@@ -3,18 +3,25 @@
 from itertools import chain
 
 from dagster import (
+    Dict,
     ExpectationResult,
     Field,
     List,
     Nothing,
     Path,
     SolidExecutionContext,
+    Materialization,
+    EventMetadataEntry,
     String,
     pipeline,
     solid
 )
+from pypika import Field as DBField
+from pypika import Query, Table, Tables
 
-from api_client import get_access_token, get_edx_course_ids
+from .api_client import get_access_token, get_edx_course_ids
+from libs.file_rendering import write_csv
+from resources.mysql_db import mysql_connection
 
 
 @solid(
@@ -60,7 +67,7 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
         context.solid_config['edx_base_url'],
         access_token)
     for result_set in course_id_generator:
-        course_ids.append([course['id'] for course in result_set])
+        course_ids.extend([course['id'] for course in result_set])
     return course_ids
 
 
@@ -70,57 +77,139 @@ def export_course(context: SolidExecutionContext, course_id: String) -> Nothing:
 
 
 @solid
-def course_staff(context: SolidExecutionContext, course_ids: List[String]) -> Path:
+def course_staff(context: SolidExecutionContext, course_id: String) -> Path:
     """
     Retrieve a list of the course staff for a given course.
 
     :param context: Dagster context object
     :type context: SolidExecutionContext
 
-    :param course_ids: edX course ID string
+    :param course_id: edX course ID string
 
-    :type course_ids: List[String]
+    :type course_id: String
 
     :returns: Path to table of course staff information grouped by course ID rendered as a flat file.
 
     :rtype: Path
     """
-    
-
-
-@solid
-def enrolled_students(context: SolidExecutionContext, course_id: str) -> Path:
-    '''
-    select auth_user.id, auth_user.username, auth_user.first_name, auth_user.last_name, auth_user.email,
-    auth_user.is_staff, auth_user.is_active, auth_user.is_superuser, auth_user.last_login, auth_user.date_joined from
-    auth_user inner join student_courseenrollment on student_courseenrollment.user_id = auth_user.id and
-    student_courseenrollment.course_id = :course_id
-    '''
     pass
 
 
-@solid
-def student_submissions(context: SolidExecutionContext, course_id: str) -> Path:
-    '''
-    select id, module_type, module_id, student_id, state, grade, created, modified, max_grade, done, course_id from
-    courseware_studentmodule where course_id= :course_id
-    '''
-    pass
+@solid(config=MYSQL_SOLID_CONFIG_SCHEMA)
+def enrolled_students(context: SolidExecutionContext, course_id: String) -> List[Dict]:
+    """Generate a table showing which students are currently enrolled in which courses.
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: SolidExecutionContext
+
+    :param course_id: Course ID to retrieve student enrollments for
+    :type course_id: String
+
+    :returns: A path definition that points to the rendered data table
+
+    :rtype: Path
+    """
+    course_enrollment, users = Tables('student_courseenrollment', 'auth_user')
+    enrollment_query = Query.from_(
+        users
+    ).join(
+        course_enrollment
+    ).on(
+        users.id == course_enrollment.user_id
+    ).select(
+        users.id, users.username, users.first_name, users.last_name,
+        users.email, users.is_staff, users.is_active, users.is_superuser,
+        users.last_login, users.date_joined
+    ).where(
+        course_enrollment.course_id == course_id
+    )
+    enrollment_data = run_query(enrollment_query, build_client(context))
+    enrollments_path = f'enrolled_students_{course_id}_{context.run_id}.csv'
+    write_csv(enrollment_data, Path(enrollments_path))
+    yield Materialization(
+        label=f'enrolled_students_{course_id}.csv',
+        description=f'Students enrolled in {course_id}',
+        metadata_entries=EventMetadataEntry.path(
+            enrollments_path, f'enrolled_students_{course_id}_path')
+    )
 
 
+
 @solid
-def enrollments(context: SolidExecutionContext, course_id: str) -> Path:
+def student_submissions(context: SolidExecutionContext, course_id: String) -> Path:
+    """Retrieve details of student submissions for the given course
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: SolidExecutionContext
+
+    :param course_id: edX course ID string
+    :type course_id: String
+
+    :returns: A path definition that points to the rendered data table
+
+    :rtype: Path
+    """
+    studentmodule = Table('courseware_studentmodule')
+    submission_query = Query.from_(
+        studentmodule
+    ).select(
+        'id',
+        'module_type',
+        'module_id',
+        'student_id',
+        'state',
+        'grade',
+        'created',
+        'modified',
+        'max_grade',
+        'done',
+        'course_id'
+    ).where(
+        studentmodule.course_id == course_id
+    )
+
+
+@solid(config=MYSQL_SOLID_CONFIG_SCHEMA)
+def enrollments(context: SolidExecutionContext, course_id: String) -> Path:
     '''
     select id, user_id, course_id, created, is_active, mode from student_courseenrollment where course_id= :course_id
     '''
-    pass
+    enrollment = Table('student_courseenrollment')
+    enrollments = Query.from_(
+        enrollment
+    ).select(
+        'id',
+        'user_id',
+        'course_id',
+        'created',
+        'is_active',
+        'mode'
+    ).where(
+        enrollment.course_id == course_id
+    )
 
 
-@solid
-def course_roles(context: SolidExecutionContext, course_id: str) -> Path:
+@solid(config=MYSQL_SOLID_CONFIG_SCHEMA)
+def course_roles(context: SolidExecutionContext, course_id: String) -> Path:
     '''
     select id,user_id,org,course_id,role from student_courseaccessrole where course_id= :course_id
     '''
+    access_role = Table('student_courseaccessrole')
+    roles = Query.from_(
+        access_role
+    ).select(
+        'id',
+        'user_id',
+        'org',
+        'course_id',
+        'role',
+    ).where(
+        access_role.course_id == course_id
+    )
+
+
+@solid
+def export_edx_forum_data(context: SolidExecutionContext) -> Path:
     pass
 
 

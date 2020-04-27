@@ -14,6 +14,7 @@ dagster-aws = "^0.7.3"
 dagster-postgres = "^0.7.3"
 pypika = "^0.36.0"
 httpx = "^0.12.0"
+mysqlclient = "^1.4.6"
 
 [tool.poetry.dev-dependencies]
 wemake-python-styleguide = "^0.13.4"
