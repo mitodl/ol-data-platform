@@ -1,27 +1,30 @@
 # -*- coding: utf-8 -*-
 
 from itertools import chain
+from pathlib import Path as FSPath
 
 from dagster import (
     Dict,
+    EventMetadataEntry,
     ExpectationResult,
     Field,
     List,
+    Materialization,
+    ModeDefinition,
     Nothing,
     Path,
     SolidExecutionContext,
-    Materialization,
-    EventMetadataEntry,
     String,
     pipeline,
     solid
 )
 from pypika import Field as DBField
-from pypika import Query, Table, Tables
+from pypika import MySQLQuery as Query
+from pypika import Table, Tables
 
-from .api_client import get_access_token, get_edx_course_ids
+from api_client import get_access_token, get_edx_course_ids
 from libs.file_rendering import write_csv
-from resources.mysql_db import mysql_connection
+from resources.mysql_db import mysql_db_resource
 
 
 @solid(
@@ -95,8 +98,8 @@ def course_staff(context: SolidExecutionContext, course_id: String) -> Path:
     pass
 
 
-@solid(config=MYSQL_SOLID_CONFIG_SCHEMA)
-def enrolled_students(context: SolidExecutionContext, course_id: String) -> List[Dict]:
+@solid(required_resource_keys={'sqldb'})
+def enrolled_students(context: SolidExecutionContext, course_ids: List[String]):
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -109,29 +112,33 @@ def enrolled_students(context: SolidExecutionContext, course_id: String) -> List
 
     :rtype: Path
     """
-    course_enrollment, users = Tables('student_courseenrollment', 'auth_user')
-    enrollment_query = Query.from_(
-        users
-    ).join(
-        course_enrollment
-    ).on(
-        users.id == course_enrollment.user_id
-    ).select(
-        users.id, users.username, users.first_name, users.last_name,
-        users.email, users.is_staff, users.is_active, users.is_superuser,
-        users.last_login, users.date_joined
-    ).where(
-        course_enrollment.course_id == course_id
-    )
-    enrollment_data = run_query(enrollment_query, build_client(context))
-    enrollments_path = f'enrolled_students_{course_id}_{context.run_id}.csv'
-    write_csv(enrollment_data, Path(enrollments_path))
-    yield Materialization(
-        label=f'enrolled_students_{course_id}.csv',
-        description=f'Students enrolled in {course_id}',
-        metadata_entries=EventMetadataEntry.path(
-            enrollments_path, f'enrolled_students_{course_id}_path')
-    )
+    for course_id in course_ids:
+        course_enrollment, users = Tables('student_courseenrollment', 'auth_user')
+        enrollment_query = Query.from_(
+            users
+        ).join(
+            course_enrollment
+        ).on(
+            users.id == course_enrollment.user_id
+        ).select(
+            users.id, users.username, users.first_name, users.last_name,
+            users.email, users.is_staff, users.is_active, users.is_superuser,
+            users.last_login, users.date_joined
+        ).where(
+            course_enrollment.course_id == course_id
+        )
+        enrollment_data = context.resources.sqldb.run_query(enrollment_query)
+        enrollments_path = f'enrolled_students_{course_id}_{context.run_id}.csv'
+        write_csv(enrollment_data, FSPath(enrollments_path))
+        yield Materialization(
+            label=f'enrolled_students_{course_id}.csv',
+            description=f'Students enrolled in {course_id}',
+            metadata_entries=[
+                EventMetadataEntry.path(
+                    enrollments_path, f'enrolled_students_{course_id}_path'
+                )
+            ]
+        )
 
 
 
@@ -169,7 +176,7 @@ def student_submissions(context: SolidExecutionContext, course_id: String) -> Pa
     )
 
 
-@solid(config=MYSQL_SOLID_CONFIG_SCHEMA)
+@solid()
 def enrollments(context: SolidExecutionContext, course_id: String) -> Path:
     '''
     select id, user_id, course_id, created, is_active, mode from student_courseenrollment where course_id= :course_id
@@ -189,7 +196,7 @@ def enrollments(context: SolidExecutionContext, course_id: String) -> Path:
     )
 
 
-@solid(config=MYSQL_SOLID_CONFIG_SCHEMA)
+@solid()
 def course_roles(context: SolidExecutionContext, course_id: String) -> Path:
     '''
     select id,user_id,org,course_id,role from student_courseaccessrole where course_id= :course_id
@@ -213,6 +220,12 @@ def export_edx_forum_data(context: SolidExecutionContext) -> Path:
     pass
 
 
-@pipeline
+@pipeline(
+    mode_defs=[
+        ModeDefinition(
+            resource_defs={'sqldb': mysql_db_resource}
+        )
+    ]
+)
 def edx_course_pipeline():
-    list_courses()
+    enrolled_students(list_courses())

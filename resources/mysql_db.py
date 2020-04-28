@@ -2,12 +2,62 @@
 
 from typing import Dict, List, Text
 
-import MySQLdb
-from dagster import Field, Int, SolidExecutionContext, String, resource
-from MySQLdb.cursors import DictCursor
+import pymysql
+from dagster import (
+    Field,
+    InitResourceContext,
+    Int,
+    ResourceDefinition,
+    SolidExecutionContext,
+    String,
+    resource
+)
+from pymysql.cursors import DictCursor
 from pypika import Query
 
 DEFAULT_MYSQL_PORT = 3306
+
+
+class MySQLClient(ResourceDefinition):
+
+    def __init__(self, hostname: Text, username: Text, password: Text, db_name: Text = None, port: Int = 3306):
+        """Instantiate a connection to a MySQL database
+
+        :param hostname: 
+        :param username: 
+        :param password: 
+        :param db_name: 
+        :param port: 
+
+        :returns:
+
+        :rtype:
+
+        """
+        self.connection = pymysql.connect(
+            host=hostname,
+            user=username,
+            passwd=password,
+            port=port,
+            db=db_name,
+            cursorclass=DictCursor)
+
+    def run_query(self, query: Query) -> List[Dict]:
+        """Execute the passed query against the MySQL database connection and return the row data as a dictionary.
+
+        :param query: PyPika query object that specifies the desired query
+        :type query: Query
+
+        :param db_conn: MySQL connection object
+        :type db_conn: MySQLdb.connection
+
+        :returns: Query results as a list of dictionaries
+
+        :rtype: List[Dict]
+        """
+        with self.connection.cursor() as db_cursor:
+            db_cursor.execute(str(query))
+            return db_cursor.fetchall()
 
 
 @resource(
@@ -40,37 +90,12 @@ DEFAULT_MYSQL_PORT = 3306
         )
     }
 )
-def mysql_connection(solid_context: SolidExecutionContext) -> MySQLdb.connection:
-    """Instantiate a connection to a MySQL database
-
-    :param solid_context:
-    :type solid_context:
-
-    :returns:
-
-    :rtype:
-    """
-    return MySQLdb.connect(
-        host=solid_context['mysql_hostname'],
-        user=solid_context['mysql_username'],
-        passwd=solid_context['mysql_password'],
-        port=solid_context['mysql_port'],
-        db=solid_context['mysql_db_name'])
-
-
-def run_query(query: Query, db_conn: MySQLdb.connection) -> List[Dict]:
-    """Execute the passed query against the MySQL database connection and return the row data as a dictionary.
-
-    :param query: PyPika query object that specifies the desired query
-    :type query: Query
-
-    :param db_conn: MySQL connection object
-    :type db_conn: MySQLdb.connection
-
-    :returns: Query results as a list of dictionaries
-
-    :rtype: List[Dict]
-    """
-    db_cursor = db_conn.cursor(DictCursor)
-    db_cursor.execute(query)
-    return db_cursor.fetchall()
+def mysql_db_resource(resource_context: InitResourceContext):
+    client = MySQLClient(
+        hostname=resource_context.resource_config['mysql_hostname'],
+        username=resource_context.resource_config['mysql_username'],
+        password=resource_context.resource_config['mysql_password'],
+        port=resource_context.resource_config['mysql_port'],
+        db_name=resource_context.resource_config['mysql_db_name'])
+    yield client
+    client.connection.close()
