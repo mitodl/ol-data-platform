@@ -18,7 +18,7 @@ from pypika import Query
 DEFAULT_MYSQL_PORT = 3306
 
 
-class MySQLClient(ResourceDefinition):
+class MySQLClient:
 
     def __init__(self, hostname: Text, username: Text, password: Text, db_name: Text = None, port: Int = 3306):
         """Instantiate a connection to a MySQL database
