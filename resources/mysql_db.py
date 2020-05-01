@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Dict, List, Text
+from typing import Dict, List, Text, Tuple
 
 import pymysql
 from dagster import (
@@ -42,7 +42,7 @@ class MySQLClient:
             db=db_name,
             cursorclass=DictCursor)
 
-    def run_query(self, query: Query) -> List[Dict]:
+    def run_query(self, query: Query) -> Tuple[List[Text], List[Dict]]:
         """Execute the passed query against the MySQL database connection and return the row data as a dictionary.
 
         :param query: PyPika query object that specifies the desired query
@@ -57,7 +57,8 @@ class MySQLClient:
         """
         with self.connection.cursor() as db_cursor:
             db_cursor.execute(str(query))
-            return db_cursor.fetchall()
+            query_fields = [field[0] for field in db_cursor.description]
+            return query_fields, db_cursor.fetchall()
 
 
 @resource(

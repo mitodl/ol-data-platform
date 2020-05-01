@@ -2,12 +2,11 @@
 
 import csv
 from pathlib import Path
-from tempfile import NamedTemporaryFile
-from typing import IO, Dict, List, Union
+from typing import Dict, List, Text
 
 
-def write_csv(table_data: List[Dict], dest_file: Path) -> Path:
-    """Write table data in CSV format to a given path or to a tempfile
+def write_csv(table_fields: List[Text], table_data: List[Dict], dest_file: Path) -> Path:
+    """Write table data in CSV format to a given path or to a tempfile.
 
     :param table_data: Tabular data formatted as a list of dictionaries
     :type table_data: List[Dict]
@@ -16,10 +15,10 @@ def write_csv(table_data: List[Dict], dest_file: Path) -> Path:
 
     :returns: Location of the file that data is written to
 
-    :rtype: PosixPath
+    :rtype: Path
     """
     with dest_file.open(mode='w') as outfile:
-        writer = csv.DictWriter(outfile, table_data[0].keys())
+        writer = csv.DictWriter(outfile, table_fields)
         writer.writeheader()
         for table_row in table_data:
             writer.writerow(table_row)
