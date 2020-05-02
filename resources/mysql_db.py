@@ -23,16 +23,11 @@ class MySQLClient:
     def __init__(self, hostname: Text, username: Text, password: Text, db_name: Text = None, port: Int = 3306):
         """Instantiate a connection to a MySQL database
 
-        :param hostname: 
-        :param username: 
-        :param password: 
-        :param db_name: 
-        :param port: 
-
-        :returns:
-
-        :rtype:
-
+        :param hostname: DNS or IP address of MySQL database
+        :param username: Username for MySQL database with readonly access to database
+        :param password: Password for specified username
+        :param db_name: Database name to run queries in
+        :param port: Port number for MySQL database
         """
         self.connection = pymysql.connect(
             host=hostname,

@@ -1,18 +1,11 @@
 # -*- coding: utf-8 -*-
 
-import json
-from collections import defaultdict
-from itertools import chain
 from pathlib import Path as FSPath
-from typing import Any, DefaultDict, Text
 
 from dagster import (
-    Dict,
     EventMetadataEntry,
-    ExpectationResult,
     Field,
     InputDefinition,
-    JsonMetadataEntryData,
     List,
     Materialization,
     ModeDefinition,
@@ -25,7 +18,6 @@ from dagster import (
     pipeline,
     solid
 )
-from pypika import Field as DBField
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
@@ -119,76 +111,69 @@ def course_staff(context: SolidExecutionContext, course_id: String) -> Path:
     ],
     output_defs=[
         OutputDefinition(
-            name='edx_enrolled_students',
-            dagster_type=List[Path],
-            description='List of paths to enrollment data in tabular format rendered as CSV files'
+            name='edx_enrolled_users',
+            dagster_type=Path,
+            description='Path to user data in tabular format rendered as CSV files'
         )
     ]
 )
-def enrolled_students(context: SolidExecutionContext, edx_course_ids: List[String]) -> List[Path]:
+def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> Path:
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
     :type context: SolidExecutionContext
 
-    :param course_id: Course ID to retrieve student enrollments for
-    :type course_id: String
+    :param edx_course_ids: List of course IDs to retrieve student enrollments for
+    :type edx_course_ids: List[String]
 
     :returns: A path definition that points to the rendered data table
 
     :rtype: Path
     """
-    output_files: Dict[Text, Text] = defaultdict(str).fromkeys(edx_course_ids)
-    for course_id in edx_course_ids:
-        course_enrollment, users = Tables('student_courseenrollment', 'auth_user')
-        enrollment_query = Query.from_(
-            users
-        ).join(
-            course_enrollment
-        ).on(
-            users.id == course_enrollment.user_id
-        ).select(
-            users.id, users.username, users.first_name, users.last_name,
-            users.email, users.is_staff, users.is_active, users.is_superuser,
-            users.last_login, users.date_joined
-        ).where(
-            course_enrollment.course_id == course_id
-        )
-        query_fields, enrollment_data = context.resources.sqldb.run_query(
-            enrollment_query)
-        enrollments_path = f'enrolled_students_{course_id}_{context.run_id}.csv'
-        output_files[course_id] = enrollments_path
-        write_csv(query_fields, enrollment_data, FSPath(enrollments_path))
-        yield Materialization(
-            label=f'enrolled_students_{course_id}.csv',
-            description=f'Students enrolled in {course_id}',
-            metadata_entries=[
-                EventMetadataEntry.json(
-                    label='course_enrollment_count',
-                    description=f'Number of enrollment records for course {course_id}',
-                    data={course_id: len(enrollment_data)}
-                ),
-                EventMetadataEntry.path(
-                    enrollments_path, f'enrolled_students_{course_id}_path'
-                )
-            ]
-        )
-    fnames = [Path(fname) for fname in output_files.values() if fname]
-    yield ExpectationResult(
-        success=(len(edx_course_ids) == len(fnames)),
-        label='course_enrollment_materializations',
-        description='Expect all courses to have enrollments data',
+    course_enrollment, users = Tables('student_courseenrollment', 'auth_user')
+    users_query = Query.from_(
+        users
+    ).join(
+        course_enrollment
+    ).on(
+        users.id == course_enrollment.user_id
+    ).select(
+        users.id,
+        users.username,
+        users.first_name,
+        users.last_name,
+        users.email,
+        users.is_staff,
+        users.is_active,
+        users.is_superuser,
+        users.last_login,
+        users.date_joined,
+        course_enrollment.course_id
+    ).where(
+        course_enrollment.course_id.isin(edx_course_ids)
+    )
+    query_fields, users_data = context.resources.sqldb.run_query(
+        users_query)
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    enrollments_path = 'users_query.csv'
+    write_csv(query_fields, users_data, FSPath(enrollments_path))
+    yield Materialization(
+        label='users_query.csv',
+        description='Information of users enrolled in available courses on Open edX installation',
         metadata_entries=[
-            EventMetadataEntry.json(
-                label='output_paths_for_course_enrollment_data',
-                description='Mapping of course IDs to the generated file path',
-                data=dict(output_files)
+            EventMetadataEntry.text(
+                label='enrolled_users_count',
+                description='Number of users who are enrolled in courses',
+                text=str(len(users_data))
+            ),
+            EventMetadataEntry.path(
+                enrollments_path, 'enrollment_query_csv_path'
             )
         ]
     )
     yield Output(
-        fnames,
-        'edx_enrolled_students'
+        enrollments_path,
+        'edx_enrolled_users'
     )
 
 
@@ -206,26 +191,28 @@ def enrolled_students(context: SolidExecutionContext, edx_course_ids: List[Strin
     output_defs=[
         OutputDefinition(
             name='edx_student_submissions',
-            dagster_type=List[Path],
-            description='List of paths to enrollment data in tabular format rendered as CSV files'
+            dagster_type=Path,
+            description='Path to submissions data in tabular format rendered as CSV files'
         )
     ]
 )
-def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> List[Path]:
+def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> Path:
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
     :type context: SolidExecutionContext
 
-    :param course_ids: List of edX course ID strings
-    :type course_ids: List[String]
+    :param edx_course_ids: List of edX course ID strings
+    :type edx_course_ids: List[String]
 
     :returns: A path definition that points to the rendered data table
 
     :rtype: Path
     """
-    output_files: Dict[Text, Text] = defaultdict(str).fromkeys(edx_course_ids)
     studentmodule = Table('courseware_studentmodule')
+    submissions_count = 0
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    submissions_path = 'studentmodule_query.csv'
     for course_id in edx_course_ids:
         submission_query = Query.from_(
             studentmodule
@@ -242,53 +229,57 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
             'done',
             'course_id'
         ).where(
-            studentmodule.course_id == course_id
+            studentmodule.course_id.isin(edx_course_ids)
         )
         query_fields, submission_data = context.resources.sqldb.run_query(
             submission_query)
-        submissions_path = f'student_submissions_{course_id}_{context.run_id}.csv'
-        output_files[course_id] = submissions_path
+        submissions_count += len(submission_data)
         write_csv(query_fields, submission_data, FSPath(submissions_path))
-        yield Materialization(
-            label=f'enrolled_students_{course_id}.csv',
-            description=f'Students enrolled in {course_id}',
-            metadata_entries=[
-                EventMetadataEntry.json(
-                    label='student_submission_count',
-                    description=f'Number of student submission records for course {course_id}',
-                    data={course_id: len(submission_data)}
-                ),
-                EventMetadataEntry.path(
-                    submissions_path, f'student_submissions_{course_id}_path'
-                )
-            ]
-        )
-    fnames = [Path(fname) for fname in output_files.values() if fname]
-    yield ExpectationResult(
-        success=(len(edx_course_ids) == len(fnames)),
-        label='student_submission_materializations',
-        description='Expect all courses to have student submissions data',
+    yield Materialization(
+        label='enrolled_students.csv',
+        description='Students enrolled in edX courses',
         metadata_entries=[
-            EventMetadataEntry.json(
-                label='output_paths_for_student_submissions_data',
-                description='Mapping of course IDs to the generated file path',
-                data=dict(output_files)
+            EventMetadataEntry.text(
+                label='student_submission_count',
+                description='Number of student submission records',
+                text=str(submissions_count)
+            ),
+            EventMetadataEntry.path(
+                submissions_path, 'student_submissions_path'
             )
         ]
     )
     yield Output(
-        fnames,
-        'edx_student_submissions'
+        submissions_path,
+        'edx_student_submissions_csv'
     )
 
 
-@solid()
-def course_enrollments(context: SolidExecutionContext, course_id: String) -> Path:
+@solid(
+    name='open_edx_enrollments',
+    description='Export of enrollment records for courses on the specified Open edX installation.',
+    required_resource_keys={'sqldb'},
+    input_defs=[
+        InputDefinition(
+            name='edx_course_ids',
+            dagster_type=List[String],
+            description='List of course IDs active on Open edX installation'
+        )
+    ],
+    output_defs=[
+        OutputDefinition(
+            name='edx_enrollment_records',
+            dagster_type=Path,
+            description='Path to enrollment data in tabular format rendered as CSV files'
+        )
+    ]
+)
+def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[String]) -> Path:
     '''
     select id, user_id, course_id, created, is_active, mode from student_courseenrollment where course_id= :course_id
     '''
     enrollment = Table('student_courseenrollment')
-    enrollments = Query.from_(
+    enrollments_query = Query.from_(
         enrollment
     ).select(
         'id',
@@ -298,17 +289,58 @@ def course_enrollments(context: SolidExecutionContext, course_id: String) -> Pat
         'is_active',
         'mode'
     ).where(
-        enrollment.course_id == course_id
+        enrollment.course_id.isin(edx_course_ids)
+    )
+    query_fields, enrollment_data = context.resources.sqldb.run_query(
+        enrollments_query)
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    enrollments_path = 'enrollment_query.csv'
+    write_csv(query_fields, enrollment_data, FSPath(enrollments_path))
+    yield Materialization(
+        label='enrollment_query.csv',
+        description='Course enrollment records from Open edX installation',
+        metadata_entries=[
+            EventMetadataEntry.text(
+                label='course_enrollment_count',
+                description='Number of enrollment records',
+                text=str(len(enrollment_data))
+            ),
+            EventMetadataEntry.path(
+                enrollments_path, 'enrollment_query_csv_path'
+            )
+        ]
+    )
+    yield Output(
+        enrollments_path,
+        'edx_enrollment_records'
     )
 
 
-@solid()
-def course_roles(context: SolidExecutionContext, course_id: String) -> Path:
+@solid(
+    name='open_edx_course_roles',
+    description='Export of user roles for courses on the specified Open edX installation.',
+    required_resource_keys={'sqldb'},
+    input_defs=[
+        InputDefinition(
+            name='edx_course_ids',
+            dagster_type=List[String],
+            description='List of course IDs active on Open edX installation'
+        )
+    ],
+    output_defs=[
+        OutputDefinition(
+            name='edx_course_roles',
+            dagster_type=Path,
+            description='Path to course role data in tabular format rendered as CSV files'
+        )
+    ]
+)
+def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -> Path:
     '''
     select id,user_id,org,course_id,role from student_courseaccessrole where course_id= :course_id
     '''
     access_role = Table('student_courseaccessrole')
-    roles = Query.from_(
+    roles_query = Query.from_(
         access_role
     ).select(
         'id',
@@ -317,7 +349,30 @@ def course_roles(context: SolidExecutionContext, course_id: String) -> Path:
         'course_id',
         'role',
     ).where(
-        access_role.course_id == course_id
+        access_role.course_id.isin(edx_course_ids)
+    )
+    query_fields, roles_data = context.resources.sqldb.run_query(
+        roles_query)
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    roles_path = 'role_query.csv'
+    write_csv(query_fields, roles_data, FSPath(roles_path))
+    yield Materialization(
+        label='role_query.csv',
+        description='Course roles records from Open edX installation',
+        metadata_entries=[
+            EventMetadataEntry.text(
+                label='course_roles_count',
+                description='Number of course roles records',
+                text=str(len(roles_data))
+            ),
+            EventMetadataEntry.path(
+                roles_path, 'role_query_csv_path'
+            )
+        ]
+    )
+    yield Output(
+        roles_path,
+        'edx_course_roles'
     )
 
 
@@ -340,5 +395,7 @@ def export_course(context: SolidExecutionContext, course_id: String) -> Nothing:
 )
 def edx_course_pipeline():
     course_list = list_courses()
-    enrolled_students(edx_course_ids=course_list)
+    enrolled_users(edx_course_ids=course_list)
     student_submissions(edx_course_ids=course_list)
+    course_roles(edx_course_ids=course_list)
+    course_enrollments(edx_course_ids=course_list)

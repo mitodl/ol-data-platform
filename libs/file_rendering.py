@@ -17,9 +17,9 @@ def write_csv(table_fields: List[Text], table_data: List[Dict], dest_file: Path)
 
     :rtype: Path
     """
-    with dest_file.open(mode='w') as outfile:
+    with dest_file.open(mode='a') as outfile:
         writer = csv.DictWriter(outfile, table_fields)
-        writer.writeheader()
-        for table_row in table_data:
-            writer.writerow(table_row)
+        if not outfile.tell() > 0:
+            writer.writeheader()
+        writer.writerows(table_data)
         return dest_file
