@@ -231,7 +231,7 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
             'done',
             'course_id'
         ).where(
-            studentmodule.course_id.isin(edx_course_ids)
+            studentmodule.course_id == course_id
         )
         query_fields, submission_data = context.resources.sqldb.run_query(
             submission_query)
