@@ -14,6 +14,7 @@ from dagster import (
     SolidExecutionContext,
     String,
     composite_solid,
+    lambda_solid,
     pipeline,
     solid
 )
@@ -22,7 +23,10 @@ from dagster_bash import bash_command_solid
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
-from ol_data_pipelines.edx.api_client import get_access_token, get_edx_course_ids
+from ol_data_pipelines.edx.api_client import (
+    get_access_token,
+    get_edx_course_ids
+)
 from ol_data_pipelines.libs.file_rendering import write_csv
 from ol_data_pipelines.resources.mysql_db import mysql_db_resource
 from ol_data_pipelines.resources.outputs import daily_dir
@@ -453,16 +457,16 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
 def edx_forum_mongo_build_dump_command(context: SolidExecutionContext):
     forum_data_path = context.resources.results_dir.joinpath(context.config['edx_forum_data_folder_name'])
     command_array = ['/usr/bin/mongodump',
-                               '--host',
-                               context.config['edx_mongodb_host'],
-                               '--port',
-                               context.config['edx_mongodb_port'],
-                               '--db',
-                               context.config['edx_mongodb_database_name'],
-                               '--authenticationDatabase',
-                               'admin',
-                               '--out',
-                               str(forum_data_path)]
+                     '--host',
+                     context.config['edx_mongodb_host'],
+                     '--port',
+                     context.config['edx_mongodb_port'],
+                     '--db',
+                     context.config['edx_mongodb_database_name'],
+                     '--authenticationDatabase',
+                     'admin',
+                     '--out',
+                     str(forum_data_path)]
     if password := context.config['edx_mongodb_password']:
         command_array.extend(['--password', password])
     if username := context.config['edx_mongodb_username']:
@@ -471,13 +475,13 @@ def edx_forum_mongo_build_dump_command(context: SolidExecutionContext):
     yield Output(str(forum_data_path), 'edx_forum_data_directory')
 
 
-@composite_solid(
+@lambda_solid(
     name='open_edx_forum_data_export',
-    description='Export data for edX forums from Mongo database',
+    description='Wrapper for export of data for edX forums from Mongo database',
     input_defs=[
         InputDefinition(
-            name='edx_forum_mongodump_command',
-            dagster_type=String,
+            name='edx_forum_mongodump_results',
+            dagster_type=Nothing,
             description='Command line string for executing mongodump on Open edX forum database',
         ),
         InputDefinition(
@@ -486,25 +490,23 @@ def edx_forum_mongo_build_dump_command(context: SolidExecutionContext):
             description='Path to Open edX forum data exported from Mongo database'
         )
     ],
-    output_defs=[
-        OutputDefinition(
-            name='edx_forum_data_directory',
-            dagster_type=String,
-            description='Path to Open edX forum data exported from Mongo database'
-        )
-    ]
+    output_def=OutputDefinition(
+        name='edx_forum_data_directory',
+        dagster_type=String,
+        description='Path to Open edX forum data exported from Mongo database'
+    )
 )
-def export_edx_forum_data(edx_forum_mongodump_command: String, edx_forum_data_directory: String) -> String:
+def export_edx_forum_data(edx_forum_data_directory: String) -> String:
     """Run mongodump for the database that contains Open edX forum submissions to be consumed by Institutional Research.
 
-    :param context: Dagster execution context for propagaint configuration data
-    :type context: SolidExecutionContext
+    :param edx_forum_data_directory: Absolute path to the directory containing the output of the mongodump command for
+        the Open edX forum database
+    :type edx_forum_data_directory: String
 
     :returns: Path to exported database contents
 
     :rtype: String
     """
-    bash_command_solid(edx_forum_mongodump_command, name='edx_mongodump_command_execution')
     return {'edx_forum_data_directory': edx_forum_data_directory}
 
 
@@ -535,14 +537,15 @@ def export_course(context: SolidExecutionContext, course_id: String) -> Nothing:
         InputDefinition(
             name='edx_forum_data_directory',
             dagster_type=String
-        )
+        ),
     ]
 )
 def upload_extracted_data(context: SolidExecutionContext,
                           edx_course_roles: String,
                           edx_enrolled_users: String,
                           edx_student_submissions: String,
-                          edx_enrollment_records: String):
+                          edx_enrollment_records: String,
+                          edx_forum_data_directory: String):
     return
 
 
@@ -560,8 +563,10 @@ def upload_extracted_data(context: SolidExecutionContext,
 def edx_course_pipeline():
     course_list = list_courses()
     forum_export_command, forum_export_dir = edx_forum_mongo_build_dump_command()
-    edx_forum_data = export_edx_forum_data(edx_forum_mongodump_command=forum_export_command,
-                                           edx_forum_data_directory=forum_export_dir)
+    mongodump_results = bash_command_solid(forum_export_command, name='edx_forum_run_mongodump')
+    edx_forum_data = export_edx_forum_data(
+        edx_forum_mongodump_results=mongodump_results,
+        edx_forum_data_directory=forum_export_dir)
     upload_extracted_data(
         enrolled_users(edx_course_ids=course_list),
         student_submissions(edx_course_ids=course_list),
