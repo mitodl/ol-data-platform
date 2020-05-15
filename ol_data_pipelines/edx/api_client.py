@@ -52,7 +52,6 @@ def get_edx_course_ids(edx_url: Text, access_token: Text) -> Generator[List[Dict
         headers={'Authorization': f'JWT {access_token}'})
     response.raise_for_status()
     response_data = response.json()
-    record_count = response_data['pagination']['count']
     course_data = response_data['results']
     next_page = response_data['pagination'].get('next')
     yield course_data

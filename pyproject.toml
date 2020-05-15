@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "ol-dags"
+name = "ol-data-pipelines"
 version = "0.1.0"
 description = "Data pipelines for open learning"
 authors = ["Tobias Macey"]
@@ -15,6 +15,8 @@ dagster-postgres = "^0.7.3"
 pypika = "^0.36.0"
 httpx = "^0.12.0"
 pymysql = "^0.9.3"
+pymongo = "^3.10.1"
+dagster-bash = "^0.7.12"
 
 [tool.poetry.dev-dependencies]
 wemake-python-styleguide = "^0.13.4"

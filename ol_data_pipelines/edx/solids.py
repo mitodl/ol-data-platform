@@ -1,31 +1,31 @@
 # -*- coding: utf-8 -*-
 
-from pathlib import Path as FSPath
-
 from dagster import (
     EventMetadataEntry,
     Field,
     InputDefinition,
+    Int,
     List,
     Materialization,
     ModeDefinition,
     Nothing,
     Output,
     OutputDefinition,
-    Path,
     SolidExecutionContext,
     String,
+    composite_solid,
     pipeline,
     solid
 )
 from dagster_aws.s3 import s3_resource
+from dagster_bash import bash_command_solid
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
-from api_client import get_access_token, get_edx_course_ids
-from libs.file_rendering import write_csv
-from resources.mysql_db import mysql_db_resource
-from resources.outputs import daily_dir
+from ol_data_pipelines.edx.api_client import get_access_token, get_edx_course_ids
+from ol_data_pipelines.libs.file_rendering import write_csv
+from ol_data_pipelines.resources.mysql_db import mysql_db_resource
+from ol_data_pipelines.resources.outputs import daily_dir
 
 
 @solid(
@@ -84,7 +84,7 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
 
 
 @solid
-def course_staff(context: SolidExecutionContext, course_id: String) -> Path:
+def course_staff(context: SolidExecutionContext, course_id: String) -> String:
     """
     Retrieve a list of the course staff for a given course.
 
@@ -97,7 +97,7 @@ def course_staff(context: SolidExecutionContext, course_id: String) -> Path:
 
     :returns: Path to table of course staff information grouped by course ID rendered as a flat file.
 
-    :rtype: Path
+    :rtype: String
     """
     pass
 
@@ -114,12 +114,12 @@ def course_staff(context: SolidExecutionContext, course_id: String) -> Path:
     output_defs=[
         OutputDefinition(
             name='edx_enrolled_users',
-            dagster_type=Path,
+            dagster_type=String,
             description='Path to user data in tabular format rendered as CSV files'
         )
     ]
 )
-def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> Path:
+def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> String:
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -130,7 +130,7 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
 
     :returns: A path definition that points to the rendered data table
 
-    :rtype: Path
+    :rtype: String
     """
     course_enrollment, users = Tables('student_courseenrollment', 'auth_user')
     users_query = Query.from_(
@@ -193,12 +193,12 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
     output_defs=[
         OutputDefinition(
             name='edx_student_submissions',
-            dagster_type=Path,
+            dagster_type=String,
             description='Path to submissions data in tabular format rendered as CSV files'
         )
     ]
 )
-def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> Path:
+def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> String:
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -209,7 +209,7 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
 
     :returns: A path definition that points to the rendered data table
 
-    :rtype: Path
+    :rtype: String
     """
     studentmodule = Table('courseware_studentmodule')
     submissions_count = 0
@@ -253,7 +253,7 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
     )
     yield Output(
         submissions_path.name,
-        'edx_student_submissions_csv'
+        'edx_student_submissions'
     )
 
 
@@ -271,13 +271,13 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
     output_defs=[
         OutputDefinition(
             name='edx_enrollment_records',
-            dagster_type=Path,
+            dagster_type=String,
             description='Path to enrollment data in tabular format rendered as CSV files'
         )
     ]
 )
-def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[String]) -> Path:
-    """Retrieve enrollment records for given courses
+def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[String]) -> String:
+    """Retrieve enrollment records for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
     :type context: SolidExecutionContext
@@ -287,7 +287,7 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
 
     :returns: A path definition that points to the rendered data table
 
-    :rtype: Path
+    :rtype: String
     """
     enrollment = Table('student_courseenrollment')
     enrollments_query = Query.from_(
@@ -341,13 +341,13 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
     output_defs=[
         OutputDefinition(
             name='edx_course_roles',
-            dagster_type=Path,
+            dagster_type=String,
             description='Path to course role data in tabular format rendered as CSV files'
         )
     ]
 )
-def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -> Path:
-    """Retrieve information about user roles for given courses
+def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -> String:
+    """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
     :type context: SolidExecutionContext
@@ -357,7 +357,7 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
 
     :returns: A path definition that points to the rendered data table
 
-    :rtype: Path
+    :rtype: String
     """
     access_role = Table('student_courseaccessrole')
     roles_query = Query.from_(
@@ -396,9 +396,116 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
     )
 
 
-@solid
-def export_edx_forum_data(context: SolidExecutionContext) -> Path:
-    pass
+@solid(
+    name='edx_forum_build_mongo_dump_command',
+    description='Solid to build the command line string for executing mongodump against the Open edX forum database',
+    required_resource_keys={'results_dir'},
+    config={
+        'edx_mongodb_host': Field(
+            String,
+            is_required=True,
+            description='Resolvable host address of MongoDB master'
+        ),
+        'edx_mongodb_port': Field(
+            Int,
+            is_required=False,
+            default_value=27017,  # noqa WPS4232
+            description='TCP port number used to connect to MongoDB server'
+        ),
+        'edx_mongodb_username': Field(
+            String,
+            is_required=False,
+            default_value='',
+            description='Username for account with permissions to read forum database'
+        ),
+        'edx_mongodb_password': Field(
+            String,
+            is_required=False,
+            default_value='',
+            description='Password for account with permissions to read forum database'
+        ),
+        'edx_mongodb_database_name': Field(
+            String,
+            is_required=True,
+            description='Name of database that contains forum data for Open edX installation'
+        ),
+        'edx_forum_data_folder_name': Field(
+            String,
+            is_required=False,
+            default_value='forum',
+            description=('Name of the directory to create within the results directory for containing the exported '
+                         'mongo database')
+        )
+    },
+    output_defs=[
+        OutputDefinition(
+            name='edx_forum_mongodump_command',
+            dagster_type=String,
+            description='Command line string for executing mongodump'
+        ),
+        OutputDefinition(
+            name='edx_forum_data_directory',
+            dagster_type=String,
+            description='Path to exported forum data generated by mongodump command'
+        )
+    ]
+)
+def edx_forum_mongo_build_dump_command(context: SolidExecutionContext):
+    forum_data_path = context.resources.results_dir.joinpath(context.config['edx_forum_data_folder_name'])
+    command_array = ['/usr/bin/mongodump',
+                               '--host',
+                               context.config['edx_mongodb_host'],
+                               '--port',
+                               context.config['edx_mongodb_port'],
+                               '--db',
+                               context.config['edx_mongodb_database_name'],
+                               '--authenticationDatabase',
+                               'admin',
+                               '--out',
+                               str(forum_data_path)]
+    if password := context.config['edx_mongodb_password']:
+        command_array.extend(['--password', password])
+    if username := context.config['edx_mongodb_username']:
+        command_array.extend(['--username', username])
+    yield Output(' '.join(command_array), 'edx_forum_mongodump_command')
+    yield Output(str(forum_data_path), 'edx_forum_data_directory')
+
+
+@composite_solid(
+    name='open_edx_forum_data_export',
+    description='Export data for edX forums from Mongo database',
+    input_defs=[
+        InputDefinition(
+            name='edx_forum_mongodump_command',
+            dagster_type=String,
+            description='Command line string for executing mongodump on Open edX forum database',
+        ),
+        InputDefinition(
+            name='edx_forum_data_directory',
+            dagster_type=String,
+            description='Path to Open edX forum data exported from Mongo database'
+        )
+    ],
+    output_defs=[
+        OutputDefinition(
+            name='edx_forum_data_directory',
+            dagster_type=String,
+            description='Path to Open edX forum data exported from Mongo database'
+        )
+    ]
+)
+def export_edx_forum_data(edx_forum_mongodump_command: String, edx_forum_data_directory: String) -> String:
+    """Run mongodump for the database that contains Open edX forum submissions to be consumed by Institutional Research.
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: SolidExecutionContext
+
+    :returns: Path to exported database contents
+
+    :rtype: String
+    """
+    bash_command_solid(edx_forum_mongodump_command, name='edx_mongodump_command_execution')
+    return {'edx_forum_data_directory': edx_forum_data_directory}
 
 
 @solid
@@ -411,27 +518,31 @@ def export_course(context: SolidExecutionContext, course_id: String) -> Nothing:
     input_defs=[
         InputDefinition(
             name='edx_course_roles',
-            dagster_type=Path
+            dagster_type=String
         ),
         InputDefinition(
             name='edx_enrolled_users',
-            dagster_type=Path
+            dagster_type=String
         ),
         InputDefinition(
             name='edx_student_submissions',
-            dagster_type=Path
+            dagster_type=String
         ),
         InputDefinition(
             name='edx_enrollment_records',
-            dagster_type=Path
+            dagster_type=String
+        ),
+        InputDefinition(
+            name='edx_forum_data_directory',
+            dagster_type=String
         )
     ]
 )
 def upload_extracted_data(context: SolidExecutionContext,
-                          edx_course_roles: Path,
-                          edx_enrolled_users: Path,
-                          edx_student_submissions: Path,
-                          edx_enrollment_records: Path):
+                          edx_course_roles: String,
+                          edx_enrolled_users: String,
+                          edx_student_submissions: String,
+                          edx_enrollment_records: String):
     return
 
 
@@ -448,8 +559,12 @@ def upload_extracted_data(context: SolidExecutionContext,
 )
 def edx_course_pipeline():
     course_list = list_courses()
+    forum_export_command, forum_export_dir = edx_forum_mongo_build_dump_command()
+    edx_forum_data = export_edx_forum_data(edx_forum_mongodump_command=forum_export_command,
+                                           edx_forum_data_directory=forum_export_dir)
     upload_extracted_data(
         enrolled_users(edx_course_ids=course_list),
         student_submissions(edx_course_ids=course_list),
         course_roles(edx_course_ids=course_list),
-        course_enrollments(edx_course_ids=course_list))
+        course_enrollments(edx_course_ids=course_list),
+        edx_forum_data)

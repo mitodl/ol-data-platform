@@ -3,15 +3,7 @@
 from typing import Dict, List, Text, Tuple
 
 import pymysql
-from dagster import (
-    Field,
-    InitResourceContext,
-    Int,
-    ResourceDefinition,
-    SolidExecutionContext,
-    String,
-    resource
-)
+from dagster import Field, InitResourceContext, Int, String, resource
 from pymysql.cursors import DictCursor
 from pypika import Query
 

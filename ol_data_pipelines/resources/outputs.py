@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import os
-from datetime import datetime, date
+from datetime import date, datetime
 from pathlib import Path
+from typing import Generator, Text
 
 from dagster import Field, InitResourceContext
-from dagster import Path as DagsterPath
 from dagster import String, resource
 
-from typing import Text
 
 class ResultsDir:
 
@@ -29,9 +28,25 @@ class ResultsDir:
     def path(self) -> Path:
         return Path(os.path.join(self.root_dir, self.dir_name))
 
+    @property
+    def absolute_path(self) -> Text:
+        return str(self.path)
+
 class DailyResultsDir(ResultsDir):
 
-    def __init__(self, root_dir: Text=None, date_format: Text='%Y-%m-%d', date_override: date=None):
+    def __init__(self, root_dir: Text = None, date_format: Text = '%Y-%m-%d', date_override: Text = None):
+        """Instantiate a results directory that defaults to being named according to the current date.
+
+        :param root_dir: The base directory within which the results directory will be created
+        :type root_dir: Text
+
+        :param date_format: The format string for specifying how the date will be represented in the directory name
+        :type date_format: Text
+
+        :param date_override: A string representing an override of the date to be used for the generated directory.
+            Primarily used for cases where a backfill process needs to occur.
+        :type date_override: Text
+        """
         super().__init__(root_dir)
         if date_override:
             dir_date = datetime.strptime(date_override, date_format)
@@ -43,7 +58,7 @@ class DailyResultsDir(ResultsDir):
 @resource(
     config={
         'outputs_root_dir': Field(
-            DagsterPath,
+            String,
             default_value='',
             is_required=False,
             description=('Base directory used for creating a results folder. Should be configured to allow writing '
@@ -64,7 +79,16 @@ class DailyResultsDir(ResultsDir):
         )
     }
 )
-def daily_dir(resource_context: InitResourceContext):
+def daily_dir(resource_context: InitResourceContext) -> Generator[DailyResultsDir, None, None]:
+    """Create a resource definition for a daily results directory.
+
+    :param resource_context: The Dagster context for configuring the resource instance
+    :type resource_context: InitResourceContext
+
+    :returns: An instance of a daily results directory
+
+    :rtype: DailyResultsDir
+    """
     results_dir = DailyResultsDir(
         root_dir=resource_context.resource_config['outputs_root_dir'],
         date_format=resource_context.resource_config['outputs_directory_date_format'],
