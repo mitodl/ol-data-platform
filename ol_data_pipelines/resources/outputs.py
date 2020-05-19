@@ -2,20 +2,20 @@
 
 import os
 from datetime import date, datetime
-from pathlib import Path
 from typing import Generator, Text
 
-from dagster import Field, InitResourceContext
-from dagster import String, resource
+from dagster import Field, InitResourceContext, String, resource
+
+from ol_data_pipelines.libs.types import DagsterPath
 
 
 class ResultsDir:
 
-    def __init__(self, root_dir: Text=None):
+    def __init__(self, root_dir: Text = None):
         if root_dir is None:
-            self.root_dir = Path(os.getcwd())
+            self.root_dir = DagsterPath(os.getcwd())
         else:
-            self.root_dir = Path(root_dir)
+            self.root_dir = DagsterPath(root_dir)
         self.dir_name = 'results'
 
     def create_dir(self):
@@ -25,12 +25,13 @@ class ResultsDir:
             pass
 
     @property
-    def path(self) -> Path:
-        return Path(os.path.join(self.root_dir, self.dir_name))
+    def path(self) -> DagsterPath:
+        return DagsterPath(os.path.join(self.root_dir, self.dir_name))
 
     @property
     def absolute_path(self) -> Text:
         return str(self.path)
+
 
 class DailyResultsDir(ResultsDir):
 
