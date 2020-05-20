@@ -20,6 +20,7 @@ from dagster import (
     solid
 )
 from dagster_aws.s3 import s3_resource
+from dagster.core.storage.system_storage import fs_system_storage
 from dagster_bash.utils import execute as run_bash
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
@@ -559,17 +560,17 @@ def upload_extracted_data( # noqa WPS211
     :type edx_forum_data_directory: DagsterPath
     """
     for path_object in context.resources.results_dir.path.iterdir():
-        if path_object.is_file:
+        if path_object.is_dir():
+            for fpath in path_object.iterdir():
+                context.resources.s3.upload_file(
+                    Filename=str(fpath),
+                    Bucket=context.solid_config['edx_etl_results_bucket'],
+                    Key=str(fpath.relative_to(context.resources.results_dir.root_dir)))
+        elif path_object.is_file():
             context.resources.s3.upload_file(
                 Filename=str(path_object),
                 Bucket=context.solid_config['edx_etl_results_bucket'],
                 Key=str(path_object.relative_to(context.resources.results_dir.root_dir)))
-        elif path_object.is_dir:
-            for fpath in path_object.iterdir():
-                context.resources.s3.upload_file(
-                    Filename=str(path_object),
-                    Bucket=context.solid_config['edx_etl_results_bucket'],
-                    Key=str(fpath.relative_to(context.resources.results_dir.root_dir)))
 
 
 @pipeline(
