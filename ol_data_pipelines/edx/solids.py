@@ -466,13 +466,17 @@ def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:
                      '--authenticationDatabase',
                      'admin',
                      '--out',
-                     str(context.resources.results_dir.path)]
+                     context.resources.results_dir.absolute_path]
     if password := context.solid_config['edx_mongodb_password']:
         command_array.extend(['--password', password])
     if username := context.solid_config['edx_mongodb_username']:
         command_array.extend(['--username', username])
 
-    mongodump_output, mongodump_retcode = run_bash(' '.join(command_array), output_logging='BUFFER', log=context.log)
+    mongodump_output, mongodump_retcode = run_bash(
+        ' '.join(command_array),
+        output_logging='BUFFER',
+        log=context.log,
+        cwd=str(context.resources.results_dir.root_dir))
 
     if mongodump_retcode != 0:
         yield Failure(
