@@ -19,8 +19,8 @@ from dagster import (
     pipeline,
     solid
 )
-from dagster_aws.s3 import s3_resource
 from dagster.core.storage.system_storage import fs_system_storage
+from dagster_aws.s3 import s3_resource
 from dagster_bash.utils import execute as run_bash
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
@@ -29,8 +29,8 @@ from ol_data_pipelines.edx.api_client import (
     get_access_token,
     get_edx_course_ids
 )
-from ol_data_pipelines.libs.file_rendering import write_csv
-from ol_data_pipelines.libs.types import DagsterPath
+from ol_data_pipelines.lib.dagster_types import DagsterPath
+from ol_data_pipelines.lib.file_rendering import write_csv
 from ol_data_pipelines.resources.mysql_db import mysql_db_resource
 from ol_data_pipelines.resources.outputs import daily_dir
 

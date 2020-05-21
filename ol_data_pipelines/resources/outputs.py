@@ -6,7 +6,7 @@ from typing import Generator, Text
 
 from dagster import Field, InitResourceContext, String, resource
 
-from ol_data_pipelines.libs.types import DagsterPath
+from ol_data_pipelines.lib.dagster_types import DagsterPath
 
 
 class ResultsDir:
