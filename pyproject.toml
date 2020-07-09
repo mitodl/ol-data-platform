@@ -4,27 +4,41 @@ version = "0.1.0"
 description = "Data pipelines for open learning"
 authors = ["Tobias Macey"]
 license = "BSD-3-Clause"
+readme = "README.md"
+repository = "https://github.com/mitodl/ol-data-pipelines"
+classifiers = [
+    'Framework :: Dagster',
+    'Operating System :: Linux',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.8',
+]
+packages = [
+    { include = "ol_data_pipelines", from = "src/" },
+]
 
 [tool.poetry.dependencies]
-python = "^3.8"
-dagster = "^0.7.3"
-dagit = "^0.7.3"
+dagster = "^0.8"
+dagster-aws = "^0.8"
+dagster-bash = "^0.7.12"
+dagster-postgres = "^0.8"
 great-expectations = "^0.9.3"
-dagster-aws = "^0.7.3"
-dagster-postgres = "^0.7.3"
-pypika = "^0.36.0"
 httpx = "^0.12.0"
 pymysql = "^0.9.3"
-pymongo = "^3.10.1"
-dagster-bash = "^0.7.12"
+pypika = "^0.36.0"
+python = "^3.8"
 
 [tool.poetry.dev-dependencies]
-wemake-python-styleguide = "^0.13.4"
-pytest = "^5.3.5"
-mypy = "^0.770"
+dagit = "^0.8"
 isort = "^4.3.21"
+mypy = "^0.770"
 pre-commit = "^2.3.0"
+pytest = "^5.3.5"
+wemake-python-styleguide = "^0.13.4"
+invoke = "^1.4.1"
+poetry = "^1.0.9"
+vdist = "^2.1.1"
 
 [build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
+requires = ["poetry_core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
