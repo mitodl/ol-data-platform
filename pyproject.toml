@@ -18,6 +18,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
+dagit = "^0.8"
 dagster = "^0.8"
 dagster-aws = "^0.8"
 dagster-bash = "^0.7.12"
