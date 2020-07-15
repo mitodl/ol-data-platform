@@ -94,7 +94,6 @@ fi
 find {{package_tmp_root}} -type d -name '.venv' -print0 | xargs -0 rm -rf
 find {{package_tmp_root}} -type d -name 'venv' -print0 | xargs -0 rm -rf
 # Install package python dependencies inside our portable python environment.
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PYTHON_BASEDIR/lib/
 $PIP_BIN install poetry
 $PYTHON_BASEDIR/bin/poetry config virtualenvs.create false
 $PYTHON_BASEDIR/bin/poetry build

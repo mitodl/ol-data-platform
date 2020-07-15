@@ -3,27 +3,24 @@ from pathlib import Path
 
 from invoke import task
 from poetry.factory import Factory
-from vdist.builder import Builder, build_package
-from vdist.configuration import Configuration
+from vdist.builder import Builder
 from vdist.source import git
 
 
 @task
 def package_pipeline(context):
     poetry = Factory().create_poetry(cwd=Path(__file__))
-    locker = poetry.locker
-    repository = locker.locked_repository()
-    poetry.package.to_dependency()
     builder = Builder()
+    app_name = 'ol_data_pipelines'
     builder.add_build(
         name='OL Data Pipelines',
-        app='ol_data_pipelines',
+        app=app_name,
         version=poetry.package.version.text,
         source=git(
             uri=poetry.package.urls['Repository']
         ),
         profile='debian',
-        python_version='.'.join([str(v) for v in sys.version_info[:3]]),
+        python_version='3.8.4',
         build_deps=[
             'libffi-dev',
             'build-essential',
@@ -34,7 +31,13 @@ def package_pipeline(context):
         compile_python=True,
         runtime_deps=[
             'mongo-tools'
-        ]
+        ],
+        fpm_args=(
+            '--config-files=workspace.yaml '
+            '--maintainer=odl-devops@mit.edu '
+            '--after-install=after_install.sh '
+            '--template-scripts'
+        )
     )
     builder.get_available_profiles()
     builder.create_build_folder_tree()
