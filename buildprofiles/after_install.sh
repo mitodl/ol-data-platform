@@ -1,4 +1,5 @@
-cat <<EOF | tee /etc/profile.d/10-<%= name %>.sh
+cat <<EOF | tee /etc/profile.d/10-<%= app_name %>.sh
 #!/bin/sh
-export PATH=$PATH:/opt/<%= name %>/bin/
+export PATH=$PATH:/opt/<%= app_name %>/bin/
 EOF
+chmod +x /etc/profile.d/10-<%= app_name %>.sh
