@@ -99,8 +99,6 @@ $PYTHON_BASEDIR/bin/poetry config virtualenvs.create false
 $PYTHON_BASEDIR/bin/poetry build
 $PIP_BIN install dist/*.whl
 
-cd /
-
 # Get rid of VCS info.
 find {{package_tmp_root}} -type d -name '.git' -print0 | xargs -0 rm -rf
 find {{package_tmp_root}} -type d -name '.svn' -print0 | xargs -0 rm -rf

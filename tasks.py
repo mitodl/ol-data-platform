@@ -13,11 +13,12 @@ def package_pipeline(context):
     builder = Builder()
     app_name = 'ol_data_pipelines'
     builder.add_build(
-        name='OL Data Pipelines',
+        name=app_name,
         app=app_name,
         version=poetry.package.version.text,
         source=git(
-            uri=poetry.package.urls['Repository']
+            uri=poetry.package.urls['Repository'],
+            branch='main'
         ),
         profile='debian',
         python_version='3.8.4',
@@ -35,7 +36,7 @@ def package_pipeline(context):
         fpm_args=(
             '--config-files=workspace.yaml '
             '--maintainer=odl-devops@mit.edu '
-            '--after-install=after_install.sh '
+            '--after-install=buildprofiles/after_install.sh '
             '--template-scripts'
         )
     )
