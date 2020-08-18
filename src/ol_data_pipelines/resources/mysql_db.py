@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Dict, List, Text, Tuple
+from typing import Dict, List, Optional, Text, Tuple
 
 import pymysql
 from dagster import Field, InitResourceContext, Int, String, resource
@@ -12,14 +12,30 @@ DEFAULT_MYSQL_PORT = 3306
 
 class MySQLClient:
 
-    def __init__(self, hostname: Text, username: Text, password: Text, db_name: Text = None, port: Int = 3306):
+    def __init__(
+            self,
+            hostname: Text,
+            username: Text,
+            password: Text,
+            db_name: Optional[Text] = None,
+            port: Int = 3306
+    ):
         """Instantiate a connection to a MySQL database
 
         :param hostname: DNS or IP address of MySQL database
+        :type hostname: Text
+
         :param username: Username for MySQL database with readonly access to database
+        :type username: Text
+
         :param password: Password for specified username
+        :type password: Text
+
         :param db_name: Database name to run queries in
+        :type db_name: Text
+
         :param port: Port number for MySQL database
+        :type port: Int
         """
         self.connection = pymysql.connect(
             host=hostname,
