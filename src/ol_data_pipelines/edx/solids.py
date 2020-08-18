@@ -9,22 +9,15 @@ from dagster import (
     List,
     Materialization,
     ModeDefinition,
-    Nothing,
     Output,
     OutputDefinition,
     SolidExecutionContext,
     String,
-    composite_solid,
-    lambda_solid,
     pipeline,
     solid
 )
-from dagster.core.storage.system_storage import fs_system_storage
 from dagster_aws.s3 import s3_resource
 from dagster_bash.utils import execute as run_bash
-from pypika import MySQLQuery as Query
-from pypika import Table, Tables
-
 from ol_data_pipelines.edx.api_client import (
     get_access_token,
     get_edx_course_ids
@@ -33,13 +26,15 @@ from ol_data_pipelines.lib.dagster_types import DagsterPath
 from ol_data_pipelines.lib.file_rendering import write_csv
 from ol_data_pipelines.resources.mysql_db import mysql_db_resource
 from ol_data_pipelines.resources.outputs import daily_dir
+from pypika import MySQLQuery as Query
+from pypika import Table, Tables
 
 
 @solid(
     name='list_edx_courses',
     description=('Retrieve the list of course IDs active in the edX instance '
                  'to be used in subsequent steps to pull data per course.'),
-    config={
+    config_schema={
         'edx_client_id': Field(
             String,
             is_required=True,
@@ -90,25 +85,6 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
     yield Output(course_ids, 'edx_course_ids')
 
 
-@solid
-def course_staff(context: SolidExecutionContext, course_id: String) -> String:
-    """
-    Retrieve a list of the course staff for a given course.
-
-    :param context: Dagster context object
-    :type context: SolidExecutionContext
-
-    :param course_id: edX course ID string
-
-    :type course_id: String
-
-    :returns: Path to table of course staff information grouped by course ID rendered as a flat file.
-
-    :rtype: String
-    """
-    pass
-
-
 @solid(
     required_resource_keys={'sqldb', 'results_dir'},
     input_defs=[
@@ -126,7 +102,7 @@ def course_staff(context: SolidExecutionContext, course_id: String) -> String:
         )
     ]
 )
-def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:
+def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -205,7 +181,7 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
         )
     ]
 )
-def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:
+def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -283,7 +259,7 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
         )
     ]
 )
-def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:
+def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve enrollment records for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -353,7 +329,7 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
         )
     ]
 )
-def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:
+def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -407,7 +383,7 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
     name='export_edx_forum_database',
     description='Solid to build the command line string for executing mongodump against the Open edX forum database',
     required_resource_keys={'results_dir'},
-    config={
+    config_schema={
         'edx_mongodb_host': Field(
             String,
             is_required=True,
@@ -416,7 +392,7 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
         'edx_mongodb_port': Field(
             Int,
             is_required=False,
-            default_value=27017,  # noqa WPS4232
+            default_value=27017,  # noqa: WPS432
             description='TCP port number used to connect to MongoDB server'
         ),
         'edx_mongodb_username': Field(
@@ -445,7 +421,7 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
         )
     ]
 )
-def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:
+def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:  # type: ignore
     """Export the edX forum database using mongodump.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -504,16 +480,11 @@ def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:
     yield Output(forum_data_path, 'edx_forum_data_directory')
 
 
-@solid
-def export_course(context: SolidExecutionContext, course_id: String) -> Nothing:
-    pass
-
-
 @solid(
     name='edx_upload_daily_extracts',
     description='Upload all data from daily extracts to S3 for institutional research.',
     required_resource_keys={'sqldb', 'results_dir', 's3'},
-    config={
+    config_schema={
         'edx_etl_results_bucket': Field(
             String,
             default_value='odl-developer-testing-sandbox',
@@ -529,7 +500,7 @@ def export_course(context: SolidExecutionContext, course_id: String) -> Nothing:
         InputDefinition(name='edx_forum_data_directory', dagster_type=DagsterPath),
     ]
 )
-def upload_extracted_data( # noqa WPS211
+def upload_extracted_data(  # noqa: WPS211
         context: SolidExecutionContext,
         edx_course_roles: DagsterPath,
         edx_enrolled_users: DagsterPath,

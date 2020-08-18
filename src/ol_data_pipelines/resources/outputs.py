@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import os
-from datetime import date, datetime
+from datetime import datetime
 from typing import Generator, Text
 
 from dagster import Field, InitResourceContext, String, resource
-
 from ol_data_pipelines.lib.dagster_types import DagsterPath
 
 
@@ -22,7 +21,7 @@ class ResultsDir:
         try:
             os.mkdir(self.path)
         except FileExistsError:
-            pass
+            return
 
     @property
     def path(self) -> DagsterPath:
@@ -57,7 +56,7 @@ class DailyResultsDir(ResultsDir):
 
 
 @resource(
-    config={
+    config_schema={
         'outputs_root_dir': Field(
             String,
             default_value='',
