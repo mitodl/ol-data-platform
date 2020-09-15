@@ -34,6 +34,7 @@ def package_pipeline(context):
             'mongo-tools'
         ],
         fpm_args=(
+            '--config-files=/etc/dagster/workspace.yaml '
             '--maintainer=odl-devops@mit.edu '
             '--after-install=buildprofiles/after_install.sh '
             '--template-scripts '

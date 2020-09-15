@@ -33,11 +33,11 @@ python = "^3.8"
 
 [tool.poetry.dev-dependencies]
 isort = "^4.3.21"
-mypy = "^0.770"
+mypy = "^0.782"
 pre-commit = "^2.3.0"
 pytest = "^5.3.5"
-wemake-python-styleguide = "^0.13.4"
-invoke = "^1.4.1"
+wemake-python-styleguide = "^0.14.0"
+invoke = "^1.0.0"
 poetry = "^1.0.9"
 vdist = "^2.1.1"
 
