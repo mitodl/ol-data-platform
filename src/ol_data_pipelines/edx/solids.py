@@ -1,22 +1,23 @@
 # -*- coding: utf-8 -*-
 
 from dagster import (
+    AssetMaterialization,
     EventMetadataEntry,
     Failure,
     Field,
     InputDefinition,
     Int,
     List,
-    Materialization,
     ModeDefinition,
     Output,
     OutputDefinition,
+    PresetDefinition,
     SolidExecutionContext,
     String,
     pipeline,
     solid
 )
-from dagster_aws.s3 import s3_resource
+from dagster_aws.s3 import s3_resource, s3_system_storage
 from dagster_bash.utils import execute as run_bash
 from ol_data_pipelines.edx.api_client import (
     get_access_token,
@@ -142,8 +143,8 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
     enrollments_path = context.resources.results_dir.path.joinpath('users_query.csv')
     write_csv(query_fields, users_data, enrollments_path)
-    yield Materialization(
-        label='users_query.csv',
+    yield AssetMaterialization(
+        asset_key='users_query',
         description='Information of users enrolled in available courses on Open edX installation',
         metadata_entries=[
             EventMetadataEntry.text(
@@ -220,8 +221,8 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
             submission_query)
         submissions_count += len(submission_data)
         write_csv(query_fields, submission_data, submissions_path)
-    yield Materialization(
-        label='enrolled_students.csv',
+    yield AssetMaterialization(
+        asset_key='enrolled_students',
         description='Students enrolled in edX courses',
         metadata_entries=[
             EventMetadataEntry.text(
@@ -290,8 +291,8 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
     enrollments_path = context.resources.results_dir.path.joinpath('enrollment_query.csv')
     write_csv(query_fields, enrollment_data, enrollments_path)
-    yield Materialization(
-        label='enrollment_query.csv',
+    yield AssetMaterialization(
+        asset_key='enrollment_query',
         description='Course enrollment records from Open edX installation',
         metadata_entries=[
             EventMetadataEntry.text(
@@ -359,8 +360,8 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
     roles_path = context.resources.results_dir.path.joinpath('role_query.csv')
     write_csv(query_fields, roles_data, roles_path)
-    yield Materialization(
-        label='role_query.csv',
+    yield AssetMaterialization(
+        asset_key='role_query',
         description='Course roles records from Open edX installation',
         metadata_entries=[
             EventMetadataEntry.text(
@@ -456,7 +457,7 @@ def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:  #
         cwd=str(context.resources.results_dir.root_dir))
 
     if mongodump_retcode != 0:
-        yield Failure(
+        raise Failure(
             description='The mongodump command for exporting the Open edX forum database failed.',
             metadata_entries=[
                 EventMetadataEntry.text(
@@ -467,8 +468,8 @@ def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:  #
             ]
         )
 
-    yield Materialization(
-        label='edx_forum_database',
+    yield AssetMaterialization(
+        asset_key='edx_forum_database',
         description='Exported Mongo database of forum data from Open edX installation',
         metadata_entries=[
             EventMetadataEntry.path(
@@ -530,6 +531,14 @@ def upload_extracted_data(  # noqa: WPS211
     :param edx_forum_data_directory: Directory containing exported MongoDB database of Open edX forum activity
     :type edx_forum_data_directory: DagsterPath
     """
+    yield AssetMaterialization(
+        asset_key='edx_daily_results',
+        description='Daily export directory for edX export pipeline',
+        metadata_entries=[
+            EventMetadataEntry.fspath(
+                f's3://{context.resources.s3._s3_bucket}/{context.resources.results_dir.path.name}'),
+        ]
+    )
     for path_object in context.resources.results_dir.path.iterdir():
         if path_object.is_dir():
             for fpath in path_object.iterdir():
@@ -550,13 +559,43 @@ def upload_extracted_data(  # noqa: WPS211
                  'tracking logs which get delivered to S3 on an hourly basis via FluentD'),
     mode_defs=[
         ModeDefinition(
+            name='production',
             resource_defs={
                 'sqldb': mysql_db_resource,
                 's3': s3_resource,
                 'results_dir': daily_dir
+            },
+            system_storage_defs=[s3_system_storage]
+        )
+    ],
+    preset_defs=[
+        PresetDefinition.from_files(
+            name='residential',
+            config_files=[
+                '/etc/dagster/residential_edx.yaml'
+            ],
+            mode='production',
+            tags={
+                'business_unit': 'residential'
+            }
+        ),
+        PresetDefinition.from_files(
+            name='xpro',
+            config_files=[
+                '/etc/dagster/xpro_edx.yaml'
+            ],
+            mode='production',
+            tags={
+                'business_unit': 'mitxpro'
             }
         )
-    ]
+    ],
+    tags={
+        'source': 'edx',
+        'destination': 's3',
+        'owner': 'platform-engineering',
+        'consumer': 'institutional-research'
+    }
 )
 def edx_course_pipeline():
     course_list = list_courses()
