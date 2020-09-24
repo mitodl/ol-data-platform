@@ -1,5 +1,7 @@
 load_from:
-  - python_package: ol_data_pipelines.edx.repositories
-    attribute: residential_edx_repository
-  - python_package: ol_data_pipelines.edx.repositories
-    attribute: xpro_edx_repository
+  - python_package:
+      package_name: ol_data_pipelines.edx.repositories
+      attribute: residential_edx_repository
+  - python_package:
+      package_name: ol_data_pipelines.edx.repositories
+      attribute: xpro_edx_repository
