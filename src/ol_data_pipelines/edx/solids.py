@@ -25,6 +25,11 @@ from ol_data_pipelines.edx.api_client import (
 )
 from ol_data_pipelines.lib.dagster_types import DagsterPath
 from ol_data_pipelines.lib.file_rendering import write_csv
+from ol_data_pipelines.lib.hooks import (
+    notify_healthchecks_io_on_failure,
+    notify_healthchecks_io_on_success
+)
+from ol_data_pipelines.resources.healthchecks import healthchecks_io_resource
 from ol_data_pipelines.resources.mysql_db import mysql_db_resource
 from ol_data_pipelines.resources.outputs import daily_dir
 from pypika import MySQLQuery as Query
@@ -553,6 +558,8 @@ def upload_extracted_data(  # noqa: WPS211
                 Key=str(path_object.relative_to(context.resources.results_dir.root_dir)))
 
 
+@notify_healthchecks_io_on_success
+@notify_healthchecks_io_on_failure
 @pipeline(
     description=('Extract data and course structure from Open edX for use by institutional research. '
                  'This is ultimately inserted into BigQuery and combined with information from the edX '
@@ -563,7 +570,8 @@ def upload_extracted_data(  # noqa: WPS211
             resource_defs={
                 'sqldb': mysql_db_resource,
                 's3': s3_resource,
-                'results_dir': daily_dir
+                'results_dir': daily_dir,
+                'healthchecks': healthchecks_io_resource
             },
             system_storage_defs=[s3_system_storage]
         )

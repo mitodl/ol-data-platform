@@ -50,7 +50,7 @@ version = "1.4.4"
 [[package]]
 category = "main"
 description = "Disable App Nap on OS X 10.9"
-marker = "python_version >= \"3.3\" and sys_platform == \"darwin\" or platform_system == \"Darwin\""
+marker = "sys_platform == \"darwin\" or platform_system == \"Darwin\" or python_version >= \"3.3\" and sys_platform == \"darwin\""
 name = "appnope"
 optional = false
 python-versions = "*"
@@ -107,7 +107,6 @@ tests_no_zope = ["coverage (>=5.0.2)", "hypothesis", "pympler", "pytest (>=4.3.0
 [[package]]
 category = "main"
 description = "Specifications for callback functions passed in to an API"
-marker = "python_version >= \"3.3\""
 name = "backcall"
 optional = false
 python-versions = "*"
@@ -167,10 +166,10 @@ description = "The AWS SDK for Python"
 name = "boto3"
 optional = false
 python-versions = "*"
-version = "1.15.3"
+version = "1.15.5"
 
 [package.dependencies]
-botocore = ">=1.18.3,<1.19.0"
+botocore = ">=1.18.5,<1.19.0"
 jmespath = ">=0.7.1,<1.0.0"
 s3transfer = ">=0.3.0,<0.4.0"
 
@@ -180,7 +179,7 @@ description = "Low-level, data-driven core of boto 3."
 name = "botocore"
 optional = false
 python-versions = "*"
-version = "1.18.3"
+version = "1.18.5"
 
 [package.dependencies]
 jmespath = ">=0.7.1,<1.0.0"
@@ -321,6 +320,18 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 version = "0.6.0.post1"
 
 [[package]]
+category = "main"
+description = "croniter provides iteration for datetime object with cron like format"
+name = "croniter"
+optional = false
+python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+version = "0.3.34"
+
+[package.dependencies]
+natsort = "*"
+python-dateutil = "*"
+
+[[package]]
 category = "dev"
 description = "cryptography is a package which provides cryptographic recipes and primitives to Python developers."
 marker = "python_version >= \"3.5\" and python_version < \"4.0\" and sys_platform == \"linux\""
@@ -357,15 +368,15 @@ description = "Web UI for dagster."
 name = "dagit"
 optional = false
 python-versions = "*"
-version = "0.9.9"
+version = "0.9.11"
 
 [package.dependencies]
 Flask-GraphQL = ">=2.0.0"
 Flask-Sockets = ">=0.2.1"
 PyYAML = "*"
 click = ">=7.0"
-dagster = "0.9.9"
-dagster-graphql = "0.9.9"
+dagster = "0.9.11"
+dagster-graphql = "0.9.11"
 flask = ">=0.12.4"
 flask-cors = ">=3.0.6"
 future = "*"
@@ -382,7 +393,7 @@ description = "A data orchestrator for machine learning, analytics, and ETL."
 name = "dagster"
 optional = false
 python-versions = "*"
-version = "0.9.9"
+version = "0.9.11"
 
 [package.dependencies]
 PyYAML = "*"
@@ -390,6 +401,7 @@ alembic = ">=1.2.1"
 click = ">=5.0"
 coloredlogs = ">=6.1"
 contextlib2 = ">=0.5.4"
+croniter = ">=0.3.34"
 funcsigs = "*"
 future = "*"
 grpcio = "1.30.0"
@@ -423,7 +435,7 @@ description = "Package for AWS-specific Dagster framework solid and resource com
 name = "dagster-aws"
 optional = false
 python-versions = "*"
-version = "0.9.9"
+version = "0.9.11"
 
 [package.dependencies]
 boto3 = ">=1.9"
@@ -451,7 +463,7 @@ description = "A Dagster integration for cron"
 name = "dagster-cron"
 optional = false
 python-versions = "*"
-version = "0.9.9"
+version = "0.9.11"
 
 [package.dependencies]
 dagster = "*"
@@ -463,7 +475,7 @@ description = "Package for GE-specific Dagster framework solid and resource comp
 name = "dagster-ge"
 optional = false
 python-versions = "*"
-version = "0.9.9"
+version = "0.9.11"
 
 [package.dependencies]
 dagster = "*"
@@ -477,7 +489,7 @@ description = "The GraphQL frontend to python dagster."
 name = "dagster-graphql"
 optional = false
 python-versions = "*"
-version = "0.9.9"
+version = "0.9.11"
 
 [package.dependencies]
 gevent = "*"
@@ -491,7 +503,7 @@ description = "Utilities and examples for working with pandas and dagster, an op
 name = "dagster-pandas"
 optional = false
 python-versions = "*"
-version = "0.9.9"
+version = "0.9.11"
 
 [package.dependencies]
 dagster = "*"
@@ -504,7 +516,7 @@ description = "A Dagster integration for postgres"
 name = "dagster-postgres"
 optional = false
 python-versions = "*"
-version = "0.9.9"
+version = "0.9.11"
 
 [package.dependencies]
 dagster = "*"
@@ -521,7 +533,6 @@ version = "1.5.4"
 [[package]]
 category = "main"
 description = "Decorators for Humans"
-marker = "python_version >= \"3.3\""
 name = "decorator"
 optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*"
@@ -1097,7 +1108,7 @@ description = "The next generation HTTP client."
 name = "httpx"
 optional = false
 python-versions = ">=3.6"
-version = "0.15.2"
+version = "0.15.4"
 
 [package.dependencies]
 certifi = "*"
@@ -1129,7 +1140,7 @@ description = "File identification library for Python"
 name = "identify"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
-version = "1.5.4"
+version = "1.5.5"
 
 [package.extras]
 license = ["editdistance"]
@@ -1277,7 +1288,6 @@ version = "1.1.0"
 [[package]]
 category = "main"
 description = "An autocompletion tool for Python that can be used for text editors."
-marker = "python_version >= \"3.3\""
 name = "jedi"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
@@ -1522,6 +1532,18 @@ version = "0.4.3"
 
 [[package]]
 category = "main"
+description = "Simple yet flexible natural sorting in Python."
+name = "natsort"
+optional = false
+python-versions = ">=3.4"
+version = "7.0.1"
+
+[package.extras]
+fast = ["fastnumbers (>=2.0.0)"]
+icu = ["PyICU (>=1.0.0)"]
+
+[[package]]
+category = "main"
 description = "Converting Jupyter Notebooks"
 name = "nbconvert"
 optional = false
@@ -1648,7 +1670,6 @@ version = "1.4.2"
 [[package]]
 category = "main"
 description = "A Python Parser"
-marker = "python_version >= \"3.3\""
 name = "parso"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
@@ -1714,7 +1735,6 @@ ptyprocess = ">=0.5"
 [[package]]
 category = "main"
 description = "Tiny 'shelve'-like database with concurrency support"
-marker = "python_version >= \"3.3\""
 name = "pickleshare"
 optional = false
 python-versions = "*"
@@ -1825,7 +1845,6 @@ test = ["pytest (>=2.7.3)", "pytest-cov", "coveralls", "futures", "pytest-benchm
 [[package]]
 category = "main"
 description = "Library for building powerful interactive command lines in Python"
-marker = "python_version >= \"3.3\""
 name = "prompt-toolkit"
 optional = false
 python-versions = ">=3.6.1"
@@ -1893,7 +1912,6 @@ version = "2.6.0"
 [[package]]
 category = "main"
 description = "C parser in Python"
-marker = "platform_python_implementation == \"CPython\" and sys_platform == \"win32\""
 name = "pycparser"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
@@ -2376,8 +2394,8 @@ category = "main"
 description = "List processing tools and functional utilities"
 name = "toolz"
 optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-version = "0.10.0"
+python-versions = ">=3.5"
+version = "0.11.1"
 
 [[package]]
 category = "main"
@@ -2507,7 +2525,6 @@ watchmedo = ["PyYAML (>=3.10)", "argh (>=0.24.1)"]
 [[package]]
 category = "main"
 description = "Measures the displayed width of unicode strings in a terminal"
-marker = "python_version >= \"3.3\""
 name = "wcwidth"
 optional = false
 python-versions = "*"
@@ -2700,12 +2717,12 @@ bleach = [
     {file = "bleach-3.2.1.tar.gz", hash = "sha256:52b5919b81842b1854196eaae5ca29679a2f2e378905c346d3ca8227c2c66080"},
 ]
 boto3 = [
-    {file = "boto3-1.15.3-py2.py3-none-any.whl", hash = "sha256:b2aa8a8ddb6a4301741a713ecc44262d49782fda754444e499851aaba8feb2bd"},
-    {file = "boto3-1.15.3.tar.gz", hash = "sha256:3f0d8dc7dec39876b7b224469639d8eef4dba1c2dc779a1b30fc73f99a18f742"},
+    {file = "boto3-1.15.5-py2.py3-none-any.whl", hash = "sha256:0c464a7de522f88b581ca0d41ffa71e9be5e17fbb0456c275421f65b7c5f6a55"},
+    {file = "boto3-1.15.5.tar.gz", hash = "sha256:0fce548e19d6db8e11fd0e2ae7809e1e3282080636b4062b2452bfa20e4f0233"},
 ]
 botocore = [
-    {file = "botocore-1.18.3-py2.py3-none-any.whl", hash = "sha256:37d4bd89e55b6873b5c08a8cdc8d41654c7b3c0b7cb44e30210b539503d03da6"},
-    {file = "botocore-1.18.3.tar.gz", hash = "sha256:f84fcfe329faa576a4e705756ffb896bd8227947fef764c72ef382135f6ecb22"},
+    {file = "botocore-1.18.5-py2.py3-none-any.whl", hash = "sha256:e3bf44fba058f6df16006b94a67650418a080a525c82521abb3cb516a4cba362"},
+    {file = "botocore-1.18.5.tar.gz", hash = "sha256:7ce7a05b98ffb3170396960273383e8aade9be6026d5a762f5f40969d5d6b761"},
 ]
 cachecontrol = [
     {file = "CacheControl-0.12.6-py2.py3-none-any.whl", hash = "sha256:10d056fa27f8563a271b345207402a6dcce8efab7e5b377e270329c62471b10d"},
@@ -2789,6 +2806,10 @@ contextlib2 = [
     {file = "contextlib2-0.6.0.post1-py2.py3-none-any.whl", hash = "sha256:3355078a159fbb44ee60ea80abd0d87b80b78c248643b49aa6d94673b413609b"},
     {file = "contextlib2-0.6.0.post1.tar.gz", hash = "sha256:01f490098c18b19d2bd5bb5dc445b2054d2fa97f09a4280ba2c5f3c394c8162e"},
 ]
+croniter = [
+    {file = "croniter-0.3.34-py2.py3-none-any.whl", hash = "sha256:15597ef0639f8fbab09cbf8c277fa8c65c8b9dbe818c4b2212f95dbc09c6f287"},
+    {file = "croniter-0.3.34.tar.gz", hash = "sha256:7186b9b464f45cf3d3c83a18bc2344cc101d7b9fd35a05f2878437b14967e964"},
+]
 cryptography = [
     {file = "cryptography-3.1.1-cp27-cp27m-macosx_10_10_x86_64.whl", hash = "sha256:65beb15e7f9c16e15934569d29fb4def74ea1469d8781f6b3507ab896d6d8719"},
     {file = "cryptography-3.1.1-cp27-cp27m-manylinux1_x86_64.whl", hash = "sha256:983c0c3de4cb9fcba68fd3f45ed846eb86a2a8b8d8bc5bb18364c4d00b3c61fe"},
@@ -2818,40 +2839,40 @@ cycler = [
     {file = "cycler-0.10.0.tar.gz", hash = "sha256:cd7b2d1018258d7247a71425e9f26463dfb444d411c39569972f4ce586b0c9d8"},
 ]
 dagit = [
-    {file = "dagit-0.9.9-py3-none-any.whl", hash = "sha256:624f5fb6dafa0024518cae6928ac5a76964fab091c6a4cc34a26418d91caaf5f"},
-    {file = "dagit-0.9.9.tar.gz", hash = "sha256:ae62cc6149268cd9f3bbb3208928928eec8d9ffd1b285eaac9a67e1204db002e"},
+    {file = "dagit-0.9.11-py3-none-any.whl", hash = "sha256:845e3a762c73a5e278c93de74c6ec662c6114cd0a9a42abd256ad6812474d0bd"},
+    {file = "dagit-0.9.11.tar.gz", hash = "sha256:0d8da9e3894b91b68a53bc4b87b49a39ca1d6413877346a772e4552fdef2006b"},
 ]
 dagster = [
-    {file = "dagster-0.9.9-py3-none-any.whl", hash = "sha256:e490d2ff2e342e37d5e54658ac52687763fb853eba311f34c9ff411161b4934f"},
-    {file = "dagster-0.9.9.tar.gz", hash = "sha256:cf61a9c78e85b73956490db3519f86767ea708585002c1407840ddf9cf4f073c"},
+    {file = "dagster-0.9.11-py3-none-any.whl", hash = "sha256:e8ef94b380feae146d8027f318df329f665757952456cce2f97d76df10b02d0b"},
+    {file = "dagster-0.9.11.tar.gz", hash = "sha256:a787bbe6c7bd8d5da6052db3bec0130ee01939921481258d88a5b859dd8f958f"},
 ]
 dagster-aws = [
-    {file = "dagster-aws-0.9.9.tar.gz", hash = "sha256:652af66bcb5d038a023fb54c023235434bb746866f063e0fb4e6187a1c743ee7"},
-    {file = "dagster_aws-0.9.9-py3-none-any.whl", hash = "sha256:a0d389a5deb8e4816072397d1fb17ba1488445a5294771fb991512518dabfbc8"},
+    {file = "dagster-aws-0.9.11.tar.gz", hash = "sha256:cc1f3e967af4309e30326037628547bde92ef7102638c258f4719b47a7d249af"},
+    {file = "dagster_aws-0.9.11-py3-none-any.whl", hash = "sha256:acd10e1445fbe3375ddee369067ffc2909a8ef922c3c3d8a50aed06ee9b22f08"},
 ]
 dagster-bash = [
     {file = "dagster-bash-0.7.16.tar.gz", hash = "sha256:8721f9c2a5bd2fca33a547ed779f788473422cdacbf1520c70fecd9bee9a224f"},
     {file = "dagster_bash-0.7.16-py3-none-any.whl", hash = "sha256:86e9033f81d6ccc1e860e400989fbbd2e9f16216a138c01e096e0192aa3bb126"},
 ]
 dagster-cron = [
-    {file = "dagster-cron-0.9.9.tar.gz", hash = "sha256:bb50ace5910db763bd5a0807df89bbbcc43888eb955153d1fd03e7f510d2d548"},
-    {file = "dagster_cron-0.9.9-py3-none-any.whl", hash = "sha256:2d685f78e133ef76bce918b15634bb0b8447f7bcf711a41a009b2b478ad9a7ba"},
+    {file = "dagster-cron-0.9.11.tar.gz", hash = "sha256:8d5b8812fc7eea318bc45b6a4dbdf79de5a7b95f2e26a3c8a27a06325fde8bc9"},
+    {file = "dagster_cron-0.9.11-py3-none-any.whl", hash = "sha256:b5f7436964f12759208fd719bc8ca1fe4a5e1b075cd76813c8d86da6a0882a01"},
 ]
 dagster-ge = [
-    {file = "dagster-ge-0.9.9.tar.gz", hash = "sha256:3c50870e7bcc79c0c979bb152a4cf3425c733cb8400bcac65947c391a66c179a"},
-    {file = "dagster_ge-0.9.9-py3-none-any.whl", hash = "sha256:3b0dc34d52ac86110f92754667bfff5b950d9198896e60526896ca48817bf228"},
+    {file = "dagster-ge-0.9.11.tar.gz", hash = "sha256:5d32ad2078964e20b40baa4a2fbf8fa29ac20e741031db3fde09315c90988e05"},
+    {file = "dagster_ge-0.9.11-py3-none-any.whl", hash = "sha256:930252fbe3161824c52d9a195b2339fb25e464b55311e25852c68117a817a7ff"},
 ]
 dagster-graphql = [
-    {file = "dagster-graphql-0.9.9.tar.gz", hash = "sha256:88a39b7ed2be2c11d504154f9b867c189bbcafa9ed0319a4651f157d46f12162"},
-    {file = "dagster_graphql-0.9.9-py3-none-any.whl", hash = "sha256:f68680fc6fd3ad83121b00b38725c1ca9d2d7b423ec560347ba0ffe814ab4a15"},
+    {file = "dagster-graphql-0.9.11.tar.gz", hash = "sha256:f6081c45bb4f86e6b703fe095210fe3ba3653a768140f29088cf4ceb6fc550b6"},
+    {file = "dagster_graphql-0.9.11-py3-none-any.whl", hash = "sha256:3e5b8d13d1c7637c835735264f3a789c181a25ca192833cef85bf2323f0f798b"},
 ]
 dagster-pandas = [
-    {file = "dagster-pandas-0.9.9.tar.gz", hash = "sha256:9a477e0c8572dbd39a22db8af3c6b66068b47ef976014f48750e9d2121991d22"},
-    {file = "dagster_pandas-0.9.9-py3-none-any.whl", hash = "sha256:938634edb423f55c4844eaabe55c37162f82f23236c4ec241ae7c19364e9648c"},
+    {file = "dagster-pandas-0.9.11.tar.gz", hash = "sha256:1131adc0b3339d5fa160adb4903568facfae791116f9da68dcab242174868868"},
+    {file = "dagster_pandas-0.9.11-py3-none-any.whl", hash = "sha256:a8e72872204b48c8daec6ba0d723391a5cb2d35f129f1321c4773439fdd8b355"},
 ]
 dagster-postgres = [
-    {file = "dagster-postgres-0.9.9.tar.gz", hash = "sha256:7c88bfeb1d8013aa285290c1c4e4cff7a0dbd279c523e11a268b6d38fe76717c"},
-    {file = "dagster_postgres-0.9.9-py3-none-any.whl", hash = "sha256:270cd868a3477e1076720315b37a05c675a111228d786842d80106c0105116f1"},
+    {file = "dagster-postgres-0.9.11.tar.gz", hash = "sha256:a1f4ae59a39d61d0fcedd4c6e416cd6a80aa6e2f05d01fe9b91145850a5b541a"},
+    {file = "dagster_postgres-0.9.11-py3-none-any.whl", hash = "sha256:c556e95d55bbbce97b68c94c14c198b0427f9f1ce570400dc1a5e35046b06cce"},
 ]
 darglint = [
     {file = "darglint-1.5.4-py3-none-any.whl", hash = "sha256:e58ff63f0f29a4dc8f9c1e102c7d00539290567d72feb74b7b9d5f8302992b8d"},
@@ -3096,16 +3117,16 @@ httpcore = [
     {file = "httpcore-0.11.0.tar.gz", hash = "sha256:35ffc735d746b83f8fc6d36f82600e56117b9e8adc65d0c0423264b6ebfef7bf"},
 ]
 httpx = [
-    {file = "httpx-0.15.2-py3-none-any.whl", hash = "sha256:a2bd6eb6d52f0fbd3b082fc8a37b1f50d6112352a83aa04a60f4107f723b018e"},
-    {file = "httpx-0.15.2.tar.gz", hash = "sha256:713a2deaf96d85bbd4a1fbdf0edb27d6b4ee2c9aaeda8433042367e4b9e1628d"},
+    {file = "httpx-0.15.4-py3-none-any.whl", hash = "sha256:7b3c07bfdcdadd92020dd4c07b15932abdcf1c898422a4e98de3d19b2223310b"},
+    {file = "httpx-0.15.4.tar.gz", hash = "sha256:4c81dbf98a29cb4f51f415140df56542f9d4860798d713e336642e953cddd1db"},
 ]
 humanfriendly = [
     {file = "humanfriendly-8.2-py2.py3-none-any.whl", hash = "sha256:e78960b31198511f45fd455534ae7645a6207d33e512d2e842c766d15d9c8080"},
     {file = "humanfriendly-8.2.tar.gz", hash = "sha256:bf52ec91244819c780341a3438d5d7b09f431d3f113a475147ac9b7b167a3d12"},
 ]
 identify = [
-    {file = "identify-1.5.4-py2.py3-none-any.whl", hash = "sha256:d7da7de6825568daa4449858ce328ecc0e1ada2554d972a6f4f90e736aaf499a"},
-    {file = "identify-1.5.4.tar.gz", hash = "sha256:e4db4796b3b0cf4f9cb921da51430abffff2d4ba7d7c521184ed5252bd90d461"},
+    {file = "identify-1.5.5-py2.py3-none-any.whl", hash = "sha256:da683bfb7669fa749fc7731f378229e2dbf29a1d1337cbde04106f02236eb29d"},
+    {file = "identify-1.5.5.tar.gz", hash = "sha256:7c22c384a2c9b32c5cc891d13f923f6b2653aa83e2d75d8f79be240d6c86c4f4"},
 ]
 idna = [
     {file = "idna-2.10-py2.py3-none-any.whl", hash = "sha256:b97d804b1e9b523befed77c48dacec60e6dcb0b5391d57af6a65a312a90648c0"},
@@ -3323,6 +3344,10 @@ mypy = [
 mypy-extensions = [
     {file = "mypy_extensions-0.4.3-py2.py3-none-any.whl", hash = "sha256:090fedd75945a69ae91ce1303b5824f428daf5a028d2f6ab8a299250a846f15d"},
     {file = "mypy_extensions-0.4.3.tar.gz", hash = "sha256:2d82818f5bb3e369420cb3c4060a7970edba416647068eb4c5343488a6c604a8"},
+]
+natsort = [
+    {file = "natsort-7.0.1-py3-none-any.whl", hash = "sha256:d3fd728a3ceb7c78a59aa8539692a75e37cbfd9b261d4d702e8016639820f90a"},
+    {file = "natsort-7.0.1.tar.gz", hash = "sha256:a633464dc3a22b305df0f27abcb3e83515898aa1fd0ed2f9726c3571a27258cf"},
 ]
 nbconvert = [
     {file = "nbconvert-5.6.1-py2.py3-none-any.whl", hash = "sha256:f0d6ec03875f96df45aa13e21fd9b8450c42d7e1830418cccc008c0df725fcee"},
@@ -3876,7 +3901,8 @@ tomlkit = [
     {file = "tomlkit-0.5.11.tar.gz", hash = "sha256:f044eda25647882e5ef22b43a1688fb6ab12af2fc50e8456cdfc751c873101cf"},
 ]
 toolz = [
-    {file = "toolz-0.10.0.tar.gz", hash = "sha256:08fdd5ef7c96480ad11c12d472de21acd32359996f69a5259299b540feba4560"},
+    {file = "toolz-0.11.1-py3-none-any.whl", hash = "sha256:1bc473acbf1a1db4e72a1ce587be347450e8f08324908b8a266b486f408f04d5"},
+    {file = "toolz-0.11.1.tar.gz", hash = "sha256:c7a47921f07822fe534fb1c01c9931ab335a4390c782bd28c6bcc7c2f71f3fbf"},
 ]
 toposort = [
     {file = "toposort-1.5-py2.py3-none-any.whl", hash = "sha256:d80128b83b411d503b0cdb4a8f172998bc1d3b434b6402a349b8ebd734d51a80"},
