@@ -23,6 +23,11 @@ class ResultsDir:
         except FileExistsError:
             return
 
+    def clean_dir(self):
+        for child in self.path.glob('*'):
+            os.remove(child)
+        self.path.rmdir()
+
     @property
     def path(self) -> DagsterPath:
         return DagsterPath(os.path.join(self.root_dir, self.dir_name))

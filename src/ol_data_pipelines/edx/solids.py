@@ -413,6 +413,12 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
             default_value='',
             description='Password for account with permissions to read forum database'
         ),
+        'edx_mongodb_auth_db': Field(
+            String,
+            is_required=False,
+            default_value='admin',
+            description='The MongoDB database that contains the account information for the authenticating user.'
+        ),
         'edx_mongodb_forum_database_name': Field(
             String,
             is_required=True,
@@ -447,7 +453,7 @@ def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:  #
                      '--db',
                      context.solid_config['edx_mongodb_forum_database_name'],
                      '--authenticationDatabase',
-                     'admin',
+                     context.solid_config['edx_mongodb_auth_db'],
                      '--out',
                      context.resources.results_dir.absolute_path]
     if password := context.solid_config['edx_mongodb_password']:
@@ -536,14 +542,6 @@ def upload_extracted_data(  # noqa: WPS211
     :param edx_forum_data_directory: Directory containing exported MongoDB database of Open edX forum activity
     :type edx_forum_data_directory: DagsterPath
     """
-    yield AssetMaterialization(
-        asset_key='edx_daily_results',
-        description='Daily export directory for edX export pipeline',
-        metadata_entries=[
-            EventMetadataEntry.fspath(
-                f's3://{context.resources.s3._s3_bucket}/{context.resources.results_dir.path.name}'),
-        ]
-    )
     for path_object in context.resources.results_dir.path.iterdir():
         if path_object.is_dir():
             for fpath in path_object.iterdir():
@@ -556,6 +554,15 @@ def upload_extracted_data(  # noqa: WPS211
                 Filename=str(path_object),
                 Bucket=context.solid_config['edx_etl_results_bucket'],
                 Key=str(path_object.relative_to(context.resources.results_dir.root_dir)))
+    yield AssetMaterialization(
+        asset_key='edx_daily_results',
+        description='Daily export directory for edX export pipeline',
+        metadata_entries=[
+            EventMetadataEntry.fspath(
+                f's3://{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}'),
+        ]
+    )
+    context.resources.results_dir.clean_dir()
 
 
 @notify_healthchecks_io_on_success
