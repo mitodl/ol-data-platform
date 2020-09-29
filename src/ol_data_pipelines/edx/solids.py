@@ -5,7 +5,6 @@ from dagster import (
     EventMetadataEntry,
     Failure,
     Field,
-    FileHandle,
     InputDefinition,
     Int,
     List,
@@ -24,6 +23,7 @@ from ol_data_pipelines.edx.api_client import (
     get_access_token,
     get_edx_course_ids
 )
+from ol_data_pipelines.lib.dagster_types import DagsterPath
 from ol_data_pipelines.lib.file_rendering import write_csv
 from ol_data_pipelines.lib.hooks import (
     notify_healthchecks_io_on_failure,
@@ -103,12 +103,12 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
     output_defs=[
         OutputDefinition(
             name='edx_enrolled_users',
-            dagster_type=FileHandle,
+            dagster_type=DagsterPath,
             description='Path to user data in tabular format rendered as CSV files'
         )
     ]
 )
-def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> FileHandle:  # type: ignore
+def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -119,7 +119,7 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
 
     :returns: A path definition that points to the rendered data table
 
-    :rtype: FileHandle
+    :rtype: DagsterPath
     """
     course_enrollment, users = Tables('student_courseenrollment', 'auth_user')
     users_query = Query.from_(
@@ -163,7 +163,7 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
         ]
     )
     yield Output(
-        FileHandle(enrollments_path),
+        enrollments_path,
         'edx_enrolled_users'
     )
 
@@ -182,12 +182,12 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
     output_defs=[
         OutputDefinition(
             name='edx_student_submissions',
-            dagster_type=FileHandle,
+            dagster_type=DagsterPath,
             description='Path to submissions data in tabular format rendered as CSV files'
         )
     ]
 )
-def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> FileHandle:  # type: ignore
+def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -198,7 +198,7 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
 
     :returns: A path definition that points to the rendered data table
 
-    :rtype: FileHandle
+    :rtype: DagsterPath
     """
     studentmodule = Table('courseware_studentmodule')
     submissions_count = 0
@@ -241,7 +241,7 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
         ]
     )
     yield Output(
-        FileHandle(submissions_path),
+        submissions_path,
         'edx_student_submissions'
     )
 
@@ -260,12 +260,12 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
     output_defs=[
         OutputDefinition(
             name='edx_enrollment_records',
-            dagster_type=FileHandle,
+            dagster_type=DagsterPath,
             description='Path to enrollment data in tabular format rendered as CSV files'
         )
     ]
 )
-def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[String]) -> FileHandle:  # type: ignore
+def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve enrollment records for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -276,7 +276,7 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
 
     :returns: A path definition that points to the rendered data table
 
-    :rtype: FileHandle
+    :rtype: DagsterPath
     """
     enrollment = Table('student_courseenrollment')
     enrollments_query = Query.from_(
@@ -311,7 +311,7 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
         ]
     )
     yield Output(
-        FileHandle(enrollments_path),
+        enrollments_path,
         'edx_enrollment_records'
     )
 
@@ -330,12 +330,12 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
     output_defs=[
         OutputDefinition(
             name='edx_course_roles',
-            dagster_type=FileHandle,
+            dagster_type=DagsterPath,
             description='Path to course role data in tabular format rendered as CSV files'
         )
     ]
 )
-def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -> FileHandle:  # type: ignore
+def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -346,7 +346,7 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
 
     :returns: A path definition that points to the rendered data table
 
-    :rtype: FileHandle
+    :rtype: DagsterPath
     """
     access_role = Table('student_courseaccessrole')
     roles_query = Query.from_(
@@ -380,7 +380,7 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
         ]
     )
     yield Output(
-        FileHandle(roles_path),
+        roles_path,
         'edx_course_roles'
     )
 
@@ -428,12 +428,12 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
     output_defs=[
         OutputDefinition(
             name='edx_forum_data_directory',
-            dagster_type=FileHandle,
+            dagster_type=DagsterPath,
             description='Path to exported forum data generated by mongodump command'
         )
     ]
 )
-def export_edx_forum_database(context: SolidExecutionContext) -> FileHandle:  # type: ignore
+def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:  # type: ignore
     """Export the edX forum database using mongodump.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -441,9 +441,7 @@ def export_edx_forum_database(context: SolidExecutionContext) -> FileHandle:  # 
 
     :returns: Path object to the directory where the exported Mongo database is located
 
-    :rtype: FileHandle
-
-    :raises Failure: Raises a Failure output in the event that the mongodump command fails.
+    :rtype: DagsterPath
     """
     forum_data_path = context.resources.results_dir.path.joinpath(
         context.solid_config['edx_mongodb_forum_database_name'])
@@ -491,7 +489,7 @@ def export_edx_forum_database(context: SolidExecutionContext) -> FileHandle:  # 
         ]
     )
 
-    yield Output(FileHandle(forum_data_path), 'edx_forum_data_directory')
+    yield Output(forum_data_path, 'edx_forum_data_directory')
 
 
 @solid(
@@ -507,46 +505,45 @@ def export_edx_forum_database(context: SolidExecutionContext) -> FileHandle:  # 
         )
     },
     input_defs=[
-        InputDefinition(name='edx_course_roles', dagster_type=FileHandle),
-        InputDefinition(name='edx_enrolled_users', dagster_type=FileHandle),
-        InputDefinition(name='edx_student_submissions', dagster_type=FileHandle),
-        InputDefinition(name='edx_enrollment_records', dagster_type=FileHandle),
-        InputDefinition(name='edx_forum_data_directory', dagster_type=FileHandle),
+        InputDefinition(name='edx_course_roles', dagster_type=DagsterPath),
+        InputDefinition(name='edx_enrolled_users', dagster_type=DagsterPath),
+        InputDefinition(name='edx_student_submissions', dagster_type=DagsterPath),
+        InputDefinition(name='edx_enrollment_records', dagster_type=DagsterPath),
+        InputDefinition(name='edx_forum_data_directory', dagster_type=DagsterPath),
     ],
     output_defs=[
-        OutputDefinition(name='edx_daily_extracts_directory', dagster_type=FileHandle)
+        OutputDefinition(name='edx_daily_extracts_directory', dagster_type=String)
     ]
 )
-def upload_extracted_data(
+def upload_extracted_data(  # noqa: WPS211
         context: SolidExecutionContext,
-        edx_course_roles: FileHandle,
-        edx_enrolled_users: FileHandle,
-        edx_student_submissions: FileHandle,
-        edx_enrollment_records: FileHandle,
-        edx_forum_data_directory: FileHandle
-) -> FileHandle:
+        edx_course_roles: DagsterPath,
+        edx_enrolled_users: DagsterPath,
+        edx_student_submissions: DagsterPath,
+        edx_enrollment_records: DagsterPath,
+        edx_forum_data_directory: DagsterPath):
     """Upload all data exports to S3 so that institutional research can ingest into their system.
 
     :param context: Dagster execution context for propagaint configuration data
     :type context: SolidExecutionContext
 
     :param edx_course_roles: Flat file containing tabular representation of course roles in Open edX installation
-    :type edx_course_roles: FileHandle
+    :type edx_course_roles: DagsterPath
 
     :param edx_enrolled_users: Flat file containing tabular representation of users who are enrolled in courses in Open
         edX installation
-    :type edx_enrolled_users: FileHandle
+    :type edx_enrolled_users: DagsterPath
 
     :param edx_student_submissions: Flat file containing tabular representation of student submissions in Open edX
         installation
-    :type edx_student_submissions: FileHandle
+    :type edx_student_submissions: DagsterPath
 
     :param edx_enrollment_records: Flat file containing tabular representation of enrollment data in Open edX
         installation
-    :type edx_enrollment_records: FileHandle
+    :type edx_enrollment_records: DagsterPath
 
     :param edx_forum_data_directory: Directory containing exported MongoDB database of Open edX forum activity
-    :type edx_forum_data_directory: FileHandle
+    :type edx_forum_data_directory: DagsterPath
     """
     for path_object in context.resources.results_dir.path.iterdir():
         if path_object.is_dir():
@@ -570,7 +567,7 @@ def upload_extracted_data(
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        FileHandle(f'{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}'),
+        f'{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}',
         'edx_daily_extracts_directory'
     )
 
