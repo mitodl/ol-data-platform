@@ -163,7 +163,7 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
         ]
     )
     yield Output(
-        enrollments_path,
+        FileHandle(enrollments_path),
         'edx_enrolled_users'
     )
 
@@ -241,7 +241,7 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
         ]
     )
     yield Output(
-        submissions_path,
+        FileHandle(submissions_path),
         'edx_student_submissions'
     )
 
@@ -311,7 +311,7 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
         ]
     )
     yield Output(
-        enrollments_path,
+        FileHandle(enrollments_path),
         'edx_enrollment_records'
     )
 
@@ -380,7 +380,7 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
         ]
     )
     yield Output(
-        roles_path,
+        FileHandle(roles_path),
         'edx_course_roles'
     )
 
@@ -442,6 +442,8 @@ def export_edx_forum_database(context: SolidExecutionContext) -> FileHandle:  # 
     :returns: Path object to the directory where the exported Mongo database is located
 
     :rtype: FileHandle
+
+    :raises Failure: Raises a Failure output in the event that the mongodump command fails.
     """
     forum_data_path = context.resources.results_dir.path.joinpath(
         context.solid_config['edx_mongodb_forum_database_name'])
@@ -489,7 +491,7 @@ def export_edx_forum_database(context: SolidExecutionContext) -> FileHandle:  # 
         ]
     )
 
-    yield Output(forum_data_path, 'edx_forum_data_directory')
+    yield Output(FileHandle(forum_data_path), 'edx_forum_data_directory')
 
 
 @solid(
@@ -568,7 +570,7 @@ def upload_extracted_data(
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        f'{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}',
+        FileHandle(f'{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}'),
         'edx_daily_extracts_directory'
     )
 
