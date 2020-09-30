@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ol-data-pipelines"
-version = "0.1.7"
+version = "0.1.8"
 description = "Data pipelines for open learning"
 authors = ["Tobias Macey"]
 license = "BSD-3-Clause"

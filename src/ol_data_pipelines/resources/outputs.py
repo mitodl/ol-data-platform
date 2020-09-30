@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import shutil
 from datetime import datetime
 from typing import Generator, Text
 
@@ -24,9 +25,7 @@ class ResultsDir:
             return
 
     def clean_dir(self):
-        for child in self.path.glob('*'):
-            os.remove(child)
-        self.path.rmdir()
+        shutil.rmtree(self.path)
 
     @property
     def path(self) -> DagsterPath:
