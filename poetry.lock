@@ -162,20 +162,20 @@ webencodings = "*"
 
 [[package]]
 name = "boto3"
-version = "1.15.13"
+version = "1.15.15"
 description = "The AWS SDK for Python"
 category = "main"
 optional = false
 python-versions = "*"
 
 [package.dependencies]
-botocore = ">=1.18.13,<1.19.0"
+botocore = ">=1.18.15,<1.19.0"
 jmespath = ">=0.7.1,<1.0.0"
 s3transfer = ">=0.3.0,<0.4.0"
 
 [[package]]
 name = "botocore"
-version = "1.18.13"
+version = "1.18.15"
 description = "Low-level, data-driven core of boto 3."
 category = "main"
 optional = false
@@ -365,7 +365,7 @@ six = "*"
 
 [[package]]
 name = "dagit"
-version = "0.9.13"
+version = "0.9.14"
 description = "Web UI for dagster."
 category = "main"
 optional = false
@@ -373,8 +373,8 @@ python-versions = "*"
 
 [package.dependencies]
 click = ">=7.0"
-dagster = "0.9.13"
-dagster-graphql = "0.9.13"
+dagster = "0.9.14"
+dagster-graphql = "0.9.14"
 flask = ">=0.12.4"
 flask-cors = ">=3.0.6"
 Flask-GraphQL = ">=2.0.0"
@@ -390,7 +390,7 @@ watchdog = ">=0.8.3"
 
 [[package]]
 name = "dagster"
-version = "0.9.13"
+version = "0.9.14"
 description = "A data orchestrator for machine learning, analytics, and ETL."
 category = "main"
 optional = false
@@ -426,7 +426,7 @@ docker = ["docker"]
 
 [[package]]
 name = "dagster-aws"
-version = "0.9.13"
+version = "0.9.14"
 description = "Package for AWS-specific Dagster framework solid and resource components."
 category = "main"
 optional = false
@@ -435,6 +435,7 @@ python-versions = "*"
 [package.dependencies]
 boto3 = ">=1.9"
 dagster = "*"
+packaging = "*"
 psycopg2-binary = "*"
 requests = "*"
 
@@ -454,7 +455,7 @@ dagster = "*"
 
 [[package]]
 name = "dagster-cron"
-version = "0.9.13"
+version = "0.9.14"
 description = "A Dagster integration for cron"
 category = "main"
 optional = false
@@ -466,7 +467,7 @@ python-crontab = ">=2.4.1"
 
 [[package]]
 name = "dagster-ge"
-version = "0.9.13"
+version = "0.9.14"
 description = "Package for GE-specific Dagster framework solid and resource components."
 category = "main"
 optional = false
@@ -480,7 +481,7 @@ pandas = "*"
 
 [[package]]
 name = "dagster-graphql"
-version = "0.9.13"
+version = "0.9.14"
 description = "The GraphQL frontend to python dagster."
 category = "main"
 optional = false
@@ -494,7 +495,7 @@ requests = "*"
 
 [[package]]
 name = "dagster-pandas"
-version = "0.9.13"
+version = "0.9.14"
 description = "Utilities and examples for working with pandas and dagster, an opinionated framework for expressing data pipelines"
 category = "main"
 optional = false
@@ -507,7 +508,7 @@ pandas = "*"
 
 [[package]]
 name = "dagster-postgres"
-version = "0.9.13"
+version = "0.9.14"
 description = "A Dagster integration for postgres"
 category = "main"
 optional = false
@@ -1090,7 +1091,7 @@ http2 = ["h2 (>=3,<5)"]
 
 [[package]]
 name = "httpx"
-version = "0.16.0"
+version = "0.16.1"
 description = "The next generation HTTP client."
 category = "main"
 optional = false
@@ -2309,7 +2310,7 @@ tornado = ">=4"
 
 [[package]]
 name = "testfixtures"
-version = "6.14.2"
+version = "6.15.0"
 description = "A collection of helpers and mock objects for unit tests and doc tests."
 category = "dev"
 optional = false
@@ -2373,7 +2374,7 @@ python-versions = ">= 3.5"
 
 [[package]]
 name = "tqdm"
-version = "4.50.1"
+version = "4.50.2"
 description = "Fast, Extensible Progress Meter"
 category = "main"
 optional = false
@@ -2668,12 +2669,12 @@ bleach = [
     {file = "bleach-3.2.1.tar.gz", hash = "sha256:52b5919b81842b1854196eaae5ca29679a2f2e378905c346d3ca8227c2c66080"},
 ]
 boto3 = [
-    {file = "boto3-1.15.13-py2.py3-none-any.whl", hash = "sha256:f71ef9005bc49f92e822b3c24d651a9bc2b682a63acdcbbb2bc1d16da39c01ea"},
-    {file = "boto3-1.15.13.tar.gz", hash = "sha256:329178bd505b5d1dbb5eab25e9697c0e592c45548c895f451a91772d0e5a9329"},
+    {file = "boto3-1.15.15-py2.py3-none-any.whl", hash = "sha256:8aafa1ec72451cf70fe6d8c7e86b1a83d2e195d4dda95e5bf21e40132a38c309"},
+    {file = "boto3-1.15.15.tar.gz", hash = "sha256:1627f97e050be59cfef839481acc73eba4b29e475a067f374a493e6b7f25601e"},
 ]
 botocore = [
-    {file = "botocore-1.18.13-py2.py3-none-any.whl", hash = "sha256:90e76683807896a28bbefd6e9bc3a2dc44ecd88fc6f6737fa0e3b20d5b7223ea"},
-    {file = "botocore-1.18.13.tar.gz", hash = "sha256:570609095c992732cf6158c3dd0a38619c77818fa700d6779b27277b34f98959"},
+    {file = "botocore-1.18.15-py2.py3-none-any.whl", hash = "sha256:f59437ff69d260faa876a2bb7d76debcbbb3b1a497e9ff49550a1a5501679720"},
+    {file = "botocore-1.18.15.tar.gz", hash = "sha256:3b9179edbba61c96f5d1eaa4328c9cda686bd461e102c5878c4880479c24e268"},
 ]
 cachecontrol = [
     {file = "CacheControl-0.12.6-py2.py3-none-any.whl", hash = "sha256:10d056fa27f8563a271b345207402a6dcce8efab7e5b377e270329c62471b10d"},
@@ -2794,40 +2795,40 @@ cycler = [
     {file = "cycler-0.10.0.tar.gz", hash = "sha256:cd7b2d1018258d7247a71425e9f26463dfb444d411c39569972f4ce586b0c9d8"},
 ]
 dagit = [
-    {file = "dagit-0.9.13-py3-none-any.whl", hash = "sha256:5d46ac3ac732a2a01a8bce05be4ecda72e5bec857de0120c3aad2c3a3770afea"},
-    {file = "dagit-0.9.13.tar.gz", hash = "sha256:271247f8702e6f3282e3e8c03fe793b0e4cb1caa103214570c04e75663330c33"},
+    {file = "dagit-0.9.14-py3-none-any.whl", hash = "sha256:69ee5b4dec883588d175c267681739e63f57acb5bb89bc318df9b1c68d5ad183"},
+    {file = "dagit-0.9.14.tar.gz", hash = "sha256:e9a8e566162f2111129e12148405423fe6dd95283142eaebac344b8790f17da4"},
 ]
 dagster = [
-    {file = "dagster-0.9.13-py3-none-any.whl", hash = "sha256:f235b3184ea549c3814aa8a24e90517aacd0ca8634c6bb33ae3d12adce75d11c"},
-    {file = "dagster-0.9.13.tar.gz", hash = "sha256:f7c64297a757b75dec290579ca2bd9a464c6a8a54fd93d043448044d68088f98"},
+    {file = "dagster-0.9.14-py3-none-any.whl", hash = "sha256:97b59343b762c988e3825dae4517c8f2e32a7a62ed3c43de90b7cefe0bc6c138"},
+    {file = "dagster-0.9.14.tar.gz", hash = "sha256:a2538433237340565294e2e6aa224929ef1756304a077436abae7b764f6264ca"},
 ]
 dagster-aws = [
-    {file = "dagster-aws-0.9.13.tar.gz", hash = "sha256:32758304992477c7a76d43b819d486d5aa53302da9c3d79c1a8aa8223824c26e"},
-    {file = "dagster_aws-0.9.13-py3-none-any.whl", hash = "sha256:19310b2a704d6177db7734e4b26acc71e2a2dcc37c6e7280dcc95afaf4a50522"},
+    {file = "dagster-aws-0.9.14.tar.gz", hash = "sha256:f04c11f356c855133a91a5b28c7834b255e9cc8d8c9becf85ddf672c51dcd88f"},
+    {file = "dagster_aws-0.9.14-py3-none-any.whl", hash = "sha256:a10ce1a847d4661dc0f9bc3082dae773977f5771eded9d74e09eece0413200ac"},
 ]
 dagster-bash = [
     {file = "dagster-bash-0.7.16.tar.gz", hash = "sha256:8721f9c2a5bd2fca33a547ed779f788473422cdacbf1520c70fecd9bee9a224f"},
     {file = "dagster_bash-0.7.16-py3-none-any.whl", hash = "sha256:86e9033f81d6ccc1e860e400989fbbd2e9f16216a138c01e096e0192aa3bb126"},
 ]
 dagster-cron = [
-    {file = "dagster-cron-0.9.13.tar.gz", hash = "sha256:2ebb194afad7e1423f90c15e02bcd77cd4f538182d03dd62279c23ad7f04f187"},
-    {file = "dagster_cron-0.9.13-py3-none-any.whl", hash = "sha256:4f5a0892a4bd4d9e7ec96567c8a62a4e45dc1e33cc456e2260f55bc742885f41"},
+    {file = "dagster-cron-0.9.14.tar.gz", hash = "sha256:55fdcb3a433064d42f03fc0258a8526c20c05bc02f4d64f77183b06d91662ed8"},
+    {file = "dagster_cron-0.9.14-py3-none-any.whl", hash = "sha256:e0c6ce00e08c550d55f7f2851936bb4c7ed8334373b1e440b9dbcf521941270f"},
 ]
 dagster-ge = [
-    {file = "dagster-ge-0.9.13.tar.gz", hash = "sha256:e2fc07bcc527cbc946e4f8b0ede997d6130234a57a721b5d22d09578e72ee03c"},
-    {file = "dagster_ge-0.9.13-py3-none-any.whl", hash = "sha256:a02beb47693e7c117c171795c952d4edeba0cb78b1bb33b5201b895b83a40ebd"},
+    {file = "dagster-ge-0.9.14.tar.gz", hash = "sha256:a9a4fe629195d011731b98fe8c11956f3b3ebc8ed76b69d597d2e10eec7b1ab0"},
+    {file = "dagster_ge-0.9.14-py3-none-any.whl", hash = "sha256:1d70f787023e9cbebeadb3b4b121fdfe978f8f7eff46cac7e0a401c60270202a"},
 ]
 dagster-graphql = [
-    {file = "dagster-graphql-0.9.13.tar.gz", hash = "sha256:5d5a66b80381d7d0fb95d7518a6bf7371175e8fac8f71202efe5d7498a733938"},
-    {file = "dagster_graphql-0.9.13-py3-none-any.whl", hash = "sha256:0913ca6d3af902a1a511c596ea4a080516f96b104e80f3fdd4e69899c19ef0ec"},
+    {file = "dagster-graphql-0.9.14.tar.gz", hash = "sha256:5fc706afec154e6b62ee4d084b41caee5444c8f5700c40eeec1d0069b1bf84e8"},
+    {file = "dagster_graphql-0.9.14-py3-none-any.whl", hash = "sha256:fd2863dafa0285e1ba7707656b633b705470178ac1e14ff889e45d1d169630bd"},
 ]
 dagster-pandas = [
-    {file = "dagster-pandas-0.9.13.tar.gz", hash = "sha256:e9ef497a60a16ba18b18f2f5114825a2064ed0810d6022a4264cc8a090e07b58"},
-    {file = "dagster_pandas-0.9.13-py3-none-any.whl", hash = "sha256:b32eb8d1235ed804f1304de3998dfccd902672351554a587c6aa4d1ab185d3f2"},
+    {file = "dagster-pandas-0.9.14.tar.gz", hash = "sha256:3eaccb8bed9c6916c131b247242b6d75f9275ab5c80c23fe9c0e0b7a156b0ec5"},
+    {file = "dagster_pandas-0.9.14-py3-none-any.whl", hash = "sha256:ee4cd967c741e5d7eeb62459a375e36cdb0bb2b0a00930301ef62f87e8bdafb2"},
 ]
 dagster-postgres = [
-    {file = "dagster-postgres-0.9.13.tar.gz", hash = "sha256:dbe0bc907ac7b7100f7fbee52a00390c205a55dd5d038c272cfa3a403f5149d8"},
-    {file = "dagster_postgres-0.9.13-py3-none-any.whl", hash = "sha256:f16e3ec90f66c76682ed929c298856648e2d2060e182b07765fed6992ebef9d5"},
+    {file = "dagster-postgres-0.9.14.tar.gz", hash = "sha256:d098c811ae9e70c2dc6605a12be2a99b4c41cfec4dd0fe46bdae18869c0982ae"},
+    {file = "dagster_postgres-0.9.14-py3-none-any.whl", hash = "sha256:e1218d452374bda63d4651730529a4cfddf7b896d25430f1c93aabf083b4a568"},
 ]
 darglint = [
     {file = "darglint-1.5.5-py3-none-any.whl", hash = "sha256:cd882c812f28ee3b5577259bfd8d6d25962386dd87fc1f3756eac24370aaa060"},
@@ -3072,8 +3073,8 @@ httpcore = [
     {file = "httpcore-0.12.0.tar.gz", hash = "sha256:2526a38f31ac5967d38b7f593b5d8c4bd3fa82c21400402f866ba3312946acbf"},
 ]
 httpx = [
-    {file = "httpx-0.16.0-py3-none-any.whl", hash = "sha256:824325d2dfb42ee6e3be31e072199a33e5a98dc2bda76fd6c9a844871948eb73"},
-    {file = "httpx-0.16.0.tar.gz", hash = "sha256:032c624c703cfa3aafe2d3a766150b48bcf8df71e833c1440fa74151da9df143"},
+    {file = "httpx-0.16.1-py3-none-any.whl", hash = "sha256:9cffb8ba31fac6536f2c8cde30df859013f59e4bcc5b8d43901cb3654a8e0a5b"},
+    {file = "httpx-0.16.1.tar.gz", hash = "sha256:126424c279c842738805974687e0518a94c7ae8d140cd65b9c4f77ac46ffa537"},
 ]
 humanfriendly = [
     {file = "humanfriendly-8.2-py2.py3-none-any.whl", hash = "sha256:e78960b31198511f45fd455534ae7645a6207d33e512d2e842c766d15d9c8080"},
@@ -3840,8 +3841,8 @@ terminado = [
     {file = "terminado-0.9.1.tar.gz", hash = "sha256:3da72a155b807b01c9e8a5babd214e052a0a45a975751da3521a1c3381ce6d76"},
 ]
 testfixtures = [
-    {file = "testfixtures-6.14.2-py2.py3-none-any.whl", hash = "sha256:816557888877f498081c1b5c572049b4a2ddffedb77401308ff4cdc1bb9147b7"},
-    {file = "testfixtures-6.14.2.tar.gz", hash = "sha256:14d9907390f5f9c7189b3d511b64f34f1072d07cc13b604a57e1bb79029376e3"},
+    {file = "testfixtures-6.15.0-py2.py3-none-any.whl", hash = "sha256:e17f4f526fc90b0ac9bc7f8ca62b7dec17d9faf3d721f56bda4f0fd94d02f85a"},
+    {file = "testfixtures-6.15.0.tar.gz", hash = "sha256:409f77cfbdad822d12a8ce5c4aa8fb4d0bb38073f4a5444fede3702716a2cec2"},
 ]
 testpath = [
     {file = "testpath-0.4.4-py2.py3-none-any.whl", hash = "sha256:bfcf9411ef4bf3db7579063e0546938b1edda3d69f4e1fb8756991f5951f85d4"},
@@ -3875,8 +3876,8 @@ tornado = [
     {file = "tornado-6.0.4.tar.gz", hash = "sha256:0fe2d45ba43b00a41cd73f8be321a44936dc1aba233dee979f17a042b83eb6dc"},
 ]
 tqdm = [
-    {file = "tqdm-4.50.1-py2.py3-none-any.whl", hash = "sha256:5313148c57fcca7df562187903cf9cfa30fe1df2fe0641ea6ddb8ef9e841a137"},
-    {file = "tqdm-4.50.1.tar.gz", hash = "sha256:b04bbbc52a7f1e3665eaa310f34c6ebbdf058bd3f6251fd64c6ab831817121ea"},
+    {file = "tqdm-4.50.2-py2.py3-none-any.whl", hash = "sha256:43ca183da3367578ebf2f1c2e3111d51ea161ed1dc4e6345b86e27c2a93beff7"},
+    {file = "tqdm-4.50.2.tar.gz", hash = "sha256:69dfa6714dee976e2425a9aab84b622675b7b1742873041e3db8a8e86132a4af"},
 ]
 traitlets = [
     {file = "traitlets-5.0.4-py3-none-any.whl", hash = "sha256:9664ec0c526e48e7b47b7d14cd6b252efa03e0129011de0a9c1d70315d4309c3"},

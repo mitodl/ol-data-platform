@@ -24,7 +24,8 @@ def get_access_token(client_id: Text, client_secret: Text, edx_url: Text) -> Tex
         'grant_type': 'client_credentials',
         'client_id': client_id,
         'client_secret': client_secret,
-        'token_type': 'jwt',
+        # Switching to Bearer token rather than JWT to maintain compatibility with edX Ironwood
+        # 'token_type': 'jwt',
     }
     response = httpx.post(
         f'{edx_url}/oauth2/access_token', data=payload
@@ -48,7 +49,10 @@ def get_edx_course_ids(edx_url: Text, access_token: Text) -> Generator[List[Dict
     """
     response = httpx.get(
         f'{edx_url}/api/courses/v1/courses/',
-        headers={'Authorization': f'JWT {access_token}'})
+        headers={'Authorization': f'Bearer {access_token}'},
+        # Switching to Bearer token rather than JWT to maintain compatibility with edX Ironwood
+        # headers={'Authorization': f'JWT {access_token}'}
+    )
     response.raise_for_status()
     response_data = response.json()
     course_data = response_data['results']
