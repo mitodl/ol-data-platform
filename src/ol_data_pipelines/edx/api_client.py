@@ -4,7 +4,7 @@ from typing import Dict, Generator, List, Text
 import httpx
 
 
-def get_access_token(client_id: Text, client_secret: Text, edx_url: Text) -> Text:
+def get_access_token(client_id: Text, client_secret: Text, edx_url: Text, token_type: Text = 'jwt') -> Text:
     """Retrieve an access token from an Open edX site via OAUTH2 credentials.
 
     :param client_id: OAUTH2 client ID for Open edX installation
@@ -24,8 +24,7 @@ def get_access_token(client_id: Text, client_secret: Text, edx_url: Text) -> Tex
         'grant_type': 'client_credentials',
         'client_id': client_id,
         'client_secret': client_secret,
-        # Switching to Bearer token rather than JWT to maintain compatibility with edX Ironwood
-        # 'token_type': 'jwt',
+        'token_type': token_type,
     }
     response = httpx.post(
         f'{edx_url}/oauth2/access_token', data=payload
@@ -40,20 +39,25 @@ def get_edx_course_ids(edx_url: Text, access_token: Text) -> Generator[List[Dict
     :param edx_url: Base URL of edX instance being queried, including protocol.  e.g. https://lms.mitx.mit.edu
     :type edx_url: Text
 
-    :param access_token: A valid JWT access token for authenticating to the edX API
+    :param access_token: A valid JWT or Bearer access token for authenticating to the edX API
     :type access_token: Text
 
     :returns: A generator for walking the paginated list of courses returned from the API
 
     :rtype: Generator[List[Dict], None, None]
     """
-    response = httpx.get(
-        f'{edx_url}/api/courses/v1/courses/',
-        headers={'Authorization': f'Bearer {access_token}'},
-        # Switching to Bearer token rather than JWT to maintain compatibility with edX Ironwood
-        # headers={'Authorization': f'JWT {access_token}'}
-    )
-    response.raise_for_status()
+    try:
+        response = httpx.get(
+            f'{edx_url}/api/courses/v1/courses/',
+            headers={'Authorization': f'JWT {access_token}'}
+        )
+        response.raise_for_status()
+    except httpx.HTTPStatusError:  # TODO: Remove this once xPro upgrades to Juniper. (TMM 2020-10-13)
+        response = httpx.get(
+            f'{edx_url}/api/courses/v1/courses/',
+            headers={'Authorization': f'Bearer {access_token}'}
+        )
+        response.raise_for_status()
     response_data = response.json()
     course_data = response_data['results']
     next_page = response_data['pagination'].get('next')

@@ -3,6 +3,7 @@
 from dagster import (
     AssetMaterialization,
     EventMetadataEntry,
+    ExpectationResult,
     Failure,
     Field,
     InputDefinition,
@@ -19,6 +20,9 @@ from dagster import (
 )
 from dagster_aws.s3 import s3_resource, s3_system_storage
 from dagster_bash.utils import execute as run_bash
+from pypika import MySQLQuery as Query
+from pypika import Table, Tables
+
 from ol_data_pipelines.edx.api_client import (
     get_access_token,
     get_edx_course_ids
@@ -32,8 +36,6 @@ from ol_data_pipelines.lib.hooks import (
 from ol_data_pipelines.resources.healthchecks import healthchecks_io_resource
 from ol_data_pipelines.resources.mysql_db import mysql_db_resource
 from ol_data_pipelines.resources.outputs import daily_dir
-from pypika import MySQLQuery as Query
-from pypika import Table, Tables
 
 
 @solid(
@@ -56,6 +58,13 @@ from pypika import Table, Tables
             default_value='lms.mitx.mit.edu',
             is_required=False,
             description='Domain of edX installation'
+        ),
+        'edx_token_type': Field(
+            String,
+            default_value='jwt',
+            is_required=False,
+            description='Type of OAuth token to use for authenticating to the edX API. Default to "jwt" for edX '
+            'Juniper and newer, or "bearer" for older releases.'
         )
     },
     output_defs=[
@@ -78,9 +87,10 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
     :rtype: List[String]
     """
     access_token = get_access_token(
-        context.solid_config['edx_client_id'],
-        context.solid_config['edx_client_secret'],
-        context.solid_config['edx_base_url'],
+        client_id=context.solid_config['edx_client_id'],
+        client_secret=context.solid_config['edx_client_secret'],
+        edx_url=context.solid_config['edx_base_url'],
+        token_type=context.solid_config['edx_token_type']
     )
     course_ids = []
     course_id_generator = get_edx_course_ids(
@@ -88,6 +98,18 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
         access_token)
     for result_set in course_id_generator:
         course_ids.extend([course['id'] for course in result_set])
+    yield ExpectationResult(
+        success=bool(course_ids),
+        label='edx_course_list_not_empty',
+        description='Ensure course list is not empty.',
+        metadata_entries=[
+            EventMetadataEntry.text(
+                text=str(len(course_ids)),
+                label='number_of_course_ids',
+                description='The number of course IDs retrieved from the course API.'
+            )
+        ]
+    )
     yield Output(course_ids, 'edx_course_ids')
 
 
@@ -153,14 +175,19 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
         description='Information of users enrolled in available courses on Open edX installation',
         metadata_entries=[
             EventMetadataEntry.text(
+                text=str(len(users_data)),
                 label='enrolled_users_count',
-                description='Number of users who are enrolled in courses',
-                text=str(len(users_data))
+                description='Number of users who are enrolled in courses'
             ),
             EventMetadataEntry.path(
                 enrollments_path.name, 'enrollment_query_csv_path'
             )
         ]
+    )
+    yield ExpectationResult(
+        success=bool(users_data),
+        label='enrolled_users_count_non_zero',
+        description='Ensure that the number of users is not zero.'
     )
     yield Output(
         enrollments_path,
@@ -240,6 +267,11 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
             )
         ]
     )
+    yield ExpectationResult(
+        success=submissions_count > 0,
+        label='enrolled_students_count_non_zero',
+        description='Ensure that the number of enrolled students is not zero.'
+    )
     yield Output(
         submissions_path,
         'edx_student_submissions'
@@ -310,6 +342,11 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
             )
         ]
     )
+    yield ExpectationResult(
+        success=bool(enrollment_data),
+        label='enrollments_count_non_zero',
+        description='Ensure that the number of enrollment records is not zero.'
+    )
     yield Output(
         enrollments_path,
         'edx_enrollment_records'
@@ -378,6 +415,11 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
                 roles_path.name, 'role_query_csv_path'
             )
         ]
+    )
+    yield ExpectationResult(
+        success=bool(roles_data),
+        label='course_roles_count_non_zero',
+        description='Ensure that the number of course roles is not zero.'
     )
     yield Output(
         roles_path,
