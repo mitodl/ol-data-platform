@@ -1,10 +1,14 @@
-# -*- coding: utf-8 -*-
 from typing import Dict, Generator, List, Text
 
 import httpx
 
 
-def get_access_token(client_id: Text, client_secret: Text, edx_url: Text, token_type: Text = 'jwt') -> Text:
+def get_access_token(  # noqa: S107
+        client_id: Text,
+        client_secret: Text,
+        edx_url: Text,
+        token_type: Text = 'jwt'
+) -> Text:
     """Retrieve an access token from an Open edX site via OAUTH2 credentials.
 
     :param client_id: OAUTH2 client ID for Open edX installation
@@ -33,6 +37,22 @@ def get_access_token(client_id: Text, client_secret: Text, edx_url: Text, token_
     return response.json()['access_token']
 
 
+def _fetch_with_auth(edx_url: Text, access_token: Text):
+    try:  # noqa: WPS229
+        response = httpx.get(
+            f'{edx_url}/api/courses/v1/courses/',
+            headers={'Authorization': f'JWT {access_token}'}
+        )
+        response.raise_for_status()
+    except httpx.HTTPStatusError:  # TODO: Remove this once xPro upgrades to Juniper. (TMM 2020-10-13)
+        response = httpx.get(
+            f'{edx_url}/api/courses/v1/courses/',
+            headers={'Authorization': f'Bearer {access_token}'}
+        )
+        response.raise_for_status()
+    return response.json()
+
+
 def get_edx_course_ids(edx_url: Text, access_token: Text) -> Generator[List[Dict], None, None]:
     """Retrieve all items from the edX courses REST API including pagination.
 
@@ -46,27 +66,11 @@ def get_edx_course_ids(edx_url: Text, access_token: Text) -> Generator[List[Dict
 
     :rtype: Generator[List[Dict], None, None]
     """
-    try:
-        response = httpx.get(
-            f'{edx_url}/api/courses/v1/courses/',
-            headers={'Authorization': f'JWT {access_token}'}
-        )
-        response.raise_for_status()
-    except httpx.HTTPStatusError:  # TODO: Remove this once xPro upgrades to Juniper. (TMM 2020-10-13)
-        response = httpx.get(
-            f'{edx_url}/api/courses/v1/courses/',
-            headers={'Authorization': f'Bearer {access_token}'}
-        )
-        response.raise_for_status()
-    response_data = response.json()
+    response_data = _fetch_with_auth(edx_url, access_token)
     course_data = response_data['results']
     next_page = response_data['pagination'].get('next')
     yield course_data
     while next_page:
-        response = httpx.get(
-            next_page,
-            headers={'Authorization': f'JWT {access_token}'})
-        response.raise_for_status()
-        response_data = response.json()
+        response_data = _fetch_with_auth(edx_url, access_token)
         next_page = response_data['pagination'].get('next')
         yield response_data['results']
