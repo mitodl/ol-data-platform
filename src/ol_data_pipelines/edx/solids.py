@@ -58,8 +58,15 @@ from ol_data_pipelines.resources.outputs import daily_dir
             String,
             default_value="jwt",
             is_required=False,
-            description='Type of OAuth token to use for authenticating to the edX API. Default to "jwt" for edX '
-            'Juniper and newer, or "bearer" for older releases.',
+            description="Type of OAuth token to use for authenticating to the edX API. "
+            'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',
+        ),
+        "edx_course_api_page_size": Field(
+            Int,
+            default_value=250,
+            is_required=False,
+            description="The number of records to return per API request. This can be "
+            "modified to address issues with rate limiting.",
         ),
     },
     output_defs=[
@@ -433,7 +440,7 @@ def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:  #
     :param context: Dagster execution context for propagaint configuration data
     :type context: SolidExecutionContext
 
-    :raise Failure: Raise a failure event if the mongo dump returns a non-zero exit code
+    :raises Failure: Raise a failure event if the mongo dump returns a non-zero exit code
 
     :yield: Path object to the directory where the exported Mongo database is located
     """

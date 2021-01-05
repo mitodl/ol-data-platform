@@ -45,12 +45,12 @@ def _get_username(edx_url: Text, access_token: Text):
     return response.json()["username"]
 
 
-def _fetch_with_auth(edx_url: Text, access_token: Text):
+def _fetch_with_auth(edx_url: Text, access_token: Text, page_size: int = 250):
     username = _get_username(edx_url, access_token)
     response = httpx.get(
         f"{edx_url}/api/courses/v1/courses/",
         headers={"Authorization": f"JWT {access_token}"},
-        params={"username": username},
+        params={"username": username, "page_size": page_size},
     )
     response.raise_for_status()
     return response.json()
