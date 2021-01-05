@@ -36,19 +36,23 @@ def get_access_token(  # noqa: S107
     return response.json()["access_token"]
 
 
+def _get_username(edx_url: Text, access_token: Text):
+    response = httpx.get(
+        f"{edx_url}/api/user/v1/me",
+        headers={"Authorization": f"JWT {access_token}"},
+    )
+    response.raise_for_status()
+    return response.json()["username"]
+
+
 def _fetch_with_auth(edx_url: Text, access_token: Text):
-    try:  # noqa: WPS229
-        response = httpx.get(
-            f"{edx_url}/api/courses/v1/courses/",
-            headers={"Authorization": f"JWT {access_token}"},
-        )
-        response.raise_for_status()
-    except httpx.HTTPStatusError:  # TODO: Remove this once xPro upgrades to Juniper. (TMM 2020-10-13)
-        response = httpx.get(
-            f"{edx_url}/api/courses/v1/courses/",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        response.raise_for_status()
+    username = _get_username(edx_url, access_token)
+    response = httpx.get(
+        f"{edx_url}/api/courses/v1/courses/",
+        headers={"Authorization": f"JWT {access_token}"},
+        params={"username": username},
+    )
+    response.raise_for_status()
     return response.json()
 
 
