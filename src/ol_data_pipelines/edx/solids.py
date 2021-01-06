@@ -63,7 +63,7 @@ from ol_data_pipelines.resources.outputs import daily_dir
         ),
         "edx_course_api_page_size": Field(
             Int,
-            default_value=250,
+            default_value=100,
             is_required=False,
             description="The number of records to return per API request. This can be "
             "modified to address issues with rate limiting.",
@@ -94,7 +94,9 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
     )
     course_ids = []
     course_id_generator = get_edx_course_ids(
-        context.solid_config["edx_base_url"], access_token
+        context.solid_config["edx_base_url"],
+        access_token,
+        page_size=context.solid_config["edx_course_api_page_size"],
     )
     for result_set in course_id_generator:
         course_ids.extend([course["id"] for course in result_set])

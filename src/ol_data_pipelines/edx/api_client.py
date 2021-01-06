@@ -1,3 +1,4 @@
+import time
 from typing import Dict, Generator, List, Text
 
 import httpx
@@ -45,19 +46,27 @@ def _get_username(edx_url: Text, access_token: Text):
     return response.json()["username"]
 
 
-def _fetch_with_auth(edx_url: Text, access_token: Text, page_size: int = 250):
-    username = _get_username(edx_url, access_token)
+def _fetch_with_auth(
+    request_url: Text, access_token: Text, username: Text, page_size: int
+):
     response = httpx.get(
-        f"{edx_url}/api/courses/v1/courses/",
+        request_url,
         headers={"Authorization": f"JWT {access_token}"},
         params={"username": username, "page_size": page_size},
     )
-    response.raise_for_status()
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as error_response:
+        if error_response.response.status_code == 429:
+            time.sleep(60)
+            return _fetch_with_auth(request_url, access_token, username, page_size)
+        raise
     return response.json()
 
 
 def get_edx_course_ids(
-    edx_url: Text, access_token: Text
+    edx_url: Text, access_token: Text, page_size: int = 100
 ) -> Generator[List[Dict], None, None]:
     """Retrieve all items from the edX courses REST API including pagination.
 
@@ -69,14 +78,19 @@ def get_edx_course_ids(
         edX API
     :type access_token: Text
 
+    :param page_size: The number of courses to retrieve per page via the API.
+    :type page_size: int
+
     :yield: A generator for walking the paginated list of courses returned from the
         API
     """
-    response_data = _fetch_with_auth(edx_url, access_token)
+    username = _get_username(edx_url, access_token)
+    request_url = f"{edx_url}/api/courses/v1/courses/"
+    response_data = _fetch_with_auth(request_url, access_token, username, page_size)
     course_data = response_data["results"]
     next_page = response_data["pagination"].get("next")
     yield course_data
     while next_page:
-        response_data = _fetch_with_auth(edx_url, access_token)
+        response_data = _fetch_with_auth(next_page, access_token, username, page_size)
         next_page = response_data["pagination"].get("next")
         yield response_data["results"]
