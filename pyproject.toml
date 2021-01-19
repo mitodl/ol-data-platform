@@ -30,6 +30,8 @@ httpx = "<1.0"
 pymysql = "^0.9.3"
 pypika = "^0.36.0"
 python = "^3.8"
+dagster-gcp = "^0.10.0"
+pyarrow = "^2.0.0"
 
 [tool.poetry.dev-dependencies]
 isort = "^4.3.21"
