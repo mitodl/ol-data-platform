@@ -18,6 +18,11 @@ class ResultsDir:
 
     def create_dir(self):
         try:
+            os.mkdir(self.root_dir)
+        except FileExistsError:
+            pass
+
+        try:
             os.mkdir(self.path)
         except FileExistsError:
             return
