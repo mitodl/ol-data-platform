@@ -80,6 +80,7 @@ def download_user_data(
         "profile_name",
         "profile_meta",
         "enrollment_course_id",
+        "enrollment_created",
     ]
 
     file_system, output_folder = fs.FileSystem.from_uri(
