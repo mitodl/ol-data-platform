@@ -16,8 +16,8 @@ from dagster import (
     pipeline,
     solid,
 )
-from dagster_aws.s3 import s3_resource, s3_system_storage
-from dagster_bash.utils import execute as run_bash
+from dagster_aws.s3 import s3_resource
+from dagster_shell.utils import execute as run_bash
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
@@ -605,8 +605,7 @@ def upload_extracted_data(  # noqa: WPS211
                 "s3": s3_resource,
                 "results_dir": daily_dir,
                 "healthchecks": healthchecks_io_resource,
-            },
-            system_storage_defs=[s3_system_storage],
+            }
         )
     ],
     preset_defs=[

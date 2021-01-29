@@ -18,13 +18,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-dagit = "^0.9"
-dagster = "^0.9"
-dagster-aws = "^0.9"
-dagster-bash = ">=0.7"
-dagster-cron = "^0.9.4"
 dagster-ge = "^0.9"
-dagster-postgres = "^0.9"
 great-expectations = "*"
 httpx = "<1.0"
 pymysql = "^0.9.3"
@@ -32,6 +26,12 @@ pypika = "^0.36.0"
 python = "^3.8"
 dagster-gcp = "^0.10.0"
 pyarrow = "^2.0.0"
+dagster = "0.10.1"
+dagit = "^0.10.1"
+dagster-aws = "^0.10.1"
+dagster-postgres = "^0.10.1"
+dagster-cron = "^0.10.1"
+dagster-shell = "^0.10.1"
 
 [tool.poetry.dev-dependencies]
 isort = "^4.3.21"
