@@ -605,7 +605,7 @@ def upload_extracted_data(  # noqa: WPS211
                 "s3": s3_resource,
                 "results_dir": daily_dir,
                 "healthchecks": healthchecks_io_resource,
-            }
+            },
         )
     ],
     preset_defs=[
