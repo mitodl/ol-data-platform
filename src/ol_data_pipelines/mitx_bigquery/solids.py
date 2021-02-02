@@ -22,6 +22,7 @@ from google.cloud.exceptions import NotFound
 from pyarrow import fs, parquet
 
 from ol_data_pipelines.lib.dagster_types import DatasetDagsterType
+from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
 from ol_data_pipelines.resources.bigquery_db import bigquery_db_resource
 
 
@@ -172,11 +173,17 @@ def get_datasets(context: SolidExecutionContext):
         )
     ],
     preset_defs=[
-        PresetDefinition.from_files(
+        PresetDefinition(
             name="production",
-            config_files=["/etc/dagster/mitx_bigquery.yaml"],
+            run_config=load_yaml_config("/etc/dagster/mitx_bigquery.yaml"),
             mode="production",
-        ),
+            tags={
+                "sources": ["bigquery"],
+                "destinations": ["s3"],
+                "owner": "ol-engineering",
+                "consumer": "ol-engineering",
+            },
+        )
     ],
     tags={"source": "mitx", "destination": "s3", "owner": "platform-engineering"},
 )

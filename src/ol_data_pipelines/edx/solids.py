@@ -13,10 +13,11 @@ from dagster import (
     PresetDefinition,
     SolidExecutionContext,
     String,
+    fs_io_manager,
     pipeline,
     solid,
 )
-from dagster_aws.s3 import s3_resource
+from dagster_aws.s3 import s3_pickle_io_manager, s3_resource
 from dagster_shell.utils import execute as run_bash
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
@@ -28,9 +29,14 @@ from ol_data_pipelines.lib.hooks import (
     notify_healthchecks_io_on_failure,
     notify_healthchecks_io_on_success,
 )
-from ol_data_pipelines.resources.healthchecks import healthchecks_io_resource
+from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
+from ol_data_pipelines.resources.healthchecks import (
+    healthchecks_dummy_resource,
+    healthchecks_io_resource,
+)
 from ol_data_pipelines.resources.mysql_db import mysql_db_resource
 from ol_data_pipelines.resources.outputs import daily_dir
+from ol_data_pipelines.resources.sqlite_db import sqlite_db_resource
 
 
 @solid(
@@ -599,25 +605,41 @@ def upload_extracted_data(  # noqa: WPS211
     ),
     mode_defs=[
         ModeDefinition(
+            name="dev",
+            resource_defs={
+                "sqldb": sqlite_db_resource,
+                "s3": s3_resource,
+                "results_dir": daily_dir,
+                "healthchecks": healthchecks_dummy_resource,
+                "io_manager": fs_io_manager,
+            },
+        ),
+        ModeDefinition(
             name="production",
             resource_defs={
                 "sqldb": mysql_db_resource,
                 "s3": s3_resource,
                 "results_dir": daily_dir,
                 "healthchecks": healthchecks_io_resource,
+                "io_manager": s3_pickle_io_manager,
             },
-        )
+        ),
     ],
     preset_defs=[
-        PresetDefinition.from_files(
+        PresetDefinition(
+            name="dev",
+            run_config={},
+            mode="dev",
+        ),
+        PresetDefinition(
             name="residential",
-            config_files=["/etc/dagster/residential_edx.yaml"],
+            run_config=load_yaml_config("/etc/dagster/residential_edx.yaml"),
             mode="production",
             tags={"business_unit": "residential"},
         ),
-        PresetDefinition.from_files(
+        PresetDefinition(
             name="xpro",
-            config_files=["/etc/dagster/xpro_edx.yaml"],
+            run_config=load_yaml_config("/etc/dagster/xpro_edx.yaml"),
             mode="production",
             tags={"business_unit": "mitxpro"},
         ),
