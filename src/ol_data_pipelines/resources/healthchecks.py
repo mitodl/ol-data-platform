@@ -43,3 +43,8 @@ def healthchecks_io_resource(resource_context: InitResourceContext):
     if resource_context.resource_config["measure_time"]:
         check.send_update("start")
     yield check
+
+
+@resource()
+def healthchecks_dummy_resource(resource_context: InitResourceContext):
+    yield

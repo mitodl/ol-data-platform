@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 from pathlib import PosixPath
+
+from dagster import PythonObjectDagsterType, usable_as_dagster_type
 from google.cloud.bigquery.dataset import DatasetListItem
-from dagster import usable_as_dagster_type, PythonObjectDagsterType
 
 
 @usable_as_dagster_type
 class DagsterPath(PosixPath):
-    pass
+    pass  # noqa: WPS420, WPS604
 
 
 DatasetDagsterType = PythonObjectDagsterType(DatasetListItem, name="DatasetDagsterType")

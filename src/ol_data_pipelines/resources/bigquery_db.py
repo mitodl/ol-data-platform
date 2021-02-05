@@ -1,6 +1,6 @@
+from dagster import Field, InitResourceContext, String, resource
 from google.cloud import bigquery
 from google.oauth2 import service_account
-from dagster import Field, InitResourceContext, Int, String, resource
 
 
 @resource(
@@ -48,13 +48,13 @@ from dagster import Field, InitResourceContext, Int, String, resource
     }
 )
 def bigquery_db_resource(resource_context: InitResourceContext):
-    """
-     Create a connection to bigquery database.
+    """Create a connection to bigquery database.
 
-    :param context: Dagster execution context for configuration data
-    :type context: ResourceExecutionContext
-    """
+    :param resource_context: Dagster execution context for configuration data
+    :type resource_context: InitResourceContext
 
+    :yields: A BigQuery client instance for use during pipeline execution.
+    """
     access_json = {
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "project_id": resource_context.resource_config["project_id"],
@@ -71,8 +71,7 @@ def bigquery_db_resource(resource_context: InitResourceContext):
     }
 
     credentials = service_account.Credentials.from_service_account_info(access_json)
-    client = bigquery.Client(
+    yield bigquery.Client(
         credentials=credentials,
         project=credentials.project_id,
     )
-    return client

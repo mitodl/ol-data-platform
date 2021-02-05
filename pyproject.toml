@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ol-data-pipelines"
-version = "0.1.13"
+version = "0.2.1"
 description = "Data pipelines for open learning"
 authors = ["Tobias Macey"]
 license = "BSD-3-Clause"
@@ -18,31 +18,31 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-dagit = "^0.9"
-dagster = "^0.9"
-dagster-aws = "^0.9"
-dagster-bash = ">=0.7"
-dagster-cron = "^0.9.4"
-dagster-ge = "^0.9"
-dagster-postgres = "^0.9"
+dagit = "^0.10"
+dagster = "^0.10"
+dagster-aws = "^0.10"
+dagster-cron = "^0.10"
+dagster-gcp = "^0.10"
+dagster-ge = "^0.10"
+dagster-postgres = "^0.10"
+dagster-shell = "^0.10"
 great-expectations = "*"
 httpx = "<1.0"
+pyarrow = "^2.0.0"
 pymysql = "^0.9.3"
 pypika = "^0.36.0"
 python = "^3.8"
-dagster-gcp = "^0.10.0"
-pyarrow = "^2.0.0"
 
 [tool.poetry.dev-dependencies]
+black = "*"
+invoke = "^1.0.0"
 isort = "^4.3.21"
-mypy = "^0.782"
+mypy = "^0.800"
+poetry = "^1.0.9"
 pre-commit = "^2.3.0"
 pytest = "^6.0.0"
-wemake-python-styleguide = "^0.14.0"
-invoke = "^1.0.0"
-poetry = "^1.0.9"
 vdist = "^2.1.1"
-black = "^20.8b1"
+wemake-python-styleguide = "*"
 
 [tool.black]
 target-version = ["py38"]
