@@ -21,7 +21,6 @@ packages = [
 dagit = "^0.10"
 dagster = "^0.10"
 dagster-aws = "^0.10"
-dagster-cron = "^0.10"
 dagster-gcp = "^0.10"
 dagster-ge = "^0.10"
 dagster-postgres = "^0.10"
