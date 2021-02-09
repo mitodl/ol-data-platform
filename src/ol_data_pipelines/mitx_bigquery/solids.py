@@ -55,7 +55,7 @@ from ol_data_pipelines.resources.bigquery_db import bigquery_db_resource
         )
     ],
 )
-def download_user_data(
+def download_user_data(  # noqa: WPS210
     context: SolidExecutionContext, datasets: List[DatasetDagsterType]
 ):
     """Download mitx user data as parquet files.
