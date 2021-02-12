@@ -14,7 +14,7 @@ xpro_preset = edx_course_pipeline.get_preset("xpro")
     execution_time=time(0, 0, 0),
     mode="production",
     tags_fn_for_date=lambda _: residential_preset.tags,
-    execution_timezone="UST",
+    execution_timezone="Etc/UTC",
 )
 def residential_edx_daily_schedule(execution_date):  # noqa: D103
     return residential_preset.run_config
@@ -26,7 +26,7 @@ def residential_edx_daily_schedule(execution_date):  # noqa: D103
     execution_time=time(0, 0, 0),
     mode="production",
     tags_fn_for_date=lambda _: xpro_preset.tags,
-    execution_timezone="UST",
+    execution_timezone="Etc/UTC",
 )
 def xpro_edx_daily_schedule(execution_date):  # noqa: D103
     return xpro_preset.run_config

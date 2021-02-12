@@ -24,6 +24,7 @@ def package_pipeline(context):
             "build-essential",
             "zlib1g-dev",
             "libssl-dev",
+            "liblzma-dev",
             "libmariadbclient-dev",
         ],
         compile_python=True,
