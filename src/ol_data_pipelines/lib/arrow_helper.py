@@ -1,5 +1,5 @@
 """Helper class for parquet data output."""
-from pyarrow import concat_tables, fs, parquet
+from pyarrow import concat_tables, parquet
 
 
 def write_parquet_file(file_system, output_folder, arrow_table, file_name):
@@ -22,7 +22,9 @@ def write_parquet_file(file_system, output_folder, arrow_table, file_name):
     )
 
     with file_system.open_output_stream(file_path) as parquet_file:
-        with parquet.ParquetWriter(parquet_file, arrow_table.schema) as writer:
+        with parquet.ParquetWriter(
+            parquet_file, arrow_table.schema, use_deprecated_int96_timestamps=True
+        ) as writer:
             writer.write_table(arrow_table)
 
 
