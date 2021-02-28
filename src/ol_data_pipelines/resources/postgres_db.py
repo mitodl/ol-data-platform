@@ -65,6 +65,16 @@ class PostgresClient:
             arrow_table = pyarrow.Table.from_pandas(chunk)
             yield arrow_table
 
+    def run_write_query(self, query: Query):
+        """Execute the passed write query.
+
+        :param query: PyPika query object that specifies the desired query
+        :type query: Query
+        """
+        with self.connection.cursor() as db_cursor:
+            db_cursor.execute(str(query))
+            self.connection.commit()
+
 
 @resource(
     config_schema={
