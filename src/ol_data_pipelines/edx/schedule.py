@@ -11,7 +11,7 @@ xpro_preset = edx_course_pipeline.get_preset("xpro")
 @daily_schedule(
     pipeline_name="edx_course_pipeline",
     start_date=datetime(2020, 9, 23),
-    execution_time=time(0, 0, 0),
+    execution_time=time(3, 0, 0),
     mode="production",
     tags_fn_for_date=lambda _: residential_preset.tags,
     execution_timezone="Etc/UTC",
