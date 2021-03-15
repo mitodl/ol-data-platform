@@ -29,7 +29,7 @@ great-expectations = "*"
 httpx = "<1.0"
 pyarrow = "^2.0.0"
 pymysql = "^0.9.3"
-pypika = "^0.36.0"
+pypika = "^0.47.7"
 python = "^3.8"
 pyathena = "^2.1.1"
 
