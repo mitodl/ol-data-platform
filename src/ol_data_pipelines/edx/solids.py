@@ -507,8 +507,6 @@ def export_edx_forum_database(  # type: ignore # noqa: WPS210
     yield Output(forum_data_path, "edx_forum_data_directory")
 
 
-@notify_healthchecks_io_on_success
-@notify_healthchecks_io_on_failure
 @solid(
     name="edx_upload_daily_extracts",
     description="Upload all data from daily extracts to S3 for institutional research.",
@@ -655,7 +653,9 @@ def upload_extracted_data(  # noqa: WPS211
 )
 def edx_course_pipeline():
     course_list = list_courses()
-    upload_extracted_data(
+    upload_extracted_data.with_hooks(
+        {notify_healthchecks_io_on_success, notify_healthchecks_io_on_failure}
+    )(
         enrolled_users(edx_course_ids=course_list),
         student_submissions(edx_course_ids=course_list),
         course_roles(edx_course_ids=course_list),
