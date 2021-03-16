@@ -442,7 +442,9 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
         )
     ],
 )
-def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:  # type: ignore
+def export_edx_forum_database(  # type: ignore # noqa: WPS210
+    context: SolidExecutionContext,
+) -> DagsterPath:
     """Export the edX forum database using mongodump.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -505,6 +507,8 @@ def export_edx_forum_database(context: SolidExecutionContext) -> DagsterPath:  #
     yield Output(forum_data_path, "edx_forum_data_directory")
 
 
+@notify_healthchecks_io_on_success
+@notify_healthchecks_io_on_failure
 @solid(
     name="edx_upload_daily_extracts",
     description="Upload all data from daily extracts to S3 for institutional research.",
@@ -584,19 +588,17 @@ def upload_extracted_data(  # noqa: WPS211
         description="Daily export directory for edX export pipeline",
         metadata_entries=[
             EventMetadataEntry.fspath(
-                f's3://{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}'
+                f's3://{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}'  # noqa: WPS237
             ),
         ],
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        f'{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}',
+        f'{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}',  # noqa: WPS237
         "edx_daily_extracts_directory",
     )
 
 
-@notify_healthchecks_io_on_success
-@notify_healthchecks_io_on_failure
 @pipeline(
     description=(
         "Extract data and course structure from Open edX for use by institutional research. "

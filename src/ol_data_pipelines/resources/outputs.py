@@ -112,4 +112,3 @@ def daily_dir(
     )
     results_dir.create_dir()
     yield results_dir
-    results_dir.clean_dir()
