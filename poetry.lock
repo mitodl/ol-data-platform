@@ -519,7 +519,7 @@ psycopg2-binary = "*"
 
 [[package]]
 name = "dagster-shell"
-version = "0.10.9"
+version = "0.11.1"
 description = "Package for Dagster shell solids."
 category = "main"
 optional = false
@@ -2938,7 +2938,7 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "205fc8ebac2d407452b380b882e50d7a38b3637a9442bd09601bac643dfcc6f4"
+content-hash = "4705be94c2a7e87eff2cf461699fbca30bbc2e17e1db3e836dfd74b470a46e53"
 
 [metadata.files]
 alembic = [
@@ -3158,8 +3158,8 @@ dagster-postgres = [
     {file = "dagster_postgres-0.10.9-py3-none-any.whl", hash = "sha256:45185caa019c56ddff60023a91d3081bc66d3549b87ff8d86ff0b3f12c688f88"},
 ]
 dagster-shell = [
-    {file = "dagster-shell-0.10.9.tar.gz", hash = "sha256:411d4d62e38620f13a59a8255e70469ca7d565f3a58192669b16b740884d7b35"},
-    {file = "dagster_shell-0.10.9-py3-none-any.whl", hash = "sha256:92412542ab133c69be29cc535cf9f54dac717a61cb889defa294ba377c90b660"},
+    {file = "dagster-shell-0.11.1.tar.gz", hash = "sha256:96ed802bc500b6a0a270aa5b91caed88980ae8b486621d71229cd560de63ede2"},
+    {file = "dagster_shell-0.11.1-py3-none-any.whl", hash = "sha256:f7f14af713b6852869d8f474944eea3c07a25048cd4c91e720b7dcd47d754784"},
 ]
 darglint = [
     {file = "darglint-1.7.0-py3-none-any.whl", hash = "sha256:3bf16e78e2909ecdb737afd45fcd6a3f8993b092c2ba2b7cd7b179cceee87a43"},
