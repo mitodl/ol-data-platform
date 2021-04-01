@@ -507,7 +507,7 @@ pandas = "<=1.1.4"
 
 [[package]]
 name = "dagster-postgres"
-version = "0.10.9"
+version = "0.11.2"
 description = "A Dagster integration for postgres"
 category = "main"
 optional = false
@@ -2938,7 +2938,7 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "ebda593e7f8dbb9cdbed193501fb22fd7ec4b0014ff60281fa56ea2c85d89c52"
+content-hash = "71e3acb1b3a65c523aaef3a841a1b3fb17fd5886c39011ebfb04c4593861ca1a"
 
 [metadata.files]
 alembic = [
@@ -3154,8 +3154,8 @@ dagster-pandas = [
     {file = "dagster_pandas-0.10.9-py3-none-any.whl", hash = "sha256:a3c2aa7637bd7a45edf8b780b62fdecd834cb89e2a162aa3136c1cc9637d3f90"},
 ]
 dagster-postgres = [
-    {file = "dagster-postgres-0.10.9.tar.gz", hash = "sha256:cbd68ecec72fb1f2982a939d367548885884f5c82bb9144a2827df93c67b7247"},
-    {file = "dagster_postgres-0.10.9-py3-none-any.whl", hash = "sha256:45185caa019c56ddff60023a91d3081bc66d3549b87ff8d86ff0b3f12c688f88"},
+    {file = "dagster-postgres-0.11.2.tar.gz", hash = "sha256:1f6dfc90ad2359177b1db948b5a14bcb7aed2e82f405f5c02079919ca0a6a09c"},
+    {file = "dagster_postgres-0.11.2-py3-none-any.whl", hash = "sha256:04cdbd8aee07a3d311f7687cdc68188a9f9faf90f973f130243350467f69f037"},
 ]
 dagster-shell = [
     {file = "dagster-shell-0.10.9.tar.gz", hash = "sha256:411d4d62e38620f13a59a8255e70469ca7d565f3a58192669b16b740884d7b35"},
