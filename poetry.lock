@@ -2237,7 +2237,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 
 [[package]]
 name = "pypika"
-version = "0.48.0"
+version = "0.48.1"
 description = "A SQL query builder API for Python"
 category = "main"
 optional = false
@@ -4194,7 +4194,7 @@ pyparsing = [
     {file = "pyparsing-2.4.7.tar.gz", hash = "sha256:c203ec8783bf771a155b207279b9bccb8dea02d8f0c9e5f8ead507bc3246ecc1"},
 ]
 pypika = [
-    {file = "PyPika-0.48.0.tar.gz", hash = "sha256:8bdf5265076628c10e1ea2d0306d68f0559e27c5d3253b696778d191057ef7b0"},
+    {file = "pypika-0.48.1.tar.gz", hash = "sha256:9ea67608abcb1fd50de5cd7cc61a2e6d4f2aba0571328798d336b8865e3bbb87"},
 ]
 pypiwin32 = [
     {file = "pypiwin32-220-cp36-none-win32.whl", hash = "sha256:ceacd1b853fd9f521808d52554a1dcf1231d63c0e7409898ca6502e73e447b6b"},
