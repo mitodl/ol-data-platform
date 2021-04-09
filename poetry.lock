@@ -466,7 +466,7 @@ pyarrow = ["pyarrow"]
 
 [[package]]
 name = "dagster-ge"
-version = "0.11.2"
+version = "0.11.4"
 description = "Package for GE-specific Dagster framework solid and resource components."
 category = "main"
 optional = false
@@ -475,7 +475,7 @@ python-versions = "*"
 [package.dependencies]
 dagster = "*"
 dagster-pandas = "*"
-great-expectations = ">=0.11.9,<0.12.8 || >0.12.8"
+great-expectations = ">=0.11.9,<0.12.8 || >0.12.8,<0.13.7"
 pandas = "*"
 
 [[package]]
@@ -3142,8 +3142,8 @@ dagster-gcp = [
     {file = "dagster_gcp-0.11.2-py3-none-any.whl", hash = "sha256:2c945f506900cdacb289cf4411a5e137b1a4925184ea2e2e0dec659ae741af71"},
 ]
 dagster-ge = [
-    {file = "dagster-ge-0.11.2.tar.gz", hash = "sha256:72c3d1223e1c96da321bae1150945382f955da7f7cfed409c0706d599429a6bb"},
-    {file = "dagster_ge-0.11.2-py3-none-any.whl", hash = "sha256:881b05b6af1c01ac11c79cc751dad671de98e998b3b42a4e131305706911ead5"},
+    {file = "dagster-ge-0.11.4.tar.gz", hash = "sha256:51701996ba1b4d960e44455ca334aabd9a5ebc0fedc740e737e890a478649533"},
+    {file = "dagster_ge-0.11.4-py3-none-any.whl", hash = "sha256:2a8fc042f81dc46c8f158531f6dc7d3322e48e1aede68c69f7851828368e7696"},
 ]
 dagster-graphql = [
     {file = "dagster-graphql-0.10.9.tar.gz", hash = "sha256:fed902f524aab1250651c9647194af2dfde1a745715d8b2fc7cabc73d64ba492"},
