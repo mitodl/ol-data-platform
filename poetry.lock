@@ -519,7 +519,7 @@ psycopg2-binary = "*"
 
 [[package]]
 name = "dagster-shell"
-version = "0.11.2"
+version = "0.11.5"
 description = "Package for Dagster shell solids."
 category = "main"
 optional = false
@@ -3158,8 +3158,8 @@ dagster-postgres = [
     {file = "dagster_postgres-0.11.2-py3-none-any.whl", hash = "sha256:04cdbd8aee07a3d311f7687cdc68188a9f9faf90f973f130243350467f69f037"},
 ]
 dagster-shell = [
-    {file = "dagster-shell-0.11.2.tar.gz", hash = "sha256:3a32dd52972d15bfca43f4a1b79a195b6e117276ff16ca07e46cc3e20353ffc4"},
-    {file = "dagster_shell-0.11.2-py3-none-any.whl", hash = "sha256:0013b014ed0746c10cb0aa41332d771077a4ee1caf0e0a1bfb2085af178799f8"},
+    {file = "dagster-shell-0.11.5.tar.gz", hash = "sha256:373dd5edda0467eda6abecd754654aded57cb0995f3ca349f6caa9c0b5475736"},
+    {file = "dagster_shell-0.11.5-py3-none-any.whl", hash = "sha256:a69aa460b34fb2da81852674a7005085acb081b3c36677f124fe62ad90670a92"},
 ]
 darglint = [
     {file = "darglint-1.7.0-py3-none-any.whl", hash = "sha256:3bf16e78e2909ecdb737afd45fcd6a3f8993b092c2ba2b7cd7b179cceee87a43"},
