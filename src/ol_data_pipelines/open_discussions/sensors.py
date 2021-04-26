@@ -27,6 +27,9 @@ def mitx_bigquery_pipeline_completion_sensor(context):
         ),
     )
 
-    run = runs[0]
+    if runs:
+        run = runs[0]
 
-    yield RunRequest(run_key=str(run.run_id), run_config=production_preset.run_config)
+        yield RunRequest(
+            run_key=str(run.run_id), run_config=production_preset.run_config
+        )
