@@ -447,7 +447,7 @@ test = ["moto (==1.3.16)"]
 
 [[package]]
 name = "dagster-gcp"
-version = "0.11.2"
+version = "0.11.6"
 description = "Package for GCP-specific Dagster framework solid and resource components."
 category = "main"
 optional = false
@@ -3138,8 +3138,8 @@ dagster-aws = [
     {file = "dagster_aws-0.11.2-py3-none-any.whl", hash = "sha256:15d5ebfb70fef0552b6dc461ae9d86672a280ad198e1779a20246f29f3fd617c"},
 ]
 dagster-gcp = [
-    {file = "dagster-gcp-0.11.2.tar.gz", hash = "sha256:74ff23f362197f093009b7d4f229685539a55ff182aff72a578ac5a645ea3bc7"},
-    {file = "dagster_gcp-0.11.2-py3-none-any.whl", hash = "sha256:2c945f506900cdacb289cf4411a5e137b1a4925184ea2e2e0dec659ae741af71"},
+    {file = "dagster-gcp-0.11.6.tar.gz", hash = "sha256:f346919e9c5b957c8d435da558924c812e14d3c799444d4e774ad6c49b576719"},
+    {file = "dagster_gcp-0.11.6-py3-none-any.whl", hash = "sha256:234513a0b4cf3ed82fd80b2074ff225c283ff3f8d3fddc187d96e4e312d7a3e8"},
 ]
 dagster-ge = [
     {file = "dagster-ge-0.11.2.tar.gz", hash = "sha256:72c3d1223e1c96da321bae1150945382f955da7f7cfed409c0706d599429a6bb"},
