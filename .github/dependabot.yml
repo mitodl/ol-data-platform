@@ -1,0 +1,75 @@
+version: 2
+updates:
+- package-ecosystem: pip
+  directory: "/"
+  schedule:
+    interval: daily
+    time: "11:00"
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: black
+    versions:
+    - 21.4b0
+    - 21.4b1
+    - 21.4b2
+  - dependency-name: httpx
+    versions:
+    - 0.18.0
+  - dependency-name: pyarrow
+    versions:
+    - 4.0.0
+  - dependency-name: great-expectations
+    versions:
+    - 0.13.16
+    - 0.13.17
+    - 0.13.19
+  - dependency-name: dagster-aws
+    versions:
+    - 0.11.0
+    - 0.11.1
+    - 0.11.3
+    - 0.11.4
+    - 0.11.6
+  - dependency-name: dagster-gcp
+    versions:
+    - 0.11.0
+    - 0.11.1
+    - 0.11.3
+    - 0.11.4
+    - 0.11.6
+  - dependency-name: dagster-shell
+    versions:
+    - 0.11.0
+    - 0.11.1
+    - 0.11.3
+    - 0.11.4
+    - 0.11.6
+  - dependency-name: dagster-ge
+    versions:
+    - 0.11.0
+    - 0.11.1
+    - 0.11.3
+    - 0.11.4
+    - 0.11.6
+  - dependency-name: dagster-postgres
+    versions:
+    - 0.11.0
+    - 0.11.1
+    - 0.11.3
+    - 0.11.4
+    - 0.11.6
+  - dependency-name: pre-commit
+    versions:
+    - 2.12.0
+  - dependency-name: pypika
+    versions:
+    - 0.47.7
+  - dependency-name: isort
+    versions:
+    - 5.7.0
+  - dependency-name: pymysql
+    versions:
+    - 1.0.2
+  - dependency-name: mypy
+    versions:
+    - "0.812"
