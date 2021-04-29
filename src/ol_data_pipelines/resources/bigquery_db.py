@@ -1,8 +1,8 @@
-"""resource for connection to a bigquery database"""
+"""Resource for connection to a bigquery database."""
 
+from dagster import Field, InitResourceContext, String, resource
 from google.cloud import bigquery
 from google.oauth2 import service_account
-from dagster import Field, InitResourceContext, String, resource
 
 
 @resource(

@@ -1,5 +1,5 @@
 import sqlite3
-from typing import Dict, List, Text, Tuple
+from typing import Dict, List, Tuple
 
 from dagster import Field, InitResourceContext, String, resource
 from pypika import Query
@@ -8,17 +8,20 @@ DEFAULT_MYSQL_PORT = 3306
 
 
 class SQLiteClient:
-    def __init__(self, db_name: Text):
+    def __init__(self, db_name: str):
         """Instantiate a connection to a SQLite database.
 
         :param db_name: Database name to run queries in
-        :type db_name: Text
+        :type db_name: str
         """
         self.connection = sqlite3.connect(db_name)
         self.connection.row_factory = sqlite3.Row
 
-    def run_query(self, query: Query) -> Tuple[List[Text], List[Dict]]:
-        """Execute the passed query against the MySQL database connection and return the row data as a dictionary.
+    def run_query(self, query: Query) -> Tuple[List[str], List[Dict]]:
+        """Execute the passed query against the SQLite database connection.
+
+        Executes a query on the configured SQLite database and returns the row data as a
+        dictionary.
 
         :param query: PyPika query object that specifies the desired query
         :type query: Query
@@ -49,7 +52,8 @@ def sqlite_db_resource(resource_context: InitResourceContext):
     :param resource_context: The resource context object provided by Dagster
     :type resource_context: InitResourceContext
 
-    :yield: Yields the SQLite client for use within solids that are relying on the resource.
+    :yield: Yields the SQLite client for use within solids that are relying on the
+            resource.
 
     :rtype: SQLiteClient
     """

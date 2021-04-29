@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Text, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pymysql
 from dagster import Field, InitResourceContext, Int, String, resource
@@ -11,25 +11,25 @@ DEFAULT_MYSQL_PORT = 3306
 class MySQLClient:
     def __init__(  # noqa: WPS211
         self,
-        hostname: Text,
-        username: Text,
-        password: Text,
-        db_name: Optional[Text] = None,
+        hostname: str,
+        username: str,
+        password: str,
+        db_name: Optional[str] = None,
         port: Int = 3306,
     ):
         """Instantiate a connection to a MySQL database.
 
         :param hostname: DNS or IP address of MySQL database
-        :type hostname: Text
+        :type hostname: str
 
         :param username: Username for MySQL database with readonly access to database
-        :type username: Text
+        :type username: str
 
         :param password: Password for specified username
-        :type password: Text
+        :type password: str
 
         :param db_name: Database name to run queries in
-        :type db_name: Text
+        :type db_name: str
 
         :param port: Port number for MySQL database
         :type port: Int
@@ -43,8 +43,11 @@ class MySQLClient:
             cursorclass=DictCursor,
         )
 
-    def run_query(self, query: Query) -> Tuple[List[Text], List[Dict]]:
-        """Execute the passed query against the MySQL database connection and return the row data as a dictionary.
+    def run_query(self, query: Query) -> Tuple[List[str], List[Dict]]:
+        """Execute the passed query against the MySQL database connection.
+
+        Execute a query on the configured MySQL database and return the row data as a
+        dictionary.
 
         :param query: PyPika query object that specifies the desired query
         :type query: Query

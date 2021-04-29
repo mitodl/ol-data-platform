@@ -1,5 +1,4 @@
 """Resource for connection to a postgres db."""
-from typing import Text
 
 import pandas
 import psycopg2
@@ -13,25 +12,25 @@ DEFAULT_POSTGRES_PORT = 5432
 class PostgresClient:
     def __init__(  # noqa: WPS211
         self,
-        hostname: Text,
-        username: Text,
-        password: Text,
-        db_name: Text,
+        hostname: str,
+        username: str,
+        password: str,
+        db_name: str,
         port: Int = DEFAULT_POSTGRES_PORT,
     ):
         """Instantiate a connection to a Postgres database.
 
         :param hostname: DNS or IP address of Postgres database
-        :type hostname: Text
+        :type hostname: str
 
         :param username: Username for Postgres database
-        :type username: Text
+        :type username: str
 
         :param password: Password for specified username
-        :type password: Text
+        :type password: str
 
         :param db_name: Database name to run queries in
-        :type db_name: Text
+        :type db_name: str
 
         :param port: Port number for Postgres database
         :type port: Int
@@ -45,7 +44,10 @@ class PostgresClient:
         )
 
     def run_chunked_query(self, query: Query, chunksize: Int) -> pyarrow.Table:
-        """Execute the passed query against the Postgres connection and yeild the row data as Arrow Table.
+        """Execute the passed query against the Postgres connection.
+
+        Executes a query against the target Postgres database and yields the row data as
+        an Arrow Table.
 
         :param query: PyPika query object that specifies the desired query
         :type query: Query
