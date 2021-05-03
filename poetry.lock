@@ -415,7 +415,7 @@ test = ["astroid (>=2.3.3,<2.5)", "black (==20.8b1)", "coverage (==5.3)", "docke
 
 [[package]]
 name = "dagster-aws"
-version = "0.11.6"
+version = "0.11.7"
 description = "Package for AWS-specific Dagster framework solid and resource components."
 category = "main"
 optional = false
@@ -3091,8 +3091,8 @@ dagster = [
     {file = "dagster-0.11.6.tar.gz", hash = "sha256:a4971b66b8fce7f083d707b5d239bda548c792688dc34f582c6708eb1cae0747"},
 ]
 dagster-aws = [
-    {file = "dagster-aws-0.11.6.tar.gz", hash = "sha256:c6269f1ba31438ef82ff944033a7b16af89a3993ca3c94cf6ca7748bf80afcd7"},
-    {file = "dagster_aws-0.11.6-py3-none-any.whl", hash = "sha256:85552938e38a7f431c8e969771d4f1f766ee3b27fac55d448fc33d2a24bdf7ec"},
+    {file = "dagster-aws-0.11.7.tar.gz", hash = "sha256:29b48ad5be5ccff126bfbceb7dff119f1916fbb63d568733bce8071c056c0208"},
+    {file = "dagster_aws-0.11.7-py3-none-any.whl", hash = "sha256:429a8979df185b25a85e84e2d24354f4a6e87dd115d01f4ff694b88f8ff42569"},
 ]
 dagster-gcp = [
     {file = "dagster-gcp-0.11.6.tar.gz", hash = "sha256:f346919e9c5b957c8d435da558924c812e14d3c799444d4e774ad6c49b576719"},
