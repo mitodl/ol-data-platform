@@ -505,7 +505,7 @@ psycopg2-binary = "*"
 
 [[package]]
 name = "dagster-shell"
-version = "0.11.6"
+version = "0.11.9"
 description = "Package for Dagster shell solids."
 category = "main"
 optional = false
@@ -2369,7 +2369,7 @@ docutils = ">=0.11,<1.0"
 
 [[package]]
 name = "rfc3986"
-version = "1.4.0"
+version = "1.5.0"
 description = "Validating URI References per RFC 3986"
 category = "main"
 optional = false
@@ -3115,8 +3115,8 @@ dagster-postgres = [
     {file = "dagster_postgres-0.11.6-py3-none-any.whl", hash = "sha256:7fb974a76b06f13dd11c2c9d18df9a26c71d8dbb7ac4ed49bb47bfd6b2507f07"},
 ]
 dagster-shell = [
-    {file = "dagster-shell-0.11.6.tar.gz", hash = "sha256:548bb0f82ba311bef08462c58933a07fed2d29f8f5713ff21a53c85ab9e4fbf1"},
-    {file = "dagster_shell-0.11.6-py3-none-any.whl", hash = "sha256:5efbd1aacf6e921415309b549dc153f77fb8d06f25b3953ed3d2a201cad6093e"},
+    {file = "dagster-shell-0.11.9.tar.gz", hash = "sha256:d34a07fc2cbdbfef38ad05987c1be65746e3bdbb96b9a25d4601da234e999a48"},
+    {file = "dagster_shell-0.11.9-py3-none-any.whl", hash = "sha256:696d5e60e0d7029ba28b37f50aa2752730febdc8de697fd8ac7ae7d64845ce40"},
 ]
 darglint = [
     {file = "darglint-1.8.0-py3-none-any.whl", hash = "sha256:ac6797bcc918cd8d8f14c168a4a364f54e1aeb4ced59db58e7e4c6dfec2fe15c"},
@@ -4237,8 +4237,8 @@ restructuredtext-lint = [
     {file = "restructuredtext_lint-1.3.2.tar.gz", hash = "sha256:d3b10a1fe2ecac537e51ae6d151b223b78de9fafdd50e5eb6b08c243df173c80"},
 ]
 rfc3986 = [
-    {file = "rfc3986-1.4.0-py2.py3-none-any.whl", hash = "sha256:af9147e9aceda37c91a05f4deb128d4b4b49d6b199775fd2d2927768abdc8f50"},
-    {file = "rfc3986-1.4.0.tar.gz", hash = "sha256:112398da31a3344dc25dbf477d8df6cb34f9278a94fee2625d89e4514be8bb9d"},
+    {file = "rfc3986-1.5.0-py2.py3-none-any.whl", hash = "sha256:a86d6e1f5b1dc238b218b012df0aa79409667bb209e58da56d0b94704e712a97"},
+    {file = "rfc3986-1.5.0.tar.gz", hash = "sha256:270aaf10d87d0d4e095063c65bf3ddbc6ee3d0b226328ce21e036f946e421835"},
 ]
 rsa = [
     {file = "rsa-4.7.2-py3-none-any.whl", hash = "sha256:78f9a9bf4e7be0c5ded4583326e7461e3a3c5aae24073648b4bdfa797d78c9d2"},
