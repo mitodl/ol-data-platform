@@ -7,6 +7,7 @@ from dagster import Field, InitResourceContext, Int, String, resource
 from pypika import Query
 
 DEFAULT_POSTGRES_PORT = 5432
+DEFAULT_POSTGRES_QUERY_CHUNKSIZE = 5000
 
 
 class PostgresClient:

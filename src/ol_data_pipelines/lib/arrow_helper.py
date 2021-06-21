@@ -21,6 +21,8 @@ def write_parquet_file(file_system, output_folder, arrow_table, file_name):
         output_folder=output_folder, file_name=file_name
     )
 
+    file_system.create_dir(output_folder)
+
     with file_system.open_output_stream(file_path) as parquet_file:
         with parquet.ParquetWriter(
             parquet_file, arrow_table.schema, use_deprecated_int96_timestamps=True
