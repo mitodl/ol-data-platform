@@ -2,7 +2,7 @@
 import datetime
 
 import pytz
-from dagster import (
+from dagster import (  # noqa: WPS235
     Field,
     InputDefinition,
     Int,
@@ -26,7 +26,10 @@ from ol_data_pipelines.lib.arrow_helper import stream_to_parquet_file
 from ol_data_pipelines.lib.pypika_helper import Excluded, MinBy, Position, SplitPart
 from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
 from ol_data_pipelines.resources.athena_db import athena_db_resource
-from ol_data_pipelines.resources.postgres_db import postgres_db_resource
+from ol_data_pipelines.resources.postgres_db import (
+    DEFAULT_POSTGRES_QUERY_CHUNKSIZE,
+    postgres_db_resource,
+)
 
 
 @solid(
@@ -36,7 +39,7 @@ from ol_data_pipelines.resources.postgres_db import postgres_db_resource
         "chunksize": Field(
             Int,
             is_required=False,
-            default_value=5000,
+            default_value=DEFAULT_POSTGRES_QUERY_CHUNKSIZE,
             description="Number of rows per parquet file",
         ),
         "outputs_dir": Field(
@@ -70,7 +73,7 @@ def fetch_open_user_data(context: SolidExecutionContext):
     :param context: Dagster execution context for configuration data
     :type context: SolidExecutionContext
 
-    :yield: A path definition that points to the the folder containing the data
+    :yields: A path definition that points to the the folder containing the data
     """
     users = Table("auth_user")
     query = PostgreSQLQuery.from_(users).select("id", "email", "date_joined")
@@ -103,7 +106,7 @@ def fetch_open_user_data(context: SolidExecutionContext):
         "chunksize": Field(
             Int,
             is_required=False,
-            default_value=5000,
+            default_value=DEFAULT_POSTGRES_QUERY_CHUNKSIZE,
             description="Number of rows per parquet file",
         ),
         "outputs_dir": Field(
@@ -137,7 +140,7 @@ def fetch_open_run_data(context: SolidExecutionContext):  # noqa: WPS210
     :param context: Dagster execution context for configuration data
     :type context: SolidExecutionContext
 
-    :yield: A path definition that points to the the folder containing the data
+    :yields: A path definition that points to the the folder containing the data
     """
     run_offerors, runs, offerors, content_types = Tables(
         "course_catalog_learningresourcerun_offered_by",
@@ -192,7 +195,7 @@ def fetch_open_run_data(context: SolidExecutionContext):  # noqa: WPS210
         "chunksize": Field(
             Int,
             is_required=False,
-            default_value=5000,
+            default_value=DEFAULT_POSTGRES_QUERY_CHUNKSIZE,
             description="Number of rows per parquet file",
         ),
         "outputs_dir": Field(
@@ -309,7 +312,7 @@ def fetch_open_course_data(context: SolidExecutionContext):  # noqa: WPS210
         "athena_mitx_enrollments_table": Field(
             Noneable(str),
             is_required=True,
-            description="Athena mitx enrollments table",
+            description="Athena user_info_combo table",
         ),
     },
     input_defs=[

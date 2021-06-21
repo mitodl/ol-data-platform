@@ -21,6 +21,9 @@ def write_parquet_file(file_system, output_folder, arrow_table, file_name):
         output_folder=output_folder, file_name=file_name
     )
 
+    if file_system.type_name == "local":
+        file_system.create_dir(output_folder)
+
     with file_system.open_output_stream(file_path) as parquet_file:
         with parquet.ParquetWriter(
             parquet_file, arrow_table.schema, use_deprecated_int96_timestamps=True
@@ -44,6 +47,10 @@ def stream_to_parquet_file(
 
     :output_folder: Folder for outputs
     :type output_folder: String
+
+    :returns: arrow shema for parquet file data
+    :rtype: Schema
     """
     arrow_table = concat_tables(arrow_table_generator)
     write_parquet_file(file_system, output_folder, arrow_table, file_base)
+    return arrow_table.schema

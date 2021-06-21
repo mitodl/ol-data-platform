@@ -1,10 +1,11 @@
 """Pipeline for uploading bigquery data to s3."""
 import datetime
+import types
 
 import pytz
 from dagster import (  # noqa: WPS235
+    Array,
     AssetMaterialization,
-    Bool,
     EventMetadataEntry,
     Field,
     InputDefinition,
@@ -24,22 +25,77 @@ from pyarrow import fs
 
 from ol_data_pipelines.lib.arrow_helper import write_parquet_file
 from ol_data_pipelines.lib.dagster_types import DatasetDagsterType
+from ol_data_pipelines.lib.glue_helper import convert_schema, create_or_update_table
 from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
 from ol_data_pipelines.resources.bigquery_db import bigquery_db_resource
 
+FIELDS = types.MappingProxyType(
+    {
+        "user_info_combo": [
+            "user_id",
+            "username",
+            "email",
+            "is_staff",
+            "profile_name",
+            "profile_meta",
+            "enrollment_course_id",
+            "enrollment_created",
+            "profile_country",
+        ],
+        "person_course": [
+            "user_id",
+            "registered",
+            "explored",
+            "certified",
+            "mode",
+            "roles",
+            "cert_created_date",
+            "cert_modified_date",
+            "course_id",
+        ],
+    }
+)
+
+DEFAULT_LAST_MODIFIED_DAYS = 3600
+
 
 @solid(
-    description=("Download mitx user data as parquet files "),
+    description=("Download bigquery data as parquet files "),
     required_resource_keys={"bigquery_db"},
     config_schema={
         "last_modified_days": Field(
             Int,
             is_required=False,
-            default_value=3600,
-            description="If set, ignore tables whose modified date is older than this many days",
+            default_value=DEFAULT_LAST_MODIFIED_DAYS,
+            description=(
+                "If set, ignore tables whose modified date is older than"
+                " this many days"
+            ),
         ),
         "outputs_dir": Field(
             String, is_required=True, description="Path for output files"
+        ),
+        "table_name": Field(
+            String, is_required=True, description="Table that needs to be outputted"
+        ),
+        "athena_table_name": Field(
+            String,
+            is_required=False,
+            description="Athena table. Ignored if outputs_dir is not an S3 path",
+        ),
+        "athena_database_name": Field(
+            String,
+            is_required=False,
+            description="Athena database. Ignored if outputs_dir is not an S3 path",
+        ),
+        "athena_partition_keys": Field(
+            Array(str),
+            is_required=False,
+            default_value=[],
+            description=(
+                "List of columns to use as partition keys. "
+                "Ignored if outputs_dir is not an S3 path"
+            ),
         ),
     },
     input_defs=[
@@ -51,13 +107,13 @@ from ol_data_pipelines.resources.bigquery_db import bigquery_db_resource
     ],
     output_defs=[
         OutputDefinition(
-            name="user_query_folder",
+            name="output_folder",
             dagster_type=String,
             description="Path to user data rendered as parquet config_files",
         )
     ],
 )
-def download_user_data(  # noqa: WPS210
+def export_bigquery_data(  # noqa: WPS210, WPS231
     context: SolidExecutionContext, datasets: List[DatasetDagsterType]
 ):
     """Download mitx user data as parquet files.
@@ -66,7 +122,8 @@ def download_user_data(  # noqa: WPS210
     :type context: SolidExecutionContext
     :param datasets: List of bigquery DatasetListItem objects
     :type datasets: List[DatasetDagsterType]
-    :yield: A path definition that points to the the folder containing the user data
+
+    :yields: A path definition that points to the the folder containing the data
     """
     file_system, output_folder = fs.FileSystem.from_uri(
         context.solid_config["outputs_dir"]
@@ -76,26 +133,22 @@ def download_user_data(  # noqa: WPS210
         tzinfo=pytz.utc
     ) - datetime.timedelta(days=context.solid_config["last_modified_days"])
 
-    fields = [
-        "user_id",
-        "username",
-        "email",
-        "is_staff",
-        "profile_name",
-        "profile_meta",
-        "enrollment_course_id",
-        "enrollment_created",
-    ]
+    table_name = context.solid_config["table_name"]
+
+    fields = FIELDS[table_name]
+    first_update = True
 
     # MITx bigquery data is organized into datasets by course run
     # User data for each run is stored in a table named user_info_combo
     for dataset in datasets:
-        table_name = "{project}.{dataset_id}.user_info_combo".format(
-            project=context.resources.bigquery_db.project, dataset_id=dataset.dataset_id
+        full_table_name = "{project}.{dataset_id}.{table_name}".format(
+            project=context.resources.bigquery_db.project,
+            dataset_id=dataset.dataset_id,
+            table_name=table_name,
         )
 
         try:
-            bigquery_table = context.resources.bigquery_db.get_table(table_name)
+            bigquery_table = context.resources.bigquery_db.get_table(full_table_name)
         except NotFound:
             continue
 
@@ -109,11 +162,30 @@ def download_user_data(  # noqa: WPS210
             )
             arrow_table = rows.to_arrow()
 
-            file_name = "user_info_combo_{dataset_id}".format(
-                dataset_id=dataset.dataset_id
+            file_name = "{table_name}_{dataset_id}".format(
+                table_name=table_name, dataset_id=dataset.dataset_id
             )
 
             write_parquet_file(file_system, output_folder, arrow_table, file_name)
+
+            athena_schema_update_needed = (
+                file_system.type_name == "s3"
+                and first_update
+                and context.solid_config["athena_table_name"]
+                and context.solid_config["athena_database_name"]
+            )
+
+            if athena_schema_update_needed:
+                formatted_schema = convert_schema(arrow_table.schema)
+
+                create_or_update_table(
+                    context.solid_config["athena_database_name"],
+                    context.solid_config["athena_table_name"],
+                    formatted_schema,
+                    context.solid_config["outputs_dir"],
+                    context.solid_config["athena_partition_keys"],
+                )
+                first_update = False
 
             yield AssetMaterialization(
                 description="Updated course file",
@@ -121,7 +193,7 @@ def download_user_data(  # noqa: WPS210
                 metadata_entries=[
                     EventMetadataEntry.text(
                         label="updated_file",
-                        description="updated course file",
+                        description="updated data file",
                         text=file_name,
                     ),
                     EventMetadataEntry.text(
@@ -132,7 +204,7 @@ def download_user_data(  # noqa: WPS210
                 ],
             )
 
-    yield Output(output_folder, "user_query_folder")
+    yield Output(output_folder, "output_folder")
 
 
 @solid(
@@ -142,7 +214,9 @@ def download_user_data(  # noqa: WPS210
         OutputDefinition(
             name="datasets",
             dagster_type=List[DatasetDagsterType],
-            description="List of of bigquery DatasetListItem objects from mitx database",
+            description=(
+                "List of of bigquery DatasetListItem objects from mitx database"
+            ),
         )
     ],
 )
@@ -183,4 +257,8 @@ def get_datasets(context: SolidExecutionContext):
 )
 def mitx_bigquery_pipeline():
     """Pipeline for MITX user data extraction."""
-    download_user_data(get_datasets())
+    datasets = get_datasets()
+    export_user_info_combo = export_bigquery_data.alias("export_user_info_combo")
+    export_user_info_combo(datasets)
+    export_person_course = export_bigquery_data.alias("export_person_course")
+    export_person_course(datasets)
