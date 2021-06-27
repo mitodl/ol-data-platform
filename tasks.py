@@ -28,7 +28,7 @@ def package_pipeline(context):
             "libmariadbclient-dev",
         ],
         compile_python=True,
-        runtime_deps=["mongo-tools"],
+        runtime_deps=["mongodb-org-tools"],
         fpm_args=(
             "--config-files=/etc/dagster/workspace.yaml "
             "--maintainer=odl-devops@mit.edu "
