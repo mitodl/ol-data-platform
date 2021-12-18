@@ -643,6 +643,12 @@ def upload_extracted_data(  # noqa: WPS211
             mode="production",
             tags={"business_unit": "mitxpro"},
         ),
+        PresetDefinition(
+            name="mitxonline",
+            run_config=load_yaml_config("/etc/dagster/mitxonline_edx.yaml"),
+            mode="production",
+            tags={"business_unit": "mitxonline"},
+        ),
     ],
     tags={
         "source": "edx",
