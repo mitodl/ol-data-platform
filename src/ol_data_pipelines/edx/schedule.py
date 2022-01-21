@@ -2,11 +2,7 @@ from datetime import datetime, time
 
 from dagster import daily_schedule
 
-from ol_data_pipelines.edx.solids import edx_course_pipeline
-
-residential_preset = edx_course_pipeline.get_preset("residential")
-xpro_preset = edx_course_pipeline.get_preset("xpro")
-mitxonline_preset = edx_course_pipeline.get_preset("mitxonline")
+from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
 
 
 @daily_schedule(
@@ -14,11 +10,11 @@ mitxonline_preset = edx_course_pipeline.get_preset("mitxonline")
     start_date=datetime(2020, 9, 23),
     execution_time=time(3, 0, 0),
     mode="production",
-    tags_fn_for_date=lambda _: residential_preset.tags,
+    tags_fn_for_date=lambda _: {"business_unit": "residential"},
     execution_timezone="Etc/UTC",
 )
 def residential_edx_daily_schedule(execution_date):  # noqa: D103
-    return residential_preset.run_config
+    return load_yaml_config("/etc/dagster/mitxonline_edx.yaml")
 
 
 @daily_schedule(
@@ -26,11 +22,11 @@ def residential_edx_daily_schedule(execution_date):  # noqa: D103
     start_date=datetime(2020, 9, 23),
     execution_time=time(0, 0, 0),
     mode="production",
-    tags_fn_for_date=lambda _: xpro_preset.tags,
+    tags_fn_for_date=lambda _: {"business_unit": "mitxpro"},
     execution_timezone="Etc/UTC",
 )
 def xpro_edx_daily_schedule(execution_date):  # noqa: D103
-    return xpro_preset.run_config
+    return load_yaml_config("/etc/dagster/mitxonline_edx.yaml")
 
 
 @daily_schedule(
@@ -38,8 +34,8 @@ def xpro_edx_daily_schedule(execution_date):  # noqa: D103
     start_date=datetime(2021, 12, 18),
     execution_time=time(0, 0, 0),
     mode="production",
-    tags_fn_for_date=lambda _: mitxonline_preset.tags,
+    tags_fn_for_date=lambda _: {"business_unit": "mitxonline"},
     execution_timezone="Etc/UTC",
 )
 def mitxonline_edx_daily_schedule(execution_date):  # noqa: D103
-    return mitxonline_preset.run_config
+    return load_yaml_config("/etc/dagster/mitxonline_edx.yaml")

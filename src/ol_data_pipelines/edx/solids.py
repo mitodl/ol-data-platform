@@ -7,17 +7,13 @@ from dagster import (
     InputDefinition,
     Int,
     List,
-    ModeDefinition,
     Output,
     OutputDefinition,
-    PresetDefinition,
     SolidExecutionContext,
     String,
-    fs_io_manager,
-    pipeline,
-    solid,
+    graph,
+    op,
 )
-from dagster_aws.s3 import s3_pickle_io_manager, s3_resource
 from dagster_shell.utils import execute as run_bash
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
@@ -29,17 +25,9 @@ from ol_data_pipelines.lib.hooks import (
     notify_healthchecks_io_on_failure,
     notify_healthchecks_io_on_success,
 )
-from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
-from ol_data_pipelines.resources.healthchecks import (
-    healthchecks_dummy_resource,
-    healthchecks_io_resource,
-)
-from ol_data_pipelines.resources.mysql_db import mysql_db_resource
-from ol_data_pipelines.resources.outputs import daily_dir
-from ol_data_pipelines.resources.sqlite_db import sqlite_db_resource
 
 
-@solid(
+@op(
     name="list_edx_courses",
     description=(
         "Retrieve the list of course IDs active in the edX instance "
@@ -121,7 +109,7 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
     yield Output(course_ids, "edx_course_ids")
 
 
-@solid(
+@op(
     required_resource_keys={"sqldb", "results_dir"},
     input_defs=[
         InputDefinition(
@@ -138,7 +126,7 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
         )
     ],
 )
-def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore # noqa: WPS210
+def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -193,7 +181,7 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
     yield Output(enrollments_path, "edx_enrolled_users")
 
 
-@solid(
+@op(
     name="open_edx_student_submissions",
     description="Export of student submission events for courses on the specified Open edX installation.",
     required_resource_keys={"sqldb", "results_dir"},
@@ -212,7 +200,7 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
         )
     ],
 )
-def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore # noqa: WPS210
+def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -272,7 +260,7 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
     yield Output(submissions_path, "edx_student_submissions")
 
 
-@solid(
+@op(
     name="open_edx_enrollments",
     description="Export of enrollment records for courses on the specified Open edX installation.",
     required_resource_keys={"sqldb", "results_dir"},
@@ -334,7 +322,7 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
     yield Output(enrollments_path, "edx_enrollment_records")
 
 
-@solid(
+@op(
     name="open_edx_course_roles",
     description="Export of user roles for courses on the specified Open edX installation.",
     required_resource_keys={"sqldb", "results_dir"},
@@ -394,7 +382,7 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
     yield Output(roles_path, "edx_course_roles")
 
 
-@solid(
+@op(
     name="export_edx_forum_database",
     description="Solid to build the command line string for executing mongodump against the Open edX forum database",
     required_resource_keys={"results_dir"},
@@ -442,7 +430,7 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
         )
     ],
 )
-def export_edx_forum_database(  # type: ignore # noqa: WPS210
+def export_edx_forum_database(  # type: ignore
     context: SolidExecutionContext,
 ) -> DagsterPath:
     """Export the edX forum database using mongodump.
@@ -507,7 +495,7 @@ def export_edx_forum_database(  # type: ignore # noqa: WPS210
     yield Output(forum_data_path, "edx_forum_data_directory")
 
 
-@solid(
+@op(
     name="edx_upload_daily_extracts",
     description="Upload all data from daily extracts to S3 for institutional research.",
     required_resource_keys={"sqldb", "results_dir", "s3"},
@@ -597,59 +585,12 @@ def upload_extracted_data(  # noqa: WPS211
     )
 
 
-@pipeline(
+@graph(
     description=(
         "Extract data and course structure from Open edX for use by institutional research. "
         "This is ultimately inserted into BigQuery and combined with information from the edX "
         "tracking logs which get delivered to S3 on an hourly basis via FluentD"
     ),
-    mode_defs=[
-        ModeDefinition(
-            name="dev",
-            resource_defs={
-                "sqldb": sqlite_db_resource,
-                "s3": s3_resource,
-                "results_dir": daily_dir,
-                "healthchecks": healthchecks_dummy_resource,
-                "io_manager": fs_io_manager,
-            },
-        ),
-        ModeDefinition(
-            name="production",
-            resource_defs={
-                "sqldb": mysql_db_resource,
-                "s3": s3_resource,
-                "results_dir": daily_dir,
-                "healthchecks": healthchecks_io_resource,
-                "io_manager": s3_pickle_io_manager,
-            },
-        ),
-    ],
-    preset_defs=[
-        PresetDefinition(
-            name="dev",
-            run_config={},
-            mode="dev",
-        ),
-        PresetDefinition(
-            name="residential",
-            run_config=load_yaml_config("/etc/dagster/residential_edx.yaml"),
-            mode="production",
-            tags={"business_unit": "residential"},
-        ),
-        PresetDefinition(
-            name="xpro",
-            run_config=load_yaml_config("/etc/dagster/xpro_edx.yaml"),
-            mode="production",
-            tags={"business_unit": "mitxpro"},
-        ),
-        PresetDefinition(
-            name="mitxonline",
-            run_config=load_yaml_config("/etc/dagster/mitxonline_edx.yaml"),
-            mode="production",
-            tags={"business_unit": "mitxonline"},
-        ),
-    ],
     tags={
         "source": "edx",
         "destination": "s3",
