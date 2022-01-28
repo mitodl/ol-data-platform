@@ -1,14 +1,11 @@
 from dagster import RunRequest, sensor
 from dagster.core.storage.pipeline_run import PipelineRunsFilter, PipelineRunStatus
 
-from ol_data_pipelines.open_discussions.solids import update_enrollments_pipeline
-
-production_preset = update_enrollments_pipeline.get_preset("production")
+from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
 
 
 @sensor(
     pipeline_name="update_enrollments_pipeline",
-    mode="production",
     minimum_interval_seconds=600,
 )
 def mitx_bigquery_pipeline_completion_sensor(context):
@@ -31,5 +28,8 @@ def mitx_bigquery_pipeline_completion_sensor(context):
         run = runs[0]
 
         yield RunRequest(
-            run_key=str(run.run_id), run_config=production_preset.run_config
+            run_key=str(run.run_id),
+            run_config=load_yaml_config(
+                "/etc/dagster/open-discussions-enrollment-update.yaml"
+            ),
         )

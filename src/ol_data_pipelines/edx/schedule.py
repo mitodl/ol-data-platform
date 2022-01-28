@@ -9,7 +9,6 @@ from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
     pipeline_name="edx_course_pipeline",
     start_date=datetime(2020, 9, 23),
     execution_time=time(3, 0, 0),
-    mode="production",
     tags_fn_for_date=lambda _: {"business_unit": "residential"},
     execution_timezone="Etc/UTC",
 )
@@ -21,7 +20,6 @@ def residential_edx_daily_schedule(execution_date):  # noqa: D103
     pipeline_name="edx_course_pipeline",
     start_date=datetime(2020, 9, 23),
     execution_time=time(0, 0, 0),
-    mode="production",
     tags_fn_for_date=lambda _: {"business_unit": "mitxpro"},
     execution_timezone="Etc/UTC",
 )
@@ -33,7 +31,6 @@ def xpro_edx_daily_schedule(execution_date):  # noqa: D103
     pipeline_name="edx_course_pipeline",
     start_date=datetime(2021, 12, 18),
     execution_time=time(0, 0, 0),
-    mode="production",
     tags_fn_for_date=lambda _: {"business_unit": "mitxonline"},
     execution_timezone="Etc/UTC",
 )

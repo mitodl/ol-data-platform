@@ -18,7 +18,7 @@ def package_pipeline(context):
         # source=directory(str(Path(__file__).parent)),
         source=git(uri=poetry.package.urls["Repository"], branch="main"),
         profile="debian",
-        python_version="3.8.5",
+        python_version="3.9.9",
         build_deps=[
             "libffi-dev",
             "build-essential",
