@@ -14,8 +14,8 @@ from dagster import (  # noqa: WPS235
     PresetDefinition,
     SolidExecutionContext,
     String,
-    pipeline,
-    solid,
+    job,
+    op,
 )
 from dagster.experimental import DynamicOutput, DynamicOutputDefinition
 from pyarrow import fs
@@ -32,7 +32,7 @@ from ol_data_pipelines.resources.postgres_db import (
 )
 
 
-@solid(
+@op(
     description=("Query postgres and data as parquet files "),
     required_resource_keys={"postgres_db"},
     config_schema={
@@ -99,7 +99,7 @@ def fetch_open_user_data(context: SolidExecutionContext):
     yield Output(output_folder, "query_folder")
 
 
-@solid(
+@op(
     description=("Retrieve run information from open and write it as parquet files "),
     required_resource_keys={"postgres_db"},
     config_schema={
@@ -133,7 +133,7 @@ def fetch_open_user_data(context: SolidExecutionContext):
         )
     ],
 )
-def fetch_open_run_data(context: SolidExecutionContext):  # noqa: WPS210
+def fetch_open_run_data(context: SolidExecutionContext):
     """
     Fetch open run data as parquet files.
 
@@ -186,7 +186,7 @@ def fetch_open_run_data(context: SolidExecutionContext):  # noqa: WPS210
     yield Output(output_folder, "query_folder")
 
 
-@solid(
+@op(
     description=(
         "Retrieve course information from open and write it as parquet files "
     ),
@@ -222,7 +222,7 @@ def fetch_open_run_data(context: SolidExecutionContext):  # noqa: WPS210
         )
     ],
 )
-def fetch_open_course_data(context: SolidExecutionContext):  # noqa: WPS210
+def fetch_open_course_data(context: SolidExecutionContext):
     """
     Fetch open course data as parquet files.
 
@@ -272,7 +272,7 @@ def fetch_open_course_data(context: SolidExecutionContext):  # noqa: WPS210
     yield Output(output_folder, "query_folder")
 
 
-@solid(
+@op(
     description=(
         "Run athena query joining enrollment data to user, course and run data"
     ),
@@ -334,7 +334,7 @@ def fetch_open_course_data(context: SolidExecutionContext):  # noqa: WPS210
     ],
     output_defs=[DynamicOutputDefinition(List)],
 )
-def run_open_enrollments_query(  # noqa: WPS210
+def run_open_enrollments_query(
     context: SolidExecutionContext,
     open_course_update: String,
     open_run_update: String,
@@ -450,7 +450,7 @@ def run_open_enrollments_query(  # noqa: WPS210
         chunk = chunk + 1
 
 
-@solid(
+@op(
     description=("Insert open enrollments data to the open database"),
     required_resource_keys={"postgres_db"},
     config_schema={
@@ -469,7 +469,7 @@ def run_open_enrollments_query(  # noqa: WPS210
         )
     ],
 )
-def update_open_enrollment_data(  # noqa: WPS210
+def update_open_enrollment_data(
     context: SolidExecutionContext, enrollment_data: List[dict]
 ):
     """
@@ -531,21 +531,10 @@ def update_open_enrollment_data(  # noqa: WPS210
             insert_count = 0
 
 
-@pipeline(
+@job(
     description="Retrieve user information from open and write it as parquet files",
-    mode_defs=[
-        ModeDefinition(
-            name="production",
-            resource_defs={"postgres_db": postgres_db_resource},
-        )
-    ],
-    preset_defs=[
-        PresetDefinition(
-            name="production",
-            run_config=load_yaml_config("/etc/dagster/open-discussions.yaml"),
-            mode="production",
-        )
-    ],
+    resource_defs={"postgres_db": postgres_db_resource},
+    config=load_yaml_config("/etc/dagster/open-discussions.yaml"),
     tags={
         "source": "open_discussions",
         "destination": "s3",
@@ -559,30 +548,17 @@ def pull_open_data_pipeline():
     fetch_open_user_data()
 
 
-@pipeline(
+@job(
     description="""
         Update open course, run and user data on S3.
         Merge that data with mitx enrollments from the mitx bigquery database.
         Finally, update data in the open enrollments table.
     """,
-    mode_defs=[
-        ModeDefinition(
-            name="production",
-            resource_defs={
-                "postgres_db": postgres_db_resource,
-                "athena_db": athena_db_resource,
-            },
-        )
-    ],
-    preset_defs=[
-        PresetDefinition(
-            name="production",
-            run_config=load_yaml_config(
-                "/etc/dagster/open-discussions-enrollment-update.yaml"
-            ),
-            mode="production",
-        )
-    ],
+    resource_defs={
+        "postgres_db": postgres_db_resource,
+        "athena_db": athena_db_resource,
+    },
+    config=load_yaml_config("/etc/dagster/open-discussions-enrollment-update.yaml"),
     tags={
         "source": "open_discussions",
         "destination": "open_discussions",

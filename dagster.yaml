@@ -1,2 +1,3 @@
+---
 telemetry:
-  enabled: True
+  enabled: true

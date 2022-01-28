@@ -17,8 +17,8 @@ from dagster import (  # noqa: WPS235
     PresetDefinition,
     SolidExecutionContext,
     String,
-    pipeline,
-    solid,
+    graph,
+    op,
 )
 from google.cloud.exceptions import NotFound
 from pyarrow import fs
@@ -26,8 +26,6 @@ from pyarrow import fs
 from ol_data_pipelines.lib.arrow_helper import write_parquet_file
 from ol_data_pipelines.lib.dagster_types import DatasetDagsterType
 from ol_data_pipelines.lib.glue_helper import convert_schema, create_or_update_table
-from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
-from ol_data_pipelines.resources.bigquery_db import bigquery_db_resource
 
 FIELDS = types.MappingProxyType(
     {
@@ -59,7 +57,7 @@ FIELDS = types.MappingProxyType(
 DEFAULT_LAST_MODIFIED_DAYS = 3600
 
 
-@solid(
+@op(
     description=("Download bigquery data as parquet files "),
     required_resource_keys={"bigquery_db"},
     config_schema={
@@ -113,7 +111,7 @@ DEFAULT_LAST_MODIFIED_DAYS = 3600
         )
     ],
 )
-def export_bigquery_data(  # noqa: WPS210, WPS231
+def export_bigquery_data(  # noqa: WPS210
     context: SolidExecutionContext, datasets: List[DatasetDagsterType]
 ):
     """Download mitx user data as parquet files.
@@ -207,7 +205,7 @@ def export_bigquery_data(  # noqa: WPS210, WPS231
     yield Output(output_folder, "output_folder")
 
 
-@solid(
+@op(
     description="Get list of bigquery dataset pbjects containing user data",
     required_resource_keys={"bigquery_db"},
     output_defs=[
@@ -233,27 +231,14 @@ def get_datasets(context: SolidExecutionContext):
     )
 
 
-@pipeline(
+@graph(
     description="Extract user data from mitx bigquery database.",
-    mode_defs=[
-        ModeDefinition(
-            name="production",
-            resource_defs={"bigquery_db": bigquery_db_resource},
-        )
-    ],
-    preset_defs=[
-        PresetDefinition(
-            name="production",
-            run_config=load_yaml_config("/etc/dagster/mitx_bigquery.yaml"),
-            mode="production",
-            tags={
-                "sources": ["bigquery"],
-                "destinations": ["s3"],
-                "owner": "ol-engineering",
-                "consumer": "ol-engineering",
-            },
-        )
-    ],
+    tags={
+        "sources": ["bigquery"],
+        "destinations": ["s3"],
+        "owner": "ol-engineering",
+        "consumer": "ol-engineering",
+    },
 )
 def mitx_bigquery_pipeline():
     """Pipeline for MITX user data extraction."""

@@ -25,7 +25,7 @@ def package_pipeline(context):
             "zlib1g-dev",
             "libssl-dev",
             "liblzma-dev",
-            "libmariadbclient-dev",
+            "libmariadb-dev",
         ],
         compile_python=True,
         runtime_deps=["mongodb-org-tools"],
