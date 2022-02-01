@@ -13,7 +13,7 @@ from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
     execution_timezone="Etc/UTC",
 )
 def residential_edx_daily_schedule(execution_date):  # noqa: D103
-    return load_yaml_config("/etc/dagster/mitxonline_edx.yaml")
+    return load_yaml_config("/etc/dagster/residential_edx.yaml")
 
 
 @daily_schedule(
@@ -24,7 +24,7 @@ def residential_edx_daily_schedule(execution_date):  # noqa: D103
     execution_timezone="Etc/UTC",
 )
 def xpro_edx_daily_schedule(execution_date):  # noqa: D103
-    return load_yaml_config("/etc/dagster/mitxonline_edx.yaml")
+    return load_yaml_config("/etc/dagster/xpro_edx.yaml")
 
 
 @daily_schedule(

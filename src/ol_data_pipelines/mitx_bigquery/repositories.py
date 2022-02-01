@@ -1,6 +1,7 @@
 """Repository for pipeline pulling MITx bigquery data to S3."""
 from dagster import repository
 
+from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
 from ol_data_pipelines.mitx_bigquery.schedule import mitx_bigquery_daily_schedule
 from ol_data_pipelines.mitx_bigquery.solids import mitx_bigquery_pipeline
 from ol_data_pipelines.resources.bigquery_db import bigquery_db_resource
@@ -14,7 +15,8 @@ def mitx_bigquery_repository():
     """
     return [
         mitx_bigquery_pipeline.to_job(
-            resource_defs={"bigquery_db": bigquery_db_resource}
+            resource_defs={"bigquery_db": bigquery_db_resource},
+            config=load_yaml_config("/etc/dagster/mitx_bigquery.yaml"),
         ),
         mitx_bigquery_daily_schedule,
     ]

@@ -7,6 +7,7 @@ from ol_data_pipelines.edx.schedule import (
     xpro_edx_daily_schedule,
 )
 from ol_data_pipelines.edx.solids import edx_course_pipeline
+from ol_data_pipelines.lib.yaml_config_helper import load_yaml_config
 from ol_data_pipelines.resources.healthchecks import (
     healthchecks_dummy_resource,
     healthchecks_io_resource,
@@ -35,7 +36,10 @@ production_resources = {
 @repository
 def residential_edx_repository():
     return [
-        edx_course_pipeline.to_job(resource_defs=production_resources),
+        edx_course_pipeline.to_job(
+            resource_defs=production_resources,
+            config=load_yaml_config("/etc/dagster/residential_edx.yaml"),
+        ),
         residential_edx_daily_schedule,
     ]
 
@@ -43,7 +47,10 @@ def residential_edx_repository():
 @repository
 def xpro_edx_repository():
     return [
-        edx_course_pipeline.to_job(resource_defs=production_resources),
+        edx_course_pipeline.to_job(
+            resource_defs=production_resources,
+            config=load_yaml_config("/etc/dagster/xpro_edx.yaml"),
+        ),
         xpro_edx_daily_schedule,
     ]
 
@@ -51,6 +58,9 @@ def xpro_edx_repository():
 @repository
 def mitxonline_edx_repository():
     return [
-        edx_course_pipeline.to_job(resource_defs=production_resources),
+        edx_course_pipeline.to_job(
+            resource_defs=production_resources,
+            config=load_yaml_config("/etc/dagster/mitxonline_edx.yaml"),
+        ),
         mitxonline_edx_daily_schedule,
     ]
