@@ -387,16 +387,10 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
     description="Solid to build the command line string for executing mongodump against the Open edX forum database",
     required_resource_keys={"results_dir"},
     config_schema={
-        "edx_mongodb_host": Field(
+        "edx_mongodb_uri": Field(
             String,
             is_required=True,
-            description="Resolvable host address of MongoDB master",
-        ),
-        "edx_mongodb_port": Field(
-            Int,
-            is_required=False,
-            default_value=27017,  # noqa: WPS432
-            description="TCP port number used to connect to MongoDB server",
+            description="The URI for connecting to a MongoDB replicat set",
         ),
         "edx_mongodb_username": Field(
             String,
@@ -447,10 +441,8 @@ def export_edx_forum_database(  # type: ignore
     )
     command_array = [
         "/usr/bin/mongodump",
-        "--host",
-        context.solid_config["edx_mongodb_host"],
-        "--port",
-        str(context.solid_config["edx_mongodb_port"]),
+        "--uri",
+        context.solid_config["edx_mongodb_uri"],
         "--db",
         context.solid_config["edx_mongodb_forum_database_name"],
         "--authenticationDatabase",

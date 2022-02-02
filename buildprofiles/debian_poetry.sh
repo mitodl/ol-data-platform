@@ -97,6 +97,8 @@ find {{package_tmp_root}} -type d -name 'venv' -print0 | xargs -0 rm -rf
 $PIP_BIN install poetry
 $PYTHON_BASEDIR/bin/poetry config virtualenvs.create false
 $PYTHON_BASEDIR/bin/poetry build
+$PYTHON_BASEDIR/bin/poetry export --output requirements.txt --without-hashes
+$PIP_BIN install -r requirements.txt
 $PIP_BIN install dist/*.whl
 
 # Get rid of VCS info.
