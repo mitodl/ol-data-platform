@@ -439,10 +439,11 @@ def export_edx_forum_database(  # type: ignore
     forum_data_path = context.resources.results_dir.path.joinpath(
         context.solid_config["edx_mongodb_forum_database_name"]
     )
+    mongo_uri = context.solid_config["edx_mongodb_uri"]
     command_array = [
         "/usr/bin/mongodump",
         "--uri",
-        context.solid_config["edx_mongodb_uri"],
+        f"'{mongo_uri}'",
         "--db",
         context.solid_config["edx_mongodb_forum_database_name"],
         "--authenticationDatabase",
