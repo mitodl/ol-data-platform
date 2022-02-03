@@ -498,7 +498,14 @@ def export_edx_forum_database(  # type: ignore
             default_value="odl-developer-testing-sandbox",
             is_required=False,
             description="S3 bucket to use for uploading results of pipeline execution.",
-        )
+        ),
+        "edx_etl_results_bucket_path": Field(
+            String,
+            default_value="",
+            is_required=False,
+            description="The path prefix to use when uploading the results to the "
+            "target bucket.",
+        ),
     },
     input_defs=[
         InputDefinition(name="edx_course_roles", dagster_type=DagsterPath),
@@ -546,43 +553,50 @@ def upload_extracted_data(  # noqa: WPS211
 
     :yield: The S3 path of the uploaded directory
     """
+    results_bucket = context.solid_config["edx_etl_results_bucket"]
+    bucket_prefix = context.solid_config["edx_etl_results_bucket_path"]
     for path_object in context.resources.results_dir.path.iterdir():
         if path_object.is_dir():
             for fpath in path_object.iterdir():
+                file_key = str(
+                    fpath.relative_to(context.resources.results_dir.root_dir)
+                )
                 context.resources.s3.upload_file(
                     Filename=str(fpath),
-                    Bucket=context.solid_config["edx_etl_results_bucket"],
-                    Key=str(fpath.relative_to(context.resources.results_dir.root_dir)),
+                    Bucket=results_bucket,
+                    Key=f"{bucket_prefix}/{file_key}".strip("/"),
                 )
         elif path_object.is_file():
+            file_key = str(
+                path_object.relative_to(context.resources.results_dir.root_dir)
+            )
             context.resources.s3.upload_file(
                 Filename=str(path_object),
-                Bucket=context.solid_config["edx_etl_results_bucket"],
-                Key=str(
-                    path_object.relative_to(context.resources.results_dir.root_dir)
-                ),
+                Bucket=results_bucket,
+                Key=f"{bucket_prefix}/{file_key}".strip("/"),
             )
     yield AssetMaterialization(
         asset_key="edx_daily_results",
         description="Daily export directory for edX export pipeline",
         metadata_entries=[
             EventMetadataEntry.fspath(
-                f's3://{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}'  # noqa: WPS237
+                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: WPS237
             ),
         ],
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        f'{context.solid_config["edx_etl_results_bucket"]}/{context.resources.results_dir.path.name}',  # noqa: WPS237
+        f"{results_bucket}/{context.resources.results_dir.path.name}",  # noqa: WPS237
         "edx_daily_extracts_directory",
     )
 
 
 @graph(
     description=(
-        "Extract data and course structure from Open edX for use by institutional research. "
-        "This is ultimately inserted into BigQuery and combined with information from the edX "
-        "tracking logs which get delivered to S3 on an hourly basis via FluentD"
+        "Extract data and course structure from Open edX for use by institutional "
+        "research. This is ultimately inserted into BigQuery and combined with "
+        "information from the edX tracking logs which get delivered to S3 on an hourly "
+        "basis via a log shipping agent"
     ),
     tags={
         "source": "edx",
