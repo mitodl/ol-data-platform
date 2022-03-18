@@ -561,6 +561,7 @@ def export_edx_courses(
     successful_exports: Set[str] = set()
     failed_exports: Set[str] = set()
     tasks = exported_courses["upload_task_ids"]
+    context.log.info("Exporting %s tasks from Open edX", len(tasks))
     while len(successful_exports.union(failed_exports)) < len(tasks):
         for course_id, task_id in tasks.items():
             task_status = check_course_export_status(
@@ -574,13 +575,18 @@ def export_edx_courses(
             if task_status["state"] == "Failed":
                 failed_exports.add(course_id)
     for course_id in successful_exports:
+        context.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
+        course_file = f"{course_id}.tar.gz"
         source_object = {
             "Bucket": context.op_config["edx_course_bucket"],
-            "Key": f"{course_id}.tar.gz",
+            "Key": course_file,
         }
-        context.resources.s3.copy(
-            source_object, *daily_extracts_dir.split("/", maxsplit=1)
-        )
+        dest_bucket, dest_prefix = daily_extracts_dir.split("/", maxsplit=1)
+        dest_object = {
+            "Bucket": dest_bucket,
+            "Key": f"{dest_prefix}/courses/{course_file}",
+        }
+        context.resources.s3.copy(CopySource=source_object, **dest_object)
         context.resources.s3.delete_object(**source_object)
 
 
@@ -594,13 +600,6 @@ def export_edx_courses(
             default_value="odl-developer-testing-sandbox",
             is_required=False,
             description="S3 bucket to use for uploading results of pipeline execution.",
-        ),
-        "edx_etl_results_bucket_path": Field(
-            String,
-            default_value="",
-            is_required=False,
-            description="The path prefix to use when uploading the results to the "
-            "target bucket.",
         ),
     },
     input_defs=[
@@ -650,7 +649,6 @@ def upload_extracted_data(  # noqa: WPS211
     :yield: The S3 path of the uploaded directory
     """
     results_bucket = context.op_config["edx_etl_results_bucket"]
-    bucket_prefix = context.op_config["edx_etl_results_bucket_path"]
     for path_object in context.resources.results_dir.path.iterdir():
         if path_object.is_dir():
             for fpath in path_object.iterdir():
@@ -660,7 +658,7 @@ def upload_extracted_data(  # noqa: WPS211
                 context.resources.s3.upload_file(
                     Filename=str(fpath),
                     Bucket=results_bucket,
-                    Key=f"{bucket_prefix}/{context.resources.results_dir.path.name}/{file_key}".strip(
+                    Key=f"{context.resources.results_dir.path.name}/{file_key}".strip(
                         "/"
                     ),
                 )
@@ -671,22 +669,20 @@ def upload_extracted_data(  # noqa: WPS211
             context.resources.s3.upload_file(
                 Filename=str(path_object),
                 Bucket=results_bucket,
-                Key=f"{bucket_prefix}/{context.resources.results_dir.path.name}/{file_key}".strip(
-                    "/"
-                ),
+                Key=f"{context.resources.results_dir.path.name}/{file_key}".strip("/"),
             )
     yield AssetMaterialization(
         asset_key="edx_daily_results",
         description="Daily export directory for edX export pipeline",
         metadata_entries=[
             EventMetadataEntry.fspath(
-                f"s3://{results_bucket}/{bucket_prefix}/{context.resources.results_dir.path.name}"  # noqa: WPS237
+                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: WPS237
             ),
         ],
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        f"{results_bucket}/{bucket_prefix}/{context.resources.results_dir.path.name}",  # noqa: WPS237
+        f"{results_bucket}/{context.resources.results_dir.path.name}",  # noqa: WPS237
         "edx_daily_extracts_directory",
     )
 
