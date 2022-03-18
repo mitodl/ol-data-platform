@@ -39,7 +39,7 @@ isort = "*"
 mypy = "*"
 poetry = "*"
 pre-commit = "^2"
-pytest = "^6.2.3"
+pytest = "^7.1.1"
 vdist = "^2"
 wemake-python-styleguide = "*"
 
