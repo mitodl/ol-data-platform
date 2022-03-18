@@ -76,14 +76,13 @@ def get_edx_course_ids(
         https://lms.mitx.mit.edu
     :type edx_url: str
 
-    :param access_token: A valid JWT or Bearer access token for authenticating to the
-        edX API
+    :param access_token: A valid JWT access token for authenticating to the edX API
     :type access_token: str
 
     :param page_size: The number of courses to retrieve per page via the API.
     :type page_size: int
 
-    :yield: A generator for walking the paginated list of courses returned from the
+        :yield: A generator for walking the paginated list of courses returned from the
         API
     """
     username = _get_username(edx_url, access_token)
@@ -96,3 +95,43 @@ def get_edx_course_ids(
         response_data = _fetch_with_auth(next_page, access_token, username, page_size)
         next_page = response_data["pagination"].get("next")
         yield response_data["results"]
+
+
+def export_courses(
+    edx_studio_url: str, access_token: str, course_ids: List[str]
+) -> Dict[str, Dict[str, str]]:
+    """Trigger export of edX courses to an S3 bucket via an API request.
+
+    :param edx_studio_url: The base URL of the edX studio, including protocol.  e.g.
+        https://studio.mitx.mit.edu
+    :type edx_studio_url: str
+
+    :param access_token: A valid JWT access token for authenticating to the edX API
+    :type access_token: str
+
+    :param course_ids: A list of course IDs to be exported
+    :type course_ids: List[str]
+
+    :returns: A dictionary of course IDs and the S3 URL where it will be exported to.
+
+    :rtype: Dict[str, str]
+    """
+    request_url = f"{edx_studio_url}/api/courses/v0/export/"
+    response = httpx.post(
+        request_url,
+        json={"courses": course_ids},
+        headers={"Authorization": f"JWT {access_token}"},
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def check_course_export_status(
+    edx_studio_url: str, access_token: str, course_id: str, task_id: str
+) -> Dict[str, str]:
+    response = httpx.get(
+        f"{edx_studio_url}/api/courses/v0/export/{course_id}?task_id={task_id}",
+        headers={"Authorization": f"JWT {access_token}"},
+    )
+    response.raise_for_status()
+    return response.json()

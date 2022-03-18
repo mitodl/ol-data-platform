@@ -1,3 +1,5 @@
+from typing import Set
+
 from dagster import (
     AssetMaterialization,
     EventMetadataEntry,
@@ -14,11 +16,17 @@ from dagster import (
     graph,
     op,
 )
+from dagster.core.definitions.input import In
 from dagster_shell.utils import execute as run_bash
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
-from ol_data_pipelines.edx.api_client import get_access_token, get_edx_course_ids
+from ol_data_pipelines.edx.api_client import (
+    check_course_export_status,
+    export_courses,
+    get_access_token,
+    get_edx_course_ids,
+)
 from ol_data_pipelines.lib.dagster_types import DagsterPath
 from ol_data_pipelines.lib.file_rendering import write_csv
 from ol_data_pipelines.lib.hooks import (
@@ -81,16 +89,16 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
     :yield: List of edX course IDs
     """
     access_token = get_access_token(
-        client_id=context.solid_config["edx_client_id"],
-        client_secret=context.solid_config["edx_client_secret"],
-        edx_url=context.solid_config["edx_base_url"],
-        token_type=context.solid_config["edx_token_type"],
+        client_id=context.op_config["edx_client_id"],
+        client_secret=context.op_config["edx_client_secret"],
+        edx_url=context.op_config["edx_base_url"],
+        token_type=context.op_config["edx_token_type"],
     )
     course_ids = []
     course_id_generator = get_edx_course_ids(
-        context.solid_config["edx_base_url"],
+        context.op_config["edx_base_url"],
         access_token,
-        page_size=context.solid_config["edx_course_api_page_size"],
+        page_size=context.op_config["edx_course_api_page_size"],
     )
     for result_set in course_id_generator:
         course_ids.extend([course["id"] for course in result_set])
@@ -437,23 +445,23 @@ def export_edx_forum_database(  # type: ignore
     :yield: Path object to the directory where the exported Mongo database is located
     """
     forum_data_path = context.resources.results_dir.path.joinpath(
-        context.solid_config["edx_mongodb_forum_database_name"]
+        context.op_config["edx_mongodb_forum_database_name"]
     )
-    mongo_uri = context.solid_config["edx_mongodb_uri"]
+    mongo_uri = context.op_config["edx_mongodb_uri"]
     command_array = [
         "/usr/bin/mongodump",
         "--uri",
         f"'{mongo_uri}'",
         "--db",
-        context.solid_config["edx_mongodb_forum_database_name"],
+        context.op_config["edx_mongodb_forum_database_name"],
         "--authenticationDatabase",
-        context.solid_config["edx_mongodb_auth_db"],
+        context.op_config["edx_mongodb_auth_db"],
         "--out",
         context.resources.results_dir.absolute_path,
     ]
-    if password := context.solid_config["edx_mongodb_password"]:
+    if password := context.op_config["edx_mongodb_password"]:
         command_array.extend(["--password", password])
-    if username := context.solid_config["edx_mongodb_username"]:
+    if username := context.op_config["edx_mongodb_username"]:
         command_array.extend(["--username", username])
 
     mongodump_output, mongodump_retcode = run_bash(
@@ -489,9 +497,97 @@ def export_edx_forum_database(  # type: ignore
 
 
 @op(
+    name="edx_export_courses",
+    description="Export the contents of all active courses to S3",
+    required_resource_keys={"s3"},
+    config_schema={
+        "edx_base_url": Field(
+            String,
+            is_required=True,
+            description="Domain of edX installation",
+        ),
+        "edx_client_id": Field(
+            String, is_required=True, description="OAUTH2 Client ID for Open edX API"
+        ),
+        "edx_client_secret": Field(
+            String,
+            is_required=True,
+            description="OAUTH2 Client secret for Open edX API",
+        ),
+        "edx_studio_base_url": Field(
+            String,
+            is_required=True,
+            description="Domain of edX studio installation",
+        ),
+        "edx_token_type": Field(
+            String,
+            default_value="jwt",
+            is_required=False,
+            description="Type of OAuth token to use for authenticating to the edX API. "
+            'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',
+        ),
+        "edx_course_bucket": Field(
+            String,
+            is_required=True,
+            description="Bucket name that the edX installation uses for uploading "
+            "course exports",
+        ),
+    },
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        ),
+        "daily_extracts_dir": In(
+            dagster_type=String,
+            description="The S3 location for the daily edX extracts",
+        ),
+    },
+)
+def export_edx_courses(
+    context: SolidExecutionContext, edx_course_ids: List[str], daily_extracts_dir: str
+) -> None:
+    access_token = get_access_token(
+        client_id=context.op_config["edx_client_id"],
+        client_secret=context.op_config["edx_client_secret"],
+        edx_url=context.op_config["edx_base_url"],
+        token_type=context.op_config["edx_token_type"],
+    )
+    exported_courses = export_courses(
+        context.op_config["edx_studio_base_url"],
+        access_token=access_token,
+        course_ids=edx_course_ids,
+    )
+    successful_exports: Set[str] = set()
+    failed_exports: Set[str] = set()
+    tasks = exported_courses["upload_task_ids"]
+    while len(successful_exports.union(failed_exports)) < len(tasks):
+        for course_id, task_id in tasks.items():
+            task_status = check_course_export_status(
+                context.op_config["edx_studio_base_url"],
+                access_token,
+                course_id,
+                task_id,
+            )
+            if task_status["state"] == "Succeeded":
+                successful_exports.add(course_id)
+            if task_status["state"] == "Failed":
+                failed_exports.add(course_id)
+    for course_id in successful_exports:
+        source_object = {
+            "Bucket": context.op_config["edx_course_bucket"],
+            "Key": f"{course_id}.tar.gz",
+        }
+        context.resources.s3.copy(
+            source_object, *daily_extracts_dir.split("/", maxsplit=1)
+        )
+        context.resources.s3.delete_object(**source_object)
+
+
+@op(
     name="edx_upload_daily_extracts",
     description="Upload all data from daily extracts to S3 for institutional research.",
-    required_resource_keys={"sqldb", "results_dir", "s3"},
+    required_resource_keys={"results_dir", "s3"},
     config_schema={
         "edx_etl_results_bucket": Field(
             String,
@@ -553,8 +649,8 @@ def upload_extracted_data(  # noqa: WPS211
 
     :yield: The S3 path of the uploaded directory
     """
-    results_bucket = context.solid_config["edx_etl_results_bucket"]
-    bucket_prefix = context.solid_config["edx_etl_results_bucket_path"]
+    results_bucket = context.op_config["edx_etl_results_bucket"]
+    bucket_prefix = context.op_config["edx_etl_results_bucket_path"]
     for path_object in context.resources.results_dir.path.iterdir():
         if path_object.is_dir():
             for fpath in path_object.iterdir():
@@ -564,7 +660,9 @@ def upload_extracted_data(  # noqa: WPS211
                 context.resources.s3.upload_file(
                     Filename=str(fpath),
                     Bucket=results_bucket,
-                    Key=f"{bucket_prefix}/{file_key}".strip("/"),
+                    Key=f"{bucket_prefix}/{context.resources.results_dir.path.name}/{file_key}".strip(
+                        "/"
+                    ),
                 )
         elif path_object.is_file():
             file_key = str(
@@ -573,20 +671,22 @@ def upload_extracted_data(  # noqa: WPS211
             context.resources.s3.upload_file(
                 Filename=str(path_object),
                 Bucket=results_bucket,
-                Key=f"{bucket_prefix}/{file_key}".strip("/"),
+                Key=f"{bucket_prefix}/{context.resources.results_dir.path.name}/{file_key}".strip(
+                    "/"
+                ),
             )
     yield AssetMaterialization(
         asset_key="edx_daily_results",
         description="Daily export directory for edX export pipeline",
         metadata_entries=[
             EventMetadataEntry.fspath(
-                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: WPS237
+                f"s3://{results_bucket}/{bucket_prefix}/{context.resources.results_dir.path.name}"  # noqa: WPS237
             ),
         ],
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        f"{results_bucket}/{context.resources.results_dir.path.name}",  # noqa: WPS237
+        f"{results_bucket}/{bucket_prefix}/{context.resources.results_dir.path.name}",  # noqa: WPS237
         "edx_daily_extracts_directory",
     )
 
@@ -607,12 +707,13 @@ def upload_extracted_data(  # noqa: WPS211
 )
 def edx_course_pipeline():
     course_list = list_courses()
-    upload_extracted_data.with_hooks(
-        {notify_healthchecks_io_on_success, notify_healthchecks_io_on_failure}
-    )(
+    extracts_upload = upload_extracted_data(
         enrolled_users(edx_course_ids=course_list),
         student_submissions(edx_course_ids=course_list),
         course_roles(edx_course_ids=course_list),
         course_enrollments(edx_course_ids=course_list),
         export_edx_forum_database(),
     )
+    export_edx_courses.with_hooks(
+        {notify_healthchecks_io_on_success, notify_healthchecks_io_on_failure}
+    )(course_list, extracts_upload)

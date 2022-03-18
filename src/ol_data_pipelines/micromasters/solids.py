@@ -155,16 +155,16 @@ def fetch_micromasters_tables(context: SolidExecutionContext):
         else:
             query = PostgreSQLQuery.from_(table).select(table.star)
 
-        outputs_folder_name = f'{context.solid_config["folder_prefix"]}_{table_name}'
+        outputs_folder_name = f'{context.op_config["folder_prefix"]}_{table_name}'
         outputs_path = path.join(
-            context.solid_config["outputs_base_dir"], outputs_folder_name
+            context.op_config["outputs_base_dir"], outputs_folder_name
         )
 
         file_system, output_folder = fs.FileSystem.from_uri(outputs_path)
 
         arrow_schema = stream_to_parquet_file(
             context.resources.postgres_db.run_chunked_query(
-                query, context.solid_config["chunksize"]
+                query, context.op_config["chunksize"]
             ),
             table_name,
             file_system,
@@ -173,14 +173,14 @@ def fetch_micromasters_tables(context: SolidExecutionContext):
 
         needs_athena_schema_update = (
             file_system.type_name == "s3"
-            and context.solid_config["athena_table_prefix"]
-            and context.solid_config["athena_database_name"]
+            and context.op_config["athena_table_prefix"]
+            and context.op_config["athena_database_name"]
         )
 
         if needs_athena_schema_update:
             create_or_update_table(
-                context.solid_config["athena_database_name"],
-                f'{context.solid_config["athena_table_prefix"]}_{table_name}',
+                context.op_config["athena_database_name"],
+                f'{context.op_config["athena_table_prefix"]}_{table_name}',
                 convert_schema(arrow_schema),
                 outputs_path,
             )

@@ -124,14 +124,14 @@ def export_bigquery_data(  # noqa: WPS210
     :yields: A path definition that points to the the folder containing the data
     """
     file_system, output_folder = fs.FileSystem.from_uri(
-        context.solid_config["outputs_dir"]
+        context.op_config["outputs_dir"]
     )
 
     modified_minimum = datetime.datetime.utcnow().replace(
         tzinfo=pytz.utc
-    ) - datetime.timedelta(days=context.solid_config["last_modified_days"])
+    ) - datetime.timedelta(days=context.op_config["last_modified_days"])
 
-    table_name = context.solid_config["table_name"]
+    table_name = context.op_config["table_name"]
 
     fields = FIELDS[table_name]
     first_update = True
@@ -169,19 +169,19 @@ def export_bigquery_data(  # noqa: WPS210
             athena_schema_update_needed = (
                 file_system.type_name == "s3"
                 and first_update
-                and context.solid_config["athena_table_name"]
-                and context.solid_config["athena_database_name"]
+                and context.op_config["athena_table_name"]
+                and context.op_config["athena_database_name"]
             )
 
             if athena_schema_update_needed:
                 formatted_schema = convert_schema(arrow_table.schema)
 
                 create_or_update_table(
-                    context.solid_config["athena_database_name"],
-                    context.solid_config["athena_table_name"],
+                    context.op_config["athena_database_name"],
+                    context.op_config["athena_table_name"],
                     formatted_schema,
-                    context.solid_config["outputs_dir"],
-                    context.solid_config["athena_partition_keys"],
+                    context.op_config["outputs_dir"],
+                    context.op_config["athena_partition_keys"],
                 )
                 first_update = False
 

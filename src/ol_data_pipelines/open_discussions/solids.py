@@ -78,20 +78,18 @@ def fetch_open_user_data(context: SolidExecutionContext):
     users = Table("auth_user")
     query = PostgreSQLQuery.from_(users).select("id", "email", "date_joined")
 
-    if context.solid_config["minimum_timestamp"]:  # noqa: WPS204
-        query = query.where(
-            users.date_joined > context.solid_config["minimum_timestamp"]
-        )
+    if context.op_config["minimum_timestamp"]:  # noqa: WPS204
+        query = query.where(users.date_joined > context.op_config["minimum_timestamp"])
 
     file_system, output_folder = fs.FileSystem.from_uri(
-        context.solid_config["outputs_dir"]
+        context.op_config["outputs_dir"]
     )
 
     stream_to_parquet_file(
         context.resources.postgres_db.run_chunked_query(
-            query, context.solid_config["chunksize"]
+            query, context.op_config["chunksize"]
         ),
-        context.solid_config["file_base"],
+        context.op_config["file_base"],
         file_system,
         output_folder,
     )
@@ -167,18 +165,18 @@ def fetch_open_run_data(context: SolidExecutionContext):
         .where(content_types.model == "course")
     )
 
-    if context.solid_config["minimum_timestamp"]:
-        query = query.where(runs.created_on > context.solid_config["minimum_timestamp"])
+    if context.op_config["minimum_timestamp"]:
+        query = query.where(runs.created_on > context.op_config["minimum_timestamp"])
 
     file_system, output_folder = fs.FileSystem.from_uri(
-        context.solid_config["outputs_dir"]
+        context.op_config["outputs_dir"]
     )
 
     stream_to_parquet_file(
         context.resources.postgres_db.run_chunked_query(
-            query, context.solid_config["chunksize"]
+            query, context.op_config["chunksize"]
         ),
-        context.solid_config["file_base"],
+        context.op_config["file_base"],
         file_system,
         output_folder,
     )
@@ -251,20 +249,18 @@ def fetch_open_course_data(context: SolidExecutionContext):
         .where(courses.published == True)  # noqa: E712
     )
 
-    if context.solid_config["minimum_timestamp"]:
-        query = query.where(
-            courses.created_on > context.solid_config["minimum_timestamp"]
-        )
+    if context.op_config["minimum_timestamp"]:
+        query = query.where(courses.created_on > context.op_config["minimum_timestamp"])
 
     file_system, output_folder = fs.FileSystem.from_uri(
-        context.solid_config["outputs_dir"]
+        context.op_config["outputs_dir"]
     )
 
     stream_to_parquet_file(
         context.resources.postgres_db.run_chunked_query(
-            query, context.solid_config["chunksize"]
+            query, context.op_config["chunksize"]
         ),
-        context.solid_config["file_base"],
+        context.op_config["file_base"],
         file_system,
         output_folder,
     )
@@ -358,15 +354,15 @@ def run_open_enrollments_query(
     :yield: Chunked query results with open enrollments
     """
     runs, courses, users = Tables(
-        context.solid_config["athena_open_course_runs_table"],
-        context.solid_config["athena_open_courses_table"],
-        context.solid_config["athena_open_users_table"],
-        schema=context.solid_config["athena_open_database"],
+        context.op_config["athena_open_course_runs_table"],
+        context.op_config["athena_open_courses_table"],
+        context.op_config["athena_open_users_table"],
+        schema=context.op_config["athena_open_database"],
     )
 
     athena_enrollments = Table(
-        context.solid_config["athena_mitx_enrollments_table"],
-        schema=context.solid_config["athena_mitx_database"],
+        context.op_config["athena_mitx_enrollments_table"],
+        schema=context.op_config["athena_mitx_database"],
     )
 
     athena_query = (
@@ -424,16 +420,13 @@ def run_open_enrollments_query(
         )
     )
 
-    if context.solid_config["minimum_timestamp"]:
+    if context.op_config["minimum_timestamp"]:
         athena_query = athena_query.where(
             (  # noqa: WPS465
                 athena_enrollments.enrollment_created
-                > Cast(context.solid_config["minimum_timestamp"], "DATE")
+                > Cast(context.op_config["minimum_timestamp"], "DATE")
             )
-            | (
-                users.date_joined
-                > Cast(context.solid_config["minimum_timestamp"], "DATE")
-            )
+            | (users.date_joined > Cast(context.op_config["minimum_timestamp"], "DATE"))
         )
 
     query_cursor = context.resources.athena_db.run_query(athena_query)
@@ -525,7 +518,7 @@ def update_open_enrollment_data(
         )
         insert_count = insert_count + 1
 
-        if insert_count >= context.solid_config["insert_chunksize"]:
+        if insert_count >= context.op_config["insert_chunksize"]:
             context.resources.postgres_db.run_write_query(insert_query)
             insert_query = base_insert_query
             insert_count = 0
