@@ -1,3 +1,5 @@
+import time
+from datetime import timedelta
 from typing import Set
 
 from dagster import (
@@ -563,6 +565,7 @@ def export_edx_courses(
     tasks = exported_courses["upload_task_ids"]
     context.log.info("Exporting %s tasks from Open edX", len(tasks))
     while len(successful_exports.union(failed_exports)) < len(tasks):
+        time.sleep(timedelta(seconds=5).seconds)
         for course_id, task_id in tasks.items():
             task_status = check_course_export_status(
                 context.op_config["edx_studio_base_url"],

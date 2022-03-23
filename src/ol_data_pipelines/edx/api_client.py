@@ -121,6 +121,7 @@ def export_courses(
         request_url,
         json={"courses": course_ids},
         headers={"Authorization": f"JWT {access_token}"},
+        timeout=60,
     )
     response.raise_for_status()
     return response.json()
@@ -132,6 +133,7 @@ def check_course_export_status(
     response = httpx.get(
         f"{edx_studio_url}/api/courses/v0/export/{course_id}/?task_id={task_id}",
         headers={"Authorization": f"JWT {access_token}"},
+        timeout=60,
     )
     response.raise_for_status()
     return response.json()
