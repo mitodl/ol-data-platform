@@ -661,9 +661,7 @@ def upload_extracted_data(  # noqa: WPS211
                 context.resources.s3.upload_file(
                     Filename=str(fpath),
                     Bucket=results_bucket,
-                    Key=f"{context.resources.results_dir.path.name}/{file_key}".strip(
-                        "/"
-                    ),
+                    Key=file_key,
                 )
         elif path_object.is_file():
             file_key = str(
@@ -672,7 +670,7 @@ def upload_extracted_data(  # noqa: WPS211
             context.resources.s3.upload_file(
                 Filename=str(path_object),
                 Bucket=results_bucket,
-                Key=f"{context.resources.results_dir.path.name}/{file_key}".strip("/"),
+                Key=file_key,
             )
     yield AssetMaterialization(
         asset_key="edx_daily_results",
