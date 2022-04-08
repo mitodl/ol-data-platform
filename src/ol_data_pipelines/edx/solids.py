@@ -564,6 +564,8 @@ def export_edx_courses(
     failed_exports: Set[str] = set()
     tasks = exported_courses["upload_task_ids"]
     context.log.info("Exporting %s tasks from Open edX", len(tasks))
+    # Possible status values found here:
+    # https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
     while len(successful_exports.union(failed_exports)) < len(tasks):
         time.sleep(timedelta(seconds=5).seconds)
         for course_id, task_id in tasks.items():
@@ -575,7 +577,7 @@ def export_edx_courses(
             )
             if task_status["state"] == "Succeeded":
                 successful_exports.add(course_id)
-            if task_status["state"] == "Failed":
+            if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
                 failed_exports.add(course_id)
     for course_id in successful_exports:
         context.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
