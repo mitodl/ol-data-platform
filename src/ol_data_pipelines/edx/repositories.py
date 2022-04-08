@@ -37,6 +37,7 @@ production_resources = {
 def residential_edx_repository():
     return [
         edx_course_pipeline.to_job(
+            name="residential_edx_course_pipeline",
             resource_defs=production_resources,
             config=load_yaml_config("/etc/dagster/residential_edx.yaml"),
         ),
@@ -48,6 +49,7 @@ def residential_edx_repository():
 def xpro_edx_repository():
     return [
         edx_course_pipeline.to_job(
+            name="xpro_edx_course_pipeline",
             resource_defs=production_resources,
             config=load_yaml_config("/etc/dagster/xpro_edx.yaml"),
         ),
@@ -59,6 +61,7 @@ def xpro_edx_repository():
 def mitxonline_edx_repository():
     return [
         edx_course_pipeline.to_job(
+            name="mitxonline_edx_course_pipeline",
             resource_defs=production_resources,
             config=load_yaml_config("/etc/dagster/mitxonline_edx.yaml"),
         ),
