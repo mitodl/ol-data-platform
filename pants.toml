@@ -1,0 +1,27 @@
+[GLOBAL]
+pants_version = "2.11.0"
+backend_packages = [
+  'pants.backend.docker.lint.hadolint',
+  'pants.backend.python',
+  'pants.backend.python.lint.black',
+  'pants.backend.python.lint.flake8',
+  'pants.backend.python.lint.isort',
+  'pants.backend.python.typecheck.mypy',
+  'pants.backend.shell',
+  'pants.backend.shell.lint.shellcheck',
+  'pants.backend.shell.lint.shfmt',
+]
+pants_ignore = ['copier_templates/*', 'edx_configs/*',]
+
+[source]
+root_patterns = ['src/']
+
+[python]
+interpreter_constraints = ['>=3.8']
+
+[flake8]
+config = 'setup.cfg'
+
+[anonymous-telemetry]
+enabled = true
+repo_id = '910e8451-aeea-4389-aae8-dde8674cace2'

@@ -10,7 +10,7 @@ from vdist.source import git  # , directory
 def package_pipeline(context):
     poetry = Factory().create_poetry(cwd=Path(__file__))
     builder = Builder()
-    app_name = "ol_data_pipelines"
+    app_name = "ol_orchestrate"
     builder.add_build(
         name=app_name,
         app=app_name,

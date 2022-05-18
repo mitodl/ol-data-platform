@@ -1,36 +1,39 @@
 [tool.poetry]
-name = "ol-data-pipelines"
+name = "ol-data-platform"
 version = "0.5.3"
-description = "Data pipelines for open learning"
-authors = ["Tobias Macey"]
+description = "Code and configuration for powering the MIT Open Learning data platform"
+authors = ["MIT Open Learning Engineering <ol-data@mit.edu>"]
 license = "BSD-3-Clause"
 readme = "README.md"
-repository = "https://github.com/mitodl/ol-data-pipelines"
+repository = "https://github.com/mitodl/ol-data-platform"
 classifiers = [
     'Framework :: Dagster',
     'Operating System :: Linux',
     'Programming Language :: Python',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
 ]
 packages = [
-    { include = "ol_data_pipelines", from = "src/" },
+    { include = "ol_orchestrate", from = "src/" },
 ]
 
 [tool.poetry.dependencies]
 python = "^3.9"
+PyPika = "^0.48.9"
 dagit = "^0.14"
 dagster = "^0.14"
+dagster-airbyte = "^0.14.15"
 dagster-aws = "^0.14"
+dagster-dbt = "^0.14.15"
 dagster-gcp = "^0.14"
 dagster-ge = "^0.14"
 dagster-postgres = "^0.14"
 dagster-shell = "^0.14"
-httpx = "<1.0"
+dbt-trino = "^1.1.0"
+httpx = "^0.22.0"
 pyarrow = "^8.0.0"
-pymysql = "^1.0.0"
-pypika = "<1.0"
 pyathena = "^2.9.3"
+pymysql = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
 black = "*"
@@ -40,11 +43,11 @@ mypy = "*"
 poetry = "*"
 pre-commit = "^2"
 pytest = "^7.1.2"
-vdist = "^2"
+sqlfluff = "^0.13.1"
 wemake-python-styleguide = "*"
 
 [tool.black]
-target-version = ["py38"]
+target-version = ["py39"]
 
 [tool.isort]
 profile = "black"
@@ -52,3 +55,14 @@ profile = "black"
 [build-system]
 requires = ["poetry_core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.sqlfluff.core]
+templater = "dbt"
+dialect = "hive"
+sql_file_exts = ".sql,.sql.j2,.dml,.ddl"
+
+[tool.sqlfluff.templater]
+unwrap_wrapped_queries = true
+
+[tool.sqlfluff.templater.jinja]
+apply_dbt_builtins = true

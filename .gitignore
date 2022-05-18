@@ -1,2 +1,7 @@
 **/.mypy_cache/
 **/__pycache__/
+/.pants.d/
+/.vscode/
+/.pids/
+/dist/
+.venv/
