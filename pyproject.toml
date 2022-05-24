@@ -34,7 +34,7 @@ pyathena = "^2.7.0"
 
 [tool.poetry.dev-dependencies]
 black = "*"
-invoke = "^1.7.0"
+invoke = "^1.7.1"
 isort = "*"
 mypy = "*"
 poetry = "*"
