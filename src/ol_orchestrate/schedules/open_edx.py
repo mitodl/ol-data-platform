@@ -12,7 +12,7 @@ from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
     tags_fn_for_date=lambda _: {"business_unit": "residential"},
     execution_timezone="Etc/UTC",
 )
-def residential_edx_daily_schedule(execution_date):  # noqa: D103
+def residential_edx_daily_schedule(execution_date):
     return load_yaml_config("/etc/dagster/residential_edx.yaml")
 
 
@@ -23,7 +23,7 @@ def residential_edx_daily_schedule(execution_date):  # noqa: D103
     tags_fn_for_date=lambda _: {"business_unit": "mitxpro"},
     execution_timezone="Etc/UTC",
 )
-def xpro_edx_daily_schedule(execution_date):  # noqa: D103
+def xpro_edx_daily_schedule(execution_date):
     return load_yaml_config("/etc/dagster/xpro_edx.yaml")
 
 
@@ -34,5 +34,5 @@ def xpro_edx_daily_schedule(execution_date):  # noqa: D103
     tags_fn_for_date=lambda _: {"business_unit": "mitxonline"},
     execution_timezone="Etc/UTC",
 )
-def mitxonline_edx_daily_schedule(execution_date):  # noqa: D103
+def mitxonline_edx_daily_schedule(execution_date):
     return load_yaml_config("/etc/dagster/mitxonline_edx.yaml")

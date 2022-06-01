@@ -1,0 +1,22 @@
+FROM python:3.9-slim AS dagster-base
+RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app
+RUN useradd -s /bin/bash -d /opt/dagster/dagster_home/ dagster
+RUN chown -R dagster: /opt/dagster/
+USER dagster
+ENV DAGSTER_HOME=/opt/dagster/dagster_home/
+
+# Copy your code and workspace to /opt/dagster/app
+COPY workspace.yaml /opt/dagster/app/
+
+# Copy dagster instance YAML to $DAGSTER_HOME
+COPY dagster.yaml /opt/dagster/dagster_home/
+
+WORKDIR /opt/dagster/app
+
+EXPOSE 3000
+
+FROM dagster-base AS dagit
+ENTRYPOINT ["dagit", "-h", "0.0.0.0", "-p", "3000"]
+
+FROM dagster-base AS dagster-daemon
+ENTRYPOINT ["dagster-daemon", "run"]

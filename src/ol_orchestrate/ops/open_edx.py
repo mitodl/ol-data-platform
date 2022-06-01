@@ -15,7 +15,6 @@ from dagster import (
     OutputDefinition,
     SolidExecutionContext,
     String,
-    graph,
     op,
 )
 from dagster.core.definitions.input import In
@@ -23,18 +22,14 @@ from dagster_shell.utils import execute as run_bash
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
-from ol_orchestrate.edx.api_client import (
+from ol_orchestrate.lib.dagster_types import DagsterPath
+from ol_orchestrate.lib.edx_api_client import (
     check_course_export_status,
     export_courses,
     get_access_token,
     get_edx_course_ids,
 )
-from ol_orchestrate.lib.dagster_types import DagsterPath
 from ol_orchestrate.lib.file_rendering import write_csv
-from ol_orchestrate.lib.hooks import (
-    notify_healthchecks_io_on_failure,
-    notify_healthchecks_io_on_success,
-)
 
 
 @op(
@@ -618,7 +613,7 @@ def export_edx_courses(
         OutputDefinition(name="edx_daily_extracts_directory", dagster_type=String)
     ],
 )
-def upload_extracted_data(  # noqa: WPS211
+def upload_extracted_data(
     context: SolidExecutionContext,
     edx_course_roles: DagsterPath,
     edx_enrolled_users: DagsterPath,
@@ -679,40 +674,12 @@ def upload_extracted_data(  # noqa: WPS211
         description="Daily export directory for edX export pipeline",
         metadata_entries=[
             EventMetadataEntry.fspath(
-                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: WPS237
+                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"
             ),
         ],
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        f"{results_bucket}/{context.resources.results_dir.path.name}",  # noqa: WPS237
+        f"{results_bucket}/{context.resources.results_dir.path.name}",
         "edx_daily_extracts_directory",
     )
-
-
-@graph(
-    description=(
-        "Extract data and course structure from Open edX for use by institutional "
-        "research. This is ultimately inserted into BigQuery and combined with "
-        "information from the edX tracking logs which get delivered to S3 on an hourly "
-        "basis via a log shipping agent"
-    ),
-    tags={
-        "source": "edx",
-        "destination": "s3",
-        "owner": "platform-engineering",
-        "consumer": "institutional-research",
-    },
-)
-def edx_course_pipeline():
-    course_list = list_courses()
-    extracts_upload = upload_extracted_data(
-        enrolled_users(edx_course_ids=course_list),
-        student_submissions(edx_course_ids=course_list),
-        course_roles(edx_course_ids=course_list),
-        course_enrollments(edx_course_ids=course_list),
-        export_edx_forum_database(),
-    )
-    export_edx_courses.with_hooks(
-        {notify_healthchecks_io_on_success, notify_healthchecks_io_on_failure}
-    )(course_list, extracts_upload)

@@ -6,7 +6,7 @@ import httpx
 TOO_MANY_REQUESTS = 429
 
 
-def get_access_token(  # noqa: S107
+def get_access_token(
     client_id: str, client_secret: str, edx_url: str, token_type: str = "jwt"
 ) -> str:
     """Retrieve an access token from an Open edX site via OAUTH2 credentials.

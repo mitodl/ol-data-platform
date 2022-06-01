@@ -1,6 +1,7 @@
 [GLOBAL]
-pants_version = "2.11.0"
+pants_version = "2.12.0rc0"
 backend_packages = [
+  'pants.backend.docker',
   'pants.backend.docker.lint.hadolint',
   'pants.backend.python',
   'pants.backend.python.lint.black',
@@ -14,10 +15,11 @@ backend_packages = [
 pants_ignore = ['copier_templates/*', 'edx_configs/*',]
 
 [source]
-root_patterns = ['src/']
+root_patterns = ["src/", "/",]
 
 [python]
-interpreter_constraints = ['>=3.8']
+enable_resolves = true
+interpreter_constraints = ['>=3.9']
 
 [flake8]
 config = 'setup.cfg'
@@ -25,3 +27,7 @@ config = 'setup.cfg'
 [anonymous-telemetry]
 enabled = true
 repo_id = '910e8451-aeea-4389-aae8-dde8674cace2'
+
+[docker]
+default_repository = "mitodl/{directory}/{name}"
+build_verbose = true

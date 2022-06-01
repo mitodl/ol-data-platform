@@ -1,12 +1,7 @@
 from dagster import fs_io_manager, repository
 from dagster_aws.s3 import s3_pickle_io_manager, s3_resource
 
-from ol_orchestrate.edx.schedule import (
-    mitxonline_edx_daily_schedule,
-    residential_edx_daily_schedule,
-    xpro_edx_daily_schedule,
-)
-from ol_orchestrate.edx.solids import edx_course_pipeline
+from ol_orchestrate.jobs.open_edx import edx_course_pipeline
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 from ol_orchestrate.resources.healthchecks import (
     healthchecks_dummy_resource,
@@ -15,6 +10,11 @@ from ol_orchestrate.resources.healthchecks import (
 from ol_orchestrate.resources.mysql_db import mysql_db_resource
 from ol_orchestrate.resources.outputs import daily_dir
 from ol_orchestrate.resources.sqlite_db import sqlite_db_resource
+from ol_orchestrate.schedules.open_edx import (
+    mitxonline_edx_daily_schedule,
+    residential_edx_daily_schedule,
+    xpro_edx_daily_schedule,
+)
 
 dev_resources = {
     "sqldb": sqlite_db_resource,
