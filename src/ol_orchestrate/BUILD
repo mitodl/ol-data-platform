@@ -20,22 +20,9 @@ pex_binary(
     entry_point="dagster.daemon.cli:main"
 )
 
-docker_image(
-    name="ol-dagit",
-    description="Dagster web service container iamge",
-    dependencies=[
-        ":dagit"
-    ],
-    source="dockerfiles/Dockerfile.dagster"
-)
-
-docker_image(
-    name="ol-dagster-daemon",
-    description="Dagster daemon container image for scheduling and run triggering",
-    dependencies=[
-        ":dagster-daemon"
-    ],
-    source="dockerfiles/Dockerfile.dagster"
+files(
+    name="project-config",
+    sources=["dagster.yaml", "workspace.yaml"]
 )
 
 python_distribution(

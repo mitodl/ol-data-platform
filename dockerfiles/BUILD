@@ -1,9 +1,29 @@
 docker_image(
-    name="docker",
+    name="dagit",
     source="Dockerfile.dagit",
+    dependencies=[
+        "src/ol_orchestrate:dagit",
+        "src/ol_orchestrate:dagster-daemon",
+        "src/ol_orchestrate:project-config",
+    ],
+    target_stage="dagit"
 )
 
 docker_image(
-    name="docker0",
+    name="dagster-daemon",
+    source="Dockerfile.dagit",
+    dependencies=[
+        "src/ol_orchestrate:dagster-daemon",
+        "src/ol_orchestrate:project-config",
+    ],
+    target_stage="dagster-daemon"
+)
+
+docker_image(
+    name="pipeline",
+    dependencies=[
+        "src/ol_orchestrate:open-edx",
+        "src/ol_dbt:dbt_project"
+    ],
     source="Dockerfile.user_pipeline",
 )
