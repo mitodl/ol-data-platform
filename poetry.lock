@@ -2193,7 +2193,7 @@ pyasn1 = ">=0.4.6,<0.5.0"
 
 [[package]]
 name = "pyathena"
-version = "2.9.1"
+version = "2.9.3"
 description = "Python DB API 2.0 (PEP 249) client for Amazon Athena"
 category = "main"
 optional = false
@@ -3108,7 +3108,7 @@ testing = ["coverage (>=5.0.3)", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "ea045588abf687ca815dc7dd528ce71d119808ac3b34dfd415055cf81e0bd367"
+content-hash = "87a8fb8e15deb41bb677a96e19fd77ba2ba705c9f4ffeba139d9320dc2eccea1"
 
 [metadata.files]
 alembic = [
@@ -4433,8 +4433,8 @@ pyasn1-modules = [
     {file = "pyasn1_modules-0.2.8-py3.7.egg", hash = "sha256:c29a5e5cc7a3f05926aff34e097e84f8589cd790ce0ed41b67aed6857b26aafd"},
 ]
 pyathena = [
-    {file = "PyAthena-2.9.1-py3-none-any.whl", hash = "sha256:0c9cc72cd089b1b0e53a56fa5c83e75f9341d010d5806c69c4359109c81f753f"},
-    {file = "PyAthena-2.9.1.tar.gz", hash = "sha256:6f525d26149ee1ecca37869f65ec7073f613ece33d9c85c72bb71aea76111a76"},
+    {file = "PyAthena-2.9.3-py3-none-any.whl", hash = "sha256:200a3816c6c7e3bf4d3138f5de1127dc3d7ff075902fcea89e96fae2eba6b67d"},
+    {file = "PyAthena-2.9.3.tar.gz", hash = "sha256:b9b55f8f46ba2b8c65292039a41af40e0883dd5e6753713a986e8b93a4388b13"},
 ]
 pycodestyle = [
     {file = "pycodestyle-2.8.0-py2.py3-none-any.whl", hash = "sha256:720f8b39dde8b293825e7ff02c475f3077124006db4f440dcbc9a20b76548a20"},

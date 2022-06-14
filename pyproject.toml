@@ -30,7 +30,7 @@ httpx = "<1.0"
 pyarrow = "^8.0.0"
 pymysql = "^1.0.0"
 pypika = "<1.0"
-pyathena = "^2.9.1"
+pyathena = "^2.9.3"
 
 [tool.poetry.dev-dependencies]
 black = "*"
