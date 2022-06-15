@@ -21,12 +21,16 @@ jobs:
         type: registry-image
         source:
           repository: python
-          label: 3.9-slim
+          tag: 3.9
       inputs:
       - name: ol-data-platform
       run:
-        path: pants
+        path: sh
         dir: ol-data-platform
         args:
-        - package
-        - "dockerfiles/orchestrate/:"
+        - -exc
+        - |
+          apt-get update
+          apt-get install -y docker.io
+          dockerd 2>&1 > /dev/null &
+          ./pants --tag=docker_image package ::

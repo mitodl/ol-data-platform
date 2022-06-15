@@ -6,15 +6,18 @@ docker_image(
         "src/ol_orchestrate:dagster-daemon",
         "src/ol_orchestrate:project-config",
     ],
-    target_stage="dagit"
+    target_stage="dagit",
+    tags=["docker_image"],
 )
 
 docker_image(
     name="dagster-daemon",
     source="Dockerfile.dagit",
     dependencies=[
+        "src/ol_orchestrate:dagit",
         "src/ol_orchestrate:dagster-daemon",
         "src/ol_orchestrate:project-config",
     ],
-    target_stage="dagster-daemon"
+    target_stage="dagster-daemon",
+    tags=["docker_image"],
 )

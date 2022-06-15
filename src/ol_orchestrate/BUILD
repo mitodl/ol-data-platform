@@ -41,4 +41,5 @@ docker_image(
         "src/ol_dbt:dbt_project"
     ],
     source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
+    tags=["data_pipeline", "docker_image"],
 )
