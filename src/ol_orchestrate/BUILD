@@ -33,3 +33,12 @@ python_distribution(
         version="0.5.2",
     ),
 )
+
+docker_image(
+    name="edx-pipeline",
+    dependencies=[
+        ":open-edx",
+        "src/ol_dbt:dbt_project"
+    ],
+    source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
+)

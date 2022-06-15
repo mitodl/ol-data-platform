@@ -18,12 +18,3 @@ docker_image(
     ],
     target_stage="dagster-daemon"
 )
-
-docker_image(
-    name="pipeline",
-    dependencies=[
-        "src/ol_orchestrate:open-edx",
-        "src/ol_dbt:dbt_project"
-    ],
-    source="Dockerfile.user_pipeline",
-)

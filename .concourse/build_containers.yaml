@@ -1,0 +1,32 @@
+---
+resources:
+- name: ol-data-platform
+  type: git
+  icon: github
+  source:
+    uri: https://github.com/mitodl/ol-data-platform
+    branch: elt_refactor
+
+jobs:
+- name: build-and-publish-container
+  public: true
+  plan:
+  - get: ol-data-platform
+    trigger: true
+  - task: build-images
+    privileged: true
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: python
+          label: 3.9-slim
+      inputs:
+      - name: ol-data-platform
+      run:
+        path: pants
+        dir: ol-data-platform
+        args:
+        - package
+        - "dockerfiles/orchestrate/:"
