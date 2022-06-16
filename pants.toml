@@ -29,5 +29,6 @@ enabled = true
 repo_id = '910e8451-aeea-4389-aae8-dde8674cace2'
 
 [docker]
-default_repository = "mitodl/data-platform/{name}"
+build_args=["DAGSTER_VERSION"]
+default_repository = "mitodl/data-platform-{name}"
 build_verbose = true

@@ -42,4 +42,5 @@ docker_image(
     ],
     source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
     tags=["data_pipeline", "docker_image"],
+    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
 )

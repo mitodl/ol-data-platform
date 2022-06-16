@@ -8,6 +8,7 @@ docker_image(
     ],
     target_stage="dagit",
     tags=["docker_image"],
+    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
 )
 
 docker_image(
@@ -20,4 +21,5 @@ docker_image(
     ],
     target_stage="dagster-daemon",
     tags=["docker_image"],
+    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
 )
