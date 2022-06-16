@@ -24,6 +24,9 @@ jobs:
           tag: 3.9
       inputs:
       - name: ol-data-platform
+      params:
+        DOCKERHUB_PASSWORD: "((dockerhub.password))"
+        DOCKERHUB_USERNAME: "((dockerhub.username))"
       run:
         path: sh
         dir: ol-data-platform
@@ -33,4 +36,6 @@ jobs:
           apt-get update
           apt-get install -y docker.io
           dockerd 2>&1 > /dev/null &
-          ./pants --tag=docker_image package ::
+          export DAGSTER_VERSION=`egrep -A1 "^name = \"dagster\"$" poetry.lock | tail -n 1 | cut -d'"' -f2`
+          echo "${DOCKERHUB_PASSWORD}" | docker login --username "${DOCKERHUB_USERNAME}" --password-stdin
+          ./pants --tag=docker_image publish ::
