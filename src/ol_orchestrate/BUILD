@@ -41,6 +41,7 @@ docker_image(
         "src/ol_dbt:dbt_project"
     ],
     source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
+    extra_build_args=["PACKAGE_NAME=open-edx-pipelines"],
     tags=["data_pipeline", "docker_image"],
     image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
 )
