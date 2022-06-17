@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir /tmp/packages/* && rm -r /tmp/packages/
 COPY --chown=dagster:dagster src/ol_dbt /opt/dbt/
 USER dagster
 ENV PACKAGE_NAME ${PACKAGE_NAME}
-CMD ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "--package-name", "${PACKAGE_NAME}"]
+CMD "dagster api grpc -h 0.0.0.0 -p 4000 --package-name ${PACKAGE_NAME}"
