@@ -5,7 +5,7 @@ from typing import Generator
 
 from dagster import Field, InitResourceContext, String, resource
 
-from ol_orchestrate.lib.dagster_types import DagsterPath
+from ol_orchestrate.lib.dagster_types.files import DagsterPath
 
 
 class ResultsDir:
@@ -38,7 +38,7 @@ class DailyResultsDir(ResultsDir):
     def __init__(
         self,
         root_dir: str = None,
-        date_format: str = "%Y-%m-%d",  # noqa: WPS323
+        date_format: str = "%Y-%m-%d",
         date_override: str = None,
     ):
         """Instantiate a results directory that defaults to being named according to the current date.
@@ -74,7 +74,7 @@ class DailyResultsDir(ResultsDir):
         ),
         "outputs_directory_date_format": Field(
             String,
-            default_value="%Y-%m-%d",  # noqa: WPS323
+            default_value="%Y-%m-%d",
             is_required=False,
             description="Format string for structuring the name of the daily outputs directory",
         ),

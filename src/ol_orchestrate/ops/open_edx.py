@@ -22,7 +22,7 @@ from dagster_shell.utils import execute as run_bash
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
-from ol_orchestrate.lib.dagster_types import DagsterPath
+from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.lib.edx_api_client import (
     check_course_export_status,
     export_courses,

@@ -3,7 +3,7 @@ import datetime
 import types
 
 import pytz
-from dagster import (  # noqa: WPS235
+from dagster import (
     Array,
     AssetMaterialization,
     EventMetadataEntry,
@@ -11,10 +11,8 @@ from dagster import (  # noqa: WPS235
     InputDefinition,
     Int,
     List,
-    ModeDefinition,
     Output,
     OutputDefinition,
-    PresetDefinition,
     SolidExecutionContext,
     String,
     graph,
@@ -24,7 +22,7 @@ from google.cloud.exceptions import NotFound
 from pyarrow import fs
 
 from ol_orchestrate.lib.arrow_helper import write_parquet_file
-from ol_orchestrate.lib.dagster_types import DatasetDagsterType
+from ol_orchestrate.lib.dagster_types.google import DatasetDagsterType
 from ol_orchestrate.lib.glue_helper import convert_schema, create_or_update_table
 
 FIELDS = types.MappingProxyType(
@@ -111,7 +109,7 @@ DEFAULT_LAST_MODIFIED_DAYS = 3600
         )
     ],
 )
-def export_bigquery_data(  # noqa: WPS210
+def export_bigquery_data(
     context: SolidExecutionContext, datasets: List[DatasetDagsterType]
 ):
     """Download mitx user data as parquet files.
