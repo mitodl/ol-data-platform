@@ -29,7 +29,7 @@ python_distribution(
     name="open-edx",
     dependencies=["./repositories/open_edx.py"],
     provides=python_artifact(
-        name="open-edx-pipelines",
+        name="dagster-pipeline",
         version="0.5.2",
     ),
 )
