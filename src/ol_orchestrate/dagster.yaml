@@ -22,7 +22,7 @@ run_storage:
       hostname:
         env: DAGSTER_PG_HOST
       db_name:
-        env: dagster
+        env: DAGSTER_PG_DB_NAME
       port: 5432
 event_log_storage:
   module: dagster_postgres.event_log
@@ -36,7 +36,7 @@ event_log_storage:
       hostname:
         env: DAGSTER_PG_HOST
       db_name:
-        env: dagster
+        env: DAGSTER_PG_DB_NAME
       port: 5432
 schedule_storage:
   module: dagster_postgres.schedule_storage
@@ -50,5 +50,5 @@ schedule_storage:
       hostname:
         env: DAGSTER_PG_HOST
       db_name:
-        env: dagster
+        env: DAGSTER_PG_DB_NAME
       port: 5432
