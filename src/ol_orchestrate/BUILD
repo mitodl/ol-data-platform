@@ -5,6 +5,7 @@ pex_binary(
     dependencies=[
         "//:requirements#dagit",
         "//:requirements#dagster-postgres",
+        "//:requirements#dagster-aws",
     ],
     shebang="/usr/bin/env python",
     entry_point="dagit.cli:main"
@@ -15,6 +16,7 @@ pex_binary(
     dependencies=[
         "//:requirements#dagster",
         "//:requirements#dagster-postgres",
+        "//:requirements#dagster-aws",
     ],
     shebang="/usr/bin/env python",
     entry_point="dagster.daemon.cli:main"
