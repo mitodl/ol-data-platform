@@ -5,7 +5,7 @@ resources:
   icon: github
   source:
     uri: https://github.com/mitodl/ol-data-platform
-    branch: elt_refactor
+    branch: main
 
 jobs:
 - name: build-and-publish-container
