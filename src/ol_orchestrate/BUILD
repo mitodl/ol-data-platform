@@ -1,27 +1,5 @@
 python_sources()
 
-pex_binary(
-    name="dagit",
-    dependencies=[
-        "//:requirements#dagit",
-        "//:requirements#dagster-postgres",
-        "//:requirements#dagster-aws",
-    ],
-    shebang="/usr/bin/env python",
-    entry_point="dagit.cli:main"
-)
-
-pex_binary(
-    name="dagster-daemon",
-    dependencies=[
-        "//:requirements#dagster",
-        "//:requirements#dagster-postgres",
-        "//:requirements#dagster-aws",
-    ],
-    shebang="/usr/bin/env python",
-    entry_point="dagster.daemon.cli:main"
-)
-
 files(
     name="project-config",
     sources=["dagster.yaml", "workspace.yaml"]
