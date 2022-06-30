@@ -1,0 +1,41 @@
+---
+resources:
+- name: ol-data-platform
+  type: git
+  icon: github
+  source:
+    uri: https://github.com/mitodl/ol-data-platform
+    branch: main
+
+jobs:
+- name: build-and-publish-container
+  public: true
+  plan:
+  - get: ol-data-platform
+    trigger: true
+  - task: build-images
+    privileged: true
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: python
+          tag: 3.9
+      inputs:
+      - name: ol-data-platform
+      params:
+        DOCKERHUB_PASSWORD: "((dockerhub.password))"
+        DOCKERHUB_USERNAME: "((dockerhub.username))"
+      run:
+        path: sh
+        dir: ol-data-platform
+        args:
+        - -exc
+        - |
+          apt-get update
+          apt-get install -y docker.io
+          dockerd 2>&1 > /dev/null &
+          export DAGSTER_VERSION=`egrep -A1 "^name = \"dagster\"$" poetry.lock | tail -n 1 | cut -d'"' -f2`
+          echo "${DOCKERHUB_PASSWORD}" | docker login --username "${DOCKERHUB_USERNAME}" --password-stdin
+          ./pants --tag=docker_image publish ::

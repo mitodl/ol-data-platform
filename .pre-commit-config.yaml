@@ -86,3 +86,15 @@ repos:
     - types-PyYAML
     - types-pytz
     - types-pymysql
+- repo: https://github.com/sqlfluff/sqlfluff
+  rev: 0.13.2
+  hooks:
+  - id: sqlfluff-fix
+      # Arbitrary arguments to show an example
+      # args: [--rules, "L003,L014"]
+    additional_dependencies: ['dbt-trino', 'sqlfluff-templater-dbt']
+  - id: sqlfluff-lint
+      # For dbt projects, this installs the dbt "extras".
+      # You will need to select the relevant dbt adapter for your dialect
+      # (https://docs.getdbt.com/docs/available-adapters):
+    additional_dependencies: ['dbt-trino', 'sqlfluff-templater-dbt']

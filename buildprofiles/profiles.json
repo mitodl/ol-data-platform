@@ -1,6 +1,0 @@
-{
-    "debian": {
-        "docker_image": "mitodl/vdist_debian",
-        "script": "debian_poetry.sh"
-    }
-}

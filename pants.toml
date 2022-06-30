@@ -1,0 +1,34 @@
+[GLOBAL]
+pants_version = "2.12.0rc0"
+backend_packages = [
+  'pants.backend.docker',
+  'pants.backend.docker.lint.hadolint',
+  'pants.backend.python',
+  'pants.backend.python.lint.black',
+  'pants.backend.python.lint.flake8',
+  'pants.backend.python.lint.isort',
+  'pants.backend.python.typecheck.mypy',
+  'pants.backend.shell',
+  'pants.backend.shell.lint.shellcheck',
+  'pants.backend.shell.lint.shfmt',
+]
+pants_ignore = ['copier_templates/*', 'edx_configs/*',]
+
+[source]
+root_patterns = ["src/", "/",]
+
+[python]
+enable_resolves = true
+interpreter_constraints = ['>=3.9']
+
+[flake8]
+config = 'setup.cfg'
+
+[anonymous-telemetry]
+enabled = true
+repo_id = '910e8451-aeea-4389-aae8-dde8674cace2'
+
+[docker]
+build_args=["DAGSTER_VERSION"]
+default_repository = "mitodl/data-platform-{name}"
+build_verbose = true
