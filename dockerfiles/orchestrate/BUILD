@@ -1,5 +1,5 @@
 pex_binary(
-    name="dagit",
+    name="dagit-binary",
     dependencies=[
         "//:requirements#dagit",
         "//:requirements#dagster-postgres",
@@ -10,7 +10,7 @@ pex_binary(
 )
 
 pex_binary(
-    name="dagster-daemon",
+    name="dagster-daemon-binary",
     dependencies=[
         "//:requirements#dagster",
         "//:requirements#dagster-postgres",
@@ -24,8 +24,8 @@ docker_image(
     name="dagit",
     source="Dockerfile.dagit",
     dependencies=[
-        ":dagit",
-        ":dagster-daemon",
+        ":dagit-binary",
+        ":dagster-daemon-binary",
         "src/ol_orchestrate:project-config",
     ],
     target_stage="dagit",
@@ -37,8 +37,8 @@ docker_image(
     name="dagster-daemon",
     source="Dockerfile.dagit",
     dependencies=[
-        ":dagit",
-        ":dagster-daemon",
+        ":dagit-binary",
+        ":dagster-daemon-binary",
         "src/ol_orchestrate:project-config",
     ],
     target_stage="dagster-daemon",
