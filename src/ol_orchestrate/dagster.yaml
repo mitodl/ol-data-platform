@@ -8,7 +8,8 @@ compute_logs:
   module: dagster_aws.s3.compute_log_manager
   class: S3ComputeLogManager
   config:
-    bucket: dagster-{{ environment }}
+    bucket:
+      env: DAGSTER_BUCKET_NAME
     prefix: compute-logs/
 run_storage:
   module: dagster_postgres.run_storage
