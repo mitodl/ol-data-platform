@@ -1,0 +1,31 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: 'ol_data_lake_{{ target.name }}'
+  schema: 'ol_warehouse_data_{{ target.name }}'
+  tables:
+  - name: mitxonline__app__postgres__courses_courserunenrollment
+    columns:
+    - name: id
+    - name: active
+    - name: run_id
+    - name: user_id
+    - name: created_on
+    - name: updated_on
+  - name: mitxonline__app__postgres__courses_courserun
+    columns:
+    - name: id
+    - name: live
+    - name: title
+    - name: course_id
+    - name: courseware_url_path
+    - name: created_on
+    - name: is_active
+  - name: mitxonline__app__postgres__users_user
+    columns:
+    - name: id
+    - name: created_on
+    - name: is_active

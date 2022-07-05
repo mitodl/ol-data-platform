@@ -63,6 +63,11 @@ templater = "jinja"
 dialect = "hive"
 sql_file_exts = ".sql,.sql.j2,.dml,.ddl"
 
+[tool.sqlfluff.rules]
+# Use leading commas for cleaner diffs
+comma_style = "leading"
+max_line_length = 120
+
 [tool.sqlfluff.templater]
 unwrap_wrapped_queries = true
 

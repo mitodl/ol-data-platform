@@ -1,11 +1,13 @@
-Welcome to your new dbt project!
+### Notes
 
-### Using the starter project
+This project is configured to use Trino as the warehouse engine. The profile information
+is defined in the repository with environment variables for the username and
+password. There are separate profiles defined for QA and Production environments.
 
-Try running the following commands:
-- dbt run
-- dbt test
-
+To run a dbt build you can use the command:
+```
+TRINO_USERNAME=<your_username> TRINO_PASSWORD=<your_password> dbt build --project-dir src/ol_dbt/ --profiles-dir src/ol_dbt/ --target <qa|production>
+```
 
 ### Resources:
 - Learn more about dbt [in the docs](https://docs.getdbt.com/docs/introduction)
