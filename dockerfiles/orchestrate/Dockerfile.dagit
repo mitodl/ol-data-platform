@@ -16,9 +16,9 @@ WORKDIR /opt/dagster/app
 EXPOSE 3000
 
 FROM dagster-base AS dagster-daemon
-COPY --chown=dagster:dagster dockerfiles.orchestrate/dagster-daemon.pex /usr/local/bin/dagster-daemon
+COPY --chown=dagster:dagster dockerfiles.orchestrate/dagster-daemon-binary.pex /usr/local/bin/dagster-daemon
 ENTRYPOINT ["dagster-daemon", "run"]
 
 FROM dagster-base AS dagit
-COPY --chown=dagster:dagster dockerfiles.orchestrate/dagit.pex /usr/local/bin/dagit
+COPY --chown=dagster:dagster dockerfiles.orchestrate/dagit-binary.pex /usr/local/bin/dagit
 ENTRYPOINT ["dagit", "-h", "0.0.0.0", "-p", "3000"]
