@@ -6,7 +6,7 @@ password. There are separate profiles defined for QA and Production environments
 
 To run a dbt build you can use the command:
 ```
-TRINO_USERNAME=<your_username> TRINO_PASSWORD=<your_password> dbt build --project-dir src/ol_dbt/ --profiles-dir src/ol_dbt/ --target <qa|production>
+DBT_TRINO_USERNAME=<your_username> DBT_TRINO_PASSWORD=<your_password> dbt build --project-dir src/ol_dbt/ --profiles-dir src/ol_dbt/ --target <qa|production>
 ```
 
 ### Resources:

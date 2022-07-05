@@ -5,8 +5,8 @@ open_learning:
     qa:
       type: trino
       method: ldap
-      user: '{{ env_var("TRINO_USERNAME") }}'
-      password: '{{ env_var("TRINO_PASSWORD") }}'
+      user: '{{ env_var("DBT_TRINO_USERNAME") }}'
+      password: '{{ env_var("DBT_TRINO_PASSWORD") }}'
       database: ol_data_lake_qa
       port: 443
       schema: ol_warehouse_data_qa
@@ -15,8 +15,8 @@ open_learning:
     production:
       type: trino
       method: ldap
-      user: '{{ env_var("TRINO_USERNAME") }}'
-      password: '{{ env_var("TRINO_PASSWORD") }}'
+      user: '{{ env_var("DBT_TRINO_USERNAME") }}'
+      password: '{{ env_var("DBT_TRINO_PASSWORD") }}'
       database: ol_data_lake_production
       port: 443
       schema: ol_warehouse_data_production
