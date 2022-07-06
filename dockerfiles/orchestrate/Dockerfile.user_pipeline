@@ -1,5 +1,7 @@
 FROM python:3.9-slim
 
+ENV DAGSTER_HOME=/opt/dagster/dagster_home/
+
 RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app /tmp/packages && \
     useradd -s /bin/bash -d /opt/dagster/dagster_home/ dagster && \
     chown -R dagster:dagster /opt/dagster/dagster_home /opt/dagster/app
