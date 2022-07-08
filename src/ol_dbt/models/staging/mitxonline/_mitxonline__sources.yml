@@ -23,9 +23,20 @@ sources:
     - name: course_id
     - name: courseware_url_path
     - name: created_on
-    - name: is_active
+    - name: updated_on
   - name: mitxonline__app__postgres__users_user
     columns:
     - name: id
-    - name: created_on
     - name: is_active
+    - name: created_on
+    - name: updated_on
+  - name: mitxonline__app__postgres__courses_course
+    columns:
+    - name: id
+    - name: live
+    - name: title
+    - name: program_id
+    - name: readable_id
+    - name: position_in_program
+    - name: created_on
+    - name: updated_on
