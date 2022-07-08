@@ -3,7 +3,7 @@ select
     , active
     , run_id
     , user_id
-    , created_on
-    , updated_on
+    , cast(created_on[1] as timestamp(6)) as created_on
+    , cast(updated_on[1] as timestamp(6)) as updated_on
 from
     {{ source('ol_warehouse_raw_data','mitxonline__app__postgres__courses_courserunenrollment') }}
