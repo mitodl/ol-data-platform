@@ -1,0 +1,14 @@
+---
+version: 2
+
+models:
+  - name: fiscal_year_enrollments
+    description: Mart containing enrollment counts grouped by fiscal year
+    columns:
+      - name: org
+        description: short name for the product in which a user enrolls
+      - name: fiscal_year
+        description: MIT fiscal year calculated by adding 6 to the month of the created_on timestamp
+      - name: enrollment_count
+        description: count of the number of enrollees given group by specification (org, fiscal year)
+      
