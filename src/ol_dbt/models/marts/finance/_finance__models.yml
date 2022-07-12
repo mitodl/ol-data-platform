@@ -30,3 +30,4 @@ models:
         description: short name for the product in which a user enrolls
       - name: fiscal_year
         description: MIT fiscal year calculated by adding 6 to the month of the created_on timestamp
+        
