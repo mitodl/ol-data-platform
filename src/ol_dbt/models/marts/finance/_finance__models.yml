@@ -11,4 +11,22 @@ models:
         description: MIT fiscal year calculated by adding 6 to the month of the created_on timestamp
       - name: enrollment_count
         description: count of the number of enrollees given group by specification (org, fiscal year)
-      
+  - name: ol_enrollments
+    description: Mart containing enrollments from all available OL offerings
+    columns:
+      - name: id
+        description: id for enrollment
+        tests:
+          - not_null
+      - name: active
+        description: status of the course run
+      - name: run_id
+        description: id for the course run
+      - name: user_id
+        description: id for the enrolling user
+      - name: created_on
+        description: timestamp specifying when the enrollment happened
+      - name: org
+        description: short name for the product in which a user enrolls
+      - name: fiscal_year
+        description: MIT fiscal year calculated by adding 6 to the month of the created_on timestamp
