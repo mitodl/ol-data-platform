@@ -1,0 +1,20 @@
+---
+version: 2
+
+models:
+  - name: int_finance__ol_joined_enrollments
+    description: Intermediate model where we join enrollment from across Open Learning (ol).
+    columns:
+      - name: id
+        description: id for enrollment
+        tests:
+          - not_null
+      - name: active
+        description: status of the course run
+      - name: run_id
+        description: id for the course run
+      - name: user_id
+        description: id for the enrolling user
+      - name: created_on
+        description: timestamp specifying when the enrollment happened
+      
