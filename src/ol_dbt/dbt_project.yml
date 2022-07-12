@@ -39,6 +39,6 @@ models:
     staging:
       +materialized: incremental
     intermediate:
-      +materialized: views
+      +materialized: incremental
     marts:
-      +materialized: tables
+      +materialized: incremental
