@@ -23,7 +23,7 @@ resources:
 
 octavia: &octavia
   type: registry-image
-  source: 
+  source:
     repository: airbyte/octavia-cli
     tag: 0.39.34-alpha
 
@@ -37,23 +37,23 @@ jobs:
       platform: linux
       image_resource: *octavia
       inputs:
-        - name: sync-s3-to-octavia
-          path: /octavia
+      - name: sync-s3-to-octavia
+        path: /octavia
       params:
-        OCTAVIA_ENABLE_TELEMETRY: False
+        OCTAVIA_ENABLE_TELEMETRY: false
         AIRBYTE_URL: http://10.2.0.232:8000
       run:
         path: /bin/sh
         user: root
         args:
         - -cx
-        -  |
+        - |
           cd /octavia
           octavia generate source decd338e-5647-4c0b-adf4-da0e75f5a750 mitxonline_edxapp_pg
           octavia generate destination 4816b78f-1489-44c1-9060-4b19d5fa9362  mitxonline_edxapp_s3
           octavia generate connection --source ./sources/mitxonline_edxapp_pg/configuration.yaml --destination ./destinations/mitxonline_edxapp_s3/configuration.yaml mitxonline_edxapp_pg_to_s3
           octavia apply
       outputs:
-        - name: octavia
-          path: /octavia
+      - name: octavia
+        path: /octavia
   - put: sync-octavia-to-s3
