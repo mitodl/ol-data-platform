@@ -2,7 +2,7 @@
 version: 2
 
 models:
-  - name: int_finance__ol_joined_enrollments
+  - name: int_finance__joined_ol_enrollments
     description: Intermediate model where we join enrollment from across Open Learning (ol).
     columns:
       - name: id

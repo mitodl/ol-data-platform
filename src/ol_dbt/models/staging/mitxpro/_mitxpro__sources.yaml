@@ -39,3 +39,14 @@ sources:
     - name: position_in_program
     - name: created_on
     - name: updated_on
+  - name: mitxpro__app__postgres__courses_programenrollment
+    columns:
+    - name: id
+    - name: created_on
+    - name: updated_on
+    - name: program_id
+    - name: user_id
+    - name: company_id
+    - name: active
+    - name: change_status
+    - name: order_id
