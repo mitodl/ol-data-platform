@@ -11,7 +11,7 @@ xpro as (
 
     select cre.*, pe.active as xpro_program_active, 'xpro' as org 
     from {{ ref('stg_mitxpro__app__postgres__courses_courserunenrollment') }} cre
-    join {{ ref('stg_mitxpro__app__postgres__courses_programenrollment') }} pe on user_id
+    join {{ ref('stg_mitxpro__app__postgres__courses_programenrollment') }} pe on pe.user_id=cre.user_id
 ),
 
 join_ol_enrollments as (
