@@ -25,7 +25,7 @@ resources:
 
 octavia: &octavia
   type: registry-image
-  source: 
+  source:
     repository: airbyte/octavia-cli
     tag: 0.39.34-alpha
 
@@ -39,10 +39,11 @@ jobs:
       platform: linux
       image_resource: *octavia
       inputs:
-        - name: sync-s3-to-octavia
-          path: /octavia
+      - name: sync-s3-to-octavia
+        path: /octavia
       params:
-        AIRBYTE_URL: http://10.2.0.232:8000
+        OCTAVIA_ENABLE_TELEMETRY: false
+        AIRBYTE_URL: 
         MITXONLINE_DB_USER: ((mitxonline_edxapp_pg.username))
         MITXONLINE_DB_PASSWORD: ((mitxonline_edxapp_pg.password))
         MITXPRO_DB_USER: ((mitxpro_edxapp_pg.username))
@@ -53,7 +54,7 @@ jobs:
         user: root
         args:
         - -cx
-        -  |
+        - |
           cd /octavia
           #MITx Online edxapp Postgres DB
           octavia generate source decd338e-5647-4c0b-adf4-da0e75f5a750 mitxonline_edxapp_pg
@@ -65,6 +66,6 @@ jobs:
           octavia generate connection --source ./sources/mitxpro_edxapp_pg/configuration.yaml --destination ./destinations/mitxpro_edxapp_s3/configuration.yaml mitxpro_edxapp_pg_to_s3
           octavia apply
       outputs:
-        - name: octavia
-          path: /octavia
+      - name: octavia
+        path: /octavia
   - put: sync-octavia-to-s3
