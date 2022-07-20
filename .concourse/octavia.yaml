@@ -19,6 +19,8 @@ resources:
     directory: octavia
     path: octavia-config
     region: us-east-1
+    options:
+      - --exlcude "configuration.yaml"
   type: s3-sync
 
 octavia: &octavia
@@ -40,8 +42,12 @@ jobs:
         - name: sync-s3-to-octavia
           path: /octavia
       params:
-        OCTAVIA_ENABLE_TELEMETRY: False
         AIRBYTE_URL: http://10.2.0.232:8000
+        MITXONLINE_DB_USER: ((mitxonline_edxapp_pg.username))
+        MITXONLINE_DB_PASSWORD: ((mitxonline_edxapp_pg.password))
+        MITXPRO_DB_USER: ((mitxpro_edxapp_pg.username))
+        MITXPRO_DB_PASSWORD: ((mitxpro_edxapp_pg.username))
+        OCTAVIA_ENABLE_TELEMETRY: False
       run:
         path: /bin/sh
         user: root
@@ -49,9 +55,14 @@ jobs:
         - -cx
         -  |
           cd /octavia
+          #MITx Online edxapp Postgres DB
           octavia generate source decd338e-5647-4c0b-adf4-da0e75f5a750 mitxonline_edxapp_pg
-          octavia generate destination 4816b78f-1489-44c1-9060-4b19d5fa9362  mitxonline_edxapp_s3
+          octavia generate destination 4816b78f-1489-44c1-9060-4b19d5fa9362 mitxonline_edxapp_s3
           octavia generate connection --source ./sources/mitxonline_edxapp_pg/configuration.yaml --destination ./destinations/mitxonline_edxapp_s3/configuration.yaml mitxonline_edxapp_pg_to_s3
+          #MIT xPRO edxapp Postgres DB
+          octavia generate source decd338e-5647-4c0b-adf4-da0e75f5a750 mitxpro_edxapp_pg
+          octavia generate destination 4816b78f-1489-44c1-9060-4b19d5fa9362 mitxpro_edxapp_s3
+          octavia generate connection --source ./sources/mitxpro_edxapp_pg/configuration.yaml --destination ./destinations/mitxpro_edxapp_s3/configuration.yaml mitxpro_edxapp_pg_to_s3
           octavia apply
       outputs:
         - name: octavia
