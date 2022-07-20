@@ -43,7 +43,7 @@ jobs:
         path: /octavia
       params:
         OCTAVIA_ENABLE_TELEMETRY: false
-        AIRBYTE_URL: 
+        AIRBYTE_URL:
         MITXONLINE_DB_USER: ((mitxonline_edxapp_pg.username))
         MITXONLINE_DB_PASSWORD: ((mitxonline_edxapp_pg.password))
         MITXPRO_DB_USER: ((mitxpro_edxapp_pg.username))
