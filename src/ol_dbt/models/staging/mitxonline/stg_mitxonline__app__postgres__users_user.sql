@@ -13,7 +13,7 @@ cleaned as (
     , cast(created_on[1] as timestamp(6)) as created_on
     -- timestamp, specifying when a user account was most recently updated
     , cast(updated_on[1] as timestamp(6)) as updated_on
+    from source
 ) 
 
 select * from cleaned
-    
