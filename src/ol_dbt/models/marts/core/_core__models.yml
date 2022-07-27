@@ -1,0 +1,23 @@
+---
+version: 2
+
+models:
+  - name: ol__enrollments
+    description: Enrollments across Open Learning platforms.
+    columns:
+      - name: course_run_active
+        description: boolean, specifying whether the user is active in the enrolled course
+      - name: user_id
+        description: int, id for the enrolling user
+      - name: created_on
+        description: timestamp, specifying when the enrollment happened
+      - name: updated_on
+        description: timestamp, specifying when the enrollment was last updated
+      - name: courseware_url_path
+        description: str, url for course where the user is enrolled
+      - name: course_title
+        description: str, title of the course where the user is enrolled
+      - name: user_active
+        description: boolean, specifying whether the user is active within a platform (e.g., xPro, MITx Online, etc)
+      - name: org
+        description: str, specifying which product (or organization) associated with the enrollment
