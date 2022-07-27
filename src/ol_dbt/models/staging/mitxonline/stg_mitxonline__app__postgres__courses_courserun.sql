@@ -2,9 +2,9 @@
 
 with source as (
     select * from {{ source('ol_warehouse_raw_data','mitxonline__app__postgres__courses_courserun') }}
-),
+)
 
-cleaned as (
+, cleaned as (
     select
         -- int, sequential ID tracking a single course run
         id
