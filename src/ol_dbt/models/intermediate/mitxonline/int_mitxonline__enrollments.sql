@@ -15,6 +15,8 @@ runs as (
 users as (
     select
         id
+        , username
+        , email
         , is_active
     from {{ ref('stg_mitxonline__app__postgres__users_user') }}
 ),
@@ -28,6 +30,8 @@ mitxonline_enrollments as (
         , enrollments.updated_on 
         , runs.courseware_url_path
         , runs.title as "course_title"
+        , users.username
+        , users.email
         , users.is_active as "user_active"
     from enrollments
     join runs on enrollments.run_id = runs.id

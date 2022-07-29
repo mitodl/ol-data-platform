@@ -8,6 +8,10 @@ cleaned as (
     select 
         -- int, sequential ID representing one user in MITx Online
         id
+        -- str, name chosen by user
+        , username
+        -- str, user email associated with their account
+        , email
         -- boolean, ...
         , is_active
         -- timestamp, specifying when a user account was initially created

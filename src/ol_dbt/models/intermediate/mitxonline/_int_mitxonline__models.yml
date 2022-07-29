@@ -21,5 +21,9 @@ models:
         description: url for course where the user is enrolled
       - name: course_title
         description: title of the course where the user is enrolled
+      - name: username
+        description: str, name chosen by user
+      - name: email
+        description: str, email associated with the user account
       - name: user_active
         description: boolean specifying whether the user is active within MITx Online
