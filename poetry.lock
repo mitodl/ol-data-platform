@@ -203,21 +203,6 @@ toml = ["toml"]
 yaml = ["pyyaml"]
 
 [[package]]
-name = "beautifulsoup4"
-version = "4.11.1"
-description = "Screen-scraping library"
-category = "main"
-optional = false
-python-versions = ">=3.6.0"
-
-[package.dependencies]
-soupsieve = ">1.2"
-
-[package.extras]
-html5lib = ["html5lib"]
-lxml = ["lxml"]
-
-[[package]]
 name = "black"
 version = "22.6.0"
 description = "The uncompromising code formatter."
@@ -321,9 +306,9 @@ optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
 [package.extras]
-redis = ["redis (>=3.3.6,<4.0.0)"]
-memcached = ["python-memcached (>=1.59,<2.0)"]
 msgpack = ["msgpack-python (>=0.5,<0.6)"]
+memcached = ["python-memcached (>=1.59,<2.0)"]
+redis = ["redis (>=3.3.6,<4.0.0)"]
 
 [[package]]
 name = "certifi"
@@ -1250,8 +1235,8 @@ requests = ">=2.12,<3"
 six = ">=1.10.0"
 
 [package.extras]
-dev = ["flake8 (==3.8.1)", "isort (==4.3.21)", "black (==19.10b0)", "mypy (==0.770)", "check-manifest (>=0.42,<1)", "pytest (==5.4.2)", "pytest-asyncio (==0.11.0)", "pytest-cov (==2.8.1)", "mock (==4.0.2)", "vcrpy (==4.0.2)", "coveralls (==2.0.0)"]
-test = ["pytest (==5.4.2)", "pytest-asyncio (==0.11.0)", "pytest-cov (==2.8.1)", "mock (==4.0.2)", "vcrpy (==4.0.2)", "coveralls (==2.0.0)"]
+test = ["coveralls (==2.0.0)", "vcrpy (==4.0.2)", "mock (==4.0.2)", "pytest-cov (==2.8.1)", "pytest-asyncio (==0.11.0)", "pytest (==5.4.2)"]
+dev = ["coveralls (==2.0.0)", "vcrpy (==4.0.2)", "mock (==4.0.2)", "pytest-cov (==2.8.1)", "pytest-asyncio (==0.11.0)", "pytest (==5.4.2)", "check-manifest (>=0.42,<1)", "mypy (==0.770)", "black (==19.10b0)", "isort (==4.3.21)", "flake8 (==3.8.1)"]
 
 [[package]]
 name = "graphene"
@@ -1431,10 +1416,10 @@ six = ">=1.9"
 webencodings = "*"
 
 [package.extras]
-all = ["genshi", "chardet (>=2.2)", "lxml"]
-chardet = ["chardet (>=2.2)"]
-genshi = ["genshi"]
 lxml = ["lxml"]
+genshi = ["genshi"]
+chardet = ["chardet (>=2.2)"]
+all = ["lxml", "chardet (>=2.2)", "genshi"]
 
 [[package]]
 name = "httpcore"
@@ -1689,8 +1674,8 @@ optional = false
 python-versions = ">=3.7"
 
 [package.extras]
-test = ["pytest", "pytest-trio", "pytest-asyncio (>=0.17)", "testpath", "trio", "async-timeout"]
-trio = ["trio", "async-generator"]
+trio = ["async-generator", "trio"]
+test = ["async-timeout", "trio", "testpath", "pytest-asyncio (>=0.17)", "pytest-trio", "pytest"]
 
 [[package]]
 name = "jinja2"
@@ -1785,14 +1770,6 @@ traitlets = "*"
 
 [package.extras]
 test = ["ipykernel", "pre-commit", "pytest", "pytest-cov", "pytest-timeout"]
-
-[[package]]
-name = "jupyterlab-pygments"
-version = "0.2.2"
-description = "Pygments theme using JupyterLab CSS variables"
-category = "main"
-optional = false
-python-versions = ">=3.7"
 
 [[package]]
 name = "keyring"
@@ -1920,8 +1897,8 @@ six = ">=1.9.0,<2.0"
 
 [[package]]
 name = "mistune"
-version = "0.8.4"
-description = "The fastest markdown parser in pure Python"
+version = "2.0.3"
+description = "A sane Markdown parser with useful plugins and renderers"
 category = "main"
 optional = false
 python-versions = "*"
@@ -1961,54 +1938,32 @@ optional = false
 python-versions = "*"
 
 [[package]]
-name = "nbclient"
-version = "0.5.13"
-description = "A client library for executing notebooks. Formerly nbconvert's ExecutePreprocessor."
-category = "main"
-optional = false
-python-versions = ">=3.7.0"
-
-[package.dependencies]
-jupyter-client = ">=6.1.5"
-nbformat = ">=5.0"
-nest-asyncio = "*"
-traitlets = ">=5.0.0"
-
-[package.extras]
-sphinx = ["Sphinx (>=1.7)", "sphinx-book-theme", "mock", "moto", "myst-parser"]
-test = ["ipython (<8.0.0)", "ipykernel", "ipywidgets (<8.0.0)", "pytest (>=4.1)", "pytest-asyncio", "pytest-cov (>=2.6.1)", "check-manifest", "flake8", "mypy", "xmltodict", "black", "pip (>=18.1)", "wheel (>=0.31.0)", "setuptools (>=38.6.0)", "twine (>=1.11.0)"]
-
-[[package]]
 name = "nbconvert"
-version = "6.4.5"
+version = "5.5.0"
 description = "Converting Jupyter Notebooks"
 category = "main"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 
 [package.dependencies]
-beautifulsoup4 = "*"
 bleach = "*"
 defusedxml = "*"
 entrypoints = ">=0.2.2"
 jinja2 = ">=2.4"
 jupyter-core = "*"
-jupyterlab-pygments = "*"
-MarkupSafe = ">=2.0"
-mistune = ">=0.8.1,<2"
-nbclient = ">=0.5.0,<0.6.0"
+mistune = ">=0.8.1"
 nbformat = ">=4.4"
 pandocfilters = ">=1.4.1"
-pygments = ">=2.4.1"
+pygments = "*"
 testpath = "*"
-traitlets = ">=5.0"
+traitlets = ">=4.2"
 
 [package.extras]
-all = ["pytest", "pytest-cov", "pytest-dependency", "ipykernel", "ipywidgets (>=7)", "pyppeteer (>=1,<1.1)", "tornado (>=4.0)", "sphinx (>=1.5.1)", "sphinx-rtd-theme", "nbsphinx (>=0.2.12)", "ipython"]
-docs = ["sphinx (>=1.5.1)", "sphinx-rtd-theme", "nbsphinx (>=0.2.12)", "ipython"]
+all = ["pytest", "pytest-cov", "ipykernel", "jupyter-client (>=4.2)", "ipywidgets (>=7)", "tornado (>=4.0)", "sphinx (>=1.5.1)", "sphinx-rtd-theme", "nbsphinx (>=0.2.12)", "sphinxcontrib-github-alt", "ipython"]
+docs = ["sphinx (>=1.5.1)", "sphinx-rtd-theme", "nbsphinx (>=0.2.12)", "sphinxcontrib-github-alt", "ipython", "jupyter-client (>=4.2)"]
+execute = ["jupyter-client (>=4.2)"]
 serve = ["tornado (>=4.0)"]
-test = ["pytest", "pytest-cov", "pytest-dependency", "ipykernel", "ipywidgets (>=7)", "pyppeteer (>=1,<1.1)"]
-webpdf = ["pyppeteer (>=1,<1.1)"]
+test = ["pytest", "pytest-cov", "ipykernel", "jupyter-client (>=4.2)", "ipywidgets (>=7)"]
 
 [[package]]
 name = "nbformat"
@@ -2278,8 +2233,8 @@ optional = false
 python-versions = ">=3.6"
 
 [package.extras]
-dev = ["pre-commit", "tox"]
-testing = ["pytest", "pytest-benchmark"]
+testing = ["pytest-benchmark", "pytest"]
+dev = ["tox", "pre-commit"]
 
 [[package]]
 name = "poetry"
@@ -2532,8 +2487,8 @@ optional = false
 python-versions = ">=3.6"
 
 [package.extras]
-ed25519 = ["PyNaCl (>=1.4.0)"]
 rsa = ["cryptography"]
+ed25519 = ["PyNaCl (>=1.4.0)"]
 
 [[package]]
 name = "pyparsing"
@@ -2872,9 +2827,9 @@ optional = false
 python-versions = "*"
 
 [package.extras]
-nativelib = ["pyobjc-framework-cocoa", "pywin32"]
-objc = ["pyobjc-framework-cocoa"]
 win32 = ["pywin32"]
+objc = ["pyobjc-framework-cocoa"]
+nativelib = ["pywin32", "pyobjc-framework-cocoa"]
 
 [[package]]
 name = "shellingham"
@@ -2915,14 +2870,6 @@ description = "This package provides 29 stemmers for 28 languages generated from
 category = "dev"
 optional = false
 python-versions = "*"
-
-[[package]]
-name = "soupsieve"
-version = "2.3.2.post1"
-description = "A modern CSS selector implementation for Beautiful Soup."
-category = "main"
-optional = false
-python-versions = ">=3.6"
 
 [[package]]
 name = "sqlalchemy"
@@ -3002,7 +2949,7 @@ executing = "*"
 pure-eval = "*"
 
 [package.extras]
-tests = ["pytest", "typeguard", "pygments", "littleutils", "cython"]
+tests = ["cython", "littleutils", "pygments", "typeguard", "pytest"]
 
 [[package]]
 name = "starlette"
@@ -3524,10 +3471,6 @@ backcall = [
 bandit = [
     {file = "bandit-1.7.4-py3-none-any.whl", hash = "sha256:412d3f259dab4077d0e7f0c11f50f650cc7d10db905d98f6520a95a18049658a"},
     {file = "bandit-1.7.4.tar.gz", hash = "sha256:2d63a8c573417bae338962d4b9b06fbc6080f74ecd955a092849e1e65c717bd2"},
-]
-beautifulsoup4 = [
-    {file = "beautifulsoup4-4.11.1-py3-none-any.whl", hash = "sha256:58d5c3d29f5a36ffeb94f02f0d786cd53014cf9b3b3951d42e0080d8a9498d30"},
-    {file = "beautifulsoup4-4.11.1.tar.gz", hash = "sha256:ad9aa55b65ef2808eb405f46cf74df7fcb7044d5cbc26487f96eb2ef2e436693"},
 ]
 black = [
     {file = "black-22.6.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:f586c26118bc6e714ec58c09df0157fe2d9ee195c764f630eb0d8e7ccce72e69"},
@@ -4279,10 +4222,6 @@ jupyter-core = [
     {file = "jupyter_core-4.10.0-py3-none-any.whl", hash = "sha256:e7f5212177af7ab34179690140f188aa9bf3d322d8155ed972cbded19f55b6f3"},
     {file = "jupyter_core-4.10.0.tar.gz", hash = "sha256:a6de44b16b7b31d7271130c71a6792c4040f077011961138afed5e5e73181aec"},
 ]
-jupyterlab-pygments = [
-    {file = "jupyterlab_pygments-0.2.2-py2.py3-none-any.whl", hash = "sha256:2405800db07c9f770863bcf8049a529c3dd4d3e28536638bd7c1c01d2748309f"},
-    {file = "jupyterlab_pygments-0.2.2.tar.gz", hash = "sha256:7405d7fde60819d905a9fa8ce89e4cd830e318cdad22a0030f7a901da705585d"},
-]
 keyring = [
     {file = "keyring-23.6.0-py3-none-any.whl", hash = "sha256:372ff2fc43ab779e3f87911c26e6c7acc8bb440cbd82683e383ca37594cb0617"},
     {file = "keyring-23.6.0.tar.gz", hash = "sha256:3ac00c26e4c93739e19103091a9986a9f79665a78cf15a4df1dba7ea9ac8da2f"},
@@ -4397,8 +4336,8 @@ minimal-snowplow-tracker = [
     {file = "minimal-snowplow-tracker-0.0.2.tar.gz", hash = "sha256:acabf7572db0e7f5cbf6983d495eef54081f71be392330eb3aadb9ccb39daaa4"},
 ]
 mistune = [
-    {file = "mistune-0.8.4-py2.py3-none-any.whl", hash = "sha256:88a1051873018da288eee8538d476dffe1262495144b33ecb586c4ab266bb8d4"},
-    {file = "mistune-0.8.4.tar.gz", hash = "sha256:59a3429db53c50b5c6bcc8a07f8848cb00d7dc8bdb431a4ab41920d201d4756e"},
+    {file = "mistune-2.0.3-py2.py3-none-any.whl", hash = "sha256:e3964140c0775535fba50bd616fe180920044a64bc21850253267b07bff89924"},
+    {file = "mistune-2.0.3.tar.gz", hash = "sha256:d7605b46b6156b53b7d52a465202b29a6f00f4ea4130ad5d25e9d5547d6b7e50"},
 ]
 msgpack = [
     {file = "msgpack-1.0.4-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:4ab251d229d10498e9a2f3b1e68ef64cb393394ec477e3370c457f9430ce9250"},
@@ -4483,13 +4422,9 @@ mypy-extensions = [
     {file = "mypy_extensions-0.4.3-py2.py3-none-any.whl", hash = "sha256:090fedd75945a69ae91ce1303b5824f428daf5a028d2f6ab8a299250a846f15d"},
     {file = "mypy_extensions-0.4.3.tar.gz", hash = "sha256:2d82818f5bb3e369420cb3c4060a7970edba416647068eb4c5343488a6c604a8"},
 ]
-nbclient = [
-    {file = "nbclient-0.5.13-py3-none-any.whl", hash = "sha256:47ac905af59379913c1f8f541098d2550153cf8dc58553cbe18c702b181518b0"},
-    {file = "nbclient-0.5.13.tar.gz", hash = "sha256:40c52c9b5e3c31faecaee69f202b3f53e38d7c1c563de0fadde9d7eda0fdafe8"},
-]
 nbconvert = [
-    {file = "nbconvert-6.4.5-py3-none-any.whl", hash = "sha256:e01d219f55cc79f9701c834d605e8aa3acf35725345d3942e3983937f368ce14"},
-    {file = "nbconvert-6.4.5.tar.gz", hash = "sha256:21163a8e2073c07109ca8f398836e45efdba2aacea68d6f75a8a545fef070d4e"},
+    {file = "nbconvert-5.5.0-py2.py3-none-any.whl", hash = "sha256:4a978548d8383f6b2cfca4a3b0543afb77bc7cb5a96e8b424337ab58c12da9bc"},
+    {file = "nbconvert-5.5.0.tar.gz", hash = "sha256:138381baa41d83584459b5cfecfc38c800ccf1f37d9ddd0bd440783346a4c39c"},
 ]
 nbformat = [
     {file = "nbformat-5.4.0-py3-none-any.whl", hash = "sha256:0d6072aaec95dddc39735c144ee8bbc6589c383fb462e4058abc855348152dad"},
@@ -5264,10 +5199,6 @@ sniffio = [
 snowballstemmer = [
     {file = "snowballstemmer-2.2.0-py2.py3-none-any.whl", hash = "sha256:c8e1716e83cc398ae16824e5572ae04e0d9fc2c6b985fb0f900f5f0c96ecba1a"},
     {file = "snowballstemmer-2.2.0.tar.gz", hash = "sha256:09b16deb8547d3412ad7b590689584cd0fe25ec8db3be37788be3810cbf19cb1"},
-]
-soupsieve = [
-    {file = "soupsieve-2.3.2.post1-py3-none-any.whl", hash = "sha256:3b2503d3c7084a42b1ebd08116e5f81aadfaea95863628c80a3b774a11b7c759"},
-    {file = "soupsieve-2.3.2.post1.tar.gz", hash = "sha256:fc53893b3da2c33de295667a0e19f078c14bf86544af307354de5fcf12a3f30d"},
 ]
 sqlalchemy = [
     {file = "SQLAlchemy-1.4.39-cp27-cp27m-macosx_10_14_x86_64.whl", hash = "sha256:4770eb3ba69ec5fa41c681a75e53e0e342ac24c1f9220d883458b5596888e43a"},
