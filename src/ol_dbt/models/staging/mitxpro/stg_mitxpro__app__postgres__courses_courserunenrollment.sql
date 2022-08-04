@@ -1,10 +1,10 @@
--- xPro Course Run Enrollment Information 
+-- xPro Course Run Enrollment Information
 
 with source as (
     select * from {{ source('ol_warehouse_raw_data','mitxpro__app__postgres__courses_courserunenrollment') }}
-),
+)
 
-cleaned as (
+, cleaned as (
     select
         -- int, sequential ID tracking a single user enrollment
         id

@@ -2,10 +2,10 @@
 
 with source as (
     select * from {{ source('ol_warehouse_raw_data','mitxpro__app__postgres__courses_course') }}
-),
+)
 
-cleaned as (
-    select 
+, cleaned as (
+    select
         -- int, sequential ID tracking a single xPro course
         id
         -- boolean, indicating whether the course is available to users
