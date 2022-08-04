@@ -9,14 +9,14 @@ with mitxonline_enrollments as (
 , join_ol_enrollments as (
     select
         *
-, 'MITx Online' as platform
+        , 'MITx Online' as platform
     from mitxonline_enrollments
 
     union all
 
     select
         *
-, 'xPro' as platform
+        , 'xPro' as platform
     from mitxpro_enrollments
 )
 
