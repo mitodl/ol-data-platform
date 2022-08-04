@@ -27,6 +27,8 @@ sources:
   - name: mitxonline__app__postgres__users_user
     columns:
     - name: id
+    - name: username
+    - name: email
     - name: is_active
     - name: created_on
     - name: updated_on
