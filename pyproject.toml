@@ -20,7 +20,7 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.9"
 PyPika = "^0.48.9"
-dagit = "^0.15"
+dagit = "^1.0"
 dagster = "^0.15"
 dagster-airbyte = "^0.15"
 dagster-aws = "^0.15"
