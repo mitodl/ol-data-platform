@@ -2408,19 +2408,20 @@ pyasn1 = ">=0.4.6,<0.5.0"
 
 [[package]]
 name = "pyathena"
-version = "2.9.5"
+version = "2.13.0"
 description = "Python DB API 2.0 (PEP 249) client for Amazon Athena"
 category = "main"
 optional = false
 python-versions = ">=3.7.1,<4.0.0"
 
 [package.dependencies]
-boto3 = ">=1.13.20"
-botocore = ">=1.16.20"
+boto3 = ">=1.21.0"
+botocore = ">=1.24.7"
 tenacity = ">=4.1.0"
 
 [package.extras]
-pandas = ["pandas (>=1.3.0)", "pyarrow (>=7.0.0)", "s3fs (>=0.4.0)"]
+fastparquet = ["fastparquet (>=0.4.0)"]
+pandas = ["pandas (>=1.3.0)", "s3fs (>=2021.09.0)"]
 arrow = ["pyarrow (>=7.0.0)"]
 sqlalchemy = ["sqlalchemy (>=1.0.0,<2.0.0)"]
 
@@ -3386,7 +3387,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "b4b9afe355bcbd5b4e0ac6b1c036fdeba6dfe93332db07ec9576547bbd7c928b"
+content-hash = "8c318e33e21384229af79779d6dd50e1958528fee5bfc21a841d50633466431c"
 
 [metadata.files]
 agate = [
@@ -4788,8 +4789,8 @@ pyasn1-modules = [
     {file = "pyasn1_modules-0.2.8-py3.7.egg", hash = "sha256:c29a5e5cc7a3f05926aff34e097e84f8589cd790ce0ed41b67aed6857b26aafd"},
 ]
 pyathena = [
-    {file = "PyAthena-2.9.5-py3-none-any.whl", hash = "sha256:f6610aa1f5e42e7af1872f1f9a12eef34741f8cb86638982e423d5fc4038aa55"},
-    {file = "PyAthena-2.9.5.tar.gz", hash = "sha256:b32045fc5aba5e5b900a23ef92bc7ebba869657278976b3ec47c9f49bbd5c9ae"},
+    {file = "PyAthena-2.13.0.tar.gz", hash = "sha256:b6dec8769d8cb91ec3a570d4c2dcea98c85044e6f7d35f26fc6c5e48989ad63e"},
+    {file = "pyathena-2.13.0-py3-none-any.whl", hash = "sha256:e541fa3873010d23848213cee87cd4823877420bcb5966f84718de8da8bc1b19"},
 ]
 pycodestyle = [
     {file = "pycodestyle-2.8.0-py2.py3-none-any.whl", hash = "sha256:720f8b39dde8b293825e7ff02c475f3077124006db4f440dcbc9a20b76548a20"},
