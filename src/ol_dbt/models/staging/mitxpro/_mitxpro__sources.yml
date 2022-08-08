@@ -10,35 +10,62 @@ sources:
   - name: mitxpro__app__postgres__courses_courserunenrollment
     columns:
     - name: id
+      description: int, sequential ID tracking a single user enrollment
     - name: active
+      description: str, boolean describing whether the enrollment is active
     - name: run_id
+      description: int, unique ID specifying a "run" of an xPro course
     - name: user_id
+      description: int, unique ID for each user on the xPro platform
     - name: created_on
+      description: timestamp, specifying when an enrollment was initially created
     - name: updated_on
+      description: timestamp, specifying when an enrollment was most recently updated
   - name: mitxpro__app__postgres__courses_courserun
     columns:
     - name: id
+      description: int, sequential ID tracking a single course run
     - name: live
+      description: boolean, indicating whether the course is available to users
     - name: title
+      description: str, title of the course
     - name: course_id
+      description: int, ID specifying a course in the courses_course table
     - name: courseware_url_path
+      description: str, url location for the course in xPro
     - name: created_on
+      description: timestamp, specifying when a course run was initially created
     - name: updated_on
+      description: timestamp, specifying when a course run was most recently updated
   - name: mitxpro__app__postgres__users_user
     columns:
     - name: id
+      description: int, sequential ID representing one user in xPro
     - name: username
+      description: str, name chosen by user
     - name: email
+      description: str, user email associated with their account
     - name: is_active
+      description: boolean, ...
     - name: created_on
+      description: timestamp, specifying when a user account was initially created
     - name: updated_on
+      description: timestamp, specifying when a user account was most recently updated
   - name: mitxpro__app__postgres__courses_course
     columns:
     - name: id
+      description: int, sequential ID tracking a single xPro course
     - name: live
+      description: boolean, indicating whether the course is available to users
     - name: title
+      description: str, title of the course
     - name: program_id
+      description: int, unique ID pointing to the "program" which this course is part of
     - name: readable_id
+      description: str, Open edX ID formatted as course-v1:{org}+{course code}
     - name: position_in_program
+      description: int, ...
     - name: created_on
+      description: timestamp, specifying when an enrollment was initially created
     - name: updated_on
+      description: timestamp, specifying when an enrollment was most recently updated
