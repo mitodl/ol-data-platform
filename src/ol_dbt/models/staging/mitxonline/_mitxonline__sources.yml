@@ -7,7 +7,7 @@ sources:
   database: 'ol_data_lake_{{ target.name }}'
   schema: 'ol_warehouse_data_{{ target.name }}'
   tables:
-  - name: mitxonline__app__postgres__courses_courserunenrollment
+  - name: raw__mitxonline__app__postgres__courses_courserunenrollment
     columns:
     - name: id
       description: int, sequential ID tracking a single user enrollment
@@ -21,7 +21,7 @@ sources:
       description: timestamp, specifying when an enrollment was initially created
     - name: updated_on
       description: timestamp, specifying when an enrollment was most recently updated
-  - name: mitxonline__app__postgres__courses_courserun
+  - name: raw__mitxonline__app__postgres__courses_courserun
     columns:
     - name: id
       description: int, sequential ID tracking a single course run
@@ -37,7 +37,7 @@ sources:
       description: timestamp, specifying when a course run was initially created
     - name: updated_on
       description: timestamp, specifying when a course run was most recently updated
-  - name: mitxonline__app__postgres__users_user
+  - name: raw__mitxonline__app__postgres__users_user
     columns:
     - name: id
       description: int, sequential ID representing one user in MITx Online
@@ -51,7 +51,7 @@ sources:
       description: timestamp, specifying when a user account was initially created
     - name: updated_on
       description: timestamp, specifying when a user account was most recently updated
-  - name: mitxonline__app__postgres__courses_course
+  - name: raw__mitxonline__app__postgres__courses_course
     columns:
     - name: id
       description: int, sequential ID tracking a single MITx Online course

@@ -1,7 +1,7 @@
 -- MITx Online Course Run Enrollment Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','mitxonline__app__postgres__courses_courserunenrollment') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_courserunenrollment') }}
 )
 
 , cleaned as (
@@ -10,8 +10,8 @@ with source as (
         , active
         , run_id
         , user_id
-        , cast(created_on[1] as timestamp(6)) as created_on
-        , cast(updated_on[1] as timestamp(6)) as updated_on
+        , created_on
+        , updated_on
     from source
 )
 
