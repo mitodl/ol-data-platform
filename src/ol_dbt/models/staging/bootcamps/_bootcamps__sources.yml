@@ -2,63 +2,63 @@
 version: 2
 
 sources:
-  - name: ol_warehouse_raw_data
-    loader: airbyte
-    database: 'ol_data_lake_{{ target.name }}'
-    schema: 'ol_warehouse_data_{{ target.name }}'
-    tables: 
-      - name: raw__bootcamps__app__postgres__klasses_bootcamprunenrollment
-        description: ""
-        columns:
-          - name: id
-            description: ""
-          - name: active
-            description: ""
-          - name: user_id
-            description: ""
-          - name: created_on
-            description: ""
-          - name: updated_on
-            description: ""
-          - name: change_status
-            description: ""
-          - name: bootcamp_run_id
-            description: ""
-          - name: novoed_sync_date
-            description: ""
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: 'ol_data_lake_{{ target.name }}'
+  schema: 'ol_warehouse_data_{{ target.name }}'
+  tables:
+  - name: raw__bootcamps__app__postgres__klasses_bootcamprunenrollment
+    description: ""
+    columns:
+    - name: id
+      description: ""
+    - name: active
+      description: ""
+    - name: user_id
+      description: ""
+    - name: created_on
+      description: ""
+    - name: updated_on
+      description: ""
+    - name: change_status
+      description: ""
+    - name: bootcamp_run_id
+      description: ""
+    - name: novoed_sync_date
+      description: ""
 
-      - name: raw__bootcamps__app__postgres__klasses_bootcamprun
-        description: ""
-        columns:
-          - name: id
-            description: ""
-          - name: title
-            description: ""
-          - name: source
-            description: ""
-          - name: end_date
-            description: ""
-          - name: start_date
-            description: ""
-          - name: bootcamp_id
-            description: ""
-          - name: bootcamp_run_id
-            description: ""
-          - name: novoed_course_stub
-            description: ""
+  - name: raw__bootcamps__app__postgres__klasses_bootcamprun
+    description: ""
+    columns:
+    - name: id
+      description: ""
+    - name: title
+      description: ""
+    - name: source
+      description: ""
+    - name: end_date
+      description: ""
+    - name: start_date
+      description: ""
+    - name: bootcamp_id
+      description: ""
+    - name: bootcamp_run_id
+      description: ""
+    - name: novoed_course_stub
+      description: ""
 
-      - name: raw__bootcamps__app__postgres__auth_user
-        description: ""
-        columns:
-          - name: id
-            description: ""
-          - name: email
-            description: ""
-          - name: username
-            description: ""
-          - name: is_active
-            description: ""
-          - name: last_login
-            description: ""
-          - name: date_joined
-            description: ""
+  - name: raw__bootcamps__app__postgres__auth_user
+    description: ""
+    columns:
+    - name: id
+      description: ""
+    - name: email
+      description: ""
+    - name: username
+      description: ""
+    - name: is_active
+      description: ""
+    - name: last_login
+      description: ""
+    - name: date_joined
+      description: ""
