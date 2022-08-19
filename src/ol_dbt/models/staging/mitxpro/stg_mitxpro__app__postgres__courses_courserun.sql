@@ -1,7 +1,7 @@
 -- xPro Course Run Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','mitxpro__app__postgres__courses_courserun') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__courses_courserun') }}
 )
 
 , cleaned as (
@@ -11,8 +11,8 @@ with source as (
         , title
         , course_id
         , courseware_url_path
-        , cast(created_on[1] as timestamp(6)) as created_on
-        , cast(updated_on[1] as timestamp(6)) as updated_on
+        , created_on
+        , updated_on
     from source
 )
 

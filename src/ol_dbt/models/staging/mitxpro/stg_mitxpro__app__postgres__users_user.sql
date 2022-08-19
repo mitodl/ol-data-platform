@@ -1,7 +1,7 @@
 -- xPro User Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','mitxpro__app__postgres__users_user') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__users_user') }}
 )
 
 , cleaned as (
@@ -10,8 +10,8 @@ with source as (
         , username
         , email
         , is_active
-        , cast(created_on[1] as timestamp(6)) as created_on
-        , cast(updated_on[1] as timestamp(6)) as updated_on
+        , created_on
+        , updated_on
     from source
 )
 
