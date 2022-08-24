@@ -1,15 +1,15 @@
 -- Enrollment information for MITx Online
 
 with enrollments as (
-    select * from {{ ref('stg_bootcamps__app__postgres__klasses_bootcamprunenrollment') }}
+    select * from {{ ref('stg__bootcamps__app__postgres__klasses_bootcamprunenrollment') }}
 )
 
 , runs as (
-    select * from {{ ref('stg_bootcamps__app__postgres__klasses_bootcamprun') }}
+    select * from {{ ref('stg__bootcamps__app__postgres__klasses_bootcamprun') }}
 )
 
 , users as (
-    select * from {{ ref('stg_bootcamps__app__postgres__auth_user') }}
+    select * from {{ ref('stg__bootcamps__app__postgres__auth_user') }}
 )
 
 , bootcamps_enrollments as (

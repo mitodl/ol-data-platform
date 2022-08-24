@@ -1,13 +1,13 @@
 with mitxonline_enrollments as (
-    select * from {{ ref('int_mitxonline__enrollments') }}
+    select * from {{ ref('int__mitxonline__enrollments') }}
 )
 
 , mitxpro_enrollments as (
-    select * from {{ ref('int_mitxpro__enrollments') }}
+    select * from {{ ref('int__mitxpro__enrollments') }}
 )
 
 , bootcamps_enrollments as (
-    select * from {{ ref('int_bootcamps__enrollments') }}
+    select * from {{ ref('int__bootcamps__enrollments') }}
 )
 
 , join_ol_enrollments as (

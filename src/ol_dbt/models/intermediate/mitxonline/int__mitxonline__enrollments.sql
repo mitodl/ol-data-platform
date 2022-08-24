@@ -1,7 +1,7 @@
--- Enrollment information for xPro
+-- Enrollment information for MITx Online
 
 with enrollments as (
-    select * from {{ ref('stg_mitxpro__app__postgres__courses_courserunenrollment') }}
+    select * from {{ ref('stg__mitxonline__app__postgres__course_courserunenrollment') }}
 )
 
 , runs as (
@@ -9,7 +9,7 @@ with enrollments as (
         id
         , title
         , courseware_url_path
-    from {{ ref('stg_mitxpro__app__postgres__courses_courserun') }}
+    from {{ ref('stg__mitxonline__app__postgres__courses_courserun') }}
 )
 
 , users as (
@@ -18,10 +18,10 @@ with enrollments as (
         , username
         , email
         , is_active
-    from {{ ref('stg_mitxpro__app__postgres__users_user') }}
+    from {{ ref('stg__mitxonline__app__postgres__users_user') }}
 )
 
-, mitxpro_enrollments as (
+, mitxonline_enrollments as (
     select
         enrollments.id
         , enrollments.active as course_run_active
@@ -38,4 +38,4 @@ with enrollments as (
     inner join users on enrollments.user_id = users.id
 )
 
-select * from mitxpro_enrollments
+select * from mitxonline_enrollments
