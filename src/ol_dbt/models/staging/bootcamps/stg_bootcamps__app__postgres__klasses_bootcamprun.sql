@@ -12,7 +12,7 @@ with source as (
         , end_date
         , start_date
         , bootcamp_id
-        , bootcamp_run_id
+        , bootcamp_run_id as course_readable_id
         , novoed_course_stub
     from source
 )

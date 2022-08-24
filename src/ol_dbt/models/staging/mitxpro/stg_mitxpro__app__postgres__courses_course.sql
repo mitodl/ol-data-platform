@@ -10,7 +10,7 @@ with source as (
         , live
         , title
         , program_id
-        , readable_id
+        , readable_id as course_readable_id
         , position_in_program
         , created_on
         , updated_on

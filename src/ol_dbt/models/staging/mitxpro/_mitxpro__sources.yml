@@ -61,7 +61,7 @@ sources:
       description: str, title of the course
     - name: program_id
       description: int, unique ID pointing to the "program" which this course belongs
-    - name: readable_id
+    - name: course_readable_id
       description: str, Open edX ID formatted as course-v1:{org}+{course code}
     - name: position_in_program
       description: int, ...

@@ -42,7 +42,7 @@ sources:
       description: ""
     - name: bootcamp_id
       description: ""
-    - name: bootcamp_run_id
+    - name: course_readable_id
       description: ""
     - name: novoed_course_stub
       description: ""
