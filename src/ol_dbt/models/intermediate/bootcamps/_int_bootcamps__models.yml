@@ -1,0 +1,29 @@
+---
+version: 2
+
+models:
+- name: int_bootcamps__enrollments
+  description: Intermediate model for Bootcamps enrollments.
+  columns:
+  - name: id
+    description: ""
+    tests:
+    - not_null
+  - name: active
+    description: ""
+  - name: user_id
+    description: ""
+  - name: created_on
+    description: ""
+  - name: updated_on
+    description: ""
+  - name: courseware_url_path
+    description: ""
+  - name: course_title
+    description: ""
+  - name: username
+    description: ""
+  - name: email
+    description: ""
+  - name: user_active
+    description: ""

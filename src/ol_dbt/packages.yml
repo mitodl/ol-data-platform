@@ -2,3 +2,5 @@
 packages:
 - package: emilyriederer/dbtplyr
   version: 0.3.0
+- package: dbt-labs/codegen
+  version: 0.7.0
