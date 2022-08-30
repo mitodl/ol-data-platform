@@ -9,7 +9,10 @@ with source as (
         id
         , live
         , title
+        , end_date
+        , start_date
         , course_id
+        , courseware_id
         , courseware_url_path
         , created_on
         , updated_on

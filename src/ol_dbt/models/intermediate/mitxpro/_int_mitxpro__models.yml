@@ -15,8 +15,6 @@ models:
     description: int, id for the enrolling user
   - name: created_on
     description: timestamp, specifying when the enrollment happened
-  - name: updated_on
-    description: timestamp, specifying when the enrollment was last updated
   - name: courseware_url_path
     description: str, url for course where the user is enrolled
   - name: course_title
@@ -25,5 +23,3 @@ models:
     description: str, name chosen by user
   - name: email
     description: str, email associated with the user account
-  - name: user_active
-    description: boolean, specifying whether the user is active within the xPro platform

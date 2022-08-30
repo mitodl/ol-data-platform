@@ -18,12 +18,10 @@ with enrollments as (
         , enrollments.active as course_run_active
         , enrollments.user_id
         , enrollments.created_on
-        , enrollments.updated_on
         , '' as courseware_url_path
         , runs.title as course_title
         , users.username
         , users.email
-        , users.is_active as user_active
     from enrollments
     inner join runs on runs.id = enrollments.bootcamp_run_id
     inner join users on users.id = enrollments.user_id

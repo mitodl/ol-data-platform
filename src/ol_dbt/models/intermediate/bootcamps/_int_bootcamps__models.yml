@@ -15,8 +15,6 @@ models:
     description: ""
   - name: created_on
     description: ""
-  - name: updated_on
-    description: ""
   - name: courseware_url_path
     description: ""
   - name: course_title
@@ -24,6 +22,4 @@ models:
   - name: username
     description: ""
   - name: email
-    description: ""
-  - name: user_active
     description: ""
