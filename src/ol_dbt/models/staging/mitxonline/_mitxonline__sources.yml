@@ -31,6 +31,12 @@ sources:
       description: str, title of the course
     - name: course_id
       description: int, ID specifying a course in the courses_course table
+    - name: courseware_id
+      description: str, human readable ID in the format course-v1:{org}+{course code}+{run}
+    - name: end_date
+      description: ...
+    - name: start_date
+      description: ...
     - name: courseware_url_path
       description: str, url location for the course in MITx Online
     - name: created_on
@@ -61,7 +67,6 @@ sources:
       description: str, title of the course
     - name: program_id
       description: id, unique ID pointing to the "program" which this course is part
-        of
     - name: course_readable_id
       description: str, Open edX ID formatted as course-v1:{org}+{course code}
     - name: position_in_program
