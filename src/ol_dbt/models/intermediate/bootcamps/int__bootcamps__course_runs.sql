@@ -5,7 +5,7 @@ with runs as (
         , end_date
         , start_date
         , courseware_id
-        , courseware_url_path
+        , 'n/a' as courseware_url_path
     from {{ ref('stg__mitxonline__app__postgres__courses_courserun') }}
 )
 

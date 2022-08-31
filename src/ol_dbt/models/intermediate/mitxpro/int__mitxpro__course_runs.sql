@@ -1,4 +1,4 @@
-with runs as (
+with course_runs as (
     select
         id
         , title
@@ -6,7 +6,7 @@ with runs as (
         , start_date
         , courseware_id
         , courseware_url_path
-    from {{ ref('stg__mitxonline__app__postgres__courses_courserun') }}
+    from {{ ref('stg__mitxpro__app__postgres__courses_courserun') }}
 )
 
-select * from runs
+select * from course_runs
