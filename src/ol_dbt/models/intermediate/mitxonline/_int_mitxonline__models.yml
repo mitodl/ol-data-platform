@@ -5,24 +5,25 @@ models:
   - name: int_mitxonline__enrollments
     description: Intermediate model of enrollments in MITx Online.
     columns:
-    - name: id
-      description: id for enrollment
-      tests:
-      - not_null
-    - name: active
-      description: boolean specifying whether the user is active in this course run
-    - name: user_id
-      description: id for the enrolling user
-    - name: created_on
-      description: timestamp specifying when the enrollment happened
-    - name: courseware_url_path
-      description: url for course where the user is enrolled
-    - name: course_title
-      description: title of the course where the user is enrolled
-    - name: username
-      description: str, name chosen by user
-    - name: email
-      description: str, email associated with the user account
+      - name: id
+        description: id for enrollment
+        tests:
+        - not_null
+      - name: active
+        description: boolean specifying whether the user is active in this course run
+      - name: user_id
+        description: id for the enrolling user
+      - name: created_on
+        description: timestamp specifying when the enrollment happened
+      - name: courseware_url_path
+        description: url for course where the user is enrolled
+      - name: course_title
+        description: title of the course where the user is enrolled
+      - name: username
+        description: str, name chosen by user
+      - name: email
+        description: str, email associated with the user account
+  
   - name: int__mitxonline__course_runs
     description: ""
     columns:
@@ -37,4 +38,14 @@ models:
       - name: courseware_id
         description: ""
       - name: courseware_url_path
+        description: ""
+  
+  - name: int__mitxonline__users
+    description: ""
+    columns:
+      - name: id
+        description: ""
+      - name: username
+        description: ""
+      - name: email
         description: ""

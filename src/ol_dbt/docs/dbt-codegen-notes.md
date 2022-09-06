@@ -1,5 +1,5 @@
 # dbt-codegen
-dbt-codegen is run from the command line. It does require working dbt code, i.e., you can run this in the middle of writing elements of your dbt project. It outputs .yml (source) and .sql (models) to the command line output. You then copy/paste into a new file (or you could pipe it into a file, but I chose to review then copy/paste). There is probably a lot more we could do to automate aspects of bringing over new data sources.
+dbt-codegen is run from the command line. It does require working dbt code, i.e., you can run this in the middle of writing elements of your dbt project. It generates .yml (source) and .sql (models) to the command line output. You then copy/paste into a new file (or you could pipe it into a file, but I chose to review then copy/paste). There is probably a lot more we could do to automate aspects of bringing over new data sources.
 
 ## How to generate a source
 I ran dbt-codegen to create relevant code for the Bootcamps source as it relates to Enrollments.
@@ -16,3 +16,7 @@ dbt run-operation generate_base_model --args '{"source_name": "ol_warehouse_raw_
 
 ### auth_user
 dbt run-operation generate_base_model --args '{"source_name": "ol_warehouse_raw_data", "table_name": "raw__bootcamps__app__postgres__auth_user"}'
+
+## How to generate model yml (documentation)
+### Generate model yaml
+dbt run-operation generate_model_yaml --args '{"model_name": "int__mitxonline__course_runs", "upstream_descriptions": true}'

@@ -2,24 +2,50 @@
 version: 2
 
 models:
-- name: int_mitxpro__enrollments
-  description: Intermediate model of enrollments in MITx xPro.
+- name: int__mitxpro__course_runs
+  description: Intermediate model of course runs in MIT xPro.
   columns:
-  - name: id
-    description: int, id for enrollment
-    tests:
-    - not_null
-  - name: active
-    description: boolean, specifying whether the user is active in this course run
-  - name: user_id
-    description: int, id for the enrolling user
-  - name: created_on
-    description: timestamp, specifying when the enrollment happened
-  - name: courseware_url_path
-    description: str, url for course where the user is enrolled
-  - name: course_title
-    description: str, title of the course where the user is enrolled
-  - name: username
-    description: str, name chosen by user
-  - name: email
-    description: str, email associated with the user account
+    - name: id
+      description: ""
+    - name: title
+      description: ""
+    - name: end_date
+      description: ""
+    - name: start_date
+      description: ""
+    - name: courseware_id
+      description: ""
+    - name: courseware_url_path
+      description: ""
+
+- name: int_mitxpro__enrollments
+  description: Intermediate model of enrollments in MIT xPro.
+  columns:
+    - name: id
+      description: int, id for enrollment
+      tests:
+      - not_null
+    - name: active
+      description: boolean, specifying whether the user is active in this course run
+    - name: user_id
+      description: int, id for the enrolling user
+    - name: created_on
+      description: timestamp, specifying when the enrollment happened
+    - name: courseware_url_path
+      description: str, url for course where the user is enrolled
+    - name: course_title
+      description: str, title of the course where the user is enrolled
+    - name: username
+      description: str, name chosen by user
+    - name: email
+      description: str, email associated with the user account
+
+- name: int__mitxpro__users
+  description: Intermediate model of users in MIT xPro.
+  columns:
+    - name: id
+      description: ""
+    - name: username
+      description: ""
+    - name: email
+      description: ""
