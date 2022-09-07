@@ -34,9 +34,9 @@ sources:
     - name: courseware_id
       description: str, human readable ID in the format course-v1:{org}+{course code}+{run}
     - name: end_date
-      description: ...
+      description: '...'
     - name: start_date
-      description: ...
+      description: '...'
     - name: courseware_url_path
       description: str, url location for the course in MITx Online
     - name: created_on

@@ -25,25 +25,25 @@ models:
 - name: int__bootcamps__course_runs
   description: Intermediate model for Bootcamps courseware runs.
   columns:
-    - name: id
-      description: ""
-    - name: title
-      description: ""
-    - name: end_date
-      description: ""
-    - name: start_date
-      description: ""
-    - name: courseware_id
-      description: ""
-    - name: courseware_url_path
-      description: ""
+  - name: id
+    description: ""
+  - name: title
+    description: ""
+  - name: end_date
+    description: ""
+  - name: start_date
+    description: ""
+  - name: courseware_id
+    description: ""
+  - name: courseware_url_path
+    description: ""
 
 - name: int__bootcamps__users
   description: ""
   columns:
-    - name: id
-      description: ""
-    - name: username
-      description: ""
-    - name: email
-      description: ""
+  - name: id
+    description: ""
+  - name: username
+    description: ""
+  - name: email
+    description: ""
