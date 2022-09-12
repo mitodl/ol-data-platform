@@ -1,38 +1,47 @@
-from datetime import datetime, time
+from dagster import RunRequest, schedule
 
-from dagster import daily_schedule
-
+from ol_orchestrate.jobs.open_edx import (
+    mitxonline_edx_job,
+    residential_edx_job,
+    xpro_edx_job,
+)
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 
 
-@daily_schedule(
-    pipeline_name="residential_edx_course_pipeline",
-    start_date=datetime(2020, 9, 23),
-    execution_time=time(3, 0, 0),
-    tags_fn_for_date=lambda _: {"business_unit": "residential"},
+@schedule(
+    job=residential_edx_job,
+    cron_schedule="@daily",
     execution_timezone="Etc/UTC",
 )
 def residential_edx_daily_schedule(execution_date):
-    return load_yaml_config("/etc/dagster/residential_edx.yaml")
+    return RunRequest(
+        run_key="residential_edx_course_pipeline",
+        run_config=load_yaml_config("/etc/dagster/residential_edx.yaml"),
+        tags={"business_unit": "residential"},
+    )
 
 
-@daily_schedule(
-    pipeline_name="xpro_edx_course_pipeline",
-    start_date=datetime(2020, 9, 23),
-    execution_time=time(0, 0, 0),
-    tags_fn_for_date=lambda _: {"business_unit": "mitxpro"},
+@schedule(
+    job=xpro_edx_job,
+    cron_schedule="@daily",
     execution_timezone="Etc/UTC",
 )
 def xpro_edx_daily_schedule(execution_date):
-    return load_yaml_config("/etc/dagster/xpro_edx.yaml")
+    return RunRequest(
+        run_key="xpro_edx_course_pipeline",
+        run_config=load_yaml_config("/etc/dagster/xpro_edx.yaml"),
+        tags={"business_unit": "mitxpro"},
+    )
 
 
-@daily_schedule(
-    pipeline_name="mitxonline_edx_course_pipeline",
-    start_date=datetime(2021, 12, 18),
-    execution_time=time(0, 0, 0),
-    tags_fn_for_date=lambda _: {"business_unit": "mitxonline"},
+@schedule(
+    job=mitxonline_edx_job,
+    cron_schedule="@daily",
     execution_timezone="Etc/UTC",
 )
 def mitxonline_edx_daily_schedule(execution_date):
-    return load_yaml_config("/etc/dagster/mitxonline_edx.yaml")
+    return RunRequest(
+        run_key="mitxonline_edx_course_pipeline",
+        run_config=load_yaml_config("/etc/dagster/mitxonline_edx.yaml"),
+        tags={"business_unit": "mitxonline"},
+    )

@@ -4,16 +4,15 @@ from typing import Set
 
 from dagster import (
     AssetMaterialization,
-    EventMetadataEntry,
     ExpectationResult,
     Failure,
     Field,
-    InputDefinition,
     Int,
     List,
+    MetadataEntry,
+    OpExecutionContext,
+    Out,
     Output,
-    OutputDefinition,
-    SolidExecutionContext,
     String,
     op,
 )
@@ -68,20 +67,19 @@ from ol_orchestrate.lib.file_rendering import write_csv
             "modified to address issues with rate limiting.",
         ),
     },
-    output_defs=[
-        OutputDefinition(
+    out={
+        "edx_course_ids": Out(
             dagster_type=List[String],
-            name="edx_course_ids",
             description="List of course IDs active on Open edX installation",
         )
-    ],
+    },
 )
-def list_courses(context: SolidExecutionContext) -> List[String]:
+def list_courses(context: OpExecutionContext) -> List[String]:
     """
     Retrieve the list of course IDs active in the edX instance to be used in subsequent steps to pull data per course.
 
     :param context: Dagster context object for passing configuration
-    :type context: SolidExecutionContext
+    :type context: OpExecutionContext
 
     :yield: List of edX course IDs
     """
@@ -104,7 +102,7 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
         label="edx_course_list_not_empty",
         description="Ensure course list is not empty.",
         metadata_entries=[
-            EventMetadataEntry.text(
+            MetadataEntry.text(
                 text=str(len(course_ids)),
                 label="number_of_course_ids",
                 description="The number of course IDs retrieved from the course API.",
@@ -116,26 +114,24 @@ def list_courses(context: SolidExecutionContext) -> List[String]:
 
 @op(
     required_resource_keys={"sqldb", "results_dir"},
-    input_defs=[
-        InputDefinition(
-            name="edx_course_ids",
+    ins={
+        "edx_course_ids": In(
             dagster_type=List[String],
             description="List of course IDs active on Open edX installation",
         )
-    ],
-    output_defs=[
-        OutputDefinition(
-            name="edx_enrolled_users",
+    },
+    out={
+        "edx_enrolled_users": Out(
             dagster_type=DagsterPath,
             description="Path to user data in tabular format rendered as CSV files",
         )
-    ],
+    },
 )
-def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
+def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
-    :type context: SolidExecutionContext
+    :type context: OpExecutionContext
 
     :param edx_course_ids: List of course IDs to retrieve student enrollments for
     :type edx_course_ids: List[String]
@@ -170,12 +166,12 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
         asset_key="users_query",
         description="Information of users enrolled in available courses on Open edX installation",
         metadata_entries=[
-            EventMetadataEntry.text(
+            MetadataEntry.text(
                 text=str(len(users_data)),
                 label="enrolled_users_count",
                 description="Number of users who are enrolled in courses",
             ),
-            EventMetadataEntry.path(enrollments_path.name, "enrollment_query_csv_path"),
+            MetadataEntry.path(enrollments_path.name, "enrollment_query_csv_path"),
         ],
     )
     yield ExpectationResult(
@@ -190,26 +186,24 @@ def enrolled_users(context: SolidExecutionContext, edx_course_ids: List[String])
     name="open_edx_student_submissions",
     description="Export of student submission events for courses on the specified Open edX installation.",
     required_resource_keys={"sqldb", "results_dir"},
-    input_defs=[
-        InputDefinition(
-            name="edx_course_ids",
+    ins={
+        "edx_course_ids": In(
             dagster_type=List[String],
             description="List of course IDs active on Open edX installation",
         )
-    ],
-    output_defs=[
-        OutputDefinition(
-            name="edx_student_submissions",
+    },
+    out={
+        "edx_student_submissions": Out(
             dagster_type=DagsterPath,
             description="Path to submissions data in tabular format rendered as CSV files",
         )
-    ],
+    },
 )
-def student_submissions(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
+def student_submissions(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
-    :type context: SolidExecutionContext
+    :type context: OpExecutionContext
 
     :param edx_course_ids: List of edX course ID strings
     :type edx_course_ids: List[String]
@@ -249,12 +243,12 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
         asset_key="enrolled_students",
         description="Students enrolled in edX courses",
         metadata_entries=[
-            EventMetadataEntry.text(
+            MetadataEntry.text(
                 label="student_submission_count",
                 description="Number of student submission records",
                 text=str(submissions_count),
             ),
-            EventMetadataEntry.path(submissions_path.name, "student_submissions_path"),
+            MetadataEntry.path(submissions_path.name, "student_submissions_path"),
         ],
     )
     yield ExpectationResult(
@@ -269,26 +263,24 @@ def student_submissions(context: SolidExecutionContext, edx_course_ids: List[Str
     name="open_edx_enrollments",
     description="Export of enrollment records for courses on the specified Open edX installation.",
     required_resource_keys={"sqldb", "results_dir"},
-    input_defs=[
-        InputDefinition(
-            name="edx_course_ids",
+    ins={
+        "edx_course_ids": In(
             dagster_type=List[String],
             description="List of course IDs active on Open edX installation",
         )
-    ],
-    output_defs=[
-        OutputDefinition(
-            name="edx_enrollment_records",
+    },
+    out={
+        "edx_enrollment_records": Out(
             dagster_type=DagsterPath,
             description="Path to enrollment data in tabular format rendered as CSV files",
         )
-    ],
+    },
 )
-def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
+def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve enrollment records for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
-    :type context: SolidExecutionContext
+    :type context: OpExecutionContext
 
     :param edx_course_ids: List of edX course ID strings
     :type edx_course_ids: List[String]
@@ -311,12 +303,12 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
         asset_key="enrollment_query",
         description="Course enrollment records from Open edX installation",
         metadata_entries=[
-            EventMetadataEntry.text(
+            MetadataEntry.text(
                 label="course_enrollment_count",
                 description="Number of enrollment records",
                 text=str(len(enrollment_data)),
             ),
-            EventMetadataEntry.path(enrollments_path.name, "enrollment_query_csv_path"),
+            MetadataEntry.path(enrollments_path.name, "enrollment_query_csv_path"),
         ],
     )
     yield ExpectationResult(
@@ -331,26 +323,24 @@ def course_enrollments(context: SolidExecutionContext, edx_course_ids: List[Stri
     name="open_edx_course_roles",
     description="Export of user roles for courses on the specified Open edX installation.",
     required_resource_keys={"sqldb", "results_dir"},
-    input_defs=[
-        InputDefinition(
-            name="edx_course_ids",
+    ins={
+        "edx_course_ids": In(
             dagster_type=List[String],
             description="List of course IDs active on Open edX installation",
         )
-    ],
-    output_defs=[
-        OutputDefinition(
-            name="edx_course_roles",
+    },
+    out={
+        "edx_course_roles": Out(
             dagster_type=DagsterPath,
             description="Path to course role data in tabular format rendered as CSV files",
         )
-    ],
+    },
 )
-def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
+def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
-    :type context: SolidExecutionContext
+    :type context: OpExecutionContext
 
     :param edx_course_ids: List of edX course ID strings
     :type edx_course_ids: List[String]
@@ -371,12 +361,12 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
         asset_key="role_query",
         description="Course roles records from Open edX installation",
         metadata_entries=[
-            EventMetadataEntry.text(
+            MetadataEntry.text(
                 label="course_roles_count",
                 description="Number of course roles records",
                 text=str(len(roles_data)),
             ),
-            EventMetadataEntry.path(roles_path.name, "role_query_csv_path"),
+            MetadataEntry.path(roles_path.name, "role_query_csv_path"),
         ],
     )
     yield ExpectationResult(
@@ -421,21 +411,20 @@ def course_roles(context: SolidExecutionContext, edx_course_ids: List[String]) -
             description="Name of database that contains forum data for Open edX installation",
         ),
     },
-    output_defs=[
-        OutputDefinition(
-            name="edx_forum_data_directory",
+    out={
+        "edx_forum_data_directory": Out(
             dagster_type=DagsterPath,
             description="Path to exported forum data generated by mongodump command",
         )
-    ],
+    },
 )
 def export_edx_forum_database(  # type: ignore
-    context: SolidExecutionContext,
+    context: OpExecutionContext,
 ) -> DagsterPath:
     """Export the edX forum database using mongodump.
 
     :param context: Dagster execution context for propagaint configuration data
-    :type context: SolidExecutionContext
+    :type context: OpExecutionContext
 
     :raises Failure: Raise a failure event if the mongo dump returns a non-zero exit code
 
@@ -472,7 +461,7 @@ def export_edx_forum_database(  # type: ignore
         raise Failure(
             description="The mongodump command for exporting the Open edX forum database failed.",
             metadata_entries=[
-                EventMetadataEntry.text(
+                MetadataEntry.text(
                     text=mongodump_output,
                     label="mongodump_output",
                     description="Output of the mongodump command",
@@ -484,9 +473,7 @@ def export_edx_forum_database(  # type: ignore
         asset_key="edx_forum_database",
         description="Exported Mongo database of forum data from Open edX installation",
         metadata_entries=[
-            EventMetadataEntry.path(
-                str(forum_data_path), "edx_forum_database_export_path"
-            )
+            MetadataEntry.path(str(forum_data_path), "edx_forum_database_export_path")
         ],
     )
 
@@ -542,7 +529,7 @@ def export_edx_forum_database(  # type: ignore
     },
 )
 def export_edx_courses(
-    context: SolidExecutionContext, edx_course_ids: List[str], daily_extracts_dir: str
+    context: OpExecutionContext, edx_course_ids: List[str], daily_extracts_dir: str
 ) -> None:
     access_token = get_access_token(
         client_id=context.op_config["edx_client_id"],
@@ -591,6 +578,29 @@ def export_edx_courses(
 
 
 @op(
+    name="edx_write_course_id_csv",
+    description="Write a CSV file containing the list of active course IDs on the edX instance",
+    required_resource_keys={"results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        ),
+    },
+    out={
+        "edx_course_ids_csv": Out(
+            dagster_type=DagsterPath,
+            description="Path to list of course IDs rendered as a CSV file",
+        ),
+    },
+)
+def write_course_list_csv(context: OpExecutionContext, edx_course_ids: List[String]):
+    course_ids_csv_path = context.resources.results_dir.path.joinpath("course_ids.csv")
+    write_csv(["course_id"], edx_course_ids, course_ids_csv_path)
+    yield Output(course_ids_csv_path, "edx_course_ids_csv")
+
+
+@op(
     name="edx_upload_daily_extracts",
     description="Upload all data from daily extracts to S3 for institutional research.",
     required_resource_keys={"results_dir", "s3"},
@@ -602,19 +612,19 @@ def export_edx_courses(
             description="S3 bucket to use for uploading results of pipeline execution.",
         ),
     },
-    input_defs=[
-        InputDefinition(name="edx_course_roles", dagster_type=DagsterPath),
-        InputDefinition(name="edx_enrolled_users", dagster_type=DagsterPath),
-        InputDefinition(name="edx_student_submissions", dagster_type=DagsterPath),
-        InputDefinition(name="edx_enrollment_records", dagster_type=DagsterPath),
-        InputDefinition(name="edx_forum_data_directory", dagster_type=DagsterPath),
-    ],
-    output_defs=[
-        OutputDefinition(name="edx_daily_extracts_directory", dagster_type=String)
-    ],
+    ins={
+        "edx_course_ids_csv": In(dagster_type=DagsterPath),
+        "edx_course_roles": In(dagster_type=DagsterPath),
+        "edx_enrolled_users": In(dagster_type=DagsterPath),
+        "edx_student_submissions": In(dagster_type=DagsterPath),
+        "edx_enrollment_records": In(dagster_type=DagsterPath),
+        "edx_forum_data_directory": In(dagster_type=DagsterPath),
+    },
+    out={"edx_daily_extracts_directory": Out(dagster_type=String)},
 )
 def upload_extracted_data(
-    context: SolidExecutionContext,
+    context: OpExecutionContext,
+    edx_course_ids_csv: DagsterPath,
     edx_course_roles: DagsterPath,
     edx_enrolled_users: DagsterPath,
     edx_student_submissions: DagsterPath,
@@ -624,7 +634,11 @@ def upload_extracted_data(
     """Upload all data exports to S3 so that institutional research can ingest.
 
     :param context: Dagster execution context for propagaint configuration data
-    :type context: SolidExecutionContext
+    :type context: OpExecutionContext
+
+    :param edx_course_ids_csv: Flat file containing a list of course IDs active on the
+        Open edX instance.
+    :type edx_course_ids_csv: DagsterPath
 
     :param edx_course_roles: Flat file containing tabular representation of course roles
         in Open edX installation
@@ -646,7 +660,7 @@ def upload_extracted_data(
         Open edX forum activity
     :type edx_forum_data_directory: DagsterPath
 
-    :yield: The S3 path of the uploaded directory
+        :yield: The S3 path of the uploaded directory
     """
     results_bucket = context.op_config["edx_etl_results_bucket"]
     for path_object in context.resources.results_dir.path.iterdir():
@@ -673,7 +687,7 @@ def upload_extracted_data(
         asset_key="edx_daily_results",
         description="Daily export directory for edX export pipeline",
         metadata_entries=[
-            EventMetadataEntry.fspath(
+            MetadataEntry.fspath(
                 f"s3://{results_bucket}/{context.resources.results_dir.path.name}"
             ),
         ],
