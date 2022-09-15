@@ -1,6 +1,5 @@
 import time
 from datetime import timedelta
-from typing import Set
 
 from dagster import (
     AssetMaterialization,
@@ -542,8 +541,8 @@ def export_edx_courses(
         access_token=access_token,
         course_ids=edx_course_ids,
     )
-    successful_exports: Set[str] = set()
-    failed_exports: Set[str] = set()
+    successful_exports: set[str] = set()
+    failed_exports: set[str] = set()
     tasks = exported_courses["upload_task_ids"]
     context.log.info("Exporting %s tasks from Open edX", len(tasks))
     # Possible status values found here:
@@ -594,9 +593,10 @@ def export_edx_courses(
         ),
     },
 )
-def write_course_list_csv(context: OpExecutionContext, edx_course_ids: List[String]):
+def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]):
     course_ids_csv_path = context.resources.results_dir.path.joinpath("course_ids.csv")
-    write_csv(["course_id"], edx_course_ids, course_ids_csv_path)
+    course_ids_dict = [{"course_id": course_id} for course_id in edx_course_ids]
+    write_csv(["course_id"], course_ids_dict, course_ids_csv_path)
     yield Output(course_ids_csv_path, "edx_course_ids_csv")
 
 

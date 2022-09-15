@@ -1,9 +1,10 @@
 import csv
 from pathlib import Path
-from typing import Dict, List
 
 
-def write_csv(table_fields: List[str], table_data: List[Dict], dest_file: Path) -> Path:
+def write_csv(
+    table_fields: list[str], table_data: list[dict[str, str]], dest_file: Path
+) -> Path:
     """Write table data in CSV format to a given path or to a tempfile.
 
     :param table_fields: List of column names for the table being rendered as CSV
