@@ -101,7 +101,7 @@ def daily_dir(
     """
     run_dir = os.path.join(
         os.getcwd() or resource_context.resource_config["outputs_root_dir"],
-        resource_context.pipeline_run.run_id,
+        resource_context.dagster_run.run_id,
     )
     results_dir = DailyResultsDir(
         root_dir=run_dir,
