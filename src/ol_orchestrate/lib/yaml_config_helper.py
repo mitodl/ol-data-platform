@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Union
 
 import yaml
 
 
-def load_yaml_config(config_path: Union[Path, str]) -> Dict[str, Any]:
+def load_yaml_config(config_path: Union[Path, str]) -> dict[str, Any]:
     """Load a YAML config from disk if it exists.
 
     :param config_path: Path to the config file formatted as YAML
