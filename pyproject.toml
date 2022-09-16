@@ -34,7 +34,7 @@ dbt-trino = "^1.2.0"
 httpx = "^0.23.0"
 pyarrow = "^9.0.0"
 pymysql = "^1.0.0"
-hvac = "^0.11.2"
+hvac = "^1.0"
 
 [tool.poetry.dev-dependencies]
 black = "*"
