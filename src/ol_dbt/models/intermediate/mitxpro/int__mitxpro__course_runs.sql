@@ -1,0 +1,12 @@
+with course_runs as (
+    select
+        id
+        , title
+        , end_date
+        , start_date
+        , courseware_id
+        , courseware_url_path
+    from {{ ref('stg__mitxpro__app__postgres__courses_courserun') }}
+)
+
+select * from course_runs

@@ -2,8 +2,24 @@
 version: 2
 
 models:
+- name: int__mitxpro__course_runs
+  description: Intermediate model of course runs in MIT xPro.
+  columns:
+  - name: id
+    description: ""
+  - name: title
+    description: ""
+  - name: end_date
+    description: ""
+  - name: start_date
+    description: ""
+  - name: courseware_id
+    description: ""
+  - name: courseware_url_path
+    description: ""
+
 - name: int_mitxpro__enrollments
-  description: Intermediate model of enrollments in MITx xPro.
+  description: Intermediate model of enrollments in MIT xPro.
   columns:
   - name: id
     description: int, id for enrollment
@@ -15,8 +31,6 @@ models:
     description: int, id for the enrolling user
   - name: created_on
     description: timestamp, specifying when the enrollment happened
-  - name: updated_on
-    description: timestamp, specifying when the enrollment was last updated
   - name: courseware_url_path
     description: str, url for course where the user is enrolled
   - name: course_title
@@ -25,5 +39,13 @@ models:
     description: str, name chosen by user
   - name: email
     description: str, email associated with the user account
-  - name: user_active
-    description: boolean, specifying whether the user is active within the xPro platform
+
+- name: int__mitxpro__users
+  description: Intermediate model of users in MIT xPro.
+  columns:
+  - name: id
+    description: ""
+  - name: username
+    description: ""
+  - name: email
+    description: ""
