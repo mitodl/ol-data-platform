@@ -1,7 +1,7 @@
 import os
 import shutil
+from collections.abc import Generator
 from datetime import datetime
-from typing import Generator
 
 from dagster import Field, InitResourceContext, String, resource
 
