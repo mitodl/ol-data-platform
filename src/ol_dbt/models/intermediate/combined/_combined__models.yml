@@ -2,7 +2,7 @@
 version: 2
 
 models:
-- name: ol_enrollments
+- name: int__combined__enrollments
   description: Enrollments across Open Learning platforms.
   columns:
   - name: course_run_active
@@ -27,5 +27,5 @@ models:
   - name: org
     description: str, specifying which product (or organization) associated with the
       enrollment
-- name: ol_course_runs
+- name: int__combined__course_runs
   description: Course runs from across Open Learning platforms.
