@@ -43,33 +43,34 @@ models:
 - name: int__mitxonline__users
   description: denormalized mitxonline users
   columns:
-    - name: id
-      description: int, primary key
-      tests:
-        - unique
-        - not_null
-    - name: username
-      description: string, username
-    - name: full_name
-      description: string, full name
-    - name: user_email
-      description: int, email
-    - name: is_open_learning_staff
-      description: boolean, union of is_superuser and is_staff in the user table. If true, the user is definitely staff, but other users may be staff as well
-    - name: user_joined_on_utc
-      description: date, user join date
-    - name: last_login_utc
-      description: date, user last log in
-    - name: is_moderator
-      description: boolean, if true the user is a moderator
-    - name: is_cms_editor
-      description: boolean, if true the user is an editor 
-    - name: user_address_country
-      description: string, country code for the user's address
-    - name: first_name
-      description: string, first name
-    - name: last_name
-      description: string, last name
+  - name: id
+    description: int, primary key
+    tests:
+    - unique
+    - not_null
+  - name: username
+    description: string, username
+  - name: full_name
+    description: string, full name
+  - name: user_email
+    description: int, email
+  - name: is_open_learning_staff
+    description: boolean, union of is_superuser and is_staff in the user table. If
+      true, the user is definitely staff, but other users may be staff as well
+  - name: user_joined_on_utc
+    description: date, user join date
+  - name: last_login_utc
+    description: date, user last log in
+  - name: is_moderator
+    description: boolean, if true the user is a moderator
+  - name: is_cms_editor
+    description: boolean, if true the user is an editor
+  - name: user_address_country
+    description: string, country code for the user's address
+  - name: first_name
+    description: string, first name
+  - name: last_name
+    description: string, last name
   tests:
-    - dbt_utils.equal_rowcount: 
-        compare_model: ref('stg__mitxonline__app__postgres__users_user')
+  - dbt_utils.equal_rowcount:
+      compare_model: ref('stg__mitxonline__app__postgres__users_user')

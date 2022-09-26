@@ -1,8 +1,8 @@
 with mitxonline_users as (
-    select 
-        id,
-        username,
-        user_email as email
+    select
+        id
+        , username
+        , user_email as email
     from {{ ref('int__mitxonline__users') }}
 )
 
