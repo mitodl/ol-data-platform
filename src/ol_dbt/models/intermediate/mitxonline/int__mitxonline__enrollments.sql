@@ -17,7 +17,7 @@ with enrollments as (
     select
         id
         , username
-        , email
+        , user_email
     from {{ ref('stg__mitxonline__app__postgres__users_user') }}
 )
 
@@ -30,7 +30,7 @@ with enrollments as (
         , runs.courseware_url_path
         , runs.title as course_title
         , users.username
-        , users.email
+        , users.user_email
     from enrollments
     inner join runs on enrollments.run_id = runs.id
     inner join users on enrollments.user_id = users.id

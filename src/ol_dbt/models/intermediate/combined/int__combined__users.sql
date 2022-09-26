@@ -1,5 +1,9 @@
 with mitxonline_users as (
-    select * from {{ ref('int__mitxonline__users') }}
+    select 
+        id,
+        username,
+        user_email as email
+    from {{ ref('int__mitxonline__users') }}
 )
 
 , mitxpro_users as (

@@ -75,3 +75,27 @@ sources:
       description: timestamp, specifying when an enrollment was initially created
     - name: updated_on
       description: timestamp, specifying when an enrollment was most recently updated
+  - name: raw__mitxonline__app__postgres__users_user_groups
+    columns:
+    - name: id
+      description: int, primary key for table
+    - name: user_id
+      description: int, foreign key to users_user
+    - name: group_id
+      description: int, foreign key to auth_group
+  - name: raw__mitxonline__app__postgres__users_legaladdress
+    columns:
+    - name: id
+      description: int, primary key for table
+    - name: country
+      description: string, user country
+    - name: user_id
+      description: int, foreign key to users_user
+    - name: last_name
+      description: string, user last name
+    - name: created_on
+      description: timestamp, when the record was created
+    - name: first_name
+      description: string, user last name
+    - name: updated_on
+      description: timestamp, when the record was updated
