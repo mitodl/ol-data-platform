@@ -12,7 +12,7 @@ The following considerations are all necssary phases of the "staging" process in
 The guidelines below are an attempt to help prepare contributers on what to consider when they begin "staging" data.
 
 ### Selecting tables and fields to stage
-Decisions on which tables and fields to "stage" should be determined by the issue being addressed. At times, table and field selections will be based upon downstream use, and at other times, part of building out our initial project structure. Guidelines: 
+Decisions on which tables and fields to "stage" should be determined by the issue being addressed. At times, table and field selections will be based upon downstream use, and at other times, part of building out our initial project structure. Guidelines:
 - Seek clarity and ask questions via the issue being worked on.
 - Explore data to help determine which tables are needed ([Redash](https://bi.odl.mit.edu/queries?order=-created_at&page=1&page_size=20) is a great tool for exploring tables).
 - PII (Personally Identifying Information): _we want to ask ourselves internally, are these data worth risking PII exposure?_ If concerned, ask for clarifications.
@@ -31,11 +31,11 @@ All timestamp fields should be converted to [ISO8601](https://en.wikipedia.org/w
 
 ### Transforming values
 In some situations, we may want to tranform field values to specific types or to more human interpretable formats. Examples might include:
-- Writing "CASE" logic to combine multiple boolean fields into a signle "string" field. Chapter 10 of the [Informed Company](https://learning.oreilly.com/library/view/the-informed-company/9781119748007/c10.xhtml#head-2-1) details some of these types of cases. 
+- Writing "CASE" logic to combine multiple boolean fields into a signle "string" field. Chapter 10 of the [Informed Company](https://learning.oreilly.com/library/view/the-informed-company/9781119748007/c10.xhtml#head-2-1) details some of these types of cases.
 - Ints, floats, strings to their proper format where needed. We can likely leverage the dbt testing framework to help with this (as oppossed to making it a manual transformation).
 
 ### Testing with dbt
-dbt has a [robust testing framework](https://docs.getdbt.com/docs/building-a-dbt-project/tests) that includes four 
+dbt has a [robust testing framework](https://docs.getdbt.com/docs/building-a-dbt-project/tests) that includes four
 out of the box tests: `uniqueness`, `not_null`, `accepted_values`, and `relationships`. Guidelines:
 - Include at least one test per table, focusing particularly on "primary keys" and the outcomes of transformed data.
 
