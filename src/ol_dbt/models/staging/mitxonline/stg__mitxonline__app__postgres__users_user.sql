@@ -5,13 +5,15 @@ with source as (
 )
 
 , cleaned as (
+
     select
         id
         , username
         , email
         , is_active
-        , created_on
-        , updated_on
+        , name as full_name
+        , to_iso8601(from_iso8601_timestamp(created_on)) as joined_on
+        , to_iso8601(from_iso8601_timestamp(last_login)) as last_login
     from source
 )
 

@@ -1,0 +1,31 @@
+---
+version: 2
+
+models:
+- name: stg__mitxonline__app__postgres__users_user
+  columns:
+  - name: id
+    description: int, sequential ID representing one user in MITx Online
+    tests:
+    - unique
+    - not_null
+  - name: username
+    description: str, name chosen by user
+    tests:
+    - unique
+    - not_null
+  - name: email
+    description: str, user email associated with their account
+    tests:
+    - unique
+    - not_null
+  - name: is_active
+    description: boolean, used to soft delete user accunts
+  - name: full_name
+    description: str, the user's full name
+    tests:
+    - not_null
+  - name: created_on
+    description: timestamp, specifying when a user account was initially created
+  - name: last_login
+    description: timestamp, specifying when a user last logged in
