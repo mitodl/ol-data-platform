@@ -38,7 +38,10 @@ models:
   open_learning:
     staging:
       +materialized: incremental
+      +schema: staging
     intermediate:
       +materialized: incremental
+      +schema: intermediate
     marts:
       +materialized: incremental
+      +schema: mart
