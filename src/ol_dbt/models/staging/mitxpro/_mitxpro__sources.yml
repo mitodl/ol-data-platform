@@ -45,12 +45,16 @@ sources:
       description: str, name chosen by user
     - name: email
       description: str, user email associated with their account
+    - name: name
+      description: str, the user's full name
     - name: is_active
-      description: boolean, ...
+      description: boolean, used to soft delete users
     - name: created_on
       description: timestamp, specifying when a user account was initially created
     - name: updated_on
       description: timestamp, specifying when a user account was most recently updated
+    - name: last_login
+      description: timestamp, user's last login
   - name: raw__xpro__app__postgres__courses_course
     columns:
     - name: id

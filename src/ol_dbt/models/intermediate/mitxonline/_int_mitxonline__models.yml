@@ -62,7 +62,7 @@ models:
     tests:
     - unique
     - not_null
-  - name: user_joined_on
+  - name: joined_on
     description: timestamp, user join timestamp
   - name: last_login
     description: timestamp, user last log in
