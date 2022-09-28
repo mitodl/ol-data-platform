@@ -35,6 +35,7 @@ httpx = "^0.23.0"
 pyarrow = "^9.0.0"
 pymysql = "^1.0.0"
 hvac = "^1.0"
+setuptools = "^65.4.0"  # Add this to avoid errors with installing packages that depend on it for building
 
 [tool.poetry.dev-dependencies]
 black = "*"
