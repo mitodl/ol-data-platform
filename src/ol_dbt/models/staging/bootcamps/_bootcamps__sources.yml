@@ -5,7 +5,7 @@ sources:
 - name: ol_warehouse_raw_data
   loader: airbyte
   database: 'ol_data_lake_{{ target.name }}'
-  schema: 'ol_warehouse_raw_{{ target.name }}'
+  schema: 'ol_warehouse_{{ target.name }}_raw'
   tables:
   - name: raw__bootcamps__app__postgres__klasses_bootcamprunenrollment
     description: ""
