@@ -4,6 +4,10 @@ load_from:
     host: edx-pipeline
     port: 4000
     location_name: 'edx-pipeline'
+- grpc_server:
+    host: asset-materialization-pipeline
+    port: 4001
+    location_name: 'asset-materialization-pipeline'
 #- python_package:
 #    package_name: ol_orchestrate.edx.repositories
 #    attribute: residential_edx_repository
