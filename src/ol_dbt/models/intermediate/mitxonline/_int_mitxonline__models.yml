@@ -41,11 +41,44 @@ models:
     description: ""
 
 - name: int__mitxonline__users
-  description: ""
+  description: denormalized mitxonline users
   columns:
   - name: id
-    description: ""
+    description: int, primary key
+    tests:
+    - unique
+    - not_null
   - name: username
-    description: ""
+    description: string, username
+    tests:
+    - unique
+    - not_null
+  - name: full_name
+    description: string, full name
+    tests:
+    - not_null
   - name: email
-    description: ""
+    description: int, email
+    tests:
+    - unique
+    - not_null
+  - name: user_joined_on
+    description: timestamp, user join timestamp
+  - name: last_login
+    description: timestamp, user last log in
+  - name: user_address_country
+    description: string, country code for the user's address
+    tests:
+    - not_null
+  - name: first_name
+    description: string, first name
+    tests:
+    - not_null
+  - name: last_name
+    description: string, last name
+    tests:
+    - not_null
+  tests:
+  - equal_rowcount_with_filters:
+      compare_model: ref('stg__mitxonline__app__postgres__users_user')
+      compare_filter: "is_active=true"
