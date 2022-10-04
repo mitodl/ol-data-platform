@@ -3434,7 +3434,7 @@ testing = ["func-timeout", "jaraco.itertools", "pytest (>=6)", "pytest-black (>=
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "9dcd5f02f2d8d368b48bdc0c25e7959e796ce53e32b0137089fcb084c48a3c92"
+content-hash = "c6ec3ba4e976efd475f1a6241087b0bbed79afda7befe94b980a52894864bc31"
 
 [metadata.files]
 agate = [
