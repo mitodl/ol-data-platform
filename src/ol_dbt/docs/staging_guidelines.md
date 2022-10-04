@@ -18,9 +18,9 @@ Decisions on which tables and fields to "stage" should be determined by the issu
 - PII (Personally Identifying Information): _we want to ask ourselves internally, are these data worth risking PII exposure?_ If concerned, ask for clarifications.
 
 ### Renaming fields
-Naming conventions, and any related ambiguity, should be addressed in the discussion of the issue being worked on. 
+Naming conventions, and any related ambiguity, should be addressed in the discussion of the issue being worked on.
 
-_A discussion post will be created for whether we can establish our own version of [Emily Riederer's "field names as contracts"](https://emilyriederer.netlify.app/post/column-name-contracts/), using `<type>_<entity>_<column_name/details>`_. 
+_A discussion post will be created for whether we can establish our own version of [Emily Riederer's "field names as contracts"](https://emilyriederer.netlify.app/post/column-name-contracts/), using `<type>_<entity>_<column_name/details>`_.
 
 ### Transforming timestamps
 All timestamp fields should be converted to [ISO8601](https://en.wikipedia.org/wiki/ISO_8601). For example, 2022-09-26T18:51:23Z.
