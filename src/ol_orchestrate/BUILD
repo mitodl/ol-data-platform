@@ -32,8 +32,6 @@ docker_image(
 python_distribution(
     name="asset-materialization",
     dependencies=[
-        "//:requirements#dagster-airbyte",
-        "//:requirements#dagster-dbt",
         "./repositories/asset_materialization.py"
     ],
     provides=python_artifact(
