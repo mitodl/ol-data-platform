@@ -28,7 +28,7 @@ environment = {
     },
 }
 
-dagster_deployment = os.getenv("DAGSTER_DEPLOYMENT", "qa")
+dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
 
 
 @repository
