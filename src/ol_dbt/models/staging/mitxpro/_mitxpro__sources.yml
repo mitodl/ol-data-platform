@@ -73,3 +73,37 @@ sources:
       description: timestamp, specifying when an enrollment was initially created
     - name: updated_on
       description: timestamp, specifying when an enrollment was most recently updated
+  - name: raw__xpro__app__postgres__users_legaladdress
+    columns:
+    - name: id
+      description: int, primary key for table
+    - name: country
+      description: string, user country code
+    - name: user_id
+      description: int, foreign key to users_user
+    - name: last_name
+      description: string, user last name
+    - name: created_on
+      description: timestamp, when the record was created
+    - name: first_name
+      description: string, user first name
+    - name: updated_on
+      description: timestamp, when the record was updated
+    - name: street_address_1
+      description: string, first line of street address
+    - name: street_address_2
+      description: string, second line of street address
+    - name: street_address_3
+      description: string, third line of street address
+    - name: street_address_4
+      description: string, fourth line of street address
+    - name: street_address_5
+      description: string, fifth line of street address
+    - name: city
+      description: string, city
+    - name: country
+      description: string, country
+    - name: state_or_territory
+      description: string, state or territory
+    - name: postal_code
+      description: string, postal code
