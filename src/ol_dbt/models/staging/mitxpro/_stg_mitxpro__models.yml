@@ -29,3 +29,43 @@ models:
     description: timestamp, specifying when a user account was initially created
   - name: last_login
     description: timestamp, specifying when a user last logged in
+- name: stg__mitxpro__app__postgres__users_legaladdress
+  columns:
+  - name: id
+    description: int, sequential ID
+    tests:
+    - unique
+    - not_null
+  - name: user_address_country
+    description: string, user country code
+    tests:
+    - not_null
+  - name: user_id
+    description: int, foreign key to users_user
+    tests:
+    - unique
+    - not_null
+  - name: last_name
+    description: string, user last name
+    tests:
+    - not_null
+  - name: first_name
+    description: string, user first name
+    tests:
+    - not_null
+  - name: user_street_address
+    description: string, user street address
+    tests:
+    - not_null
+  - name: user_address_city
+    description: string, user city
+    tests:
+    - not_null
+  - name: user_address_state_or_territory
+    description: string, user state or territory
+    tests:
+    - not_null
+  - name: user_address_postal_code
+    description: string, user postal code
+    tests:
+    - not_null
