@@ -58,7 +58,7 @@ requires = ["poetry_core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.sqlfluff.core]
-templater = "dbt"
+templater = "jinja"
 dialect = "hive"
 sql_file_exts = ".sql,.sql.j2,.dml,.ddl"
 
@@ -76,3 +76,5 @@ apply_dbt_builtins = true
 [tool.sqlfluff.templater.dbt]
 project_dir = "src/ol_dbt/"
 profiles_dir = "src/ol_dbt/"
+profile ="open_learning"
+target = "qa"
