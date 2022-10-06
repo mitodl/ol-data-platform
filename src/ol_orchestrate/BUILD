@@ -28,3 +28,26 @@ docker_image(
     tags=["data_pipeline", "docker_image"],
     image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
 )
+
+python_distribution(
+    name="asset-materialization",
+    dependencies=[
+        "./repositories/asset_materialization.py"
+    ],
+    provides=python_artifact(
+        name="dagster-pipeline",
+        version="0.5.2",
+    ),
+)
+
+docker_image(
+    name="asset-materialization-pipeline",
+    dependencies=[
+        ":asset_materialization",
+        "src/ol_dbt:dbt_project"
+    ],
+    source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
+    extra_build_args=["PACKAGE_NAME=asset-materialization-pipelines"],
+    tags=["data_pipeline", "docker_image"],
+    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
+)
