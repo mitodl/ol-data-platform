@@ -9,11 +9,12 @@ python_distribution(
     name="open-edx",
     dependencies=[
         "//:requirements#dagster-postgres",
+        "//:requirements#dagster-aws",
         "./repositories/open_edx.py"
     ],
     provides=python_artifact(
         name="dagster-pipeline",
-        version="0.5.2",
+        version="0.5.3",
     ),
 )
 
@@ -33,11 +34,12 @@ python_distribution(
     name="asset-materialization",
     dependencies=[
         "//:requirements#dagster-postgres",
+        "//:requirements#dagster-aws",
         "./repositories/asset_materialization.py"
     ],
     provides=python_artifact(
         name="dagster-pipeline",
-        version="0.5.2",
+        version="0.5.3",
     ),
 )
 
