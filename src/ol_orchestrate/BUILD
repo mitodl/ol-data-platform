@@ -43,7 +43,7 @@ python_distribution(
 docker_image(
     name="asset-materialization-pipeline",
     dependencies=[
-        ":asset_materialization",
+        ":asset-materialization",
         "src/ol_dbt:dbt_project"
     ],
     source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
