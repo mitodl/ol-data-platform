@@ -32,13 +32,13 @@ repos:
   - id: yamllint
     args: [--format, parsable, -d, relaxed]
 - repo: https://github.com/asottile/pyupgrade
-  rev: v2.38.2
+  rev: v3.1.0
   hooks:
   - id: pyupgrade
     args:
     - --py39-plus
 - repo: https://github.com/myint/autoflake/
-  rev: v1.6.1
+  rev: v1.7.2
   hooks:
   - id: autoflake
     args:
@@ -48,7 +48,7 @@ repos:
     - --remove-unused-variables
     - --remove-all-unused-imports
 - repo: https://github.com/Yelp/detect-secrets
-  rev: v1.3.0
+  rev: v1.4.0
   hooks:
   - id: detect-secrets
     args:
@@ -65,7 +65,7 @@ repos:
     - wemake-python-styleguide
     - bandit==1.7.2 # Need to pin due to existing bug
 - repo: https://github.com/psf/black
-  rev: 22.8.0
+  rev: 22.10.0
   hooks:
   - id: black
 - repo: https://github.com/PyCQA/flake8
@@ -80,7 +80,7 @@ repos:
     - --extend-ignore=D1
     - --diff
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v0.981
+  rev: v0.982
   hooks:
   - id: mypy
     additional_dependencies:
