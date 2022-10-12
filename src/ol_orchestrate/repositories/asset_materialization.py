@@ -6,10 +6,8 @@ from dagster_dbt import dbt_cli_resource
 
 from ol_orchestrate.jobs.sync_assets_and_run_models import sync_assets_and_run_models
 
-configured_airbyte_resource = (
-    airbyte_resource.configured(
-        {"host": {"env": "DAGSTER_AIRBYTE_HOST"}, "port": "443", "use_https": True}
-    ),
+configured_airbyte_resource = airbyte_resource.configured(
+    {"host": {"env": "DAGSTER_AIRBYTE_HOST"}, "port": "443", "use_https": True}
 )
 environment = {
     "qa": {
