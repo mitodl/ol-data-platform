@@ -6,11 +6,14 @@ from dagster_dbt import dbt_cli_resource
 
 from ol_orchestrate.jobs.sync_assets_and_run_models import sync_assets_and_run_models
 
+configured_airbyte_resource = (
+    airbyte_resource.configured(
+        {"host": {"env": "DAGSTER_AIRBYTE_HOST"}, "port": "443", "use_https": True}
+    ),
+)
 environment = {
     "qa": {
-        "airbyte_resource": airbyte_resource.configured(
-            {"host": "airbyte-qa.odl.mit.edu", "port": "443"}
-        ),
+        "airbyte_resource": configured_airbyte_resource,
         "airbyte_connection": {
             "raw_bootcamps_application_database_tables": "d8415e19-9859-480a-830b-18cd2f6c0392",
             "raw_mitxonline_application_database_tables": "6e8cdba9-c711-4118-a196-91038cee78a7",
@@ -22,9 +25,7 @@ environment = {
         },
     },
     "production": {
-        "airbyte_resource": airbyte_resource.configured(
-            {"host": "airbyte.odl.mit.edu", "port": "443"}
-        ),
+        "airbyte_resource": configured_airbyte_resource,
     },
 }
 
