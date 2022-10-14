@@ -38,18 +38,18 @@ class DailyResultsDir(ResultsDir):
     def __init__(
         self,
         root_dir: str = None,
-        date_format: str = "%Y-%m-%d",
+        date_format: str = "%Y-%m-%d",  # noqa: WPS323
         date_override: str = None,
     ):
-        """Instantiate a results directory that defaults to being named according to the current date.
+        """Instantiate a results directory that defaults to being named according to the current date.  # noqa: E501
 
-        :param root_dir: The base directory within which the results directory will be created
+        :param root_dir: The base directory within which the results directory will be created  # noqa: E501
         :type root_dir: str
 
-        :param date_format: The format string for specifying how the date will be represented in the directory name
+        :param date_format: The format string for specifying how the date will be represented in the directory name  # noqa: E501
         :type date_format: str
 
-        :param date_override: A string representing an override of the date to be used for the generated directory.
+        :param date_override: A string representing an override of the date to be used for the generated directory.  # noqa: E501
             Primarily used for cases where a backfill process needs to occur.
         :type date_override: str
         """
@@ -68,22 +68,22 @@ class DailyResultsDir(ResultsDir):
             default_value="",
             is_required=False,
             description=(
-                "Base directory used for creating a results folder. Should be configured to allow writing "
+                "Base directory used for creating a results folder. Should be configured to allow writing "  # noqa: E501
                 "by the Dagster/Dagit user"
             ),
         ),
         "outputs_directory_date_format": Field(
             String,
-            default_value="%Y-%m-%d",
+            default_value="%Y-%m-%d",  # noqa: WPS323
             is_required=False,
-            description="Format string for structuring the name of the daily outputs directory",
+            description="Format string for structuring the name of the daily outputs directory",  # noqa: E501
         ),
         "outputs_directory_date_override": Field(
             String,
             default_value="",
             is_required=False,
             description=(
-                "Specified date object to override the default of using the current date. Intended only for "
+                "Specified date object to override the default of using the current date. Intended only for "  # noqa: E501
                 "purposes of backfill operations."
             ),
         ),

@@ -13,13 +13,13 @@ environment = {
     "qa": {
         "airbyte_resource": configured_airbyte_resource,
         "airbyte_connection": {
-            "raw_bootcamps_application_database_tables": "d8415e19-9859-480a-830b-18cd2f6c0392",
-            "raw_mitxonline_application_database_tables": "6e8cdba9-c711-4118-a196-91038cee78a7",
-            "raw_mitxonline_openedx_database_tables": "79b5fe95-7b8c-4a94-ba4e-5b8e925cfdd9",
-            "raw_mitxpro_application_database_tables": "442c98f7-9a51-4f10-945d-82f022f1e1a1",
-            "raw_mitxpro_openedx_database_tables": "cda953b8-e089-4eb8-8cf5-95419d4b6fb4",
-            "raw_mitx_residential_openedx_database_tables": "358a7580-97f8-419f-8636-a3d08f0e30ab",
-            "raw_ocw_studio_application_database_tables": "ba60ac15-de5c-4eef-9c38-0a89c2360653",
+            "raw_bootcamps_application_database_tables": "d8415e19-9859-480a-830b-18cd2f6c0392",  # noqa: E501
+            "raw_mitxonline_application_database_tables": "6e8cdba9-c711-4118-a196-91038cee78a7",  # noqa: E501
+            "raw_mitxonline_openedx_database_tables": "79b5fe95-7b8c-4a94-ba4e-5b8e925cfdd9",  # noqa: E501
+            "raw_mitxpro_application_database_tables": "442c98f7-9a51-4f10-945d-82f022f1e1a1",  # noqa: E501
+            "raw_mitxpro_openedx_database_tables": "cda953b8-e089-4eb8-8cf5-95419d4b6fb4",  # noqa: E501
+            "raw_mitx_residential_openedx_database_tables": "358a7580-97f8-419f-8636-a3d08f0e30ab",  # noqa: E501
+            "raw_ocw_studio_application_database_tables": "ba60ac15-de5c-4eef-9c38-0a89c2360653",  # noqa: E501
         },
     },
     "production": {
@@ -28,6 +28,7 @@ environment = {
 }
 
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
+env_map = environment[dagster_deployment]
 
 
 @repository
@@ -39,15 +40,15 @@ def bootcamps():
                 "ops": {
                     "sync_airbyte": {
                         "config": {
-                            "connection_id": environment[dagster_deployment][
-                                "airbyte_connection"
-                            ]["raw_bootcamps_application_database_tables"]
+                            "connection_id": env_map["airbyte_connection"][
+                                "raw_bootcamps_application_database_tables"
+                            ]
                         }
                     }
                 },
             },
             resource_defs={
-                "airbyte": environment[dagster_deployment]["airbyte_resource"],
+                "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
                         "project_dir": "/opt/dbt/models/staging/bootcamps",
@@ -65,7 +66,7 @@ def mitxonline():
         sync_assets_and_run_models.to_job(
             name="raw_mitxonline_application_database_tables",
             resource_defs={
-                "airbyte": environment[dagster_deployment]["airbyte_resource"],
+                "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
                         "project_dir": "/opt/dbt/models/staging/mitxonline",
@@ -77,9 +78,9 @@ def mitxonline():
                 "ops": {
                     "sync_airbyte": {
                         "config": {
-                            "connection_id": environment[dagster_deployment][
-                                "airbyte_connection"
-                            ]["raw_mitxonline_application_database_tables"]
+                            "connection_id": env_map["airbyte_connection"][
+                                "raw_mitxonline_application_database_tables"
+                            ]
                         }
                     }
                 },
@@ -88,7 +89,7 @@ def mitxonline():
         sync_assets_and_run_models.to_job(
             name="raw_mitxonline_openedx_database_tables",
             resource_defs={
-                "airbyte": environment[dagster_deployment]["airbyte_resource"],
+                "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
                         "project_dir": "/opt/dbt/models/staging/mitxonline",
@@ -100,9 +101,9 @@ def mitxonline():
                 "ops": {
                     "sync_airbyte": {
                         "config": {
-                            "connection_id": environment[dagster_deployment][
-                                "airbyte_connection"
-                            ]["raw_mitxonline_openedx_database_tables"]
+                            "connection_id": env_map["airbyte_connection"][
+                                "raw_mitxonline_openedx_database_tables"
+                            ]
                         }
                     }
                 },
@@ -117,7 +118,7 @@ def mitxpro():
         sync_assets_and_run_models.to_job(
             name="raw_mitxpro_application_database_tables",
             resource_defs={
-                "airbyte": environment[dagster_deployment]["airbyte_resource"],
+                "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
                         "project_dir": "/opt/dbt/models/staging/mitxpro",
@@ -129,9 +130,9 @@ def mitxpro():
                 "ops": {
                     "sync_airbyte": {
                         "config": {
-                            "connection_id": environment[dagster_deployment][
-                                "airbyte_connection"
-                            ]["raw_mitxpro_application_database_tables"]
+                            "connection_id": env_map["airbyte_connection"][
+                                "raw_mitxpro_application_database_tables"
+                            ]
                         }
                     }
                 },
@@ -140,7 +141,7 @@ def mitxpro():
         sync_assets_and_run_models.to_job(
             name="raw_mitxpro_openedx_database_tables",
             resource_defs={
-                "airbyte": environment[dagster_deployment]["airbyte_resource"],
+                "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
                         "project_dir": "/opt/dbt/models/staging/mitxpro",
@@ -152,9 +153,9 @@ def mitxpro():
                 "ops": {
                     "sync_airbyte": {
                         "config": {
-                            "connection_id": environment[dagster_deployment][
-                                "airbyte_connection"
-                            ]["raw_mitxpro_openedx_database_tables"]
+                            "connection_id": env_map["airbyte_connection"][
+                                "raw_mitxpro_openedx_database_tables"
+                            ]
                         }
                     }
                 },
@@ -169,7 +170,7 @@ def mitx_residential():
         sync_assets_and_run_models.to_job(
             name="raw_mitx_residential_openedx_database_tables",
             resource_defs={
-                "airbyte": environment[dagster_deployment]["airbyte_resource"],
+                "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {"project_dir": "/opt/dbt", "profiles_dir": "/opt/dbt"}
                 ),
@@ -178,9 +179,9 @@ def mitx_residential():
                 "ops": {
                     "sync_airbyte": {
                         "config": {
-                            "connection_id": environment[dagster_deployment][
-                                "airbyte_connection"
-                            ]["raw_mitx_residential_openedx_database_tables"]
+                            "connection_id": env_map["airbyte_connection"][
+                                "raw_mitx_residential_openedx_database_tables"
+                            ]
                         }
                     }
                 },
@@ -195,7 +196,7 @@ def ocw_studio():
         sync_assets_and_run_models.to_job(
             name="raw_ocw_studio_application_database_tables",
             resource_defs={
-                "airbyte": environment[dagster_deployment]["airbyte_resource"],
+                "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {"project_dir": "/opt/dbt", "profiles_dir": "/opt/dbt"}
                 ),
@@ -204,9 +205,9 @@ def ocw_studio():
                 "ops": {
                     "sync_airbyte": {
                         "config": {
-                            "connection_id": environment[dagster_deployment][
-                                "airbyte_connection"
-                            ]["raw_ocw_studio_application_database_tables"]
+                            "connection_id": env_map["airbyte_connection"][
+                                "raw_ocw_studio_application_database_tables"
+                            ]
                         }
                     }
                 },

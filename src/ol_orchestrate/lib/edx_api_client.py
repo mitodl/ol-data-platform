@@ -6,7 +6,7 @@ import httpx
 TOO_MANY_REQUESTS = 429
 
 
-def get_access_token(
+def get_access_token(  # noqa: S107
     client_id: str, client_secret: str, edx_url: str, token_type: str = "jwt"
 ) -> str:
     """Retrieve an access token from an Open edX site via OAUTH2 credentials.
@@ -69,7 +69,7 @@ def _fetch_with_auth(
 
 def get_edx_course_ids(
     edx_url: str, access_token: str, page_size: int = 100
-) -> Generator[list[dict], None, None]:
+) -> Generator[list[dict], None, None]:  # noqa: DAR301
     """Retrieve all items from the edX courses REST API including pagination.
 
     :param edx_url: Base URL of edX instance being queried, including protocol.  e.g.
@@ -83,7 +83,7 @@ def get_edx_course_ids(
     :type page_size: int
 
         :yield: A generator for walking the paginated list of courses returned from the
-        API
+        API  # noqa: RST206
     """
     username = _get_username(edx_url, access_token)
     request_url = f"{edx_url}/api/courses/v1/courses/"

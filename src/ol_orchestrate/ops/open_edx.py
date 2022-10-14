@@ -1,7 +1,7 @@
 import time
 from datetime import timedelta
 
-from dagster import (
+from dagster import (  # noqa: WPS235
     AssetMaterialization,
     ExpectationResult,
     Failure,
@@ -56,7 +56,7 @@ from ol_orchestrate.lib.file_rendering import write_csv
             default_value="jwt",
             is_required=False,
             description="Type of OAuth token to use for authenticating to the edX API. "
-            'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',
+            'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
         ),
         "edx_course_api_page_size": Field(
             Int,
@@ -75,7 +75,8 @@ from ol_orchestrate.lib.file_rendering import write_csv
 )
 def list_courses(context: OpExecutionContext) -> List[String]:
     """
-    Retrieve the list of course IDs active in the edX instance to be used in subsequent steps to pull data per course.
+    Retrieve the list of course IDs active in the edX instance to be used in subsequent
+    steps to pull data per course.
 
     :param context: Dagster context object for passing configuration
     :type context: OpExecutionContext
@@ -126,7 +127,7 @@ def list_courses(context: OpExecutionContext) -> List[String]:
         )
     },
 )
-def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
+def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -163,7 +164,7 @@ def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) ->
     write_csv(query_fields, users_data, enrollments_path)
     yield AssetMaterialization(
         asset_key="users_query",
-        description="Information of users enrolled in available courses on Open edX installation",
+        description="Information of users enrolled in available courses on Open edX installation",  # noqa: E501
         metadata_entries=[
             MetadataEntry.text(
                 text=str(len(users_data)),
@@ -183,7 +184,7 @@ def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) ->
 
 @op(
     name="open_edx_student_submissions",
-    description="Export of student submission events for courses on the specified Open edX installation.",
+    description="Export of student submission events for courses on the specified Open edX installation.",  # noqa: E501
     required_resource_keys={"sqldb", "results_dir"},
     ins={
         "edx_course_ids": In(
@@ -194,11 +195,11 @@ def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) ->
     out={
         "edx_student_submissions": Out(
             dagster_type=DagsterPath,
-            description="Path to submissions data in tabular format rendered as CSV files",
+            description="Path to submissions data in tabular format rendered as CSV files",  # noqa: E501
         )
     },
 )
-def student_submissions(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
+def student_submissions(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -260,7 +261,7 @@ def student_submissions(context: OpExecutionContext, edx_course_ids: List[String
 
 @op(
     name="open_edx_enrollments",
-    description="Export of enrollment records for courses on the specified Open edX installation.",
+    description="Export of enrollment records for courses on the specified Open edX installation.",  # noqa: E501
     required_resource_keys={"sqldb", "results_dir"},
     ins={
         "edx_course_ids": In(
@@ -271,11 +272,11 @@ def student_submissions(context: OpExecutionContext, edx_course_ids: List[String
     out={
         "edx_enrollment_records": Out(
             dagster_type=DagsterPath,
-            description="Path to enrollment data in tabular format rendered as CSV files",
+            description="Path to enrollment data in tabular format rendered as CSV files",  # noqa: E501
         )
     },
 )
-def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
+def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
     """Retrieve enrollment records for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -320,7 +321,7 @@ def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]
 
 @op(
     name="open_edx_course_roles",
-    description="Export of user roles for courses on the specified Open edX installation.",
+    description="Export of user roles for courses on the specified Open edX installation.",  # noqa: E501
     required_resource_keys={"sqldb", "results_dir"},
     ins={
         "edx_course_ids": In(
@@ -331,11 +332,11 @@ def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]
     out={
         "edx_course_roles": Out(
             dagster_type=DagsterPath,
-            description="Path to course role data in tabular format rendered as CSV files",
+            description="Path to course role data in tabular format rendered as CSV files",  # noqa: E501
         )
     },
 )
-def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore
+def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -378,7 +379,7 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
 
 @op(
     name="export_edx_forum_database",
-    description="Solid to build the command line string for executing mongodump against the Open edX forum database",
+    description="Solid to build the command line string for executing mongodump against the Open edX forum database",  # noqa: E501
     required_resource_keys={"results_dir"},
     config_schema={
         "edx_mongodb_uri": Field(
@@ -402,12 +403,12 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
             String,
             is_required=False,
             default_value="admin",
-            description="The MongoDB database that contains the account information for the authenticating user.",
+            description="The MongoDB database that contains the account information for the authenticating user.",  # noqa: E501
         ),
         "edx_mongodb_forum_database_name": Field(
             String,
             is_required=True,
-            description="Name of database that contains forum data for Open edX installation",
+            description="Name of database that contains forum data for Open edX installation",  # noqa: E501
         ),
     },
     out={
@@ -425,9 +426,11 @@ def export_edx_forum_database(  # type: ignore
     :param context: Dagster execution context for propagaint configuration data
     :type context: OpExecutionContext
 
-    :raises Failure: Raise a failure event if the mongo dump returns a non-zero exit code
+    :raises Failure: Raise a failure event if the mongo dump returns a non-zero exit
+        code
 
-    :yield: Path object to the directory where the exported Mongo database is located
+    :yield: Path object to the directory where the exported Mongo database is
+        located
     """
     forum_data_path = context.resources.results_dir.path.joinpath(
         context.op_config["edx_mongodb_forum_database_name"]
@@ -458,7 +461,7 @@ def export_edx_forum_database(  # type: ignore
 
     if mongodump_retcode != 0:
         raise Failure(
-            description="The mongodump command for exporting the Open edX forum database failed.",
+            description="The mongodump command for exporting the Open edX forum database failed.",  # noqa: E501
             metadata_entries=[
                 MetadataEntry.text(
                     text=mongodump_output,
@@ -507,7 +510,7 @@ def export_edx_forum_database(  # type: ignore
             default_value="jwt",
             is_required=False,
             description="Type of OAuth token to use for authenticating to the edX API. "
-            'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',
+            'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
         ),
         "edx_course_bucket": Field(
             String,
@@ -527,7 +530,7 @@ def export_edx_forum_database(  # type: ignore
         ),
     },
 )
-def export_edx_courses(
+def export_edx_courses(  # noqa: WPS210
     context: OpExecutionContext, edx_course_ids: List[str], daily_extracts_dir: str
 ) -> None:
     access_token = get_access_token(
@@ -544,7 +547,7 @@ def export_edx_courses(
     successful_exports: set[str] = set()
     failed_exports: set[str] = set()
     tasks = exported_courses["upload_task_ids"]
-    context.log.info("Exporting %s tasks from Open edX", len(tasks))
+    context.log.info("Exporting %s tasks from Open edX", len(tasks))  # noqa: WPS323
     # Possible status values found here:
     # https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
     while len(successful_exports.union(failed_exports)) < len(tasks):
@@ -560,8 +563,10 @@ def export_edx_courses(
                 successful_exports.add(course_id)
             if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
                 failed_exports.add(course_id)
-    for course_id in successful_exports:
-        context.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
+    for course_id in successful_exports:  # noqa: WPS440
+        context.log.info(
+            "Moving course %s to %s", course_id, daily_extracts_dir  # noqa: WPS323
+        )
         course_file = f"{course_id}.tar.gz"
         source_object = {
             "Bucket": context.op_config["edx_course_bucket"],
@@ -578,7 +583,7 @@ def export_edx_courses(
 
 @op(
     name="edx_write_course_id_csv",
-    description="Write a CSV file containing the list of active course IDs on the edX instance",
+    description="Write a CSV file containing the list of active course IDs on the edX instance",  # noqa: E501
     required_resource_keys={"results_dir"},
     ins={
         "edx_course_ids": In(
@@ -622,7 +627,7 @@ def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]
     },
     out={"edx_daily_extracts_directory": Out(dagster_type=String)},
 )
-def upload_extracted_data(
+def upload_extracted_data(  # noqa: WPS211
     context: OpExecutionContext,
     edx_course_ids_csv: DagsterPath,
     edx_course_roles: DagsterPath,
@@ -660,7 +665,7 @@ def upload_extracted_data(
         Open edX forum activity
     :type edx_forum_data_directory: DagsterPath
 
-        :yield: The S3 path of the uploaded directory
+    :yield: The S3 path of the uploaded directory
     """
     results_bucket = context.op_config["edx_etl_results_bucket"]
     for path_object in context.resources.results_dir.path.iterdir():
@@ -688,12 +693,12 @@ def upload_extracted_data(
         description="Daily export directory for edX export pipeline",
         metadata_entries=[
             MetadataEntry.fspath(
-                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"
+                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501, WPS237
             ),
         ],
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        f"{results_bucket}/{context.resources.results_dir.path.name}",
+        f"{results_bucket}/{context.resources.results_dir.path.name}",  # noqa: WPS237
         "edx_daily_extracts_directory",
     )

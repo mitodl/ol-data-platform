@@ -32,9 +32,9 @@ dagster-postgres = "^0.16"
 dagster-shell = "^0.16"
 dbt-trino = "^1.2.0"
 httpx = "^0.23.0"
+hvac = "^1.0"
 pyarrow = "^9.0.0"
 pymysql = "^1.0.0"
-hvac = "^1.0"
 setuptools = "^65.4.1"  # Add this to avoid errors with installing packages that depend on it for building
 
 [tool.poetry.dev-dependencies]
@@ -45,7 +45,7 @@ poetry = "*"
 pre-commit = "^2"
 pytest = "^7.1.2"
 sqlfluff = "^1.3.0"
-wemake-python-styleguide = "*"
+wemake-python-styleguide = {git = "https://github.com/wemake-services/wemake-python-styleguide"}
 
 [tool.black]
 target-version = ["py39"]
