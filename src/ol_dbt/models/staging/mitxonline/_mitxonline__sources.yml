@@ -64,21 +64,23 @@ sources:
   - name: raw__mitxonline__app__postgres__courses_course
     columns:
     - name: id
-      description: int, sequential ID tracking a single MITx Online course
+      description: int, primary key representing a single MITx Online course
     - name: live
-      description: boolean, indicating whether the course is available to users
+      description: boolean, indicating whether the course is available to users on
+        user-facing website
     - name: title
       description: str, title of the course
     - name: program_id
-      description: id, unique ID pointing to the "program" which this course is part
-    - name: course_readable_id
+      description: id, foreign key to courses_program (deprecating)
+    - name: readable_id
       description: str, Open edX ID formatted as course-v1:{org}+{course code}
     - name: position_in_program
-      description: int, ...
+      description: int, sequential number indicating the course position in a program
+        (deprecating)
     - name: created_on
-      description: timestamp, specifying when an enrollment was initially created
+      description: timestamp, specifying when a course was initially created
     - name: updated_on
-      description: timestamp, specifying when an enrollment was most recently updated
+      description: timestamp, specifying when a course was most recently updated
   - name: raw__mitxonline__app__postgres__users_legaladdress
     columns:
     - name: id
