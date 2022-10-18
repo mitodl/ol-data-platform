@@ -97,3 +97,17 @@ sources:
       description: string, user first name
     - name: updated_on
       description: timestamp, when the record was updated
+  - name: raw__mitxonline__app__postgres__courses_program
+    columns:
+    - name: id
+      description: int, primary key representing a single MITx Online program
+    - name: live
+      description: boolean, indicating whether the program is available to users
+    - name: title
+      description: str, title of the program
+    - name: readable_id
+      description: str, Open edX ID formatted as program-v1:{org}+{program code}
+    - name: created_on
+      description: timestamp, specifying when a program was initially created
+    - name: updated_on
+      description: timestamp, specifying when a program was most recently updated
