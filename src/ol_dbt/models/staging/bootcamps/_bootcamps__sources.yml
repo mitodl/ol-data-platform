@@ -51,14 +51,24 @@ sources:
     description: ""
     columns:
     - name: id
-      description: ""
-    - name: email
-      description: ""
-    - name: username
-      description: ""
-    - name: is_active
-      description: ""
+      description: int, sequential ID representing one user
+    - name: password
+      description: str, hashed password
     - name: last_login
-      description: ""
+      description: timestamp, user's last login
+    - name: is_superuser
+      description: boolean, used for app permissions
+    - name: username
+      description: str, chosen by the user
+    - name: first_name
+      description: str, currently blank for all users on production
+    - name: last_name
+      description: str, currently blank for all users on production
+    - name: email
+      description: str, user email associated with their account
+    - name: is_staff
+      description: boolean, used for app permissions
+    - name: is_active
+      description: boolean, used to soft delete users
     - name: date_joined
-      description: ""
+      description: timestamp, specifying when a user account was initially created

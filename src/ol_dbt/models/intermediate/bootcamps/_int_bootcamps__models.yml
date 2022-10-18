@@ -17,9 +17,9 @@ models:
     description: ""
   - name: course_title
     description: ""
-  - name: username
+  - name: user_username
     description: ""
-  - name: email
+  - name: user_email
     description: ""
 
 - name: int__bootcamps__course_runs
@@ -41,9 +41,9 @@ models:
 - name: int__bootcamps__users
   description: ""
   columns:
-  - name: id
+  - name: user_id
     description: ""
-  - name: username
+  - name: user_username
     description: ""
-  - name: email
+  - name: user_email
     description: ""
