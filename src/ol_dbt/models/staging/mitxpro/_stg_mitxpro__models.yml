@@ -4,34 +4,34 @@ version: 2
 models:
 - name: stg__mitxpro__app__postgres__users_user
   columns:
-  - name: id
+  - name: user_id
     description: int, sequential ID representing one user in xPro
     tests:
     - unique
     - not_null
-  - name: username
+  - name: user_username
     description: str, name chosen by user
     tests:
     - unique
     - not_null
-  - name: email
+  - name: user_email
     description: str, user email associated with their account
     tests:
     - unique
     - not_null
-  - name: is_active
+  - name: user_is_active
     description: boolean, used to soft delete user accounts
-  - name: full_name
+  - name: user_full_name
     description: str, the user's full name
     tests:
     - not_null
-  - name: joined_on
+  - name: user_joined_on
     description: timestamp, specifying when a user account was initially created
   - name: last_login
     description: timestamp, specifying when a user last logged in
 - name: stg__mitxpro__app__postgres__users_legaladdress
   columns:
-  - name: id
+  - name: user_address_id
     description: int, sequential ID
     tests:
     - unique
@@ -45,11 +45,11 @@ models:
     tests:
     - unique
     - not_null
-  - name: last_name
+  - name: user_last_name
     description: string, user last name
     tests:
     - not_null
-  - name: first_name
+  - name: user_first_name
     description: string, user first name
     tests:
     - not_null
@@ -71,7 +71,7 @@ models:
     - not_null
 - name: stg__mitxpro__app__postgres__users_profile
   columns:
-  - name: id
+  - name: user_profile_id
     description: int, sequential ID
     tests:
     - unique

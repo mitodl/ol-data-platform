@@ -19,9 +19,9 @@ models:
     description: url for course where the user is enrolled
   - name: course_title
     description: title of the course where the user is enrolled
-  - name: username
+  - name: user_username
     description: str, name chosen by user
-  - name: email
+  - name: user_email
     description: str, email associated with the user account
 
 - name: int__mitxonline__course_runs
@@ -43,42 +43,34 @@ models:
 - name: int__mitxonline__users
   description: denormalized mitxonline users
   columns:
-  - name: id
+  - name: user_id
     description: int, primary key
     tests:
     - unique
     - not_null
-  - name: username
+  - name: user_username
     description: string, username
     tests:
     - unique
     - not_null
-  - name: full_name
+  - name: user_full_name
     description: string, full name
     tests:
     - not_null
-  - name: email
+  - name: user_email
     description: int, email
     tests:
     - unique
     - not_null
-  - name: joined_on
+  - name: user_joined_on
     description: timestamp, user join timestamp
-  - name: last_login
+  - name: user_last_login
     description: timestamp, user last log in
   - name: user_address_country
     description: string, country code for the user's address
     tests:
     - not_null
-  - name: first_name
-    description: string, first name
-    tests:
-    - not_null
-  - name: last_name
-    description: string, last name
-    tests:
-    - not_null
   tests:
   - equal_rowcount_with_filters:
       compare_model: ref('stg__mitxonline__app__postgres__users_user')
-      compare_filter: "is_active=true"
+      compare_filter: "user_is_active=true"

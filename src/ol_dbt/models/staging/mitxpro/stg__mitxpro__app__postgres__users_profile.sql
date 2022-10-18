@@ -6,7 +6,7 @@ with source as (
 
 , cleaned as (
     select
-        id
+        id as user_profile_id
         , birth_year as user_birth_year
         , company as user_company
         , job_title as user_job_title

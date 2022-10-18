@@ -9,15 +9,13 @@ with users as (
 )
 
 select
-    users.id
-    , users.username
-    , users.full_name
-    , users.email
-    , users.joined_on
-    , users.last_login
+    users.user_id
+    , users.user_username
+    , users.user_full_name
+    , users.user_email
+    , users.user_joined_on
+    , users.user_last_login
     , users_legaladdress.user_address_country
-    , users_legaladdress.first_name
-    , users_legaladdress.last_name
 from users
-left join users_legaladdress on users_legaladdress.user_id = users.id
-where users.is_active = true
+left join users_legaladdress on users_legaladdress.user_id = users.user_id
+where users.user_is_active = true
