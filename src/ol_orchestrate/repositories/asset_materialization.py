@@ -12,7 +12,7 @@ configured_airbyte_resource = airbyte_resource.configured(
         "port": "443",
         "use_https": True,
         "request_additional_params": {
-            "auth": {"env": "DAGSTER_AIRBYTE_AUTH"},
+            "auth": os.getenv("DAGSTER_AIRBYTE_AUTH"),
             "verify": False,
         },
     }
