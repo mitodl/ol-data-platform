@@ -1,0 +1,26 @@
+---
+version: 2
+
+models:
+- name: stg__bootcamps__app__postgres__auth_user
+  columns:
+  - name: user_id
+    description: int, sequential ID representing one user in xPro
+    tests:
+    - unique
+    - not_null
+  - name: user_username
+    description: str, name chosen by user
+    tests:
+    - unique
+    - not_null
+  - name: user_email
+    description: str, user email associated with user account. Not unique
+    tests:
+    - not_null
+  - name: user_is_active
+    description: boolean, used to soft delete user accounts
+  - name: user_joined_on
+    description: timestamp, specifying when a user account was initially created
+  - name: user_last_login
+    description: timestamp, specifying when a user last logged in

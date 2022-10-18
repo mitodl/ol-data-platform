@@ -20,11 +20,11 @@ with enrollments as (
         , enrollments.created_on
         , '' as courseware_url_path
         , runs.title as course_title
-        , users.username
-        , users.email
+        , users.user_username
+        , users.user_email
     from enrollments
     inner join runs on runs.id = enrollments.bootcamp_run_id
-    inner join users on users.id = enrollments.user_id
+    inner join users on users.user_id = enrollments.user_id
 )
 
 select * from bootcamps_enrollments

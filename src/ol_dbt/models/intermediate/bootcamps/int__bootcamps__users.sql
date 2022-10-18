@@ -1,8 +1,8 @@
 with users as (
     select
-        id
-        , username
-        , email
+        user_id
+        , user_username
+        , user_email
     from {{ ref('stg__bootcamps__app__postgres__auth_user') }}
 )
 
