@@ -80,14 +80,12 @@ repos:
   rev: v0.982
   hooks:
   - id: mypy
-    args:
-    - --install-types
-    - --non-interactive
     additional_dependencies:
     - pydantic
     - types-PyYAML
     - types-pytz
     - types-pymysql
+    - types-requests
 - repo: https://github.com/sqlfluff/sqlfluff
   rev: 1.3.2
   hooks:
