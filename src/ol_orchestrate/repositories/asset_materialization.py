@@ -3,6 +3,7 @@ import os
 from dagster import repository
 from dagster_airbyte import airbyte_resource
 from dagster_dbt import dbt_cli_resource
+from requests.auth import HTTPBasicAuth
 
 from ol_orchestrate.jobs.sync_assets_and_run_models import sync_assets_and_run_models
 
@@ -12,7 +13,7 @@ configured_airbyte_resource = airbyte_resource.configured(
         "port": "443",
         "use_https": True,
         "request_additional_params": {
-            "auth": os.getenv("DAGSTER_AIRBYTE_AUTH"),
+            "auth": HTTPBasicAuth(*os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")),
             "verify": False,
         },
     }

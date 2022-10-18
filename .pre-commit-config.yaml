@@ -80,6 +80,9 @@ repos:
   rev: v0.982
   hooks:
   - id: mypy
+    args:
+    - --install-types
+    - --non-interactive
     additional_dependencies:
     - pydantic
     - types-PyYAML
