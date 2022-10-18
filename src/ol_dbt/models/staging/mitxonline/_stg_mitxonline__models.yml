@@ -53,3 +53,31 @@ models:
     description: string, user first name
     tests:
     - not_null
+- name: stg__mitxonline__app__postgres__courses_course
+  columns:
+  - name: course_id
+    description: int, primary key representing a single MITx Online course
+    tests:
+    - unique
+    - not_null
+  - name: course_is_live
+    description: boolean, indicating whether the course is available to users on user-facing
+      website
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+  - name: program_id
+    description: id, foreign key to courses_program (deprecating)
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code}
+    tests:
+    - unique
+    - not_null
+  - name: position_in_program
+    description: int, sequential number indicating the course position in a program
+      (deprecating)
+  - name: course_created_on
+    description: timestamp, specifying when a course was initially created
+  - name: course_updated_on
+    description: timestamp, specifying when a course was most recently updated
