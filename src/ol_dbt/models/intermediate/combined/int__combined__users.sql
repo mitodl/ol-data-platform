@@ -1,18 +1,20 @@
 with mitxonline_users as (
     select
-        id
-        , username
-        , email
+        user_id
+        , user_username
+        , user_email
     from {{ ref('int__mitxonline__users') }}
 )
 
 , mitxpro_users as (
-    select * from {{ ref('int__mitxpro__users') }}
+    select
+        user_id
+        , user_username
+        , user_email
+    from {{ ref('int__mitxpro__users') }}
 )
 
-, bootcamps_users as (
-    select * from {{ ref('int__bootcamps__users') }}
-)
+
 
 , join_ol_users as (
     select
@@ -26,13 +28,6 @@ with mitxonline_users as (
         *
         , 'xPro' as platform
     from mitxpro_users
-
-    union all
-
-    select
-        *
-        , 'Bootcamps' as platform
-    from bootcamps_users
 )
 
 select * from join_ol_users

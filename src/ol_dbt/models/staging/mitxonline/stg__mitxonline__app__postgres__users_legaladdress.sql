@@ -7,11 +7,11 @@ with source as (
 , cleaned as (
 
     select
-        id
+        id as user_address_id
         , country as user_address_country
         , user_id
-        , first_name
-        , last_name
+        , first_name as user_first_name
+        , last_name as user_last_name
     from source
 )
 

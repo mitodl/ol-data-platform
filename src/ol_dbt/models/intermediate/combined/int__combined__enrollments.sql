@@ -6,10 +6,6 @@ with mitxonline_enrollments as (
     select * from {{ ref('int__mitxpro__enrollments') }}
 )
 
-, bootcamps_enrollments as (
-    select * from {{ ref('int__bootcamps__enrollments') }}
-)
-
 , join_ol_enrollments as (
     select
         *
@@ -22,13 +18,6 @@ with mitxonline_enrollments as (
         *
         , 'xPro' as platform
     from mitxpro_enrollments
-
-    union all
-
-    select
-        *
-        , 'Bootcamps' as platform
-    from bootcamps_enrollments
 )
 
 select * from join_ol_enrollments
