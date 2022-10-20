@@ -24,21 +24,38 @@ sources:
   - name: raw__mitxonline__app__postgres__courses_courserun
     columns:
     - name: id
-      description: int, sequential ID tracking a single course run
+      description: int, primary key representing a single MITx Online course run
     - name: live
       description: boolean, indicating whether the course is available to users
     - name: title
-      description: str, title of the course
+      description: str, title of the course run
+    - name: run_tag
+      description: str, A string identifying the set of runs that this run belongs
+        to. E.g. 1T2022
     - name: course_id
-      description: int, ID specifying a course in the courses_course table
+      description: int, foreign key to courses_course representing a single MITx Online
+        course
     - name: courseware_id
-      description: str, human readable ID in the format course-v1:{org}+{course code}+{run}
-    - name: end_date
-      description: '...'
-    - name: start_date
-      description: '...'
+      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
     - name: courseware_url_path
-      description: str, url location for the course in MITx Online
+      description: str, url location for the course run in MITx Online
+    - name: is_self_paced
+      description: boolean, indicating whether users can take this course at their
+        own pace and earn certificate at any time
+    - name: end_date
+      description: timestamp, specifying when the course ends
+    - name: start_date
+      description: timestamp, specifying when the course begins
+    - name: enrollment_start
+      description: timestamp, specifying when enrollment starts
+    - name: enrollment_end
+      description: timestamp, specifying when enrollment ends
+    - name: expiration_date
+      description: timestamp, specifying the date time beyond which users should not
+        see link to this course run on their dashboard
+    - name: upgrade_deadline
+      description: timestamp, specifying the date time beyond which users can not
+        enroll in paid course mode
     - name: created_on
       description: timestamp, specifying when a course run was initially created
     - name: updated_on

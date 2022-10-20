@@ -2,20 +2,20 @@
 version: 2
 
 models:
-- name: int_mitxonline__enrollments
+- name: int__mitxonline__enrollments
   description: Intermediate model of enrollments in MITx Online.
   columns:
   - name: id
     description: id for enrollment
     tests:
     - not_null
-  - name: active
+  - name: course_run_active
     description: boolean specifying whether the user is active in this course run
   - name: user_id
     description: id for the enrolling user
   - name: created_on
     description: timestamp specifying when the enrollment happened
-  - name: courseware_url_path
+  - name: courserun_url
     description: url for course where the user is enrolled
   - name: course_title
     description: title of the course where the user is enrolled
@@ -27,18 +27,18 @@ models:
 - name: int__mitxonline__course_runs
   description: ""
   columns:
-  - name: id
-    description: ""
-  - name: title
-    description: ""
-  - name: end_date
-    description: ""
-  - name: start_date
-    description: ""
-  - name: courseware_id
-    description: ""
-  - name: courseware_url_path
-    description: ""
+  - name: courserun_id
+    description: int, primary key representing a single MITx Online course run
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_end_on
+    description: timestamp, specifying when the course ends
+  - name: courserun_start_on
+    description: timestamp, specifying when the course begins
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+  - name: courserun_url
+    description: str, url location for the course run in MITx Online
 
 - name: int__mitxonline__users
   description: denormalized mitxonline users
