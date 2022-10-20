@@ -128,3 +128,13 @@ sources:
       description: timestamp, specifying when a program was initially created
     - name: updated_on
       description: timestamp, specifying when a program was most recently updated
+  - name: raw__mitxonline__app__postgres__courses_coursetopic
+    columns:
+    - name: id
+      description: int, primary key representing a single MITx Online course topic
+    - name: title
+      description: str, name of a course topic
+    - name: created_on
+      description: timestamp, specifying when a course topic was initially created
+    - name: updated_on
+      description: timestamp, specifying when a course topic was most recently updated
