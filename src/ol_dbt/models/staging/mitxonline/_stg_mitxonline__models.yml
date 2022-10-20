@@ -9,26 +9,37 @@ models:
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: str, name chosen by user
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_email
     description: str, user email associated with their account
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_is_active
     description: boolean, used to soft delete user accounts
   - name: user_full_name
     description: str, the user's full name
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_joined_on
     description: timestamp, specifying when a user account was initially created
-  - name: last_login
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_last_login
     description: timestamp, specifying when a user last logged in
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 7
 - name: stg__mitxonline__app__postgres__users_legaladdress
   columns:
   - name: user_address_id
@@ -36,23 +47,31 @@ models:
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_address_country
     description: string, user country code
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_id
     description: int, foreign key to users_user
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_last_name
     description: string, user last name
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_first_name
     description: string, user first name
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
 - name: stg__mitxonline__app__postgres__courses_course
   columns:
   - name: course_id
@@ -60,6 +79,7 @@ models:
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: course_is_live
     description: boolean, indicating whether the course is available to users on user-facing
       website
@@ -67,20 +87,33 @@ models:
     description: str, title of the course
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: program_id
     description: id, foreign key to courses_program (deprecating)
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: course_readable_id
     description: str, Open edX ID formatted as course-v1:{org}+{course code}
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: position_in_program
     description: int, sequential number indicating the course position in a program
       (deprecating)
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: course_created_on
     description: timestamp, specifying when a course was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: course_updated_on
     description: timestamp, specifying when a course was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
 - name: stg__mitxonline__app__postgres__courses_program
   columns:
   - name: program_id
@@ -88,18 +121,30 @@ models:
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: program_is_live
     description: boolean, indicating whether the program is available to users
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: program_title
     description: str, title of the program
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: program_readable_id
     description: str, Open edX ID formatted as program-v1:{org}+{program code}
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: program_created_on
     description: timestamp, specifying when a program was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: program_updated_on
     description: timestamp, specifying when a program was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6

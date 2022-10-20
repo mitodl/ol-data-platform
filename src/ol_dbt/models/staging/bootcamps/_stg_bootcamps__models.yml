@@ -9,18 +9,30 @@ models:
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: str, name chosen by user
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_email
     description: str, user email associated with user account. Not unique
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_is_active
     description: boolean, used to soft delete user accounts
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: user_joined_on
     description: timestamp, specifying when a user account was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: user_last_login
     description: timestamp, specifying when a user last logged in
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
