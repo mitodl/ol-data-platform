@@ -1,6 +1,8 @@
 ---
 packages:
 - package: emilyriederer/dbtplyr
-  version: 0.3.0
+  version: 0.3.2
 - package: dbt-labs/codegen
+  version: 0.8.1
+- package: calogica/dbt_expectations
   version: 0.7.0
