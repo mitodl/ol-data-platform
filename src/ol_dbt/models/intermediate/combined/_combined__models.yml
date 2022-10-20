@@ -17,14 +17,14 @@ models:
     description: timestamp, specifying when the enrollment happened
   - name: updated_on
     description: timestamp, specifying when the enrollment was last updated
-  - name: courseware_url_path
+  - name: courserun_url
     description: str, url for course where the user is enrolled
   - name: course_title
     description: str, title of the course where the user is enrolled
   - name: user_active
     description: boolean, specifying whether the user is active within a platform
       (e.g., xPro, MITx Online, etc)
-  - name: org
+  - name: platform
     description: str, specifying which product (or organization) associated with the
       enrollment
 - name: int__combined__course_runs
