@@ -156,47 +156,103 @@ models:
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_is_live
     description: boolean, indicating whether the course is available to users
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_title
     description: str, title of the course run
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_tag
     description: str, A string identifying the set of runs that this run belongs to.
       E.g. 1T2022
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: course_id
     description: int, foreign key to courses_course representing a single MITx Online
       course
     tests:
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - unique
     - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_url
     description: str, url location for the course run in MITx Online
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_is_self_paced
     description: boolean, indicating whether users can take this course at their own
       pace and earn certificate at any time
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_start_on
     description: timestamp, specifying when the course begins
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_end_on
     description: timestamp, specifying when the course ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_enrollment_start_on
     description: timestamp, specifying when enrollment starts
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_enrollment_end_on
     description: timestamp, specifying when enrollment ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_expired_on
     description: timestamp, specifying the date time beyond which users should not
       see link to this course run on their dashboard
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_upgrade_deadline
     description: timestamp, specifying the date time beyond which users can not enroll
       in paid course mode
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_created_on
     description: timestamp, specifying when a course run was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_updated_on
     description: timestamp, specifying when a course run was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 16
+
+- name: stg__mitxonline__app__postgres__courses_coursetopic
+  columns:
+  - name: coursetopic_id
+    description: int, primary key representing a single MITx Online course topic
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: coursetopic_name
+    description: str, name of a course topic
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: coursetopic_created_on
+    description: timestamp, specifying when a course topic was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: coursetopic_updated_on
+    description: timestamp, specifying when a course topic was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 4
