@@ -256,3 +256,29 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 4
+
+- name: stg__mitxonline__app__postgres__courses_course_to_topic
+  columns:
+  - name: coursetotopic_id
+    description: int, primary key representing a single MITx Online course tagged
+      to a topic
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: coursetopic_id
+    description: int, foreign key to courses_coursetopic representing a single course
+      topic
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to courses_course representing a single course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 3
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["coursetopic_id", "course_id"]
