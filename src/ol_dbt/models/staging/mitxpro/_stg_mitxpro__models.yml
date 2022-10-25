@@ -161,7 +161,7 @@ models:
     - not_null
     - dbt_expectations.expect_column_to_exist
   - name: user_highest_education
-    description: str, user higest education
+    description: str, user highest education
     tests:
     - accepted_values:
         values: ['Doctorate', "Master''s or professional degree", "Bachelor''s degree",

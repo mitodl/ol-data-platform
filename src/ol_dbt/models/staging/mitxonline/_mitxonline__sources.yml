@@ -25,140 +25,290 @@ sources:
     columns:
     - name: id
       description: int, primary key representing a single MITx Online course run
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: live
       description: boolean, indicating whether the course is available to users
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: title
       description: str, title of the course run
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: run_tag
       description: str, A string identifying the set of runs that this run belongs
         to. E.g. 1T2022
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: course_id
       description: int, foreign key to courses_course representing a single MITx Online
         course
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: courseware_id
       description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: courseware_url_path
       description: str, url location for the course run in MITx Online
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: is_self_paced
       description: boolean, indicating whether users can take this course at their
         own pace and earn certificate at any time
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: end_date
       description: timestamp, specifying when the course ends
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: start_date
       description: timestamp, specifying when the course begins
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: enrollment_start
       description: timestamp, specifying when enrollment starts
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: enrollment_end
       description: timestamp, specifying when enrollment ends
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: expiration_date
       description: timestamp, specifying the date time beyond which users should not
         see link to this course run on their dashboard
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: upgrade_deadline
       description: timestamp, specifying the date time beyond which users can not
         enroll in paid course mode
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a course run was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a course run was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 16
   - name: raw__mitxonline__app__postgres__users_user
     columns:
     - name: id
       description: int, sequential ID representing one user in MITx Online
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: password
+      description: str, hashed password
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: username
       description: str, name chosen by user
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: email
       description: str, user email associated with their account
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: name
       description: str, the user's full name
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: is_active
       description: boolean, used to soft delete users
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a user account was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a user account was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: last_login
       description: timestamp, user's last login
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_staff
+      description: boolean, used for app permissions
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_superuser
+      description: boolean, used for app permissions
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 11
   - name: raw__mitxonline__app__postgres__courses_course
     columns:
     - name: id
       description: int, primary key representing a single MITx Online course
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: live
       description: boolean, indicating whether the course is available to users on
         user-facing website
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: title
       description: str, title of the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: program_id
       description: id, foreign key to courses_program (deprecating)
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: readable_id
       description: str, Open edX ID formatted as course-v1:{org}+{course code}
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: position_in_program
       description: int, sequential number indicating the course position in a program
         (deprecating)
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a course was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a course was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 8
   - name: raw__mitxonline__app__postgres__users_legaladdress
     columns:
     - name: id
       description: int, primary key for table
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: country
       description: string, user country code
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, foreign key to users_user
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: last_name
       description: string, user last name
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, when the record was created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: first_name
       description: string, user first name
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, when the record was updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 7
   - name: raw__mitxonline__app__postgres__courses_program
     columns:
     - name: id
       description: int, primary key representing a single MITx Online program
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: live
       description: boolean, indicating whether the program is available to users
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: title
       description: str, title of the program
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: readable_id
       description: str, Open edX ID formatted as program-v1:{org}+{program code}
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a program was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a program was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 6
   - name: raw__mitxonline__app__postgres__courses_coursetopic
     columns:
     - name: id
       description: int, primary key representing a single MITx Online course topic
-    - name: title
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: name
       description: str, name of a course topic
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a course topic was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a course topic was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 4
   - name: raw__mitxonline__app__postgres__courses_course_topics
     columns:
     - name: id
       description: int, primary key representing a single MITx Online course tagged
         to a topic
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: course_id
       description: int, foreign key to courses_course representing a single course
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: coursetopic_id
       description: int, foreign key to courses_coursetopic representing a single course
         topic
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 3
   - name: raw__mitxonline__app__postgres__courses_blockedcountry
     columns:
     - name: id
       description: int, primary key for courses_blockedcountry table from MITx Online
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: country
       description: str, two-letter code of the blocked country for a course
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: course_id
       description: int, foreign key to courses_course representing a single course
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a blocked country record was initially
         created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a blocked country record was most recently
         updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 5

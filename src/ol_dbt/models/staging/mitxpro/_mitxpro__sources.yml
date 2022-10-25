@@ -41,20 +41,49 @@ sources:
     columns:
     - name: id
       description: int, sequential ID representing one user in xPro
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: password
+      description: str, hashed password
     - name: username
       description: str, name chosen by user
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: email
       description: str, user email associated with their account
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: name
       description: str, the user's full name
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: is_active
       description: boolean, used to soft delete users
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a user account was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a user account was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: last_login
       description: timestamp, user's last login
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_staff
+      description: boolean, used for app permissions
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_superuser
+      description: boolean, used for app permissions
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 11
   - name: raw__xpro__app__postgres__courses_course
     columns:
     - name: id
@@ -77,74 +106,136 @@ sources:
     columns:
     - name: id
       description: int, primary key for table
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: country
       description: string, user country code
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, foreign key to users_user
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: last_name
       description: string, user last name
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, when the record was created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: first_name
       description: string, user first name
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, when the record was updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: street_address_1
       description: string, first line of street address
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: street_address_2
       description: string, second line of street address
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: street_address_3
       description: string, third line of street address
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: street_address_4
       description: string, fourth line of street address
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: street_address_5
       description: string, fifth line of street address
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: city
       description: string, city
-    - name: country
-      description: string, country
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: state_or_territory
       description: string, state or territory
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: postal_code
       description: string, postal code
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 15
   - name: raw__xpro__app__postgres__users_profile
     columns:
     - name: id
       description: int, sequential ID
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the row was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the row was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: gender
       description: str, one of  "m", "f" or "o" to encode "Male" , "Female", "Other/Prefer
         not to say". May be blank
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: birth_year
       description: int, user birth year
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: company
       description: str, user company
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: job_title
       description: str, user job title
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: industry
       description: str, user job industry
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: job_function
       description: str, user job function
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: company_size
       description: int, encodes company size choices are 1 - "Small/Start-up (1+ employees)",
         9 - "Small/Home office (1-9 employees)", 99 - "Small (10-99 employees)", 999
         - "Small to medium-sized (100-999 employees)", 9999 - "Medium-sized (1000-9999
         employees)", 10000 - "Large Enterprise (10,000+ employees)", 0 - "Other (N/A
         or Don't know)" may be null
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: years_experience
       description: int, encodes user years experience choices are; 2 - "Less than
         2 years", 5 - "2-5 years", 10 - "6 - 10 years", 15 - "11 - 15 years", 20 -
         "16 - 20 years", 21 - "More than 20 years", 0 - "Prefer not to say", may be
         null
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: leadership_level
       description: str, user leadership level
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, unique ID for each user on the xPro platform
-    - name: higest_education
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: highest_education
       description: str, choices are "Doctorate", "Master's or professional degree",
         "Bachelor's degree", "Associate degree", "Secondary/high school", "Junior
         secondary/junior high/middle school", "Elementary/primary school", "No formal
         education", "Other education"
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 14
