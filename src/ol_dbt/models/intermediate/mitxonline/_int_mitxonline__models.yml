@@ -61,7 +61,7 @@ models:
     - not_null
     - dbt_expectations.expect_column_to_exist
   - name: user_email
-    description: int, email
+    description: string, email
     tests:
     - unique
     - not_null
@@ -77,7 +77,6 @@ models:
   - name: user_address_country
     description: string, country code for the user's address
     tests:
-    - not_null
     - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
