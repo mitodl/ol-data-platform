@@ -282,3 +282,37 @@ models:
       value: 3
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["coursetopic_id", "course_id"]
+
+- name: stg__mitxonline__app__postgres__courses_blockedcountry
+  columns:
+  - name: blockedcountry_id
+    description: int, primary key for courses_blockedcountry table from MITx Online
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: blockedcountry_code
+    description: str, two-letter code of a blocked country for a course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to courses_course representing a single course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: blockedcountry_created_on
+    description: timestamp, specifying when a blocked country record was initially
+      created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: blockedcountry_updated_on
+    description: timestamp, specifying when a blocked country record was most recently
+      updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["blockedcountry_code", "course_id"]
