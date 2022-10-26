@@ -1,11 +1,5 @@
 from dagster import op
 
-
 @op
-def sync_airbyte_connection():
-    ...  # noqa: WPS428
-
-
-@op
-def materialize_dbt_model():
-    ...  # noqa: WPS428
+def materialize_dbt_model(context):
+    context.resources.dbt.run(models=context.op_config["materialize_dbt_model"])

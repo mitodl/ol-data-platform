@@ -10,11 +10,10 @@ from ol_orchestrate.jobs.sync_assets_and_run_models import sync_assets_and_run_m
 configured_airbyte_resource = airbyte_resource.configured(
     {
         "host": {"env": "DAGSTER_AIRBYTE_HOST"},
-        "port": "443",
         "use_https": True,
         "request_additional_params": {
-            "auth": HTTPBasicAuth(*os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")),
-            "verify": False,
+           "auth": HTTPBasicAuth(*os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")),
+           "verify": False,
         },
     }
 )
@@ -53,6 +52,11 @@ def bootcamps():
                                 "raw_bootcamps_application_database_tables"
                             ]
                         }
+                    },
+                    "materialize_dbt_model": {
+                        "config": {
+                            "path": "/opt/dbt/models/staging/bootcamps"
+                        }
                     }
                 },
             },
@@ -60,7 +64,7 @@ def bootcamps():
                 "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
-                        "project_dir": "/opt/dbt/models/staging/bootcamps",
+                        "project_dir": "/opt/dbt",
                         "profiles_dir": "/opt/dbt",
                     }
                 ),
@@ -78,7 +82,7 @@ def mitxonline():
                 "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
-                        "project_dir": "/opt/dbt/models/staging/mitxonline",
+                        "project_dir": "/opt/dbt",
                         "profiles_dir": "/opt/dbt",
                     }
                 ),
@@ -91,6 +95,11 @@ def mitxonline():
                                 "raw_mitxonline_application_database_tables"
                             ]
                         }
+                    },
+                    "dbt_models": {
+                        "config": {
+                            "path": "/opt/dbt/models/staging/mitxonline"
+                        }
                     }
                 },
             },
@@ -101,7 +110,7 @@ def mitxonline():
                 "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
-                        "project_dir": "/opt/dbt/models/staging/mitxonline",
+                        "project_dir": "/opt/dbt",
                         "profiles_dir": "/opt/dbt",
                     }
                 ),
@@ -113,6 +122,11 @@ def mitxonline():
                             "connection_id": env_map["airbyte_connection"][
                                 "raw_mitxonline_openedx_database_tables"
                             ]
+                        }
+                    },
+                    "dbt_models": {
+                        "config": {
+                            "path": "/opt/dbt/models/staging/mitxonline"
                         }
                     }
                 },
@@ -130,7 +144,7 @@ def mitxpro():
                 "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
-                        "project_dir": "/opt/dbt/models/staging/mitxpro",
+                        "project_dir": "/opt/dbt",
                         "profiles_dir": "/opt/dbt",
                     }
                 ),
@@ -143,6 +157,11 @@ def mitxpro():
                                 "raw_mitxpro_application_database_tables"
                             ]
                         }
+                    },
+                    "dbt_models": {
+                        "config": {
+                            "path": "/opt/dbt/models/staging/mitxpro"
+                        }
                     }
                 },
             },
@@ -153,7 +172,7 @@ def mitxpro():
                 "airbyte": env_map["airbyte_resource"],
                 "dbt": dbt_cli_resource.configured(
                     {
-                        "project_dir": "/opt/dbt/models/staging/mitxpro",
+                        "project_dir": "/opt/dbt",
                         "profiles_dir": "/opt/dbt",
                     }
                 ),
@@ -165,6 +184,11 @@ def mitxpro():
                             "connection_id": env_map["airbyte_connection"][
                                 "raw_mitxpro_openedx_database_tables"
                             ]
+                        }
+                    },
+                    "dbt_models": {
+                        "config": {
+                            "path": "/opt/dbt/models/staging/mitxpro"
                         }
                     }
                 },
@@ -191,6 +215,11 @@ def mitx_residential():
                             "connection_id": env_map["airbyte_connection"][
                                 "raw_mitx_residential_openedx_database_tables"
                             ]
+                        }
+                    },
+                    "dbt_models": {
+                        "config": {
+                            "path": "/opt/dbt/models/staging/mitx_residential"
                         }
                     }
                 },
