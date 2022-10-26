@@ -10,10 +10,11 @@ from ol_orchestrate.jobs.sync_assets_and_run_models import sync_assets_and_run_m
 configured_airbyte_resource = airbyte_resource.configured(
     {
         "host": {"env": "DAGSTER_AIRBYTE_HOST"},
+        "port": "443",
         "use_https": True,
         "request_additional_params": {
-           "auth": HTTPBasicAuth(*os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")),
-           "verify": False,
+            "auth": HTTPBasicAuth(*os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")),
+            "verify": False,
         },
     }
 )
@@ -54,10 +55,8 @@ def bootcamps():
                         }
                     },
                     "materialize_dbt_model": {
-                        "config": {
-                            "path": "/opt/dbt/models/staging/bootcamps"
-                        }
-                    }
+                        "config": {"path": "/opt/dbt/models/staging/bootcamps"}
+                    },
                 },
             },
             resource_defs={
@@ -96,11 +95,9 @@ def mitxonline():
                             ]
                         }
                     },
-                    "dbt_models": {
-                        "config": {
-                            "path": "/opt/dbt/models/staging/mitxonline"
-                        }
-                    }
+                    "materialize_dbt_model": {
+                        "config": {"path": "/opt/dbt/models/staging/mitxonline"}
+                    },
                 },
             },
         ),
@@ -124,11 +121,9 @@ def mitxonline():
                             ]
                         }
                     },
-                    "dbt_models": {
-                        "config": {
-                            "path": "/opt/dbt/models/staging/mitxonline"
-                        }
-                    }
+                    "materialize_dbt_model": {
+                        "config": {"path": "/opt/dbt/models/staging/mitxonline"}
+                    },
                 },
             },
         ),
@@ -158,11 +153,9 @@ def mitxpro():
                             ]
                         }
                     },
-                    "dbt_models": {
-                        "config": {
-                            "path": "/opt/dbt/models/staging/mitxpro"
-                        }
-                    }
+                    "materialize_dbt_model": {
+                        "config": {"path": "/opt/dbt/models/staging/mitxpro"}
+                    },
                 },
             },
         ),
@@ -186,11 +179,9 @@ def mitxpro():
                             ]
                         }
                     },
-                    "dbt_models": {
-                        "config": {
-                            "path": "/opt/dbt/models/staging/mitxpro"
-                        }
-                    }
+                    "materialize_dbt_model": {
+                        "config": {"path": "/opt/dbt/models/staging/mitxpro"}
+                    },
                 },
             },
         ),
@@ -217,11 +208,9 @@ def mitx_residential():
                             ]
                         }
                     },
-                    "dbt_models": {
-                        "config": {
-                            "path": "/opt/dbt/models/staging/mitx_residential"
-                        }
-                    }
+                    "materialize_dbt_model": {
+                        "config": {"path": "/opt/dbt/models/staging/mitx_residential"}
+                    },
                 },
             },
         )

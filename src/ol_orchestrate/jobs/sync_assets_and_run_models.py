@@ -1,7 +1,6 @@
 from dagster import graph
 from dagster_airbyte import airbyte_sync_op
-from dagster_dbt import dbt_run_op
-from dagster_dbt import dbt_cli_resource
+
 from ol_orchestrate.ops.elt import materialize_dbt_model
 
 
