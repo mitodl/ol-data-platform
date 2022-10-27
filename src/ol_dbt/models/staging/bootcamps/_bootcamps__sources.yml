@@ -183,13 +183,13 @@ sources:
       tests:
       - dbt_expectations.expect_column_to_exist
     - name: fluidreview_id
-      description: int, forign id for users who applied through fluidreview, null for
-        all users created after June 2019
+      description: int, forign id for users who applied through fluidreview, null
+        for all users created after June 2019
       tests:
       - dbt_expectations.expect_column_to_exist
     - name: smapply_id
-      description: int, forign id for users who applied through smapply, null for all
-        users created after May 2020
+      description: int, forign id for users who applied through smapply, null for
+        all users created after May 2020
       tests:
       - dbt_expectations.expect_column_to_exist
     - name: smapply_user_data
@@ -252,7 +252,8 @@ sources:
       tests:
       - dbt_expectations.expect_column_to_exist
     - name: can_skip_application_steps
-      description: boolean, allows users to be accepted into a bootcamp without completing all application steps
+      description: boolean, allows users to be accepted into a bootcamp without completing
+        all application steps
       tests:
       - dbt_expectations.expect_column_to_exist
     tests:
