@@ -81,8 +81,8 @@ models:
     - not_null
     - dbt_expectations.expect_column_to_exist
   - name: course_is_live
-    description: boolean, indicating whether the course is available to users on user-facing
-      website
+    description: boolean, indicating whether course is available to users on MITx
+      Online website
   - name: course_title
     description: str, title of the course
     tests:
@@ -158,7 +158,8 @@ models:
     - not_null
     - dbt_expectations.expect_column_to_exist
   - name: courserun_is_live
-    description: boolean, indicating whether the course is available to users
+    description: boolean, indicating whether the course run is available to users
+      on MITx Online website
     tests:
     - dbt_expectations.expect_column_to_exist
   - name: courserun_title
@@ -167,8 +168,8 @@ models:
     - not_null
     - dbt_expectations.expect_column_to_exist
   - name: courserun_tag
-    description: str, A string identifying the set of runs that this run belongs to.
-      E.g. 1T2022
+    description: str, unique string that identifies a single run for a course. E.g.
+      1T2022
     tests:
     - not_null
     - dbt_expectations.expect_column_to_exist
