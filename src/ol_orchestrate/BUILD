@@ -35,6 +35,7 @@ python_distribution(
     dependencies=[
         "//:requirements#dagster-postgres",
         "//:requirements#dagster-aws",
+        "//:requirements#dbt-trino",
         "./repositories/asset_materialization.py"
     ],
     provides=python_artifact(
