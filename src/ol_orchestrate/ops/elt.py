@@ -3,7 +3,6 @@ from dagster_airbyte import AirbyteOutput
 
 
 @op(
-    ins={"airbyte_output": In(dagster_type=AirbyteOutput)},
     config_schema={
         "models_path": Field(
             String,
@@ -11,6 +10,8 @@ from dagster_airbyte import AirbyteOutput
             description="The directory path to the models that you want to materialize",
         )
     },
+    ins={"airbyte_output": In(dagster_type=AirbyteOutput)},
+    required_resource_keys={"dbt"},
 )
 def materialize_dbt_model(context, airbyte_output):
     models = context.op_config["models_path"]
