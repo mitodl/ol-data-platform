@@ -55,7 +55,7 @@ def bootcamps():
                         }
                     },
                     "materialize_dbt_model": {
-                        "config": {"models_path": "/opt/dbt/models/staging/bootcamps"}
+                        "config": {"models_path": "models/staging/bootcamps"}
                     },
                 },
             },
