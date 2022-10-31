@@ -15,5 +15,5 @@ from dagster_airbyte import AirbyteOutput
 )
 def materialize_dbt_model(context, airbyte_output):
     models = context.op_config["models_path"]
-    context.resources.dbt.cli('deps')
+    context.resources.dbt.cli("deps")
     context.resources.dbt.run(models=models)

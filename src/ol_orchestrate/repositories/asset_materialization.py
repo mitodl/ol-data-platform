@@ -9,13 +9,13 @@ from ol_orchestrate.jobs.sync_assets_and_run_models import sync_assets_and_run_m
 
 configured_airbyte_resource = airbyte_resource.configured(
     {
-         "host": {"env": "DAGSTER_AIRBYTE_HOST"},
-         "port": "443",
-         "use_https": True,
-         "request_additional_params": {
-             "auth": HTTPBasicAuth(*os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")),
-             "verify": False,
-         },
+        "host": {"env": "DAGSTER_AIRBYTE_HOST"},
+        "port": "443",
+        "use_https": True,
+        "request_additional_params": {
+            "auth": HTTPBasicAuth(*os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")),
+            "verify": False,
+        },
     }
 )
 environment = {
@@ -240,9 +240,7 @@ def ocw_studio():
                         }
                     },
                     "materialize_dbt_model": {
-                        "config": {
-                            "models_path": "/opt/dbt/models/staging/ocw_studio"
-                        }
+                        "config": {"models_path": "/opt/dbt/models/staging/ocw_studio"}
                     },
                 },
             },
