@@ -15,28 +15,66 @@ models:
     description: ""
   - name: courseware_url_path
     description: ""
-  - name: course_title
+  - name: courserun_title
     description: ""
   - name: user_username
     description: ""
   - name: user_email
     description: ""
 
-- name: int__bootcamps__course_runs
-  description: Intermediate model for Bootcamps courseware runs.
+- name: int__bootcamps__courses
+  description: Intermediate model for Bootcamps courses
   columns:
-  - name: id
-    description: ""
-  - name: title
-    description: ""
-  - name: end_date
-    description: ""
-  - name: start_date
-    description: ""
-  - name: courseware_id
-    description: ""
-  - name: courseware_url_path
-    description: ""
+  - name: course_id
+    description: int, primary key representing a single bootcamp course
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_title
+    description: str, title of the bootcamp course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 2
+
+- name: int__bootcamps__course_runs
+  description: Intermediate model for Bootcamps course runs
+  columns:
+  - name: courserun_id
+    description: int, primary key representing a single bootcamp course run
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to int__bootcamps__courses representing a single
+      bootcamp course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_title
+    description: str, title of the bootcamp course run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_readable_id
+    description: str, unique string to identify a bootcamp course run (could be blank
+      for older runs)
+    tests:
+    - unique
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_start_on
+    description: timestamp, specifying when the course run begins
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_end_on
+    description: timestamp, specifying when the course run ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
 
 - name: int__bootcamps__users
   description: denormalized bootcamps users
