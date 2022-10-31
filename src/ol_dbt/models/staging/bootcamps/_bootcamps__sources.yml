@@ -27,25 +27,74 @@ sources:
     - name: novoed_sync_date
       description: ""
 
-  - name: raw__bootcamps__app__postgres__klasses_bootcamprun
-    description: ""
+  - name: raw__bootcamps__app__postgres__klasses_bootcamp
     columns:
     - name: id
-      description: ""
+      description: int, primary key representing a single bootcamp course
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: title
-      description: ""
-    - name: source
-      description: ""
-    - name: end_date
-      description: ""
-    - name: start_date
-      description: ""
+      description: str, title of the bootcamp course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: legacy
+      description: boolean, used to distinguish the older bootcamp courses from the
+        newer ones
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 3
+
+  - name: raw__bootcamps__app__postgres__klasses_bootcamprun
+    columns:
+    - name: id
+      description: int, primary key representing a single bootcamp course run
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: bootcamp_id
-      description: ""
-    - name: course_readable_id
-      description: ""
+      description: int, foreign key to klasses_bootcamp representing a single bootcamp
+        course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: title
+      description: str, title of the bootcamp course run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: run_key
+      description: int, numeric key assigned to bootcamp course run (not necessarily
+        unique by itself)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: source
+      description: str, indicating if applications were from SMApply or FluidRev (those
+        two sources are deprecated)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: start_date
+      description: timestamp, specifying when the course run begins
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: end_date
+      description: timestamp, specifying when the course run ends
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: bootcamp_run_id
+      description: str, unique string to identify a bootcamp course run (it could
+        be blank for older runs)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: allows_skipped_steps
+      description: boolean, indicating if this course run allows users to skip application
+        steps
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: novoed_course_stub
-      description: ""
+      description: str, unique identifier for NovoEd course (it's primarily used for
+        API call to NovoEd)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 10
 
   - name: raw__bootcamps__app__postgres__auth_user
     description: ""

@@ -5,7 +5,7 @@ with enrollments as (
 )
 
 , runs as (
-    select * from {{ ref('stg__bootcamps__app__postgres__klasses_bootcamprun') }}
+    select * from {{ ref('stg__bootcamps__app__postgres__courses_courserun') }}
 )
 
 , users as (
@@ -19,11 +19,11 @@ with enrollments as (
         , enrollments.user_id
         , enrollments.created_on
         , '' as courseware_url_path
-        , runs.title as course_title
+        , runs.courserun_title
         , users.user_username
         , users.user_email
     from enrollments
-    inner join runs on runs.id = enrollments.bootcamp_run_id
+    inner join runs on runs.courserun_id = enrollments.bootcamp_run_id
     inner join users on users.user_id = enrollments.user_id
 )
 

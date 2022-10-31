@@ -88,7 +88,7 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 9
-- name: stg__bootcamps_app__postgres__profiles_profile
+- name: stg__bootcamps__app__postgres__profiles_profile
   columns:
   - name: user_profile_id
     description: int, sequential ID
@@ -167,3 +167,57 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 12
+
+- name: stg__bootcamps__app__postgres__courses_course
+  description: staging model for Bootcamps courses
+  columns:
+  - name: course_id
+    description: int, primary key representing a single bootcamp course
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_title
+    description: str, title of the bootcamp course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 2
+
+- name: stg__bootcamps__app__postgres__courses_courserun
+  description: staging model for Bootcamps course runs
+  columns:
+  - name: courserun_id
+    description: int, primary key representing a single bootcamp course run
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to courses_course representing a single bootcamp
+      course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_title
+    description: str, title of the bootcamp course run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_readable_id
+    description: str, unique string to identify a bootcamp course run (could be blank
+      for older runs)
+    tests:
+    - unique
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_start_on
+    description: timestamp, specifying when the course run begins
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_end_on
+    description: timestamp, specifying when the course run ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
