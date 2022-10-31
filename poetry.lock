@@ -677,7 +677,7 @@ pyarrow = ">=3.0.0,<10.0dev"
 
 [[package]]
 name = "dbt-core"
-version = "1.2.2"
+version = "1.3.0"
 description = "With dbt, data analysts and engineers can build analytics the way engineers build applications."
 category = "main"
 optional = false
@@ -692,13 +692,14 @@ dbt-extractor = ">=0.4.1,<0.5.0"
 hologram = ">=0.0.14,<=0.0.15"
 idna = ">=2.5,<4"
 isodate = ">=0.6,<0.7"
-Jinja2 = "2.11.3"
+Jinja2 = "3.1.2"
 logbook = ">=1.5,<1.6"
-MarkupSafe = ">=0.23,<2.1"
-mashumaro = "2.9"
+mashumaro = {version = "3.0.4", extras = ["msgpack"]}
 minimal-snowplow-tracker = "0.0.2"
 networkx = {version = ">=2.3,<3", markers = "python_version >= \"3.8\""}
 packaging = ">=20.9,<22.0"
+pathspec = ">=0.9.0,<0.10.0"
+pyyaml = ">=6.0"
 requests = "<3.0.0"
 sqlparse = ">=0.2.3,<0.5"
 typing-extensions = ">=3.7.4"
@@ -714,15 +715,14 @@ python-versions = ">=3.6.1"
 
 [[package]]
 name = "dbt-trino"
-version = "1.2.3"
+version = "1.3.0"
 description = "The trino adapter plugin for dbt (data build tool)"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 
 [package.dependencies]
-dbt-core = ">=1.2.0,<1.3.0"
-pyyaml = ">=5.4"
+dbt-core = ">=1.3.0,<1.4.0"
 trino = "0.318.0"
 
 [[package]]
@@ -1694,17 +1694,17 @@ trio = ["async_generator", "trio"]
 
 [[package]]
 name = "jinja2"
-version = "2.11.3"
+version = "3.1.2"
 description = "A very fast and expressive template engine."
 category = "main"
 optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+python-versions = ">=3.7"
 
 [package.dependencies]
-MarkupSafe = ">=0.23"
+MarkupSafe = ">=2.0"
 
 [package.extras]
-i18n = ["Babel (>=0.8)"]
+i18n = ["Babel (>=2.7)"]
 
 [[package]]
 name = "jmespath"
@@ -1929,16 +1929,19 @@ tests = ["pytest", "pytz", "simplejson"]
 
 [[package]]
 name = "mashumaro"
-version = "2.9"
+version = "3.0.4"
 description = "Fast serialization framework on top of dataclasses"
 category = "main"
 optional = false
 python-versions = ">=3.6"
 
 [package.dependencies]
-msgpack = ">=0.5.6"
-pyyaml = ">=3.13"
+msgpack = {version = ">=0.5.6", optional = true, markers = "extra == \"msgpack\""}
 typing-extensions = "*"
+
+[package.extras]
+msgpack = ["msgpack (>=0.5.6)"]
+yaml = ["pyyaml (>=3.13)"]
 
 [[package]]
 name = "matplotlib-inline"
@@ -2263,11 +2266,11 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 
 [[package]]
 name = "pathspec"
-version = "0.10.1"
+version = "0.9.0"
 description = "Utility library for gitignore style pattern matching of file paths."
-category = "dev"
+category = "main"
 optional = false
-python-versions = ">=3.7"
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 
 [[package]]
 name = "pbr"
@@ -3448,7 +3451,7 @@ typing_extensions = ">=4.0,<5.0"
 type = "git"
 url = "https://github.com/wemake-services/wemake-python-styleguide"
 reference = "HEAD"
-resolved_reference = "89a621e0b55ddc8ec7d666d24e91f90d1d91a012"
+resolved_reference = "80db2405965234efede6558010758dfe5bfea46d"
 
 [[package]]
 name = "werkzeug"
@@ -3484,7 +3487,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "5bbe95a91ddce67c491b24b7013e148bb9c4dfba561850ebd55fd5d022be03f5"
+content-hash = "e564c3d8fd7f88988eb0614cbe5428835d52f68f67b9fdd6b12df6be5191da14"
 
 [metadata.files]
 agate = [
@@ -3804,8 +3807,8 @@ db-dtypes = [
     {file = "db_dtypes-1.0.4-py2.py3-none-any.whl", hash = "sha256:996c0250051c0c3faef8a9bd02b30a182d553e6a9b8d34b5344a30fe2fb9de33"},
 ]
 dbt-core = [
-    {file = "dbt-core-1.2.2.tar.gz", hash = "sha256:7dcd6e22c4022b2cc500c072790484f2cde635bfc768482703676690ff82b23d"},
-    {file = "dbt_core-1.2.2-py3-none-any.whl", hash = "sha256:b93895380dfe481d7f6ded9203ca4357fe6309c19643e27627612f174f942689"},
+    {file = "dbt-core-1.3.0.tar.gz", hash = "sha256:20d23cf7c20ed16f6d82804d6cf67dafca8ac3c9f2557e5aeaa8c6af9d39c384"},
+    {file = "dbt_core-1.3.0-py3-none-any.whl", hash = "sha256:63f2f691af87790a4315e15267b863ecdd67828da5c76367c2c2f1cad08c6822"},
 ]
 dbt-extractor = [
     {file = "dbt_extractor-0.4.1-cp36-abi3-macosx_10_7_x86_64.whl", hash = "sha256:4dc715bd740e418d8dc1dd418fea508e79208a24cf5ab110b0092a3cbe96bf71"},
@@ -3826,8 +3829,8 @@ dbt-extractor = [
     {file = "dbt_extractor-0.4.1.tar.gz", hash = "sha256:75b1c665699ec0f1ffce1ba3d776f7dfce802156f22e70a7b9c8f0b4d7e80f42"},
 ]
 dbt-trino = [
-    {file = "dbt-trino-1.2.3.tar.gz", hash = "sha256:bc34b37a567eed26c125415ef433394b0ab4b947b24298579b7b74a619f7c5cd"},
-    {file = "dbt_trino-1.2.3-py3-none-any.whl", hash = "sha256:7c1abd4491a82d0c68cc59585f8ac12b5cc16f862ef81e999ee9d36409a33012"},
+    {file = "dbt-trino-1.3.0.tar.gz", hash = "sha256:ade762add665d5b6f14b3bd164397d1c64f00ecb12dbf428821e3e3db56cfb0e"},
+    {file = "dbt_trino-1.3.0-py3-none-any.whl", hash = "sha256:c2dabc7fab47e50e9d0c1aa1e6a1305b13f5b1e667973946e1061e09fb916882"},
 ]
 debugpy = [
     {file = "debugpy-1.6.3-cp310-cp310-macosx_10_15_x86_64.whl", hash = "sha256:c4b2bd5c245eeb49824bf7e539f95fb17f9a756186e51c3e513e32999d8846f3"},
@@ -4337,8 +4340,8 @@ jeepney = [
     {file = "jeepney-0.8.0.tar.gz", hash = "sha256:5efe48d255973902f6badc3ce55e2aa6c5c3b3bc642059ef3a91247bcfcc5806"},
 ]
 jinja2 = [
-    {file = "Jinja2-2.11.3-py2.py3-none-any.whl", hash = "sha256:03e47ad063331dd6a3f04a43eddca8a966a26ba0c5b7207a9a9e4e08f1b29419"},
-    {file = "Jinja2-2.11.3.tar.gz", hash = "sha256:a6d58433de0ae800347cab1fa3043cebbabe8baa9d29e668f1c768cb87a333c6"},
+    {file = "Jinja2-3.1.2-py3-none-any.whl", hash = "sha256:6088930bfe239f0e6710546ab9c19c9ef35e29792895fed6e6e31a023a182a61"},
+    {file = "Jinja2-3.1.2.tar.gz", hash = "sha256:31351a702a408a9e7595a8fc6150fc3f43bb6bf7e319770cbc0db9df9437e852"},
 ]
 jmespath = [
     {file = "jmespath-1.0.1-py3-none-any.whl", hash = "sha256:02e2e4cc71b5bcab88332eebf907519190dd9e6e82107fa7f83b1003a6252980"},
@@ -4479,8 +4482,8 @@ marshmallow = [
     {file = "marshmallow-3.18.0.tar.gz", hash = "sha256:6804c16114f7fce1f5b4dadc31f4674af23317fcc7f075da21e35c1a35d781f7"},
 ]
 mashumaro = [
-    {file = "mashumaro-2.9-py3-none-any.whl", hash = "sha256:f616df410d82936b8bb2b4d32af570556685d77f49acf4228134b50230a69799"},
-    {file = "mashumaro-2.9.tar.gz", hash = "sha256:343b6e2d3e432e31973688c4c8821dcd6ef41fd33264b992afc4aecbfd155f18"},
+    {file = "mashumaro-3.0.4-py3-none-any.whl", hash = "sha256:72b97b7660b7a4de1df2466a52543e6439f968cd081ce55aae899bc375b1f53d"},
+    {file = "mashumaro-3.0.4.tar.gz", hash = "sha256:6d221e09df2d884afda19325d5412dc9b1274be9ba1c3e57c12a8977320c7e07"},
 ]
 matplotlib-inline = [
     {file = "matplotlib-inline-0.1.6.tar.gz", hash = "sha256:f887e5f10ba98e8d2b150ddcf4702c1e5f8b3a20005eb0f74bfdbd360ee6f304"},
@@ -4697,8 +4700,8 @@ pastel = [
     {file = "pastel-0.2.1.tar.gz", hash = "sha256:e6581ac04e973cac858828c6202c1e1e81fee1dc7de7683f3e1ffe0bfd8a573d"},
 ]
 pathspec = [
-    {file = "pathspec-0.10.1-py3-none-any.whl", hash = "sha256:46846318467efc4556ccfd27816e004270a9eeeeb4d062ce5e6fc7a87c573f93"},
-    {file = "pathspec-0.10.1.tar.gz", hash = "sha256:7ace6161b621d31e7902eb6b5ae148d12cfd23f4a249b9ffb6b9fee12084323d"},
+    {file = "pathspec-0.9.0-py2.py3-none-any.whl", hash = "sha256:7d15c4ddb0b5c802d161efc417ec1a2558ea2653c2e8ad9c19098201dc1c993a"},
+    {file = "pathspec-0.9.0.tar.gz", hash = "sha256:e564499435a2673d586f6b2130bb5b95f04a3ba06f81b8f895b651a3c76aabb1"},
 ]
 pbr = [
     {file = "pbr-5.11.0-py2.py3-none-any.whl", hash = "sha256:db2317ff07c84c4c63648c9064a79fe9d9f5c7ce85a9099d4b6258b3db83225a"},
