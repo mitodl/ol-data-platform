@@ -6,7 +6,7 @@ RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app /tmp/packages && \
     useradd -s /bin/bash -d /opt/dagster/dagster_home/ dagster && \
     chown -R dagster:dagster /opt/dagster/dagster_home /opt/dagster/app && \
     apt-get update && \
-    apt-get install -y wget gnupg2 git && \
+    apt-get install -y wget gnupg2 git build-essential && \
     wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | apt-key add - && \
     echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/5.0 main" > /etc/apt/sources.list.d/mongodb-org-5.0.list && \
     apt-get update && \
