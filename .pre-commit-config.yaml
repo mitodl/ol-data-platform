@@ -32,7 +32,7 @@ repos:
   - id: yamllint
     args: [--format, parsable, -d, relaxed]
 - repo: https://github.com/asottile/pyupgrade
-  rev: v3.1.0
+  rev: v3.2.0
   hooks:
   - id: pyupgrade
     args:
@@ -87,7 +87,7 @@ repos:
     - types-pymysql
     - types-requests
 - repo: https://github.com/sqlfluff/sqlfluff
-  rev: 1.3.2
+  rev: 1.4.1
   hooks:
   - id: sqlfluff-fix
       # Arbitrary arguments to show an example
