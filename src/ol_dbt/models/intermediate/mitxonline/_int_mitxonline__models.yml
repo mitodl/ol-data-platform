@@ -116,8 +116,7 @@ models:
     - not_null
     - dbt_expectations.expect_column_to_exist
   - name: courserun_tag
-    description: str, unique string that identifies a single run for a course. E.g.
-      1T2022
+    description: str, string that identifies a single run in a course E.g. 1T2022
     tests:
     - not_null
     - dbt_expectations.expect_column_to_exist

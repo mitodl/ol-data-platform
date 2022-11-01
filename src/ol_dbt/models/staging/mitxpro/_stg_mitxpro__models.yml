@@ -173,3 +173,252 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 12
+
+- name: stg__mitxpro__app__postgres__courses_program
+  columns:
+  - name: program_id
+    description: int, primary key representing a single MITxPro program
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_is_live
+    description: boolean, indicating whether the program is available to users on
+      MITxPro website
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code} e.g.
+      program-v1:xPRO+MLx
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_created_on
+    description: timestamp, specifying when a program was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_updated_on
+    description: timestamp, specifying when a program was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
+
+- name: stg__mitxpro__app__postgres__courses_programrun
+  columns:
+  - name: programrun_id
+    description: int, primary key representing a single MITxPro program run
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: int, foreign key to courses_program representing a single MITxPro
+      program
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_tag
+    description: str, string that identifies a single run in a program e.g. R0
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_start_on
+    description: timestamp, specifying when the program run begins
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_end_on
+    description: timestamp, specifying when the program run ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_created_on
+    description: timestamp, specifying when the program run was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_updated_on
+    description: timestamp, specifying when the program run was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 7
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["program_id", "programrun_tag"]
+
+- name: stg__mitxpro__app__postgres__courses_course
+  columns:
+  - name: course_id
+    description: int, primary key representing a single MITxPro course
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_is_live
+    description: boolean, indicating whether the course is available to users on MITxPro
+      website
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: id, foreign key to courses_program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} e.g.
+      course-v1:xPRO+MLx2
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: position_in_program
+    description: int, sequential number indicating the course display order in a program
+      on MITxPro website
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_created_on
+    description: timestamp, specifying when a course was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_updated_on
+    description: timestamp, specifying when a course was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
+
+- name: stg__mitxpro__app__postgres__courses_courserun
+  columns:
+  - name: courserun_id
+    description: int, primary key representing a single MITxPro course run
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to courses_course representing a single MITxPro
+      course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_is_live
+    description: boolean, indicating whether the course run is available to users
+      on MITxPro website
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_tag
+    description: str, string that identifies a single run in a program e.g. R0
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      e.g. course-v1:xPRO+MLx1+R0
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_url
+    description: str, url location for the course run on MITxPro website
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_start_on
+    description: timestamp, specifying when the course begins
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_end_on
+    description: timestamp, specifying when the course ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_enrollment_start_on
+    description: timestamp, specifying when enrollment starts
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_enrollment_end_on
+    description: timestamp, specifying when enrollment ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_expired_on
+    description: timestamp, specifying the date time beyond which users should not
+      see link to this course run on their dashboard
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_created_on
+    description: timestamp, specifying when a course run was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_updated_on
+    description: timestamp, specifying when a course run was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 14
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_id", "courserun_tag"]
+
+- name: stg__mitxpro__app__postgres__courses_coursetopic
+  columns:
+  - name: coursetopic_id
+    description: int, primary key representing a single MITxPro course topic
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: coursetopic_name
+    description: str, name of a course topic
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: coursetopic_created_on
+    description: timestamp, specifying when a course topic was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: coursetopic_updated_on
+    description: timestamp, specifying when a course topic was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 4
+
+- name: stg__mitxpro__app__postgres__courses_course_to_topic
+  columns:
+  - name: coursetotopic_id
+    description: int, primary key representing a single MITxPro course tagged to a
+      topic
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: coursetopic_id
+    description: int, foreign key to courses_coursetopic representing a single course
+      topic
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to courses_course representing a single course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 3
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["coursetopic_id", "course_id"]

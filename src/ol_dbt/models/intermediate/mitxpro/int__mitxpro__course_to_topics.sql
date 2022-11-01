@@ -1,14 +1,13 @@
--- MITx Online Course to Topic Information
+-- MITxPro Course to Topic Information
 -- Keep it as separate model for flexibility to satisfy different use cases
 
 with topics as (
-    select *
-    from {{ ref('stg__mitxonline__app__postgres__courses_coursetopic') }}
+    select * from {{ ref('stg__mitxpro__app__postgres__courses_coursetopic') }}
 )
 
 , course_to_topics as (
     select *
-    from {{ ref('stg__mitxonline__app__postgres__courses_course_to_topic') }}
+    from {{ ref('stg__mitxpro__app__postgres__courses_course_to_topic') }}
 )
 
 select

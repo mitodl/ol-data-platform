@@ -6,9 +6,10 @@ with enrollments as (
 
 , runs as (
     select
-        id
-        , title
-        , courseware_url_path
+        courserun_id
+        , courserun_title
+        , courserun_readable_id
+        , courserun_url
     from {{ ref('stg__mitxpro__app__postgres__courses_courserun') }}
 )
 
@@ -26,12 +27,12 @@ with enrollments as (
         , enrollments.active as course_run_active
         , enrollments.user_id
         , enrollments.created_on
-        , runs.courseware_url_path
-        , runs.title as course_title
+        , runs.courserun_url
+        , runs.courserun_title
         , users.user_username
         , users.user_email
     from enrollments
-    inner join runs on enrollments.run_id = runs.id
+    inner join runs on enrollments.run_id = runs.courserun_id
     inner join users on enrollments.user_id = users.user_id
 )
 
