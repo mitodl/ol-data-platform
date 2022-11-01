@@ -1,4 +1,4 @@
--- xPro Online Course Information
+--MITxPro Online Course Information
 
 with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__courses_course') }}
@@ -6,14 +6,14 @@ with source as (
 
 , cleaned as (
     select
-        id
-        , live
-        , title
+        id as course_id
+        , live as course_is_live
+        , title as course_title
         , program_id
         , readable_id as course_readable_id
         , position_in_program
-        , created_on
-        , updated_on
+        , to_iso8601(from_iso8601_timestamp(created_on)) as course_created_on
+        , to_iso8601(from_iso8601_timestamp(updated_on)) as course_updated_on
     from source
 )
 

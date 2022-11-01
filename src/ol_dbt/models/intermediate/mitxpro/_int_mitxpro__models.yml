@@ -2,23 +2,205 @@
 version: 2
 
 models:
+- name: int__mitxpro__programs
+  description: Intermediate model of programs in MITxPro
+  columns:
+  - name: program_id
+    description: int, primary key representing a single MITxPro program
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_is_live
+    description: boolean, indicating whether the program is available to users on
+      MITxPro website
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code} e.g.
+      program-v1:xPRO+MLx
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_created_on
+    description: timestamp, specifying when a program was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_updated_on
+    description: timestamp, specifying when a program was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
+
+- name: int__mitxpro__program_runs
+  description: Intermediate model of program runs in MITxPro
+  columns:
+  - name: programrun_id
+    description: int, primary key representing a single MITxPro program run
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: int, foreign key to courses_program representing a single MITxPro
+      program
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_readable_id
+    description: str, unique program run ID formatted as program-v1:{org}+{program
+      code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_tag
+    description: str, string that identifies a single run in a program e.g. R0
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_start_on
+    description: timestamp, specifying when the program run begins
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_end_on
+    description: timestamp, specifying when the program run ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 7
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxpro__app__postgres__courses_programrun')
+
+- name: int__mitxpro__courses
+  description: Intermediate model of courses in MITxPro
+  columns:
+  - name: course_id
+    description: int, primary key representing a single MITxPro course
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: id, foreign key to courses_program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_is_live
+    description: boolean, indicating whether the course is available to users on MITxPro
+      website
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} e.g.
+      course-v1:xPRO+MLx2
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
+
 - name: int__mitxpro__course_runs
   description: Intermediate model of course runs in MIT xPro.
   columns:
-  - name: id
-    description: ""
-  - name: title
-    description: ""
-  - name: end_date
-    description: ""
-  - name: start_date
-    description: ""
-  - name: courseware_id
-    description: ""
-  - name: courseware_url_path
-    description: ""
+  - name: courserun_id
+    description: int, primary key representing a single MITxPro course run
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to courses_course representing a single MITxPro
+      course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_is_live
+    description: boolean, indicating whether the course run is available to users
+      on MITxPro website
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_tag
+    description: str, string that identifies a single run in a course e.g. R0
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      e.g. course-v1:xPRO+MLx1+R0
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_url
+    description: str, url location for the course run on MITxPro website
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_start_on
+    description: timestamp, specifying when the course begins
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_end_on
+    description: timestamp, specifying when the course ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_enrollment_start_on
+    description: timestamp, specifying when enrollment starts
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_enrollment_end_on
+    description: timestamp, specifying when enrollment ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 11
 
-- name: int_mitxpro__enrollments
+- name: int__mitxpro__course_to_topics
+  description: Intermediate model for MITxPro course to topics
+  columns:
+  - name: coursetopic_name
+    description: str, name of a course topic
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to courses_course representing a single course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 2
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["coursetopic_name", "course_id"]
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxpro__app__postgres__courses_course_to_topic')
+
+- name: int__mitxpro__enrollments
   description: Intermediate model of enrollments in MIT xPro.
   columns:
   - name: id
@@ -31,10 +213,10 @@ models:
     description: int, id for the enrolling user
   - name: created_on
     description: timestamp, specifying when the enrollment happened
-  - name: courseware_url_path
+  - name: courserun_url
     description: str, url for course where the user is enrolled
-  - name: course_title
-    description: str, title of the course where the user is enrolled
+  - name: courserun_title
+    description: str, title of the course run where the user is enrolled
   - name: user_username
     description: str, name chosen by user
   - name: user_email
