@@ -3109,7 +3109,7 @@ sqlcipher = ["sqlcipher3_binary"]
 
 [[package]]
 name = "sqlfluff"
-version = "1.3.2"
+version = "1.4.1"
 description = "The SQL Linter for Humans"
 category = "dev"
 optional = false
@@ -3589,7 +3589,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "0bea2c71252de5cc45011a66df82797b0a7a0a3a105ea04dc9d25ed4753a18ba"
+content-hash = "63550c8afb669fd9cfb191d681184e9dc72e01215848b1fea9ddad795468d169"
 
 [metadata.files]
 agate = [
@@ -5622,8 +5622,8 @@ sqlalchemy = [
     {file = "SQLAlchemy-1.4.42.tar.gz", hash = "sha256:177e41914c476ed1e1b77fd05966ea88c094053e17a85303c4ce007f88eff363"},
 ]
 sqlfluff = [
-    {file = "sqlfluff-1.3.2-py3-none-any.whl", hash = "sha256:538707af21d1e1f15a64512255b502eaf6d12d1b6edfd3b0b6cb979fcaec07b4"},
-    {file = "sqlfluff-1.3.2.tar.gz", hash = "sha256:2a291d9c2ff742471c690c4bd1e760a483100fbcba23f330a61e7888f67c0c3f"},
+    {file = "sqlfluff-1.4.1-py3-none-any.whl", hash = "sha256:b65071162c70a0424dd2fc53edd4d76633293feb7690b32e0ed02d10c5a0b66c"},
+    {file = "sqlfluff-1.4.1.tar.gz", hash = "sha256:cc16f31b1213e42fde1d6d80d66b5f54553ea269165602cc8e4e51484f15bb2d"},
 ]
 sqlparse = [
     {file = "sqlparse-0.4.3-py3-none-any.whl", hash = "sha256:0323c0ec29cd52bceabc1b4d9d579e311f3e4961b98d174201d5622a23b85e34"},

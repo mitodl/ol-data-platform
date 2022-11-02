@@ -44,7 +44,7 @@ mypy = "*"
 poetry = "*"
 pre-commit = "^2"
 pytest = "^7.1.2"
-sqlfluff = "^1.3.0"
+sqlfluff = "^1.4.1"
 wemake-python-styleguide = {git = "https://github.com/wemake-services/wemake-python-styleguide"}
 
 [tool.black]
