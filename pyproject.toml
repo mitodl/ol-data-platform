@@ -78,3 +78,7 @@ project_dir = "src/ol_dbt/"
 profiles_dir = "src/ol_dbt/"
 profile ="open_learning"
 target = "qa"
+
+[tool.sqlfluff.layout.type.comma]
+# Use leading commas for cleaner diffs
+line_position = "leading"
