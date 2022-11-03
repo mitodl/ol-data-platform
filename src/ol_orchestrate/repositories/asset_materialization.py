@@ -96,7 +96,7 @@ def mitxonline():
                         }
                     },
                     "materialize_dbt_model": {
-                        "config": {"models_path": "/opt/dbt/models/staging/mitxonline"}
+                        "config": {"models_path": "models/staging/mitxonline"}
                     },
                 },
             },
@@ -122,7 +122,7 @@ def mitxonline():
                         }
                     },
                     "materialize_dbt_model": {
-                        "config": {"models_path": "/opt/dbt/models/staging/mitxonline"}
+                        "config": {"models_path": "models/staging/mitxonline"}
                     },
                 },
             },
@@ -154,7 +154,7 @@ def mitxpro():
                         }
                     },
                     "materialize_dbt_model": {
-                        "config": {"models_path": "/opt/dbt/models/staging/mitxpro"}
+                        "config": {"models_path": "models/staging/mitxpro"}
                     },
                 },
             },
@@ -180,7 +180,7 @@ def mitxpro():
                         }
                     },
                     "materialize_dbt_model": {
-                        "config": {"models_path": "/opt/dbt/models/staging/mitxpro"}
+                        "config": {"models_path": "models/staging/mitxpro"}
                     },
                 },
             },
@@ -210,7 +210,7 @@ def mitx_residential():
                     },
                     "materialize_dbt_model": {
                         "config": {
-                            "models_path": "/opt/dbt/models/staging/mitx_residential"
+                            "models_path": "models/staging/mitx_residential"
                         }
                     },
                 },
@@ -240,7 +240,7 @@ def ocw_studio():
                         }
                     },
                     "materialize_dbt_model": {
-                        "config": {"models_path": "/opt/dbt/models/staging/ocw_studio"}
+                        "config": {"models_path": "models/staging/ocw_studio"}
                     },
                 },
             },
