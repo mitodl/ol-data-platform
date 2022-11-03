@@ -209,9 +209,7 @@ def mitx_residential():
                         }
                     },
                     "materialize_dbt_model": {
-                        "config": {
-                            "models_path": "models/staging/mitx_residential"
-                        }
+                        "config": {"models_path": "models/staging/mitx_residential"}
                     },
                 },
             },
