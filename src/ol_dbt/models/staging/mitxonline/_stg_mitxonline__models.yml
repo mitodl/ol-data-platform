@@ -316,3 +316,113 @@ models:
       value: 5
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["blockedcountry_code", "course_id"]
+- name: stg__mitxonline__app__postgres__courses_courserunenrollment
+  columns:
+  - name: courserunenrollment_id
+    description: int, sequential ID tracking a single user enrollment
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+    - not_null
+  - name: courserunenrollment_created_on
+    description: timestamp, specifying when an enrollment was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserunenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserunenrollment_enrollment_status
+    description: str, enrollment status for users whose enrollment changed. Options
+      are 'deferred', 'transferred', 'refunded', 'unenrolled', 'enrolled'
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
+          '']
+  - name: courserunenrollment_is_active
+    description: boolean, indicating whether the user is still enrolled in the run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, indicating whether the user is enrolled on edx
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserun_id
+    description: int, unique ID specifying a "run" of an MITx Online course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_id
+    description: int, unique ID for each user on the MITx Online platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserunenrollment_enrollment_mode
+    description: str, enrollment mode for user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserunenrollment_has_edx_email_subscription
+    description: boolean, indicates whether the user should receive emails from edx
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 10
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_id"]
+- name: stg__mitxonline__app__postgres__courses_programenrollment
+  columns:
+  - name: programenrollment_id
+    description: int, sequential ID tracking a single user enrollment
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+    - not_null
+  - name: programenrollment_created_on
+    description: timestamp, specifying when an enrollment was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: programenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: programenrollment_enrollment_status
+    description: str, enrollment status for users whose enrollment changed Options
+      are 'deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled'
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
+          '']
+  - name: programenrollment_is_active
+    description: boolean, indicating whether the user is still enrolled in the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_id
+    description: int, unique ID specifying a "run" of an MITx Online course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_id
+    description: int, unique ID for each user on the MITx Online platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: programenrollment_enrollment_mode
+    description: str, enrollment mode for user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "program_id"]
