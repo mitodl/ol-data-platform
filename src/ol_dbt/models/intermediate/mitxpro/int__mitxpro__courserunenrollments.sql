@@ -1,4 +1,4 @@
--- Enrollment information for xPro
+-- Enrollment information for MITxPro
 
 with enrollments as (
     select * from {{ ref('stg__mitxpro__app__postgres__courses_courserunenrollment') }}
@@ -8,8 +8,6 @@ with enrollments as (
     select
         courserun_id
         , courserun_title
-        , courserun_readable_id
-        , courserun_url
     from {{ ref('stg__mitxpro__app__postgres__courses_courserun') }}
 )
 
@@ -23,17 +21,20 @@ with enrollments as (
 
 , mitxpro_enrollments as (
     select
-        enrollments.id
-        , enrollments.active as course_run_active
+        enrollments.courserunenrollment_id
+        , enrollments.courserunenrollment_is_active
         , enrollments.user_id
-        , enrollments.created_on
-        , runs.courserun_url
+        , enrollments.courserun_id
+        , enrollments.courserunenrollment_created_on
+        , enrollments.courserunenrollment_enrollment_status
         , runs.courserun_title
         , users.user_username
         , users.user_email
+        , enrollments.ecommerce_company_id
+        , enrollments.ecommerce_order_id
     from enrollments
-    inner join runs on enrollments.run_id = runs.courserun_id
-    inner join users on enrollments.user_id = users.user_id
+    left join runs on enrollments.courserun_id = runs.courserun_id
+    left join users on enrollments.user_id = users.user_id
 )
 
 select * from mitxpro_enrollments
