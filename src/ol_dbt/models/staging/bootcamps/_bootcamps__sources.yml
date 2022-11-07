@@ -11,21 +11,47 @@ sources:
     description: ""
     columns:
     - name: id
-      description: ""
+      description: int, sequential ID tracking a single user enrollment
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: active
-      description: ""
+      description: boolean, indicating whether the user is still enrolled in the bootcamp
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: user_id
-      description: ""
+      description: int, unique ID for each bootcamps user
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: created_on
-      description: ""
+      description: timestamp, specifying when an enrollment was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: updated_on
-      description: ""
+      description: timestamp, specifying when an enrollment was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: change_status
-      description: ""
+      description: str, enrollment status for users whose enrollment is no longer
+        active. Options are 'deferred', 'refunded'
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: bootcamp_run_id
-      description: ""
+      description: int, unique ID specifying a "run" of an bootcamp
+      tests:
+      - dbt_expectations.expect_column_to_exist
     - name: novoed_sync_date
-      description: ""
+      description: timestamp, indicates the last time when the data was synced with
+        novoed for courses hosted on novoed
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_certificate_is_blocked
+      description: boolean, flag indicating that a new certificate should not be generated
+        for the enrollment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 9
 
   - name: raw__bootcamps__app__postgres__klasses_bootcamp
     columns:
