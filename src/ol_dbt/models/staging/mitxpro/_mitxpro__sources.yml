@@ -7,6 +7,96 @@ sources:
   database: 'ol_data_lake_{{ target.name }}'
   schema: 'ol_warehouse_{{ target.name }}_raw'
   tables:
+  - name: raw__xpro__app__postgres__courses_courserunenrollment
+    columns:
+    - name: id
+      description: int, sequential ID tracking a single user enrollment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when an enrollment was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when an enrollment was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: change_status
+      description: str, enrollment status for users whose enrollment is no longer
+        active. Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: active
+      description: boolean, indicating whether the user is still enrolled in the run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: edx_enrolled
+      description: boolean, indicating whether the user is enrolled on edx
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: run_id
+      description: int, unique ID specifying a "run" of an xPro course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: int, unique ID for each user on the xPro platform
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, id of order associated with the payment for the enrollment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: company_id
+      description: int, id of the company associated with the payment for the enrollment
+        for enrollments that are made through bulk purchases by companies
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 10
+  - name: raw__xpro__app__postgres__courses_programenrollment
+    columns:
+    - name: id
+      description: int, sequential ID tracking a single user enrollment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when an enrollment was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when an enrollment was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: change_status
+      description: str, enrollment status for users whose enrollment is no longer
+        active. Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: active
+      description: boolean, indicating whether the user is still enrolled in the program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: program_id
+      description: int, foreign key from the courses_program table
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: int, unique ID for each user on the xPro platform
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, id of order associated with the payment for the enrollment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: company_id
+      description: int, id of the company associated with the payment for the enrollment
+        for enrollments that are made through bulk purchases by companies
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 9
   - name: raw__xpro__app__postgres__courses_program
     columns:
     - name: id
@@ -73,21 +163,6 @@ sources:
     tests:
     - dbt_expectations.expect_table_column_count_to_equal:
         value: 7
-
-  - name: raw__xpro__app__postgres__courses_courserunenrollment
-    columns:
-    - name: id
-      description: int, sequential ID tracking a single user enrollment
-    - name: active
-      description: str, boolean describing whether the enrollment is active
-    - name: run_id
-      description: int, unique ID specifying a "run" of an xPro course
-    - name: user_id
-      description: int, unique ID for each user on the xPro platform
-    - name: created_on
-      description: timestamp, specifying when an enrollment was initially created
-    - name: updated_on
-      description: timestamp, specifying when an enrollment was most recently updated
 
   - name: raw__xpro__app__postgres__courses_course
     description: Source table for MITxPro courses

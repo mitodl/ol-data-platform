@@ -6,12 +6,16 @@ with source as (
 
 , cleaned as (
     select
-        id
-        , active
-        , run_id
+        id as courserunenrollment_id
+        , change_status as courserunenrollment_enrollment_status
+        , active as courserunenrollment_is_active
+        , edx_enrolled as courserunenrollment_is_edx_enrolled
+        , run_id as courserun_id
         , user_id
-        , created_on
-        , updated_on
+        , company_id as ecommerce_company_id
+        , order_id as ecommerce_order_id
+        , to_iso8601(from_iso8601_timestamp(created_on)) as courserunenrollment_created_on
+        , to_iso8601(from_iso8601_timestamp(updated_on)) as courserunenrollment_updated_on
     from source
 )
 
