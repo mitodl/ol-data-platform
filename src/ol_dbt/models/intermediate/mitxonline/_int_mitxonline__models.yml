@@ -263,6 +263,241 @@ models:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 13
 
+- name: int__mitxonline__courserun_grades
+  description: Intermediate model for MITxOnline course run grades
+  columns:
+  - name: courserungrade_id
+    description: int, primary key representing a single MITxOnline grade record
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_id
+    description: int, foreign key to courses_courserun representing a single course
+      run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__mitxonline__course_runs')
+        field: courserun_id
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_url
+    description: str, url location for the course run in MITx Online
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to courses_course representing a single course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__mitxonline__courses')
+        field: course_id
+  - name: courserungrade_grade
+    description: float, user's grade for the course (range between 0.0 to 1.0)
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_letter_grade
+    description: str, letter grade defined in the edX grading policy (value may be
+      'A', 'B', 'C', 'D', 'Pass', none)
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the minimum passing
+      score set for this course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_id
+    description: str, foreign key to users_user representing a single user
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__mitxonline__users')
+        field: user_id
+  - name: user_username
+    description: string, username
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: user_email
+    description: string, email
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__app__postgres__courses_courserungrade')
+
+- name: int__mitxonline__courserun_certificates
+  columns:
+  - name: courseruncertificate_id
+    description: int, primary key representing a single MITxOnline course certificate
+      record
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_id
+    description: int, foreign key to courses_courserun representing a single course
+      run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__mitxonline__course_runs')
+        field: courserun_id
+  - name: course_id
+    description: int, foreign key to courses_course representing a single course
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__mitxonline__courses')
+        field: course_id
+  - name: user_id
+    description: str, foreign key to users_user representing a single user
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__mitxonline__users')
+        field: user_id
+  - name: courseruncertificate_is_revoked
+    description: boolean, indicating whether the certificate is revoked and invalid
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_url
+    description: str, url location for the course run in MITx Online
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_username
+    description: string, username
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: user_email
+    description: string, email
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__app__postgres__courses_courseruncertificate')
+
+- name: int__mitxonline__programs
+  columns:
+  - name: program_id
+    description: int, primary key representing a single MITx Online program
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_is_live
+    description: boolean, indicating whether the program is available to users
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code}
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 4
+
+- name: int__mitxonline__program_certificates
+  columns:
+  - name: programcertificate_id
+    description: int, primary key representing a single MITxOnline program certificate
+      record
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: programcertificate_uuid
+    description: str, unique identifier for the program certificate
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: int, foreign key to courses_program representing a single program
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__mitxonline__programs')
+        field: program_id
+  - name: user_id
+    description: str, foreign key to users_user representing a single user
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__mitxonline__users')
+        field: user_id
+  - name: programcertificate_is_revoked
+    description: boolean, indicating whether the certificate is revoked and invalid
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code}
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: user_username
+    description: string, username
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: user_email
+    description: string, email
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__app__postgres__courses_programcertificate')
+
 - name: int__mitxonline__users
   description: denormalized mitxonline users
   columns:
@@ -301,9 +536,10 @@ models:
     description: string, country code for the user's address
     tests:
     - dbt_expectations.expect_column_to_exist
+  - name: user_is_active
+    description: boolean, indicating if user is active or not
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 7
+      value: 8
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__users_user')
-      compare_row_condition: "user_is_active = true"

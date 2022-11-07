@@ -382,3 +382,123 @@ sources:
     tests:
     - dbt_expectations.expect_table_column_count_to_equal:
         value: 5
+
+  - name: raw__mitxonline__app__postgres__courses_courseruncertificate
+    columns:
+    - name: id
+      description: int, primary key representing a single MITxOnline course certificate
+        record
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: uuid
+      description: str, unique identifier for the certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_run_id
+      description: int, foreign key to courses_courserun representing a single course
+        run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: str, foreign key to users_user representing a single user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_page_revision_id
+      description: int, foreign key to wagtailcore_pagerevision (could be blank)
+    - name: created_on
+      description: timestamp, specifying when a certificate was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when a certificate was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_revoked
+      description: boolean, indicating whether the certificate is revoked and invalid
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 8
+
+  - name: raw__mitxonline__app__postgres__courses_programcertificate
+    columns:
+    - name: id
+      description: int, primary key representing a single MITxOnline program certificate
+        record
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: uuid
+      description: str, unique identifier for the program certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: program_id
+      description: int, foreign key to courses_program representing a single program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: str, foreign key to users_user representing a single user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_page_revision_id
+      description: int, foreign key to wagtailcore_pagerevision (could be blank)
+    - name: created_on
+      description: timestamp, specifying when a certificate was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when a certificate was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_revoked
+      description: boolean, indicating whether the certificate is revoked and invalid
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 8
+
+  - name: raw__mitxonline__app__postgres__courses_courserungrade
+    columns:
+    - name: id
+      description: int, primary key representing a single MITxOnline grade record
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_run_id
+      description: int, foreign key to courses_courserun representing a single course
+        run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: str, foreign key to users_user representing a single user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: grade
+      description: float, user's grade for the course (range between 0.0 to 1.0)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: letter_grade
+      description: str, letter grade defined ib edX grading policy (value may be 'A',
+        'B', 'C', 'D', 'Pass', none)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: set_by_admin
+      description: boolean, indicating whether this grade is set by a staff user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: passed
+      description: boolean, indicating whether the user has passed the minimum passing
+        score set for this course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when a grade was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when a grade was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 9
