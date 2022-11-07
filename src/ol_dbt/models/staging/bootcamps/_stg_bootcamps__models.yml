@@ -2,10 +2,64 @@
 version: 2
 
 models:
+- name: stg__bootcamps__app__postgres__courserunenrollment
+  columns:
+  - name: courserunenrollment_id
+    description: int, sequential ID tracking a single user enrollment
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+    - not_null
+  - name: courserunenrollment_created_on
+    description: timestamp, specifying when an enrollment was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserunenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserunenrollment_enrollment_status
+    description: str, enrollment status for users whose enrollment changed. Options
+      are 'deferred', 'refunded'
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ['deferred', 'refunded', null]
+  - name: courserunenrollment_is_active
+    description: boolean, indicating whether the user is still enrolled in the run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserun_id
+    description: int, unique ID specifying a "run" of a bootcamp
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_id
+    description: int, unique ID for each user on the bootcamp platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserunenrollment_novoed_sync_on
+    description: timestamp, last time the enrollment was synced with novoed
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserunenrollment_is_certificate_blocked
+    description: boolean, indicates that new cretificates shouldn't be created for
+      the enrollment
+    tests:
+    - dbt_expectations.expect_column_to_exist - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 9
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_id"]
 - name: stg__bootcamps__app__postgres__auth_user
   columns:
   - name: user_id
-    description: int, sequential ID representing one user in xPro
+    description: int, sequential ID representing one user in bootcamps
     tests:
     - unique
     - not_null
@@ -149,7 +203,7 @@ models:
           '16 - 20 years', 'More than 20 years', 'Prefer not to say']
     - dbt_expectations.expect_column_to_exist
   - name: user_id
-    description: int, unique ID for each user on the xPro platform
+    description: int, unique ID for each user on the bootcamp platform
     tests:
     - unique
     - not_null

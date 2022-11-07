@@ -2,25 +2,64 @@
 version: 2
 
 models:
-- name: int_bootcamps__enrollments
-  description: Intermediate model for Bootcamps enrollments.
+- name: int__bootcamps__courserunenrollments
+  description: Intermediate model for enrollments in bootcamps
   columns:
-  - name: id
-    description: ""
-  - name: active
-    description: ""
+  - name: courserunenrollment_id
+    description: id for enrollment
+    tests:
+    - not_null
+    - unique
+    - dbt_expectations.expect_column_to_exist
+  - name: courserunenrollment_is_active
+    description: boolean, indicating whether the user is still enrolled in the run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
   - name: user_id
-    description: ""
-  - name: created_on
-    description: ""
-  - name: courseware_url_path
-    description: ""
+    description: int, unique ID for each user on the bootcamps platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserun_id
+    description: int, unique ID specifying a "run" of a bootcamp
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserunenrollment_created_on
+    description: timestamp, specifying when an enrollment was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserunenrollment_enrollment_status
+    description: str, enrollment status for users whose enrollment changed. Options
+      are 'deferred', 'refunded'
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ['deferred', 'refunded', null]
   - name: courserun_title
-    description: ""
+    description: str, title of the course run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_username
-    description: ""
+    description: str, name chosen by user
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_email
-    description: ""
+    description: str, user email associated with their account
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 9
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__bootcamps__app__postgres__courserunenrollment')
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_id"]
 
 - name: int__bootcamps__courses
   description: Intermediate model for Bootcamps courses
