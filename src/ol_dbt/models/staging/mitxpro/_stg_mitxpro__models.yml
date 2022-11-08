@@ -397,6 +397,167 @@ models:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 4
 
+- name: stg__mitxpro__app__postgres__courses_courserungrade
+  columns:
+  - name: courserungrade_id
+    description: int, primary key representing a single MIT xPro grade record
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_id
+    description: int, foreign key to courses_courserun representing a single course
+      run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__mitxpro__app__postgres__courses_courserun')
+        field: courserun_id
+  - name: user_id
+    description: str, foreign key to users_user representing a single user
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__mitxpro__app__postgres__users_user')
+        field: user_id
+  - name: courserungrade_grade
+    description: float, user's grade for the course (range between 0.0 to 1.0)
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_letter_grade
+    description: str, letter grade defined in the edX grading policy (value may be
+      'A', 'B', 'C', 'D', 'Pass', none)
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_is_set_by_admin
+    description: boolean, indicating whether this grade is set by a staff user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the minimum passing
+      score set for this course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_created_on
+    description: timestamp, specifying when a grade was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_updated_on
+    description: timestamp, specifying when a grade was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 9
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_id"]
+
+- name: stg__mitxpro__app__postgres__courses_courseruncertificate
+  columns:
+  - name: courseruncertificate_id
+    description: int, primary key representing a single MIT xPro course certificate
+      record
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_id
+    description: int, foreign key to courses_courserun representing a single course
+      run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__mitxpro__app__postgres__courses_courserun')
+        field: courserun_id
+  - name: user_id
+    description: str, foreign key to users_user representing a single user
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__mitxpro__app__postgres__users_user')
+        field: user_id
+  - name: certificate_page_revision_id
+    description: int, foreign key to wagtailcore_pagerevision (could be blank)
+  - name: courseruncertificate_created_on
+    description: timestamp, specifying when a certificate was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_updated_on
+    description: timestamp, specifying when a certificate was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_is_revoked
+    description: boolean, indicating whether the certificate is revoked and invalid
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_id"]
+
+- name: stg__mitxpro__app__postgres__courses_programcertificate
+  columns:
+  - name: programcertificate_id
+    description: int, primary key representing a single MIT xPro program certificate
+      record
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: programcertificate_uuid
+    description: str, unique identifier for the program certificate
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: int, foreign key to courses_program representing a single program
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__mitxpro__app__postgres__courses_program')
+        field: program_id
+  - name: user_id
+    description: str, foreign key to users_user representing a single user
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__mitxpro__app__postgres__users_user')
+        field: user_id
+  - name: certificate_page_revision_id
+    description: int, foreign key to wagtailcore_pagerevision (could be blank)
+  - name: programcertificate_created_on
+    description: timestamp, specifying when a certificate was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programcertificate_updated_on
+    description: timestamp, specifying when a certificate was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programcertificate_is_revoked
+    description: boolean, indicating whether the certificate is revoked and invalid
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "program_id"]
+
 - name: stg__mitxpro__app__postgres__courses_course_to_topic
   columns:
   - name: coursetotopic_id
