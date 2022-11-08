@@ -538,6 +538,8 @@ models:
     - dbt_expectations.expect_column_to_exist
   - name: user_is_active
     description: boolean, indicating if user is active or not
+    tests:
+    - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 8
