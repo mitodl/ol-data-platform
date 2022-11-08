@@ -334,3 +334,39 @@ sources:
     tests:
     - dbt_expectations.expect_table_column_count_to_equal:
         value: 19
+
+  - name: raw__bootcamps__app__postgres__klasses_bootcampruncertificate
+    columns:
+    - name: id
+      description: int, primary key representing a single Bootcamps course certificate
+        record
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: uuid
+      description: str, unique identifier for the certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: bootcamp_run_id
+      description: int, foreign key to klasses_bootcamprun representing a single course
+        run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: str, foreign key to auth_user representing a single user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when a certificate was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when a certificate was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_revoked
+      description: boolean, indicating whether the certificate is revoked and invalid
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 7

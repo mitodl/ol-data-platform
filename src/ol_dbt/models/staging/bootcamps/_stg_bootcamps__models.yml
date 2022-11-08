@@ -275,3 +275,53 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 6
+
+- name: stg__bootcamps__app__postgres__courses_courseruncertificate
+  columns:
+  - name: courseruncertificate_id
+    description: int, primary key representing a single Bootcamps course certificate
+      record
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_id
+    description: int, foreign key to courses_courserun representing a single course
+      run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__bootcamps__app__postgres__courses_courserun')
+        field: courserun_id
+  - name: user_id
+    description: str, foreign key to auth_user representing a single user
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__bootcamps__app__postgres__auth_user')
+        field: user_id
+  - name: courseruncertificate_created_on
+    description: timestamp, specifying when a certificate was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_updated_on
+    description: timestamp, specifying when a certificate was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_is_revoked
+    description: boolean, indicating whether the certificate is revoked and invalid
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 7
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_id"]

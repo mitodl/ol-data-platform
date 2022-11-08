@@ -21,7 +21,7 @@ select
     , users.user_joined_on
     , users.user_last_login
     , users_legaladdress.user_address_country
+    , users.user_is_active
 from users
 left join users_legaladdress on users_legaladdress.user_id = users.user_id
 left join users_profile on users_profile.user_id = users.user_id
-where users.user_is_active = true
