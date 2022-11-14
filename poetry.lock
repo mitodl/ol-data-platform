@@ -3097,7 +3097,7 @@ sqlcipher = ["sqlcipher3_binary"]
 
 [[package]]
 name = "sqlfluff"
-version = "1.4.1"
+version = "1.4.2"
 description = "The SQL Linter for Humans"
 category = "dev"
 optional = false
@@ -3580,7 +3580,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "63550c8afb669fd9cfb191d681184e9dc72e01215848b1fea9ddad795468d169"
+content-hash = "b387d2480813bf49ce010b7f60dfe5ca0a48a44de58fa90a48e277a2d734e13f"
 
 [metadata.files]
 agate = [
@@ -4933,6 +4933,8 @@ psycopg2-binary = [
     {file = "psycopg2_binary-2.9.5-cp311-cp311-musllinux_1_1_i686.whl", hash = "sha256:e67b3c26e9b6d37b370c83aa790bbc121775c57bfb096c2e77eacca25fd0233b"},
     {file = "psycopg2_binary-2.9.5-cp311-cp311-musllinux_1_1_ppc64le.whl", hash = "sha256:5fc447058d083b8c6ac076fc26b446d44f0145308465d745fba93a28c14c9e32"},
     {file = "psycopg2_binary-2.9.5-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:d892bfa1d023c3781a3cab8dd5af76b626c483484d782e8bd047c180db590e4c"},
+    {file = "psycopg2_binary-2.9.5-cp311-cp311-win32.whl", hash = "sha256:2abccab84d057723d2ca8f99ff7b619285d40da6814d50366f61f0fc385c3903"},
+    {file = "psycopg2_binary-2.9.5-cp311-cp311-win_amd64.whl", hash = "sha256:bef7e3f9dc6f0c13afdd671008534be5744e0e682fb851584c8c3a025ec09720"},
     {file = "psycopg2_binary-2.9.5-cp36-cp36m-macosx_10_14_x86_64.macosx_10_9_intel.macosx_10_9_x86_64.macosx_10_10_intel.macosx_10_10_x86_64.whl", hash = "sha256:6e63814ec71db9bdb42905c925639f319c80e7909fb76c3b84edc79dadef8d60"},
     {file = "psycopg2_binary-2.9.5-cp36-cp36m-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:212757ffcecb3e1a5338d4e6761bf9c04f750e7d027117e74aa3cd8a75bb6fbd"},
     {file = "psycopg2_binary-2.9.5-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6f8a9bcab7b6db2e3dbf65b214dfc795b4c6b3bb3af922901b6a67f7cb47d5f8"},
@@ -5506,8 +5508,8 @@ sqlalchemy = [
     {file = "SQLAlchemy-1.4.43.tar.gz", hash = "sha256:c628697aad7a141da8fc3fd81b4874a711cc84af172e1b1e7bbfadf760446496"},
 ]
 sqlfluff = [
-    {file = "sqlfluff-1.4.1-py3-none-any.whl", hash = "sha256:b65071162c70a0424dd2fc53edd4d76633293feb7690b32e0ed02d10c5a0b66c"},
-    {file = "sqlfluff-1.4.1.tar.gz", hash = "sha256:cc16f31b1213e42fde1d6d80d66b5f54553ea269165602cc8e4e51484f15bb2d"},
+    {file = "sqlfluff-1.4.2-py3-none-any.whl", hash = "sha256:e23dc5f709e16e7a9788f9f65c65f9ac8b9b564bb4437c4971d673969a99b0bd"},
+    {file = "sqlfluff-1.4.2.tar.gz", hash = "sha256:6182c8523b46b133bd4826462070fdcf72349e45906ad755813fb5b0f6cdcb4b"},
 ]
 sqlparse = [
     {file = "sqlparse-0.4.3-py3-none-any.whl", hash = "sha256:0323c0ec29cd52bceabc1b4d9d579e311f3e4961b98d174201d5622a23b85e34"},
