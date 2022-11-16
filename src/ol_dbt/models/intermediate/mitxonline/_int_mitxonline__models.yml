@@ -540,8 +540,12 @@ models:
     description: boolean, indicating if user is active or not
     tests:
     - dbt_expectations.expect_column_to_exist
+  - name: user_micromasters_profile_id
+    description: int, foreign key to profiles_profile in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 8
+      value: 9
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__users_user')
