@@ -7,6 +7,277 @@ sources:
   database: 'ol_data_lake_{{ target.name }}'
   schema: 'ol_warehouse_{{ target.name }}_raw'
   tables:
+  - name: raw__mitxonline__app__postgres__ecommerce_transaction
+    columns:
+    - name: id
+      description: int, primary key representing an ecommerce transaction
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the transaction was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the transaction was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: amount
+      description: numeric, transaction ammount
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: data
+      description: json, data returned from cybersource when the transaction is fulfilled
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, foreign id in the ecommerce_orders tabe for the order associated
+        with the transaction
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: transaction_type
+      description: string, transaction type, one of "refund" and "payment"
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: reason
+      description: string, reason for refund, currently always blank
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: transaction_id
+      description: string, unique identifier. Either the transaction_id from cybersource
+        or a unique uuid
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 9
+  - name: raw__mitxonline__app__postgres__ecommerce_line
+    columns:
+    - name: id
+      description: int, primary key representing an ecommerce line
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the line was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the line was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: quantity
+      description: int, quantitiy ordered, currently always 1
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, foreign key in the orders_order table for the order that contains
+        the line Currently orders have exactly one line
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: product_version_id
+      description: int stored as string, foreign key in the reversion_version table.
+        Versioned product
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: purchased_content_type_id
+      description: int, foreign key in the django_contenttype table, content type
+        of the product
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: purchased_object_id
+      description: int, id for the product object in either the course_courseruns
+        or the course_programruns table
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 8
+  - name: raw__mitxonline__app__postgres__reversion_revision
+    description: This table is used to track changes to products and transactions
+    columns:
+    - name: id
+      description: int, primary key representing a revision to a product or transaction
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: date_created
+      description: timestamp, specifying when the revision was made
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: comment
+      description: string, automatically generated discription of the change
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: int, foreign key to the users_user record for the user that made
+        the change
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 4
+  - name: raw__mitxonline__app__postgres__reversion_version
+    description: This table is used to track changes to products and transactions
+    columns:
+    - name: id
+      description: int, primary key representing a version of a product or transaction
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: object_id
+      description: integer stored as string, foreign key of the object being versioned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: format
+      description: string, always "json"
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: serialized_data
+      description: json, serialized data from the object at the time it was versioned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: object_repr
+      description: string, readable representation of object
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: content_type_id
+      description: int, foreign key to django_contenttype of the object being versioned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: revision_id
+      description: int, primary key in the reversion_revision table
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: db
+      description: string, always set to "default"
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 8
+  - name: raw__mitxonline__app__postgres__ecommerce_order
+    columns:
+    - name: id
+      description: int, primary key representing a single MITx Online order
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the order was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the order was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: state
+      description: string, order state. Options are "pending", "fulfilled", "canceled"
+        "declined", "errored", "refunded", "review", "partially_refunded"
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: total_price_paid
+      description: number, total order amount
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: purchaser_id
+      description: int, primary key in users_user for the purchaser
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: reference_number
+      description: string, readable id for the order. Shared with micromasters
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 7
+
+  - name: raw__mitxonline__app__postgres__courses_programrun
+    columns:
+    - name: id
+      description: int, primary key representing a single MITx Online program run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when a program run was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when a program run was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: run_tag
+      description: str, string that identifies a single run in a prgram E.g. R11
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: end_date
+      description: timestamp, specifying when the program run ends
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: start_date
+      description: timestamp, specifying when the program run begins
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: program_id
+      description: int, foreign key to courses_program representing a single MITx
+        Online program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 7
+  - name: raw__mitxonline__app__postgres__ecommerce_product
+    columns:
+    - name: id
+      description: int, sequential ID for  ecommerce product
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: price
+      description: numeric, the price of the product
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_active
+      description: boolean, whether the product is visible in the app
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: object_id
+      description: int, the course run or program run id in the courses_courserun
+        or courses_programrun table
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, the timestamp the product was create
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, the timestamp the product was last updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: description
+      description: string, the product description, usually the readable_id from the
+        courses_courserun table for products that are courseruns
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: content_type_id
+      description: int, the id of the product object type in the django_contenttype
+        table
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 8
+  - name: raw__mitxonline__app__postgres__django_content_type
+    columns:
+    - name: id
+      description: int, sequential ID for the django model
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: model
+      description: string, the name of the django model
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: app_label
+      description: string, the  functional group the model belongs to
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 3
   - name: raw__mitxonline__app__postgres__courses_courserunenrollment
     columns:
     - name: id
