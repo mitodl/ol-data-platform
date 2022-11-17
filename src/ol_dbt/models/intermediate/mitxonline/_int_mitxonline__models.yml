@@ -2,6 +2,213 @@
 version: 2
 
 models:
+- name: int__mitxonline__ecommerce_transaction
+  columns:
+  - name: transaction_id
+    description: int, primary key representing an ecommerce transaction
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+    - not_null
+  - name: transaction_amount
+    description: numeric, transaction ammount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: order_id
+    description: int, foreign id in the ecommerce_orders tabe for the order associated
+      with the transaction
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: transaction_created_on
+    description: timestamp, specifying when the transaction was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: transaction_readable_identifier
+    description: string, unique identifier. Either the transaction_id from cybersource
+      or a unique uuid
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: transaction_type
+    description: string, transaction type, one of "refund" and "payment"
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ["refund", "payment"]
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__app__postgres__ecommerce_transaction')
+- name: int__mitxonline__ecommerce_line
+  columns:
+  - name: line_id
+    description: int, primary key representing an ecommerce line
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: order_id
+    description: int, foreign key in the orders_order table for the order that contains
+      the line. Currently orders have exactly one line
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: line_created_on
+    description: timestamp, specifying when the line was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: product_version_id
+    description: int. Versioned product
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: product_type
+    description: string, readable product type
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - accepted_values:
+        values: ['course run', 'program run']
+  - name: product_id
+    description: int, sequential ID for ecommerce product
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserun_id
+    description: int, primary key representing a single MITx Online course run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_id
+    description: int, primary key representing a single MITx Online program run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__app__postgres__ecommerce_line')
+- name: int__mitxonline__ecommerce_order
+  description: Intermediate model of MITx Online orders.
+  columns:
+  - name: order_id
+    description: int, primary key representing a single MITx Online order
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: order_state
+    description: string, order state. Options are "pending", "fulfilled", "canceled"
+      "declined", "errored", "refunded", "review", "partially_refunded"
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ["pending", "fulfilled", "canceled", "declined", "errored", "refunded",
+          "review", "partially_refunded"]
+    - not_null
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: order_purchaser_user_id
+    description: int, primary key in users_user for the purchaser
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: order_reference_number
+    description: string, readable id for the order. Shared with micromasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: order_total_price_paid
+    description: number, total order amount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: order_purchaser_username
+    description: string, username of purchaser
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: order_purchaser_full_name
+    description: string, full name of purchaser
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: order_purchaser_email
+    description: string, email of purchaser
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 9
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__app__postgres__ecommerce_order')
+- name: int__mitxonline__ecommerce_product
+  description: Intermediate model of MITx Online Products.
+  columns:
+  - name: product_id
+    description: int, sequential ID for ecommerce product
+    tests:
+    - not_null
+    - unique
+    - dbt_expectations.expect_column_to_exist
+  - name: product_price
+    description: numeric, the price of the product
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: product_is_active
+    description: boolean, whether the product is visible in the app
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: product_description
+    description: string, the product description, usually the readable_id from the
+      courses_course table
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_id
+    description: int, primary key representing a single MITx Online course run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programrun_id
+    description: int, primary key representing a single MITx Online program run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: product_created_on
+    description: timestamp, the timestamp the product was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: product_type
+    description: string, readable product type
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - accepted_values:
+        values: ['course run', 'program run']
+  - name: course_id
+    description: int, foreign key to courses_course representing a single MITx Online
+      course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: int, foreign key to courses_program representing a single MITx Online
+      program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 10
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["product_type", "programrun_id", "courserun_id"]
+      row_condition: "product_is_active"
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__app__postgres__ecommerce_product')
 - name: int__mitxonline__courserunenrollments
   description: Intermediate model of enrollments in MITx Online.
   columns:
