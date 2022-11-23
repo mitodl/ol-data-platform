@@ -269,7 +269,7 @@ models:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 10
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxonline__app__postgres__course_courserunenrollment')
+      compare_model: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_id"]
 - name: int__mitxonline__programenrollments
@@ -332,7 +332,7 @@ models:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 10
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxonline__app__postgres__course_courserunenrollment')
+      compare_model: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id"]
 - name: int__mitxonline__courses
@@ -642,6 +642,40 @@ models:
     - unique
     - not_null
     - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 4
+
+- name: int__mitxonline__programrequirements
+  columns:
+  - name: programrequirement_id
+    description: int, primary key representing a MITx Online program requirement node
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+    - not_null
+  - name: course_id
+    description: int, foreign key to courses representing a single course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__mitxonline__courses')
+        field: course_id
+  - name: program_id
+    description: int, foreign key to programs representing a single program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - relationships:
+        to: ref('int__mitxonline__programs')
+        field: program_id
+  - name: programrequirement_type
+    description: str, indicating the courses is either required or elective
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - accepted_values:
+        values: ["Required Courses", "Elective Courses"]
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 4
