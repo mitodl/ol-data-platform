@@ -586,6 +586,60 @@ sources:
     tests:
     - dbt_expectations.expect_table_column_count_to_equal:
         value: 6
+
+  - name: raw__mitxonline__app__postgres__courses_programrequirement
+    columns:
+    - name: id
+      description: int, primary key representing a MITx Online program requirement
+        node
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_id
+      description: int, foreign key to courses_course representing a single course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: program_id
+      description: int, foreign key to courses_program representing a single program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: node_type
+      description: str, there are 3 types of nodes that exist in a requirement tree
+        - program_root (represent a program) - course (represent a reference to a
+        course) - operator (represent a logical operation over a set of courses)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: path
+      description: str, the full materialized path for each node (readonly) e.g. 0001
+        is root path, 00010001 is the path to a node in this requirement tree
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: depth
+      description: int, depth of a node in the tree. A root node has a depth of 1.
+        (readonly)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: numchild
+      description: int, the number of children of a node (readonly)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: operator
+      description: str, the logical operation over a set of courses, it can be all_of,
+        min_number_of or blank
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: title
+      description: str, title of the operator for this requirement
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: operator_value
+      description: str, value of the operator for this requirement e.g. if operator
+        is all_of, the corresponding operator_value 3 means all of 3 courses
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 10
+
   - name: raw__mitxonline__app__postgres__courses_coursetopic
     columns:
     - name: id
