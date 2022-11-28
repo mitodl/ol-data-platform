@@ -2,6 +2,7 @@ import os
 import shutil
 from collections.abc import Generator
 from datetime import datetime
+from typing import Optional
 
 from dagster import Field, InitResourceContext, String, resource
 
@@ -9,7 +10,7 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
 
 
 class ResultsDir:
-    def __init__(self, root_dir: str = None):
+    def __init__(self, root_dir: Optional[str] = None):
         if root_dir is None:
             self.root_dir = DagsterPath(os.getcwd())
         else:
@@ -37,9 +38,9 @@ class ResultsDir:
 class DailyResultsDir(ResultsDir):
     def __init__(
         self,
-        root_dir: str = None,
+        root_dir: Optional[str] = None,
         date_format: str = "%Y-%m-%d",  # noqa: WPS323
-        date_override: str = None,
+        date_override: Optional[str] = None,
     ):
         """Instantiate a results directory that defaults to being named according to the current date.  # noqa: E501
 
