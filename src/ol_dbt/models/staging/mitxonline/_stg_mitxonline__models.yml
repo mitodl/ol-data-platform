@@ -89,6 +89,371 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 4
+- name: stg__mitxonline__app__postgres__flexiblepricing_flexiblepriceapplication
+  description: An application for an income based discount.
+  columns:
+  - name: flexiblepriceapplication_id
+    description: int, primary key representing a flexible pricing application
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: flexiblepriceapplication_created_on
+    description: timestamp, specifying when the table row was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: flexiblepriceapplication_updated_on
+    description: timestamp, specifying when the table row was updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: flexiblepriceapplication_status
+    description: string, status of the application. One of "approved", "auto-approved",
+      "created", "pending-manual-approval", "denied", "reset"
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - accepted_values:
+        values: ["approved", "auto-approved", "created", "pending-manual-approval",
+          "denied", "reset"]
+  - name: flexiblepriceapplication_income_usd
+    description: numeric, user income in usd
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: flexiblepriceapplication_original_income
+    description: numeric, user income in it's original currency
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: flexiblepriceapplication_original_currency
+    description: string, currency code of orginal income
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: flexiblepriceapplication_country_of_income
+    description: string, country code for user country of income
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: flexiblepriceapplication_exchange_rate_timestamp
+    description: timestamp, timestamp of exchange rate used to convert the original
+      income to usd
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: flexiblepriceapplication_date_documents_sent
+    description: date, date that the user sent documents that prove their income
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: flexiblepriceapplication_justification
+    description: string, explanation for flexible pricing application approval or
+      rejection
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: flexiblepriceapplication_country_of_residence
+    description: string, country code for user country of residece
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_id
+    description: int, primary key in the users_user table of the user  requesting
+      flexible pricing
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: flexiblepriceapplication_cms_submission_id
+    description: int, primary key of the cms submission stored in the flexiblepricing_flexiblepricingrequestsubmission
+      table
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: contenttype_id
+    description: int, primary key in django_contenttype of either courses_course or
+      courses_program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courseware_object_id
+    description: int, primary key in either the courses_course or courses_program
+      table of the courseware the user applied for flexible pricing for
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: flexiblepricetier_id
+    description: int, primary key in flexiblepricing_flexiblepricetier of the price
+      tier the user applied for
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 17
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courseware_object_id", "contenttype_id", "user_id"]
+- name: stg__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
+  columns:
+  - name: flexiblepricetier_id
+    description: int, primary key representing a flexible pricing tier
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: flexiblepricetier_created_on
+    description: timestamp, specifying when the table row was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: flexiblepricetier_updated_on
+    description: timestamp, specifying when the table row was updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: contenttype_id
+    description: int, foreign key in django_contenttype for either course or program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courseware_object_id
+    description: int, id for the courseware object in either the courses_course or
+      courses_program table
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: flexiblepricetier_is_current
+    description: boolean, whether the flexible pricing tier is currently enabled
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: flexiblepricetier_income_threshold_usd
+    description: numeric, maximum income in usd to qualify for the flexible price
+      tier
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: discount_id
+    description: int, id of ecommerce_discount associated with the flexible price
+      tier
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
+- name: stg__mitxonline__app__postgres__flexiblepricing_currencyexchangerate
+  columns:
+  - name: currencyexchangerate_id
+    description: int, primary key representing a country exchange rate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: currencyexchangerate_created_on
+    description: timestamp, specifying when the table row was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: currencyexchangerate_updated_on
+    description: timestamp, specifying when the table row was updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: currencyexchangerate_currency_code
+    description: string, currency code
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: currencyexchangerate_exchange_rate
+    description: numeric, exchange rate to usd
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: currencyexchangerate_description
+    description: string, readable currency name
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
+- name: stg__mitxonline__app__postgres__flexiblepricing_countryincomethreshold
+  columns:
+  - name: countryincomethreshold_id
+    description: int, primary key representing a country income threshold
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: countryincomethreshold_created_on
+    description: timestamp, specifying when the table row was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: countryincomethreshold_updated_on
+    description: timestamp, specifying when the table row was updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: countryincomethreshold_country_code
+    description: string, country code
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: countryincomethreshold_income_threshold
+    description: int, usd income threshold to quantity for flexible pricing
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
+- name: stg__mitxonline__app__postgres__ecommerce_userdiscount
+  description: This table is used to pre-apply a discount when a user checks out
+  columns:
+  - name: userdiscount_id
+    description: int, primary key representing a discount user combo
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: userdiscount_created_on
+    description: timestamp, specifying when the discount user association was initially
+      created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: userdiscount_updated_on
+    description: timestamp, specifying when the discount user association was initially
+      created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: discount_id
+    description: int, foreign key for ecommerce_discount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_id
+    description: int, foreign key for users_user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
+- name: stg__mitxonline__app__postgres__ecommerce_discountproduct
+  description: This table is used to limit dicounts to a specific product. Discounts
+    which do not have a record in this table are redeemable for all products
+  columns:
+  - name: discountproduct_id
+    description: int, primary key representing a discount product combo
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: discountproduct_created_on
+    description: timestamp, specifying when the discount product association was initially
+      created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: discountproduct_updated_on
+    description: timestamp, specifying when the discount product association was last
+      updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: discount_id
+    description: int, foreign key for ecommerce_discount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: product_id
+    description: int, foreign key for ecommerce_product
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
+- name: stg__mitxonline__app__postgres__ecommerce_discount
+  columns:
+  - name: discount_id
+    description: int, primary key representing a discount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: discount_created_on
+    description: timestamp, specifying when the discount was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: discount_updated_on
+    description: timestamp, specifying when the discount was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: discount_amount
+    description: numeric, discount amount. May be a precent or dollar amount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: discount_type
+    description: string, one of  "percent-off", "dollars-off" and "fixed-price". Specifys
+      if the ammount of the discount refers to a percent of, a dollar amount off or
+      a discounted price
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - accepted_values:
+        values: ["percent-off", "dollars-off", "fixed-price"]
+  - name: discount_redemption_type
+    description: string, one of  "one-time",  "one-time-per-user" and "unlimited"
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - accepted_values:
+        values: ["one-time", "one-time-per-user", "unlimited"]
+  - name: discount_max_redemptions
+    description: int, maximum times a coupon can be redeemed
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: discount_code
+    description: string, discount code
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: discount_is_for_flexible_pricing
+    description: boolean, whether the discount was created for income based flexible
+      pricing
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: discount_activated_on
+    description: timestamp, specifying when the discount is activated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: discount_expires_on
+    description: timestamp, specifying when the discount is deactivated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 11
+- name: stg__mitxonline__app__postgres__ecommerce_discountredemption
+  columns:
+  - name: discountredemption_id
+    description: int, primary key representing a discount redemption
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: discountredemption_timestamp
+    description: timestamp, specifying when the discount was redeemed by the user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_id
+    description: int, foreign key for users_user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: discount_id
+    description: int, foreign key for ecommerce_discount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: order_id
+    description: int, foreign key for ecommerce_orders
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
 - name: stg__mitxonline__app__postgres__ecommerce_transaction
   columns:
   - name: transaction_id
