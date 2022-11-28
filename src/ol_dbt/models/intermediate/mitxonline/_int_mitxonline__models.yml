@@ -2,6 +2,97 @@
 version: 2
 
 models:
+- name: int__mitxonline__ecommerce_basketdiscount
+  columns:
+  - name: basketdiscount_id
+    description: int, primary key representing a discount in a user's basket
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basketdiscount_created_on
+    description: timestamp, specifying when the basket discount was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basketdiscount_updated_on
+    description: timestamp, specifying when the basket discount was most recently
+      updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basketdiscount_applied_on
+    description: timestamp, specifying when the discount was applied to the basket
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basket_id
+    description: int, foreign key referencing ecommerce_basket
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_id
+    description: int, foreign key referencing users_user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: discount_id
+    description: int, foreign key referencing ecommerce_discount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 7
+- name: int__mitxonline__ecommerce_basketitem
+  columns:
+  - name: basketitem_id
+    description: int, primary key representing a item in a user's basket
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basketitem_created_on
+    description: timestamp, specifying when the basket item was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basketitem_updated_on
+    description: timestamp, specifying when the basket item was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basketitem_quantity
+    description: int, quantitiy of the item. Always 1
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basket_id
+    description: int, foreign key referencing ecommerce_basket
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: product_id
+    description: int, foreign key referencing ecommerce_product
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__app__postgres__ecommerce_basketitem')
+- name: int__mitxonline__ecommerce_basket
+  description: Checkout basket that contains courseware that a users wants to purchase
+    but has not purchased yet
+  columns:
+  - name: basket_id
+    description: int, primary key representing a user basket
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basket_created_on
+    description: timestamp, specifying when the basket was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: basket_updated_on
+    description: timestamp, specifying when the basket was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_id
+    description: int, foreign key to the users_user table
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 4
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__app__postgres__ecommerce_basket')
 - name: int__mitxonline__ecommerce_transaction
   columns:
   - name: transaction_id
