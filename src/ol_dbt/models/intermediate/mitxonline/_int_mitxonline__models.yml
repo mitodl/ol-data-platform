@@ -154,8 +154,9 @@ models:
 - name: int__mitxonline__ecommerce_purchase
   description: Since mitxonline orders always have exactly one line, we can combine
     the ecommerce_line and ecommnerce_order tables into one intermediate table. This
-    may change at somne point in the future (xpro orders have multiple lines). If
-    it does, the unique constraint on order_id in this model will fail
+    may change at some point in the future (xpro orders have multiple lines). If it
+    does, the unique test on order_id in this model will fail and we will know to
+    change this query and the queries that depend on it
   columns:
   - name: order_id
     description: int, primary key representing a single MITx Online order.  Currently
