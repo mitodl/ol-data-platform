@@ -523,24 +523,68 @@ models:
       value: 6
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__ecommerce_transaction')
-- name: int__mitxonline__ecommerce_line
+- name: int__mitxonline__ecommerce_order
+  description: Since mitxonline orders always have exactly one line, we can combine
+    the ecommerce_line and ecommnerce_order tables into one intermediate table. This
+    may change at some point in the future (xpro orders have multiple lines). If it
+    does, the unique test on order_id in this model will fail and we will know to
+    change this query and the queries that depend on it
   columns:
+  - name: order_id
+    description: int, primary key representing a single MITx Online order.  Currently
+      orders have exactly one line
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: order_state
+    description: string, order state. Options are "pending", "fulfilled", "canceled"
+      "declined", "errored", "refunded", "review", "partially_refunded"
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ["pending", "fulfilled", "canceled", "declined", "errored", "refunded",
+          "review", "partially_refunded"]
+    - not_null
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: order_reference_number
+    description: string, readable id for the order. Shared with micromasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: order_total_price_paid
+    description: number, total order amount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_id
+    description: int, unique ID for each user on the MITx Online platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_username
+    description: string, username of purchaser
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: user_full_name
+    description: string, full name of purchaser
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: user_email
+    description: string, email of purchaser
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: line_id
     description: int, primary key representing an ecommerce line
     tests:
     - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
-  - name: order_id
-    description: int, foreign key in the orders_order table for the order that contains
-      the line. Currently orders have exactly one line
-    tests:
-    - dbt_expectations.expect_column_to_exist
-    - not_null
-  - name: line_created_on
-    description: timestamp, specifying when the line was initially created
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: product_version_id
     description: int. Versioned product
     tests:
@@ -568,63 +612,7 @@ models:
     - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 8
-  - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxonline__app__postgres__ecommerce_line')
-- name: int__mitxonline__ecommerce_order
-  description: Intermediate model of MITx Online orders.
-  columns:
-  - name: order_id
-    description: int, primary key representing a single MITx Online order
-    tests:
-    - dbt_expectations.expect_column_to_exist
-    - not_null
-    - unique
-  - name: order_state
-    description: string, order state. Options are "pending", "fulfilled", "canceled"
-      "declined", "errored", "refunded", "review", "partially_refunded"
-    tests:
-    - dbt_expectations.expect_column_to_exist
-    - accepted_values:
-        values: ["pending", "fulfilled", "canceled", "declined", "errored", "refunded",
-          "review", "partially_refunded"]
-    - not_null
-  - name: order_created_on
-    description: timestamp, specifying when the order was initially created
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  - name: order_purchaser_user_id
-    description: int, primary key in users_user for the purchaser
-    tests:
-    - dbt_expectations.expect_column_to_exist
-    - not_null
-  - name: order_reference_number
-    description: string, readable id for the order. Shared with micromasters
-    tests:
-    - dbt_expectations.expect_column_to_exist
-    - not_null
-  - name: order_total_price_paid
-    description: number, total order amount
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  - name: order_purchaser_username
-    description: string, username of purchaser
-    tests:
-    - not_null
-    - dbt_expectations.expect_column_to_exist
-  - name: order_purchaser_full_name
-    description: string, full name of purchaser
-    tests:
-    - not_null
-    - dbt_expectations.expect_column_to_exist
-  - name: order_purchaser_email
-    description: string, email of purchaser
-    tests:
-    - not_null
-    - dbt_expectations.expect_column_to_exist
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 9
+      value: 15
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__ecommerce_order')
 - name: int__mitxonline__ecommerce_product
