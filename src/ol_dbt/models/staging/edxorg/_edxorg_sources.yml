@@ -1,0 +1,545 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: 'ol_data_lake_{{ target.name }}'
+  schema: 'ol_warehouse_{{ target.name }}_raw'
+  tables:
+  - name: raw__irx__edxorg__bigquery__mitx_course
+    description: MITx courses metadata provided by IR
+    columns:
+    - name: course_id
+      description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
+        Note that this is old format as IR converts any new format (course-v1:{org}+{course}+{run})
+        into old ones
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_title
+      description: str, The title of the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: url
+      description: str, The url path of the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_number
+      description: str, The MIT course number for this course e.g. SysEngx1 is the
+        course number for MITxPRO/SysEngx1/1T2018
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_key_version
+      description: str, version number of course key. e.g. v1
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: semester
+      description: str, The semester during which the course was launched e.g Fall
+        2020
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_launch
+      description: date, The date on which the course launches
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_wrap
+      description: date, The date on which the course wraps up
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: institution
+      description: str, The institution that is linked to the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: content_type
+      description: str, indicate whether this is Course, Exam, Residential, Other
+        or blank
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: modules
+      description: str
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: report_year
+      description: int, currently single digit
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: finance_year
+      description: int, finance year
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: instructors
+      description: str, List of instructors associated with the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: faculty_kerberos
+      description: str, A list of kerberos usernames of the faculty associated with
+        the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nchapters
+      description: int, Number of chapters/modules in the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: visible_nchapters
+      description: int
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: tags
+      description: str, Tags associated with the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: new_or_rerun
+      description: str, Indicator whether the course is new or a re-run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: registration_open
+      description: date, registration open date for the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: short_title
+      description: str, short title of the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: subject_short_title
+      description: str, short title for the course subject
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: clean_course_number
+      description: str
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: self_paced
+      description: int, Indicate whether or not the course is self paced e.g 1 or
+        blank
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: micromasters_description
+      description: str, The MicroMasters indicator of the course (if applicable) e.g.
+        DEDP
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: _4_way_category_by_name
+      description: str
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: new_4_way
+      description: str
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: mit_content
+      description: int
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: phase
+      description: str
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: sheetorder
+      description: int
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: sheetorder2
+      description: int
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: andrews_short_title
+      description: str
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 32
+
+  - name: raw__irx__edxorg__bigquery__mitx_person_course
+    description: canonical datasets that tracks both user activities and certain demographics
+    columns:
+    - name: course_id
+      description: str, The canonical ID of the course in the format as {org}/{course
+        number}/{semester}. Note that this is old format as IR converts any new format
+        (course-v1:{org}+{course}+{run}) into old ones
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: int, Numerical user ID of a learner on the edX platform
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: username
+      description: str, username of a learner on the edX platform
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: registered
+      description: boolean, indicating that the user registered in the course (obsolete
+        - should always be true)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: viewed
+      description: boolean, indicating that the user visited the course at least once
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: explored
+      description: boolean, indicating that the user viewed at least half of the chapters
+        of the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: completed
+      description: boolean, indicating that the user completed the course with a passing
+        grade
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: loe
+      description: str, user's Level of education in one of "p", "m" , "b", "a", "hs",
+        "jhs", "el" "p_se", "p_oth", blank or null. blank means User did not specify
+        level of education. Null means this student signed up before this information
+        was collected
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: yob
+      description: int, user's Year of birth
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: gender
+      description: str, gender, one of "m", "f", "o", blank or NULL. blank means User
+        did not specify a gender. Null means this student signed up before this information
+        was collected
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_country
+      description: str, two-letter country code as specified by user in their profile
+        (only available after ~mid-2014)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: start_time
+      description: timestamp, timestamp of user's enrollment in the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: verified_enroll_time
+      description: timestamp, timestamp on when user initially had their first id-verified
+        enrollment event
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: verified_unenroll_time
+      description: timestamp, timestamp on when user had their last id-verified unenrollment
+        event, if any. Null if there were no unenrollment events
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: mode
+      description: str, enrollment mode, e.g. honor, audit, verified
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_active
+      description: int, indicating if enrollment is active or not (1 or 0)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: grade
+      description: float, Final grade user earned in the course, (range between 0.0
+        to 1.0)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: passing_grade
+      description: float, Passing grade for the course, (range between 0.0 to 1.0)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: cert_created_date
+      description: timestamp, timestamp when certificate was generated (if applicable)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: cert_modified_date
+      description: timestamp, timestamp when certificate was modified (if applicable)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: cert_status
+      description: str, one of downloadable, notpassing, audit_passing, unavailable,
+        audit_notpassing where downloadable should = earned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certified
+      description: boolean, indicating that the user earned a certificate in the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: ip
+      description: str, Modal value of the IP address from which this user connected,
+        from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: postalcode
+      description: str, Postal code corresponding to modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: cc_by_ip
+      description: str, Two-letter country code corresponding to the modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: countrylabel
+      description: str, Full name of country corresponding to modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: continent
+      description: str, Full name of continent corresponding to modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: city
+      description: str, Full name of city corresponding to modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: region
+      description: str, Two-Letter code of region or U.S. State corresponding to modal
+        IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: subdivision
+      description: str, Full name of region/subdivision or U.S. State corresponding
+        to modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: un_major_region
+      description: str, UN defined sub-continent major geographic regions corresponding
+        to modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: un_economic_group
+      description: str, UN defined major geographical economic groups (developing
+        and developed nations) corresponding to modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: un_developing_nation
+      description: str, UN defined developing nation groups files corresponding to
+        modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: un_special_region
+      description: str, Special Regions corresponding to modal IP address (Latin America
+        and the Caribbean, Sub-Saharan-Africa)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: latitude
+      description: str, Latitude of city corresponding to modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: longitude
+      description: str, Longitude of city corresponding to modal IP address
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: modal_agent
+      description: str, Most frequently used method of accessing course materials
+        (mobile or desktop)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: ever_mobile
+      description: int, indicating if user has ever accessed course materials using
+        a mobile browser or app (0 or 1)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: ever_desktop
+      description: int, indicating if user has ever accessed course materials using
+        a desktop browser (0 or 1)
+    - name: first_event
+      description: timestamp, timestamp of first event of user from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: last_event
+      description: timestamp, timestamp of last event of user from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nevents
+      description: int, Number of tracking log events
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: ndays_act
+      description: int, Number of days with activity from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nplay_video
+      description: int, Number of video play events from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nchapters
+      description: int, Number of chapters visited by the user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nforum_posts
+      description: int, Number of forum posts and comments made by user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nforum_votes
+      description: int, Number of votes received by user's forum posts
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nforum_endorsed
+      description: int, Number of endorsed forum posts by user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nforum_threads
+      description: int, Number of forum post threads by user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nforum_comments
+      description: int, Number of forum post comments by user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nforum_pinned
+      description: int, Number of forum posts by user which were pinned (good indicator
+        of staff)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: roles
+      description: str, One of 3 values, 'Student', Staff' or null null means that
+        user does not have course role or discussion forum role assigned from edX
+        data
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nprogcheck
+      description: int, Number of progress check events from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nproblem_check
+      description: int, Number of problem check events from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nforum_events
+      description: int, Number of all kinds of forum events from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: y1_anomalous
+      description: int, indicate if this user was anomalously missing and had to be
+        side-loaded from mongo then this field = 1, else null
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: email_domain
+      description: str, domain of the email address of the user, i.e. what appears
+        after the '@'
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: language
+      description: str, modal transcript language
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: language_download
+      description: int, modal transcript language download for any video
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: language_nevents
+      description: int, modal transcript language events
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: language_ndiff
+      description: int, count of different transcript languages
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: ntranscript
+      description: int, Number of video transcript events from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nshow_answer
+      description: int, Number of show answer events from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nvideo
+      description: int, Number of video events (of all kinds) from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nvideos_unique_viewed
+      description: int, Number of unique Videos viewed per user within a course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nvideos_total_watched
+      description: float, Total percentage of all videos watched per user within a
+        course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nseq_goto
+      description: int, Number of 'sequence goto' navigational events from tracking
+        logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: nseek_video
+      description: int, Number of 'video seek' events from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: npause_video
+      description: int, Number of 'video pause' events from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: avg_dt
+      description: float, Average time difference in seconds between consecutive events
+        from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: sdv_dt
+      description: float, Standard deviation of difference in seconds between consecutive
+        events from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: max_dt
+      description: float, Maximum difference in seconds between consecutive events
+        from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: n_dt
+      description: float, Number of consecutive events used in time difference computations
+        from tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: sum_dt
+      description: float, Total elapsed time (in seconds) spent by user on this course,
+        based on time difference of consecutive events, with 5 min max cutoff, from
+        tracking logs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: roles_isbetatester
+      description: int, indicating if user is a course beta tester (1 or null) null
+        means user does not have course role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: roles_isinstructor
+      description: int, indicating if user is a course instructor (1 or null) null
+        means user does not have course role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: roles_isstaff
+      description: int, indicating if user is course staff (1 or null) null means
+        user does not have course role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: roles_isccx
+      description: int, indicating if user is ccx coach (1 or null) null means user
+        does not have course role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: roles_issales
+      description: int, indicating if user is sales (1 or null) null means user does
+        not have course role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: roles_isfinance
+      description: int, indicating if user is finance admin (1 or null) null means
+        user does not have course role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: roles_islibrary
+      description: int, indicating if user is library user (1 or null) null means
+        user does not have course role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: forumroles_isadmin
+      description: int, indicating if user is forum admin (1 or null) null means user
+        does not have a discussion forum role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: forumroles_iscommunityta
+      description: int, indicating if user is a community TA (1 or null) null means
+        user does not have a discussion forum role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: forumroles_ismoderator
+      description: int, indicating if user is a forum moderator (1 or null) null means
+        user does not have a discussion forum role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: forumroles_isstudent
+      description: int, indicating if user is a student on the forum (1 or null) null
+        means user does not have a discussion forum role assigned
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 85

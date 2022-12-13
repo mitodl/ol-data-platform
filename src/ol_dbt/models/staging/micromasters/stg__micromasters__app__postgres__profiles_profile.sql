@@ -52,9 +52,9 @@ with source as (
             when edx_level_of_education = 'm' then 'Master''s or professional degree'
             when edx_level_of_education = 'b' then 'Bachelor''s degree'
             when edx_level_of_education = 'a' then 'Associate degree'
-            when edx_level_of_education = 'hs' then 'High school'
-            when edx_level_of_education = 'jhs' then 'Junior high school'
-            when edx_level_of_education = 'el' then 'Elementary school'
+            when edx_level_of_education = 'hs' then 'Secondary/high school'
+            when edx_level_of_education = 'jhs' then 'Junior secondary/junior high/middle school'
+            when edx_level_of_education = 'el' then 'Elementary/primary school'
             when edx_level_of_education = 'none' then 'No formal education'
             when edx_level_of_education = 'other' then 'Other education'
             else edx_level_of_education
