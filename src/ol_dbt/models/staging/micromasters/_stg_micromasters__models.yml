@@ -96,8 +96,9 @@ models:
     tests:
     - accepted_values:
         values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-          "Associate degree", "High school", "Junior high school", "Elementary school",
-          "No formal education", "Other education"]
+          "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
+            \ school", "Elementary/primary school", "No formal education", "Other\
+            \ education"]
     - dbt_expectations.expect_column_to_exist
   - name: user_gender
     description: str, user gender (could be blank)
