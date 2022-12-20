@@ -249,3 +249,174 @@ models:
       value: 4
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "user_auth_provider"]
+
+
+- name: stg__micromasters__app__postgres__courses_course
+  columns:
+  - name: course_id
+    description: int, sequential ID representing a course in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: course_edx_key
+    description: str, edX key formatted as {org}+{course number}
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_number
+    description: str, edX course number
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: int, foreign key to courses_program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_program')
+        field: program_id
+  - name: course_position_in_program
+    description: int, sequential number indicating the course position in a program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: course_description
+    description: str, description of the course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_prerequisites
+    description: str, required courses as a prior condition before taking this course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_contact_email
+    description: str, email used to contact course team
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_should_display_progress
+    description: boolean, indicating if "in progress" grades should be displayed for
+      the course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 10
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["program_id", "course_position_in_program"]
+
+- name: stg__micromasters__app__postgres__courses_program
+  columns:
+  - name: program_id
+    description: int, sequential ID representing a program in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_description
+    description: str, description of the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_num_required_courses
+    description: int, indicating the number of required courses to earn certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_price
+    description: numeric, price of the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_ga_tracking_id
+    description: str, a unique tracking ID provided by Google Analytics used to track
+      the number of views to certain pages of MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_is_live
+    description: boolean, indicating whether program is available to users on MicroMasters
+      website
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_is_financial_aid_available
+    description: boolean, indicating if financial aid is available for the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_created_on
+    description: timestamp, specifying when a program was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_updated_on
+    description: timestamp, specifying when a program was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 10
+
+- name: stg__micromasters__app__postgres__courses_electiveset
+  description: This represents the elective requirements for programs
+  columns:
+  - name: electiveset_id
+    description: int, sequential ID representing a elective requirement set for a
+      program in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: electiveset_required_number
+    description: int, indicating the number of required courses from this elective
+      requirement set
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_id
+    description: int, foreign key to courses_program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_program')
+        field: program_id
+  - name: electiveset_title
+    description: str, title of the elective requirement set
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 4
+
+- name: stg__micromasters__app__postgres__courses_electiveset_to_course
+  description: this links a course to a elective set for programs
+  columns:
+  - name: electivesettocourse_id
+    description: int, sequential ID representing a course in a  set for a program
+      in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: electiveset_id
+    description: int, foreign key to courses_electivesset
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_course')
+        field: course_id
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 3
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_id", "electiveset_id"]

@@ -268,3 +268,157 @@ sources:
     tests:
     - dbt_expectations.expect_table_column_count_to_equal:
         value: 5
+
+  - name: raw__micromasters__app__postgres__courses_course
+    columns:
+    - name: id
+      description: int, sequential ID representing a course in MicroMasters
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: title
+      description: str, title of the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: edx_key
+      description: str, edX key formatted as {org}+{course number}
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_number
+      description: str, edX course number
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: program_id
+      description: int, foreign key to courses_program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: position_in_program
+      description: int, sequential number indicating the course position in a program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: thumbnail
+      description: str, thumbnail path (not used on production)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: description
+      description: str, description of the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: prerequisites
+      description: str, required courses as a prior condition before taking this course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: contact_email
+      description: str, email used to contact course team
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: should_display_progress
+      description: boolean, indicating if "in progress" grades should be displayed
+        for the course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 11
+
+  - name: raw__micromasters__app__postgres__courses_program
+    columns:
+    - name: id
+      description: int, sequential ID representing a program in MicroMasters
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: title
+      description: str, title of the program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: description
+      description: str, description of the program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: num_required_courses
+      description: int, indicating the number of required courses to earn certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: price
+      description: numeric, price of the program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: ga_tracking_id
+      description: str, a unique tracking ID provided by Google Analytics used to
+        track the number of views to certain pages of MicroMasters
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: live
+      description: boolean, indicating whether program is available to users on MicroMasters
+        website
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: exam_attempts_first_date
+      description: timestamp, specify the date when users get one attempt if payment
+        made after this date
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: exam_attempts_second_date
+      description: timestamp, specify the date when users completely switched to one
+        attempt after this date
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: financial_aid_availability
+      description: boolean, indicating if financial aid is available for the program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when a program was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when a program was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 12
+
+  - name: raw__micromasters__app__postgres__courses_electivesset
+    description: This represents the elective requirements for programs
+    columns:
+    - name: id
+      description: int, sequential ID representing a elective requirement set for
+        a program in MicroMasters
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: required_number
+      description: int, indicating the number of required courses from this elective
+        requirement set
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: program_id
+      description: int, foreign key to courses_program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: title
+      description: str, title of the elective requirement set
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 4
+
+  - name: raw__micromasters__app__postgres__courses_electivecourse
+    description: this links a course to a elective set for programs
+    columns:
+    - name: id
+      description: int, sequential ID representing a course in a  set for a program
+        in MicroMasters
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: electives_set_id
+      description: int, foreign key to courses_electivesset
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: course_id
+      description: int, foreign key to courses_course
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 3
