@@ -55,3 +55,75 @@ models:
       value: 10
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__auth_user')
+
+- name: int__micromasters__programs
+  description: Intermediate model for programs in MicroMasters
+  columns:
+  - name: program_id
+    description: int, sequential ID representing a program in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_description
+    description: str, description of the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_num_required_courses
+    description: int, indicating the number of required courses to earn certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_is_live
+    description: boolean, indicating whether program is available to users on MicroMasters
+      website
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__micromasters__app__postgres__courses_program')
+
+- name: int__micromasters__program_requirements
+  description: Intermediate model for program requirements in MicroMasters
+  columns:
+  - name: program_id
+    description: int, foreign key to courses_program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_program')
+        field: program_id
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_course')
+        field: course_id
+  - name: electiveset_id
+    description: int, sequential ID representing a elective requirement set for a
+      program in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: electiveset_required_number
+    description: int, indicating the number of required from elective courses
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programrequirement_type
+    description: str, indicating the courses is either core or elective
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - accepted_values:
+        values: ["Core", "Elective"]
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6

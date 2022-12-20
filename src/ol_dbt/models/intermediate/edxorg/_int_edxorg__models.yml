@@ -2,7 +2,71 @@
 version: 2
 
 models:
-- name: int__edxorg__courserun_certificates
+- name: int__edxorg__mitx_courseruns
+  description: Intermediate model for MITx course runs from edx.org
+  columns:
+  - name: courserun_readable_id
+    description: str, The canonical ID of the course run in the format as {org}/{course}/{run}
+    tests:
+    - unique
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_title
+    description: str, The title of the course run
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_url
+    description: str, The url path of the course run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: course_number
+    description: str, The MIT course number for this course e.g. SysEngx1 is the course
+      number for MITxPRO/SysEngx1/1T2018
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_semester
+    description: str, The semester during which the course was launched e.g Fall 2020
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_enrollment_start_date
+    description: date, registration open date for the course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_start_date
+    description: date, The date on which the course starts
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_end_date
+    description: date, The date on which the course ends
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_is_self_paced
+    description: boolean, Indicate whether or not the course is self paced
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_institution
+    description: str, The institution that is linked to the course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_instructors
+    description: str, List of instructors associated with the course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: micromasters_program_id
+    description: int, foreign key to int__micromasters__programs
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('int__micromasters__programs')
+        field: program_id
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 12
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__edxorg__bigquery__mitx_courserun')
+
+- name: int__edxorg__mitx_courserun_certificates
   description: Intermediate model for course run certificates from edx.org
   columns:
   - name: user_id
@@ -35,7 +99,7 @@ models:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 5
 
-- name: int__edxorg__courserun_enrollments
+- name: int__edxorg__mitx_courserun_enrollments
   description: Intermediate model for course run enrollments from edx.org
   columns:
   - name: user_id
@@ -74,5 +138,3 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 7
-  - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__edxorg__bigquery__mitx_person_course')
