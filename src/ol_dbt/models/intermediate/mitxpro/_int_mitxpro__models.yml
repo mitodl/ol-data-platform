@@ -2,6 +2,271 @@
 version: 2
 
 models:
+- name: int__mitxpro__ecommerce_receipt
+  description: Data returned from cybersource when a user pays for an order
+  columns:
+  - name: receipt_id
+    description: int, primary key representing a receipt
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: receipt_created_on
+    description: timestamp, specifying when the receipt was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: receipt_updated_on
+    description: timestamp, specifying when the receipt most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: receipt_data
+    description: json, cybersource data for a payment
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: order_id
+    description: int, primary key in ecommerce_order
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_receipt')
+- name: int__mitxpro__ecommerce_order
+  columns:
+  - name: order_id
+    description: int, primary key representing a single xpro order
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+    - not_null
+  - name: order_state
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded"
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - accepted_values:
+        values: ['fulfilled', 'failed', 'created', 'refunded']
+  - name: order_total_price_paid
+    description: number, total order amount
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: order_updated_on
+    description: timestamp, specifying when the order was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: order_purchaser_user_id
+    description: int, primary key in users_user for the purchaser
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: order_created_on
+    description: timestamp, specifying when the order was most created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_order')
+- name: int__mitxpro__ecommerce_linerunselection
+  description: The course runs the user selected when purchsing the courseware object.
+    If the courseware object is a course run, there is one ecommerce_line_run_selection
+    record. If the courseware object is a program, there will be a record for each
+    course run from the program that is selected by the user
+  columns:
+  - name: linerunselection_id
+    description: int, primary key representing a line course run selection
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: linerunselection_created_on
+    description: timestamp, specifying when the line course run selection was initially
+      created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: linerunselection_updated_on
+    description: timestamp, specifying when the line course run selection was most
+      recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserun_id
+    description: int, primary key in courses_courserun
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: line_id
+    description: int, primary key in ecommerce_line
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 5
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["line_id", "courserun_id"]
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_linerunselection')
+- name: int__mitxpro__ecommerce_line
+  columns:
+  - name: line_id
+    description: int, primary key representing an ecommerce line
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+    - not_null
+  - name: order_id
+    description: int, foreign key in the orders_order table for the order that contains
+      the line
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: line_created_on
+    description: timestamp, specifying when the line was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: line_updated_on
+    description: timestamp, specifying when the line was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: productversion_id
+    description: int, foreign key in the ecommerce_productversion table. Versioned
+      product
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserun_id
+    description: int, primary key representing a single xPro course run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: int, primary key representing a single xPro program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: product_type
+    description: string, readable product type
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: programrun_id
+    description: int, primary key representing a single MITxPro program run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 10
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_line')
+- name: int__mitxpro__ecommerce_productversion
+  columns:
+  - name: productversion_id
+    description: int, primary key representing an ecommerce product version
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: productversion_created_on
+    description: timestamp, specifying when the product version was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: productversion_updated_on
+    description: timestamp, specifying when the product version was most recently
+      updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: productversion_price
+    description: numeric, the product price for this version
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: productversion_description
+    description: string, product version discriptiom
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: product_id
+    description: int, primary key in ecommerce_product
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: productversion_readable_id
+    description: string, the readable_id field from the product object
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: productversion_requires_enrollment_code
+    description: boolean, true if the learner is required to enter an enrollment code
+      to enroll in the course or program at the checkout
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_productversion')
+- name: int__mitxpro__ecommerce_product
+  description: Intermediate model of xPro Products.
+  columns:
+  - name: product_id
+    description: int, sequential ID for ecommerce product
+    tests:
+    - not_null
+    - unique
+    - dbt_expectations.expect_column_to_exist
+  - name: product_is_active
+    description: boolean, whether the product is purchasable
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
+  - name: product_created_on
+    description: timestamp, the timestamp the product was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: product_updated_on
+    description: timestamp, the timestamp the product was last updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: product_is_visible_in_bulk_form
+    description: boolean, whether or not the product is purchasable through the bulk
+      form at /ecommerce/bulk
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserun_id
+    description: int, primary key representing a single xPro course run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_id
+    description: int, primary key representing a single xPro program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: product_type
+    description: string, readable product type
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: course_id
+    description: int, foreign key to courses_course representing a single xPro course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 9
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["product_type", "program_id", "courserun_id"]
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_product')
 - name: int__mitxpro__courserunenrollments
   description: Intermediate model of enrollments in xPro
   columns:
