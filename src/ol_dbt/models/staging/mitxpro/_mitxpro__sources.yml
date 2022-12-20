@@ -7,6 +7,245 @@ sources:
   database: 'ol_data_lake_{{ target.name }}'
   schema: 'ol_warehouse_{{ target.name }}_raw'
   tables:
+  - name: raw__xpro__app__postgres__ecommerce_receipt
+    description: Data returned from cybersource when a user pays for an order
+    columns:
+    - name: id
+      description: int, primary key representing a receipt
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the receipt was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the receipt most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: data
+      description: json, cybersource data for a payment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, primary key in ecommerce_order
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 5
+  - name: raw__xpro__app__postgres__ecommerce_programrunline
+    description: The program run the user selected when purchsing a program.
+    columns:
+    - name: id
+      description: int, primary key representing a line program run selection
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the line program run selection was initially
+        created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the line program run selection was most
+        recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: program_run_id
+      description: int, primary key in courses_programrun
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: line_id
+      description: int, primary key in ecommerce_line
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 5
+  - name: raw__xpro__app__postgres__ecommerce_linerunselection
+    description: The course runs the user selected when purchsing the courseware object.
+      If the courseware object is a course run, there is one ecommerce_line_run_selection
+      record. If the courseware object is a program, there will be a record for each
+      course run from the program that is selected by the user
+    columns:
+    - name: id
+      description: int, primary key representing a line run selection
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the line run selection was initially
+        created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the line run selection was most recently
+        updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: run_id
+      description: int, primary key in courses_courserun
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: line_id
+      description: int, primary key in ecommerce_line
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 5
+  - name: raw__xpro__app__postgres__django_content_type
+    columns:
+    - name: id
+      description: int, sequential ID for the django model
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: model
+      description: string, the name of the django model
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: app_label
+      description: string, the  functional group the model belongs to
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 3
+  - name: raw__xpro__app__postgres__ecommerce_product
+    columns:
+    - name: id
+      description: int, primary key representing an ecommerce product
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the product was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the product was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: content_type_id
+      description: int, primary key in django_contenttype of the courseware. It is
+        the key for courses_courserun or courses_program in production. There is a
+        record where the courseware is courses_course on rc
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: object_id
+      description: int, primary key in either courses_courserun or courses_program
+        table of the courseware
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_active
+      description: boolean, whether or not the product is currently purchasable
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: visible_in_bulk_form
+      description: boolean, whether or not the product is purchasable through the
+        bulk form at /ecommerce/bulk
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 7
+  - name: raw__xpro__app__postgres__ecommerce_productversion
+    columns:
+    - name: id
+      description: int, primary key representing an ecommerce product version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the product version was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the product version was most recently
+        updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: price
+      description: numeric, the product price for this version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: description
+      description: string, product version discriptiom
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: product_id
+      description: int, primary key in ecommerce_product
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: text_id
+      description: string, the readable_id field from the product object
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: requires_enrollment_code
+      description: boolean, true if the learner is required to enter an enrollment
+        code to enroll in the course or program at the checkout
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 8
+  - name: raw__xpro__app__postgres__ecommerce_line
+    columns:
+    - name: id
+      description: int, primary key representing an ecommerce line
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the line was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the line was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: quantity
+      description: int, quantitiy ordered, currently always 1
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, foreign key in the orders_order table for the order that contains
+        the line Currently orders have exactly one line
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: product_version_id
+      description: int stored as string, foreign key in the ecommerce_productversion
+        table. Versioned product
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 6
+  - name: raw__xpro__app__postgres__ecommerce_order
+    columns:
+    - name: id
+      description: int, primary key representing a single xpro order
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the order was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the order was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: status
+      description: string, order state. Options are "fulfilled", "failed", "created"
+        "refunded"
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: total_price_paid
+      description: number, total order amount
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: purchaser_id
+      description: int, primary key in users_user for the purchaser
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 6
   - name: raw__xpro__app__postgres__courses_courserunenrollment
     columns:
     - name: id
