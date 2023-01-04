@@ -7,6 +7,302 @@ sources:
   database: 'ol_data_lake_{{ target.name }}'
   schema: 'ol_warehouse_{{ target.name }}_raw'
   tables:
+  - name: raw__xpro__app__postgres__ecommerce_couponselection
+    description: A row in this table is added when a coupon code is added to the users
+      basket for a course or product they have not yet purchased
+    columns:
+    - name: id
+      description: int, primary key representing a coupon selection
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the coupon was added to the basket
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the coupon selection was updated most
+        recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: coupon_id
+      description: int, foreign key for ecommerce_coupon
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: basket_id
+      description: int, foreign key for ecommerce_basket
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 5
+  - name: raw__xpro__app__postgres__ecommerce_couponredemption
+    description: A row in this table is added when an order uses a coupon code
+    columns:
+    - name: id
+      description: int, primary key representing a coupon redemption
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the coupon was redeemed
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the coupon redemption was updated most
+        recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: coupon_version_id
+      description: int, foreign key for ecommerce_couponversion
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, foreign key for ecommerce_order
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 5
+  - name: raw__xpro__app__postgres__ecommerce_couponeligibility
+    description: This table is used to limit coupons to a specific product. Coupons
+      which do not have a record in this table are redeemable for all products
+    columns:
+    - name: id
+      description: int, primary key representing a coupon product combo
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the coupon product association was initially
+        created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the coupon product association was most
+        recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: coupon_id
+      description: int, foreign key for ecommerce_coupon
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: product_id
+      description: int, foreign key for ecommerce_product
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: program_run_id
+      description: int, foreign key for courses_programrun, may be set when the product
+        type is a program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 6
+  - name: raw__xpro__app__postgres__ecommerce_company
+    description: A company that purchases bulk enrollments to xpro courses or programs
+    columns:
+    - name: id
+      description: int, primary key representing a company
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the company record was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the company record was most recently
+        updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: name
+      description: string, company name
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 4
+  - name: raw__xpro__app__postgres__ecommerce_couponpaymentversion
+    description: The ecommerce_couponpaymentversion holds information about a batch
+      of coupons. A coupon payment version has information about the dollar of percentage
+      amount of the discount, the number of available coupons that can be used to
+      redeem the discount, how many times they can be redeemed and the source of the
+      coupons. Coupon groups can be generated internally, for example to allow staff
+      to enroll in courses without paying or marketing to create promos that allow
+      learners to take a percentage or dollar amount off the full course price. Other
+      coupon groups are created when a company buys bulk seats in a course for their
+      employees, which generates a batch of 100% off coupons that learners can use
+      to enroll in a course or program.
+    columns:
+    - name: id
+      description: int, primary key representing a coupon payment version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the coupon payment version was initially
+        created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the coupon paymemt  version was most
+        recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: coupon_type
+      description: string, one of 'single-use' or 'promo'.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: num_coupon_codes
+      description: int, number of coupon (and coupon version) objects associated with
+        the payment version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: max_redemptions
+      description: int, maximum number of redemptions for the coupon payment version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: max_redemptions_per_user
+      description: int, maximum number of redemptions per user for the coupon payment
+        version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: amount
+      description: number, either dollar amount or percentage (between 0 and 1) discount
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: expiration_date
+      description: timestamp, expiration timestamp for the coupon payment version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: activation_date
+      description: timestamp, activation timestamp for the coupon payment version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: automatic
+      description: boolean, whether the coupon should be automatically applied to
+        eligible orders
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: payment_type
+      description: string, one of "credit_card", "purchase_order", "marketing, "sales",
+        "staff". "staff" coupons are used to allow staff to enroll in courses. "marketing"
+        coupons are promos for discounts generated by marketing. "credit_card", "purchase_order"
+        and "sales" correspond to different ways that companies can pay for vouchers
+        for their employees to enroll in courses or programs
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: payment_transaction
+      description: string, string that identifies the payment invoice for coupon purchases
+        by companies
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: tag
+      description: string, optional string tag used to identify the coupon payment
+        version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: company_id
+      description: foreign key is ecommerce_company
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: payment_id
+      description: int, foreign key to ecommerce_couponpayment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: discount_type
+      description: one of percent-off or dollars-off
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 17
+  - name: raw__xpro__app__postgres__ecommerce_couponpayment
+    description: Most of the information for coupon payments is in couponpaymentversion
+    columns:
+    - name: id
+      description: int, primary key representing a coupon payment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the coupon payment was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the coupon paymemt was most recently
+        updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: name
+      description: string, human readable name for the coupon payment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 4
+  - name: raw__xpro__app__postgres__ecommerce_couponversion
+    description: A version of a coupon linked to a specific couponpaymentversion record
+    columns:
+    - name: id
+      description: int, primary key representing a coupon version
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the coupon version was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the coupon version was most recently
+        updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: coupon_id
+      description: int, foreign key referencing ecommerce_coupon
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: payment_version_id
+      description: int, foreign key to ecommerce_paymentversion
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 5
+  - name: raw__xpro__app__postgres__ecommerce_coupon
+    description: A coupon code that can be used to recieve a discount on a course
+      or program
+    columns:
+    - name: id
+      description: int, primary key representing a coupon
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the coupon was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the coupon was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: coupon_code
+      description: string, coupon code for the coupon
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: payment_id
+      description: int, foreign key to ecommerce_payment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: enabled
+      description: boolean, whethere or not the coupon is currently active
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: include_future_runs
+      description: boolean, if true the coupon is automatically enabled for future
+        runs of the product the coupon is associated with
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_global
+      description: boolean, if true the coupon is valid for all products
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 8
   - name: raw__xpro__app__postgres__ecommerce_orderaudit
     columns:
     - name: id

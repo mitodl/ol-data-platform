@@ -1,11 +1,18 @@
-with source as (
+with basket as (
     select *
     from {{ ref('stg__mitxpro__app__postgres__ecommerce_basket') }}
 )
 
+, couponbasket as (
+    select *
+    from {{ ref('stg__mitxpro__app__postgres__ecommerce_couponbasket') }}
+)
+
 select
-    basket_id
-    , user_id
-    , basket_created_on
-    , basket_updated_on
-from source
+    basket.basket_id
+    , basket.user_id
+    , basket.basket_created_on
+    , basket.basket_updated_on
+    , couponbasket.coupon_id
+from basket
+left join couponbasket on couponbasket.basket_id = basket.basket_id
