@@ -32,7 +32,7 @@ repos:
   - id: yamllint
     args: [--format, parsable, -d, relaxed]
 - repo: https://github.com/asottile/pyupgrade
-  rev: v3.2.2
+  rev: v3.3.1
   hooks:
   - id: pyupgrade
     args:
@@ -54,7 +54,7 @@ repos:
     args:
     - --exclude-files poetry.lock
 - repo: https://github.com/PyCQA/isort
-  rev: 5.10.1
+  rev: 5.11.4
   hooks:
   - id: isort
 - repo: https://github.com/asottile/yesqa
@@ -64,7 +64,7 @@ repos:
     additional_dependencies:
     - git+https://github.com/wemake-services/wemake-python-styleguide#egg=wemake-python-styleguide
 - repo: https://github.com/psf/black
-  rev: 22.10.0
+  rev: 22.12.0
   hooks:
   - id: black
 - repo: https://github.com/PyCQA/flake8
@@ -87,7 +87,7 @@ repos:
     - types-pymysql
     - types-requests
 - repo: https://github.com/sqlfluff/sqlfluff
-  rev: 1.4.2
+  rev: 2.0.0a1
   hooks:
   - id: sqlfluff-fix
       # Arbitrary arguments to show an example
