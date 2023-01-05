@@ -10,7 +10,8 @@ with lines as (
     select * from {{ ref('stg__mitxonline__app__postgres__reversion_version') }}
     where contenttype_id in (
         select contenttype_id from
-            contenttypes where contenttype_full_name = 'ecommerce_product'
+            contenttypes
+        where contenttype_full_name = 'ecommerce_product'
     )
 )
 

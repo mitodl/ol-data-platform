@@ -20,7 +20,7 @@ with programrequirement as (
         , programrequirement.program_id
     from programrequirement
     inner join required_path
-               on programrequirement.programrequirement_path like required_path.programrequirement_path || '%'
+        on programrequirement.programrequirement_path like required_path.programrequirement_path || '%'
     where programrequirement.programrequirement_node_type = 'course'
 )
 
@@ -32,9 +32,11 @@ with programrequirement as (
         , programrequirement.program_id
     from programrequirement
     left join required_courses
-        on programrequirement.program_id = required_courses.program_id
+        on
+            programrequirement.program_id = required_courses.program_id
             and programrequirement.course_id = required_courses.course_id
-    where programrequirement.programrequirement_node_type = 'course'
+    where
+        programrequirement.programrequirement_node_type = 'course'
         and required_courses.program_id is null
 )
 
