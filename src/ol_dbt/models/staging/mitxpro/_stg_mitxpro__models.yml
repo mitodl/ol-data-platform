@@ -2,6 +2,113 @@
 version: 2
 
 models:
+- name: stg__mitxpro__app__postgres__ecommerce_productcouponassignment
+  description: Coupon assignments made through bulk coupon assignment google sheets.
+    These coupons can be redeemed by users with a specific email for a specific product
+  columns:
+  - name: productcouponassignment_id
+    description: int, primary key representing a coupon assignment
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: productcouponassignment_created_on
+    description: timestamp, specifying when the oupon assignment was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: productcouponassignment_updated_on
+    description: timestamp, specifying when the  coupon assignment was most recently
+      updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: productcouponassignment_email
+    description: string, user email that can redeem the coupon
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: couponproduct_id
+    description: int, foreign key to ecommerce_couponeproduct, which has a coupon
+      and product pair
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: productcouponassignment_is_redeemed
+    description: boolean, whether the user redeemed the coupon to enroll in the course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: bulkcouponassignment_id
+    description: int, foreign key to ecommerce_bulkcouponassignment
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: productcouponassignment_message_status
+    description: string, email message status. One of  "delivered", "failed", "opened",
+      "clicked"
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: productcouponassignment_message_status_updated_on
+    description: timestamp, timestamp when the message status was last updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: productcouponassignment_original_email
+    description: string, original email for the record, used when the email for a
+      coupon needs to change
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 10
+- name: stg__mitxpro__app__postgres__ecommerce_bulkcouponassignment
+  description: xPro has functionality for companies to assign coupons codes (usually
+    full price vouchers) to employees through a google drive sheet. People that get
+    a coupon recieve an email with their coupon code and enrollment instructions.
+    This table controls that functionality.
+  columns:
+  - name: bulkcouponassignment_id
+    description: int, primary key representing a bulk coupon assignment sheet
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: bulkcouponassignment_created_on
+    description: timestamp, specifying when the bulk coupon assignment sheet record
+      was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: bulkcouponassignment_updated_on
+    description: timestamp, specifying when the bulk coupon assignment sheet record
+      was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: bulkcouponassignment_assignment_sheet_id
+    description: string, google drive id for the sheet used to make the assignments
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: bulkcouponassignment_assignments_started_on
+    description: timestamp, timestamp when we started assigning coupons and sending
+      emails to the email addresses in the sheet
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: bulkcouponassignment_message_delivery_completed_on
+    description: timestamp, timestamp when all the emails with enrollment coupons
+      have been sent
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: bulkcouponassignment_sheet_last_modified_on
+    description: timestamp, timestamp when the google spreadsheet used for coupon
+      assignments was last modified
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: bulkcouponassignment_last_assignment_on
+    description: timestamp, timestamp when a coupon was last assigned to a user on
+      the list
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
 - name: stg__mitxpro__app__postgres__ecommerce_basketcoupon
   description: A row in this table is added when a coupon code is added to the users
     basket for a course or product they have not yet purchased
@@ -140,7 +247,7 @@ models:
       value: 4
 - name: stg__mitxpro__app__postgres__ecommerce_couponpaymentversion
   description: The ecommerce_couponpaymentversion holds information about a batch
-    of coupons. A coupon payment version has information about the dollar of percentage
+    of coupons. A coupon payment version has information about the dollar or percentage
     amount of the discount, the number of available coupons that can be used to redeem
     the discount, how many times they can be redeemed and the source of the coupons.
     Coupon groups can be generated internally, for example to allow staff to enroll
