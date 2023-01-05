@@ -1,6 +1,8 @@
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__reversion_revision') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__reversion_revision') }}
 
 )
 
@@ -10,7 +12,9 @@ with source as (
         id as revision_id
         , comment as revision_comment
         , user_id
-        , to_iso8601(from_iso8601_timestamp(date_created)) as revision_date_created
+        , to_iso8601(
+            from_iso8601_timestamp(date_created)
+        ) as revision_date_created
 
     from source
 

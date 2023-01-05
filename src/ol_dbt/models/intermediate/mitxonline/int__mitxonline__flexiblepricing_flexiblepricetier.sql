@@ -1,5 +1,7 @@
 with source as (
-    select * from {{ ref('stg__mitxonline__app__postgres__flexiblepricing_flexiblepricetier') }}
+    select *
+    from
+        {{ ref('stg__mitxonline__app__postgres__flexiblepricing_flexiblepricetier') }}
 )
 
 select

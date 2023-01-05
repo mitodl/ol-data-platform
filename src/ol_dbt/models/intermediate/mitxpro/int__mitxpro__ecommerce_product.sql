@@ -32,7 +32,9 @@ with products as (
             else contenttypes.contenttype_full_name
         end as product_type
     from products
-    inner join contenttypes on products.contenttype_id = contenttypes.contenttype_id
+    inner join
+        contenttypes
+        on products.contenttype_id = contenttypes.contenttype_id
 )
 
 select

@@ -1,5 +1,7 @@
 with countryincomethreshold as (
-    select * from {{ ref('stg__mitxonline__app__postgres__flexiblepricing_countryincomethreshold') }}
+    select *
+    from
+        {{ ref('stg__mitxonline__app__postgres__flexiblepricing_countryincomethreshold') }}
 )
 
 select

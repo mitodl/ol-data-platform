@@ -4,13 +4,17 @@
 
 
 with programrequirement as (
-    select * from {{ ref('stg__mitxonline__app__postgres__courses_programrequirement') }}
+    select *
+    from {{ ref('stg__mitxonline__app__postgres__courses_programrequirement') }}
 )
 
 , required_path as (
     select programrequirement_path
     from programrequirement
-    where programrequirement_node_type = 'operator' and programrequirement_operator = 'all_of'
+    where
+        programrequirement_node_type
+        = 'operator' and programrequirement_operator
+        = 'all_of'
 )
 
 , required_courses as (
@@ -20,7 +24,9 @@ with programrequirement as (
         , programrequirement.program_id
     from programrequirement
     inner join required_path
-               on programrequirement.programrequirement_path like required_path.programrequirement_path || '%'
+        on
+            programrequirement.programrequirement_path like required_path.programrequirement_path
+            || '%'
     where programrequirement.programrequirement_node_type = 'course'
 )
 
@@ -32,9 +38,11 @@ with programrequirement as (
         , programrequirement.program_id
     from programrequirement
     left join required_courses
-        on programrequirement.program_id = required_courses.program_id
+        on
+            programrequirement.program_id = required_courses.program_id
             and programrequirement.course_id = required_courses.course_id
-    where programrequirement.programrequirement_node_type = 'course'
+    where
+        programrequirement.programrequirement_node_type = 'course'
         and required_courses.program_id is null
 )
 

@@ -1,5 +1,7 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__bootcamps__app__postgres__profiles_legaladdress') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__bootcamps__app__postgres__profiles_legaladdress') }}
 )
 
 , cleaned as (

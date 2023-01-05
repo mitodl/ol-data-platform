@@ -1,7 +1,8 @@
 -- Enrollment information for Bootcamps
 
 with enrollments as (
-    select * from {{ ref('stg__bootcamps__app__postgres__courserunenrollment') }}
+    select *
+    from {{ ref('stg__bootcamps__app__postgres__courserunenrollment') }}
 )
 
 , runs as (

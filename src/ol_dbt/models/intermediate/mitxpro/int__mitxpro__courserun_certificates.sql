@@ -1,7 +1,8 @@
 -- Course Certificate information for MIT xPro
 
 with certificates as (
-    select * from {{ ref('stg__mitxpro__app__postgres__courses_courseruncertificate') }}
+    select *
+    from {{ ref('stg__mitxpro__app__postgres__courses_courseruncertificate') }}
 )
 
 , runs as (

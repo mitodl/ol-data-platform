@@ -3,7 +3,8 @@ with users as (
 )
 
 , profiles as (
-    select * from {{ ref('stg__micromasters__app__postgres__profiles_profile') }}
+    select *
+    from {{ ref('stg__micromasters__app__postgres__profiles_profile') }}
 )
 
 , mitxonline_auth as (

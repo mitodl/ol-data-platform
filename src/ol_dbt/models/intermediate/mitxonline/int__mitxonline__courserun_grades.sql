@@ -1,7 +1,8 @@
 -- Course Grade information for MITx Online
 
 with grades as (
-    select * from {{ ref('stg__mitxonline__app__postgres__courses_courserungrade') }}
+    select *
+    from {{ ref('stg__mitxonline__app__postgres__courses_courserungrade') }}
 )
 
 , runs as (

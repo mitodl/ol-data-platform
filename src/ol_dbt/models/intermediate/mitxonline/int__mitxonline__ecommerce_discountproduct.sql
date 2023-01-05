@@ -1,5 +1,6 @@
 with discountproduct as (
-    select * from {{ ref('stg__mitxonline__app__postgres__ecommerce_discountproduct') }}
+    select *
+    from {{ ref('stg__mitxonline__app__postgres__ecommerce_discountproduct') }}
 )
 
 select

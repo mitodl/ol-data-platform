@@ -1,7 +1,8 @@
 -- Enrollment information for MITxPro
 
 with enrollments as (
-    select * from {{ ref('stg__mitxpro__app__postgres__courses_programenrollment') }}
+    select *
+    from {{ ref('stg__mitxpro__app__postgres__courses_programenrollment') }}
 )
 
 , programs as (

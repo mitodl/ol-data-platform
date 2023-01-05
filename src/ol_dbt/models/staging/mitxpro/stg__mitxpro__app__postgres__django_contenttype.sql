@@ -1,6 +1,8 @@
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__django_content_type') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__django_content_type') }}
 
 )
 

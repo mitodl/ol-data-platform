@@ -1,7 +1,9 @@
 -- Bootcamps Course Run Enrollment Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__bootcamps__app__postgres__klasses_bootcamprunenrollment') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__bootcamps__app__postgres__klasses_bootcamprunenrollment') }}
 )
 
 , renamed as (
@@ -12,9 +14,15 @@ with source as (
         , bootcamp_run_id as courserun_id
         , change_status as courserunenrollment_enrollment_status
         , user_certificate_is_blocked as courserunenrollment_is_certificate_blocked
-        , to_iso8601(from_iso8601_timestamp(created_on)) as courserunenrollment_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as courserunenrollment_updated_on
-        , to_iso8601(from_iso8601_timestamp(novoed_sync_date)) as courserunenrollment_novoed_sync_on
+        , to_iso8601(
+            from_iso8601_timestamp(created_on)
+        ) as courserunenrollment_created_on
+        , to_iso8601(
+            from_iso8601_timestamp(updated_on)
+        ) as courserunenrollment_updated_on
+        , to_iso8601(
+            from_iso8601_timestamp(novoed_sync_date)
+        ) as courserunenrollment_novoed_sync_on
     from source
 )
 

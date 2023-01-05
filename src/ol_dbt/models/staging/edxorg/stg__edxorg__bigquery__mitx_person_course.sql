@@ -3,7 +3,9 @@
 
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__irx__edxorg__bigquery__mitx_person_course') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__irx__edxorg__bigquery__mitx_person_course') }}
 
 )
 
@@ -48,12 +50,22 @@ with source as (
             else loe
         end as user_highest_education
 
-        , to_iso8601(from_iso8601_timestamp(start_time)) as courserunenrollment_created_on
-        , to_iso8601(from_iso8601_timestamp(verified_enroll_time)) as courserunenrollment_enrolled_on
+        , to_iso8601(
+            from_iso8601_timestamp(start_time)
+        ) as courserunenrollment_created_on
+        , to_iso8601(
+            from_iso8601_timestamp(verified_enroll_time)
+        ) as courserunenrollment_enrolled_on
 
-        , to_iso8601(from_iso8601_timestamp(verified_unenroll_time)) as courserunenrollment_unenrolled_on
-        , to_iso8601(from_iso8601_timestamp(cert_created_date)) as courseruncertificate_created_on
-        , to_iso8601(from_iso8601_timestamp(cert_modified_date)) as courseruncertificate_updated_on
+        , to_iso8601(
+            from_iso8601_timestamp(verified_unenroll_time)
+        ) as courserunenrollment_unenrolled_on
+        , to_iso8601(
+            from_iso8601_timestamp(cert_created_date)
+        ) as courseruncertificate_created_on
+        , to_iso8601(
+            from_iso8601_timestamp(cert_modified_date)
+        ) as courseruncertificate_updated_on
     from source
     where user_id is not null --- temporary fix to filter the bad data
 

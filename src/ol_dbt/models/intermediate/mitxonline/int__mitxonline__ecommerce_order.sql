@@ -3,14 +3,16 @@ with lines as (
 )
 
 , contenttypes as (
-    select * from {{ ref('stg__mitxonline__app__postgres__django_contenttype') }}
+    select *
+    from {{ ref('stg__mitxonline__app__postgres__django_contenttype') }}
 )
 
 , versions as (
     select * from {{ ref('stg__mitxonline__app__postgres__reversion_version') }}
     where contenttype_id in (
         select contenttype_id from
-            contenttypes where contenttype_full_name = 'ecommerce_product'
+            contenttypes
+        where contenttype_full_name = 'ecommerce_product'
     )
 )
 
@@ -48,4 +50,6 @@ from lines
 inner join orders on orders.order_id = lines.order_id
 inner join users on orders.order_purchaser_user_id = users.user_id
 inner join versions on versions.version_id = lines.product_version_id
-inner join intermediate_products_view on intermediate_products_view.product_id = versions.version_object_id
+inner join
+    intermediate_products_view
+    on intermediate_products_view.product_id = versions.version_object_id

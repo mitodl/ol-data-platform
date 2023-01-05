@@ -4,7 +4,9 @@
 -- not every user from MITxOnline DB has a matching record in this source table
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__social_auth_usersocialauth') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__social_auth_usersocialauth') }}
 )
 
 , cleaned as (

@@ -1,6 +1,8 @@
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__ecommerce_basketitem') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__xpro__app__postgres__ecommerce_basketitem') }}
 
 )
 
@@ -12,8 +14,12 @@ with source as (
         , basket_id
         , product_id
         , program_run_id as programrun_id
-        , to_iso8601(from_iso8601_timestamp(created_on)) as basketitem_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as basketitem_updated_on
+        , to_iso8601(
+            from_iso8601_timestamp(created_on)
+        ) as basketitem_created_on
+        , to_iso8601(
+            from_iso8601_timestamp(updated_on)
+        ) as basketitem_updated_on
     from source
 
 )

@@ -2,7 +2,8 @@
 
 
 with programrequirement as (
-    select * from {{ ref('stg__mitxonline__app__postgres__courses_programrequirement') }}
+    select *
+    from {{ ref('stg__mitxonline__app__postgres__courses_programrequirement') }}
 )
 
 select

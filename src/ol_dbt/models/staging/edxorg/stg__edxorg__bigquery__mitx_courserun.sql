@@ -6,7 +6,9 @@
 
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__irx__edxorg__bigquery__mitx_course') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__irx__edxorg__bigquery__mitx_course') }}
 
 )
 

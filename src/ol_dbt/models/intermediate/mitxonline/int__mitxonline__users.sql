@@ -9,7 +9,8 @@ with users as (
 )
 
 , micromasters_profiles as (
-    select * from {{ ref('stg__micromasters__app__postgres__profiles_profile') }}
+    select *
+    from {{ ref('stg__micromasters__app__postgres__profiles_profile') }}
 )
 
 , micromasters_auth as (
@@ -25,7 +26,9 @@ with users as (
         , micromasters_auth.user_username
         , micromasters_profiles.user_address_country
     from micromasters_profiles
-    inner join micromasters_auth on micromasters_auth.user_id = micromasters_profiles.user_id
+    inner join
+        micromasters_auth
+        on micromasters_auth.user_id = micromasters_profiles.user_id
 )
 
 select

@@ -1,7 +1,8 @@
 -- Program Certificate information for MITx Online
 
 with certificates as (
-    select * from {{ ref('stg__mitxonline__app__postgres__courses_programcertificate') }}
+    select *
+    from {{ ref('stg__mitxonline__app__postgres__courses_programcertificate') }}
 )
 
 , programs as (

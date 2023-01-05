@@ -2,7 +2,9 @@
 -- It should be primarily used to link edx.org courses to programs in MicroMasters
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__courses_course') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__courses_course') }}
 )
 
 , cleaned as (

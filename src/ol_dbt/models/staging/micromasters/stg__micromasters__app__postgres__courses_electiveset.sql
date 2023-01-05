@@ -1,7 +1,9 @@
 -- MicroMasters program elective set Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__courses_electivesset') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__courses_electivesset') }}
 )
 
 , cleaned as (

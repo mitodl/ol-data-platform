@@ -36,7 +36,9 @@ with products as (
             when 'courses_programrun' then 'program run'
         end as product_type
     from products
-    inner join contenttypes on products.contenttype_id = contenttypes.contenttype_id
+    inner join
+        contenttypes
+        on products.contenttype_id = contenttypes.contenttype_id
 )
 
 select
@@ -45,4 +47,6 @@ select
     , programruns.program_id
 from product_subquery
 left join courseruns on product_subquery.courserun_id = courseruns.courserun_id
-left join programruns on product_subquery.programrun_id = programruns.programrun_id
+left join
+    programruns
+    on product_subquery.programrun_id = programruns.programrun_id

@@ -1,6 +1,8 @@
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__flexiblepricing_flexibleprice') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__flexiblepricing_flexibleprice') }}
 
 )
 
@@ -20,10 +22,18 @@ with source as (
         , country_of_residence as flexiblepriceapplication_country_of_residence
         , courseware_object_id
         , courseware_content_type_id as contenttype_id
-        , to_iso8601(from_iso8601_timestamp(date_exchange_rate)) as flexiblepriceapplication_exchange_rate_timestamp
-        , to_iso8601(from_iso8601_timestamp(date_documents_sent)) as flexiblepriceapplication_date_documents_sent
-        , to_iso8601(from_iso8601_timestamp(created_on)) as flexiblepriceapplication_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as flexiblepriceapplication_updated_on
+        , to_iso8601(
+            from_iso8601_timestamp(date_exchange_rate)
+        ) as flexiblepriceapplication_exchange_rate_timestamp
+        , to_iso8601(
+            from_iso8601_timestamp(date_documents_sent)
+        ) as flexiblepriceapplication_date_documents_sent
+        , to_iso8601(
+            from_iso8601_timestamp(created_on)
+        ) as flexiblepriceapplication_created_on
+        , to_iso8601(
+            from_iso8601_timestamp(updated_on)
+        ) as flexiblepriceapplication_updated_on
 
     from source
 

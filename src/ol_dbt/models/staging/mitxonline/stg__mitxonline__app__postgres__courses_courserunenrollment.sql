@@ -1,7 +1,9 @@
 -- MITx Online Course Run Enrollment Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_courserunenrollment') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_courserunenrollment') }}
 )
 
 , cleaned as (
@@ -14,8 +16,12 @@ with source as (
         , user_id
         , enrollment_mode as courserunenrollment_enrollment_mode
         , edx_emails_subscription as courserunenrollment_has_edx_email_subscription
-        , to_iso8601(from_iso8601_timestamp(created_on)) as courserunenrollment_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as courserunenrollment_updated_on
+        , to_iso8601(
+            from_iso8601_timestamp(created_on)
+        ) as courserunenrollment_created_on
+        , to_iso8601(
+            from_iso8601_timestamp(updated_on)
+        ) as courserunenrollment_updated_on
     from source
 )
 

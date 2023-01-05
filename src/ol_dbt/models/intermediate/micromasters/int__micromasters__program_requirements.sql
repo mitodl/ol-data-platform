@@ -24,11 +24,14 @@ with programs as (
 )
 
 , electiveset as (
-    select * from {{ ref('stg__micromasters__app__postgres__courses_electiveset') }}
+    select *
+    from {{ ref('stg__micromasters__app__postgres__courses_electiveset') }}
 )
 
 , electiveset_to_course as (
-    select * from {{ ref('stg__micromasters__app__postgres__courses_electiveset_to_course') }}
+    select *
+    from
+        {{ ref('stg__micromasters__app__postgres__courses_electiveset_to_course') }}
 )
 
 , elective_courses as (
@@ -39,7 +42,7 @@ with programs as (
         , electiveset.electiveset_required_number
     from electiveset_to_course
     inner join electiveset
-               on electiveset_to_course.electiveset_id = electiveset.electiveset_id
+        on electiveset_to_course.electiveset_id = electiveset.electiveset_id
 )
 
 --- courses that are not in elective_courses are core
@@ -49,7 +52,8 @@ with programs as (
         , courses.program_id
     from courses
     left join elective_courses
-        on courses.program_id = elective_courses.program_id
+        on
+            courses.program_id = elective_courses.program_id
             and courses.course_id = elective_courses.course_id
     where elective_courses.course_id is null
 )

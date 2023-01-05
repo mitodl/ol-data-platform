@@ -1,7 +1,9 @@
 -- MITx Online Program Enrollment Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_programenrollment') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_programenrollment') }}
 )
 
 , cleaned as (
@@ -12,8 +14,12 @@ with source as (
         , program_id
         , user_id
         , enrollment_mode as programenrollment_enrollment_mode
-        , to_iso8601(from_iso8601_timestamp(created_on)) as programenrollment_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as programenrollment_updated_on
+        , to_iso8601(
+            from_iso8601_timestamp(created_on)
+        ) as programenrollment_created_on
+        , to_iso8601(
+            from_iso8601_timestamp(updated_on)
+        ) as programenrollment_updated_on
     from source
 )
 

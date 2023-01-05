@@ -1,7 +1,9 @@
 -- MicroMasters User Profile Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__profiles_profile') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__profiles_profile') }}
 )
 
 , cleaned as (
@@ -49,11 +51,15 @@ with source as (
         ) as user_romanized_full_name
         , case
             when edx_level_of_education = 'p' then 'Doctorate'
-            when edx_level_of_education = 'm' then 'Master''s or professional degree'
+            when
+                edx_level_of_education = 'm'
+                then 'Master''s or professional degree'
             when edx_level_of_education = 'b' then 'Bachelor''s degree'
             when edx_level_of_education = 'a' then 'Associate degree'
             when edx_level_of_education = 'hs' then 'Secondary/high school'
-            when edx_level_of_education = 'jhs' then 'Junior secondary/junior high/middle school'
+            when
+                edx_level_of_education = 'jhs'
+                then 'Junior secondary/junior high/middle school'
             when edx_level_of_education = 'el' then 'Elementary/primary school'
             when edx_level_of_education = 'none' then 'No formal education'
             when edx_level_of_education = 'other' then 'Other education'
@@ -67,12 +73,18 @@ with source as (
         end as user_gender
         , case
             when account_privacy = 'public' then 'Public to everyone'
-            when account_privacy = 'public_to_mm' then 'Public to logged in users'
+            when
+                account_privacy = 'public_to_mm'
+                then 'Public to logged in users'
             when account_privacy = 'private' then 'Private'
             else account_privacy
         end as user_account_privacy
-        , to_iso8601(from_iso8601_timestamp(date_joined_micromasters)) as user_joined_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as user_profile_updated_on
+        , to_iso8601(
+            from_iso8601_timestamp(date_joined_micromasters)
+        ) as user_joined_on
+        , to_iso8601(
+            from_iso8601_timestamp(updated_on)
+        ) as user_profile_updated_on
     from source
 )
 

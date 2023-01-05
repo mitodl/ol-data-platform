@@ -1,7 +1,8 @@
 -- Program Certificate information for MIT xPro
 
 with certificates as (
-    select * from {{ ref('stg__mitxpro__app__postgres__courses_programcertificate') }}
+    select *
+    from {{ ref('stg__mitxpro__app__postgres__courses_programcertificate') }}
 )
 
 , programs as (

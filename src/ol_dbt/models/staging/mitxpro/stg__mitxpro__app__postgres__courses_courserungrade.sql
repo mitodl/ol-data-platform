@@ -1,7 +1,9 @@
 -- MIT xPro Users Course Grades Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__courses_courserungrade') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__courses_courserungrade') }}
 )
 
 , cleaned as (
@@ -13,8 +15,12 @@ with source as (
         , letter_grade as courserungrade_letter_grade
         , set_by_admin as courserungrade_is_set_by_admin
         , passed as courserungrade_is_passing
-        , to_iso8601(from_iso8601_timestamp(created_on)) as courserungrade_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as courserungrade_updated_on
+        , to_iso8601(
+            from_iso8601_timestamp(created_on)
+        ) as courserungrade_created_on
+        , to_iso8601(
+            from_iso8601_timestamp(updated_on)
+        ) as courserungrade_updated_on
     from source
 )
 

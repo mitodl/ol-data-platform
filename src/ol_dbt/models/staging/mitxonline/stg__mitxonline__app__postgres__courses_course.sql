@@ -1,7 +1,9 @@
 -- MITx Online Course Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_course') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_course') }}
 )
 
 , cleaned as (

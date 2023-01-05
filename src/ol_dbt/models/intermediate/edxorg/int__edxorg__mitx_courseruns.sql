@@ -14,7 +14,9 @@ with runs as (
         , program_id
         , course_edx_key
         , course_number
-        , replace(replace(course_edx_key, 'course-v1:', ''), '+', '/') as course_readable_id
+        , replace(
+            replace(course_edx_key, 'course-v1:', ''), '+', '/'
+        ) as course_readable_id
     from {{ ref('stg__micromasters__app__postgres__courses_course') }}
 )
 
@@ -31,6 +33,11 @@ select
     , runs.courserun_end_date
     , runs.courserun_is_self_paced
     , micromasters_courses.program_id as micromasters_program_id
-from runs
+from
+    runs
 --- courserun_readable_id here is formatted as {org}/{course_number}/{run}
-left join micromasters_courses on runs.courserun_readable_id like micromasters_courses.course_readable_id || '%'
+left join
+    micromasters_courses
+    on
+        runs.courserun_readable_id like micromasters_courses.course_readable_id
+        || '%'

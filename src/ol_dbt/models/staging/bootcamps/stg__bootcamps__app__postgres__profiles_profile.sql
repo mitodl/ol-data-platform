@@ -1,5 +1,7 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__bootcamps__app__postgres__profiles_profile') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__bootcamps__app__postgres__profiles_profile') }}
 )
 
 , cleaned as (
@@ -23,9 +25,13 @@ with source as (
             when company_size = 1 then 'Small/Start-up (1+ employees)'
             when company_size = 9 then 'Small/Home office (1-9 employees)'
             when company_size = 99 then 'Small (10-99 employees)'
-            when company_size = 999 then 'Small to medium-sized (100-999 employees)'
+            when
+                company_size = 999
+                then 'Small to medium-sized (100-999 employees)'
             when company_size = 9999 then 'Medium-sized (1000-9999 employees)'
-            when company_size = 10000 then 'Large Enterprise (10,000+ employees)'
+            when
+                company_size = 10000
+                then 'Large Enterprise (10,000+ employees)'
             when company_size = 0 then 'Other (N/A or Don''t know)'
             else cast(company_size as varchar)
         end as user_company_size

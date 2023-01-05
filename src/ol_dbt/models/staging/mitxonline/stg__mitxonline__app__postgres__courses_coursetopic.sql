@@ -1,15 +1,21 @@
 -- MITx Online Course Topic Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_coursetopic') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_coursetopic') }}
 )
 
 , cleaned as (
     select
         id as coursetopic_id
         , name as coursetopic_name
-        , to_iso8601(from_iso8601_timestamp(created_on)) as coursetopic_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as coursetopic_updated_on
+        , to_iso8601(
+            from_iso8601_timestamp(created_on)
+        ) as coursetopic_created_on
+        , to_iso8601(
+            from_iso8601_timestamp(updated_on)
+        ) as coursetopic_updated_on
     from source
 )
 

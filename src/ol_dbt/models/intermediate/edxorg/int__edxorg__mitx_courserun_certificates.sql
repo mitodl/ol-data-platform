@@ -27,8 +27,11 @@ select
     , certificates.courseruncertificate_status
     , certificates.courseruncertificate_created_on
     , runs.courserun_title
-from certificates
+from
+    certificates
 ---- there are certificates issued for courses that don't exist in course model.
 --   this inner joins will eliminate those rows.
 --   if we want to show all the certificate, it needs to change to Left join
-inner join runs on certificates.courserun_readable_id = runs.courserun_readable_id
+inner join
+    runs
+    on certificates.courserun_readable_id = runs.courserun_readable_id

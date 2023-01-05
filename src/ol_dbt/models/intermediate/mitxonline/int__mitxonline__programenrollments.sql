@@ -1,7 +1,8 @@
 -- Enrollment information for MITx Online
 
 with enrollments as (
-    select * from {{ ref('stg__mitxonline__app__postgres__courses_programenrollment') }}
+    select *
+    from {{ ref('stg__mitxonline__app__postgres__courses_programenrollment') }}
 )
 
 , programs as (

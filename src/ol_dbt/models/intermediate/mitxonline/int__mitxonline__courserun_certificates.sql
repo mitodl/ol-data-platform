@@ -1,7 +1,9 @@
 -- Course Certificate information for MITx Online
 
 with certificates as (
-    select * from {{ ref('stg__mitxonline__app__postgres__courses_courseruncertificate') }}
+    select *
+    from
+        {{ ref('stg__mitxonline__app__postgres__courses_courseruncertificate') }}
 )
 
 , runs as (

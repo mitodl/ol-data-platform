@@ -1,7 +1,9 @@
 -- MITx Online Program Requirement Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_programrequirement') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__courses_programrequirement') }}
 )
 
 , cleaned as (

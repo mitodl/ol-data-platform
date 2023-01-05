@@ -1,6 +1,8 @@
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__ecommerce_line') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__ecommerce_line') }}
 
 )
 

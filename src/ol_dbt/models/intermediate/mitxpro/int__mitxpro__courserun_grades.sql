@@ -1,7 +1,8 @@
 -- Course Grade information for MIT xPro
 
 with grades as (
-    select * from {{ ref('stg__mitxpro__app__postgres__courses_courserungrade') }}
+    select *
+    from {{ ref('stg__mitxpro__app__postgres__courses_courserungrade') }}
 )
 
 , runs as (

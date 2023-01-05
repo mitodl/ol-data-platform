@@ -1,5 +1,7 @@
 with flexiblepriceapplication as (
-    select * from {{ ref('stg__mitxonline__app__postgres__flexiblepricing_flexiblepriceapplication') }}
+    select *
+    from
+        {{ ref('stg__mitxonline__app__postgres__flexiblepricing_flexiblepriceapplication') }}
 )
 
 , contenttypes as (
@@ -28,7 +30,9 @@ select
     end as course_id
 
     , case contenttypes.contenttype_full_name
-        when 'courses_program' then flexiblepriceapplication.courseware_object_id
+        when
+            'courses_program'
+            then flexiblepriceapplication.courseware_object_id
     end as program_id
 
     , case contenttypes.contenttype_full_name
@@ -36,4 +40,6 @@ select
         when 'courses_program' then 'program'
     end as courseware_type
 from flexiblepriceapplication
-inner join contenttypes on flexiblepriceapplication.contenttype_id = contenttypes.contenttype_id
+inner join
+    contenttypes
+    on flexiblepriceapplication.contenttype_id = contenttypes.contenttype_id

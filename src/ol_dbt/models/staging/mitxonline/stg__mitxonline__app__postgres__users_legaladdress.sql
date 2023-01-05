@@ -1,7 +1,9 @@
 -- MITx Online User Information
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__users_legaladdress') }}
+    select *
+    from
+        {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__users_legaladdress') }}
 )
 
 , cleaned as (
