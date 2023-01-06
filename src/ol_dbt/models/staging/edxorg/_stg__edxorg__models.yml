@@ -96,7 +96,7 @@ models:
             \ education", "Doctorate in science or engineering", "Doctorate in another\
             \ field", "", null]
   - name: user_birth_year
-    description: int, user's Year of birth
+    description: int, A year of birth provided by the learner on their profile
     tests:
     - dbt_expectations.expect_column_to_exist
   - name: user_profile_country
@@ -162,3 +162,161 @@ models:
       value: 19
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]
+
+- name: stg__edxorg__bigquery__mitx_user_info_combo
+  description: This contains edxorg user profile, enrollments and certificate details
+    in a course from IRx BigQuery.
+  columns:
+  - name: user_id
+    description: int, Numerical user ID of a learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_username
+    description: str, The username of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_full_name
+    description: str, The full name of the user on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_email
+    description: str, The email address of the learner on the edX platform (could
+      be blank)
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_map_hash_id
+    description: str, A hashed ID mapping learner user ID's to external systems
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_mailing_address
+    description: str, Mailing address provided by the learner on their profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_profile_goals
+    description: str, The intended goals of the learner provided on their profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_gender
+    description: str, Gender selected by the user on their profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+  - name: user_country
+    description: str, Country selected by the learner on their profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_highest_education
+    description: str, user's Level of education- blank means User did not specify
+      level of education. Null means this student signed up before this information
+      was collected
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
+          "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
+            \ school", "Elementary/primary school", "No formal education", "Other\
+            \ education", "Doctorate in science or engineering", "Doctorate in another\
+            \ field", "", null]
+  - name: user_birth_year
+    description: int, A year of birth provided by the learner on their profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_profile_meta
+    description: str, extra metadata on learner's profile. JSON data in text field
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_joined_on
+    description: timestamp, timestamp that the account was created.
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_last_login
+    description: timestamp, Timestamp indicating the last time the user logged into
+      the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserunenrollment_courserun_readable_id
+    description: str, course ID user is enrolling in. It's in the format as org/number/semester
+      this field is not always populated here, but it's always populated in person_course
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserunenrollment_mode
+    description: str, indicate what kind of enrollment it is - mode, no-id-professional,
+      audit, honor, verified, professional, credit
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserunenrollment_created_on
+    description: timestamp, Timestamp indicating when the enrollment event was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserunenrollment_is_active
+    description: int, Whether or not the enrollment is active. 1 means active
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_id
+    description: int, The ID of the certificate obtained by the user. Null if the
+      user obtained no certificate.
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_courserun_readable_id
+    description: str, The course ID associated with the certificate. It's in the format
+      as org/number/semester
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_user_id
+    description: int, The user ID tied to the certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_mode
+    description: str, The enrollment mode associated with the certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_distinction
+    description: int, This was used for letters of distinction for 188.1x, but is
+      not being used for any current courses
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_created_on
+    description: timestamp, Timestamp indicating when the certificate was created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_updated_on
+    description: timestamp, Timestamp indicating the last time the certificate was
+      modified
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_name
+    description: str, The name of the user that is listed on the certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_key
+    description: str, A random string that is used to match server requests to responses
+      sent to the LMS. Used internally only
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_status
+    description: str, Status of the generation of the certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_download_url
+    description: str, the full URL to the certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_download_uuid
+    description: str, A hash code that identifies this student’s certificate. Included
+      as part of the download_url.
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_verify_uuid
+    description: str, A hash code that verifies the validity of a certificate. Included
+      on the certificate itself as part of a URL.
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_grade
+    description: float, The grade when the certificate was generated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 32
