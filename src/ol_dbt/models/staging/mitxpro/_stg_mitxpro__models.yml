@@ -109,21 +109,21 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 8
-- name: stg__mitxpro__app__postgres__ecommerce_basketcoupon
+- name: stg__mitxpro__app__postgres__ecommerce_couponbasket
   description: A row in this table is added when a coupon code is added to the users
     basket for a course or product they have not yet purchased
   columns:
-  - name: basketcoupon_id
+  - name: couponbasket_id
     description: int, primary key representing a coupon in a user's basket
     tests:
     - dbt_expectations.expect_column_to_exist
     - not_null
-  - name: basketcoupon_created_on
+  - name: couponbasket_created_on
     description: timestamp, specifying when the coupon was added to a users basket
     tests:
     - dbt_expectations.expect_column_to_exist
     - not_null
-  - name: basketcoupon_updated_on
+  - name: couponbasket_updated_on
     description: timestamp, specifying when the coupon basket selection was updated
       most recently updated
     tests:
