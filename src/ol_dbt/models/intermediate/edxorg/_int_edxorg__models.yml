@@ -69,6 +69,12 @@ models:
 - name: int__edxorg__mitx_courserun_certificates
   description: Intermediate model for course run certificates from edx.org
   columns:
+  - name: courseruncertificate_id
+    description: int, sequential ID of the certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
   - name: user_id
     description: int, Numerical user ID of a learner on the edX platform
     tests:
@@ -81,23 +87,58 @@ models:
     tests:
     - dbt_expectations.expect_column_to_exist
     - not_null
-  - name: courseruncertificate_status
-    description: str, one of downloadable, notpassing, audit_passing, unavailable,
-      audit_notpassing where downloadable should = earned
+  - name: user_username
+    description: str, The username of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_email
+    description: str, The email address of the learner on the edX platform
     tests:
     - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_created_on
-    description: timestamp, timestamp when certificate was generated (if applicable)
+    description: timestamp, Timestamp indicating when the certificate was created
     tests:
     - dbt_expectations.expect_column_to_exist
-  - name: courserun_title
-    description: str, The title of the course run
+  - name: courseruncertificate_updated_on
+    description: timestamp, Timestamp indicating the last time the certificate was
+      modified
     tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_name
+    description: str, The name of the user that is listed on the certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_status
+    description: str, Status of the generation of the certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_download_url
+    description: str, the full URL to the certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
     - not_null
+  - name: courseruncertificate_download_uuid
+    description: str, A hash code that identifies this student’s certificate. Included
+      as part of the download_url.
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courseruncertificate_verify_uuid
+    description: str, A hash code that verifies the validity of a certificate. Included
+      on the certificate itself as part of a URL.
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_grade
+    description: float, The grade when the certificate was generated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_mode
+    description: str, The enrollment mode associated with the certificate
+    tests:
     - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 5
+      value: 15
 
 - name: int__edxorg__mitx_courserun_enrollments
   description: Intermediate model for course run enrollments from edx.org
@@ -116,6 +157,10 @@ models:
     - not_null
   - name: user_username
     description: str, username of a learner on the edX platform (some blank from source)
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_email
+    description: str, The email address of the learner on the edX platform
     tests:
     - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_created_on
@@ -137,4 +182,42 @@ models:
     - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 7
+      value: 8
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id"]
+
+- name: int__edxorg__mitx_users
+  description: Intermediate User model for edx.org that contains the most recent user
+    data
+  columns:
+  - name: user_id
+    description: int, Numerical user ID of a learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - unique
+  - name: user_username
+    description: str, The username of the learner on the edX platform some usernames
+      are blank
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_email
+    description: str, The current default email address of the learner on the edX
+      platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_full_name
+    description: str, The full name of the user on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_country
+    description: str, Country provided by the learner
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_joined_on
+    description: timestamp, timestamp that the account was created.
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6

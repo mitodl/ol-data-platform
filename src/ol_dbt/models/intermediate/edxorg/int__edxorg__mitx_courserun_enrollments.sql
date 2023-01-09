@@ -18,22 +18,26 @@ with enrollments as (
     from {{ ref('stg__edxorg__bigquery__mitx_courserun') }}
 )
 
----- placeholder for users
+, users as (
+    select * from {{ ref('int__edxorg__mitx_users') }}
+)
 
 , edxorg_enrollments as (
     select
-        enrollments.user_id
-        , enrollments.user_username
-        , enrollments.courserun_readable_id
+        enrollments.courserun_readable_id
         , enrollments.courserunenrollment_created_on
         , enrollments.courserunenrollment_enrollment_mode
         , enrollments.courserunenrollment_is_active
+        , users.user_id
+        , users.user_email
+        , users.user_username
         , runs.courserun_title
-    from
-        enrollments
-    ---- there are certificates issued for courses that don't exist in course model.
-    ---- this inner joins will eliminate those rows.
-    ---- if we want to show all the certificate, it needs to change to Left join
+    from enrollments
+    inner join users on
+        enrollments.user_id = users.user_id
+---- there are certificates issued for courses that don't exist in course model.
+---- this inner joins will eliminate those rows.
+---- if we want to show all the certificate, it needs to change to Left join
     inner join runs on enrollments.courserun_readable_id = runs.courserun_readable_id
 )
 

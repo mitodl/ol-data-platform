@@ -543,3 +543,212 @@ sources:
     tests:
     - dbt_expectations.expect_table_column_count_to_equal:
         value: 85
+
+  - name: raw__irx__edxorg__bigquery__mitx_user_info_combo
+    description: source table contains edxorg user profile, enrollments and certificate
+      details in a course from IRx BigQuery. enrollment_course_id in this table is
+      not always populated.
+    columns:
+    - name: user_id
+      description: int, Numerical user ID of a learner on the edX platform (not unique)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: username
+      description: str, The username of the learner on the edX platform (not unique)
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: email
+      description: str, The email address of the learner on the edX platform
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: id_map_hash_id
+      description: str, A hashed ID mapping learner user ID's to external systems
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: is_staff
+      description: int, Whether the user is a staff member of edx, 1 indicates staff
+        member
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_language
+      description: str, Language selected by the user as their default profile language
+        (No longer used) History - User’s preferred language, asked during the sign
+        up process for the 6.002x prototype course given in the Spring of 2012. Sometimes
+        written in those languages. EdX stopped collecting this data after MITx transitioned
+        to edX, but never removed the values for the first group of students.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_location
+      description: str, location chosen by the user on their profile (No longer used)
+        History- User’s location, asked during the sign up process for the 6.002x
+        prototype course given in the Spring of 2012. edX stopped collecting this
+        column after MITx transitioned to edX, so it is only available for the first
+        batch of students.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_name
+      description: str, The full name of the user on the edX platform
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_mailing_address
+      description: str, Mailing address provided by the learner on their profile
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_allow_certificate
+      description: int, Whether or not the profile allows certificate (No longer used)
+        History - Prior to 10 Feb 2014, this field was set to 0 (false) if log analysis
+        revealed that the student was accessing the edX site from a country that the
+        U.S. had embargoed. This restriction is no longer in effect.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_goals
+      description: str, The intended goals of the learner provided on their profile
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_gender
+      description: str, Gender selected by the user on their profile
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_country
+      description: str, Country selected by the learner on their profile
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_level_of_education
+      description: str, user's Level of education- blank means User did not specify
+        level of education. Null means this student signed up before this information
+        was collected
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_year_of_birth
+      description: int, A year of birth provided by the learner on their profile
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_meta
+      description: str, extra metadata on learner's profile. JSON data in text field
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_courseware
+      description: str, The courseware under which the profile was created History
+        - At one point, it was part of a way to do A/B tests, but it has not been
+        used for anything meaningful since the conclusion of the prototype course
+        in the spring of 2012.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: profile_city
+      description: str, City selected the learner on their profile (Not currently
+        used) History - Added in Jan 2014, not yet implemented.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: date_joined
+      description: timestamp, timestamp that the account was created.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: last_login
+      description: timestamp, Timestamp indicating the last time the user logged into
+        the edX platform
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: enrollment_course_id
+      description: str, course ID user is enrolling in. It's in the format as org/number/semester
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: enrollment_mode
+      description: str, indicate what kind of enrollment it is - mode, no-id-professional,
+        audit, honor, verified, professional, credit
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: enrollment_created
+      description: timestamp, Timestamp indicating when the enrollment event was created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: enrollment_is_active
+      description: int, Whether or not the enrollment is active. 1 means active
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_id
+      description: int, The ID of the certificate obtained by the user. Null if the
+        user obtained no certificate.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_course_id
+      description: str, The course ID associated with the certificate. It's in the
+        format as org/number/semester
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_user_id
+      description: int, The user ID tied to the certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_mode
+      description: str, The enrollment mode associated with the certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_distinction
+      description: int, This was used for letters of distinction for 188.1x, but is
+        not being used for any current courses
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_created_date
+      description: timestamp, Timestamp indicating when the certificate was created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_modified_date
+      description: timestamp, Timestamp indicating the last time the certificate was
+        modified
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_name
+      description: str, The name of the user that is listed on the certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_key
+      description: str, A random string that is used to match server requests to responses
+        sent to the LMS. Used internally only
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_status
+      description: str, Status of the generation of the certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_download_url
+      description: str, the full URL to the certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_download_uuid
+      description: str, A hash code that identifies this student’s certificate. Included
+        as part of the download_url.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_verify_uuid
+      description: str, A hash code that verifies the validity of a certificate. Included
+        on the certificate itself as part of a URL.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_grade
+      description: float, The grade when the certificate was generated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: certificate_error_reason
+      description: str, indicate any errors encountered during certificate generation.
+        Used internally only.
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: edxinstructordash_grade
+      description: float, A grade downloaded separately from the instructor dashboards.
+        This is mostly null for all tables generated by the simeon CLI tool version
+        0.0.1
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: edxinstructordash_grade_timestamp
+      description: str, Timestamp indicating when the grades from the instructor dashboards
+        were generated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: y1_anomalous
+      description: int, relic from processes that the edx2bigquery package used to
+        handle
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 42
