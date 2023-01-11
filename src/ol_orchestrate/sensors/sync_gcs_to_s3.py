@@ -1,10 +1,8 @@
-from dagster import sensor, RunRequest, SkipReason
-
-from ol_orchestrate.jobs.sync_assets_and_run_models import (
-    sync_gcs_to_s3,
-)
+from dagster import RunRequest, SkipReason, sensor
 from google.cloud import storage
 from google.oauth2 import service_account
+
+from ol_orchestrate.jobs.sync_assets_and_run_models import sync_gcs_to_s3
 
 
 @sensor(job=sync_gcs_to_s3, minimum_interval_seconds=86400)
