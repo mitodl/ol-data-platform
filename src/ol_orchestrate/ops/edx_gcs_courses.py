@@ -1,4 +1,4 @@
-from dagster import (  # noqa: WPS235
+from dagster import (
     AssetMaterialization,
     Field,
     MetadataEntry,
@@ -11,6 +11,7 @@ from dagster import (  # noqa: WPS235
 from dagster.core.definitions.input import In
 from google.cloud import storage
 from google.oauth2 import service_account
+
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
 
 
@@ -20,12 +21,12 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
     required_resource_keys={"results_dir"},
     out={"edx_course_tarball_directory": Out(dagster_type=DagsterPath)},
 )
-def download_edx_gcs_course_data():
+def download_edx_gcs_course_data(context):
     credentials = service_account.Credentials.from_service_account_info(access_json)
     storage_client = storage.Client(
-            credentials=credentials,
-            project=credentials.project_id,
-        )
+        credentials=credentials,
+        project=credentials.project_id,
+    )
     bucket = storage_client.get_bucket("simeon-mitx-course-tarballs")
     edx_course_tarball_path = context.resources.results_dir.path.joinpath(
         context.op_config["edx_gcs_course_tarballs"]
@@ -33,9 +34,11 @@ def download_edx_gcs_course_data():
     blobs = storage_client.list_blobs(bucket)
     for blob in blobs:
         blob.download_to_filename(edx_course_tarball_path + blob.name)
-    yield Output(edx_course_tarball_path,
+    yield Output(
+        edx_course_tarball_path,
         "edx_course_tarball_directory",
     )
+
 
 @op(
     name="edx_upload_gcs_course_tarballs",
@@ -54,7 +57,7 @@ def download_edx_gcs_course_data():
     },
     out={"edx_s3_course_tarball_directory": Out(dagster_type=String)},
 )
-def upload_edx_gcs_course_data_to_s3(  # noqa: WPS211
+def upload_edx_gcs_course_data_to_s3(
     context: OpExecutionContext,
     edx_gcs_course_tarball_directory: DagsterPath,
 ):

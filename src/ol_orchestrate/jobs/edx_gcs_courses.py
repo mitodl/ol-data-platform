@@ -1,21 +1,17 @@
 from dagster import graph
 from dagster_aws.s3.resources import s3_resource
 
-from ol_orchestrate.lib.hooks import (
-    notify_healthchecks_io_on_failure,
-    notify_healthchecks_io_on_success,
-)
-from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
-from ol_orchestrate.ops.edx_gcs_courses import (  # noqa: WPS235
+from ol_orchestrate.ops.edx_gcs_courses import (
     download_edx_gcs_course_data,
     upload_edx_gcs_course_data_to_s3,
 )
+from ol_orchestrate.resources.gcp_gcs import gcp_gcs_resource
 from ol_orchestrate.resources.healthchecks import (
     healthchecks_dummy_resource,
     healthchecks_io_resource,
 )
-from ol_orchestrate.resources.gcp_gcs import gcp_gcs_resource
 from ol_orchestrate.resources.outputs import daily_dir
+
 
 @graph(
     description=(
@@ -32,7 +28,8 @@ from ol_orchestrate.resources.outputs import daily_dir
 )
 def sync_gcs_to_s3():
     upload_edx_gcs_course_data_to_s3(download_edx_gcs_course_data())
-    
+
+
 dev_resources = {
     "gcp_gcs": gcp_gcs_resource,
     "s3": s3_resource,
