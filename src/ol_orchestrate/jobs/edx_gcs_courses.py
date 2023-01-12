@@ -31,6 +31,7 @@ from ol_orchestrate.resources.outputs import daily_dir
 def sync_gcs_to_s3():
     upload_edx_gcs_course_data_to_s3(download_edx_gcs_course_data())
 
+
 environment = {
     "qa": {
         "gcp_gcs": gcp_gcs_resource,
