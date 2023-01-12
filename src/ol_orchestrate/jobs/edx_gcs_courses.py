@@ -1,3 +1,5 @@
+import os
+
 from dagster import graph
 from dagster_aws.s3.resources import s3_resource
 
@@ -29,22 +31,25 @@ from ol_orchestrate.resources.outputs import daily_dir
 def sync_gcs_to_s3():
     upload_edx_gcs_course_data_to_s3(download_edx_gcs_course_data())
 
-
-dev_resources = {
-    "gcp_gcs": gcp_gcs_resource,
-    "s3": s3_resource,
-    "results_dir": daily_dir,
-    "healthchecks": healthchecks_dummy_resource,
+environment = {
+    "qa": {
+        "gcp_gcs": gcp_gcs_resource,
+        "s3": s3_resource,
+        "results_dir": daily_dir,
+        "healthchecks": healthchecks_dummy_resource,
+    },
+    "production": {
+        "gcp_gcs": gcp_gcs_resource,
+        "s3": s3_resource,
+        "results_dir": daily_dir,
+        "healthchecks": healthchecks_io_resource,
+    },
 }
 
-production_resources = {
-    "gcp_gcs": gcp_gcs_resource,
-    "s3": s3_resource,
-    "results_dir": daily_dir,
-    "healthchecks": healthchecks_io_resource,
-}
+dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
+env_map = environment[dagster_deployment]
 
 sync_gcs_to_s3_job = sync_gcs_to_s3.to_job(
     name="sync_gcs_to_s3_job_pipeline",
-    resource_defs=dev_resources,
+    resource_defs=env_map,
 )

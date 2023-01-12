@@ -9,24 +9,17 @@ from dagster import (
     op,
 )
 from dagster.core.definitions.input import In
-from google.cloud import storage
-from google.oauth2 import service_account
-
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
 
 
 @op(
     name="edx_course_tarballs",
     description="Download edx course tarballs from GCS bucket",
-    required_resource_keys={"results_dir"},
+    required_resource_keys={"gcp_gcs", "results_dir"},
     out={"edx_course_tarball_directory": Out(dagster_type=DagsterPath)},
 )
 def download_edx_gcs_course_data(context):
-    credentials = service_account.Credentials.from_service_account_info(access_json)
-    storage_client = storage.Client(
-        credentials=credentials,
-        project=credentials.project_id,
-    )
+    storage_client = context.resources.gcp_gcs.gcp_gcs_resource
     bucket = storage_client.get_bucket("simeon-mitx-course-tarballs")
     edx_course_tarball_path = context.resources.results_dir.path.joinpath(
         context.op_config["edx_gcs_course_tarballs"]
