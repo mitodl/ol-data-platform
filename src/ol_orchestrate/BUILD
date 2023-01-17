@@ -72,7 +72,8 @@ python_distribution(
 docker_image(
     name="edx-gcs-courses-pipeline",
     dependencies=[
-        ":edx-gcs-courses"
+        ":edx-gcs-courses",
+        "src/ol_dbt:dbt_project"
     ],
     source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
     extra_build_args=["PACKAGE_NAME=edx-gcs-courses-pipelines"],
