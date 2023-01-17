@@ -59,6 +59,7 @@ docker_image(
 python_distribution(
     name="edx-gcs-courses",
     dependencies=[
+        "//:requirements#dagster-postgres",
         "//:requirements#dagster-aws",
         "//:requirements#dagster-gcp"
     ],
