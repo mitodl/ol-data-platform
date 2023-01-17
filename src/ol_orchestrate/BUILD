@@ -55,3 +55,27 @@ docker_image(
     tags=["data_pipeline", "docker_image"],
     image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
 )
+
+python_distribution(
+    name="edx-gcs-courses",
+    dependencies=[
+        "//:requirements#dagster-postgres",
+        "//:requirements#dagster-aws",
+        "//:requirements#dagster-gcp"
+    ],
+    provides=python_artifact(
+        name="dagster-pipeline",
+        version="0.5.3",
+    ),
+)
+
+docker_image(
+    name="edx-gcs-courses-pipeline",
+    dependencies=[
+        ":edx-gcs-courses"
+    ],
+    source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
+    extra_build_args=["PACKAGE_NAME=edx-gcs-courses-pipelines"],
+    tags=["data_pipeline", "docker_image"],
+    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
+)
