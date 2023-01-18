@@ -3,9 +3,7 @@ import os
 from dagster import repository
 from dagster_aws.s3.resources import s3_resource
 
-from ol_orchestrate.jobs.edx_gcs_courses import (
-    sync_gcs_to_s3,
-)
+from ol_orchestrate.jobs.edx_gcs_courses import sync_gcs_to_s3
 from ol_orchestrate.resources.gcp_gcs import gcp_gcs_resource
 from ol_orchestrate.resources.healthchecks import (
     healthchecks_dummy_resource,
@@ -31,10 +29,9 @@ environment = {
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
 env_map = environment[dagster_deployment]
 
+
 @repository
 def edx_gcs_courses_repository():
     return [
-        sync_gcs_to_s3.to_job(
-            resource_defs=env_map
-        ),
+        sync_gcs_to_s3.to_job(resource_defs=env_map),
     ]
