@@ -61,7 +61,8 @@ python_distribution(
     dependencies=[
         "//:requirements#dagster-postgres",
         "//:requirements#dagster-aws",
-        "//:requirements#dagster-gcp"
+        "//:requirements#dagster-gcp",
+        "./repositories/edx_gcs_courses.py"
     ],
     provides=python_artifact(
         name="dagster-pipeline",
