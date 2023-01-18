@@ -36,7 +36,7 @@ def download_edx_gcs_course_data(context):
 
 @op(
     name="edx_upload_gcs_course_tarballs",
-    description="Upload all data from GCS downloaded course tarballs provided by institutional research.",
+    description="Upload all data from GCS downloaded course tarballs provided by institutional research.",  # noqa: E501
     required_resource_keys={"results_dir", "s3"},
     config_schema={
         "edx_etl_results_bucket": Field(
@@ -55,7 +55,7 @@ def upload_edx_gcs_course_data_to_s3(
     context: OpExecutionContext,
     edx_gcs_course_tarball_directory: DagsterPath,
 ):
-    """Upload all course tarballs to S3 from gcs bucket provided by institutional research.
+    """Upload course tarballs to S3 from gcs provided by institutional research.
 
     :param context: Dagster execution context for propagaint configuration data
     :type context: OpExecutionContext
