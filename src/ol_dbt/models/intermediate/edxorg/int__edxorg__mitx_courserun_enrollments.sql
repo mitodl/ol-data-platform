@@ -36,9 +36,7 @@ with enrollments as (
     inner join users on
         enrollments.user_id = users.user_id
 ---- there are certificates issued for courses that don't exist in course model.
----- this inner joins will eliminate those rows.
----- if we want to show all the certificate, it needs to change to Left join
-    inner join runs on enrollments.courserun_readable_id = runs.courserun_readable_id
+    left join runs on enrollments.courserun_readable_id = runs.courserun_readable_id
 )
 
 select * from edxorg_enrollments

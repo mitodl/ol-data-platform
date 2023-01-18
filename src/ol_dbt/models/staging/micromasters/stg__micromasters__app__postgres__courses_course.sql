@@ -9,7 +9,6 @@ with source as (
     select
         id as course_id
         , title as course_title
-        , edx_key as course_edx_key
         , course_number
         , program_id
         , prerequisites as course_prerequisites
@@ -17,6 +16,7 @@ with source as (
         , contact_email as course_contact_email
         , should_display_progress as course_should_display_progress
         , position_in_program as course_position_in_program
+        , replace(replace(replace(edx_key, 'course-v1:', ''), '+', '/'), '_1', '') as course_edx_key
     from source
 )
 

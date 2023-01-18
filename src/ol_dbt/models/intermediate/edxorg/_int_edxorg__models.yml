@@ -60,9 +60,16 @@ models:
     - relationships:
         to: ref('int__micromasters__programs')
         field: program_id
+  - name: micromasters_course_id
+    description: int, foreign key to int__micromasters__courses
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_course')
+        field: course_id
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 12
+      value: 13
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__edxorg__bigquery__mitx_courserun')
 
@@ -190,7 +197,6 @@ models:
   - name: courserun_title
     description: str, The title of the course run
     tests:
-    - not_null
     - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
@@ -232,9 +238,16 @@ models:
     description: timestamp, timestamp that the user's account was created.
     tests:
     - dbt_expectations.expect_column_to_exist
+  - name: user_gender
+    description: str, user's gender - blank means user did not specify a gender. Null
+      means this student signed up before this information was collected
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 6
+      value: 7
 
 - name: int__edxorg__mitx_courserun_grades
   description: Intermediate model for course run grades from edx.org

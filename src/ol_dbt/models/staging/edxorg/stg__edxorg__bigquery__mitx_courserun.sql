@@ -13,8 +13,7 @@ with source as (
 , renamed as (
 
     select
-        course_id as courserun_readable_id
-        , course_number
+        course_number
         , course_title as courserun_title
         , semester as courserun_semester
         , url as courserun_url
@@ -23,6 +22,7 @@ with source as (
         , registration_open as courserun_enrollment_start_date
         , course_launch as courserun_start_date
         , course_wrap as courserun_end_date
+        , replace(course_id, 'ESD.SCM1x', 'CTL.SC1x') as courserun_readable_id
         , coalesce(self_paced = 1, false) as courserun_is_self_paced
     from source
 
