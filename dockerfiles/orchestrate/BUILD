@@ -6,7 +6,7 @@ pex_binary(
         "//:requirements#dagster-aws",
     ],
     shebang="/usr/bin/env python",
-    entry_point="dagit.cli:main"
+    entry_point="dagit.cli:main",
 )
 
 pex_binary(
@@ -17,7 +17,7 @@ pex_binary(
         "//:requirements#dagster-aws",
     ],
     shebang="/usr/bin/env python",
-    entry_point="dagster.daemon.cli:main"
+    entry_point="dagster.daemon.cli:main",
 )
 
 docker_image(
@@ -43,5 +43,36 @@ docker_image(
     ],
     target_stage="dagster-daemon",
     tags=["docker_image"],
+    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
+)
+
+docker_image(
+    name="edx-gcs-courses-pipeline",
+    dependencies=["src/ol_orchestrate:pipeline-repositories"],
+    source="Dockerfile.basic_pipeline",
+    extra_build_args=["PACKAGE_NAME=edx-gcs-courses-pipelines"],
+    tags=["data_pipeline", "docker_image"],
+    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
+)
+
+
+docker_image(
+    name="edx-pipeline",
+    dependencies=["src/ol_orchestrate:pipeline-repositories"],
+    source="Dockerfile.edx_pipeline",
+    extra_build_args=["PACKAGE_NAME=open-edx-pipelines"],
+    tags=["data_pipeline", "docker_image"],
+    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
+)
+
+docker_image(
+    name="asset-materialization-pipeline",
+    dependencies=[
+        "src/ol_orchestrate:pipeline-repositories",
+        "src/ol_dbt:dbt_project"
+    ],
+    source="Dockerfile.dbt_pipeline",
+    extra_build_args=["PACKAGE_NAME=asset-materialization-pipelines"],
+    tags=["data_pipeline", "docker_image"],
     image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
 )

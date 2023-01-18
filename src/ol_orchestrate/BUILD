@@ -1,83 +1,18 @@
-python_sources()
+python_sources(name="ol-orchestrate")
 
-files(
-    name="project-config",
-    sources=["dagster.yaml", "workspace.yaml"]
-)
+files(name="project-config", sources=["dagster.yaml", "workspace.yaml"])
 
 python_distribution(
-    name="open-edx",
-    dependencies=[
-        "//:requirements#dagster-postgres",
-        "//:requirements#dagster-aws",
-        "./repositories/open_edx.py"
-    ],
-    provides=python_artifact(
-        name="dagster-pipeline",
-        version="0.5.3",
-    ),
-)
-
-docker_image(
-    name="edx-pipeline",
-    dependencies=[
-        ":open-edx",
-        "src/ol_dbt:dbt_project"
-    ],
-    source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
-    extra_build_args=["PACKAGE_NAME=open-edx-pipelines"],
-    tags=["data_pipeline", "docker_image"],
-    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
-)
-
-python_distribution(
-    name="asset-materialization",
-    dependencies=[
-        "//:requirements#dagster-postgres",
-        "//:requirements#dagster-aws",
-        "//:requirements#dbt-trino",
-        "./repositories/asset_materialization.py"
-    ],
-    provides=python_artifact(
-        name="dagster-pipeline",
-        version="0.5.3",
-    ),
-)
-
-docker_image(
-    name="asset-materialization-pipeline",
-    dependencies=[
-        ":asset-materialization",
-        "src/ol_dbt:dbt_project"
-    ],
-    source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
-    extra_build_args=["PACKAGE_NAME=asset-materialization-pipelines"],
-    tags=["data_pipeline", "docker_image"],
-    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
-)
-
-python_distribution(
-    name="edx-gcs-courses",
+    name="pipeline-repositories",
     dependencies=[
         "//:requirements#dagster-postgres",
         "//:requirements#dagster-aws",
         "//:requirements#dagster-gcp",
-        "./repositories/edx_gcs_courses.py"
+        "//:requirements#dbt-trino",
+        "./repositories",
     ],
     provides=python_artifact(
         name="dagster-pipeline",
         version="0.5.3",
     ),
-)
-
-docker_image(
-    name="edx-gcs-courses-pipeline",
-    dependencies=[
-        ":edx-gcs-courses",
-        "src/ol_dbt:dbt_project"
-    ],
-    source="../../dockerfiles/orchestrate/Dockerfile.user_pipeline",
-    extra_build_args=["PACKAGE_NAME=edx-gcs-courses-pipelines"],
-    tags=["data_pipeline", "docker_image"],
-    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
 )
