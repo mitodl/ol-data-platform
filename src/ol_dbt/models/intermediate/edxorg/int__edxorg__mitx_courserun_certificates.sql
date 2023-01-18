@@ -65,5 +65,5 @@ select distinct
 from certificates
 inner join users
     on certificates.user_id = users.user_id
-inner join runs
+left join runs
     on certificates.courserun_readable_id = runs.courserun_readable_id

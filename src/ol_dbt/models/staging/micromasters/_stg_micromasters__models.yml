@@ -68,7 +68,7 @@ models:
     tests:
     - dbt_expectations.expect_column_to_exist
   - name: user_birth_date
-    description: str, user's date of birth
+    description: timestamp, user's date of birth
     tests:
     - dbt_expectations.expect_column_to_exist
   - name: user_address_country
@@ -213,9 +213,17 @@ models:
     description: timestamp, specifying when a profile was most recently updated
     tests:
     - dbt_expectations.expect_column_to_exist
+  - name: user_first_name
+    description: str, first name on user profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_last_name
+    description: str, last name on user profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 38
+      value: 40
 
 - name: stg__micromasters__app__postgres__auth_usersocialauth
   columns:
