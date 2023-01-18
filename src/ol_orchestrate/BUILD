@@ -13,6 +13,20 @@ python_distribution(
     ],
     provides=python_artifact(
         name="dagster-pipeline",
-        version="0.5.3",
+        version="0.6.0",
     ),
+)
+
+python_distribution(
+    name="ol-data-code-locations",
+    dependencies=[
+        "//:requirements#dagster-postgres",
+        "//:requirements#dagster-aws",
+        "//:requirements#dbt-trino",
+        "./definitions",
+    ],
+    provides=python_artifact(
+        name="dagster-pipeline",
+        version="0.6.0",
+    )
 )
