@@ -34,27 +34,8 @@ with source as (
         , certificate_verify_uuid as courseruncertificate_verify_uuid
         , certificate_name as courseruncertificate_name
         , certificate_status as courseruncertificate_status
-        , case
-            when profile_gender = 'm' then 'Male'
-            when profile_gender = 'f' then 'Female'
-            when profile_gender = 'o' then 'Other/Prefer Not to Say'
-            else profile_gender
-        end as user_gender
-        , case
-            when profile_level_of_education = 'p' then 'Doctorate'
-            when profile_level_of_education = 'm' then 'Master''s or professional degree'
-            when profile_level_of_education = 'b' then 'Bachelor''s degree'
-            when profile_level_of_education = 'a' then 'Associate degree'
-            when profile_level_of_education = 'hs' then 'Secondary/high school'
-            when profile_level_of_education = 'jhs' then 'Junior secondary/junior high/middle school'
-            when profile_level_of_education = 'el' then 'Elementary/primary school'
-            when profile_level_of_education = 'none' then 'No formal education'
-            when profile_level_of_education = 'other' or profile_level_of_education = 'o' then 'Other education'
-            --- the following two are no longer used, but there are still user's profiles have these values
-            when profile_level_of_education = 'p_se' then 'Doctorate in science or engineering'
-            when profile_level_of_education = 'p_oth' then 'Doctorate in another field'
-            else profile_level_of_education
-        end as user_highest_education
+        , {{ transform_gender_value('profile_gender') }} as user_gender
+        , {{ transform_education_value('profile_level_of_education') }} as user_highest_education
         , to_iso8601(from_iso8601_timestamp(date_joined)) as user_joined_on
         , to_iso8601(from_iso8601_timestamp(last_login)) as user_last_login
         , to_iso8601(from_iso8601_timestamp(enrollment_created)) as courserunenrollment_created_on

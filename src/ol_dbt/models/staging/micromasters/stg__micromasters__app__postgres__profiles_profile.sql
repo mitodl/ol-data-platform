@@ -47,24 +47,8 @@ with source as (
             , nullif(romanized_first_name, '')
             , nullif(romanized_last_name, '')
         ) as user_romanized_full_name
-        , case
-            when edx_level_of_education = 'p' then 'Doctorate'
-            when edx_level_of_education = 'm' then 'Master''s or professional degree'
-            when edx_level_of_education = 'b' then 'Bachelor''s degree'
-            when edx_level_of_education = 'a' then 'Associate degree'
-            when edx_level_of_education = 'hs' then 'Secondary/high school'
-            when edx_level_of_education = 'jhs' then 'Junior secondary/junior high/middle school'
-            when edx_level_of_education = 'el' then 'Elementary/primary school'
-            when edx_level_of_education = 'none' then 'No formal education'
-            when edx_level_of_education = 'other' then 'Other education'
-            else edx_level_of_education
-        end as user_highest_education
-        , case
-            when gender = 'm' then 'Male'
-            when gender = 'f' then 'Female'
-            when gender = 'o' then 'Other/Prefer Not to Say'
-            else gender
-        end as user_gender
+        , {{ transform_education_value('edx_level_of_education') }} as user_highest_education
+        , {{ transform_gender_value('gender') }} as user_gender
         , case
             when account_privacy = 'public' then 'Public to everyone'
             when account_privacy = 'public_to_mm' then 'Public to logged in users'

@@ -13,12 +13,7 @@ with source as (
         , job_function as user_job_function
         , user_id
         , highest_education as user_highest_education
-        , case
-            when gender = 'm' then 'Male'
-            when gender = 'f' then 'Female'
-            when gender = 'o' then 'Other/Prefer not to say'
-            else gender
-        end as user_gender
+        , {{ transform_gender_value('gender') }} as user_gender
         , case
             when company_size = 1 then 'Small/Start-up (1+ employees)'
             when company_size = 9 then 'Small/Home office (1-9 employees)'

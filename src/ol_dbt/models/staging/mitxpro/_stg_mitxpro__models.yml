@@ -1232,7 +1232,7 @@ models:
     description: str, user gender
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer not to say', '']
+        values: ['Male', 'Female', 'Other/Prefer Not to Say', '']
     - not_null
     - dbt_expectations.expect_column_to_exist
   - name: user_birth_year
