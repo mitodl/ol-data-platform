@@ -32,6 +32,7 @@ def download_edx_gcs_course_data(context):
     edx_course_tarball_path = context.resources.results_dir.path.joinpath(
         context.op_config["edx_gcs_course_tarballs"]
     )
+    os.makedirs(edx_course_tarball_path, exist_ok=True)
     blobs = storage_client.list_blobs(bucket)
     for blob in blobs:
         blob.download_to_filename(f'{edx_course_tarball_path}/{blob.name}')
