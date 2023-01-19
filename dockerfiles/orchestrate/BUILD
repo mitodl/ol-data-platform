@@ -80,7 +80,7 @@ docker_image(
 docker_image(
     name="lakehouse-assets-graph",
     dependencies=[
-        ":ol-data-code-locations",
+        "src/ol_orchestrate:ol-data-code-locations",
         "src/ol_dbt:dbt_project",
     ],
     source="Dockerfile.dbt_pipeline",
