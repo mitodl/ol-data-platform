@@ -1,7 +1,12 @@
 import os
 from pathlib import Path
 
-from dagster import AssetSelection, Definitions, build_asset_reconciliation_sensor
+from dagster import (
+    AssetSelection,
+    DefaultSensorStatus,
+    Definitions,
+    build_asset_reconciliation_sensor,
+)
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
 from dagster_dbt import dbt_cli_resource, load_assets_from_dbt_project
 from requests.auth import HTTPBasicAuth
@@ -43,8 +48,9 @@ elt = Definitions(
     sensors=[
         build_asset_reconciliation_sensor(
             name="elt_asset_sensor",
-            asset_selection=AssetSelection.all(),
+            asset_selection=AssetSelection.groups("intermediate", "mart"),
             minimum_interval_seconds=60 * 5,
+            default_status=DefaultSensorStatus.RUNNING,
         )
     ],
 )
