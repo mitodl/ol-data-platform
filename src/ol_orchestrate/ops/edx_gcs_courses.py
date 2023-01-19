@@ -20,7 +20,7 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
     out={"edx_course_tarball_directory": Out(dagster_type=DagsterPath)},
 )
 def download_edx_gcs_course_data(context):
-    storage_client = context.resources.gcp_gcs.gcp_gcs_resource
+    storage_client = context.resources.gcp_gcs
     bucket = storage_client.get_bucket("simeon-mitx-course-tarballs")
     edx_course_tarball_path = context.resources.results_dir.path.joinpath(
         context.op_config["edx_gcs_course_tarballs"]
