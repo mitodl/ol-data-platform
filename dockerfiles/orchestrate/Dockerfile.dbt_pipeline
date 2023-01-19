@@ -11,6 +11,7 @@ RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app /tmp/packages && \
 COPY *.whl /tmp/packages/
 RUN pip install --no-cache-dir /tmp/packages/* && rm -r /tmp/packages/
 COPY --chown=dagster:dagster src/ol_dbt /opt/dbt/
+RUN cd /opt/dbt && dbt deps
 WORKDIR /opt/dagster/dagster_home
 USER dagster
 ENTRYPOINT ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000"]
