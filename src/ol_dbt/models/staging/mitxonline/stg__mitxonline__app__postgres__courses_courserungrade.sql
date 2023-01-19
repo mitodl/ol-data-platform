@@ -13,8 +13,8 @@ with source as (
         , letter_grade as courserungrade_letter_grade
         , set_by_admin as courserungrade_is_set_by_admin
         , passed as courserungrade_is_passing
-        , to_iso8601(from_iso8601_timestamp(created_on)) as courserungrade_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as courserungrade_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as courserungrade_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as courserungrade_updated_on
     from source
 )
 

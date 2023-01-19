@@ -9,8 +9,8 @@ with source as (
         id as couponversion_id
         , coupon_id
         , payment_version_id as couponpaymentversion_id
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as couponversion_updated_on
-        , to_iso8601(from_iso8601_timestamp(created_on)) as couponversion_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as couponversion_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as couponversion_created_on
     from source
 )
 

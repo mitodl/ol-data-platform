@@ -10,8 +10,8 @@ with source as (
         id as linerunselection_id
         , line_id
         , run_id as courserun_id
-        , to_iso8601(from_iso8601_timestamp(created_on)) as linerunselection_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as linerunselection_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as linerunselection_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as linerunselection_updated_on
     from source
 
 )

@@ -12,8 +12,8 @@ with source as (
         , acting_user_id as orderaudit_acting_user_id
         , data_before as orderaudit_data_before
         , data_after as orderaudit_data_after
-        , to_iso8601(from_iso8601_timestamp(created_on)) as orderaudit_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as orderaudit_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as orderaudit_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as orderaudit_updated_on
     from source
 
 )

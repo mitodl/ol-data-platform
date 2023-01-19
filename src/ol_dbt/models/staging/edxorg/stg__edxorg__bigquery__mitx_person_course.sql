@@ -29,12 +29,12 @@ with source as (
         , {{ transform_gender_value('gender') }} as user_gender
         , {{ transform_education_value('loe') }} as user_highest_education
 
-        , to_iso8601(from_iso8601_timestamp(start_time)) as courserunenrollment_created_on
-        , to_iso8601(from_iso8601_timestamp(verified_enroll_time)) as courserunenrollment_enrolled_on
+        , {{ cast_timestamp_to_iso8601('start_time') }} as courserunenrollment_created_on
+        , {{ cast_timestamp_to_iso8601('verified_enroll_time') }} as courserunenrollment_enrolled_on
 
-        , to_iso8601(from_iso8601_timestamp(verified_unenroll_time)) as courserunenrollment_unenrolled_on
-        , to_iso8601(from_iso8601_timestamp(cert_created_date)) as courseruncertificate_created_on
-        , to_iso8601(from_iso8601_timestamp(cert_modified_date)) as courseruncertificate_updated_on
+        , {{ cast_timestamp_to_iso8601('verified_unenroll_time') }} as courserunenrollment_unenrolled_on
+        , {{ cast_timestamp_to_iso8601('cert_created_date') }} as courseruncertificate_created_on
+        , {{ cast_timestamp_to_iso8601('cert_modified_date') }} as courseruncertificate_updated_on
     from source
     where user_id is not null --- temporary fix to filter the bad data
 

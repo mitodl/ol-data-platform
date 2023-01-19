@@ -13,8 +13,8 @@ with source as (
         , description as productversion_description
         , product_id
         , requires_enrollment_code as productversion_requires_enrollment_code
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as productversion_updated_on
-        , to_iso8601(from_iso8601_timestamp(created_on)) as productversion_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as productversion_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as productversion_created_on
     from source
 
 )

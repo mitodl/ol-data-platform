@@ -12,8 +12,8 @@ with source as (
         , description as currencyexchangerate_description
         , currency_code as currencyexchangerate_currency_code
         , exchange_rate as currencyexchangerate_exchange_rate
-        , to_iso8601(from_iso8601_timestamp(created_on)) as currencyexchangerate_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as currencyexchangerate_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as currencyexchangerate_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as currencyexchangerate_updated_on
 
     from source
 

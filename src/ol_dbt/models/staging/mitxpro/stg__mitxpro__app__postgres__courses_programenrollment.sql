@@ -13,8 +13,8 @@ with source as (
         , user_id
         , company_id as ecommerce_company_id
         , order_id as ecommerce_order_id
-        , to_iso8601(from_iso8601_timestamp(created_on)) as programenrollment_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as programenrollment_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as programenrollment_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as programenrollment_updated_on
     from source
 )
 

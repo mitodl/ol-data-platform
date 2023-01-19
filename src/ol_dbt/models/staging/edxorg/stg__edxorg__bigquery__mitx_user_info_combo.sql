@@ -36,11 +36,11 @@ with source as (
         , certificate_status as courseruncertificate_status
         , {{ transform_gender_value('profile_gender') }} as user_gender
         , {{ transform_education_value('profile_level_of_education') }} as user_highest_education
-        , to_iso8601(from_iso8601_timestamp(date_joined)) as user_joined_on
-        , to_iso8601(from_iso8601_timestamp(last_login)) as user_last_login
-        , to_iso8601(from_iso8601_timestamp(enrollment_created)) as courserunenrollment_created_on
-        , to_iso8601(from_iso8601_timestamp(certificate_created_date)) as courseruncertificate_created_on
-        , to_iso8601(from_iso8601_timestamp(certificate_modified_date)) as courseruncertificate_updated_on
+        , {{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
+        , {{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
+        , {{ cast_timestamp_to_iso8601('enrollment_created') }} as courserunenrollment_created_on
+        , {{ cast_timestamp_to_iso8601('certificate_created_date') }} as courseruncertificate_created_on
+        , {{ cast_timestamp_to_iso8601('certificate_modified_date') }} as courseruncertificate_updated_on
     from source
     --- user_id could be blank due to parsing error on edx data so filter out these
     where user_id is not null

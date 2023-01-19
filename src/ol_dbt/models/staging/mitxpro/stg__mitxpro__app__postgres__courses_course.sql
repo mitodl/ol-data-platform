@@ -12,8 +12,8 @@ with source as (
         , program_id
         , readable_id as course_readable_id
         , position_in_program
-        , to_iso8601(from_iso8601_timestamp(created_on)) as course_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as course_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as course_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as course_updated_on
     from source
 )
 
