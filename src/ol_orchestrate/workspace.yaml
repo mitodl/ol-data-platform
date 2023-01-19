@@ -12,21 +12,7 @@ load_from:
     host: edx-gcs-courses-pipeline
     port: 4000
     location_name: 'edx-gcs-courses-pipeline'
-#- python_package:
-#    package_name: ol_orchestrate.edx.repositories
-#    attribute: residential_edx_repository
-#- python_package:
-#    package_name: ol_orchestrate.edx.repositories
-#    attribute: xpro_edx_repository
-#- python_package:
-#    package_name: ol_orchestrate.edx.repositories
-#    attribute: mitxonline_edx_repository
-#- python_package:
-#    package_name: ol_orchestrate.mitx_bigquery.repositories
-#    attribute: mitx_bigquery_repository
-#- python_package:
-#    package_name: ol_orchestrate.open_discussions.repositories
-#    attribute: open_data_repository
-# - python_package:
-#     package_name: ol_orchestrate.micromasters.repositories
-#     attribute: micromasters_repository
+- grpc_server:
+    host: lakehouse-assets-graph
+    port: 4000
+    location_name: lakehouse-assets-graph

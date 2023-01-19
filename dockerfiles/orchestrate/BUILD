@@ -76,3 +76,15 @@ docker_image(
     tags=["data_pipeline", "docker_image"],
     image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
 )
+
+docker_image(
+    name="lakehouse-assets-graph",
+    dependencies=[
+        ":ol-data-code-locations",
+        "src/ol_dbt:dbt_project",
+    ],
+    source="Dockerfile.dbt_pipeline",
+    extra_build_args=["PACKAGE_NAME=lakehouse-assets"],
+    tags=["data_pipeline", "docker_image", "data_lakehouse"],
+    image_tags=["{build_args.DAGSTER_VERSION}", "latest"],
+)
