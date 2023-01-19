@@ -11,7 +11,7 @@ configured_airbyte_resource = airbyte_resource.configured(
     {
         "host": {"env": "DAGSTER_AIRBYTE_HOST"},
         "port": {"env": "DAGSTER_AIRBYTE_PORT"},
-        "use_https": False,
+        "use_https": True,
         "request_additional_params": {
             "auth": HTTPBasicAuth(*os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")),
             "verify": False,
