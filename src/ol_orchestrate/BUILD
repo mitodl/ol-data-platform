@@ -12,7 +12,7 @@ python_distribution(
         "./repositories",
     ],
     provides=python_artifact(
-        name="dagster-pipeline",
+        name="dagster-repositories",
         version="0.6.0",
     ),
 )
@@ -26,7 +26,7 @@ python_distribution(
         "./definitions",
     ],
     provides=python_artifact(
-        name="dagster-pipeline",
+        name="dagster-code-locations",
         version="0.6.0",
     )
 )
