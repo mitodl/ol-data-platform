@@ -17,6 +17,13 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
     name="edx_course_tarballs",
     description="Download edx course tarballs from GCS bucket",
     required_resource_keys={"gcp_gcs", "results_dir"},
+    config_schema={
+        "edx_gcs_course_tarballs": Field(
+            String,
+            default_value="simeon-mitx-course-tarballs",
+            description="The GCS bucket that contains the MITx course exports from edx.org",  # noqa: E501
+        ),
+    },
     out={"edx_course_tarball_directory": Out(dagster_type=DagsterPath)},
 )
 def download_edx_gcs_course_data(context):
