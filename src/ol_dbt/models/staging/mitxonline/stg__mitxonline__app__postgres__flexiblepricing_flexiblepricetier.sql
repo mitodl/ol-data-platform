@@ -11,8 +11,8 @@ with source as (
         , source.courseware_object_id
         , source.income_threshold_usd as flexiblepricetier_income_threshold_usd
         , source.courseware_content_type_id as contenttype_id
-        , to_iso8601(from_iso8601_timestamp(source.created_on)) as flexiblepricetier_created_on
-        , to_iso8601(from_iso8601_timestamp(source.updated_on)) as flexiblepricetier_updated_on
+        , {{ cast_timestamp_to_iso8601('source.created_on') }} as flexiblepricetier_created_on
+        , {{ cast_timestamp_to_iso8601('source.updated_on') }} as flexiblepricetier_updated_on
 
     from source
 )

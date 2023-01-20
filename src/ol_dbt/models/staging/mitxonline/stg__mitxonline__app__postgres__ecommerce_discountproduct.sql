@@ -10,8 +10,8 @@ with source as (
         id as discountproduct_id
         , product_id
         , discount_id
-        , to_iso8601(from_iso8601_timestamp(created_on)) as discountproduct_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as discountproduct_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as discountproduct_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as discountproduct_updated_on
 
     from source
 

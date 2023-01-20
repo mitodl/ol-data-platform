@@ -20,8 +20,8 @@ with source as (
         , discount as b2border_discount
         , program_run_id as programrun_id
         , email as b2border_email
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as b2border_updated_on
-        , to_iso8601(from_iso8601_timestamp(created_on)) as b2border_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as b2border_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as b2border_created_on
     from source
 
 )

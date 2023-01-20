@@ -12,8 +12,8 @@ with source as (
         , basket_id
         , product_id
         , program_run_id as programrun_id
-        , to_iso8601(from_iso8601_timestamp(created_on)) as basketitem_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as basketitem_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as basketitem_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as basketitem_updated_on
     from source
 
 )

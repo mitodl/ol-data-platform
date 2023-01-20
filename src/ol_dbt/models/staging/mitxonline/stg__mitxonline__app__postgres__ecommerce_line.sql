@@ -12,8 +12,8 @@ with source as (
         , product_version_id
         , purchased_object_id as product_object_id
         , purchased_content_type_id as contenttype_id
-        , to_iso8601(from_iso8601_timestamp(created_on)) as line_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as line_updated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as line_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as line_updated_on
     from source
 
 )

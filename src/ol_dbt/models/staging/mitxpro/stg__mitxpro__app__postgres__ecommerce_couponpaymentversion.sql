@@ -20,10 +20,10 @@ with source as (
         , tag as couponpaymentversion_tag
         , discount_type as couponpaymentversion_discount_type
         , max_redemptions as couponpaymentversion_max_redemptions
-        , to_iso8601(from_iso8601_timestamp(expiration_date)) as couponpaymentversion_expires_on
-        , to_iso8601(from_iso8601_timestamp(activation_date)) as couponpaymentversion_activated_on
-        , to_iso8601(from_iso8601_timestamp(created_on)) as couponpaymentversion_created_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as couponpaymentversion_updated_on
+        , {{ cast_timestamp_to_iso8601('expiration_date') }} as couponpaymentversion_expires_on
+        , {{ cast_timestamp_to_iso8601('activation_date') }} as couponpaymentversion_activated_on
+        , {{ cast_timestamp_to_iso8601('created_on') }} as couponpaymentversion_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as couponpaymentversion_updated_on
 
     from source
 

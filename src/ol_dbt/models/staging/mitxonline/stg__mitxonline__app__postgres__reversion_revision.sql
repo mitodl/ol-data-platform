@@ -10,7 +10,7 @@ with source as (
         id as revision_id
         , comment as revision_comment
         , user_id
-        , to_iso8601(from_iso8601_timestamp(date_created)) as revision_date_created
+        , {{ cast_timestamp_to_iso8601('date_created') }} as revision_date_created
 
     from source
 

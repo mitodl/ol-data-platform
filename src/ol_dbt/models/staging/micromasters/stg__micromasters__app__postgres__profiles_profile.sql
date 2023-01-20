@@ -55,8 +55,8 @@ with source as (
             when account_privacy = 'private' then 'Private'
             else account_privacy
         end as user_account_privacy
-        , to_iso8601(from_iso8601_timestamp(date_joined_micromasters)) as user_joined_on
-        , to_iso8601(from_iso8601_timestamp(updated_on)) as user_profile_updated_on
+        , {{ cast_timestamp_to_iso8601('date_joined_micromasters') }} as user_joined_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as user_profile_updated_on
     from source
 )
 
