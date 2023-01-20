@@ -3,9 +3,12 @@ from pathlib import Path
 
 from dagster import (
     AssetSelection,
+    DefaultScheduleStatus,
     DefaultSensorStatus,
     Definitions,
+    ScheduleDefinition,
     build_asset_reconciliation_sensor,
+    define_asset_job,
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
 from dagster_dbt import dbt_cli_resource, load_assets_from_dbt_project
@@ -33,24 +36,43 @@ dbt_repo_dir = str(
 dbt_config = {"project_dir": dbt_repo_dir, "profiles_dir": dbt_repo_dir}
 configured_dbt_cli = dbt_cli_resource.configured(dbt_config)
 
+airbyte_assets = load_assets_from_airbyte_instance(
+    configured_airbyte_resource,
+    # This key_prefix is how Dagster knows to map the Airbyte outputs to the dbt
+    # sources, since they are defined as ol_warehouse_raw_data in the
+    # sources.yml files. (TMM 2023-01-18)
+    key_prefix="ol_warehouse_raw_data",
+)
+
+airbyte_asset_job = define_asset_job(
+    name="airbyte_asset_sync",
+    selection=AssetSelection.assets(airbyte_assets),
+)
+
+airbyte_update_schedule = ScheduleDefinition(
+    name="daily_airbyte_sync",
+    cron_schedule="0 23 * * *",
+    job=airbyte_asset_job,
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+dbt_assets = load_assets_from_dbt_project(**dbt_config)
+
 elt = Definitions(
     assets=[
-        load_assets_from_airbyte_instance(
-            configured_airbyte_resource,
-            # This key_prefix is how Dagster knows to map the Airbyte outputs to the dbt
-            # sources, since they are defined as ol_warehouse_raw_data in the
-            # sources.yml files. (TMM 2023-01-18)
-            key_prefix="ol_warehouse_raw_data",
-        ),
-        *load_assets_from_dbt_project(**dbt_config),
+        airbyte_assets,
+        *dbt_assets,
     ],
     resources={"dbt": configured_dbt_cli},
     sensors=[
         build_asset_reconciliation_sensor(
-            name="elt_asset_sensor",
-            asset_selection=AssetSelection.groups("intermediate", "mart"),
+            name="dbt_asset_sensor",
+            asset_selection=AssetSelection.assets(dbt_assets),
             minimum_interval_seconds=60 * 5,
             default_status=DefaultSensorStatus.RUNNING,
         )
     ],
+    jobs=[airbyte_asset_job],
+    schedules=[airbyte_update_schedule],
 )
