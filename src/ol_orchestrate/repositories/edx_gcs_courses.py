@@ -1,6 +1,6 @@
 import os
 
-from dagster import Definitions, SensorDefinition
+from dagster import DefaultSensorStatus, Definitions, SensorDefinition
 from dagster_aws.s3.resources import s3_resource
 
 from ol_orchestrate.jobs.edx_gcs_courses import sync_gcs_to_s3
@@ -34,6 +34,7 @@ edx_gcs_courses = Definitions(
             evaluation_fn=check_new_gcs_assets_sensor,
             minimum_interval_seconds=86400,  # noqa: WPS432 - 1 day
             job=gcs_sync_job,
+            default_status=DefaultSensorStatus.RUNNING,
         )
     ],
     jobs=[gcs_sync_job],
