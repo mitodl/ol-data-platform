@@ -37,7 +37,7 @@ def download_edx_gcs_course_data(context):
     os.makedirs(edx_course_tarball_path, exist_ok=True)
     blobs = storage_client.list_blobs(bucket)
     for blob in blobs:
-        blob.download_to_filename(f'{edx_course_tarball_path}/{blob.name}')
+        blob.download_to_filename(f"{edx_course_tarball_path}/{blob.name}")
     yield Output(
         edx_course_tarball_path,
         "edx_course_tarball_directory",
