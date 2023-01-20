@@ -46,7 +46,7 @@ airbyte_assets = load_assets_from_airbyte_instance(
 
 airbyte_asset_job = define_asset_job(
     name="airbyte_asset_sync",
-    selection=AssetSelection.assets(airbyte_assets),
+    selection=AssetSelection.groups("ol_warehouse_raw_data"),
 )
 
 airbyte_update_schedule = ScheduleDefinition(
@@ -68,7 +68,7 @@ elt = Definitions(
     sensors=[
         build_asset_reconciliation_sensor(
             name="dbt_asset_sensor",
-            asset_selection=AssetSelection.assets(dbt_assets),
+            asset_selection=AssetSelection.groups("staging", "intermediate", "mart"),
             minimum_interval_seconds=60 * 5,
             default_status=DefaultSensorStatus.RUNNING,
         )
