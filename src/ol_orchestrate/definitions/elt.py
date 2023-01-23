@@ -59,7 +59,6 @@ airbyte_update_schedule = ScheduleDefinition(
 
 dbt_assets = load_assets_from_dbt_project(
     **dbt_config,
-    use_build_command=True,
 )
 
 elt = Definitions(
