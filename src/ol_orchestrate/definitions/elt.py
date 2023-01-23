@@ -51,7 +51,7 @@ airbyte_asset_job = define_asset_job(
 
 airbyte_update_schedule = ScheduleDefinition(
     name="daily_airbyte_sync",
-    cron_schedule="0 23 * * *",
+    cron_schedule="0 4 * * *",
     job=airbyte_asset_job,
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.RUNNING,
