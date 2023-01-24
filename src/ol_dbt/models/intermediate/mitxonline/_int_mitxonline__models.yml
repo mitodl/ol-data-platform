@@ -993,6 +993,14 @@ models:
       score set for this course
     tests:
     - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_created_on
+    description: timestamp, specifying when a grade was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_updated_on
+    description: timestamp, specifying when a grade was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: user_id
     description: str, foreign key to users_user representing a single user
     tests:
@@ -1012,6 +1020,8 @@ models:
     - not_null
     - dbt_expectations.expect_column_to_exist
   tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 14
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__courses_courserungrade')
 
@@ -1059,6 +1069,14 @@ models:
     description: boolean, indicating whether the certificate is revoked and invalid
     tests:
     - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_created_on
+    description: timestamp, specifying when a certificate was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_updated_on
+    description: timestamp, specifying when a certificate was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -1084,6 +1102,8 @@ models:
     - not_null
     - dbt_expectations.expect_column_to_exist
   tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 13
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__courses_courseruncertificate')
 
@@ -1254,6 +1274,14 @@ models:
     description: boolean, indicating whether the certificate is revoked and invalid
     tests:
     - dbt_expectations.expect_column_to_exist
+  - name: programcertificate_created_on
+    description: timestamp, specifying when a certificate was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: programcertificate_updated_on
+    description: timestamp, specifying when a certificate was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: program_title
     description: str, title of the program
     tests:
@@ -1275,6 +1303,8 @@ models:
     - not_null
     - dbt_expectations.expect_column_to_exist
   tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 11
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__courses_programcertificate')
 

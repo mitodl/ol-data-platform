@@ -223,6 +223,16 @@ models:
     tests:
     - not_null
     - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_created_on
+    description: timestamp, specifying when a certificate was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courseruncertificate_updated_on
+    description: timestamp, specifying when a certificate was most recently updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
   tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 12
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__courses_courseruncertificate')
