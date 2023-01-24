@@ -144,6 +144,8 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 15
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id"]
 
 - name: int__edxorg__mitx_courserun_enrollments
   description: Intermediate model for course run enrollments from edx.org
@@ -233,3 +235,55 @@ models:
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
       value: 6
+
+- name: int__edxorg__mitx_courserun_grades
+  description: Intermediate model for course run grades from edx.org
+  columns:
+  - name: user_id
+    description: int, Numerical user ID of a learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+    - relationships:
+        to: ref('int__edxorg__mitx_users')
+        field: user_id
+  - name: courserun_readable_id
+    description: str, The canonical ID of the course run in the format as {org}/{course}/{run}.
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_username
+    description: str, The username of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_email
+    description: str, The email address of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: courserungrade_passing_grade
+    description: float, Passing grade for the course, (range between 0.0 to 1.0)
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_user_grade
+    description: float, Final grade user earned in the course, (range between 0.0
+      to 1.0)
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserungrade_is_passing
+    description: boolean, indicating that the user completed the course with a passing
+      grade
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: courserun_title
+    description: str, The title of the course run
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 8
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id"]
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__edxorg__bigquery__mitx_person_course')

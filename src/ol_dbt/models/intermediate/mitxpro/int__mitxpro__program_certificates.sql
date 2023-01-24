@@ -12,16 +12,22 @@ with certificates as (
     select * from {{ ref('stg__mitxpro__app__postgres__users_user') }}
 )
 
-select
-    certificates.programcertificate_id
-    , certificates.programcertificate_uuid
-    , certificates.program_id
-    , programs.program_title
-    , programs.program_readable_id
-    , certificates.programcertificate_is_revoked
-    , certificates.user_id
-    , users.user_username
-    , users.user_email
-from certificates
-inner join programs on certificates.program_id = programs.program_id
-inner join users on certificates.user_id = users.user_id
+, program_certificates as (
+    select
+        certificates.programcertificate_id
+        , certificates.programcertificate_uuid
+        , certificates.program_id
+        , programs.program_title
+        , programs.program_readable_id
+        , certificates.programcertificate_is_revoked
+        , certificates.programcertificate_created_on
+        , certificates.programcertificate_updated_on
+        , certificates.user_id
+        , users.user_username
+        , users.user_email
+    from certificates
+    inner join programs on certificates.program_id = programs.program_id
+    inner join users on certificates.user_id = users.user_id
+)
+
+select * from program_certificates
