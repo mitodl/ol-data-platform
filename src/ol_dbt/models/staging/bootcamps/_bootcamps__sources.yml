@@ -7,6 +7,172 @@ sources:
   database: 'ol_data_lake_{{ target.name }}'
   schema: 'ol_warehouse_{{ target.name }}_raw'
   tables:
+  - name: raw__bootcamps__app__postgres__ecommerce_wiretransferreceipt
+    description: Data about a wire transfer
+    columns:
+    - name: id
+      description: int, primary key representing a  wire transfer receipt
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the wire transfer receipt was initially
+        created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the wire transfer receipt was most recently
+        updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: data
+      description: json, data for a payment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, primary key in ecommerce_order
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: wire_transfer_id
+      description: int, unique id used to identify the wire transfer in the spreadsheet
+        we use to import wire transfer data
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 6
+  - name: raw__bootcamps__app__postgres__ecommerce_receipt
+    description: Data returned from cybersource when a user pays for an order through
+      cybersource
+    columns:
+    - name: id
+      description: int, primary key representing a receipt
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the receipt was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the receipt was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: data
+      description: json, cybersource data for a payment
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, primary key in ecommerce_order
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 5
+  - name: raw__bootcamps__app__postgres__ecommerce_line
+    columns:
+    - name: id
+      description: int, primary key representing an ecommerce line
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the line was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the line was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: price
+      description: numeric, price paid for the bootcamp run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: description
+      description: string, description of the purchased bootcamp run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, foreign key for the order this line belongs to
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: bootcamp_run_id
+      description: int, foreign key in courses_courserun of the purchased run
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 7
+  - name: raw__bootcamps__app__postgres__ecommerce_orderaudit
+    columns:
+    - name: id
+      description: int, primary key representing a change to the orders table
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the order audit was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the order audit was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: data_before
+      description: json, jsonified order object before the change
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: data_after
+      description: json, jsonified order object after the change
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: acting_user_id
+      description: int, reference to auth_user table, the user who made the change
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: order_id
+      description: int, reference to ecommerce_order
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 7
+  - name: raw__bootcamps__app__postgres__ecommerce_order
+    columns:
+    - name: id
+      description: int, primary key representing a single bootcamps order
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when the order was initially created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when the order was most recently updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: status
+      description: string, order state. Options are "fulfilled", "failed" "created",
+        "refunded"
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: total_price_paid
+      description: number, total order amount
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: int, primary key in auth_user for the purchaser
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: payment_type
+      description: string, payment type for the order. One of "cybersource", "wiretransfer",
+        "refund"
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: application_id
+      description: int, primary key in applications_bootcampapplication for the application
+        the order is associated with
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 8
   - name: raw__bootcamps__app__postgres__klasses_bootcamprunenrollment
     description: ""
     columns:
