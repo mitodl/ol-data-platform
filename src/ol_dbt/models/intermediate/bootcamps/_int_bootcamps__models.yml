@@ -43,6 +43,11 @@ models:
     tests:
     - not_null
     - dbt_expectations.expect_column_to_exist
+  - name: courserun_readable_id
+    description: str, unique string to identify a bootcamp course run (could be blank
+      for older runs)
+    tests:
+    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: str, name chosen by user
     tests:
@@ -55,7 +60,7 @@ models:
     - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 9
+      value: 10
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__courserunenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:

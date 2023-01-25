@@ -723,6 +723,11 @@ models:
     tests:
     - not_null
     - dbt_expectations.expect_column_to_exist
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: str, name chosen by user
     tests:
@@ -735,7 +740,7 @@ models:
     - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_table_column_count_to_equal:
-      value: 10
+      value: 11
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:

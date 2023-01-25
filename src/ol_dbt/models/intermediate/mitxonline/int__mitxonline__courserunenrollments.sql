@@ -5,10 +5,7 @@ with enrollments as (
 )
 
 , runs as (
-    select
-        courserun_id
-        , courserun_title
-    from {{ ref('stg__mitxonline__app__postgres__courses_courserun') }}
+    select * from {{ ref('stg__mitxonline__app__postgres__courses_courserun') }}
 )
 
 , users as (
@@ -29,6 +26,7 @@ with enrollments as (
         , enrollments.courserunenrollment_enrollment_mode
         , enrollments.courserunenrollment_enrollment_status
         , runs.courserun_title
+        , runs.courserun_readable_id
         , users.user_username
         , users.user_email
     from enrollments
