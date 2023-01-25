@@ -20,6 +20,7 @@ with enrollments as (
         , enrollments.courserun_id
         , enrollments.courserunenrollment_created_on
         , enrollments.courserunenrollment_enrollment_status
+        , runs.courserun_readable_id
         , runs.courserun_title
         , users.user_username
         , users.user_email

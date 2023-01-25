@@ -28,6 +28,14 @@ clean-targets:         # directories to be removed by `dbt clean`
 vars:
   environment_suffix: production
 
+  open_learning:
+    platforms: ['Bootcamps', 'xPro', 'MITx Online', 'MicroMasters', 'edX.org']
+    bootcamps: 'Bootcamps'
+    edxorg: 'edX.org'
+    mitxpro: 'xPro'
+    micromasters: 'MicroMasters'
+    mitxonline: 'MITx Online'
+
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
