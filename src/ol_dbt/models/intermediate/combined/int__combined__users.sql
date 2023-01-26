@@ -1,3 +1,7 @@
+--- This model combines intermediate users from different platform,
+-- it's built as view with no additional data is stored
+{{ config(materialized='view') }}
+
 with mitxonline_users as (
     select * from {{ ref('int__mitxonline__users') }}
 )

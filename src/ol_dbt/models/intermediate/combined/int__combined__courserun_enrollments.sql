@@ -1,3 +1,7 @@
+--- This model combines intermediate enrollments from different platform,
+-- it's built as view with no additional data is stored
+{{ config(materialized='view') }}
+
 with mitxonline_enrollments as (
     select * from {{ ref('int__mitxonline__courserunenrollments') }}
 )
