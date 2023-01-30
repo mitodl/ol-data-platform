@@ -43,7 +43,7 @@ black = "*"
 isort = "*"
 mypy = "*"
 poetry = "*"
-pre-commit = "^2"
+pre-commit = "^3"
 pytest = "^7.1.2"
 sqlfluff = "^1.4.1"
 wemake-python-styleguide = {git = "https://github.com/wemake-services/wemake-python-styleguide"}
