@@ -2,6 +2,63 @@
 version: 2
 
 models:
+- name: stg__micromasters__app__user_program_certificate_override_list
+  description: Certain users should recieve a certificate even though they do not
+    meet all the program certificate requirements. This list has the user_id on user_edxorg
+    and the program_id on micromasters production for those users
+  columns:
+  - name: user_edxorg_id
+    description: int, edxorg id for a user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: micromasters_program_id
+    description: int, foreign key in courses_program for the program the user should
+      recieve a certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 2
+- name: stg__micromasters__app__postgres__grades_programcertificate
+  columns:
+  - name: programcertificate_id
+    description: int, sequential ID representing a program certificate. Only has records
+      for DEDP
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+    - not_null
+  - name: programcertificate_created_on
+    description: timestamp, specifying when a program certificate was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: programcertificate_updated_on
+    description: timestamp, specifying when a program certificate was most recently
+      updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: programcertificate_hash
+    description: str, unique hash used to identify the program certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_id
+    description: id, int foreign key referece to courses_program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_id
+    description: int, foreign key referece to auth_user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
 - name: stg__micromasters__app__postgres__auth_user
   columns:
   - name: user_id
