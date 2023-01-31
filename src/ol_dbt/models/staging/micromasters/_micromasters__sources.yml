@@ -7,6 +7,38 @@ sources:
   database: 'ol_data_lake_{{ target.name }}'
   schema: 'ol_warehouse_{{ target.name }}_raw'
   tables:
+  - name: raw__micromasters__app__postgres__grades_micromastersprogramcertificate
+    columns:
+    - name: id
+      description: int, sequential ID representing a program certificate. Only has
+        records for DEDP
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: created_on
+      description: timestamp, specifying when a program certificate was initially
+        created
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: updated_on
+      description: timestamp, specifying when a program certificate was most recently
+        updated
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: hash
+      description: str, unique hash used to identify the program certificate
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: program_id
+      description: id, int foreign key referece to courses_program
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    - name: user_id
+      description: int, foreign key referece to auth_user
+      tests:
+      - dbt_expectations.expect_column_to_exist
+    tests:
+    - dbt_expectations.expect_table_column_count_to_equal:
+        value: 6
   - name: raw__micromasters__app__postgres__auth_user
     columns:
     - name: id

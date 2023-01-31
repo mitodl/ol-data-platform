@@ -2,6 +2,47 @@
 version: 2
 
 models:
+- name: int__micromasters__program_certificates
+  columns:
+  - name: programcertificate_id
+    description: int, sequential ID representing a program certificate. Only has records
+      for DEDP
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - unique
+    - not_null
+  - name: programcertificate_created_on
+    description: timestamp, specifying when a program certificate was initially created
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: programcertificate_updated_on
+    description: timestamp, specifying when a program certificate was most recently
+      updated
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: programcertificate_hash
+    description: str, unique hash used to identify the program certificate
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_id
+    description: id, int foreign key referece to courses_program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_id
+    description: int, foreign key referece to auth_user
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 6
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__micromasters__app__postgres__grades_programcertificate')
+
 - name: int__micromasters__users
   description: Intermediate model of Users in MicroMasters
   columns:

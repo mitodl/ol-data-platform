@@ -1,0 +1,261 @@
+---
+version: 2
+
+models:
+- name: mart_components__micromasters_program_certificates_dedp_from_micromasters
+  description: DEDP program certificate earners according to the micromasters database
+  columns:
+  - name: user_username
+    description: str, The username of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_email
+    description: str, The email address of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: micromasters_program_id
+    description: int, sequential ID representing a program in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_edxorg_id
+    description: int, Numerical user ID of a learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_gender
+    description: str, user's gender from edxorg - blank means user did not specify
+      a gender. Null means this student signed up before this information was collected
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+  - name: user_country
+    description: str, Country provided by the user on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_address_city
+    description: str, city where user lives in, collected from the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_first_name
+    description: str, first from the micromasters profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_last_name
+    description: str, last name from the micromasters profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_year_of_birth
+    description: str, user's birth year from the profile in the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_address_postal_code
+    description: str, postal code where user lives in from the profile in micromasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_street_address
+    description: str, street address where user lives in from the profile in the micromasters
+      database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_address_state_or_territory
+    description: str,  state or territory where user lives in from the profile in
+      the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_full_name
+    description: str, The full name of the user on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_completion_timestamp
+    description: timestamp, timestamp of the course certificate that completed the
+      program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: micromasters_user_id
+    description: str, user id in the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 17
+- name: mart_components__micromasters_program_certificates_dedp_from_mitxonline
+  description: DEDP program certificate earners according to the mitxonline database
+  columns:
+  - name: user_username
+    description: str, The username of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_email
+    description: str, The email address of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: micromasters_program_id
+    description: int, sequential ID representing a program in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_edxorg_id
+    description: int, Numerical user ID of a learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_gender
+    description: str, user's gender from edxorg - blank means user did not specify
+      a gender. Null means this student signed up before this information was collected
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+  - name: user_country
+    description: str, Country provided by the user on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_address_city
+    description: str, city where user lives in, collected from the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_first_name
+    description: str, first from the micromasters profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_last_name
+    description: str, last name from the micromasters profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_year_of_birth
+    description: str, user's birth year from the profile in the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_address_postal_code
+    description: str, postal code where user lives in from the profile in micromasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_street_address
+    description: str, street address where user lives in from the profile in the micromasters
+      database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_address_state_or_territory
+    description: str,  state or territory where user lives in from the profile in
+      the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_full_name
+    description: str, The full name of the user on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_completion_timestamp
+    description: timestamp, timestamp of the course certificate that completed the
+      program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: micromasters_user_id
+    description: str, user id in the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 17
+- name: mart_components__micromasters_program_certificates_non_dedp
+  description: Non DEDP program certificate earners. Calculated from joining edxorg
+    course certificate records to the program requirements from the micromasters database
+  columns:
+  - name: user_username
+    description: str, The username of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_email
+    description: str, The email address of the learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: micromasters_program_id
+    description: int, sequential ID representing a program in MicroMasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_edxorg_id
+    description: int, Numerical user ID of a learner on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - not_null
+  - name: user_gender
+    description: str, user's gender from edxorg - blank means user did not specify
+      a gender. Null means this student signed up before this information was collected
+    tests:
+    - dbt_expectations.expect_column_to_exist
+    - accepted_values:
+        values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+  - name: user_country
+    description: str, Country provided by the user on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_address_city
+    description: str, city where user lives in, collected from the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_first_name
+    description: str, first from the micromasters profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_last_name
+    description: str, last name from the micromasters profile
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_year_of_birth
+    description: str, user's birth year from the profile in the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_address_postal_code
+    description: str, postal code where user lives in from the profile in micromasters
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_street_address
+    description: str, street address where user lives in from the profile in the micromasters
+      database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_address_state_or_territory
+    description: str,  state or territory where user lives in from the profile in
+      the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: user_full_name
+    description: str, The full name of the user on the edX platform
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: program_completion_timestamp
+    description: timestamp, timestamp of the course certificate that completed the
+      program
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  - name: micromasters_user_id
+    description: str, user id in the micromasters database
+    tests:
+    - dbt_expectations.expect_column_to_exist
+  tests:
+  - dbt_expectations.expect_table_column_count_to_equal:
+      value: 17
