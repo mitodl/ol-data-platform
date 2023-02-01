@@ -60,7 +60,8 @@ with edx_course_certificates as (
         -- functions and we don't want to count the same course against the program requirements multiple times
         , row_number() over (
             partition by edx_course_certificates.user_id, micromasters_courses.course_id
-            order by edx_course_certificates.courseruncertificate_created_on asc) as user_course_certificate_number
+            order by edx_course_certificates.courseruncertificate_created_on asc
+        ) as user_course_certificate_number
     from edx_course_certificates
     inner join
         micromasters_courses
