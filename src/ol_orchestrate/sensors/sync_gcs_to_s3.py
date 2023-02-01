@@ -15,4 +15,3 @@ def check_new_gcs_assets_sensor(context: SensorEvaluationContext):
             )
         else:
             yield SkipReason("No new files in GCS bucket")
-            return

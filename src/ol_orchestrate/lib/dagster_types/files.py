@@ -5,4 +5,4 @@ from dagster import usable_as_dagster_type
 
 @usable_as_dagster_type
 class DagsterPath(PosixPath):
-    pass  # noqa: WPS420, WPS604
+    pass

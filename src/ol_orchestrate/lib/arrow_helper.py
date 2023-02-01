@@ -24,7 +24,7 @@ def write_parquet_file(file_system, output_folder, arrow_table, file_name):
     if file_system.type_name == "local":
         file_system.create_dir(output_folder)
 
-    with file_system.open_output_stream(file_path) as parquet_file:
+    with file_system.open_output_stream(file_path) as parquet_file:  # noqa: SIM117
         with parquet.ParquetWriter(
             parquet_file, arrow_table.schema, use_deprecated_int96_timestamps=True
         ) as writer:

@@ -34,7 +34,7 @@ def download_edx_gcs_course_data(context):
     edx_course_tarball_path = context.resources.results_dir.path.joinpath(
         context.op_config["edx_gcs_course_tarballs"]
     )
-    os.makedirs(edx_course_tarball_path, exist_ok=True)
+    os.makedirs(edx_course_tarball_path, exist_ok=True)  # noqa: PTH103
     blobs = storage_client.list_blobs(bucket)
     for blob in blobs:
         blob.download_to_filename(f"{edx_course_tarball_path}/{blob.name}")
@@ -101,12 +101,12 @@ def upload_edx_gcs_course_data_to_s3(
         description="Daily export directory for edX export pipeline",
         metadata_entries=[
             MetadataEntry.fspath(
-                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501, WPS237
+                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
             ),
         ],
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        f"{results_bucket}/{context.resources.results_dir.path.name}",  # noqa: WPS237
+        f"{results_bucket}/{context.resources.results_dir.path.name}",
         "edx_s3_course_tarball_directory",
     )

@@ -7,7 +7,7 @@ from ol_orchestrate.lib.hooks import (
     notify_healthchecks_io_on_success,
 )
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
-from ol_orchestrate.ops.open_edx import (  # noqa: WPS235
+from ol_orchestrate.ops.open_edx import (
     course_enrollments,
     course_roles,
     enrolled_users,
@@ -52,7 +52,10 @@ def edx_course_pipeline():
         export_edx_forum_database(),
     )
     export_edx_courses.with_hooks(
-        {notify_healthchecks_io_on_success, notify_healthchecks_io_on_failure}
+        {
+            notify_healthchecks_io_on_success,
+            notify_healthchecks_io_on_failure,
+        }
     )(course_list, extracts_upload)
 
 

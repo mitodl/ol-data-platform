@@ -1,7 +1,7 @@
 import time
 from datetime import timedelta
 
-from dagster import (  # noqa: WPS235
+from dagster import (
     AssetMaterialization,
     ExpectationResult,
     Failure,
@@ -530,7 +530,7 @@ def export_edx_forum_database(  # type: ignore
         ),
     },
 )
-def export_edx_courses(  # noqa: WPS210
+def export_edx_courses(
     context: OpExecutionContext, edx_course_ids: List[str], daily_extracts_dir: str
 ) -> None:
     access_token = get_access_token(
@@ -547,7 +547,7 @@ def export_edx_courses(  # noqa: WPS210
     successful_exports: set[str] = set()
     failed_exports: set[str] = set()
     tasks = exported_courses["upload_task_ids"]
-    context.log.info("Exporting %s tasks from Open edX", len(tasks))  # noqa: WPS323
+    context.log.info("Exporting %s tasks from Open edX", len(tasks))
     # Possible status values found here:
     # https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
     while len(successful_exports.union(failed_exports)) < len(tasks):
@@ -563,10 +563,8 @@ def export_edx_courses(  # noqa: WPS210
                 successful_exports.add(course_id)
             if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
                 failed_exports.add(course_id)
-    for course_id in successful_exports:  # noqa: WPS440
-        context.log.info(
-            "Moving course %s to %s", course_id, daily_extracts_dir  # noqa: WPS323
-        )
+    for course_id in successful_exports:
+        context.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
         course_file = f"{course_id}.tar.gz"
         source_object = {
             "Bucket": context.op_config["edx_course_bucket"],
@@ -627,7 +625,7 @@ def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]
     },
     out={"edx_daily_extracts_directory": Out(dagster_type=String)},
 )
-def upload_extracted_data(  # noqa: WPS211
+def upload_extracted_data(  # noqa: PLR0913
     context: OpExecutionContext,
     edx_course_ids_csv: DagsterPath,
     edx_course_roles: DagsterPath,
@@ -693,12 +691,12 @@ def upload_extracted_data(  # noqa: WPS211
         description="Daily export directory for edX export pipeline",
         metadata_entries=[
             MetadataEntry.fspath(
-                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501, WPS237
+                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
             ),
         ],
     )
     context.resources.results_dir.clean_dir()
     yield Output(
-        f"{results_bucket}/{context.resources.results_dir.path.name}",  # noqa: WPS237
+        f"{results_bucket}/{context.resources.results_dir.path.name}",
         "edx_daily_extracts_directory",
     )

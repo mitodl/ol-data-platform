@@ -27,55 +27,26 @@ repos:
     - '80'
     - --preserve-quotes
 - repo: https://github.com/adrienverge/yamllint.git
-  rev: v1.28.0
+  rev: v1.29.0
   hooks:
   - id: yamllint
     args: [--format, parsable, -d, relaxed]
-- repo: https://github.com/asottile/pyupgrade
-  rev: v3.3.1
-  hooks:
-  - id: pyupgrade
-    args:
-    - --py39-plus
-- repo: https://github.com/myint/autoflake/
-  rev: v2.0.0
-  hooks:
-  - id: autoflake
-    args:
-    - --in-place
-    - --ignore-init-module-imports
-    - --expand-star-imports
-    - --remove-unused-variables
-    - --remove-all-unused-imports
 - repo: https://github.com/Yelp/detect-secrets
   rev: v1.4.0
   hooks:
   - id: detect-secrets
     args:
     - --exclude-files poetry.lock
-- repo: https://github.com/PyCQA/isort
-  rev: 5.11.4
-  hooks:
-  - id: isort
-- repo: https://github.com/asottile/yesqa
-  rev: v1.4.0
-  hooks:
-  - id: yesqa
-    additional_dependencies:
-    - git+https://github.com/wemake-services/wemake-python-styleguide#egg=wemake-python-styleguide
 - repo: https://github.com/psf/black
   rev: 22.12.0
   hooks:
   - id: black
-- repo: https://github.com/PyCQA/flake8
-  rev: 5.0.4
+- repo: https://github.com/charliermarsh/ruff-pre-commit
+  # Ruff version.
+  rev: 'v0.0.238'
   hooks:
-  - id: flake8
-    additional_dependencies:
-    - git+https://github.com/wemake-services/wemake-python-styleguide#egg=wemake-python-styleguide
-    args:
-    - --config=setup.cfg
-    - --extend-ignore=D1,D2,D4
+  - id: ruff
+    args: [--extend-ignore=D1, --fix]
 - repo: https://github.com/pre-commit/mirrors-mypy
   rev: v0.991
   hooks:
@@ -87,7 +58,7 @@ repos:
     - types-pymysql
     - types-requests
 - repo: https://github.com/sqlfluff/sqlfluff
-  rev: 2.0.0a1
+  rev: 2.0.0a4
   hooks:
   - id: sqlfluff-fix
       # Arbitrary arguments to show an example
