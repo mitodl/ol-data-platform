@@ -1,4 +1,4 @@
-import urllib.parse  # noqa: WPS301
+import urllib.parse
 from typing import Literal, Optional
 
 import httpx

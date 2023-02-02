@@ -1,6 +1,6 @@
 import os
 import shutil
-from collections.abc import Generator
+from collections.abc import Generator  # noqa: TCH003
 from datetime import datetime
 from typing import Optional
 
@@ -12,14 +12,14 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
 class ResultsDir:
     def __init__(self, root_dir: Optional[str] = None):
         if root_dir is None:
-            self.root_dir = DagsterPath(os.getcwd())
+            self.root_dir = DagsterPath(os.getcwd())  # noqa: PTH109
         else:
             self.root_dir = DagsterPath(root_dir)
         self.dir_name = "results"
 
     def create_dir(self):
         try:
-            os.makedirs(self.path)
+            os.makedirs(self.path)  # noqa: PTH103
         except FileExistsError:
             return
 
@@ -28,7 +28,7 @@ class ResultsDir:
 
     @property
     def path(self) -> DagsterPath:
-        return DagsterPath(os.path.join(self.root_dir, self.dir_name))
+        return DagsterPath(os.path.join(self.root_dir, self.dir_name))  # noqa: PTH118
 
     @property
     def absolute_path(self) -> str:
@@ -39,7 +39,7 @@ class DailyResultsDir(ResultsDir):
     def __init__(
         self,
         root_dir: Optional[str] = None,
-        date_format: str = "%Y-%m-%d",  # noqa: WPS323
+        date_format: str = "%Y-%m-%d",
         date_override: Optional[str] = None,
     ):
         """Instantiate a results directory that defaults to being named according to the current date.  # noqa: E501
@@ -53,12 +53,12 @@ class DailyResultsDir(ResultsDir):
         :param date_override: A string representing an override of the date to be used for the generated directory.  # noqa: E501
             Primarily used for cases where a backfill process needs to occur.
         :type date_override: str
-        """
+        """  # noqa: E501
         super().__init__(root_dir)
         if date_override:
-            dir_date = datetime.strptime(date_override, date_format)
+            dir_date = datetime.strptime(date_override, date_format)  # noqa: DTZ007
         else:
-            dir_date = datetime.utcnow()
+            dir_date = datetime.utcnow()  # noqa: DTZ003
         self.dir_name = dir_date.strftime(date_format)
 
 
@@ -75,7 +75,7 @@ class DailyResultsDir(ResultsDir):
         ),
         "outputs_directory_date_format": Field(
             String,
-            default_value="%Y-%m-%d",  # noqa: WPS323
+            default_value="%Y-%m-%d",
             is_required=False,
             description="Format string for structuring the name of the daily outputs directory",  # noqa: E501
         ),
@@ -100,8 +100,9 @@ def daily_dir(
 
     :yield: An instance of a daily results directory
     """
-    run_dir = os.path.join(
-        os.getcwd() or resource_context.resource_config["outputs_root_dir"],
+    run_dir = os.path.join(  # noqa: PTH118
+        os.getcwd()  # noqa: PTH109
+        or resource_context.resource_config["outputs_root_dir"],
         resource_context.dagster_run.run_id,
     )
     results_dir = DailyResultsDir(

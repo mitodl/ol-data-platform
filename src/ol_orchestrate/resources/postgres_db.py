@@ -1,17 +1,17 @@
 """Resource for connection to a postgres db."""
 
-import pandas
+import pandas  # noqa: ICN001
 import psycopg2
-import pyarrow
+import pyarrow  # noqa: ICN001
 from dagster import Field, InitResourceContext, Int, String, resource
-from pypika import Query
+from pypika import Query  # noqa: TCH002
 
 DEFAULT_POSTGRES_PORT = 5432
 DEFAULT_POSTGRES_QUERY_CHUNKSIZE = 5000
 
 
 class PostgresClient:
-    def __init__(  # noqa: WPS211
+    def __init__(  # noqa: PLR0913
         self,
         hostname: str,
         username: str,
@@ -60,7 +60,7 @@ class PostgresClient:
 
         :rtype: Table
         """
-        for chunk in pandas.read_sql_query(  # noqa: WPS352
+        for chunk in pandas.read_sql_query(
             str(query),
             self.connection,
             chunksize=chunksize,

@@ -3,13 +3,13 @@ from typing import Optional
 import pymysql
 from dagster import Field, InitResourceContext, Int, String, resource
 from pymysql.cursors import DictCursor
-from pypika import Query
+from pypika import Query  # noqa: TCH002
 
 DEFAULT_MYSQL_PORT = 3306
 
 
 class MySQLClient:
-    def __init__(  # noqa: WPS211
+    def __init__(  # noqa: PLR0913
         self,
         hostname: str,
         username: str,

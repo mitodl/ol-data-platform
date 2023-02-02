@@ -5,11 +5,11 @@ from typing import Optional
 import pyathena
 from dagster import Field, InitResourceContext, Noneable, String, resource
 from pyathena.cursor import DictCursor
-from pypika import Query
+from pypika import Query  # noqa: TCH002
 
 
 class AthenaClient:
-    def __init__(  # noqa: WPS211
+    def __init__(  # noqa: PLR0913
         self,
         work_group: str,
         schema_name: str,

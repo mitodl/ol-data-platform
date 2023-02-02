@@ -32,7 +32,7 @@ edx_gcs_courses = Definitions(
     sensors=[
         SensorDefinition(
             evaluation_fn=check_new_gcs_assets_sensor,
-            minimum_interval_seconds=86400,  # noqa: WPS432 - 1 day
+            minimum_interval_seconds=86400,
             job=gcs_sync_job,
             default_status=DefaultSensorStatus.RUNNING,
         )
