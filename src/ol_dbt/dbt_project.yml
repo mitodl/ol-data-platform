@@ -53,3 +53,4 @@ models:
     marts:
       +materialized: table
       +schema: mart
+    +required_docs: true

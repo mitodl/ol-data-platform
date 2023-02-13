@@ -11,77 +11,49 @@ models:
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_title
     description: str, The title of the course run
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_url
     description: str, The url path of the course run
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: course_number
     description: str, The MIT course number for this course e.g. SysEngx1 is the course
       number for MITxPRO/SysEngx1/1T2018
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_semester
     description: str, The semester during which the course was launched e.g Fall 2020
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_enrollment_start_date
     description: date, registration open date for the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_start_date
     description: date, The date on which the course starts
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_end_date
     description: date, The date on which the course ends
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_is_self_paced
     description: boolean, Indicate whether or not the course is self paced
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_institution
     description: str, The institution that is linked to the course. Values are currently
       MITProfessionalX, MITx, MITxPRO
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_instructors
     description: str, List of instructors associated with the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 11
 
 - name: stg__edxorg__bigquery__mitx_person_course
   columns:
   - name: user_id
     description: int, Numerical user ID of a learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courserun_readable_id
     description: str, The canonical ID of the course run in the format as {org}/{course}/{run}.
       This is old format and could be different from courses in MITxOnline or MicroMasters
       that use new format
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_username
     description: str, username of a learner on the edX platform (some blank from source)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_gender
     description: str, user's gender - blank means user did not specify a gender. Null
       means this student signed up before this information was collected
     tests:
-    - dbt_expectations.expect_column_to_exist
     - accepted_values:
         values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
   - name: user_highest_education
@@ -89,7 +61,6 @@ models:
       level of education. Null means this student signed up before this information
       was collected
     tests:
-    - dbt_expectations.expect_column_to_exist
     - accepted_values:
         values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
           "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
@@ -98,168 +69,94 @@ models:
             \ field", "", null]
   - name: user_birth_year
     description: int, A year of birth provided by the learner on their profile
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_country
     description: str, two-letter country code as specified by user in their profile
       (only available after ~mid-2014)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_enrollment_mode
     description: str, enrollment mode, e.g. honor, audit, verified
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_created_on
     description: timestamp, timestamp of user's enrollment in the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_enrolled_on
     description: timestamp, timestamp on when user initially had their first id-verified
       enrollment event
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_unenrolled_on
     description: timestamp, timestamp on when user had their last id-verified unenrollment
       event, if any. Null if there were no unenrollment events
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_is_active
     description: boolean, indicating if enrollment is active or not
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_is_earned
     description: boolean, indicating that the user earned a certificate in the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_status
     description: str, one of downloadable, notpassing, audit_passing, unavailable,
       audit_notpassing where downloadable should = earned
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_created_on
     description: timestamp, timestamp when certificate was generated (if applicable)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_updated_on
     description: timestamp, timestamp when certificate was modified (if applicable)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserungrade_passing_grade
     description: float, Passing grade for the course, (range between 0.0 to 1.0)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserungrade_user_grade
     description: float, Final grade user earned in the course, (range between 0.0
       to 1.0)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserungrade_is_passing
     description: boolean, indicating that the user completed the course with a passing
       grade
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_visited_once
     description: boolean, indicating that the user visited the course at least once
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_viewed_half
     description: boolean, indicating that the user viewed at least half of the chapters
       of the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_events
     description: int, Number of tracking log events
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_activity_days
     description: int, Number of days with activity from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_progress_check
     description: int, Number of progress check events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_problem_check
     description: int, Number of problem_check interaction events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_show_answer
     description: int, Number of show_answer events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_show_transcript
     description: int, Number of show_transcript video interaction events from tracking
       logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_seq_goto
     description: int, Number of sequence_goto navigational events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_play_video
     description: int, Number of play_video video interaction events from tracking
       logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_seek_video
     description: int, Number of seek_video video interaction events from tracking
       logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_pause_video
     description: int, Number of pause_video video interaction events from tracking
       logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_video_interactions
     description: int, Number of all the video interaction events from tracking log
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_unique_videos_viewed
     description: int, Number of Unique Videos viewed per user within a course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_percentage_total_videos_watched
     description: int, Percentage of all videos watched per user within a course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_average_time_diff_in_sec
     description: float, Average time difference in seconds between consecutive events
       from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_standard_deviation_in_sec
     description: float, Standard deviation of difference in seconds between consecutive
       events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_max_diff_in_sec
     description: float, Maximum difference in seconds between consecutive events from
       tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_consecutive_events_used
     description: int, Number of consecutive events used in time difference computations,
       from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_total_elapsed_time_in_sec
     description: int, Total elapsed time (in seconds) spent by user on this course,
       based on time difference of consecutive events, with 5 min max cutoff, from
       tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_first_event_timestamp
     description: timestamp, timestamp of first event of user from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_last_event_timestamp
     description: timestamp, timestamp of last event of user from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 41
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]
 
@@ -270,49 +167,32 @@ models:
   - name: user_id
     description: int, Numerical user ID of a learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_username
     description: str, The username of the learner on the edX platform
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_full_name
     description: str, The full name of the user on the edX platform
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_email
     description: str, The email address of the learner on the edX platform (could
       be blank)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_map_hash_id
     description: str, A hashed ID mapping learner user ID's to external systems
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_mailing_address
     description: str, Mailing address provided by the learner on their profile
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_goals
     description: str, The intended goals of the learner provided on their profile
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_gender
     description: str, Gender selected by the user on their profile
     tests:
-    - dbt_expectations.expect_column_to_exist
     - accepted_values:
         values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
   - name: user_country
     description: str, Country selected by the learner on their profile
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_highest_education
     description: str, user's Level of education- blank means User did not specify
       level of education. Null means this student signed up before this information
       was collected
     tests:
-    - dbt_expectations.expect_column_to_exist
     - accepted_values:
         values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
           "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
@@ -321,143 +201,75 @@ models:
             \ field", "", null]
   - name: user_birth_year
     description: int, A year of birth provided by the learner on their profile
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_meta
     description: str, extra metadata on learner's profile. JSON data in text field
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_joined_on
     description: timestamp, timestamp that the account was created.
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_last_login
     description: timestamp, Timestamp indicating the last time the user logged into
       the edX platform
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_courserun_readable_id
     description: str, course ID user is enrolling in. It's in the format as org/number/semester
       this field is not always populated here, but it's always populated in person_course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_mode
     description: str, indicate what kind of enrollment it is - mode, no-id-professional,
       audit, honor, verified, professional, credit
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_created_on
     description: timestamp, Timestamp indicating when the enrollment event was created
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_is_active
     description: int, Whether or not the enrollment is active. 1 means active
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_id
     description: int, The ID of the certificate obtained by the user. Null if the
       user obtained no certificate.
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_courserun_readable_id
     description: str, The course ID associated with the certificate. It's in the format
       as org/number/semester
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_user_id
     description: int, The user ID tied to the certificate
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_mode
     description: str, The enrollment mode associated with the certificate
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_distinction
     description: int, This was used for letters of distinction for 188.1x, but is
       not being used for any current courses
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_created_on
     description: timestamp, Timestamp indicating when the certificate was created
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_updated_on
     description: timestamp, Timestamp indicating the last time the certificate was
       modified
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_name
     description: str, The name of the user that is listed on the certificate
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_key
     description: str, A random string that is used to match server requests to responses
       sent to the LMS. Used internally only
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_status
     description: str, Status of the generation of the certificate
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_download_url
     description: str, the full URL to the certificate
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_download_uuid
     description: str, A hash code that identifies this student’s certificate. Included
       as part of the download_url.
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_verify_uuid
     description: str, A hash code that verifies the validity of a certificate. Included
       on the certificate itself as part of a URL.
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_grade
     description: float, The grade when the certificate was generated
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 32
 
 - name: stg__edxorg__bigquery__mitx_user_email_opt_in
   description: It contains email opt-in preferences for every user on every course
     they enroll in. If users enroll in multiple courses, the email and username in
     this table are the most recent data
   columns:
-  - name: course_id
-    description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_id
     description: int, Numerical user ID of a learner on the edX platform
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: str, The username of the user on the edX platform
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_email
     description: str, The email address of the user on the edX platform
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_full_name
     description: str, The full name of the user on the edX platform
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_is_opted_in_for_email
     description: boolean, indicating if the learner has opted to receive marketing
       emails
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_email_opt_in_updated_on
     description: timestamp, specifying when email opt in preference was most recently
       updated
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 7
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_id"]

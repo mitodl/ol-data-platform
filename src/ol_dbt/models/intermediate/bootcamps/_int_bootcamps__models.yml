@@ -8,138 +8,111 @@ models:
   - name: wiretransferreceipt_id
     description: int, primary key representing a wire transfer receipt
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
   - name: wiretransferreceipt_created_on
     description: timestamp, specifying when the wire transfer receipt was initially
       created
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: wiretransferreceipt_updated_on
     description: timestamp, specifying when the wire transfer receipt was most recently
       updated
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: wiretransferreceipt_data
     description: json, wire transfer data for a payment
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: order_id
     description: int, primary key in ecommerce_order
-    tests:
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 5
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__ecommerce_wiretransferreceipt')
+
 - name: int__bootcamps__ecommerce_receipt
   description: Data returned from cybersource when a user pays for an order with cybersource
   columns:
   - name: receipt_id
     description: int, primary key representing a receipt
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
   - name: receipt_created_on
     description: timestamp, specifying when the receipt was initially created
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: receipt_updated_on
     description: timestamp, specifying when the receipt was most recently updated
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: receipt_data
     description: json, cybersource data for a payment
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: order_id
     description: int, primary key in ecommerce_order
-    tests:
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 5
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__ecommerce_receipt')
-- name: int__bootcamps__order
+
+- name: int__bootcamps__ecommerce_order
   columns:
   - name: order_id
     description: int, primary key representing a single bootcamps order
     tests:
-    - dbt_expectations.expect_column_to_exist
     - unique
     - not_null
   - name: order_created_on
     description: timestamp, specifying when the order was initially created
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: order_updated_on
     description: timestamp, specifying when the order was most recently updated
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: order_state
     description: string, order state. Options are "fulfilled", "failed", "created",
       "refunded"
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - accepted_values:
         values: ['fulfilled', 'failed', 'created', 'refunded']
   - name: order_total_price_paid
     description: number, total order amount
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: order_purchaser_user_id
     description: int, primary key in auth_user for the purchaser
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: order_payment_type
     description: string, payment type for the order. One of "cybersource", "wiretransfer",
       "refund"
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: application_id
     description: int, primary key in applications_bootcampapplication for the application
       the order is associated with
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: line_id
     description: int, primary key representing an ecommerce line
     tests:
-    - dbt_expectations.expect_column_to_exist
     - unique
     - not_null
   - name: line_description
     description: string, description of the purchased bootcamp run
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courserun_id
     description: int, foreign key in courses_courserun of the purchased run
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 11
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__ecommerce_order')
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__bootcamps__app__postgres__line')
+      compare_model: ref('stg__bootcamps__app__postgres__ecommerce_line')
+
 - name: int__bootcamps__courserunenrollments
   description: Intermediate model for enrollments in bootcamps
   columns:
@@ -148,57 +121,44 @@ models:
     tests:
     - not_null
     - unique
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the run
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_id
     description: int, unique ID for each user on the bootcamps platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courserun_id
     description: int, unique ID specifying a "run" of a bootcamp
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courserunenrollment_created_on
     description: timestamp, specifying when an enrollment was initially created
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courserunenrollment_enrollment_status
     description: str, enrollment status for users whose enrollment changed. Options
       are 'deferred', 'refunded'
     tests:
-    - dbt_expectations.expect_column_to_exist
     - accepted_values:
         values: ['deferred', 'refunded', null]
   - name: courserun_title
     description: str, title of the course run
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_readable_id
     description: str, unique string to identify a bootcamp course run (could be blank
       for older runs)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: str, name chosen by user
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_email
     description: str, user email associated with their account
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 10
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__courserunenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
@@ -212,14 +172,8 @@ models:
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: course_title
     description: str, title of the bootcamp course
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 2
 
 - name: int__bootcamps__course_runs
   description: Intermediate model for Bootcamps course runs
@@ -229,34 +183,22 @@ models:
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: course_id
     description: int, foreign key to int__bootcamps__courses representing a single
       bootcamp course
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_title
     description: str, title of the bootcamp course run
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_readable_id
     description: str, unique string to identify a bootcamp course run (could be blank
       for older runs)
     tests:
     - unique
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_start_on
     description: timestamp, specifying when the course run begins
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_end_on
     description: timestamp, specifying when the course run ends
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 6
 
 - name: int__bootcamps__users
   description: denormalized bootcamps users
@@ -266,41 +208,26 @@ models:
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: string, username
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_full_name
     description: string, full name
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_email
     description: string, email
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_joined_on
     description: timestamp, user join timestamp
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_last_login
     description: timestamp, user last log in
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_address_country
     description: string, country code for the user's address
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_is_active
     description: boolean, indicating if user is active or not
-    tests:
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 8
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__auth_user')
 
@@ -312,19 +239,16 @@ models:
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_uuid
     description: str, unique identifier for the certificate
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_id
     description: int, foreign key to courses_courserun representing a single course
       run
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('int__bootcamps__course_runs')
         field: courserun_id
@@ -332,7 +256,6 @@ models:
     description: int, foreign key to courses_course representing a single course
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('int__bootcamps__courses')
         field: course_id
@@ -340,42 +263,27 @@ models:
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('int__bootcamps__users')
         field: user_id
   - name: courseruncertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_title
     description: str, title of the course run
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_readable_id
     description: str, unique string to identify a bootcamp course run
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: string, username
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_email
     description: string, email
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_created_on
     description: timestamp, specifying when a certificate was initially created
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_updated_on
     description: timestamp, specifying when a certificate was most recently updated
-    tests:
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 12
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__courses_courseruncertificate')
