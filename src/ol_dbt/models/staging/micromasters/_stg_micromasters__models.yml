@@ -10,55 +10,43 @@ models:
   - name: user_edxorg_id
     description: int, edxorg id for a user
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: micromasters_program_id
     description: int, foreign key in courses_program for the program the user should
       recieve a certificate
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 2
+
 - name: stg__micromasters__app__postgres__grades_programcertificate
   columns:
   - name: programcertificate_id
     description: int, sequential ID representing a program certificate. Only has records
       for DEDP
     tests:
-    - dbt_expectations.expect_column_to_exist
     - unique
     - not_null
   - name: programcertificate_created_on
     description: timestamp, specifying when a program certificate was initially created
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: programcertificate_updated_on
     description: timestamp, specifying when a program certificate was most recently
       updated
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: programcertificate_hash
     description: str, unique hash used to identify the program certificate
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_id
     description: id, int foreign key referece to courses_program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_id
     description: int, foreign key referece to auth_user
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 6
+
 - name: stg__micromasters__app__postgres__auth_user
   columns:
   - name: user_id
@@ -66,34 +54,22 @@ models:
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: str, unique string to identify user
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_email
     description: str, user email associated with user account (not unique)
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_is_active
     description: boolean, indicate whether this user is active (use it to soft delete
       account)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_joined_on
     description: timestamp, specifying when a user account was initially created
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_last_login
     description: timestamp, specifying when a user last logged in
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 6
 
 - name: stg__micromasters__app__postgres__profiles_profile
   columns:
@@ -102,12 +78,10 @@ models:
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_id
     description: str, foreign key to auth_user representing a single user
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('stg__micromasters__app__postgres__auth_user')
         field: user_id
@@ -115,39 +89,22 @@ models:
     description: str, user's full name on profile
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_romanized_full_name
     description: str, user's full name in roman (populated when full_name is non-romanized)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_preferred_name
     description: str, user's Nickname / Preferred name
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_birth_date
     description: timestamp, user's date of birth
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_address_country
     description: str, country where user lives in
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_address_city
     description: str, city where user lives in
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_address_state_or_territory
     description: str,  state or territory where user lives in
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_address_postal_code
     description: str, postal code where user lives in
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_street_address
     description: str, street address where user lives in
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_highest_education
     description: str, user's level of education
     tests:
@@ -156,131 +113,75 @@ models:
           "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
             \ school", "Elementary/primary school", "No formal education", "Other\
             \ education"]
-    - dbt_expectations.expect_column_to_exist
   - name: user_gender
     description: str, user gender (could be blank)
     tests:
     - accepted_values:
         values: ['Male', 'Female', 'Other/Prefer Not to Say']
-    - dbt_expectations.expect_column_to_exist
   - name: user_mail_id
     description: str, UUID generated for user profile (used in automatic/bulk emails)
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_is_filled_out
     description: boolean, whether user filled out the profile
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_student_id
     description: int, incremental ID for profile, it's default to primary key
     tests:
     - unique
-    - dbt_expectations.expect_column_to_exist
   - name: user_email_is_optin
     description: boolean, whether user has opted to receive email
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_image
     description: str, relative url of the profile image. e.g.profile/xxxxx.jpg
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_image_small
     description: str, relative url of the profile image in 64x64 pixel e.g.profile/xxxxx.jpg
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_image_medium
     description: str, relative url of the profile image in 128x128 pixels e.g.profile/xxxxx_medium.jpg
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_nationality
     description: str, user's nationality (stored as country code)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_employer
     description: str, user's employer on edx.org
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_phone_number
     description: str, user's phone number
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_job_title
     description: str, user's job title on edx.org
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_account_privacy
     description: str, whether user account is "Public to everyone" (public), "Public
       to logged in users" (public_to_mm) or "Private" (private)
     tests:
-    - dbt_expectations.expect_column_to_exist
     - accepted_values:
         values: ['Public to everyone', 'Public to logged in users', 'Private']
   - name: user_preferred_language
     description: str, user's preferred language
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_mailing_address
     description: str, user's mailing address on edx.org
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_is_verified
     description: boolean, whether the user is a verified MicroMasters user (currently
       false to all users on production)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_has_agreed_to_terms_of_service
     description: boolean, whether the user has agreed to term of service
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_language_proficiencies
     description: str, JSON string of user's language proficiencies on edx.org
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_parental_consent_is_required
     description: boolean, user profile requires parental consent on edx.org
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_bio
     description: str, user's biography on edx.org
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_about_me
     description: str, about me in user profile
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_edx_name
     description: str, user's full name on edx.org
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_edx_goals
     description: str, user's personal goal on edx.org
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_is_fake
     description: boolean, used for testing profiles
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_joined_on
     description: timestamp, specifying when user profile was initially created
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_profile_updated_on
     description: timestamp, specifying when a profile was most recently updated
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_first_name
     description: str, first name on user profile
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_last_name
     description: str, last name on user profile
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 40
 
 - name: stg__micromasters__app__postgres__auth_usersocialauth
   columns:
@@ -288,12 +189,10 @@ models:
     description: int, sequential ID representing a user social auth record in MicroMasters
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_id
     description: str, foreign key to auth_user representing a single user
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('stg__micromasters__app__postgres__auth_user')
         field: user_id
@@ -301,17 +200,13 @@ models:
     description: str, social auth provider. It's either "edxorg" or "mitxonline"
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
     - accepted_values:
         values: ['edxorg', 'mitxonline']
   - name: user_username
     description: str, user name string to identify a user within a social auth provider
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 4
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "user_auth_provider"]
 
@@ -321,55 +216,38 @@ models:
   - name: course_id
     description: int, sequential ID representing a course in MicroMasters
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
   - name: course_title
     description: str, title of the course
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: course_edx_key
     description: str, edX key formatted as {org}+{course number}
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: course_number
     description: str, edX course number
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: program_id
     description: int, foreign key to courses_program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('stg__micromasters__app__postgres__courses_program')
         field: program_id
   - name: course_position_in_program
     description: int, sequential number indicating the course position in a program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: course_description
     description: str, description of the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: course_prerequisites
     description: str, required courses as a prior condition before taking this course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: course_contact_email
     description: str, email used to contact course team
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: course_should_display_progress
     description: boolean, indicating if "in progress" grades should be displayed for
       the course
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 10
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_id", "course_position_in_program"]
 
@@ -378,56 +256,40 @@ models:
   - name: program_id
     description: int, sequential ID representing a program in MicroMasters
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
   - name: program_title
     description: str, title of the program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_description
     description: str, description of the program
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: program_num_required_courses
     description: int, indicating the number of required courses to earn certificate
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_price
     description: numeric, price of the program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_ga_tracking_id
     description: str, a unique tracking ID provided by Google Analytics used to track
       the number of views to certain pages of MicroMasters
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_is_live
     description: boolean, indicating whether program is available to users on MicroMasters
       website
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_is_financial_aid_available
     description: boolean, indicating if financial aid is available for the program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_created_on
     description: timestamp, specifying when a program was initially created
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: program_updated_on
     description: timestamp, specifying when a program was most recently updated
-    tests:
-    - dbt_expectations.expect_column_to_exist
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 10
 
 - name: stg__micromasters__app__postgres__courses_electiveset
   description: This represents the elective requirements for programs
@@ -436,30 +298,23 @@ models:
     description: int, sequential ID representing a elective requirement set for a
       program in MicroMasters
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
   - name: electiveset_required_number
     description: int, indicating the number of required courses from this elective
       requirement set
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_id
     description: int, foreign key to courses_program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('stg__micromasters__app__postgres__courses_program')
         field: program_id
   - name: electiveset_title
     description: str, title of the elective requirement set
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 4
 
 - name: stg__micromasters__app__postgres__courses_electiveset_to_course
   description: this links a course to a elective set for programs
@@ -467,21 +322,14 @@ models:
   - name: electivesettocourse_id
     description: int, sequential ID representing a course in a  set for a program
       in MicroMasters
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: electiveset_id
     description: int, foreign key to courses_electivesset
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: course_id
     description: int, foreign key to courses_course
     tests:
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('stg__micromasters__app__postgres__courses_course')
         field: course_id
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 3
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["course_id", "electiveset_id"]

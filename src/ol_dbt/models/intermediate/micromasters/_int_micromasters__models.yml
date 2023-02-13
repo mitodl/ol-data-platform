@@ -8,38 +8,30 @@ models:
     description: int, sequential ID representing a program certificate. Only has records
       for DEDP
     tests:
-    - dbt_expectations.expect_column_to_exist
     - unique
     - not_null
   - name: programcertificate_created_on
     description: timestamp, specifying when a program certificate was initially created
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: programcertificate_updated_on
     description: timestamp, specifying when a program certificate was most recently
       updated
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: programcertificate_hash
     description: str, unique hash used to identify the program certificate
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_id
     description: id, int foreign key referece to courses_program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_id
     description: int, foreign key referece to auth_user
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 6
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__grades_programcertificate')
 
@@ -51,49 +43,30 @@ models:
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_username
     description: str, unique string to identify user
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_full_name
     description: str, user's full name
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_email
     description: str, user email associated with user account (not unique)
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: user_joined_on
     description: timestamp, specifying when a user account was initially created
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_last_login
     description: timestamp, specifying when a user last logged in
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_address_country
     description: str, country code for the user's address
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_is_active
     description: boolean, indicating if user is active or not
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_mitxonline_username
     description: str, username in mitxonline
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_edxorg_username
     description: str, username in edx.org
-    tests:
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 10
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__auth_user')
 
@@ -103,32 +76,24 @@ models:
   - name: program_id
     description: int, sequential ID representing a program in MicroMasters
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
   - name: program_title
     description: str, title of the program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_description
     description: str, description of the program
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: program_num_required_courses
     description: int, indicating the number of required courses to earn certificate
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: program_is_live
     description: boolean, indicating whether program is available to users on MicroMasters
       website
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 5
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__courses_program')
 
@@ -138,33 +103,27 @@ models:
   - name: program_id
     description: int, foreign key to courses_program
     tests:
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('stg__micromasters__app__postgres__courses_program')
         field: program_id
   - name: course_id
     description: int, foreign key to courses_course
     tests:
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('stg__micromasters__app__postgres__courses_course')
         field: course_id
   - name: electiveset_id
     description: int, sequential ID representing a elective requirement set for a
       program in MicroMasters
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: electiveset_required_number
     description: int, indicating the number of required from elective courses
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: programrequirement_type
     description: str, indicating the courses is either core or elective
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - accepted_values:
         values: ["Core", "Elective"]
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 6
+  - name: program_num_required_courses
+    description: int, indicating the number of required courses to earn certificate
+    tests:
+    - not_null

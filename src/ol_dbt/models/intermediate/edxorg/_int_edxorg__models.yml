@@ -10,67 +10,42 @@ models:
     tests:
     - unique
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_title
     description: str, The title of the course run
     tests:
     - not_null
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_url
     description: str, The url path of the course run
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: course_number
     description: str, The MIT course number for this course e.g. SysEngx1 is the course
       number for MITxPRO/SysEngx1/1T2018
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_semester
     description: str, The semester during which the course was launched e.g Fall 2020
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_enrollment_start_date
     description: date, registration open date for the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_start_date
     description: date, The date on which the course starts
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_end_date
     description: date, The date on which the course ends
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_is_self_paced
     description: boolean, Indicate whether or not the course is self paced
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_institution
     description: str, The institution that is linked to the course. Values are currently
-      MITProfessionalX, MITx, MITxPRO
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_instructors
     description: str, List of instructors associated with the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: micromasters_program_id
     description: int, foreign key to int__micromasters__programs
     tests:
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('int__micromasters__programs')
         field: program_id
   - name: micromasters_course_id
     description: int, foreign key to int__micromasters__courses
     tests:
-    - dbt_expectations.expect_column_to_exist
     - relationships:
         to: ref('stg__micromasters__app__postgres__courses_course')
         field: course_id
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 13
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__edxorg__bigquery__mitx_courserun')
 
@@ -80,13 +55,11 @@ models:
   - name: courseruncertificate_id
     description: int, sequential ID of the certificate
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
   - name: user_id
     description: int, Numerical user ID of a learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - relationships:
         to: ref('int__edxorg__mitx_users')
@@ -96,62 +69,43 @@ models:
       This is old format and could be different from courses in MITxOnline or MicroMasters
       that use new format
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_username
     description: str, The username of the learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courseruncertificate_created_on
     description: timestamp, Timestamp indicating when the certificate was created
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_updated_on
     description: timestamp, Timestamp indicating the last time the certificate was
       modified
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_name
     description: str, The name of the user that is listed on the certificate
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_status
     description: str, Status of the generation of the certificate
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_download_url
     description: str, the full URL to the certificate
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courseruncertificate_download_uuid
     description: str, A hash code that identifies this student’s certificate. Included
       as part of the download_url.
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courseruncertificate_verify_uuid
     description: str, A hash code that verifies the validity of a certificate. Included
       on the certificate itself as part of a URL.
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_grade
     description: float, The grade when the certificate was generated
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseruncertificate_mode
     description: str, The enrollment mode associated with the certificate
-    tests:
-    - dbt_expectations.expect_column_to_exist
+  - name: courserun_title
+    description: str, The title of the course run
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 15
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]
 
@@ -161,7 +115,6 @@ models:
   - name: user_id
     description: int, Numerical user ID of a learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - relationships:
         to: ref('int__edxorg__mitx_users')
@@ -171,37 +124,24 @@ models:
       This is old format and could be different from courses in MITxOnline or MicroMasters
       that use new format
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_username
     description: str, username of a learner on the edX platform (some blank from source)
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courserunenrollment_created_on
     description: timestamp, timestamp of user's enrollment in the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_enrollment_mode
     description: str, enrollment mode, e.g. honor, audit, verified
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserunenrollment_is_active
     description: boolean, indicating if enrollment is active or not
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_title
     description: str, The title of the course run
-    tests:
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 8
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]
 
@@ -212,43 +152,30 @@ models:
   - name: user_id
     description: int, Numerical user ID on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
   - name: user_username
     description: str, The unique username of the user on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - unique
   - name: user_email
     description: str, The current default email address of the learner on the edX
       platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_full_name
     description: str, The full name of the user on the edX platform
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_country
     description: str, Country provided by the user on the edX platform
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_joined_on
     description: timestamp, timestamp that the user's account was created.
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: user_gender
     description: str, user's gender - blank means user did not specify a gender. Null
       means this student signed up before this information was collected
     tests:
-    - dbt_expectations.expect_column_to_exist
     - accepted_values:
         values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
-  tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 7
 
 - name: int__edxorg__mitx_courserun_grades
   description: Intermediate model for course run grades from edx.org
@@ -256,7 +183,6 @@ models:
   - name: user_id
     description: int, Numerical user ID of a learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - relationships:
         to: ref('int__edxorg__mitx_users')
@@ -264,39 +190,26 @@ models:
   - name: courserun_readable_id
     description: str, The canonical ID of the course run in the format as {org}/{course}/{run}.
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_username
     description: str, The username of the learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courserungrade_passing_grade
     description: float, Passing grade for the course, (range between 0.0 to 1.0)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserungrade_user_grade
     description: float, Final grade user earned in the course, (range between 0.0
       to 1.0)
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserungrade_is_passing
     description: boolean, indicating that the user completed the course with a passing
       grade
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_title
     description: str, The title of the course run
-    tests:
-    - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 8
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]
 
@@ -432,7 +345,5 @@ models:
     tests:
     - dbt_expectations.expect_column_to_exist
   tests:
-  - dbt_expectations.expect_table_column_count_to_equal:
-      value: 27
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]

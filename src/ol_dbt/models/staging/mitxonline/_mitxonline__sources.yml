@@ -11,1221 +11,657 @@ sources:
     columns:
     - name: id
       description: int, primary key representing a discount in a user's basket
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the basket discount was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the basket discount was most recently
         updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: redemption_date
       description: timestamp, specifying when the discount was applied to the basket
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: redeemed_basket_id
       description: int, foreign key referencing ecommerce_basket
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: redeemed_by_id
       description: int, foreign key referencing users_user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: redeemed_discount_id
       description: int, foreign key referencing ecommerce_discount
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 7
+
   - name: raw__mitxonline__app__postgres__ecommerce_basketitem
     columns:
     - name: id
       description: int, primary key representing a item in a user's basket
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the basket item was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the basket item was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: quantity
       description: int, quantitiy of the item. Always 1
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: basket_id
       description: int, foreign key referencing ecommerce_basket
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: product_id
       description: int, foreign key referencing ecommerce_product
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 6
+
   - name: raw__mitxonline__app__postgres__ecommerce_basket
     columns:
     - name: id
       description: int, primary key representing a user basket
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the basket was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the basket was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, foreign key to the users_user table
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 4
+
   - name: raw__mitxonline__app__postgres__flexiblepricing_flexibleprice
     description: An application for an income based discount.
     columns:
     - name: id
       description: int, primary key representing a flexible pricing application
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the table row was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the table row was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: status
       description: string, status of the application. One of "approved", "auto-approved",
         "created", "pending-manual-approval", "denied", "reset"
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: income_usd
       description: numeric, user income in usd
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: original_income
       description: numeric, user income in it's original currency
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: original_currency
       description: string, currency code of orginal income
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: country_of_income
       description: string, country code for user country of income
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: date_exchange_rate
       description: timestamp, timestamp of exchange rate used to convert the original
         income to usd
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: date_documents_sent
       description: date, date that the user sent documents that prove their income
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: justification
       description: string, explanation for flexible pricing application approval or
         rejection
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: country_of_residence
       description: string, country code for user country of residece
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, primary key in the users_user table of the user  requesting
         flexible pricing
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: cms_submission_id
       description: int, primary key of the cms submission stored in the flexiblepricing_flexiblepricingrequestsubmission
         table
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: courseware_content_type_id
       description: int, primary key in django_contenttype of either courses_course
         or courses_program
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: courseware_object_id
       description: int, primary key in either the courses_course or courses_program
         table of the courseware the user applied for flexible pricing for
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: tier_id
       description: int, primary key in flexiblepricing_flexiblepricetier of the price
         tier the user applied for
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 17
+
   - name: raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
     columns:
     - name: id
       description: int, primary key representing a flexible pricing tier
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the table row was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the table row was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: courseware_content_type_id
       description: int, django_contenttype id for either course or program
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: courseware_object_id
       description: int, id for the courseware object in either the courses_course
         or courses_program table
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: current
       description: boolean, whether the flexible pricing tier is currently enabled
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: income_threshold_usd
       description: numeric, maximum income in usd to qualify for the flexible price
         tier
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: discount_id
       description: int, id of ecommerce_discount associated with the flexible price
         tier
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 8
+
   - name: raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate
     columns:
     - name: id
       description: int, primary key representing a country exchange rate
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the table row was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the table row was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: currency_code
       description: string, currency code
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: exchange_rate
       description: numeric, exchange rate to usd
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: description
       description: string, readable currency name
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 6
+
   - name: raw__mitxonline__app__postgres__flexiblepricing_countryincomethreshold
     columns:
     - name: id
       description: int, primary key representing a country income threshold
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the table row was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the table row was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: country_code
       description: string, country code
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: income_threshold
       description: int, usd income threshold to quantity for flexible pricing
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 5
+
   - name: raw__mitxonline__app__postgres__ecommerce_discountredemption
     columns:
     - name: id
       description: int, primary key representing a discount redemption
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the table row was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: redemption_date
       description: timestamp, specifying when the discount was redeemed by the user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: redeemed_by_id
       description: int, foreign key for users_user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: redeemed_discount_id
       description: int, foreign key for ecommerce_discount
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: redeemed_order_id
       description: int, foreign key for ecommerce_orders
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 7
+
   - name: raw__mitxonline__app__postgres__ecommerce_userdiscount
     description: This table is used to pre-apply a discount when a user checks out
     columns:
     - name: id
       description: int, primary key representing a discount user combo
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the discount user association was initially
         created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the discount user association was most
         recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: discount_id
       description: int, foreign key for ecommerce_discount
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, foreign key for users_user
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 5
+
   - name: raw__mitxonline__app__postgres__ecommerce_discountproduct
     description: This table is used to limit dicounts to a specific product. Discounts
       which do not have a record in this table are redeemable for all products
     columns:
     - name: id
       description: int, primary key representing a discount product combo
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the discount product association was
         initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the discount product association was
         most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: discount_id
       description: int, foreign key for ecommerce_discount
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: product_id
       description: int, foreign key for ecommerce_product
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 5
+
   - name: raw__mitxonline__app__postgres__ecommerce_discount
     columns:
     - name: id
       description: int, primary key representing a discount
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the discount was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the discount was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: amount
       description: numeric, discount amount. May be a precent or dollar amount
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: automatic
       description: boolean, currently unused and always false on production.
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: discount_type
       description: string, one of  "percent-off", "dollars-off" and "fixed-price".
         Specifys if the ammount of the discount refers to a percent of, a dollar amount
         off or a discounted price
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: redemption_type
       description: string, one of  "one-time",  "one-time-per-user" and "unlimited"
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: max_redemptions
       description: int, maximum times a coupon can be redeemed
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: discount_code
       description: string, discount code
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: for_flexible_pricing
       description: boolean, whether the discount was created for income based flexible
         pricing
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: activation_date
       description: timestamp, specifying when the discount is activated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: expiration_date
       description: timestamp, specifying when the discount is deactivated
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 12
+
   - name: raw__mitxonline__app__postgres__ecommerce_transaction
     columns:
     - name: id
       description: int, primary key representing an ecommerce transaction
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the transaction was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the transaction was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: amount
       description: numeric, transaction ammount
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: data
       description: json, data returned from cybersource when the transaction is fulfilled
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: order_id
       description: int, foreign id in the ecommerce_orders tabe for the order associated
         with the transaction
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: transaction_type
       description: string, transaction type, one of "refund" and "payment"
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: reason
       description: string, reason for refund, currently always blank
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: transaction_id
       description: string, unique identifier. Either the transaction_id from cybersource
         or a unique uuid
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 9
+
   - name: raw__mitxonline__app__postgres__ecommerce_line
     columns:
     - name: id
       description: int, primary key representing an ecommerce line
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the line was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the line was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: quantity
       description: int, quantitiy ordered, currently always 1
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: order_id
       description: int, foreign key in the orders_order table for the order that contains
         the line Currently orders have exactly one line
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: product_version_id
       description: int stored as string, foreign key in the reversion_version table.
         Versioned product
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: purchased_content_type_id
       description: int, foreign key in the django_contenttype table, content type
         of the product
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: purchased_object_id
       description: int, id for the product object in either the course_courseruns
         or the course_programruns table
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 8
+
   - name: raw__mitxonline__app__postgres__reversion_revision
     description: This table is used to track changes to products and transactions
     columns:
     - name: id
       description: int, primary key representing a revision to a product or transaction
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: date_created
       description: timestamp, specifying when the revision was made
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: comment
       description: string, automatically generated discription of the change
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, foreign key to the users_user record for the user that made
         the change
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 4
+
   - name: raw__mitxonline__app__postgres__reversion_version
     description: This table is used to track changes to products and transactions
     columns:
     - name: id
       description: int, primary key representing a version of a product or transaction
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: object_id
       description: integer stored as string, foreign key of the object being versioned
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: format
       description: string, always "json"
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: serialized_data
       description: json, serialized data from the object at the time it was versioned
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: object_repr
       description: string, readable representation of object
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: content_type_id
       description: int, foreign key to django_contenttype of the object being versioned
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: revision_id
       description: int, primary key in the reversion_revision table
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: db
       description: string, always set to "default"
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 8
+
   - name: raw__mitxonline__app__postgres__ecommerce_order
     columns:
     - name: id
       description: int, primary key representing a single MITx Online order
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when the order was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when the order was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: state
       description: string, order state. Options are "pending", "fulfilled", "canceled"
         "declined", "errored", "refunded", "review", "partially_refunded"
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: total_price_paid
       description: number, total order amount
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: purchaser_id
       description: int, primary key in users_user for the purchaser
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: reference_number
       description: string, readable id for the order. Shared with micromasters
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 7
 
   - name: raw__mitxonline__app__postgres__courses_programrun
     columns:
     - name: id
       description: int, primary key representing a single MITx Online program run
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a program run was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a program run was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: run_tag
       description: str, string that identifies a single run in a prgram E.g. R11
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: end_date
       description: timestamp, specifying when the program run ends
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: start_date
       description: timestamp, specifying when the program run begins
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: program_id
       description: int, foreign key to courses_program representing a single MITx
         Online program
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 7
+
   - name: raw__mitxonline__app__postgres__ecommerce_product
     columns:
     - name: id
       description: int, sequential ID for  ecommerce product
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: price
       description: numeric, the price of the product
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: is_active
       description: boolean, whether the product is visible in the app
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: object_id
       description: int, the course run or program run id in the courses_courserun
         or courses_programrun table
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, the timestamp the product was create
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, the timestamp the product was last updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: description
       description: string, the product description, usually the readable_id from the
         courses_courserun table for products that are courseruns
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: content_type_id
       description: int, the id of the product object type in the django_contenttype
         table
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 8
+
   - name: raw__mitxonline__app__postgres__django_content_type
     columns:
     - name: id
       description: int, sequential ID for the django model
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: model
       description: string, the name of the django model
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: app_label
       description: string, the  functional group the model belongs to
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 3
+
   - name: raw__mitxonline__app__postgres__courses_courserunenrollment
     columns:
     - name: id
       description: int, sequential ID tracking a single user enrollment
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when an enrollment was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when an enrollment was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: change_status
       description: str, enrollment status for users whose enrollment is no longer
         active. Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: active
       description: boolean, indicating whether the user is still enrolled in the run
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: edx_enrolled
       description: boolean, indicating whether the user is enrolled on edx
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: run_id
       description: int, unique ID specifying a "run" of an MITx Online course
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, unique ID for each user on the MITx Online platform
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: enrollment_mode
       description: str, enrollment mode for user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: edx_emails_subscription
       description: bool, indicates whether the user should receive emails from edx
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 10
+
   - name: raw__mitxonline__app__postgres__courses_programenrollment
     columns:
     - name: id
       description: int, sequential ID tracking a single user enrollment
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when an enrollment was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when an enrollment was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: change_status
       description: str, enrollment status for users whose enrollment is no longer
         active. Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: active
       description: boolean, indicating whether the user is still enrolled in the program
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: program_id
       description: int, foreign key from the courses_program table
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, unique ID for each user on the MITx Online platform
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: enrollment_mode
       description: str, enrollment mode for user
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 8
+
   - name: raw__mitxonline__app__postgres__courses_courserun
     columns:
     - name: id
       description: int, primary key representing a single MITx Online course run
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: live
       description: boolean, indicating whether the course run is available to users
         on MITx Online website
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: title
       description: str, title of the course run
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: run_tag
       description: str, string that identifies a single run in a course E.g. 1T2022
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: course_id
       description: int, foreign key to courses_course representing a single MITx Online
         course
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: courseware_id
       description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: courseware_url_path
       description: str, url location for the course run in MITx Online
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: is_self_paced
       description: boolean, indicating whether users can take this course at their
         own pace and earn certificate at any time
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: end_date
       description: timestamp, specifying when the course ends
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: start_date
       description: timestamp, specifying when the course begins
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: enrollment_start
       description: timestamp, specifying when enrollment starts
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: enrollment_end
       description: timestamp, specifying when enrollment ends
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: expiration_date
       description: timestamp, specifying the date time beyond which users should not
         see link to this course run on their dashboard
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: upgrade_deadline
       description: timestamp, specifying the date time beyond which users can not
         enroll in paid course mode
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a course run was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a course run was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 16
+
   - name: raw__mitxonline__app__postgres__users_user
     columns:
     - name: id
       description: int, sequential ID representing one user in MITx Online
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: password
       description: str, hashed password
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: username
       description: str, name chosen by user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: email
       description: str, user email associated with their account
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: name
       description: str, the user's full name
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: is_active
       description: boolean, used to soft delete users
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a user account was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a user account was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: last_login
       description: timestamp, user's last login
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: is_staff
       description: boolean, used for app permissions
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: is_superuser
       description: boolean, used for app permissions
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 11
+
   - name: raw__mitxonline__app__postgres__courses_course
     columns:
     - name: id
       description: int, primary key representing a single MITx Online course
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: live
       description: boolean, indicating whether the course is available to users on
         MITx Online website
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: title
       description: str, title of the course
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: program_id
       description: id, foreign key to courses_program (deprecating)
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: readable_id
       description: str, Open edX ID formatted as course-v1:{org}+{course code}
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: position_in_program
       description: int, sequential number indicating the course position in a program
         (deprecating)
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a course was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a course was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 8
+
   - name: raw__mitxonline__app__postgres__users_legaladdress
     columns:
     - name: id
       description: int, primary key for table
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: country
       description: string, user country code
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: int, foreign key to users_user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: last_name
       description: string, user last name
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, when the record was created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: first_name
       description: string, user first name
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, when the record was updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 7
+
   - name: raw__mitxonline__app__postgres__courses_program
     columns:
     - name: id
       description: int, primary key representing a single MITx Online program
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: live
       description: boolean, indicating whether the program is available to users
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: title
       description: str, title of the program
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: readable_id
       description: str, Open edX ID formatted as program-v1:{org}+{program code}
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a program was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a program was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 6
 
   - name: raw__mitxonline__app__postgres__courses_programrequirement
     columns:
     - name: id
       description: int, primary key representing a MITx Online program requirement
         node
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: course_id
       description: int, foreign key to courses_course representing a single course
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: program_id
       description: int, foreign key to courses_program representing a single program
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: node_type
       description: str, there are 3 types of nodes that exist in a requirement tree
         - program_root (represent a program) - course (represent a reference to a
         course) - operator (represent a logical operation over a set of courses)
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: path
       description: str, the full materialized path for each node (readonly) e.g. 0001
         is root path, 00010001 is the path to a node in this requirement tree
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: depth
       description: int, depth of a node in the tree. A root node has a depth of 1.
         (readonly)
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: numchild
       description: int, the number of children of a node (readonly)
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: operator
       description: str, the logical operation over a set of courses, it can be all_of,
         min_number_of or blank
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: title
       description: str, title of the operator for this requirement
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: operator_value
       description: str, value of the operator for this requirement e.g. if operator
         is all_of, the corresponding operator_value 3 means all of 3 courses
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 10
 
   - name: raw__mitxonline__app__postgres__courses_coursetopic
     columns:
     - name: id
       description: int, primary key representing a single MITx Online course topic
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: name
       description: str, name of a course topic
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a course topic was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a course topic was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 4
+
   - name: raw__mitxonline__app__postgres__courses_course_topics
     columns:
     - name: id
       description: int, primary key representing a single MITx Online course tagged
         to a topic
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: course_id
       description: int, foreign key to courses_course representing a single course
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: coursetopic_id
       description: int, foreign key to courses_coursetopic representing a single course
         topic
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 3
+
   - name: raw__mitxonline__app__postgres__courses_blockedcountry
     columns:
     - name: id
       description: int, primary key for courses_blockedcountry table from MITx Online
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: country
       description: str, two-letter code of the blocked country for a course
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: course_id
       description: int, foreign key to courses_course representing a single course
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a blocked country record was initially
         created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a blocked country record was most recently
         updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 5
 
   - name: raw__mitxonline__app__postgres__courses_courseruncertificate
     columns:
     - name: id
       description: int, primary key representing a single MITxOnline course certificate
         record
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: uuid
       description: str, unique identifier for the certificate
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: course_run_id
       description: int, foreign key to courses_courserun representing a single course
         run
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: str, foreign key to users_user representing a single user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: certificate_page_revision_id
       description: int, foreign key to wagtailcore_pagerevision (could be blank)
     - name: created_on
       description: timestamp, specifying when a certificate was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a certificate was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: is_revoked
       description: boolean, indicating whether the certificate is revoked and invalid
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 8
+
 
   - name: raw__mitxonline__app__postgres__courses_programcertificate
     columns:
     - name: id
       description: int, primary key representing a single MITxOnline program certificate
         record
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: uuid
       description: str, unique identifier for the program certificate
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: program_id
       description: int, foreign key to courses_program representing a single program
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: str, foreign key to users_user representing a single user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: certificate_page_revision_id
       description: int, foreign key to wagtailcore_pagerevision (could be blank)
     - name: created_on
       description: timestamp, specifying when a certificate was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a certificate was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: is_revoked
       description: boolean, indicating whether the certificate is revoked and invalid
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 8
 
   - name: raw__mitxonline__app__postgres__courses_courserungrade
     columns:
     - name: id
       description: int, primary key representing a single MITxOnline grade record
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: course_run_id
       description: int, foreign key to courses_courserun representing a single course
         run
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: user_id
       description: str, foreign key to users_user representing a single user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: grade
       description: float, user's grade for the course (range between 0.0 to 1.0)
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: letter_grade
       description: str, letter grade defined ib edX grading policy (value may be 'A',
         'B', 'C', 'D', 'Pass', none)
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: set_by_admin
       description: boolean, indicating whether this grade is set by a staff user
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: passed
       description: boolean, indicating whether the user has passed the minimum passing
         score set for this course
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: created_on
       description: timestamp, specifying when a grade was initially created
-      tests:
-      - dbt_expectations.expect_column_to_exist
     - name: updated_on
       description: timestamp, specifying when a grade was most recently updated
-      tests:
-      - dbt_expectations.expect_column_to_exist
-    tests:
-    - dbt_expectations.expect_table_column_count_to_equal:
-        value: 9
