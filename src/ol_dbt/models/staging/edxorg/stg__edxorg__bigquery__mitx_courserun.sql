@@ -17,11 +17,14 @@ with source as (
         , course_title as courserun_title
         , semester as courserun_semester
         , url as courserun_url
-        , institution as courserun_institution
         , instructors as courserun_instructors
         , registration_open as courserun_enrollment_start_date
         , course_launch as courserun_start_date
         , course_wrap as courserun_end_date
+        , case
+            when institution = 'MITx_PRO' then 'MITxPRO'
+            else institution
+        end as courserun_institution
         , replace(course_id, 'ESD.SCM1x', 'CTL.SC1x') as courserun_readable_id
         , coalesce(self_paced = 1, false) as courserun_is_self_paced
     from source
