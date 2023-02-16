@@ -217,9 +217,10 @@ sources:
       description: int, maximum times a coupon can be redeemed
     - name: discount_code
       description: string, discount code
-    - name: for_flexible_pricing
-      description: boolean, whether the discount was created for income based flexible
-        pricing
+    - name: payment_type
+      description: string, reason for the discount creation. Possible options are
+        "marketing", "sales", "financial-assistance", "customer-support", "staff",
+        "legacy"
     - name: activation_date
       description: timestamp, specifying when the discount is activated
     - name: expiration_date

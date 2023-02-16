@@ -316,11 +316,13 @@ models:
     description: string, discount code
     tests:
     - not_null
-  - name: discount_is_for_flexible_pricing
-    description: boolean, whether the discount was created for income based flexible
-      pricing
+  - name: discount_source
+    description: string, reason for the discount creation. Possible options are "marketing",
+      "sales", "financial-assistance", "customer-support", "staff", "legacy"
     tests:
-    - not_null
+    - accepted_values:
+        values: ["marketing", "sales", "financial-assistance", "customer-support",
+          "staff", "legacy"]
   - name: discount_activated_on
     description: timestamp, specifying when the discount is activated
   - name: discount_expires_on
@@ -592,7 +594,7 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
+      compare_model: ref('stg__mitxonline__app__postgres__courses_programenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id"]
 - name: int__mitxonline__courses
