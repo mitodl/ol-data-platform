@@ -36,7 +36,7 @@ with source as (
         , edx_name as user_edx_name
         , edx_goals as user_edx_goals
         , fake_user as user_profile_is_fake
-        , {{ cast_timestamp_to_iso8601('date_of_birth') }} as user_birth_date
+        , {{ cast_date_to_iso8601('date_of_birth') }} as user_birth_date
         , coalesce(romanized_first_name, first_name) as user_first_name
         , coalesce(romanized_last_name, last_name) as user_last_name
         , concat_ws(
