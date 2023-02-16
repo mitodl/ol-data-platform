@@ -15,7 +15,7 @@ with source as (
         , max_redemptions_per_user as couponpaymentversion_max_redemptions_per_user
         , payment_id as couponpayment_id
         , automatic as couponpaymentversion_is_automatic
-        , payment_type as couponpaymentversion_payment_type
+        , payment_type as couponpaymentversion_discount_source
         , payment_transaction as couponpaymentversion_payment_transaction
         , tag as couponpaymentversion_tag
         , discount_type as couponpaymentversion_discount_type

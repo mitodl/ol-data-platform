@@ -13,5 +13,5 @@ select
     , discount_expires_on
     , discount_max_redemptions
     , discount_redemption_type
-    , discount_is_for_flexible_pricing
+    , discount_source
 from discount

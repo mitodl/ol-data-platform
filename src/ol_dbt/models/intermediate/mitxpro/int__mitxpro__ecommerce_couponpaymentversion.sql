@@ -21,7 +21,7 @@ select
     , couponpaymentversion.couponpaymentversion_max_redemptions_per_user
     , couponpayment.couponpayment_name
     , couponpaymentversion.couponpaymentversion_is_automatic
-    , couponpaymentversion.couponpaymentversion_payment_type
+    , couponpaymentversion.couponpaymentversion_discount_source
     , couponpaymentversion.couponpaymentversion_payment_transaction
     , couponpaymentversion.couponpaymentversion_tag
     , couponpaymentversion.couponpaymentversion_discount_type

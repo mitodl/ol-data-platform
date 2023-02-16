@@ -370,11 +370,13 @@ models:
     description: string, discount code
     tests:
     - not_null
-  - name: discount_is_for_flexible_pricing
-    description: boolean, whether the discount was created for income based flexible
-      pricing
+  - name: discount_source
+    description: string, reason for the discount creation. Possible options are "marketing",
+      "sales", "financial-assistance", "customer-support", "staff", "legacy"
     tests:
-    - not_null
+    - accepted_values:
+        values: ["marketing", "sales", "financial-assistance", "customer-support",
+          "staff", "legacy"]
   - name: discount_activated_on
     description: timestamp, specifying when the discount is activated
   - name: discount_expires_on
