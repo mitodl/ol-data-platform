@@ -1,5 +1,6 @@
 with person_courses as (
     select * from {{ ref('stg__edxorg__bigquery__mitx_person_course') }}
+    where courserun_platform = '{{ var("edxorg") }}'
 )
 
 , runs as (

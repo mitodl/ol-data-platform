@@ -1,9 +1,10 @@
--- MITx Course Runs information for edx.org
+-- MITx Course Runs from edx.org
 ---It also adds a field micromaster_program_id so that we could use it to get program requirements from MicroMaster
 
 
 with runs as (
     select * from {{ ref('stg__edxorg__bigquery__mitx_courserun') }}
+    where courserun_platform = '{{ var("edxorg") }}'
 )
 
 --- MicroMasters's course_edx_key can either be {org}+{course_number} or course-v1:{org}+{course_number}, so it

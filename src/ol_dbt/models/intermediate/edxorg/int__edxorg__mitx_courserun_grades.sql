@@ -1,4 +1,4 @@
--- Course Run Grades information for edx.org
+-- Course Run Grades information from edx.org
 
 with grades as (
     select
@@ -8,6 +8,7 @@ with grades as (
         , courserungrade_user_grade
         , courserungrade_is_passing
     from {{ ref('stg__edxorg__bigquery__mitx_person_course') }}
+    where courserun_platform = '{{ var("edxorg") }}'
 )
 
 , runs as (

@@ -11,6 +11,13 @@ models:
     tests:
     - unique
     - not_null
+  - name: courserun_platform
+    description: str, indicating what platform the course is from, MITx Online/xPro
+      open edx or edx.org
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
   - name: courserun_title
     description: str, The title of the course run
     tests:
@@ -39,7 +46,8 @@ models:
 - name: stg__edxorg__bigquery__mitx_person_course
   columns:
   - name: user_id
-    description: int, Numerical user ID of a learner on the edX platform
+    description: int, Numerical user ID of a learner on a specific edX platform -
+      MITx Online/xPro open edx or edx.org
     tests:
     - not_null
   - name: courserun_readable_id
@@ -48,6 +56,13 @@ models:
       that use new format
     tests:
     - not_null
+  - name: courserun_platform
+    description: str, indicating what platform the data is from, MITx Online/xPro
+      open edx or edx.org
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
   - name: user_username
     description: str, username of a learner on the edX platform (some blank from source)
   - name: user_gender
@@ -165,9 +180,13 @@ models:
     in a course from IRx BigQuery.
   columns:
   - name: user_id
-    description: int, Numerical user ID of a learner on the edX platform
+    description: int, Numerical user ID of a learner on a specific edX platform -
+      MITx Online/xPro open edx or edx.org
     tests:
     - not_null
+  - name: courserun_platform
+    description: str, indicating what platform the data is from, MITx Online/xPro
+      open edx or edx.org. It could be null in this table
   - name: user_username
     description: str, The username of the learner on the edX platform
   - name: user_full_name
@@ -260,16 +279,37 @@ models:
     this table are the most recent data
   columns:
   - name: user_id
-    description: int, Numerical user ID of a learner on the edX platform
+    description: int, Numerical user ID of a learner on a specific edX platform -
+      MITx Online/xPro open edx or edx.org
+    tests:
+    - not_null
   - name: user_username
     description: str, The username of the user on the edX platform
+    tests:
+    - not_null
   - name: user_email
     description: str, The email address of the user on the edX platform
+    tests:
+    - not_null
   - name: user_full_name
     description: str, The full name of the user on the edX platform
+  - name: courserun_readable_id
+    description: str, The course ID formatted as {org}/{course}/{run}
+    tests:
+    - not_null
+  - name: courserun_platform
+    description: str, indicating what platform the data is from, MITx Online/xPro
+      open edx or edx.org
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
   - name: user_is_opted_in_for_email
     description: boolean, indicating if the learner has opted to receive marketing
       emails
   - name: user_email_opt_in_updated_on
     description: timestamp, specifying when email opt in preference was most recently
       updated
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id"]
