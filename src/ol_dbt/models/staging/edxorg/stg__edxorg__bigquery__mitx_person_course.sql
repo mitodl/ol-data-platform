@@ -12,6 +12,7 @@ with source as (
     select
         user_id
         , course_id as courserun_readable_id
+        , {{ translate_course_id_to_platform('course_id') }} as courserun_platform
 
         --- users
         , username as user_username

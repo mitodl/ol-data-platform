@@ -10,6 +10,7 @@ with source as (
 
     select
         user_id
+        , {{ translate_course_id_to_platform('enrollment_course_id') }} as courserun_platform
         , email as user_email
         , username as user_username
         , id_map_hash_id as user_map_hash_id

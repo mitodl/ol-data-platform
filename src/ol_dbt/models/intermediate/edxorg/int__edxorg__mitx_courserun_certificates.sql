@@ -3,13 +3,17 @@
 with person_courses as (
     select *
     from {{ ref('stg__edxorg__bigquery__mitx_person_course') }}
-    where courseruncertificate_is_earned = true
+    where
+        courserun_platform = '{{ var("edxorg") }}'
+        and courseruncertificate_is_earned = true
 )
 
 , user_info_combo as (
     select *
     from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
-    where courseruncertificate_id is not null
+    where
+        courserun_platform = '{{ var("edxorg") }}'
+        and courseruncertificate_id is not null
 )
 
 , certificates as (

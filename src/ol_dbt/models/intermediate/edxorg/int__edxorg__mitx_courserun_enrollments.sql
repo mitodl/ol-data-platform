@@ -1,4 +1,4 @@
--- Course Run Enrollment information for edx.org
+-- Course Run Enrollment information from edx.org
 
 with enrollments as (
     select
@@ -9,6 +9,7 @@ with enrollments as (
         , courserunenrollment_enrollment_mode
         , courserunenrollment_is_active
     from {{ ref('stg__edxorg__bigquery__mitx_person_course') }}
+    where courserun_platform = '{{ var("edxorg") }}'
 )
 
 , runs as (

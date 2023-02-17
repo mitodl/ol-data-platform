@@ -91,7 +91,8 @@ sources:
         number}/{semester}. Note that this is old format as IR converts any new format
         (course-v1:{org}+{course}+{run}) into old ones
     - name: user_id
-      description: int, Numerical user ID of a learner on the edX platform
+      description: int, Numerical user ID of a learner on a specific edX platform
+        - MITx Online/xPro open edx or edx.org
     - name: username
       description: str, username of a learner on the edX platform
     - name: registered
@@ -312,7 +313,8 @@ sources:
       is not always populated.
     columns:
     - name: user_id
-      description: int, Numerical user ID of a learner on the edX platform (not unique)
+      description: int, Numerical user ID of a learner on a specific edX platform
+        - MITx Online/xPro open edx or edx.org
     - name: username
       description: str, The username of the learner on the edX platform (not unique)
     - name: email
@@ -436,7 +438,8 @@ sources:
     - name: course_id
       description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
     - name: user_id
-      description: int, Numerical user ID of a learner on the edX platform
+      description: int, Numerical user ID of a learner on a specific edX platform
+        - MITx Online/xPro open edx or edx.org
     - name: username
       description: str, username of a learner on the edX platform
     - name: email
