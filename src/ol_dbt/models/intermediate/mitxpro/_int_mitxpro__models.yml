@@ -894,6 +894,12 @@ models:
     tests:
     - unique
     - not_null
+  - name: courserun_edx_readable_id
+    description: str, The edx course ID of the course run in the format as {org}/{course}/{run}.
+      it can be used to match courserun_readable_id in int__edxorg__mitx_courseruns
+    tests:
+    - unique
+    - not_null
   - name: courserun_url
     description: str, url location for the course run on MITxPro website
   - name: courserun_start_on
