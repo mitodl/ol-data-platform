@@ -14,6 +14,7 @@ with source as (
         , courseware_url_path as courserun_url
         , run_tag as courserun_tag
         , is_self_paced as courserun_is_self_paced
+        , replace(replace(courseware_id, 'course-v1:', ''), '+', '/') as courserun_edx_readable_id
         , {{ cast_timestamp_to_iso8601('start_date') }} as courserun_start_on
         , {{ cast_timestamp_to_iso8601('end_date') }} as courserun_end_on
         , {{ cast_timestamp_to_iso8601('enrollment_start') }} as courserun_enrollment_start_on

@@ -670,6 +670,12 @@ models:
     tests:
     - unique
     - not_null
+  - name: courserun_edx_readable_id
+    description: str, The edx course ID of the course run in the format as {org}/{course}/{run}.
+      it can be used to match courserun_readable_id in int__edxorg__mitx_courseruns
+    tests:
+    - unique
+    - not_null
   - name: courserun_tag
     description: str, string that identifies a single run in a course E.g. 1T2022
     tests:

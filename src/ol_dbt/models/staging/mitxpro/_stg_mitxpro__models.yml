@@ -1042,6 +1042,11 @@ models:
     tests:
     - unique
     - not_null
+  - name: course_edx_readable_id
+    description: str, The edx course ID of the course in the format as {org}/{course}
+    tests:
+    - unique
+    - not_null
   - name: position_in_program
     description: int, sequential number indicating the course display order in a program
       on MITxPro website
@@ -1076,6 +1081,12 @@ models:
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
       e.g. course-v1:xPRO+MLx1+R0
+    tests:
+    - unique
+    - not_null
+  - name: courserun_edx_readable_id
+    description: str, The edx course ID of the course run in the format as {org}/{course}/{run}.
+      it can be used to match courserun_readable_id in stg__edxorg__bigquery__mitx_courserun
     tests:
     - unique
     - not_null

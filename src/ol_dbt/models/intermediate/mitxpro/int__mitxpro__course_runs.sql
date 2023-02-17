@@ -9,6 +9,7 @@ select
     , course_id
     , courserun_title
     , courserun_readable_id
+    , courserun_edx_readable_id
     , courserun_tag
     , courserun_url
     , courserun_start_on

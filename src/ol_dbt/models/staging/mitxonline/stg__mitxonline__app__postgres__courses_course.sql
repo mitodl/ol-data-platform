@@ -10,6 +10,7 @@ with source as (
         , live as course_is_live
         , title as course_title
         , readable_id as course_readable_id
+        , replace(replace(readable_id, 'course-v1:', ''), '+', '/') as course_edx_readable_id
         , {{ cast_timestamp_to_iso8601('created_on') }} as course_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as course_updated_on
     from source
