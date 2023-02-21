@@ -26,14 +26,14 @@ test = ["PyICU (>=2.4.2)", "coverage (>=3.7.1)", "cssselect (>=0.9.1)", "lxml (>
 
 [[package]]
 name = "alembic"
-version = "1.9.3"
+version = "1.9.4"
 description = "A database migration tool for SQLAlchemy."
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "alembic-1.9.3-py3-none-any.whl", hash = "sha256:ed2f73ea9c986f43af8ad7502c5f60d6bb1400bcd6d29f230e760e08884cb476"},
-    {file = "alembic-1.9.3.tar.gz", hash = "sha256:8fd6aaea56f5a703a190d25a705dfa91d7c313bb71de2f9c68f5abdcaf5df164"},
+    {file = "alembic-1.9.4-py3-none-any.whl", hash = "sha256:6f1c2207369bf4f49f952057a33bb017fbe5c148c2a773b46906b806ea6e825f"},
+    {file = "alembic-1.9.4.tar.gz", hash = "sha256:4d3bd32ecdbb7bbfb48a9fe9e6d6fd6a831a1b59d03e26e292210237373e7db5"},
 ]
 
 [package.dependencies]
@@ -354,18 +354,18 @@ css = ["tinycss2 (>=1.1.0,<1.2)"]
 
 [[package]]
 name = "boto3"
-version = "1.26.72"
+version = "1.26.74"
 description = "The AWS SDK for Python"
 category = "main"
 optional = false
 python-versions = ">= 3.7"
 files = [
-    {file = "boto3-1.26.72-py3-none-any.whl", hash = "sha256:990997248716f12b296d7d30b3119a93347d73b7a4831c015e53aaebbd074a77"},
-    {file = "boto3-1.26.72.tar.gz", hash = "sha256:5d6e19d148c4a9d5d85f0d96570d11264f23db610f1e3c9a8b7e8b6898424691"},
+    {file = "boto3-1.26.74-py3-none-any.whl", hash = "sha256:57f1696cbf5927180521ddabc37f10eb6650ccedc2b784dfb04502193bb65df9"},
+    {file = "boto3-1.26.74.tar.gz", hash = "sha256:a3cf126d18194e5d350ec46f99f1fff15beacdf091d1979e8471681688e14ba1"},
 ]
 
 [package.dependencies]
-botocore = ">=1.29.72,<1.30.0"
+botocore = ">=1.29.74,<1.30.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.6.0,<0.7.0"
 
@@ -374,14 +374,14 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.29.72"
+version = "1.29.74"
 description = "Low-level, data-driven core of boto 3."
 category = "main"
 optional = false
 python-versions = ">= 3.7"
 files = [
-    {file = "botocore-1.29.72-py3-none-any.whl", hash = "sha256:77fff109e1bdbf030d8400ccab9d28454c03c7be62c1696a239b21792b0873df"},
-    {file = "botocore-1.29.72.tar.gz", hash = "sha256:8710f53af0e20f08f36a3bf434d18bc7ceba5d9835495b02aedbedd35df5de9a"},
+    {file = "botocore-1.29.74-py3-none-any.whl", hash = "sha256:cb1e1a584c0bea3b1bcf39710eb7b2e58add56945598d95356bf9f6d4cc8b6ae"},
+    {file = "botocore-1.29.74.tar.gz", hash = "sha256:bf1515908c8ffdffa249e112fd9bbb54d919ce8fb5ee88baf9c198dda6172fd5"},
 ]
 
 [package.dependencies]
@@ -756,20 +756,20 @@ tox = ["tox"]
 
 [[package]]
 name = "dagit"
-version = "1.1.18"
+version = "1.1.19"
 description = "Web UI for dagster."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagit-1.1.18-py3-none-any.whl", hash = "sha256:bbbc540408013d08188caa92ca879e5f79d8f48acde2345d493c859b045b0ac3"},
-    {file = "dagit-1.1.18.tar.gz", hash = "sha256:a7e132dd3366434f148de91f9833e8cb8310560b2adc32b522c1906d3da472b6"},
+    {file = "dagit-1.1.19-py3-none-any.whl", hash = "sha256:8a1fef3b20c06da010eab47011e3deed83f3b9d98000708aaa3d075b3397a0b5"},
+    {file = "dagit-1.1.19.tar.gz", hash = "sha256:1c20a2227b56e245c64b228c96b096e037e53eb0b13e7916d5d5eaa2bec2fbce"},
 ]
 
 [package.dependencies]
 click = ">=7.0,<9.0"
-dagster = "1.1.18"
-dagster-graphql = "1.1.18"
+dagster = "1.1.19"
+dagster-graphql = "1.1.19"
 starlette = "*"
 uvicorn = {version = "*", extras = ["standard"]}
 
@@ -779,14 +779,14 @@ test = ["starlette[full]"]
 
 [[package]]
 name = "dagster"
-version = "1.1.18"
+version = "1.1.19"
 description = "The data orchestration platform built for productivity."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-1.1.18-py3-none-any.whl", hash = "sha256:d904fd62d8bec55256b5f800e10ee19474920973a621244271b09e4777c7457b"},
-    {file = "dagster-1.1.18.tar.gz", hash = "sha256:68e24f06be4fab583f9ec4498c27c503ede8e61a258dda76dbcec74ff2b3e7e0"},
+    {file = "dagster-1.1.19-py3-none-any.whl", hash = "sha256:5166ebb478e301366537aff7c7e56dc71ceb12ed100c336186cff4cfbb622090"},
+    {file = "dagster-1.1.19.tar.gz", hash = "sha256:bfce26bd885053ba3995543df07ec39aa5ddab7a7a6ab601ddc861aad01cacc1"},
 ]
 
 [package.dependencies]
@@ -822,46 +822,45 @@ watchdog = ">=0.8.3"
 [package.extras]
 black = ["black[jupyter] (==22.12.0)"]
 docker = ["docker"]
-mypy = ["mypy (==0.991)"]
-pyright = ["pandas-stubs", "pyright (==1.1.292)", "types-PyYAML", "types-backports", "types-certifi", "types-chardet", "types-croniter", "types-cryptography", "types-mock", "types-paramiko", "types-pkg-resources", "types-pyOpenSSL", "types-python-dateutil", "types-pytz", "types-requests", "types-simplejson", "types-six", "types-sqlalchemy", "types-tabulate", "types-toml", "types-tzlocal"]
+pyright = ["pandas-stubs", "pyright (==1.1.293)", "types-PyYAML", "types-backports", "types-certifi", "types-chardet", "types-croniter", "types-cryptography", "types-mock", "types-paramiko", "types-pkg-resources", "types-pyOpenSSL", "types-python-dateutil", "types-pytz", "types-requests", "types-simplejson", "types-six", "types-sqlalchemy", "types-tabulate", "types-toml", "types-tzlocal"]
 ruff = ["ruff (==0.0.241)"]
 test = ["buildkite-test-collector", "docker", "grpcio-tools (>=1.32.0,<1.44.0)", "mock (==3.0.5)", "objgraph", "pytest (==7.0.1)", "pytest-cov (==2.10.1)", "pytest-dependency (==0.5.1)", "pytest-mock (==3.3.1)", "pytest-rerunfailures (==10.0)", "pytest-runner (==5.2)", "pytest-xdist (==2.1.0)", "responses", "snapshottest (==0.6.0)", "tox (==3.25.0)", "yamllint"]
 
 [[package]]
 name = "dagster-airbyte"
-version = "0.17.18"
+version = "0.17.19"
 description = "Package for integrating Airbyte with Dagster."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-airbyte-0.17.18.tar.gz", hash = "sha256:f2ecec10843e0da4ec22a88c98dc478687fb22cd831ce9c892cd383cb5bd5ef6"},
-    {file = "dagster_airbyte-0.17.18-py3-none-any.whl", hash = "sha256:13366ce6e2f5ac08dd5f966f63ad037273b86310524cac991da42ba38b5b3dcc"},
+    {file = "dagster-airbyte-0.17.19.tar.gz", hash = "sha256:9fe1bed8ea00e76476d1e778a35ead6d267f483be0cc4ff2cb361cb23f049407"},
+    {file = "dagster_airbyte-0.17.19-py3-none-any.whl", hash = "sha256:11024d666dfcf7993d01a8b97b0a23dbd92d2086ce359f964f627d0215b872be"},
 ]
 
 [package.dependencies]
-dagster = "1.1.18"
+dagster = "1.1.19"
 requests = "*"
 
 [package.extras]
-managed = ["dagster-managed-elements (==0.17.18)"]
+managed = ["dagster-managed-elements (==0.17.19)"]
 test = ["requests-mock"]
 
 [[package]]
 name = "dagster-aws"
-version = "0.17.18"
+version = "0.17.19"
 description = "Package for AWS-specific Dagster framework solid and resource components."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-aws-0.17.18.tar.gz", hash = "sha256:4767642579f786f765024cd7827774e34e942324a73ee3769cb4a34a6879dc84"},
-    {file = "dagster_aws-0.17.18-py3-none-any.whl", hash = "sha256:56a430ee8e37467297a43d934241c34d111128226fb15712ee9c3601cbbf9dfd"},
+    {file = "dagster-aws-0.17.19.tar.gz", hash = "sha256:1f62d8af53efc621bd1789f781f64d1916e2dc295cb5e167b3b906e5cc5bdcff"},
+    {file = "dagster_aws-0.17.19-py3-none-any.whl", hash = "sha256:307b6797309600334e4f8d790eb03eda3ce766f43d56cc1743199e2063f9bb16"},
 ]
 
 [package.dependencies]
 boto3 = "*"
-dagster = "1.1.18"
+dagster = "1.1.19"
 packaging = "*"
 requests = "*"
 
@@ -872,18 +871,18 @@ test = ["moto (>=2.2.8)", "requests-mock", "xmltodict (==0.12.0)"]
 
 [[package]]
 name = "dagster-dbt"
-version = "0.17.18"
+version = "0.17.19"
 description = "A Dagster integration for dbt"
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-dbt-0.17.18.tar.gz", hash = "sha256:9c82b3b04ebff90e4e2173594011ed86bba1fef97723f1f6dfb811f4c0b35c0d"},
-    {file = "dagster_dbt-0.17.18-py3-none-any.whl", hash = "sha256:19885d61e0b42cf59c50f8d33467796fabb3c0b39419dbedcd007285366fddbd"},
+    {file = "dagster-dbt-0.17.19.tar.gz", hash = "sha256:5ea62276d778e6c2fc3fdcb95eb96e780ed2121ec8f678a17b8753c816439715"},
+    {file = "dagster_dbt-0.17.19-py3-none-any.whl", hash = "sha256:1ef62848f2318f1f65ffc33878c502a3e02bf8a5d555b0fe739243553ad47368"},
 ]
 
 [package.dependencies]
-dagster = "1.1.18"
+dagster = "1.1.19"
 dbt-core = "*"
 requests = "*"
 typer = {version = "*", extras = ["all"]}
@@ -893,36 +892,36 @@ test = ["Jinja2", "dbt-postgres", "dbt-rpc (<0.3.0)"]
 
 [[package]]
 name = "dagster-docker"
-version = "0.17.18"
+version = "0.17.19"
 description = "A Dagster integration for docker"
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-docker-0.17.18.tar.gz", hash = "sha256:d262587a871309609122346f7a99a1dc971f237e53fb2238265dceb16bde932c"},
-    {file = "dagster_docker-0.17.18-py3-none-any.whl", hash = "sha256:78efd35816f4d67099eefad6eeff37364da34cfbb269523aab97e2bd8507d0ba"},
+    {file = "dagster-docker-0.17.19.tar.gz", hash = "sha256:b2c1a581520429db6ac130a9b7aac4878505cd21eff96034889d14908c49aa46"},
+    {file = "dagster_docker-0.17.19-py3-none-any.whl", hash = "sha256:f2816b8b0a5bfc49b1746edb7628a69273b62ede29a525e2aba7c988a7ca29cc"},
 ]
 
 [package.dependencies]
-dagster = "1.1.18"
+dagster = "1.1.19"
 docker = "*"
 docker-image-py = "*"
 
 [[package]]
 name = "dagster-gcp"
-version = "0.17.18"
+version = "0.17.19"
 description = "Package for GCP-specific Dagster framework op and resource components."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-gcp-0.17.18.tar.gz", hash = "sha256:97a7ce36987af4a11e8ec8c6741d96951b94731be366ec1f36d2b5738e2eb156"},
-    {file = "dagster_gcp-0.17.18-py3-none-any.whl", hash = "sha256:09466f8ef3dba1f6f3b5265bfd53b81e8441f0d54174a37c25c12a34fc3ae380"},
+    {file = "dagster-gcp-0.17.19.tar.gz", hash = "sha256:319544e19b6d2e53d50e979544e955932b6a33a2d20b43496e0eee3f89d7f99e"},
+    {file = "dagster_gcp-0.17.19-py3-none-any.whl", hash = "sha256:65ef217d66b107fb2afab17b5cfdc954fecc712569755119344d8070b692cadd"},
 ]
 
 [package.dependencies]
-dagster = "1.1.18"
-dagster-pandas = "0.17.18"
+dagster = "1.1.19"
+dagster-pandas = "0.17.19"
 db-dtypes = "*"
 google-api-python-client = "*"
 google-cloud-bigquery = "*"
@@ -934,36 +933,36 @@ pyarrow = ["pyarrow"]
 
 [[package]]
 name = "dagster-ge"
-version = "0.17.18"
+version = "0.17.19"
 description = "Package for GE-specific Dagster framework op and resource components."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-ge-0.17.18.tar.gz", hash = "sha256:f37e24948b071229c956071e76349c0fa3918aeaaf0527d30c1430f389b21d56"},
-    {file = "dagster_ge-0.17.18-py3-none-any.whl", hash = "sha256:039e63b1c4874396ad2fe7c245adbd5f737208530cd4deaee436243f1bb4a86d"},
+    {file = "dagster-ge-0.17.19.tar.gz", hash = "sha256:8304c33a1e783db09a58a6e6cca3ae7a47ea8e87962eb9ae81224060cca528cc"},
+    {file = "dagster_ge-0.17.19-py3-none-any.whl", hash = "sha256:c0ea1b4711378e2f9772cfc09f747dc8db9d6742031940549d26f2c63e82b9c2"},
 ]
 
 [package.dependencies]
-dagster = "1.1.18"
-dagster-pandas = "0.17.18"
+dagster = "1.1.19"
+dagster-pandas = "0.17.19"
 great-expectations = ">=0.11.9,<0.12.8 || >0.12.8,<0.13.17 || >0.13.17,<0.13.27 || >0.13.27"
 pandas = "*"
 
 [[package]]
 name = "dagster-graphql"
-version = "1.1.18"
+version = "1.1.19"
 description = "The GraphQL frontend to python dagster."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-graphql-1.1.18.tar.gz", hash = "sha256:0bb461ad1a9ded545b59fda6dc8bb7f72fb392e2bc8d642787084cdba17ef8f8"},
-    {file = "dagster_graphql-1.1.18-py3-none-any.whl", hash = "sha256:d21b8d1d4532e3deb1f2dc92870a680b2321c408f95998ce448fcf1b3d92c3ab"},
+    {file = "dagster-graphql-1.1.19.tar.gz", hash = "sha256:9fae6c76bda61c4b16733b4e0b614de67162a884aacc7a2d185c90c71ae6f10f"},
+    {file = "dagster_graphql-1.1.19-py3-none-any.whl", hash = "sha256:46d9046d89b4cc7c2d3143c16e00d7f16bd3f09dbf53d9c9f7cbfcd4a7a7416b"},
 ]
 
 [package.dependencies]
-dagster = "1.1.18"
+dagster = "1.1.19"
 gql = {version = ">=3.0.0", extras = ["requests"]}
 graphene = ">=3"
 requests = "*"
@@ -971,50 +970,50 @@ starlette = "*"
 
 [[package]]
 name = "dagster-pandas"
-version = "0.17.18"
+version = "0.17.19"
 description = "Utilities and examples for working with pandas and dagster, an opinionated framework for expressing data pipelines"
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-pandas-0.17.18.tar.gz", hash = "sha256:dfda926789446088322e331c956cedd2ffb593ac8c1ece7738c8393325cab827"},
-    {file = "dagster_pandas-0.17.18-py3-none-any.whl", hash = "sha256:efa3267c5d75ad680ae95a22462c7953085221a66839ba2a6bd653d61779cf8d"},
+    {file = "dagster-pandas-0.17.19.tar.gz", hash = "sha256:bcd484b4379f092177e019b3a1e75d01f0d16eb85ba109afc42fe474356c201b"},
+    {file = "dagster_pandas-0.17.19-py3-none-any.whl", hash = "sha256:7d2810b8c0eaa522b63c237607fdf7e0e385278cc9bd4774178f4e7abe53a8e8"},
 ]
 
 [package.dependencies]
-dagster = "1.1.18"
+dagster = "1.1.19"
 pandas = "*"
 
 [[package]]
 name = "dagster-postgres"
-version = "0.17.18"
+version = "0.17.19"
 description = "A Dagster integration for postgres"
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-postgres-0.17.18.tar.gz", hash = "sha256:75235b0a5aa4ccf214345aacb9fa6ee02b898e98e97b416f7326ffbdf4917750"},
-    {file = "dagster_postgres-0.17.18-py3-none-any.whl", hash = "sha256:39da9483adfa9f9861dd168603cec27c0ba7e4c1ce70add22b5c6537012085e4"},
+    {file = "dagster-postgres-0.17.19.tar.gz", hash = "sha256:e239f1339c399ac5795e586ba718bd6be064f30470494e556d7b586a568bacce"},
+    {file = "dagster_postgres-0.17.19-py3-none-any.whl", hash = "sha256:25742002922dd5830ffca743950fedebdb09596e41af63f275b6bfcdd892b6c9"},
 ]
 
 [package.dependencies]
-dagster = "1.1.18"
+dagster = "1.1.19"
 psycopg2-binary = "*"
 
 [[package]]
 name = "dagster-shell"
-version = "0.17.18"
+version = "0.17.19"
 description = "Package for Dagster shell ops."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-shell-0.17.18.tar.gz", hash = "sha256:dfe82711a88d9fe19cc09e6497feec01881015a2f3003e16c8b80d8da981452e"},
-    {file = "dagster_shell-0.17.18-py3-none-any.whl", hash = "sha256:347b318ed4215ac306ace2fa796975de1a08a8c35774c91fdbd83eaa5717b6f7"},
+    {file = "dagster-shell-0.17.19.tar.gz", hash = "sha256:93d9d3cb72124ce935fded1ea780a9d74ff3b63b53ede6c1aa29926ecaf8d150"},
+    {file = "dagster_shell-0.17.19-py3-none-any.whl", hash = "sha256:2851f3a9c9e154eb71b6550bcf955175a8236917971a98ffbf8358bbddc4b2ce"},
 ]
 
 [package.dependencies]
-dagster = "1.1.18"
+dagster = "1.1.19"
 
 [package.extras]
 test = ["psutil"]
@@ -1434,14 +1433,14 @@ uritemplate = ">=3.0.1,<5"
 
 [[package]]
 name = "google-auth"
-version = "2.16.0"
+version = "2.16.1"
 description = "Google Authentication Library"
 category = "main"
 optional = false
 python-versions = ">=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*"
 files = [
-    {file = "google-auth-2.16.0.tar.gz", hash = "sha256:ed7057a101af1146f0554a769930ac9de506aeca4fd5af6543ebe791851a9fbd"},
-    {file = "google_auth-2.16.0-py2.py3-none-any.whl", hash = "sha256:5045648c821fb72384cdc0e82cc326df195f113a33049d9b62b74589243d2acc"},
+    {file = "google-auth-2.16.1.tar.gz", hash = "sha256:5fd170986bce6bfd7bb5c845c4b8362edb1e0cba901e062196e83f8bb5d5d32c"},
+    {file = "google_auth-2.16.1-py2.py3-none-any.whl", hash = "sha256:75d76ea857df65938e1f71dcbcd7d0cd48e3f80b34b8870ba229c9292081f7ef"},
 ]
 
 [package.dependencies]
@@ -1746,14 +1745,14 @@ graphql-core = ">=3.2,<3.3"
 
 [[package]]
 name = "great-expectations"
-version = "0.15.48"
+version = "0.15.49"
 description = "Always know what to expect from your data."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "great_expectations-0.15.48-py3-none-any.whl", hash = "sha256:67a8a00ad1b18f3204866a0a836100f00164c0ccfafa08b355b614a64060e264"},
-    {file = "great_expectations-0.15.48.tar.gz", hash = "sha256:d14245b707870519587778e53a7b450e837138c1713c406077bede40074f52bb"},
+    {file = "great_expectations-0.15.49-py3-none-any.whl", hash = "sha256:0fcdc81a9488e3f7a9bc9e219dcfa0fc0bd20f5f0398dfde47d2f26d269744e3"},
+    {file = "great_expectations-0.15.49.tar.gz", hash = "sha256:66445c4e83e8863ec7b31aa906bd7b33e3c20e80ec76e6a57ef90d419e0fa3b4"},
 ]
 
 [package.dependencies]
@@ -1781,7 +1780,7 @@ pandas = [
     {version = ">=1.1.3", markers = "python_version == \"3.9\""},
     {version = ">=1.3.0", markers = "python_version >= \"3.10\""},
 ]
-pydantic = ">=1.0,<2.0"
+pydantic = ">=1.10.4,<2.0"
 pyparsing = ">=2.4"
 python-dateutil = ">=2.8.1"
 pytz = ">=2021.3"
@@ -1800,7 +1799,7 @@ aws-secrets = ["boto3 (==1.17.106)"]
 azure = ["azure-identity (>=1.10.0)", "azure-keyvault-secrets (>=4.0.0)", "azure-storage-blob (>=12.5.0)"]
 azure-secrets = ["azure-identity (>=1.10.0)", "azure-keyvault-secrets (>=4.0.0)", "azure-storage-blob (>=12.5.0)"]
 bigquery = ["gcsfs (>=0.5.1)", "google-cloud-bigquery (>=3.3.6)", "google-cloud-secret-manager (>=1.0.0)", "google-cloud-storage (>=1.28.0)", "sqlalchemy (>=1.3.18,<2.0.0)", "sqlalchemy-bigquery (>=1.3.0)"]
-dev = ["PyHive (>=0.6.5)", "PyMySQL (>=0.9.3,<0.10)", "azure-identity (>=1.10.0)", "azure-keyvault-secrets (>=4.0.0)", "azure-storage-blob (>=12.5.0)", "black (==22.3.0)", "boto3 (==1.17.106)", "docstring-parser (==0.15)", "feather-format (>=0.4.1)", "flask (>=1.0.0)", "freezegun (>=0.3.15)", "gcsfs (>=0.5.1)", "google-cloud-bigquery (>=3.3.6)", "google-cloud-secret-manager (>=1.0.0)", "google-cloud-storage (>=1.28.0)", "invoke (>=2.0.0)", "ipykernel (<=6.17.1)", "mock-alchemy (>=0.2.5)", "moto (>=2.0.0,<3.0.0)", "mypy (==0.991)", "nbconvert (>=5)", "openpyxl (>=3.0.7)", "pre-commit (>=2.21.0)", "psycopg2-binary (>=2.7.6)", "pyarrow", "pyathena (>=1.11)", "pyfakefs (>=4.5.1)", "pyodbc (>=4.0.30)", "pypd (==1.1.0)", "pyspark (>=2.3.2)", "pytest (>=5.3.5)", "pytest-benchmark (>=3.4.1)", "pytest-cov (>=2.8.1)", "pytest-icdiff (>=0.6)", "pytest-mock (>=3.8.2)", "pytest-order (>=0.9.5)", "pytest-random-order (>=1.0.4)", "pytest-timeout (>=2.1.0)", "requirements-parser (>=0.2.0)", "ruff (==0.0.241)", "s3fs (>=0.5.1)", "snapshottest (==0.6.0)", "snowflake-connector-python (>=2.5.0)", "snowflake-sqlalchemy (>=1.2.3)", "sqlalchemy (>=1.3.18,<2.0.0)", "sqlalchemy-bigquery (>=1.3.0)", "sqlalchemy-dremio (==1.2.1)", "sqlalchemy-redshift (>=0.8.8)", "sqlalchemy-vertica-python (>=0.5.10)", "teradatasqlalchemy (==17.0.0.1)", "thrift (>=0.16.0)", "thrift-sasl (>=0.4.3)", "trino (>=0.310.0,!=0.316.0)", "xlrd (>=1.1.0,<2.0.0)"]
+dev = ["PyHive (>=0.6.5)", "PyMySQL (>=0.9.3,<0.10)", "azure-identity (>=1.10.0)", "azure-keyvault-secrets (>=4.0.0)", "azure-storage-blob (>=12.5.0)", "black[jupyter] (==22.3.0)", "boto3 (==1.17.106)", "docstring-parser (==0.15)", "feather-format (>=0.4.1)", "flask (>=1.0.0)", "freezegun (>=0.3.15)", "gcsfs (>=0.5.1)", "google-cloud-bigquery (>=3.3.6)", "google-cloud-secret-manager (>=1.0.0)", "google-cloud-storage (>=1.28.0)", "invoke (>=2.0.0)", "ipykernel (<=6.17.1)", "mock-alchemy (>=0.2.5)", "moto (>=2.0.0,<3.0.0)", "mypy (==1.0.0)", "nbconvert (>=5)", "openpyxl (>=3.0.7)", "pre-commit (>=2.21.0)", "psycopg2-binary (>=2.7.6)", "pyarrow", "pyathena (>=1.11)", "pyfakefs (>=4.5.1)", "pyodbc (>=4.0.30)", "pypd (==1.1.0)", "pyspark (>=2.3.2)", "pytest (>=6.2.0)", "pytest-benchmark (>=3.4.1)", "pytest-cov (>=2.8.1)", "pytest-icdiff (>=0.6)", "pytest-mock (>=3.8.2)", "pytest-order (>=0.9.5)", "pytest-random-order (>=1.0.4)", "pytest-timeout (>=2.1.0)", "requirements-parser (>=0.2.0)", "ruff (==0.0.246)", "s3fs (>=0.5.1)", "snapshottest (==0.6.0)", "snowflake-connector-python (>=2.5.0)", "snowflake-sqlalchemy (>=1.2.3)", "sqlalchemy (>=1.3.18,<2.0.0)", "sqlalchemy-bigquery (>=1.3.0)", "sqlalchemy-dremio (==1.2.1)", "sqlalchemy-redshift (>=0.8.8)", "sqlalchemy-vertica-python (>=0.5.10)", "teradatasqlalchemy (==17.0.0.1)", "thrift (>=0.16.0)", "thrift-sasl (>=0.4.3)", "trino (>=0.310.0,!=0.316.0)", "xlrd (>=1.1.0,<2.0.0)"]
 dremio = ["pyarrow", "pyodbc (>=4.0.30)", "sqlalchemy (>=1.3.18,<2.0.0)", "sqlalchemy-dremio (==1.2.1)"]
 excel = ["openpyxl (>=3.0.7)", "xlrd (>=1.1.0,<2.0.0)"]
 gcp = ["gcsfs (>=0.5.1)", "google-cloud-bigquery (>=3.3.6)", "google-cloud-secret-manager (>=1.0.0)", "google-cloud-storage (>=1.28.0)", "sqlalchemy (>=1.3.18,<2.0.0)", "sqlalchemy-bigquery (>=1.3.0)"]
@@ -1815,7 +1814,7 @@ snowflake = ["snowflake-connector-python (>=2.5.0)", "snowflake-sqlalchemy (>=1.
 spark = ["pyspark (>=2.3.2)"]
 sqlalchemy = ["sqlalchemy (>=1.3.18,<2.0.0)"]
 teradata = ["sqlalchemy (>=1.3.18,<2.0.0)", "teradatasqlalchemy (==17.0.0.1)"]
-test = ["black (==22.3.0)", "boto3 (==1.17.106)", "docstring-parser (==0.15)", "flask (>=1.0.0)", "freezegun (>=0.3.15)", "invoke (>=2.0.0)", "ipykernel (<=6.17.1)", "mock-alchemy (>=0.2.5)", "moto (>=2.0.0,<3.0.0)", "mypy (==0.991)", "nbconvert (>=5)", "pre-commit (>=2.21.0)", "pyfakefs (>=4.5.1)", "pytest (>=5.3.5)", "pytest-benchmark (>=3.4.1)", "pytest-cov (>=2.8.1)", "pytest-icdiff (>=0.6)", "pytest-mock (>=3.8.2)", "pytest-order (>=0.9.5)", "pytest-random-order (>=1.0.4)", "pytest-timeout (>=2.1.0)", "requirements-parser (>=0.2.0)", "ruff (==0.0.241)", "s3fs (>=0.5.1)", "snapshottest (==0.6.0)", "sqlalchemy (>=1.3.18,<2.0.0)"]
+test = ["black[jupyter] (==22.3.0)", "boto3 (==1.17.106)", "docstring-parser (==0.15)", "flask (>=1.0.0)", "freezegun (>=0.3.15)", "invoke (>=2.0.0)", "ipykernel (<=6.17.1)", "mock-alchemy (>=0.2.5)", "moto (>=2.0.0,<3.0.0)", "mypy (==1.0.0)", "nbconvert (>=5)", "pre-commit (>=2.21.0)", "pyfakefs (>=4.5.1)", "pytest (>=6.2.0)", "pytest-benchmark (>=3.4.1)", "pytest-cov (>=2.8.1)", "pytest-icdiff (>=0.6)", "pytest-mock (>=3.8.2)", "pytest-order (>=0.9.5)", "pytest-random-order (>=1.0.4)", "pytest-timeout (>=2.1.0)", "requirements-parser (>=0.2.0)", "ruff (==0.0.246)", "s3fs (>=0.5.1)", "snapshottest (==0.6.0)", "sqlalchemy (>=1.3.18,<2.0.0)"]
 trino = ["sqlalchemy (>=1.3.18,<2.0.0)", "trino (>=0.310.0,!=0.316.0)"]
 vertica = ["sqlalchemy (>=1.3.18,<2.0.0)", "sqlalchemy-vertica-python (>=0.5.10)"]
 
@@ -2507,14 +2506,14 @@ format-nongpl = ["idna", "jsonpointer (>1.13)", "rfc3339-validator", "rfc3986-va
 
 [[package]]
 name = "jupyter-client"
-version = "8.0.2"
+version = "8.0.3"
 description = "Jupyter protocol implementation and client libraries"
 category = "main"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "jupyter_client-8.0.2-py3-none-any.whl", hash = "sha256:c53731eb590b68839b0ce04bf46ff8c4f03278f5d9fe5c3b0f268a57cc2bd97e"},
-    {file = "jupyter_client-8.0.2.tar.gz", hash = "sha256:47ac9f586dbcff4d79387ec264faf0fdeb5f14845fa7345fd7d1e378f8096011"},
+    {file = "jupyter_client-8.0.3-py3-none-any.whl", hash = "sha256:be48ac6bd659cbbddb7a674cf06b3b8afbf53f228253cf58bde604c03bd487b0"},
+    {file = "jupyter_client-8.0.3.tar.gz", hash = "sha256:ed65498bea6d876ef9d8da3e0db3dd33c5d129f5b2645f56ae03993782966bd0"},
 ]
 
 [package.dependencies]
@@ -3025,38 +3024,38 @@ files = [
 
 [[package]]
 name = "mypy"
-version = "1.0.0"
+version = "1.0.1"
 description = "Optional static typing for Python"
 category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "mypy-1.0.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e0626db16705ab9f7fa6c249c017c887baf20738ce7f9129da162bb3075fc1af"},
-    {file = "mypy-1.0.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:1ace23f6bb4aec4604b86c4843276e8fa548d667dbbd0cb83a3ae14b18b2db6c"},
-    {file = "mypy-1.0.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:87edfaf344c9401942883fad030909116aa77b0fa7e6e8e1c5407e14549afe9a"},
-    {file = "mypy-1.0.0-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:0ab090d9240d6b4e99e1fa998c2d0aa5b29fc0fb06bd30e7ad6183c95fa07593"},
-    {file = "mypy-1.0.0-cp310-cp310-win_amd64.whl", hash = "sha256:7cc2c01dfc5a3cbddfa6c13f530ef3b95292f926329929001d45e124342cd6b7"},
-    {file = "mypy-1.0.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:14d776869a3e6c89c17eb943100f7868f677703c8a4e00b3803918f86aafbc52"},
-    {file = "mypy-1.0.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:bb2782a036d9eb6b5a6efcdda0986774bf798beef86a62da86cb73e2a10b423d"},
-    {file = "mypy-1.0.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5cfca124f0ac6707747544c127880893ad72a656e136adc935c8600740b21ff5"},
-    {file = "mypy-1.0.0-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:8845125d0b7c57838a10fd8925b0f5f709d0e08568ce587cc862aacce453e3dd"},
-    {file = "mypy-1.0.0-cp311-cp311-win_amd64.whl", hash = "sha256:01b1b9e1ed40544ef486fa8ac022232ccc57109f379611633ede8e71630d07d2"},
-    {file = "mypy-1.0.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:c7cf862aef988b5fbaa17764ad1d21b4831436701c7d2b653156a9497d92c83c"},
-    {file = "mypy-1.0.0-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5cd187d92b6939617f1168a4fe68f68add749902c010e66fe574c165c742ed88"},
-    {file = "mypy-1.0.0-cp37-cp37m-musllinux_1_1_x86_64.whl", hash = "sha256:4e5175026618c178dfba6188228b845b64131034ab3ba52acaffa8f6c361f805"},
-    {file = "mypy-1.0.0-cp37-cp37m-win_amd64.whl", hash = "sha256:2f6ac8c87e046dc18c7d1d7f6653a66787a4555085b056fe2d599f1f1a2a2d21"},
-    {file = "mypy-1.0.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:7306edca1c6f1b5fa0bc9aa645e6ac8393014fa82d0fa180d0ebc990ebe15964"},
-    {file = "mypy-1.0.0-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:3cfad08f16a9c6611e6143485a93de0e1e13f48cfb90bcad7d5fde1c0cec3d36"},
-    {file = "mypy-1.0.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:67cced7f15654710386e5c10b96608f1ee3d5c94ca1da5a2aad5889793a824c1"},
-    {file = "mypy-1.0.0-cp38-cp38-musllinux_1_1_x86_64.whl", hash = "sha256:a86b794e8a56ada65c573183756eac8ac5b8d3d59daf9d5ebd72ecdbb7867a43"},
-    {file = "mypy-1.0.0-cp38-cp38-win_amd64.whl", hash = "sha256:50979d5efff8d4135d9db293c6cb2c42260e70fb010cbc697b1311a4d7a39ddb"},
-    {file = "mypy-1.0.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:3ae4c7a99e5153496243146a3baf33b9beff714464ca386b5f62daad601d87af"},
-    {file = "mypy-1.0.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:5e398652d005a198a7f3c132426b33c6b85d98aa7dc852137a2a3be8890c4072"},
-    {file = "mypy-1.0.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:be78077064d016bc1b639c2cbcc5be945b47b4261a4f4b7d8923f6c69c5c9457"},
-    {file = "mypy-1.0.0-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:92024447a339400ea00ac228369cd242e988dd775640755fa4ac0c126e49bb74"},
-    {file = "mypy-1.0.0-cp39-cp39-win_amd64.whl", hash = "sha256:fe523fcbd52c05040c7bee370d66fee8373c5972171e4fbc323153433198592d"},
-    {file = "mypy-1.0.0-py3-none-any.whl", hash = "sha256:2efa963bdddb27cb4a0d42545cd137a8d2b883bd181bbc4525b568ef6eca258f"},
-    {file = "mypy-1.0.0.tar.gz", hash = "sha256:f34495079c8d9da05b183f9f7daec2878280c2ad7cc81da686ef0b484cea2ecf"},
+    {file = "mypy-1.0.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:71a808334d3f41ef011faa5a5cd8153606df5fc0b56de5b2e89566c8093a0c9a"},
+    {file = "mypy-1.0.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:920169f0184215eef19294fa86ea49ffd4635dedfdea2b57e45cb4ee85d5ccaf"},
+    {file = "mypy-1.0.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:27a0f74a298769d9fdc8498fcb4f2beb86f0564bcdb1a37b58cbbe78e55cf8c0"},
+    {file = "mypy-1.0.1-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:65b122a993d9c81ea0bfde7689b3365318a88bde952e4dfa1b3a8b4ac05d168b"},
+    {file = "mypy-1.0.1-cp310-cp310-win_amd64.whl", hash = "sha256:5deb252fd42a77add936b463033a59b8e48eb2eaec2976d76b6878d031933fe4"},
+    {file = "mypy-1.0.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:2013226d17f20468f34feddd6aae4635a55f79626549099354ce641bc7d40262"},
+    {file = "mypy-1.0.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:48525aec92b47baed9b3380371ab8ab6e63a5aab317347dfe9e55e02aaad22e8"},
+    {file = "mypy-1.0.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c96b8a0c019fe29040d520d9257d8c8f122a7343a8307bf8d6d4a43f5c5bfcc8"},
+    {file = "mypy-1.0.1-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:448de661536d270ce04f2d7dddaa49b2fdba6e3bd8a83212164d4174ff43aa65"},
+    {file = "mypy-1.0.1-cp311-cp311-win_amd64.whl", hash = "sha256:d42a98e76070a365a1d1c220fcac8aa4ada12ae0db679cb4d910fabefc88b994"},
+    {file = "mypy-1.0.1-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:e64f48c6176e243ad015e995de05af7f22bbe370dbb5b32bd6988438ec873919"},
+    {file = "mypy-1.0.1-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5fdd63e4f50e3538617887e9aee91855368d9fc1dea30da743837b0df7373bc4"},
+    {file = "mypy-1.0.1-cp37-cp37m-musllinux_1_1_x86_64.whl", hash = "sha256:dbeb24514c4acbc78d205f85dd0e800f34062efcc1f4a4857c57e4b4b8712bff"},
+    {file = "mypy-1.0.1-cp37-cp37m-win_amd64.whl", hash = "sha256:a2948c40a7dd46c1c33765718936669dc1f628f134013b02ff5ac6c7ef6942bf"},
+    {file = "mypy-1.0.1-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:5bc8d6bd3b274dd3846597855d96d38d947aedba18776aa998a8d46fabdaed76"},
+    {file = "mypy-1.0.1-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:17455cda53eeee0a4adb6371a21dd3dbf465897de82843751cf822605d152c8c"},
+    {file = "mypy-1.0.1-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e831662208055b006eef68392a768ff83596035ffd6d846786578ba1714ba8f6"},
+    {file = "mypy-1.0.1-cp38-cp38-musllinux_1_1_x86_64.whl", hash = "sha256:e60d0b09f62ae97a94605c3f73fd952395286cf3e3b9e7b97f60b01ddfbbda88"},
+    {file = "mypy-1.0.1-cp38-cp38-win_amd64.whl", hash = "sha256:0af4f0e20706aadf4e6f8f8dc5ab739089146b83fd53cb4a7e0e850ef3de0bb6"},
+    {file = "mypy-1.0.1-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:24189f23dc66f83b839bd1cce2dfc356020dfc9a8bae03978477b15be61b062e"},
+    {file = "mypy-1.0.1-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:93a85495fb13dc484251b4c1fd7a5ac370cd0d812bbfc3b39c1bafefe95275d5"},
+    {file = "mypy-1.0.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5f546ac34093c6ce33f6278f7c88f0f147a4849386d3bf3ae193702f4fe31407"},
+    {file = "mypy-1.0.1-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:c6c2ccb7af7154673c591189c3687b013122c5a891bb5651eca3db8e6c6c55bd"},
+    {file = "mypy-1.0.1-cp39-cp39-win_amd64.whl", hash = "sha256:15b5a824b58c7c822c51bc66308e759243c32631896743f030daf449fe3677f3"},
+    {file = "mypy-1.0.1-py3-none-any.whl", hash = "sha256:eda5c8b9949ed411ff752b9a01adda31afe7eae1e53e946dbdf9db23865e66c4"},
+    {file = "mypy-1.0.1.tar.gz", hash = "sha256:28cea5a6392bb43d266782983b5a4216c25544cd7d80be681a155ddcdafd152d"},
 ]
 
 [package.dependencies]
@@ -3084,14 +3083,14 @@ files = [
 
 [[package]]
 name = "nbclassic"
-version = "0.5.1"
+version = "0.5.2"
 description = "Jupyter Notebook as a Jupyter Server extension."
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "nbclassic-0.5.1-py3-none-any.whl", hash = "sha256:32c235e1f22f4048f3b877d354c198202898797cf9c2085856827598cead001b"},
-    {file = "nbclassic-0.5.1.tar.gz", hash = "sha256:8e8ffce7582bb7a4baf11fa86a3d88b184e8e7df78eed4ead69f15aa4fc0e323"},
+    {file = "nbclassic-0.5.2-py3-none-any.whl", hash = "sha256:6403a996562dadefa7fee9c49e17b663b5fd508241de5df655b90011cf3342d9"},
+    {file = "nbclassic-0.5.2.tar.gz", hash = "sha256:40f11bbcc59e8956c3d5ef132dec8e5a853e893ecf831e791d54da0d8a50d79d"},
 ]
 
 [package.dependencies]
@@ -3101,7 +3100,7 @@ ipython-genutils = "*"
 jinja2 = "*"
 jupyter-client = ">=6.1.1"
 jupyter-core = ">=4.6.1"
-jupyter-server = ">=1.17.0"
+jupyter-server = ">=1.8"
 nbconvert = ">=5"
 nbformat = "*"
 nest-asyncio = ">=1.5"
@@ -4690,33 +4689,33 @@ crt = ["botocore[crt] (>=1.20.29,<2.0a.0)"]
 
 [[package]]
 name = "scipy"
-version = "1.10.0"
+version = "1.10.1"
 description = "Fundamental algorithms for scientific computing in Python"
 category = "main"
 optional = false
 python-versions = "<3.12,>=3.8"
 files = [
-    {file = "scipy-1.10.0-cp310-cp310-macosx_10_15_x86_64.whl", hash = "sha256:b901b423c91281a974f6cd1c36f5c6c523e665b5a6d5e80fcb2334e14670eefd"},
-    {file = "scipy-1.10.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:16ba05d3d1b9f2141004f3f36888e05894a525960b07f4c2bfc0456b955a00be"},
-    {file = "scipy-1.10.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:151f066fe7d6653c3ffefd489497b8fa66d7316e3e0d0c0f7ff6acca1b802809"},
-    {file = "scipy-1.10.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2f9ea0a37aca111a407cb98aa4e8dfde6e5d9333bae06dfa5d938d14c80bb5c3"},
-    {file = "scipy-1.10.0-cp310-cp310-win_amd64.whl", hash = "sha256:27e548276b5a88b51212b61f6dda49a24acf5d770dff940bd372b3f7ced8c6c2"},
-    {file = "scipy-1.10.0-cp311-cp311-macosx_10_15_x86_64.whl", hash = "sha256:42ab8b9e7dc1ebe248e55f54eea5307b6ab15011a7883367af48dd781d1312e4"},
-    {file = "scipy-1.10.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:e096b062d2efdea57f972d232358cb068413dc54eec4f24158bcbb5cb8bddfd8"},
-    {file = "scipy-1.10.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4df25a28bd22c990b22129d3c637fd5c3be4b7c94f975dca909d8bab3309b694"},
-    {file = "scipy-1.10.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2ad449db4e0820e4b42baccefc98ec772ad7818dcbc9e28b85aa05a536b0f1a2"},
-    {file = "scipy-1.10.0-cp311-cp311-win_amd64.whl", hash = "sha256:6faf86ef7717891195ae0537e48da7524d30bc3b828b30c9b115d04ea42f076f"},
-    {file = "scipy-1.10.0-cp38-cp38-macosx_10_15_x86_64.whl", hash = "sha256:4bd0e3278126bc882d10414436e58fa3f1eca0aa88b534fcbf80ed47e854f46c"},
-    {file = "scipy-1.10.0-cp38-cp38-macosx_12_0_arm64.whl", hash = "sha256:38bfbd18dcc69eeb589811e77fae552fa923067fdfbb2e171c9eac749885f210"},
-    {file = "scipy-1.10.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0ab2a58064836632e2cec31ca197d3695c86b066bc4818052b3f5381bfd2a728"},
-    {file = "scipy-1.10.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5cd7a30970c29d9768a7164f564d1fbf2842bfc77b7d114a99bc32703ce0bf48"},
-    {file = "scipy-1.10.0-cp38-cp38-win_amd64.whl", hash = "sha256:9b878c671655864af59c108c20e4da1e796154bd78c0ed6bb02bc41c84625686"},
-    {file = "scipy-1.10.0-cp39-cp39-macosx_10_15_x86_64.whl", hash = "sha256:3afcbddb4488ac950ce1147e7580178b333a29cd43524c689b2e3543a080a2c8"},
-    {file = "scipy-1.10.0-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:6e4497e5142f325a5423ff5fda2fff5b5d953da028637ff7c704378c8c284ea7"},
-    {file = "scipy-1.10.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:441cab2166607c82e6d7a8683779cb89ba0f475b983c7e4ab88f3668e268c143"},
-    {file = "scipy-1.10.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0490dc499fe23e4be35b8b6dd1e60a4a34f0c4adb30ac671e6332446b3cbbb5a"},
-    {file = "scipy-1.10.0-cp39-cp39-win_amd64.whl", hash = "sha256:954ff69d2d1bf666b794c1d7216e0a746c9d9289096a64ab3355a17c7c59db54"},
-    {file = "scipy-1.10.0.tar.gz", hash = "sha256:c8b3cbc636a87a89b770c6afc999baa6bcbb01691b5ccbbc1b1791c7c0a07540"},
+    {file = "scipy-1.10.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e7354fd7527a4b0377ce55f286805b34e8c54b91be865bac273f527e1b839019"},
+    {file = "scipy-1.10.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:4b3f429188c66603a1a5c549fb414e4d3bdc2a24792e061ffbd607d3d75fd84e"},
+    {file = "scipy-1.10.1-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1553b5dcddd64ba9a0d95355e63fe6c3fc303a8fd77c7bc91e77d61363f7433f"},
+    {file = "scipy-1.10.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4c0ff64b06b10e35215abce517252b375e580a6125fd5fdf6421b98efbefb2d2"},
+    {file = "scipy-1.10.1-cp310-cp310-win_amd64.whl", hash = "sha256:fae8a7b898c42dffe3f7361c40d5952b6bf32d10c4569098d276b4c547905ee1"},
+    {file = "scipy-1.10.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:0f1564ea217e82c1bbe75ddf7285ba0709ecd503f048cb1236ae9995f64217bd"},
+    {file = "scipy-1.10.1-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:d925fa1c81b772882aa55bcc10bf88324dadb66ff85d548c71515f6689c6dac5"},
+    {file = "scipy-1.10.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:aaea0a6be54462ec027de54fca511540980d1e9eea68b2d5c1dbfe084797be35"},
+    {file = "scipy-1.10.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:15a35c4242ec5f292c3dd364a7c71a61be87a3d4ddcc693372813c0b73c9af1d"},
+    {file = "scipy-1.10.1-cp311-cp311-win_amd64.whl", hash = "sha256:43b8e0bcb877faf0abfb613d51026cd5cc78918e9530e375727bf0625c82788f"},
+    {file = "scipy-1.10.1-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:5678f88c68ea866ed9ebe3a989091088553ba12c6090244fdae3e467b1139c35"},
+    {file = "scipy-1.10.1-cp38-cp38-macosx_12_0_arm64.whl", hash = "sha256:39becb03541f9e58243f4197584286e339029e8908c46f7221abeea4b749fa88"},
+    {file = "scipy-1.10.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:bce5869c8d68cf383ce240e44c1d9ae7c06078a9396df68ce88a1230f93a30c1"},
+    {file = "scipy-1.10.1-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:07c3457ce0b3ad5124f98a86533106b643dd811dd61b548e78cf4c8786652f6f"},
+    {file = "scipy-1.10.1-cp38-cp38-win_amd64.whl", hash = "sha256:049a8bbf0ad95277ffba9b3b7d23e5369cc39e66406d60422c8cfef40ccc8415"},
+    {file = "scipy-1.10.1-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:cd9f1027ff30d90618914a64ca9b1a77a431159df0e2a195d8a9e8a04c78abf9"},
+    {file = "scipy-1.10.1-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:79c8e5a6c6ffaf3a2262ef1be1e108a035cf4f05c14df56057b64acc5bebffb6"},
+    {file = "scipy-1.10.1-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:51af417a000d2dbe1ec6c372dfe688e041a7084da4fdd350aeb139bd3fb55353"},
+    {file = "scipy-1.10.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1b4735d6c28aad3cdcf52117e0e91d6b39acd4272f3f5cd9907c24ee931ad601"},
+    {file = "scipy-1.10.1-cp39-cp39-win_amd64.whl", hash = "sha256:7ff7f37b1bf4417baca958d254e8e2875d0cc23aaadbe65b3d5b3077b0eb23ea"},
+    {file = "scipy-1.10.1.tar.gz", hash = "sha256:2cf9dfb80a7b4589ba4c40ce7588986d6d5cebc5457cad2c2880f6bc2d42f3a5"},
 ]
 
 [package.dependencies]
@@ -5714,14 +5713,14 @@ multidict = ">=4.0"
 
 [[package]]
 name = "zipp"
-version = "3.13.0"
+version = "3.14.0"
 description = "Backport of pathlib-compatible object wrapper for zip files"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "zipp-3.13.0-py3-none-any.whl", hash = "sha256:e8b2a36ea17df80ffe9e2c4fda3f693c3dad6df1697d3cd3af232db680950b0b"},
-    {file = "zipp-3.13.0.tar.gz", hash = "sha256:23f70e964bc11a34cef175bc90ba2914e1e4545ea1e3e2f67c079671883f9cb6"},
+    {file = "zipp-3.14.0-py3-none-any.whl", hash = "sha256:188834565033387710d046e3fe96acfc9b5e86cbca7f39ff69cf21a4128198b7"},
+    {file = "zipp-3.14.0.tar.gz", hash = "sha256:9e5421e176ef5ab4c0ad896624e87a7b2f07aca746c9b2aa305952800cb8eecb"},
 ]
 
 [package.extras]
