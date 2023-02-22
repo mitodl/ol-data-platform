@@ -1,0 +1,32 @@
+---
+version: 2
+
+models:
+- name: int__mitx__users
+  description: Intermediate model for MITx users from MITx Online and edX.org
+  columns:
+  - name: platform
+    description: string, application where the data is from
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
+  - name: user_id
+    description: int, user ID on the corresponding platform - MITx Online or edX.org
+    tests:
+    - not_null
+  - name: user_username
+    description: string, username on the corresponding platform - MITx Online or edX.org
+    tests:
+    - not_null
+  - name: user_email
+    description: string, user email on the corresponding platform - MITx Online or
+      edX.org
+    tests:
+    - not_null
+  - name: user_address_country
+    description: string, country code provided by the user on the corresponding platform
+      - MITx Online or edX.org
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "platform"]

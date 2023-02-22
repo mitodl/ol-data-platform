@@ -15,7 +15,6 @@ models:
     description: str, indicating what platform the course is from, MITx Online/xPro
       open edx or edx.org
     tests:
-    - not_null
     - accepted_values:
         values: '{{ var("platforms") }}'
   - name: courserun_title
@@ -60,7 +59,6 @@ models:
     description: str, indicating what platform the data is from, MITx Online/xPro
       open edx or edx.org
     tests:
-    - not_null
     - accepted_values:
         values: '{{ var("platforms") }}'
   - name: user_username
