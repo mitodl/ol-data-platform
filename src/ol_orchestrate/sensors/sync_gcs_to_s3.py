@@ -1,6 +1,7 @@
 from dagster import RunRequest, SensorEvaluationContext, SkipReason, build_resources
 
 from ol_orchestrate.resources.gcp_gcs import gcp_gcs_resource
+from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 
 
 def check_new_gcs_assets_sensor(context: SensorEvaluationContext):
@@ -12,6 +13,7 @@ def check_new_gcs_assets_sensor(context: SensorEvaluationContext):
             context.update_cursor(str(new_files))
             yield RunRequest(
                 run_key="new_gcs_file",
+                run_config=load_yaml_config("/etc/dagster/edxorg_gcp.yaml"),
             )
         else:
             yield SkipReason("No new files in GCS bucket")
