@@ -124,7 +124,7 @@ with edx_course_certificates as (
 
 , non_dedp_certificates as (
     select
-        edx_users.user_username
+        edx_users.user_username as user_edxorg_username
         , edx_users.user_email
         , micromasters_programs.program_id as micromasters_program_id
         , micromasters_programs.program_title
@@ -161,7 +161,7 @@ with edx_course_certificates as (
 
 , non_dedp_overides as (
     select
-        edx_users.user_username
+        edx_users.user_username as user_edxorg_username
         , edx_users.user_email
         , micromasters_programs.program_id as micromasters_program_id
         , micromasters_programs.program_title
@@ -192,7 +192,7 @@ with edx_course_certificates as (
             non_dedp_certificates.user_edxorg_id
             = program_certificates_override_list.user_edxorg_id and non_dedp_certificates.micromasters_program_id
             = program_certificates_override_list.micromasters_program_id
-    where non_dedp_certificates.user_username is null
+    where non_dedp_certificates.user_edxorg_username is null
 )
 
 select *

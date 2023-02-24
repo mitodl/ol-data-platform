@@ -5,7 +5,7 @@ models:
 - name: mart_components__micromasters_program_certificates_dedp_from_micromasters
   description: DEDP program certificate earners according to the micromasters database
   columns:
-  - name: user_username
+  - name: user_edxorg_username
     description: str, The username of the learner on the edX platform
     tests:
     - not_null
@@ -60,10 +60,8 @@ models:
 - name: mart_components__micromasters_program_certificates_dedp_from_mitxonline
   description: DEDP program certificate earners according to the mitxonline database
   columns:
-  - name: user_username
+  - name: user_edxorg_username
     description: str, The username of the learner on the edX platform
-    tests:
-    - not_null
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:
@@ -78,8 +76,6 @@ models:
     - not_null
   - name: user_edxorg_id
     description: int, Numerical user ID of a learner on the edX platform
-    tests:
-    - not_null
   - name: user_gender
     description: str, user's gender from edxorg - blank means user did not specify
       a gender. Null means this student signed up before this information was collected
@@ -118,7 +114,7 @@ models:
   description: Non DEDP program certificate earners. Calculated from joining edxorg
     course certificate records to the program requirements from the micromasters database
   columns:
-  - name: user_username
+  - name: user_edxorg_username
     description: str, The username of the learner on the edX platform
     tests:
     - not_null
