@@ -5,16 +5,12 @@ models:
 - name: marts__micromasters_program_certificates
   description: MicroMasters program certificate earners
   columns:
-  - name: user_username
+  - name: user_edxorg_username
     description: str, The username of the learner on the edX platform
     tests:
     - not_null
   - name: user_email
     description: str, The email address of the learner on the edX platform
-    tests:
-    - not_null
-  - name: micromasters_program_id
-    description: int, sequential ID representing a program in MicroMasters
     tests:
     - not_null
   - name: program_title
@@ -23,22 +19,29 @@ models:
     - not_null
   - name: user_edxorg_id
     description: int, Numerical user ID of a learner on the edX platform
+  - name: program_completion_timestamp
+    description: timestamp, timestamp of the course certificate that completed the
+      program
   - name: user_gender
     description: str, user's gender from edxorg - blank means user did not specify
       a gender. Null means this student signed up before this information was collected
     tests:
     - accepted_values:
         values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
-  - name: user_country
-    description: str, Country provided by the user on the edX platform
   - name: user_address_city
     description: str, city where user lives in, collected from the micromasters database
   - name: user_first_name
     description: str, first from the micromasters profile
   - name: user_last_name
     description: str, last name from the micromasters profile
+  - name: user_full_name
+    description: str, The full name of the user. Taken from either the edX database
+      or the mitxonline database
   - name: user_year_of_birth
     description: str, user's birth year from the profile in the micromasters database
+  - name: user_country
+    description: str, Country provided by the user either on the edX platform or the
+      mitxonline platform
   - name: user_address_postal_code
     description: str, postal code where user lives in from the profile in micromasters
   - name: user_street_address
@@ -47,10 +50,3 @@ models:
   - name: user_address_state_or_territory
     description: str,  state or territory where user lives in from the profile in
       the micromasters database
-  - name: user_full_name
-    description: str, The full name of the user on the edX platform
-  - name: program_completion_timestamp
-    description: timestamp, timestamp of the course certificate that completed the
-      program
-  - name: micromasters_user_id
-    description: str, user id in the micromasters database

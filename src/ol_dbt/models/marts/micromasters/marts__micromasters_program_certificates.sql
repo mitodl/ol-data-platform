@@ -36,6 +36,21 @@ with program_certificates_dedp_from_micromasters as (
 )
 
 
-select *
+select
+    user_edxorg_username
+    , user_email
+    , program_title
+    , user_edxorg_id
+    , program_completion_timestamp
+    , user_gender
+    , user_address_city
+    , user_first_name
+    , user_last_name
+    , user_full_name
+    , user_year_of_birth
+    , user_country
+    , user_address_postal_code
+    , user_street_address
+    , user_address_state_or_territory
 from report
 order by program_completion_timestamp desc
