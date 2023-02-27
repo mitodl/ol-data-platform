@@ -40,6 +40,7 @@ with user_info_combo as (
         , user_info_combo.user_country
         , user_info_combo.user_joined_on
         , user_info_combo.user_gender
+        , user_info_combo.user_last_login
         , row_number() over (partition by user_info_combo.user_id order by user_info_combo.user_last_login desc
         ) as row_num
     from user_info_combo
@@ -58,6 +59,7 @@ with user_info_combo as (
         , user_country
         , user_joined_on
         , user_gender
+        , user_last_login
     from combined_user_info
     where row_num = 1
 )

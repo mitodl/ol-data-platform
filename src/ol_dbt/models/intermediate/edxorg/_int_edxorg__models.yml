@@ -173,6 +173,9 @@ models:
     tests:
     - accepted_values:
         values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+  - name: user_last_login
+    description: timestamp, Timestamp indicating the last time the user logged into
+      the edX platform
 
 - name: int__edxorg__mitx_courserun_grades
   description: Intermediate model for course run grades from edx.org

@@ -65,7 +65,8 @@ models:
   - name: user_mitxonline_username
     description: str, username in mitxonline
   - name: user_edxorg_username
-    description: str, username in edx.org
+    description: str, username in edx.org. For the very small number of users with
+      multiple edx usernames, this is the username with the latest logins
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__auth_user')
