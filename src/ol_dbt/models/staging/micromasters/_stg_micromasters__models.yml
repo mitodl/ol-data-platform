@@ -112,7 +112,8 @@ models:
         values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
           "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
             \ school", "Elementary/primary school", "No formal education", "Other\
-            \ education"]
+            \ education", "Doctorate in science or engineering", "Doctorate in another\
+            \ field"]
   - name: user_gender
     description: str, user gender (could be blank)
     tests:
