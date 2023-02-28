@@ -33,7 +33,11 @@ dbt_repo_dir = str(
     else Path("/opt/dbt")
 )
 
-dbt_config = {"project_dir": dbt_repo_dir, "profiles_dir": dbt_repo_dir}
+dbt_config = {
+    "project_dir": dbt_repo_dir,
+    "profiles_dir": dbt_repo_dir,
+    "target": dagster_deployment,
+}
 configured_dbt_cli = dbt_cli_resource.configured(dbt_config)
 
 airbyte_assets = load_assets_from_airbyte_instance(
