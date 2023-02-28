@@ -70,7 +70,7 @@ elt = Definitions(
     sensors=[
         build_asset_reconciliation_sensor(
             name="dbt_asset_sensor",
-            asset_selection=AssetSelection.groups("staging", "intermediate", "mart"),
+            asset_selection=AssetSelection.assets(*dbt_assets),
             minimum_interval_seconds=60 * 5,
             default_status=DefaultSensorStatus.RUNNING,
         )
