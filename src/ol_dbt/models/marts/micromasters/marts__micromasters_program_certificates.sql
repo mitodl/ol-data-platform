@@ -20,19 +20,65 @@ with program_certificates_dedp_from_micromasters as (
 -- dedp certificates earned before 2022-10-01 and the mitxonline database for those earned after
 
 , report as (
-    select *
+    select
+        user_edxorg_username
+        , user_email
+        , program_title
+        , user_edxorg_id
+        , program_completion_timestamp
+        , user_gender
+        , user_address_city
+        , user_first_name
+        , user_last_name
+        , user_full_name
+        , user_year_of_birth
+        , user_country
+        , user_address_postal_code
+        , user_street_address
+        , user_address_state_or_territory
     from program_certificates_dedp_from_micromasters
     where program_completion_timestamp < '2022-10-01'
 
     union all
 
-    select *
+    select
+        user_edxorg_username
+        , user_email
+        , program_title
+        , user_edxorg_id
+        , program_completion_timestamp
+        , user_gender
+        , user_address_city
+        , user_first_name
+        , user_last_name
+        , user_full_name
+        , user_year_of_birth
+        , user_country
+        , user_address_postal_code
+        , user_street_address
+        , user_address_state_or_territory
     from program_certificates_dedp_from_mitxonline
     where program_completion_timestamp >= '2022-10-01'
 
     union all
 
-    select * from program_certificates_non_dedp
+    select
+        user_edxorg_username
+        , user_email
+        , program_title
+        , user_edxorg_id
+        , program_completion_timestamp
+        , user_gender
+        , user_address_city
+        , user_first_name
+        , user_last_name
+        , user_full_name
+        , user_year_of_birth
+        , user_country
+        , user_address_postal_code
+        , user_street_address
+        , user_address_state_or_territory
+    from program_certificates_non_dedp
 )
 
 
