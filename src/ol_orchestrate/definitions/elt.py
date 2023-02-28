@@ -62,7 +62,8 @@ airbyte_update_schedule = ScheduleDefinition(
 )
 
 dbt_assets = load_assets_from_dbt_project(
-    **dbt_config,
+    project_dir=dbt_repo_dir,
+    profiles_dir=dbt_repo_dir,
 )
 
 elt = Definitions(
