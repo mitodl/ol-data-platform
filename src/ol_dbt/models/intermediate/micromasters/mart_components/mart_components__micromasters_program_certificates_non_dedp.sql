@@ -89,8 +89,9 @@ with edx_course_certificates as (
         , program_num_required_courses
         , courseruncertificate_created_on
         , count(
-            micromasters_course_id) over (partition by user_edxorg_id, program_id
-        order by courseruncertificate_created_on asc
+            micromasters_course_id) over (
+            partition by user_edxorg_id, program_id
+            order by courseruncertificate_created_on asc
         ) as cumulative_courses_completed
         , count(
             case when programrequirement_type = 'Elective' then micromasters_course_id end
