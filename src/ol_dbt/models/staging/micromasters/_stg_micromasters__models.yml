@@ -2,6 +2,214 @@
 version: 2
 
 models:
+- name: stg__micromasters__app__postgres__ecommerce_redeemedcoupon
+  columns:
+  - name: redeemedcoupon_id
+    description: int, primary key representing a discount redemption
+    tests:
+    - unique
+    - not_null
+  - name: redeemedcoupon_created_on
+    description: timestamp, specifying when the coupon was redeemed
+    tests:
+    - not_null
+  - name: redeemedcoupon_updated_on
+    description: timestamp, specifying when the coupon redemption was last updated
+    tests:
+    - not_null
+  - name: coupon_id
+    description: int, foreign key for ecommerce_coupon
+  - name: order_id
+    description: int, foreign key for ecommerce_orders
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["order_id", "coupon_id"]
+
+- name: stg__micromasters__app__postgres__ecommerce_receipt
+  description: Data returned from cybersource when a user pays for an order
+  columns:
+  - name: receipt_id
+    description: int, primary key representing a receipt
+    tests:
+    - unique
+    - not_null
+  - name: receipt_created_on
+    description: timestamp, specifying when the receipt was initially created
+    tests:
+    - not_null
+  - name: receipt_updated_on
+    description: timestamp, specifying when the receipt was most recently updated
+    tests:
+    - not_null
+  - name: receipt_data
+    description: json, cybersource data for a payment
+    tests:
+    - not_null
+  - name: order_id
+    description: int, primary key in ecommerce_order
+- name: stg__micromasters__app__postgres__ecommerce_line
+  columns:
+  - name: line_id
+    tests:
+    - unique
+    - not_null
+    description: int, primary key representing an ecommerce line
+  - name: line_created_on
+    description: timestamp, specifying when the line was initially created
+    tests:
+    - not_null
+  - name: line_updated_on
+    description: timestamp, specifying when the line was most recently updated
+    tests:
+    - not_null
+  - name: courserun_edx_readable_id
+    description: string, edx_course_key from courses_courserun
+    tests:
+    - not_null
+  - name: line_price
+    description: numeric, price paid for the course run
+    tests:
+    - not_null
+  - name: order_id
+    description: int, foreign key in the orders_order table for the order that contains
+      the line. Orders have exactly one line
+    tests:
+    - not_null
+  - name: line_description
+    description: string, description of the course run being purchased
+- name: stg__micromasters__app__postgres__ecommerce_order
+  columns:
+  - name: order_id
+    description: int, primary key representing a single  order
+    tests:
+    - unique
+    - not_null
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created
+    tests:
+    - not_null
+  - name: order_updated_on
+    description: timestamp, specifying when the order was most recently updated
+    tests:
+    - not_null
+  - name: order_state
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded", "partially_refunded"
+    tests:
+    - not_null
+  - name: order_total_price_paid
+    description: number, total order amount
+    tests:
+    - not_null
+  - name: user_id
+    description: int, primary key in users_user for the purchaser
+    tests:
+    - not_null
+  - name: order_reference_number
+    description: string, readable id for the order
+    tests:
+    - unique
+
+- name: stg__micromasters__app__postgres__ecommerce_usercoupon
+  columns:
+  - name: usercoupon_id
+    description: int, primary key representing a coupon user combo
+    tests:
+    - unique
+    - not_null
+  - name: usercoupon_created_on
+    description: timestamp, specifying when the coupon user association was initially
+      created
+    tests:
+    - not_null
+  - name: usercoupon_updated_on
+    description: timestamp, specifying when the coupon user association was most recently
+      updated
+    tests:
+    - not_null
+  - name: coupon_id
+    description: int, foreign key for ecommerce_coupon
+  - name: user_id
+    description: int, foreign key for users_user
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "coupon_id"]
+
+- name: stg__micromasters__app__postgres__ecommerce_couponinvoice
+  description: the ecommerce_couponinvoice table is used to identify batches of coupons
+    that a created togather for the same purpose
+  columns:
+  - name: couponinvoice_id
+    description: int, primary key representing a coupon invoice
+    tests:
+    - unique
+    - not_null
+  - name: couponinvoice_number
+    description: string, short string used to identify a batch of coupons
+  - name: couponinvoice_description
+    description: string, description for a batch of coupons
+
+- name: stg__micromasters__app__postgres__ecommerce_coupon
+  columns:
+  - name: coupon_id
+    description: int, primary key representing a coupon
+    tests:
+    - unique
+    - not_null
+  - name: coupon_created_on
+    description: timestamp, specifying when the coupon was initially created
+    tests:
+    - not_null
+  - name: coupon_updated_on
+    description: timestamp, specifying when the coupon was most recently updated
+    tests:
+    - not_null
+  - name: coupon_code
+    description: string, coupon code
+  - name: coupon_object_id
+    description: int, id in either coures_course or courses_program for the course
+      entity for which the coupon can be redeemed
+    tests:
+    - not_null
+  - name: coupon_amount_type
+    description: string, type of coupon discount and meaning of the "amount" column.
+      May be "fixed-discount" "fixed-price" or "percent-discount"
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['fixed-discount', 'fixed-price', 'percent-discount']
+  - name: coupon_amount
+    description: numeric, discount amount. May be a precent or dollar amount
+    tests:
+    - not_null
+  - name: coupon_activated_on
+    description: timestamp, specifying when the discount is activated
+  - name: coupon_expires_on
+    description: timestamp, specifying when the discount is deactivated
+  - name: coupon_is_active
+    description: boolean, wheter the coupon is currently redeemable
+    tests:
+    - not_null
+  - name: contenttype_id
+    description: int, id in django_contenttype for eather a course or a program, depending
+      on what the coupon can be redeemed for
+  - name: couponinvoice_id
+    description: int, foreign key in ecommerce_couponinvoice, which contains information
+      about why the a batch of coupons was created
+- name: stg__micromasters__app__postgres__django_contenttype
+  columns:
+  - name: contenttype_id
+    description: int, sequential ID for the django model
+    tests:
+    - unique
+    - not_null
+  - name: contenttype_full_name
+    description: string, name for django model. A combination of the models name and
+      functional group
+    tests:
+    - unique
+    - not_null
+
 - name: stg__micromasters__app__user_program_certificate_override_list
   description: Certain users should recieve a certificate even though they do not
     meet all the program certificate requirements. This list has the user_id on user_edxorg

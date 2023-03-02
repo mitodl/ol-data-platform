@@ -1,0 +1,21 @@
+with source as (
+
+    select * from {{ source('ol_warehouse_raw_data', 'raw__micromasters__app__postgres__ecommerce_line') }}
+
+)
+
+, renamed as (
+
+    select
+        id as line_id
+        , course_key as courserun_edx_readable_id
+        , price as line_price
+        , description as line_description
+        , {{ cast_timestamp_to_iso8601('created_at') }} as line_created_on
+        , {{ cast_timestamp_to_iso8601('modified_at') }} as line_updated_on
+        , order_id
+    from source
+
+)
+
+select * from renamed
