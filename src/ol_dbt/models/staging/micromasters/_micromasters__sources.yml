@@ -7,6 +7,136 @@ sources:
   database: 'ol_data_lake_{{ target.name }}'
   schema: 'ol_warehouse_{{ target.name }}_raw'
   tables:
+  - name: raw__micromasters__app__postgres__ecommerce_redeemedcoupon
+    columns:
+    - name: id
+      description: int, primary key representing a discount redemption
+    - name: created_on
+      description: timestamp, specifying when the coupon was redeemed
+    - name: updated_on
+      description: timestamp, specifying when the coupon redemption was last updated
+    - name: coupon_id
+      description: int, foreign key for ecommerce_coupon
+    - name: order_id
+      description: int, foreign key for ecommerce_orders
+
+  - name: raw__micromasters__app__postgres__ecommerce_receipt
+    description: Data returned from cybersource when a user pays for an order
+    columns:
+    - name: id
+      description: int, primary key representing a receipt
+    - name: created_at
+      description: timestamp, specifying when the receipt was initially created
+    - name: modified_at
+      description: timestamp, specifying when the receipt was most recently updated
+    - name: data
+      description: json, cybersource data for a payment
+    - name: order_id
+      description: int, primary key in ecommerce_order
+  - name: raw__micromasters__app__postgres__ecommerce_line
+    columns:
+    - name: id
+      description: int, primary key representing an ecommerce line
+    - name: created_at
+      description: timestamp, specifying when the line was initially created
+    - name: modified_at
+      description: timestamp, specifying when the line was most recently updated
+    - name: course_key
+      description: string, edx_course_key from courses_courserun
+    - name: price
+      description: numeric, price paid for the course run
+    - name: order_id
+      description: int, foreign key in the orders_order table for the order that contains
+        the line.  Orders have exactly one line
+    - name: description
+      description: string, description of the course run being purchased
+
+  - name: raw__micromasters__app__postgres__ecommerce_order
+    columns:
+    - name: id
+      description: int, primary key representing a single  order
+    - name: created_on
+      description: timestamp, specifying when the order was initially created
+    - name: modified_at
+      description: timestamp, specifying when the order was most recently updated
+    - name: status
+      description: string, order state. Options are "fulfilled", "failed", "created"
+        "refunded", "partially_refunded"
+    - name: total_price_paid
+      description: number, total order amount
+    - name: user_id
+      description: int, primary key in users_user for the purchaser
+    - name: reference_number
+      description: string, readable id for the order
+
+  - name: raw__micromasters__app__postgres__ecommerce_usercoupon
+    columns:
+    - name: id
+      description: int, primary key representing a coupon user combo
+    - name: created_on
+      description: timestamp, specifying when the coupon user association was initially
+        created
+    - name: updated_on
+      description: timestamp, specifying when the coupon user association was most
+        recently updated
+    - name: coupon_id
+      description: int, foreign key for ecommerce_coupon
+    - name: user_id
+      description: int, foreign key for users_user
+
+  - name: raw__micromasters__app__postgres__ecommerce_couponinvoice
+    description: the ecommerce_couponinvoice table is used to identify batches of
+      coupons that a created togather for the same purpose
+    columns:
+    - name: id
+      description: int, primary key representing a coupon invoice
+    - name: invoice_number
+      description: string, short string used to identify a batch of coupons
+    - name: description
+      description: string, description for a batch of coupons
+
+  - name: raw__micromasters__app__postgres__ecommerce_coupon
+    columns:
+    - name: id
+      description: int, primary key representing a coupon
+    - name: created_on
+      description: timestamp, specifying when the coupon was initially created
+    - name: updated_on
+      description: timestamp, specifying when the coupon was most recently updated
+    - name: coupon_code
+      description: string, coupon code
+    - name: object_id
+      description: int, id in either coures_course or courses_program for the course
+        entity for which the coupon can be redeemed
+    - name: amount_type
+      description: string, type of coupon discount and meaning of the "amount" column.
+        May be "fixed-discount" "fixed-price" or "percent-discount"
+    - name: amount
+      description: numeric, discount amount. May be a precent or dollar amount
+    - name: activation_date
+      description: timestamp, specifying when the discount is activated
+    - name: expiration_date
+      description: timestamp, specifying when the discount is deactivated
+    - name: enabled
+      description: boolean, wheter the coupon is currently redeemable
+    - name: content_type_id
+      description: int, id in django_contenttype for eather a course or a program,
+        depending on what the coupon can be redeemed for
+    - name: coupon_type
+      description: string, one of  "standard", "discounted-previous-course" , almost
+        all coupons are of type "standard"
+    - name: invoice_id
+      description: int, foreign key in ecommerce_couponinvoice, which contains information
+        about why the a batch of coupons was created
+
+  - name: raw__micromasters__app__postgres__django_content_type
+    columns:
+    - name: id
+      description: int, sequential ID for the django model
+    - name: model
+      description: string, the name of the django model
+    - name: app_label
+      description: string, the  functional group the model belongs to
   - name: raw__micromasters__app__postgres__grades_micromastersprogramcertificate
     columns:
     - name: id
