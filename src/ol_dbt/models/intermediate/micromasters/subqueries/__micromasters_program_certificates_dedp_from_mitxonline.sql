@@ -1,3 +1,5 @@
+{{ config(materialized='view') }}
+
 with mitxonline_program_certificates as (
     select *
     from {{ ref('int__mitxonline__program_certificates') }}
@@ -10,7 +12,7 @@ with mitxonline_program_certificates as (
 
 , micromasters_users as (
     select *
-    from {{ ref('int__micromasters__users') }}
+    from {{ ref('__micromasters__users') }}
 )
 
 

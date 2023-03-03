@@ -17,7 +17,7 @@ with edx_course_certificates as (
 
 , micromasters_users as (
     select *
-    from {{ ref('int__micromasters__users') }}
+    from {{ ref('__micromasters__users') }}
 )
 
 , micromasters_profiles as (
