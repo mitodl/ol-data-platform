@@ -2,12 +2,12 @@
 
 with mm_program_certificates as (
     select *
-    from {{ ref('int__micromasters__program_certificates') }}
+    from {{ ref('stg__micromasters__app__postgres__grades_programcertificate') }}
 )
 
 , micromasters_users as (
     select *
-    from {{ ref('int__micromasters__users') }}
+    from {{ ref('__micromasters__users') }}
 )
 
 
