@@ -22,3 +22,23 @@ open_learning:
       schema: ol_warehouse_production
       host: mitol-ol-data-lake-production.trino.galaxy.starburst.io
       http_scheme: https
+    dev_qa:
+      type: trino
+      method: ldap
+      user: '{{ env_var("DBT_TRINO_USERNAME") }}'
+      password: '{{ env_var("DBT_TRINO_PASSWORD") }}'
+      database: ol_data_lake_qa
+      port: 443
+      schema: ol_warehouse_qa{{ "_{}".format(var('schema_suffix')) }}
+      host: mitol-ol-data-lake-qa-0.trino.galaxy.starburst.io
+      http_scheme: https
+    dev_production:
+      type: trino
+      method: ldap
+      user: '{{ env_var("DBT_TRINO_USERNAME") }}'
+      password: '{{ env_var("DBT_TRINO_PASSWORD") }}'
+      database: ol_data_lake_production
+      port: 443
+      schema: ol_warehouse_production{{ "_{}".format(var('schema_suffix', '')) }}
+      host: mitol-ol-data-lake-production.trino.galaxy.starburst.io
+      http_scheme: https

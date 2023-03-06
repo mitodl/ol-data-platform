@@ -35,7 +35,7 @@ dbt models (SQL files) are structured into 3 directories under ol_dbt/models, wi
   export DBT_TRINO_PASSWORD=<PASSWORD>
   ```
   You need Starburst credentials to complete this step, which can be requested from OL Devops
-
+- Set your `schema_suffix` variable in at the command line with `--var 'schema_suffix: my_branch'`. This will be used to create a namespaced database schema that will hold the tables that are generated during your development workflow.
 - Test dbt connection
   ```
   $ dbt debug
@@ -66,7 +66,7 @@ dbt models (SQL files) are structured into 3 directories under ol_dbt/models, wi
   ```
   By default, running dbt command from your local machine connects to our QA data lake, but you could specify different environment by passing --target.
   ```
-  dbt debug --target <qa|production>
+  dbt debug --target <dev_qa|dev_production>
   ```
 
 - Download dependencies
