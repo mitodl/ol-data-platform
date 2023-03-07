@@ -4,7 +4,7 @@ import pandas  # noqa: ICN001
 import psycopg2
 import pyarrow  # noqa: ICN001
 from dagster import Field, InitResourceContext, Int, String, resource
-from pypika import Query  # noqa: TCH002
+from pypika import Query
 
 DEFAULT_POSTGRES_PORT = 5432
 DEFAULT_POSTGRES_QUERY_CHUNKSIZE = 5000

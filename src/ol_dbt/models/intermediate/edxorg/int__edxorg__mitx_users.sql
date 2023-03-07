@@ -38,6 +38,12 @@ with user_info_combo as (
         , most_recent_user_info.user_username
         , user_info_combo.user_full_name
         , user_info_combo.user_country
+        , user_info_combo.user_city
+        , user_info_combo.user_birth_year
+        , user_info_combo.user_mailing_address
+        , user_info_combo.user_highest_education
+        , user_info_combo.user_profile_goals
+        , user_info_combo.user_profile_meta
         , user_info_combo.user_joined_on
         , user_info_combo.user_gender
         , user_info_combo.user_last_login
@@ -57,6 +63,12 @@ with user_info_combo as (
         , user_username
         , user_full_name
         , user_country
+        , user_city
+        , user_mailing_address
+        , user_highest_education
+        , user_birth_year
+        , user_profile_goals
+        , user_profile_meta
         , user_joined_on
         , user_gender
         , user_last_login

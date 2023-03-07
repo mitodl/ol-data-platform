@@ -1,6 +1,6 @@
 import os
 import shutil
-from collections.abc import Generator  # noqa: TCH003
+from collections.abc import Generator
 from datetime import datetime
 from typing import Optional
 

@@ -1,7 +1,7 @@
 import sqlite3
 
 from dagster import Field, InitResourceContext, String, resource
-from pypika import Query  # noqa: TCH002
+from pypika import Query
 
 DEFAULT_MYSQL_PORT = 3306
 

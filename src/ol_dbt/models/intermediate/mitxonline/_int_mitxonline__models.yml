@@ -1017,6 +1017,26 @@ models:
     description: boolean, indicating if user is active or not
   - name: user_micromasters_profile_id
     description: int, foreign key to profiles_profile in MicroMasters
+  - name: user_first_name
+    description: str, first name on user profile
+  - name: user_last_name
+    description: str, last name on user profile
+  - name: user_birth_date
+    description: timestamp, user's date of birth
+  - name: user_address_city
+    description: str, city where user lives in
+  - name: user_address_state_or_territory
+    description: str,  state or territory where user lives in
+  - name: user_address_postal_code
+    description: str, postal code where user lives in
+  - name: user_street_address
+    description: str, street address where user lives in
+  - name: user_highest_education
+    description: str, user's level of education
+  - name: user_gender
+    description: str, user gender (could be blank)
+  - name: user_job_title
+    description: str, user's job title on edx.org
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__users_user')

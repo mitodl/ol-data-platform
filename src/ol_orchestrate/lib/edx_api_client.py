@@ -1,5 +1,5 @@
 import time
-from collections.abc import Generator  # noqa: TCH003
+from collections.abc import Generator
 
 import httpx
 
