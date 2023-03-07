@@ -46,10 +46,17 @@ airbyte_assets = load_assets_from_airbyte_instance(
     # sources, since they are defined as ol_warehouse_raw_data in the
     # sources.yml files. (TMM 2023-01-18)
     key_prefix="ol_warehouse_raw_data",
+    connection_filter=lambda conn: "S3 Glue Data Lake" in conn.name,
+    connection_to_group_fn=(
+        lambda conn_name: "ol_warehouse_raw"
+        if "S3 Glue Data Lake" in conn_name
+        else "non_lake_connection"
+    ),
 )
 
 airbyte_asset_job = define_asset_job(
-    name="airbyte_asset_sync", selection=AssetSelection.assets(airbyte_assets)
+    name="airbyte_asset_sync",
+    selection=AssetSelection.groups("ol_warehouse_raw").downstream(),
 )
 
 airbyte_update_schedule = ScheduleDefinition(
