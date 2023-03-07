@@ -2,6 +2,49 @@
 version: 2
 
 models:
+- name: int__micromasters__course_enrollments
+  description: MicroMasters enrollments
+  columns:
+  - name: program_title
+    description: str, tite of micromasters program the course is part of
+    tests:
+    - not_null
+  - name: user_id
+    description: str, either the edx.org or the mitxonline id for the user
+    tests:
+    - not_null
+  - name: user_username
+    description: str, either the edxorg or the mitxonline username for the user
+    tests:
+    - not_null
+  - name: user_country
+    description: str, country code for the user's address
+  - name: user_email
+    description: str, user email
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course ID on edx.org or openedx
+    tests:
+    - not_null
+  - name: platform
+    description: str, the platform of the course. Either 'MITx Online' or 'edX.org'
+    tests:
+    - not_null
+  - name: courserunenrollment_created_on
+    description: timestamp, timestamp of user's enrollment in the course
+  - name: courserunenrollment_is_active
+    description: boolean, whether the enrollment is active
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "platform", "courserun_readable_id"]
+
 - name: int__micromasters__programs
   description: Intermediate model for programs in MicroMasters
   columns:

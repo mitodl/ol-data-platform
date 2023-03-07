@@ -39,4 +39,8 @@ from
 --- courserun_readable_id here is formatted as {org}/{course_number}/{run}
 left join
     micromasters_courses
-    on runs.courserun_readable_id like micromasters_courses.course_readable_id || '%'
+    on
+        replace(
+            replace(runs.courserun_readable_id, '6.041x_3', '6.431x'), '6.041x_4', '6.431x'
+        ) like micromasters_courses.course_readable_id
+        || '%'

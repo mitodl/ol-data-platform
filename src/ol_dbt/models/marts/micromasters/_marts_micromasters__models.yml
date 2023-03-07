@@ -2,6 +2,29 @@
 version: 2
 
 models:
+- name: marts__micromasters_summary
+  description: MicroMasters course enrollments
+  columns:
+  - name: program_title
+    description: str, Micromasters program tile
+    tests:
+    - not_null
+  - name: total_enrollments
+    description: str, count of course enrollments in the program. This includes users
+      who later unenrolled from the course
+    tests:
+    - not_null
+  - name: unique_users
+    description: str, count of unique users who took courses in the program. We use
+      email to identify mitxonline and edxorg users who are the same person so this
+      may count some users twice if they used different emails for their edxorg and
+      mitxonline accounts
+    tests:
+    - not_null
+  - name: unique_countries
+    description: str, count of unique countries of enrolled users
+    tests:
+    - not_null
 - name: marts__micromasters_program_certificates
   description: MicroMasters program certificate earners
   columns:
@@ -18,7 +41,7 @@ models:
     tests:
     - not_null
   - name: user_edxorg_id
-    description: int, Numerical user ID of a learner on the edX platform
+    description: int, numerical user ID of a learner on the edX platform
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program

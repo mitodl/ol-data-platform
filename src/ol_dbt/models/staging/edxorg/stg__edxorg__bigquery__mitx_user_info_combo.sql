@@ -17,8 +17,10 @@ with source as (
         , profile_name as user_full_name
         , profile_mailing_address as user_mailing_address
         , profile_goals as user_profile_goals
-        , profile_country as user_country
         , profile_city as user_city
+        -- filter outcountry values which are not valid country codes which consist of
+        -- two capital letters
+        , case when regexp_like(profile_country, '^[A-Z]{2}$') then profile_country end as user_country
         , profile_year_of_birth as user_birth_year
         , profile_meta as user_profile_meta
         , enrollment_is_active as courserunenrollment_is_active
