@@ -49,8 +49,7 @@ airbyte_assets = load_assets_from_airbyte_instance(
 )
 
 airbyte_asset_job = define_asset_job(
-    name="airbyte_asset_sync",
-    selection=AssetSelection.groups("ol_warehouse_raw_data"),
+    name="airbyte_asset_sync", selection=AssetSelection.assets(airbyte_assets)
 )
 
 airbyte_update_schedule = ScheduleDefinition(
