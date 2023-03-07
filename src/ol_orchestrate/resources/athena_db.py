@@ -5,7 +5,7 @@ from typing import Optional
 import pyathena
 from dagster import Field, InitResourceContext, Noneable, String, resource
 from pyathena.cursor import DictCursor
-from pypika import Query  # noqa: TCH002
+from pypika import Query
 
 
 class AthenaClient:

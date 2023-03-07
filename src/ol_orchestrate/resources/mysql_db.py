@@ -3,7 +3,7 @@ from typing import Optional
 import pymysql
 from dagster import Field, InitResourceContext, Int, String, resource
 from pymysql.cursors import DictCursor
-from pypika import Query  # noqa: TCH002
+from pypika import Query
 
 DEFAULT_MYSQL_PORT = 3306
 

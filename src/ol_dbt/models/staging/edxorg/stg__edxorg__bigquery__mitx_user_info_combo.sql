@@ -18,6 +18,7 @@ with source as (
         , profile_mailing_address as user_mailing_address
         , profile_goals as user_profile_goals
         , profile_country as user_country
+        , profile_city as user_city
         , profile_year_of_birth as user_birth_year
         , profile_meta as user_profile_meta
         , enrollment_is_active as courserunenrollment_is_active

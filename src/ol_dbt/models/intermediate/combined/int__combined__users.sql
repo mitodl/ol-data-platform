@@ -24,6 +24,10 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
+        , user_address_country
+        , user_highest_education
+        , user_gender
+        , cast(substring(user_birth_date, 1, 4) as int) as user_birth_year
     from mitxonline_users
 
     union all
@@ -33,6 +37,10 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
+        , user_address_country
+        , user_highest_education
+        , user_gender
+        , user_birth_year
 
     from mitxpro_users
 
@@ -43,7 +51,10 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
-
+        , user_address_country
+        , user_highest_education
+        , user_gender
+        , user_birth_year
     from bootcamps_users
 
     union all
@@ -53,6 +64,10 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
+        , user_country as user_address_country
+        , user_highest_education
+        , user_gender
+        , user_birth_year
 
     from edxorg_users
 )

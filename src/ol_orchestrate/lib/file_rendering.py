@@ -1,5 +1,5 @@
 import csv
-from pathlib import Path  # noqa: TCH003
+from pathlib import Path
 
 
 def write_csv(

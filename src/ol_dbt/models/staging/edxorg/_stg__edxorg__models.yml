@@ -205,6 +205,9 @@ models:
         values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
   - name: user_country
     description: str, Country selected by the learner on their profile
+  - name: user_city
+    description: str, City selected the learner on their profile (Not currently used)
+      History - Added in Jan 2014, not yet implemented.
   - name: user_highest_education
     description: str, user's Level of education- blank means User did not specify
       level of education. Null means this student signed up before this information

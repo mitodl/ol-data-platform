@@ -16,11 +16,6 @@ with mitxonline_program_certificates as (
 )
 
 
-, micromasters_profiles as (
-    select *
-    from {{ ref('stg__micromasters__app__postgres__profiles_profile') }}
-)
-
 , micromasters_programs as (
     select *
     from {{ ref('int__micromasters__programs') }}
@@ -38,22 +33,20 @@ select
     , micromasters_programs.program_title
     , edx_users.user_id as user_edxorg_id
     , edx_users.user_gender
-    , micromasters_profiles.user_address_city
-    , micromasters_profiles.user_first_name
-    , micromasters_profiles.user_last_name
-    , micromasters_profiles.user_address_postal_code
-    , micromasters_profiles.user_street_address
-    , micromasters_profiles.user_address_state_or_territory
+    , micromasters_users.user_address_city
+    , micromasters_users.user_first_name
+    , micromasters_users.user_last_name
+    , micromasters_users.user_address_postal_code
+    , micromasters_users.user_street_address
+    , micromasters_users.user_address_state_or_territory
     , mitxonline_program_certificates.programcertificate_created_on as program_completion_timestamp
-    , micromasters_profiles.user_id as micromasters_user_id
+    , micromasters_users.user_id as micromasters_user_id
     , coalesce(edx_users.user_country, mitxonline_users.user_address_country) as user_country
     , coalesce(edx_users.user_full_name, mitxonline_users.user_full_name) as user_full_name
-    , substring(micromasters_profiles.user_birth_date, 1, 4) as user_year_of_birth
+    , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
 from mitxonline_program_certificates
 left join mitxonline_users on mitxonline_users.user_id = mitxonline_program_certificates.user_id
-left join micromasters_profiles
-    on micromasters_profiles.user_profile_id = mitxonline_users.user_micromasters_profile_id
-left join micromasters_users on micromasters_profiles.user_id = micromasters_users.user_id
+left join micromasters_users on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
 left join micromasters_programs
     on micromasters_programs.program_title = 'Data, Economics, and Development Policy'
 left join edx_users on edx_users.user_username = micromasters_users.user_edxorg_username
