@@ -8,12 +8,10 @@ sources:
   schema: 'ol_warehouse_{{ target.name }}_raw'
   tables:
   - name: raw__irx__edxorg__bigquery__mitx_course
-    description: MITx courses metadata provided by IR
+    description: MITx courses metadata from edX.org and MITxOnline provided by IRx
     columns:
     - name: course_id
       description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
-        Note that this is old format as IR converts any new format (course-v1:{org}+{course}+{run})
-        into old ones
     - name: course_title
       description: str, The title of the course
     - name: url
@@ -84,7 +82,8 @@ sources:
       description: str
 
   - name: raw__irx__edxorg__bigquery__mitx_person_course
-    description: canonical datasets that tracks both user activities and certain demographics
+    description: source table contains user activities from edX.org, MITxOnline/xPro
+      open edx and certain enrollment/certificate fields from edx.org
     columns:
     - name: course_id
       description: str, The canonical ID of the course in the format as {org}/{course
@@ -308,9 +307,9 @@ sources:
         means user does not have a discussion forum role assigned
 
   - name: raw__irx__edxorg__bigquery__mitx_user_info_combo
-    description: source table contains edxorg user profile, enrollments and certificate
-      details in a course from IRx BigQuery, but enrollment_course_id in this table
-      is not always populated.
+    description: source table contains users from edX.org, MITxOnline/xPro open edx
+      sources and complete enrollments/certificates fields from edX.org provided by
+      IRx
     columns:
     - name: user_id
       description: int, Numerical user ID of a learner on a specific edX platform
@@ -431,9 +430,9 @@ sources:
         handle
 
   - name: raw__irx__edxorg__bigquery__email_opt_in
-    description: It contains email opt-in preferences for every user on every course
-      they enroll in. If users enroll in multiple courses, the email and username
-      in this table are the most recent data
+    description: It contains email opt-in preferences for edX.org courses. If users
+      enroll in multiple courses, the email and username in this table are expected
+      to be the most recent data.
     columns:
     - name: course_id
       description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
