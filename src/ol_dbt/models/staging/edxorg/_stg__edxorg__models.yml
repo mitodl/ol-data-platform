@@ -3,11 +3,10 @@ version: 2
 
 models:
 - name: stg__edxorg__bigquery__mitx_courserun
+  description: MITx courses metadata from edX.org and MITxOnline courses
   columns:
   - name: courserun_readable_id
     description: str, The canonical ID of the course run in the format as {org}/{course}/{run}.
-      This is old format and could be different from courses in MITxOnline or MicroMasters
-      that use new format
     tests:
     - unique
     - not_null
@@ -43,6 +42,8 @@ models:
     description: str, List of instructors associated with the course
 
 - name: stg__edxorg__bigquery__mitx_person_course
+  description: It contains user activities from edX.org, MITxOnline/xPro open edx
+    and certain enrollment/certificate fields from edx.org
   columns:
   - name: user_id
     description: int, Numerical user ID of a learner on a specific edX platform -
@@ -174,8 +175,8 @@ models:
       column_list: ["user_id", "courserun_readable_id"]
 
 - name: stg__edxorg__bigquery__mitx_user_info_combo
-  description: This contains edxorg user profile, enrollments and certificate details
-    in a course from IRx BigQuery.
+  description: This contains users from edX.org, MITxOnline/xPro open edx sources
+    and complete enrollments/certificates fields from edX.org
   columns:
   - name: user_id
     description: int, Numerical user ID of a learner on a specific edX platform -
@@ -275,9 +276,9 @@ models:
     description: float, The grade when the certificate was generated
 
 - name: stg__edxorg__bigquery__mitx_user_email_opt_in
-  description: It contains email opt-in preferences for every user on every course
-    they enroll in. If users enroll in multiple courses, the email and username in
-    this table are the most recent data
+  description: It contains email opt-in preferences for edX.org courses. If users
+    enroll in multiple courses, the email and username in this table are expected
+    to be the most recent data.
   columns:
   - name: user_id
     description: int, Numerical user ID of a learner on a specific edX platform -
