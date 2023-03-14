@@ -44,6 +44,9 @@ vars:
 # using the `{{ config(...) }}` macro.
 models:
   open_learning:
+    +properties:
+      format: "'PARQUET'"
+    +required_docs: true
     staging:
       +materialized: table
       +schema: staging
@@ -53,4 +56,3 @@ models:
     marts:
       +materialized: table
       +schema: mart
-    +required_docs: true

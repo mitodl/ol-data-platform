@@ -4,8 +4,8 @@ version: 2
 sources:
 - name: ol_warehouse_raw_data
   loader: airbyte
-  database: 'ol_data_lake_{{ target.name }}'
-  schema: 'ol_warehouse_{{ target.name }}_raw'
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
   - name: raw__micromasters__app__postgres__ecommerce_redeemedcoupon
     columns:
