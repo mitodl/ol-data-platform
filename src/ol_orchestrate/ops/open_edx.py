@@ -8,7 +8,7 @@ from dagster import (
     Field,
     Int,
     List,
-    MetadataEntry,
+    MetadataValue,
     OpExecutionContext,
     Out,
     Output,
@@ -101,13 +101,9 @@ def list_courses(context: OpExecutionContext) -> List[String]:
         success=bool(course_ids),
         label="edx_course_list_not_empty",
         description="Ensure course list is not empty.",
-        metadata_entries=[
-            MetadataEntry.text(
-                text=str(len(course_ids)),
-                label="number_of_course_ids",
-                description="The number of course IDs retrieved from the course API.",
-            )
-        ],
+        metadata={
+            "number_of_course_ids": MetadataValue.text(text=str(len(course_ids)))
+        },
     )
     yield Output(course_ids, "edx_course_ids")
 
@@ -165,14 +161,12 @@ def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) ->
     yield AssetMaterialization(
         asset_key="users_query",
         description="Information of users enrolled in available courses on Open edX installation",  # noqa: E501
-        metadata_entries=[
-            MetadataEntry.text(
+        metadata={
+            "enrolled_users_count": MetadataValue.text(
                 text=str(len(users_data)),
-                label="enrolled_users_count",
-                description="Number of users who are enrolled in courses",
             ),
-            MetadataEntry.path(enrollments_path.name, "enrollment_query_csv_path"),
-        ],
+            "enrollment_query_csv_path": MetadataValue.path(enrollments_path.name),
+        },
     )
     yield ExpectationResult(
         success=bool(users_data),
@@ -242,15 +236,14 @@ def student_submissions(context: OpExecutionContext, edx_course_ids: List[String
     yield AssetMaterialization(
         asset_key="enrolled_students",
         description="Students enrolled in edX courses",
-        metadata_entries=[
-            MetadataEntry.text(
-                label="student_submission_count",
-                description="Number of student submission records",
+        metadata={
+            "student_submission_count": MetadataValue.text(
                 text=str(submissions_count),
             ),
-            MetadataEntry.path(submissions_path.name, "student_submissions_path"),
-        ],
+            "student_submissions_path": MetadataValue.path(submissions_path.name),
+        },
     )
+
     yield ExpectationResult(
         success=submissions_count > 0,
         label="enrolled_students_count_non_zero",
@@ -302,14 +295,12 @@ def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]
     yield AssetMaterialization(
         asset_key="enrollment_query",
         description="Course enrollment records from Open edX installation",
-        metadata_entries=[
-            MetadataEntry.text(
-                label="course_enrollment_count",
-                description="Number of enrollment records",
+        metadata={
+            "course_enrollment_count": MetadataValue.text(
                 text=str(len(enrollment_data)),
             ),
-            MetadataEntry.path(enrollments_path.name, "enrollment_query_csv_path"),
-        ],
+            "enrollment_query_csv_path": MetadataValue.path(enrollments_path.name),
+        },
     )
     yield ExpectationResult(
         success=bool(enrollment_data),
@@ -360,14 +351,12 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
     yield AssetMaterialization(
         asset_key="role_query",
         description="Course roles records from Open edX installation",
-        metadata_entries=[
-            MetadataEntry.text(
-                label="course_roles_count",
-                description="Number of course roles records",
+        metadata={
+            "course_roles_count": MetadataValue.text(
                 text=str(len(roles_data)),
             ),
-            MetadataEntry.path(roles_path.name, "role_query_csv_path"),
-        ],
+            "role_query_csv_path": MetadataValue.path(roles_path.name),
+        },
     )
     yield ExpectationResult(
         success=bool(roles_data),
@@ -462,21 +451,19 @@ def export_edx_forum_database(  # type: ignore
     if mongodump_retcode != 0:
         raise Failure(
             description="The mongodump command for exporting the Open edX forum database failed.",  # noqa: E501
-            metadata_entries=[
-                MetadataEntry.text(
+            metadata={
+                "mongodump_output": MetadataValue.text(
                     text=mongodump_output,
-                    label="mongodump_output",
-                    description="Output of the mongodump command",
                 )
-            ],
+            },
         )
 
     yield AssetMaterialization(
         asset_key="edx_forum_database",
         description="Exported Mongo database of forum data from Open edX installation",
-        metadata_entries=[
-            MetadataEntry.path(str(forum_data_path), "edx_forum_database_export_path")
-        ],
+        metadata={
+            "edx_forum_database_export_path": MetadataValue.path(str(forum_data_path))
+        },
     )
 
     yield Output(forum_data_path, "edx_forum_data_directory")
@@ -689,11 +676,11 @@ def upload_extracted_data(  # noqa: PLR0913
     yield AssetMaterialization(
         asset_key="edx_daily_results",
         description="Daily export directory for edX export pipeline",
-        metadata_entries=[
-            MetadataEntry.fspath(
+        metadata={
+            "results_s3_path": MetadataValue.fspath(
                 f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
             ),
-        ],
+        },
     )
     context.resources.results_dir.clean_dir()
     yield Output(
