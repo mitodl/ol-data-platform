@@ -1,0 +1,158 @@
+---
+version: 2
+
+models:
+- name: int__salesforce__opportunity
+  description: Salesforce opportunity data
+  columns:
+  - name: opportunity_id
+    description: string, globally unique string that identifies an opportunity
+    tests:
+    - not_null
+    - unique
+  - name: opportunity_name
+    description: string, name for the opportunity
+    tests:
+    - not_null
+  - name: opportunity_type
+    description: string, opportunity type - Existing Business, Expansion Business,
+      New Business
+    tests:
+    - accepted_values:
+        values: ["Existing Business", "Expansion Business", "New Business"]
+  - name: opportunity_business_type
+    description: string, string, indicating business type - B2C (Business to Consumer),
+      B2B (Business to Business) or B2X (Business-to-Exchange). B2X is inactive.
+    tests:
+    - accepted_values:
+        values: ["B2C", "B2B", "B2X"]
+  - name: opportunity_agreement_type
+    description: string, type of Agreement. Possible values - 3rd Party Hosted, Additional
+      MSA Order Form, Affiliate Direct, Affiliate via Intermediary, Bulk Sales, Content
+      Licensing, Master Service Agreement, Membership, Private Course (SPOC), Reseller,
+      Self-Pay Opp, Subscription, Training Broker, Underwriting, Workshop
+  - name: opportunity_revenue_share_or_commission_contract
+    description: boolean, indicating if MIT will have to pay a fee or commission to
+      another party because of this opportunity
+    tests:
+    - not_null
+  - name: opportunity_revenue_share_or_commission_amount
+    description: decimal, actual $ amount of revenue share/commission once it has
+      been calculated for this opportunity
+  - name: opportunity_mit_is_sales_lead
+    description: boolean, indicating if MIT is the lead (or unsupported sales) in
+      opportunity for 3rd party hosted sales
+    tests:
+    - not_null
+  - name: opportunity_stage
+    description: string, current stage of the opportunity. Some examples - Closed
+      Won, Closed Won, Enrollment List, Contracting, Demo, Order, Prospecting, Connecting,
+      etc
+    tests:
+    - not_null
+  - name: opportunity_leadsource
+    description: string, source of the opportunity, such as Advertisement, Partner,
+      or Web
+  - name: opportunity_nextstep
+    description: string, next step noted for this opportunity
+  - name: opportunity_has_lineitem
+    description: boolean, indicating if the opportunity has product line item
+    tests:
+    - not_null
+  - name: opportunity_amount
+    description: decimal, estimated total sale amount in US dollar
+  - name: opportunity_probability
+    description: int, percentage of the likelihood that opportunity will close - 0
+      to 100 (0 means Closed/Lost, 100 means Closed/Won)
+  - name: opportunity_is_won
+    description: boolean, indicating if the opportunity is a closed-Won sale
+    tests:
+    - not_null
+  - name: opportunity_is_closed
+    description: boolean, indicating if the opportunity is a closed sale, which can
+      be Closed-Lost or Closed-Won
+    tests:
+    - not_null
+  - name: opportunity_close_date
+    description: date, close date for the opportunity
+  - name: opportunity_num_enrollment_codes_redeemed
+    description: int, sum of enrollment codes redeemed
+  - name: opportunity_num_of_seats_purchased
+    description: int, number of Seats purchased
+  - name: opportunity_price_per_seat
+    description: int, price per seat, it's calculated Amount / of_Seats_Purchased__c
+      in US dollar
+  - name: opportunity_data_quality_score
+    description: int, data quality score between 0 to 100
+  - name: opportunity_data_quality_description
+    description: string, description for data quality score
+  - name: opportunity_created_on
+    description: timestamp, date and time when this record was created
+    tests:
+    - not_null
+  - name: opportunity_modified_on
+    description: timestamp, date and time when a user or automated process last modified
+      this record
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__salesforce__opportunity')
+
+- name: int__salesforce__opportunitylineitem
+  description: Salesforce opportunity product line items
+  columns:
+  - name: opportunitylineitem_id
+    description: string, unique string that identifies this opportunity product line
+      item
+    tests:
+    - not_null
+    - unique
+  - name: opportunity_id
+    description: string, ID of the associated Opportunity
+    tests:
+    - not_null
+    - relationships:
+        to: ref('int__salesforce__opportunity')
+        field: opportunity_id
+  - name: opportunitylineitem_product_name
+    description: string, product name of the line item
+    tests:
+    - not_null
+  - name: opportunitylineitem_description
+    description: string, text description of the line item
+  - name: opportunitylineitem_product_code
+    description: string, product code for the line item (some are blank) e.g. program-v1:xPRO+SysEngx+R18
+  - name: opportunitylineitem_list_price
+    description: decimal, list price for the line item in US dollar
+    tests:
+    - not_null
+  - name: opportunitylineitem_sales_price
+    description: decimal, sales price for the line item in US dollar
+    tests:
+    - not_null
+  - name: opportunitylineitem_discount_percent
+    description: decimal, discount for the product as a percentage
+  - name: opportunitylineitem_quantity
+    description: int, number of product
+    tests:
+    - not_null
+  - name: opportunitylineitem_total_price
+    description: decimal, total price of the opportunity line item in US dollar
+    tests:
+    - not_null
+  - name: opportunitylineitem_service_date
+    description: date, date when the product revenue will be recognized and the product
+      quantity will be shipped
+  - name: opportunitylineitem_created_on
+    description: timestamp, date and time when this record was created
+    tests:
+    - not_null
+  - name: opportunitylineitem_modified_on
+    description: timestamp, date and time when a user or automated process last modified
+      this record
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__salesforce__opportunitylineitem')
