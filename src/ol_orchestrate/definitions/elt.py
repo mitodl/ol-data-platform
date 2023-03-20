@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -11,7 +12,10 @@ from dagster import (
     define_asset_job,
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
-from dagster_dbt import dbt_cli_resource, load_assets_from_dbt_project
+from dagster_dbt import (
+    dbt_cli_resource,
+    load_assets_from_dbt_manifest,
+)
 from requests.auth import HTTPBasicAuth
 
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "dev")
@@ -27,7 +31,7 @@ configured_airbyte_resource = airbyte_resource.configured(
     }
 )
 
-dbt_repo_dir = str(
+dbt_repo_dir = (
     Path(__file__).parent.parent.parent.joinpath("ol_dbt")
     if dagster_deployment == "dev"
     else Path("/opt/dbt")
@@ -67,9 +71,11 @@ airbyte_update_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.RUNNING,
 )
 
-dbt_assets = load_assets_from_dbt_project(
-    project_dir=dbt_repo_dir,
-    profiles_dir=dbt_repo_dir,
+dbt_assets = load_assets_from_dbt_manifest(
+    manifest_json=json.loads(
+        dbt_repo_dir.joinpath("target", "manifest.json").read_text(),
+    ),
+    use_build_command=True,
 )
 
 elt = Definitions(

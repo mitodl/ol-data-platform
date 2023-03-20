@@ -5,3 +5,4 @@
 /.pids/
 /dist/
 .venv/
+bin/pants

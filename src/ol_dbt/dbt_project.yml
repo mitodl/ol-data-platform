@@ -26,7 +26,7 @@ clean-targets:         # directories to be removed by `dbt clean`
 
 
 vars:
-  schema_suffix:
+  schema_suffix: dev
 
   open_learning:
     platforms: ['Bootcamps', 'xPro', 'MITx Online', 'MicroMasters', 'edX.org']
