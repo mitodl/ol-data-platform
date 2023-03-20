@@ -366,7 +366,9 @@ def teams_membership(context: OpExecutionContext, edx_course_ids: List[String]) 
 
     :yield: A path definition that points to the rendered data table
     """
-    course_team, teams_membership = Tables("teams_courseteam", "teams_courseteammembership")
+    course_team, teams_membership = Tables(
+        "teams_courseteam", "teams_courseteammembership"
+    )
     memberships_count = 0
     memberships_path = context.resources.results_dir.path.joinpath(
         "teamsmembership_query.sql"
@@ -395,6 +397,7 @@ def teams_membership(context: OpExecutionContext, edx_course_ids: List[String]) 
     )
     yield Output(memberships_path, "edx_teams_memberships")
 
+
 ###
 
 
@@ -407,7 +410,7 @@ def teams_membership(context: OpExecutionContext, edx_course_ids: List[String]) 
             String,
             is_required=False,
             description="Local path for mongodump for dev",
-            default_value="/usr/bin/mongodump"
+            default_value="/usr/bin/mongodump",
         ),
         "edx_mongodb_uri": Field(
             String,
@@ -595,30 +598,6 @@ def export_edx_courses(
         context.resources.s3.copy(CopySource=source_object, **dest_object)
         context.resources.s3.delete_object(**source_object)
 
-@op(
-    name="edx_write_course_id_csv",
-    description="Write a CSV file containing the list of active course IDs on the edX instance",  # noqa: E501
-    required_resource_keys={"results_dir"},
-    ins={
-        "edx_course_ids": In(
-            dagster_type=List[String],
-            description="List of course IDs active on Open edX installation",
-        ),
-    },
-    out={
-        "edx_course_ids_csv": Out(
-            dagster_type=DagsterPath,
-            description="Path to list of course IDs rendered as a CSV file",
-        ),
-    },
-)
-def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]):
-    course_ids_csv_path = context.resources.results_dir.path.joinpath("course_ids.csv")
-    course_ids_dict = [{"course_id": course_id} for course_id in edx_course_ids]
-    write_csv(["course_id"], course_ids_dict, course_ids_csv_path)
-    yield Output(course_ids_csv_path, "edx_course_ids_csv")
-
-
 
 @op(
     name="edx_write_course_id_csv",
@@ -642,6 +621,31 @@ def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]
     course_ids_dict = [{"course_id": course_id} for course_id in edx_course_ids]
     write_csv(["course_id"], course_ids_dict, course_ids_csv_path)
     yield Output(course_ids_csv_path, "edx_course_ids_csv")
+
+
+@op(
+    name="edx_write_course_id_csv",
+    description="Write a CSV file containing the list of active course IDs on the edX instance",  # noqa: E501
+    required_resource_keys={"results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        ),
+    },
+    out={
+        "edx_course_ids_csv": Out(
+            dagster_type=DagsterPath,
+            description="Path to list of course IDs rendered as a CSV file",
+        ),
+    },
+)
+def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]):
+    course_ids_csv_path = context.resources.results_dir.path.joinpath("course_ids.csv")
+    course_ids_dict = [{"course_id": course_id} for course_id in edx_course_ids]
+    write_csv(["course_id"], course_ids_dict, course_ids_csv_path)
+    yield Output(course_ids_csv_path, "edx_course_ids_csv")
+
 
 @op(
     name="edx_upload_daily_extracts",
