@@ -34,7 +34,8 @@ with enrollments as (
         , users.user_username
         , runs.courserun_title
     from enrollments
-    inner join users on
+    inner join
+        users on
         enrollments.user_id = users.user_id
     ---- there are certificates issued for courses that don't exist in course model.
     left join runs on enrollments.courserun_readable_id = runs.courserun_readable_id
