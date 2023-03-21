@@ -45,7 +45,7 @@ mypy = "*"
 pre-commit = "^3"
 pytest = "^7.1.2"
 ruff = "^0"
-sqlfluff = "^1.4.1"
+sqlfluff = "^2.0.0"
 
 [tool.black]
 target-version = ["py310"]
