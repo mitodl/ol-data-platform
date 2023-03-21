@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ol-data-platform"
-version = "0.5.3"
+version = "0.6.1"
 description = "Code and configuration for powering the MIT Open Learning data platform"
 authors = ["MIT Open Learning Engineering <ol-data@mit.edu>"]
 license = "BSD-3-Clause"
@@ -11,14 +11,14 @@ classifiers = [
     'Operating System :: Linux',
     'Programming Language :: Python',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
 ]
 packages = [
     { include = "ol_orchestrate", from = "src/" },
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.11"
+python = "^3.10"
 PyPika = "^0.48.9"
 dagit = "^1.2"
 dagster = "^1.2"
@@ -30,7 +30,9 @@ dagster-gcp = "^0.18"
 dagster-ge = "^0.18"
 dagster-postgres = "^0.18"
 dagster-shell = "^0.18"
+dbt-sqlite = "^1.4.0"
 dbt-trino = "^1.3.0"
+grpcio = "<1.48" # Pinning to inform Pants of the proper version constraints to enable building the Dagster related packages
 httpx = "^0.23.0"
 hvac = "^1.0"
 pyarrow = ">=9.0.0"
@@ -38,16 +40,16 @@ pymysql = "^1.0.0"
 setuptools = "^67.0.0"  # Add this to avoid errors with installing packages that depend on it for building
 dynaconf = "^3.1.11"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 black = "*"
 mypy = "*"
 pre-commit = "^3"
 pytest = "^7.1.2"
-sqlfluff = "^1.4.1"
-ruff = "^0.0.254"
+ruff = "^0"
+sqlfluff = "^2.0.0"
 
 [tool.black]
-target-version = ["py39"]
+target-version = ["py310"]
 
 [tool.isort]
 profile = "black"
@@ -80,7 +82,7 @@ target = "qa"
 line_position = "leading"
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 88
 select = [
     "A",      # flake8-builtins

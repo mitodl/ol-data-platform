@@ -12,6 +12,7 @@ open_learning:
       schema: ol_warehouse_qa
       host: mitol-ol-data-lake-qa-0.trino.galaxy.starburst.io
       http_scheme: https
+      threads: 4
     production:
       type: trino
       method: ldap
@@ -22,6 +23,7 @@ open_learning:
       schema: ol_warehouse_production
       host: mitol-ol-data-lake-production.trino.galaxy.starburst.io
       http_scheme: https
+      threads: 4
     dev_qa:
       type: trino
       method: ldap
@@ -32,6 +34,7 @@ open_learning:
       schema: ol_warehouse_qa{{ "_{}".format(var('schema_suffix')) }}
       host: mitol-ol-data-lake-qa-0.trino.galaxy.starburst.io
       http_scheme: https
+      threads: 4
     dev_production:
       type: trino
       method: ldap
@@ -42,3 +45,12 @@ open_learning:
       schema: ol_warehouse_production{{ "_{}".format(var('schema_suffix')) }}
       host: mitol-ol-data-lake-production.trino.galaxy.starburst.io
       http_scheme: https
+      threads: 4
+    dev:
+      type: sqlite
+      threads: 1
+      database: default
+      schema: main
+      schemas_and_paths:
+        main: dev_dbs/main.db
+      schema_directory: dev_dbs

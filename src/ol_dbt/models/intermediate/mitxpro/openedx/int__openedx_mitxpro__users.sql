@@ -3,7 +3,8 @@
 -- date_joined and is_staff
 
 with xpro_openedx_users as (
-    select * from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
+    select *
+    from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
     where courserun_platform = '{{ var("mitxpro") }}'
 )
 

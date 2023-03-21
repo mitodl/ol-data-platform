@@ -1,4 +1,4 @@
-FROM python:3.9-slim AS dagster-base
+FROM python:3.10-slim AS dagster-base
 RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app && \
     useradd -s /bin/bash -d /opt/dagster/dagster_home/ dagster &&\
     chown -R dagster: /opt/dagster/

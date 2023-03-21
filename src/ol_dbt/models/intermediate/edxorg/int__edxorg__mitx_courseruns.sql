@@ -3,7 +3,8 @@
 
 
 with runs as (
-    select * from {{ ref('stg__edxorg__bigquery__mitx_courserun') }}
+    select *
+    from {{ ref('stg__edxorg__bigquery__mitx_courserun') }}
     where courserun_platform = '{{ var("edxorg") }}'
 )
 

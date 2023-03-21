@@ -1,7 +1,8 @@
 -- MIT xPro open edx user activities
 
 with person_courses as (
-    select * from {{ ref('stg__edxorg__bigquery__mitx_person_course') }}
+    select *
+    from {{ ref('stg__edxorg__bigquery__mitx_person_course') }}
     where courserun_platform = '{{ var("mitxpro") }}'
 )
 

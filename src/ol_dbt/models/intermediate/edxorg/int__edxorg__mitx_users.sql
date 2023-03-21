@@ -5,7 +5,8 @@
 -- Both tables are unique on user_id + course_id
 
 with user_info_combo as (
-    select * from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
+    select *
+    from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
     where courserun_platform = '{{ var("edxorg") }}'
 )
 

@@ -9,11 +9,12 @@ python_distribution(
         "//:requirements#dagster-aws",
         "//:requirements#dagster-gcp",
         "//:requirements#dbt-trino",
+        "//:requirements#dbt-sqlite",
         "./repositories",
     ],
     provides=python_artifact(
         name="dagster-repositories",
-        version="0.6.0",
+        version="0.6.1",
     ),
 )
 
@@ -23,10 +24,11 @@ python_distribution(
         "//:requirements#dagster-postgres",
         "//:requirements#dagster-aws",
         "//:requirements#dbt-trino",
+        "//:requirements#dbt-sqlite",
         "./definitions",
     ],
     provides=python_artifact(
         name="dagster-code-locations",
-        version="0.6.0",
+        version="0.6.1",
     )
 )
