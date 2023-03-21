@@ -38,4 +38,5 @@ jobs:
           dockerd 2>&1 > /dev/null &
           export DAGSTER_VERSION=`egrep -A1 "^name = \"dagster\"$" poetry.lock | tail -n 1 | cut -d'"' -f2`
           echo "${DOCKERHUB_PASSWORD}" | docker login --username "${DOCKERHUB_USERNAME}" --password-stdin
-          ./pants --tag=docker_image publish ::
+          scripts/get-pants.sh -d bin/
+          bin/pants --tag=docker_image publish ::

@@ -162,8 +162,8 @@ def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) ->
         asset_key="users_query",
         description="Information of users enrolled in available courses on Open edX installation",  # noqa: E501
         metadata={
-            "enrolled_users_count": MetadataValue.text(
-                text=str(len(users_data)),
+            "enrolled_users_count": MetadataValue.int(
+                text=len(users_data),
             ),
             "enrollment_query_csv_path": MetadataValue.path(enrollments_path.name),
         },
@@ -237,8 +237,8 @@ def student_submissions(context: OpExecutionContext, edx_course_ids: List[String
         asset_key="enrolled_students",
         description="Students enrolled in edX courses",
         metadata={
-            "student_submission_count": MetadataValue.text(
-                text=str(submissions_count),
+            "student_submission_count": MetadataValue.int(
+                text=submissions_count,
             ),
             "student_submissions_path": MetadataValue.path(submissions_path.name),
         },
@@ -296,8 +296,8 @@ def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]
         asset_key="enrollment_query",
         description="Course enrollment records from Open edX installation",
         metadata={
-            "course_enrollment_count": MetadataValue.text(
-                text=str(len(enrollment_data)),
+            "course_enrollment_count": MetadataValue.int(
+                text=len(enrollment_data),
             ),
             "enrollment_query_csv_path": MetadataValue.path(enrollments_path.name),
         },
@@ -352,8 +352,8 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
         asset_key="role_query",
         description="Course roles records from Open edX installation",
         metadata={
-            "course_roles_count": MetadataValue.text(
-                text=str(len(roles_data)),
+            "course_roles_count": MetadataValue.int(
+                text=len(roles_data),
             ),
             "role_query_csv_path": MetadataValue.path(roles_path.name),
         },
@@ -677,7 +677,7 @@ def upload_extracted_data(  # noqa: PLR0913
         asset_key="edx_daily_results",
         description="Daily export directory for edX export pipeline",
         metadata={
-            "results_s3_path": MetadataValue.fspath(
+            "results_s3_path": MetadataValue.path(
                 f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
             ),
         },
