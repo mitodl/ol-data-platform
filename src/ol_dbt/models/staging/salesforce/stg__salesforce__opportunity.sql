@@ -3,7 +3,8 @@
 
 with source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__thirdparty__salesforce__opportunity') }}
+    select *
+    from {{ source('ol_warehouse_raw_data', 'raw__thirdparty__salesforce__opportunity') }}
     where isdeleted = false
 
 )
