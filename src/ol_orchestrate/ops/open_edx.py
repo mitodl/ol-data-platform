@@ -281,14 +281,7 @@ def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]
     enrollment = Table("student_courseenrollment")
     enrollments_query = (
         Query.from_(enrollment)
-        .select(
-            "id",
-            "user_id",
-            "course_id",
-            "created",
-            "is_active",
-            "mode"
-        )
+        .select("id", "user_id", "course_id", "created", "is_active", "mode")
         .where(enrollment.course_id.isin(edx_course_ids))
     )
     query_fields, enrollment_data = context.resources.sqldb.run_query(enrollments_query)
@@ -346,13 +339,7 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
     access_role = Table("student_courseaccessrole")
     roles_query = (
         Query.from_(access_role)
-        .select(
-            "id",
-            "user_id",
-            "org",
-            "course_id",
-            "role"
-        )
+        .select("id", "user_id", "org", "course_id", "role")
         .where(access_role.course_id.isin(edx_course_ids))
     )
     query_fields, roles_data = context.resources.sqldb.run_query(roles_query)

@@ -142,23 +142,23 @@ def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) ->
             users.first_name,
             users.last_name,
             users.email,
-            ''.as_('password'),
+            "".as_("password"),
             users.is_staff,
             users.is_active,
             users.is_superuser,
             users.last_login,
             users.date_joined,
-            ''.as_('status'),
-            'NULL'.as_('email_key'),
-            ''.as_('avatar_type'),
-            ''.as_('country'),
-            '0'.as_('show_country'),
-            'NULL'.as_('date_of_birth'),
-            ''.as_('interesting_tags'),
-            ''.as_('ignored_tags'),
-            '0'.as_('email_tag_filter_strategy'),
-            '0'.as_('display_tag_filter_strategy'),
-            '0'.as_('consecutive_days_visit_count'),
+            "".as_("status"),
+            "NULL".as_("email_key"),
+            "".as_("avatar_type"),
+            "".as_("country"),
+            "0".as_("show_country"),
+            "NULL".as_("date_of_birth"),
+            "".as_("interesting_tags"),
+            "".as_("ignored_tags"),
+            "0".as_("email_tag_filter_strategy"),
+            "0".as_("display_tag_filter_strategy"),
+            "0".as_("consecutive_days_visit_count"),
             course_enrollment.course_id,
         )
         .where(course_enrollment.course_id.isin(edx_course_ids))
@@ -331,12 +331,7 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
     access_role = Table("student_courseaccessrole")
     roles_query = (
         Query.from_(access_role)
-        .select(
-            "org",
-            "course_id",
-            "user_id",
-            "role"
-        )
+        .select("org", "course_id", "user_id", "role")
         .where(access_role.course_id.isin(edx_course_ids))
     )
     query_fields, roles_data = context.resources.sqldb.run_query(roles_query)
@@ -353,6 +348,7 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
         description="Ensure that the number of course roles is not zero.",
     )
     yield Output(roles_path, "edx_course_roles")
+
 
 @op(
     name="open_edx_team_memberships",
@@ -382,7 +378,9 @@ def team_memberships(context: OpExecutionContext, edx_course_ids: List[String]) 
 
     :yield: A path definition that points to the rendered data table
     """
-    course_team, team_membership = Tables("teams_courseteam", "teams_courseteammembership")
+    course_team, team_membership = Tables(
+        "teams_courseteam", "teams_courseteammembership"
+    )
     memberships_count = 0
     memberships_path = context.resources.results_dir.path.joinpath(
         "teamsmembership_query.sql"
@@ -410,6 +408,7 @@ def team_memberships(context: OpExecutionContext, edx_course_ids: List[String]) 
         description="Ensure that the number of team memberships is not zero.",
     )
     yield Output(memberships_path, "edx_team_memberships")
+
 
 @op(
     name="open_edx_course_grades",
@@ -450,7 +449,7 @@ def course_grades(context: OpExecutionContext, edx_course_ids: List[String]) -> 
             "letter_grade",
             "passed_timestamp",
             "created",
-            "modified"
+            "modified",
         )
         .where(course_grade.course_id.isin(edx_course_ids))
         .orderby("user_id", order=Order.asc)
@@ -469,6 +468,7 @@ def course_grades(context: OpExecutionContext, edx_course_ids: List[String]) -> 
         description="Ensure that the number of course grades is not zero.",
     )
     yield Output(grades_path, "edx_course_grades")
+
 
 @op(
     name="open_edx_subsection_grades",
@@ -511,14 +511,16 @@ def subsection_grades(context: OpExecutionContext, edx_course_ids: List[String])
             "possible_graded",
             "first_attempted",
             "created",
-            "modified"
+            "modified",
         )
         .where(subsection_grade.course_id.isin(edx_course_ids))
         .orderby("user_id", "first_attempted", order=Order.asc)
     )
     query_fields, subsection_data = context.resources.sqldb.run_query(subsection_query)
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
-    subsection_path = context.resources.results_dir.path.joinpath("subsectiongrade_query.sql")
+    subsection_path = context.resources.results_dir.path.joinpath(
+        "subsectiongrade_query.sql"
+    )
     write_csv(query_fields, subsection_data, subsection_path)
     yield AssetMaterialization(
         asset_key="subsection_query",
@@ -530,6 +532,7 @@ def subsection_grades(context: OpExecutionContext, edx_course_ids: List[String])
         description="Ensure that the number of subsection grades is not zero.",
     )
     yield Output(subsection_path, "edx_subsection_grades")
+
 
 @op(
     name="open_edx_generated_certificates",
@@ -565,9 +568,13 @@ def generated_certificates(context: OpExecutionContext, edx_course_ids: List[Str
         .select("*")
         .where(certificates.course_id.isin(edx_course_ids))
     )
-    query_fields, certificates_data = context.resources.sqldb.run_query(certificates_query)
+    query_fields, certificates_data = context.resources.sqldb.run_query(
+        certificates_query
+    )
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
-    certificates_path = context.resources.results_dir.path.joinpath("generatedcertificate_query.sql")
+    certificates_path = context.resources.results_dir.path.joinpath(
+        "generatedcertificate_query.sql"
+    )
     write_csv(query_fields, certificates_data, certificates_path)
     yield AssetMaterialization(
         asset_key="certificates_query",
@@ -579,6 +586,7 @@ def generated_certificates(context: OpExecutionContext, edx_course_ids: List[Str
         description="Ensure that the number of generated certificates is not zero.",
     )
     yield Output(certificates_path, "edx_generated_certificates")
+
 
 @op(
     name="open_edx_user_profiles",
@@ -607,7 +615,9 @@ def user_profiles(context: OpExecutionContext, edx_course_ids: List[String]) -> 
 
     :yield: A path definition that points to the rendered data table
     """
-    user_profile, course_enrollment = Tables("auth_userprofile", "student_courseenrollment")
+    user_profile, course_enrollment = Tables(
+        "auth_userprofile", "student_courseenrollment"
+    )
     user_profiles_query = (
         Query.from_(user_profile)
         .join(course_enrollment)
@@ -629,13 +639,17 @@ def user_profiles(context: OpExecutionContext, edx_course_ids: List[String]) -> 
             user_profile.city,
             user_profile.bio,
             user_profile.profile_image_uploaded_at,
-            user_profile.state
+            user_profile.state,
         )
         .where(course_enrollment.course_id.isin(edx_course_ids))
     )
-    query_fields, user_profiles_data = context.resources.sqldb.run_query(user_profiles_query)
+    query_fields, user_profiles_data = context.resources.sqldb.run_query(
+        user_profiles_query
+    )
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
-    user_profiles_path = context.resources.results_dir.path.joinpath("userprofile_query.sql")
+    user_profiles_path = context.resources.results_dir.path.joinpath(
+        "userprofile_query.sql"
+    )
     write_csv(query_fields, user_profiles_data, user_profiles_path)
     yield AssetMaterialization(
         asset_key="user_profiles_query",
@@ -647,6 +661,7 @@ def user_profiles(context: OpExecutionContext, edx_course_ids: List[String]) -> 
         description="Ensure that the number of user profiles is not zero.",
     )
     yield Output(user_profiles_path, "edx_user_profiles")
+
 
 @op(
     name="export_edx_forum_database",
