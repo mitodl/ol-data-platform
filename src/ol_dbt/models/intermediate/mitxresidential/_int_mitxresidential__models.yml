@@ -1,0 +1,182 @@
+---
+version: 2
+
+models:
+- name: int__mitxresidential__users
+  description: Residential MITx open edX users
+  columns:
+  - name: user_id
+    description: int, sequential ID representing a user on Residential MITx open edX
+      platform
+    tests:
+    - unique
+    - not_null
+  - name: user_username
+    description: str, unique username on the open edX platform
+    tests:
+    - unique
+    - not_null
+  - name: user_first_name
+    description: str, user's first name
+    tests:
+    - not_null
+  - name: user_last_name
+    description: str, user's last name
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user's email associated with their account
+    tests:
+    - unique
+    - not_null
+  - name: user_is_active
+    description: boolean, used to soft delete users
+    tests:
+    - not_null
+  - name: user_joined_on
+    description: timestamp, date and time when a user account was initially created
+    tests:
+    - not_null
+  - name: user_last_login
+    description: timestamp, date and time when user last login
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxresidential__openedx__auth_user')
+
+- name: int__mitxresidential__courseruns
+  description: Residential MITx open edX courses
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
+      courses) or org/course/run (for old-type courses)
+    tests:
+    - unique
+    - not_null
+  - name: courserun_title
+    description: str, course title
+  - name: courserun_org
+    description: str, course organization e.g. MITx
+    tests:
+    - not_null
+  - name: self_paced
+    description: boolean, indicating whether students can take this course at their
+      own pace
+    tests:
+    - not_null
+  - name: courserun_course_number
+    description: str, course number
+    tests:
+    - not_null
+  - name: courserun_start_on
+    description: timestamp, indicating when the course begins
+  - name: courserun_end_on
+    description: timestamp, indicating when the course ends
+  - name: courserun_enrollment_start_on
+    description: timestamp, first day students can enroll
+  - name: courserun_enrollment_end_on
+    description: timestamp, last day students can enroll
+  - name: courserun_created_on
+    description: timestamp, date and time when this record was initially created
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxresidential__openedx__courserun')
+
+- name: int__mitxresidential__courserun_enrollments
+  description: Residential MITx open edX course run enrollments
+  columns:
+  - name: courserunenrollment_id
+    description: int, sequential ID tracking a single user enrollment on Residential
+      MITx open edx platform
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
+      courses) or org/course/run (for old-type courses)
+    tests:
+    - not_null
+  - name: user_id
+    description: int, user ID on Residential MITx open edx platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('int__mitxresidential__users')
+        field: user_id
+  - name: courserunenrollment_enrollment_mode
+    description: str, enrollment mode e.g. honor or audit
+    tests:
+    - not_null
+  - name: courserunenrollment_is_active
+    description: boolean, indicating whether the user is still enrolled in the course
+    tests:
+    - not_null
+  - name: courserunenrollment_created_on
+    description: timestamp, date and time when this enrollment was initially created
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, course title
+  - name: user_username
+    description: str, unique username on the open edX platform
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user's email associated with their account
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxresidential__openedx__courserun_enrollment')
+
+- name: int__mitxresidential__courserun_grades
+  description: Residential MITx open edX course grades
+  columns:
+  - name: courserungrade_id
+    description: int, sequential ID tracking a user course grade on Residential MITx
+      open edx platform
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
+      courses) or org/course/run (for old-type courses)
+    tests:
+    - not_null
+  - name: user_id
+    description: int, user ID on Residential MITx open edx platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('int__mitxresidential__users')
+        field: user_id
+  - name: courserungrade_grade
+    description: float, calculated course grade as a decimal percentage, per grading
+      policy. e.g. 0.91 means 91%
+    tests:
+    - not_null
+  - name: courserungrade_letter_grade
+    description: str, calculated course grade as a letter value (e.g., A-D, Pass),
+      per grading policy If the learner's grade is Fail or F, this value is empty.
+  - name: courserungrade_created_on
+    description: timestamp, date and time when this grade was initially created
+    tests:
+    - not_null
+  - name: courserungrade_updated_on
+    description: timestamp, date and time when this grade was most recently updated
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, course title
+  - name: user_username
+    description: str, unique username on the open edX platform
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user's email associated with their account
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxresidential__openedx__courserun_grade')
