@@ -664,6 +664,183 @@ def user_profiles(context: OpExecutionContext, edx_course_ids: List[String]) -> 
 
 
 @op(
+    name="open_edx_language_proficiency",
+    required_resource_keys={"sqldb", "results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        )
+    },
+    out={
+        "edx_language_proficiency": Out(
+            dagster_type=DagsterPath,
+            description="Path to student language proficiency data in tabular format rendered as CSV files",
+        )
+    },
+)
+def language_proficiency(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+    """Generate a table showing language proficiencies for users for given courses.
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: OpExecutionContext
+
+    :param edx_course_ids: List of course IDs to retrieve student enrollments for
+    :type edx_course_ids: List[String]
+
+    :yield: A path definition that points to the rendered data table
+    """
+    user_profile, language_proficiency, course_enrollment = Tables("auth_userprofile", "student_languageproficiency", "student_courseenrollment")
+    language_proficiency_query = (
+        Query.from_(language_proficiency)
+        .join(user_profile)
+        .on(language_proficiency.user_profile_id == user_profile.id)
+        .join(course_enrollment)
+        .on(user_profile.user_id == course_enrollment.user_id)
+        .select(
+            "language_proficiency.*"
+        )
+        .where(course_enrollment.course_id.isin(edx_course_ids))
+    )
+    query_fields, language_proficiency_data = context.resources.sqldb.run_query(language_proficiency_query)
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    language_proficiency_path = context.resources.results_dir.path.joinpath("languageproficiency_query.sql")
+    write_csv(query_fields, language_proficiency_data, language_proficiency_path)
+    yield AssetMaterialization(
+        asset_key="language_proficiency_query",
+        description="Student language proficiencies in available courses on Open edX installation",  # noqa: E501
+    )
+    yield ExpectationResult(
+        success=bool(language_proficiency_data),
+        label="language_proficiency_count_non_zero",
+        description="Ensure that the number of language proficiency records is not zero.",
+    )
+    yield Output(language_proficiency_path, "edx_language_proficiency")
+
+# TODO: CourseWikiTask (WikiArticleTask, WikiArticleRevisionTask)
+@op(
+    name="open_edx_wiki_article",
+    required_resource_keys={"sqldb", "results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        )
+    },
+    out={
+        "edx_wiki_article": Out(
+            dagster_type=DagsterPath,
+            description="Path to wiki article data in tabular format rendered as CSV files",
+        )
+    },
+)
+def wiki_article(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+    """Generate a table showing wiki articles for given courses.
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: OpExecutionContext
+
+    :param edx_course_ids: List of course IDs to retrieve student enrollments for
+    :type edx_course_ids: List[String]
+
+    :yield: A path definition that points to the rendered data table
+    """
+    wiki_article, wiki_urlpath = Tables("wiki_article", "wiki_urlpath")
+    subquery = (
+        Query.from(wiki_urlpath).as_("node").from(wiki_urlpath).as("parent")
+
+        .select(
+            "node.id"
+        )
+    )
+    wiki_article_query = (
+        Query.from_(wiki_article)
+        .select(
+            "wiki_article.*"
+        )
+        .where(wiki_article.id.isin(subquery))
+    )
+#     query_fields, UPDATE_data = context.resources.sqldb.run_query(UPDATE_query)
+#     # Maintaining previous file name for compatibility (TMM 2020-05-01)
+#     UPDATE_path = context.resources.results_dir.path.joinpath("UPDATE_query.sql")
+#     write_csv(query_fields, UPDATE_data, UPDATE_path)
+#     yield AssetMaterialization(
+#         asset_key="UPDATE_query",
+#         description="UPDATE in available courses on Open edX installation",  # noqa: E501
+#     )
+#     yield ExpectationResult(
+#         success=bool(UPDATE_data),
+#         label="UPDATE_count_non_zero",
+#         description="Ensure that the number of UPDATE is not zero.",
+#     )
+#     yield Output(UPDATE_path, "edx_UPDATE")
+
+@op(
+    name="open_edx_forum_role",
+    required_resource_keys={"sqldb", "results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        )
+    },
+    out={
+        "edx_UPDATE": Out(
+            dagster_type=DagsterPath,
+            description="Path to UPDATE data in tabular format rendered as CSV files",
+        )
+    },
+)
+def UPDATE(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+    """Generate a table showing user profiles for given courses.
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: OpExecutionContext
+
+    :param edx_course_ids: List of course IDs to retrieve student enrollments for
+    :type edx_course_ids: List[String]
+
+    :yield: A path definition that points to the rendered data table
+    """
+    UPDATE, UPDATE = Tables("UPDATE", "UPDATE")
+    UPDATE_query = (
+        Query.from_(UPDATE)
+        .join(UPDATE)
+        .on(UPDATE.user_id == UPDATE.user_id)
+        .select(
+            UPDATE.UPDATE,
+            UPDATE.UPDATE,
+            UPDATE.UPDATE,
+            UPDATE.UPDATE,
+            UPDATE.UPDATE,
+            UPDATE.UPDATE,
+            UPDATE.UPDATE,
+            UPDATE.UPDATE,
+            UPDATE.UPDATE
+        )
+        .where(UPDATE.UPDATE.isin(edx_course_ids))
+    )
+    query_fields, UPDATE_data = context.resources.sqldb.run_query(UPDATE_query)
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    UPDATE_path = context.resources.results_dir.path.joinpath("UPDATE_query.sql")
+    write_csv(query_fields, UPDATE_data, UPDATE_path)
+    yield AssetMaterialization(
+        asset_key="UPDATE_query",
+        description="UPDATE in available courses on Open edX installation",  # noqa: E501
+    )
+    yield ExpectationResult(
+        success=bool(UPDATE_data),
+        label="UPDATE_count_non_zero",
+        description="Ensure that the number of UPDATE is not zero.",
+    )
+    yield Output(UPDATE_path, "edx_UPDATE")
+
+
+
+
+
+
+@op(
     name="export_edx_forum_database",
     description="Solid to build the command line string for executing mongodump against the Open edX forum database",  # noqa: E501
     required_resource_keys={"results_dir"},
