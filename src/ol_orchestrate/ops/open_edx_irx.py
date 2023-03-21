@@ -17,7 +17,7 @@ from dagster import (
 from dagster.core.definitions.input import In
 from dagster_shell.utils import execute as run_bash
 from pypika import MySQLQuery as Query
-from pypika import Table, Tables
+from pypika import Table, Tables, Order
 
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.lib.edx_api_client import (
@@ -105,6 +105,7 @@ def list_courses(context: OpExecutionContext) -> List[String]:
 
 
 @op(
+    name="open_edx_enrolled_users",
     required_resource_keys={"sqldb", "results_dir"},
     ins={
         "edx_course_ids": In(
@@ -141,11 +142,23 @@ def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) ->
             users.first_name,
             users.last_name,
             users.email,
+            ''.as_('password'),
             users.is_staff,
             users.is_active,
             users.is_superuser,
             users.last_login,
             users.date_joined,
+            ''.as_('status'),
+            'NULL'.as_('email_key'),
+            ''.as_('avatar_type'),
+            ''.as_('country'),
+            '0'.as_('show_country'),
+            'NULL'.as_('date_of_birth'),
+            ''.as_('interesting_tags'),
+            ''.as_('ignored_tags'),
+            '0'.as_('email_tag_filter_strategy'),
+            '0'.as_('display_tag_filter_strategy'),
+            '0'.as_('consecutive_days_visit_count'),
             course_enrollment.course_id,
         )
         .where(course_enrollment.course_id.isin(edx_course_ids))
@@ -266,7 +279,7 @@ def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]
     enrollment = Table("student_courseenrollment")
     enrollments_query = (
         Query.from_(enrollment)
-        .select("id", "user_id", "course_id", "created", "is_active", "mode")
+        .select("*")
         .where(enrollment.course_id.isin(edx_course_ids))
     )
     query_fields, enrollment_data = context.resources.sqldb.run_query(enrollments_query)
@@ -318,7 +331,12 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
     access_role = Table("student_courseaccessrole")
     roles_query = (
         Query.from_(access_role)
-        .select("id", "user_id", "org", "course_id", "role")
+        .select(
+            "org",
+            "course_id",
+            "user_id",
+            "role"
+        )
         .where(access_role.course_id.isin(edx_course_ids))
     )
     query_fields, roles_data = context.resources.sqldb.run_query(roles_query)
@@ -336,10 +354,8 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
     )
     yield Output(roles_path, "edx_course_roles")
 
-
-#####
 @op(
-    name="open_edx_teams_membership",
+    name="open_edx_team_memberships",
     description="Export of team memberships for courses on the specified Open edX installation.",  # noqa: E501
     required_resource_keys={"sqldb", "results_dir"},
     ins={
@@ -349,13 +365,13 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
         )
     },
     out={
-        "edx_teams_membership": Out(
+        "edx_team_memberships": Out(
             dagster_type=DagsterPath,
             description="Path to team membership data in tabular format rendered as CSV files",  # noqa: E501
         )
     },
 )
-def teams_membership(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+def team_memberships(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
     """Retrieve information about teams membership for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -366,40 +382,271 @@ def teams_membership(context: OpExecutionContext, edx_course_ids: List[String]) 
 
     :yield: A path definition that points to the rendered data table
     """
-    course_team, teams_membership = Tables(
-        "teams_courseteam", "teams_courseteammembership"
-    )
+    course_team, team_membership = Tables("teams_courseteam", "teams_courseteammembership")
     memberships_count = 0
     memberships_path = context.resources.results_dir.path.joinpath(
         "teamsmembership_query.sql"
     )
     for course_id in edx_course_ids:
-        submission_query = (
+        membership_query = (
             Query.from_(course_team)
-            .join(teams_membership)
-            .on(course_team.id == teams_membership.team_id)
-            .select("teams_membership.*")
+            .join(team_membership)
+            .on(course_team.id == team_membership.team_id)
+            .select("teams_courseteammembership.*")
             .where(course_team.course_id == course_id)
         )
-        query_fields, submission_data = context.resources.sqldb.run_query(
-            submission_query
+        query_fields, membership_data = context.resources.sqldb.run_query(
+            membership_query
         )
-        memberships_count += len(submission_data)
-        write_csv(query_fields, submission_data, memberships_path)
+        memberships_count += len(membership_data)
+        write_csv(query_fields, membership_data, memberships_path)
     yield AssetMaterialization(
-        asset_key="enrolled_students",
-        description="Students enrolled in edX courses",
+        asset_key="membership_query",
+        description="Team memberships in edX courses",
     )
     yield ExpectationResult(
         success=memberships_count > 0,
-        label="enrolled_students_count_non_zero",
-        description="Ensure that the number of enrolled students is not zero.",
+        label="team_memberships_count_non_zero",
+        description="Ensure that the number of team memberships is not zero.",
     )
-    yield Output(memberships_path, "edx_teams_memberships")
+    yield Output(memberships_path, "edx_team_memberships")
 
+@op(
+    name="open_edx_course_grades",
+    description="Export of user grades for courses on the specified Open edX installation.",  # noqa: E501
+    required_resource_keys={"sqldb", "results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        )
+    },
+    out={
+        "edx_course_grades": Out(
+            dagster_type=DagsterPath,
+            description="Path to course grade data in tabular format rendered as CSV files",  # noqa: E501
+        )
+    },
+)
+def course_grades(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+    """Retrieve information about user grades for given courses.
 
-###
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: OpExecutionContext
 
+    :param edx_course_ids: List of edX course ID strings
+    :type edx_course_ids: List[String]
+
+    :yield: A path definition that points to the rendered data table
+    """
+    course_grade = Table("grades_persistentcoursegrade")
+    grades_query = (
+        Query.from_(course_grade)
+        .select(
+            "course_id",
+            "user_id",
+            "grading_policy_hash",
+            "percent_grade",
+            "letter_grade",
+            "passed_timestamp",
+            "created",
+            "modified"
+        )
+        .where(course_grade.course_id.isin(edx_course_ids))
+        .orderby("user_id", order=Order.asc)
+    )
+    query_fields, grades_data = context.resources.sqldb.run_query(grades_query)
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    grades_path = context.resources.results_dir.path.joinpath("coursegrade_query.sql")
+    write_csv(query_fields, grades_data, grades_path)
+    yield AssetMaterialization(
+        asset_key="grades_query",
+        description="Course grades records from Open edX installation",
+    )
+    yield ExpectationResult(
+        success=bool(grades_data),
+        label="course_grades_count_non_zero",
+        description="Ensure that the number of course grades is not zero.",
+    )
+    yield Output(grades_path, "edx_course_grades")
+
+@op(
+    name="open_edx_subsection_grades",
+    description="Export of user grades for subsection on the specified Open edX installation.",  # noqa: E501
+    required_resource_keys={"sqldb", "results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        )
+    },
+    out={
+        "edx_subsection_grades": Out(
+            dagster_type=DagsterPath,
+            description="Path to course grade data in tabular format rendered as CSV files",  # noqa: E501
+        )
+    },
+)
+def subsection_grades(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+    """Retrieve information about user subsection grades for given courses.
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: OpExecutionContext
+
+    :param edx_course_ids: List of edX course ID strings
+    :type edx_course_ids: List[String]
+
+    :yield: A path definition that points to the rendered data table
+    """
+    subsection_grade = Table("grades_persistentsubsectiongrade")
+    subsection_query = (
+        Query.from_(subsection_grade)
+        .select(
+            "course_id",
+            "user_id",
+            "usage_key",
+            "earned_all",
+            "possible_all",
+            "earned_graded",
+            "possible_graded",
+            "first_attempted",
+            "created",
+            "modified"
+        )
+        .where(subsection_grade.course_id.isin(edx_course_ids))
+        .orderby("user_id", "first_attempted", order=Order.asc)
+    )
+    query_fields, subsection_data = context.resources.sqldb.run_query(subsection_query)
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    subsection_path = context.resources.results_dir.path.joinpath("subsectiongrade_query.sql")
+    write_csv(query_fields, subsection_data, subsection_path)
+    yield AssetMaterialization(
+        asset_key="subsection_query",
+        description="Subsection grade records from Open edX installation",
+    )
+    yield ExpectationResult(
+        success=bool(subsection_data),
+        label="subsection_grades_count_non_zero",
+        description="Ensure that the number of subsection grades is not zero.",
+    )
+    yield Output(subsection_path, "edx_subsection_grades")
+
+@op(
+    name="open_edx_generated_certificates",
+    description="Export of generated certificates for courses on the specified Open edX installation.",  # noqa: E501
+    required_resource_keys={"sqldb", "results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        )
+    },
+    out={
+        "edx_generated_certificates": Out(
+            dagster_type=DagsterPath,
+            description="Path to generated certificates data in tabular format rendered as CSV files",  # noqa: E501
+        )
+    },
+)
+def generated_certificates(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+    """Retrieve information about generated certificates for given courses.
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: OpExecutionContext
+
+    :param edx_course_ids: List of edX course ID strings
+    :type edx_course_ids: List[String]
+
+    :yield: A path definition that points to the rendered data table
+    """
+    certificates = Table("certificates_generatedcertificate")
+    certificates_query = (
+        Query.from_(certificates)
+        .select("*")
+        .where(certificates.course_id.isin(edx_course_ids))
+    )
+    query_fields, certificates_data = context.resources.sqldb.run_query(certificates_query)
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    certificates_path = context.resources.results_dir.path.joinpath("generatedcertificate_query.sql")
+    write_csv(query_fields, certificates_data, certificates_path)
+    yield AssetMaterialization(
+        asset_key="certificates_query",
+        description="Generated certificate records from Open edX installation",
+    )
+    yield ExpectationResult(
+        success=bool(certificates_data),
+        label="generated_certificates_count_non_zero",
+        description="Ensure that the number of generated certificates is not zero.",
+    )
+    yield Output(certificates_path, "edx_generated_certificates")
+
+@op(
+    name="open_edx_user_profiles",
+    required_resource_keys={"sqldb", "results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        )
+    },
+    out={
+        "edx_user_profiles": Out(
+            dagster_type=DagsterPath,
+            description="Path to user profile data in tabular format rendered as CSV files",
+        )
+    },
+)
+def user_profiles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+    """Generate a table showing user profiles for given courses.
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: OpExecutionContext
+
+    :param edx_course_ids: List of course IDs to retrieve student enrollments for
+    :type edx_course_ids: List[String]
+
+    :yield: A path definition that points to the rendered data table
+    """
+    user_profile, course_enrollment = Tables("auth_userprofile", "student_courseenrollment")
+    user_profiles_query = (
+        Query.from_(user_profile)
+        .join(course_enrollment)
+        .on(user_profile.user_id == course_enrollment.user_id)
+        .select(
+            user_profile.id,
+            user_profile.user_id,
+            user_profile.name,
+            user_profile.language,
+            user_profile.location,
+            user_profile.meta,
+            user_profile.courseware,
+            user_profile.gender,
+            user_profile.mailing_address,
+            user_profile.year_of_birth,
+            user_profile.level_of_education,
+            user_profile.goals,
+            user_profile.country,
+            user_profile.city,
+            user_profile.bio,
+            user_profile.profile_image_uploaded_at,
+            user_profile.state
+        )
+        .where(course_enrollment.course_id.isin(edx_course_ids))
+    )
+    query_fields, user_profiles_data = context.resources.sqldb.run_query(user_profiles_query)
+    # Maintaining previous file name for compatibility (TMM 2020-05-01)
+    user_profiles_path = context.resources.results_dir.path.joinpath("userprofile_query.sql")
+    write_csv(query_fields, user_profiles_data, user_profiles_path)
+    yield AssetMaterialization(
+        asset_key="user_profiles_query",
+        description="Profile data of users enrolled in available courses on Open edX installation",  # noqa: E501
+    )
+    yield ExpectationResult(
+        success=bool(user_profiles_data),
+        label="enrolled_users_count_non_zero",
+        description="Ensure that the number of user profiles is not zero.",
+    )
+    yield Output(user_profiles_path, "edx_user_profiles")
 
 @op(
     name="export_edx_forum_database",
