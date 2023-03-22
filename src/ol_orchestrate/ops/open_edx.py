@@ -363,6 +363,7 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
     )
     yield Output(roles_path, "edx_course_roles")
 
+
 @op(
     name="open_edx_user_roles",
     description="Export of user roles for forums on the specified Open edX installation.",  # noqa: E501
@@ -391,7 +392,12 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
 
     :yield: A path definition that points to the rendered data table
     """
-    users, role, course, org = Table("django_comment_client_role_users", "django_comment_client_role", "organizations_organizationcourse", "organizations_organization")
+    users, role, course, org = Table(
+        "django_comment_client_role_users",
+        "django_comment_client_role",
+        "organizations_organizationcourse",
+        "organizations_organization",
+    )
     user_roles_query = (
         Query.from_(users)
         .join(role)
@@ -400,13 +406,7 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
         .on(role.course_id == course.course_id)
         .join(org)
         .on(course.organization_id == org.id)
-        .select(
-            users.id,
-            users.user_id,
-            org.name,
-            role.course_id,
-            role.name
-        )
+        .select(users.id, users.user_id, org.name, role.course_id, role.name)
         .where(role.course_id.isin(edx_course_ids))
     )
     query_fields, user_roles_data = context.resources.sqldb.run_query(user_roles_query)
@@ -428,6 +428,7 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
         description="Ensure that the number of user roles is not zero.",
     )
     yield Output(user_roles_path, "edx_user_roles")
+
 
 @op(
     name="export_edx_forum_database",
