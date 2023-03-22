@@ -363,6 +363,71 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
     )
     yield Output(roles_path, "edx_course_roles")
 
+@op(
+    name="open_edx_user_roles",
+    description="Export of user roles for forums on the specified Open edX installation.",  # noqa: E501
+    required_resource_keys={"sqldb", "results_dir"},
+    ins={
+        "edx_course_ids": In(
+            dagster_type=List[String],
+            description="List of course IDs active on Open edX installation",
+        )
+    },
+    out={
+        "edx_user_roles": Out(
+            dagster_type=DagsterPath,
+            description="Path to user role data in tabular format rendered as CSV files",  # noqa: E501
+        )
+    },
+)
+def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+    """Retrieve information about user roles for given courses.
+
+    :param context: Dagster execution context for propagaint configuration data
+    :type context: OpExecutionContext
+
+    :param edx_course_ids: List of edX course ID strings
+    :type edx_course_ids: List[String]
+
+    :yield: A path definition that points to the rendered data table
+    """
+    users, role, course, org = Table("django_comment_client_role_users", "django_comment_client_role", "organizations_organizationcourse", "organizations_organization")
+    user_roles_query = (
+        Query.from_(users)
+        .join(role)
+        .on(users.role_id == role.id)
+        .join(course)
+        .on(role.course_id == course.course_id)
+        .join(org)
+        .on(course.organization_id == org.id)
+        .select(
+            users.id,
+            users.user_id,
+            org.name,
+            role.course_id,
+            role.name
+        )
+        .where(role.course_id.isin(edx_course_ids))
+    )
+    query_fields, user_roles_data = context.resources.sqldb.run_query(user_roles_query)
+    user_roles_path = context.resources.results_dir.path.joinpath("role_users.csv")
+    write_csv(query_fields, user_roles_data, user_roles_path)
+    yield AssetMaterialization(
+        asset_key="user_roles_query",
+        description="User role records from Open edX installation",
+        metadata={
+            "course_roles_count": MetadataValue.int(
+                len(user_roles_path),
+            ),
+            "role_query_csv_path": MetadataValue.path(user_roles_path.name),
+        },
+    )
+    yield ExpectationResult(
+        success=bool(user_roles_data),
+        label="user_roles_count_non_zero",
+        description="Ensure that the number of user roles is not zero.",
+    )
+    yield Output(user_roles_path, "edx_user_roles")
 
 @op(
     name="export_edx_forum_database",
