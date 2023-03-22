@@ -1,0 +1,227 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__mitx__openedx__mysql__auth_user
+    description: Residential MITx open edX users
+    columns:
+    - name: id
+      description: int, sequential ID representing a user on Residential MITx open
+        edX platform
+    - name: username
+      description: str, unique username on the open edX platform
+    - name: password
+      description: str, hashed password
+    - name: first_name
+      description: str, user's first name
+    - name: last_name
+      description: str, user's last name
+    - name: email
+      description: str, user's email associated with their account
+    - name: is_active
+      description: boolean, used to soft delete users
+    - name: is_staff
+      description: boolean, indicating whether user can log into admin site
+    - name: is_superuser
+      description: boolean, indicating whether user has all permissions on open edx
+        platform
+    - name: date_joined
+      description: timestamp, date and time when a user account was initially created
+    - name: last_login
+      description: timestamp, date and time when user last login
+
+  - name: raw__mitx__openedx__mysql__student_courseaccessrole
+    description: Residential MITx user course-level roles
+    columns:
+    - name: id
+      description: int, sequential ID for a single user course role on Residential
+        MITx open edx platform
+    - name: course_id
+      description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
+        courses) or org/course/run (for old-type courses)
+    - name: user_id
+      description: int, user ID on Residential MITx open edx platform
+    - name: org
+      description: str, course organization e.g. MITx
+    - name: role
+      description: str, user role, possible values are staff, data_researcher, instructor,
+        beta_testers, finance_admin, sales_admin, library_user, org_course_creator_group,
+        course_creator_group, support
+
+  - name: raw__mitx__openedx__mysql__course_overviews_courseoverview
+    description: Residential MITx open edX courses
+    columns:
+    - name: id
+      description: str, Open edX Course ID formatted as course-v1:{org}+{course number}+{run
+        tag} for newer courses, for older courses, it's {org}/{course number}/{run
+        tag}
+    - name: display_name
+      description: str, course title
+    - name: short_description
+      description: str, course description
+    - name: org
+      description: str, course organization e.g. MITx
+    - name: display_org_with_default
+      description: str, course organization appear in the course
+    - name: self_paced
+      description: boolean, indicating whether students can take this course at their
+        own pace
+    - name: display_number_with_default
+      description: str, course number
+    - name: start
+      description: timestamp, indicating when the course begins
+    - name: end
+      description: timestamp, indicating when the course ends
+    - name: start_date
+      description: timestamp, indicating when the course begins - not always populated
+    - name: end_date
+      description: timestamp, indicating when the course ends - not always populated
+    - name: enrollment_start
+      description: timestamp, first day students can enroll
+    - name: enrollment_end
+      description: timestamp, last day students can enroll
+    - name: certificate_available_date
+      description: timestamp, indicating when certificate is available for the course
+    - name: announcement
+      description: timestamp, date to announce the course
+    - name: lowest_passing_grade
+      description: float, Lowest passing grade for the course between 0 to 1
+    - name: max_student_enrollments_allowed
+      description: int, maximum number of students that can enroll in the course
+    - name: eligible_for_financial_aid
+      description: boolean, indicating if the course is eligible for financial aid
+    - name: enable_proctored_exams
+      description: boolean, indicating if the course is enabled for proctored exams
+    - name: allow_proctoring_opt_out
+      description: boolean, indicating if the course allows learners take proctored
+        exams without proctoring - currently all false
+    - name: has_any_active_web_certificate
+      description: boolean, indicating if the course has any active web certificates
+    - name: banner_image_url
+      description: str, relative path to course's banner image
+    - name: course_image_url
+      description: str, relative path to course image
+    - name: course_video_url
+      description: str, url to course video
+    - name: cert_name_long
+      description: str, certificate name for pdf certificate
+    - name: cert_name_short
+      description: str, certificate short name for pdf certificate
+    - name: cert_html_view_enabled
+      description: indicating if the course is enabled to view certificate in html
+    - name: version
+      description: int, version number
+    - name: catalog_visibility
+      description: str, defines the access permissions for showing the course in the
+        course catalog - both (show in catalog and allow access to about page) about
+        (only allow access to about page) none (do not show in catalog and do not
+        allow access to an about page).
+    - name: proctoring_escalation_email
+      description: str, email address to be contacted by the support team whenever
+        there are escalations (e.g. appeals, delayed reviews, etc.)
+    - name: visible_to_staff_only
+      description: boolean, indicating if course is only visible to staff member
+    - name: _location
+      description: str, location
+    - name: has_highlights
+      description: boolean, currently all false
+    - name: _pre_requisite_courses_json
+      description: str, json string for prerequisite course
+    - name: advertised_start
+      description: str, advertised starting time frame for the course such as Winter
+        2022
+    - name: invitation_only
+      description: boolean, indicating whether to restrict enrollment to invitation
+        by the course staff
+    - name: proctoring_provider
+      description: str, proctoring provider for this course run
+    - name: mobile_available
+      description: boolean, indicating if the course is available to mobile devices
+    - name: social_sharing_url
+      description: str, social sharing url
+    - name: certificates_display_behavior
+      description: str, certificates display behavior
+    - name: certificates_show_before_end
+      description: boolean, indicating if showing certificates before course end
+    - name: days_early_for_beta
+      description: int, number of days before the start date that beta users can access
+        the course
+    - name: effort
+      description: str, estimated effort for the course
+    - name: language
+      description: str, course language
+    - name: enrollment_domain
+      description: str, not used
+    - name: end_of_course_survey_url
+      description: str, not used
+    - name: entrance_exam_enabled
+      description: boolean, indicating if entrance exam is enabled for the course
+    - name: entrance_exam_id
+      description: str, entrance exam id - currently all blank
+    - name: entrance_exam_minimum_score_pct
+      description: float, minimum score for entrance exam between 0 to 1
+    - name: marketing_url
+      description: str, marketing url -currently all blank
+    - name: created
+      description: timestamp, date and time when this record was initially created
+    - name: modified
+      description: timestamp, date and time when this record was most recently updated
+
+  - name: raw__mitx__openedx__mysql__student_courseenrollment
+    description: Residential MITx open edX course enrollments
+    columns:
+    - name: id
+      description: int, sequential ID tracking a single user enrollment on Residential
+        MITx open edx platform
+    - name: course_id
+      description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
+        courses) or org/course/run (for old-type courses)
+    - name: user_id
+      description: int, user ID on Residential MITx open edx platform
+    - name: mode
+      description: str, enrollment mode e.g. honor or audit
+    - name: is_active
+      description: boolean, indicating whether the user is still enrolled in the course
+    - name: created
+      description: timestamp, date and time when this enrollment was initially created
+
+  - name: raw__mitx__openedx__mysql__grades_persistentcoursegrade
+    description: Residential MITx open edX course grades
+    columns:
+    - name: id
+      description: int, sequential ID tracking a user course grade on Residential
+        MITx open edx platform
+    - name: course_id
+      description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
+        courses) or org/course/run (for old-type courses)
+    - name: user_id
+      description: int, user ID on Residential MITx open edx platform
+    - name: course_version
+      description: str, version number of the course in the Split Modulestore when
+        the grade was computed. Currently used for debugging purposes only.
+    - name: grading_policy_hash
+      description: str, A SHA-1 digest of the course grading policy, used to detect
+        and update grades whenever the policy changes
+    - name: percent_grade
+      description: float, calculated course grade as a decimal percentage, per grading
+        policy. e.g. 0.91 means 91%
+    - name: letter_grade
+      description: str, calculated course grade as a letter value (e.g., A-D, Pass),
+        per grading policy If the learner's grade is Fail or F, this value is empty.
+    - name: passed_timestamp
+      description: timestamp, date and time when the learner first passed the course.
+        If this value is empty, the learner never passed the course. If this value
+        is non-empty but the letter_grade value is empty, the learner transitioned
+        from passing to not passing.
+    - name: course_edited_timestamp
+      description: timestamp, last edited timestamp of the course when the grade was
+        computed. Currently used for debugging purposes only.
+    - name: created
+      description: timestamp, date and time when this grade was initially created
+    - name: modified
+      description: timestamp, date and time when this grade was most recently updated
