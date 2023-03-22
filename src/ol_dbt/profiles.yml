@@ -53,4 +53,7 @@ open_learning:
       schema: main
       schemas_and_paths:
         main: dev_dbs/main.db
+        main_staging: dev_dbs/main_staging.db
+        main_intermediate: dev_dbs/main_intermediate.db
+        main_marts: dev_dbs/main_marts.db
       schema_directory: dev_dbs

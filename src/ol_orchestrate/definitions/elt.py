@@ -38,8 +38,8 @@ dbt_repo_dir = (
 )
 
 dbt_config = {
-    "project_dir": dbt_repo_dir,
-    "profiles_dir": dbt_repo_dir,
+    "project_dir": str(dbt_repo_dir),
+    "profiles_dir": str(dbt_repo_dir),
     "target": dagster_deployment,
 }
 configured_dbt_cli = dbt_cli_resource.configured(dbt_config)
