@@ -392,7 +392,7 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
 
     :yield: A path definition that points to the rendered data table
     """
-    users, role, course, org = Table(
+    users, role, course, org = Tables(
         "django_comment_client_role_users",
         "django_comment_client_role",
         "organizations_organizationcourse",
@@ -416,10 +416,10 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
         asset_key="user_roles_query",
         description="User role records from Open edX installation",
         metadata={
-            "course_roles_count": MetadataValue.int(
+            "user_roles_count": MetadataValue.int(
                 len(user_roles_path),
             ),
-            "role_query_csv_path": MetadataValue.path(user_roles_path.name),
+            "user_role_query_csv_path": MetadataValue.path(user_roles_path.name),
         },
     )
     yield ExpectationResult(
@@ -669,6 +669,7 @@ def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]
     ins={
         "edx_course_ids_csv": In(dagster_type=DagsterPath),
         "edx_course_roles": In(dagster_type=DagsterPath),
+        "edx_user_roles": In(dagster_type=DagsterPath),
         "edx_enrolled_users": In(dagster_type=DagsterPath),
         "edx_student_submissions": In(dagster_type=DagsterPath),
         "edx_enrollment_records": In(dagster_type=DagsterPath),
@@ -680,6 +681,7 @@ def upload_extracted_data(  # noqa: PLR0913
     context: OpExecutionContext,
     edx_course_ids_csv: DagsterPath,
     edx_course_roles: DagsterPath,
+    edx_user_roles: DagsterPath,
     edx_enrolled_users: DagsterPath,
     edx_student_submissions: DagsterPath,
     edx_enrollment_records: DagsterPath,
@@ -697,6 +699,10 @@ def upload_extracted_data(  # noqa: PLR0913
     :param edx_course_roles: Flat file containing tabular representation of course roles
         in Open edX installation
     :type edx_course_roles: DagsterPath
+
+    :param edx_user_roles: Flat file containing tabular representation of forum user
+        roles in Open edX installation
+    :type edx_user_roles: DagsterPath
 
     :param edx_enrolled_users: Flat file containing tabular representation of users who
         are enrolled in courses in Open edX installation
