@@ -7,3 +7,4 @@
 .venv/
 bin/pants
 **/*.db
+**/*.duckdb
