@@ -21,7 +21,7 @@ jobs:
         type: registry-image
         source:
           repository: python
-          tag: "3.10"
+          tag: "3.11"
       inputs:
       - name: ol-data-platform
       params:

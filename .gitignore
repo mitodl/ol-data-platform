@@ -6,3 +6,4 @@
 /dist/
 .venv/
 bin/pants
+**/*.db

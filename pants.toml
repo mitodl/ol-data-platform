@@ -16,7 +16,7 @@ pants_ignore = ['copier_templates/*']
 
 [python]
 enable_resolves = true
-interpreter_constraints = ['>=3.10']
+interpreter_constraints = ['>=3.11']
 
 [flake8]
 config = 'setup.cfg'
