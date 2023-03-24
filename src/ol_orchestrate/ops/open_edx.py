@@ -406,7 +406,13 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
         .on(role.course_id == course.course_id)
         .join(org)
         .on(course.organization_id == org.id)
-        .select(users.id, users.user_id, org.name, role.course_id, role.name)
+        .select(
+            users.id,
+            users.user_id,
+            org.name.as_("org"),
+            role.course_id,
+            role.name.as_("role"),
+        )
         .where(role.course_id.isin(edx_course_ids))
     )
     query_fields, user_roles_data = context.resources.sqldb.run_query(user_roles_query)
@@ -417,7 +423,7 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
         description="User role records from Open edX installation",
         metadata={
             "user_roles_count": MetadataValue.int(
-                len(user_roles_path),
+                len(user_roles_data),
             ),
             "user_role_query_csv_path": MetadataValue.path(user_roles_path.name),
         },
@@ -435,6 +441,12 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
     description="Solid to build the command line string for executing mongodump against the Open edX forum database",  # noqa: E501
     required_resource_keys={"results_dir"},
     config_schema={
+        "mongodump_path": Field(
+            String,
+            is_required=False,
+            default_value="/usr/bin/mongodump",
+            description="The mongodump path for a MongoDB replicat set",
+        ),
         "edx_mongodb_uri": Field(
             String,
             is_required=True,
@@ -490,7 +502,7 @@ def export_edx_forum_database(  # type: ignore
     )
     mongo_uri = context.op_config["edx_mongodb_uri"]
     command_array = [
-        "/usr/bin/mongodump",
+        context.op_config["mongodump_path"],
         "--uri",
         f"'{mongo_uri}'",
         "--db",
