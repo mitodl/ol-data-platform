@@ -10,6 +10,7 @@ from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 from ol_orchestrate.ops.open_edx import (
     course_enrollments,
     course_roles,
+    user_roles,
     enrolled_users,
     export_edx_courses,
     export_edx_forum_database,
@@ -48,6 +49,7 @@ def edx_course_pipeline():
         enrolled_users(edx_course_ids=course_list),
         student_submissions(edx_course_ids=course_list),
         course_roles(edx_course_ids=course_list),
+        user_roles(edx_course_ids=course_list),
         course_enrollments(edx_course_ids=course_list),
         export_edx_forum_database(),
     )
