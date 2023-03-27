@@ -19,7 +19,7 @@ with mitxonline_users as (
         , user_address_country
         , user_highest_education
         , user_gender
-        , cast(substring(user_birth_date, 1, 4) as int) as user_birth_year
+        , user_birth_year
     from mitxonline_users
 
     union distinct

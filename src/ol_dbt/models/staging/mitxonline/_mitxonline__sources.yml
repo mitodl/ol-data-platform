@@ -508,6 +508,9 @@ sources:
       description: int, primary key for table
     - name: country
       description: string, user country code
+    - name: state
+      description: string, state code for the user's address. e.g. US-NY It's required
+        field for new users, could be blank for existing users.
     - name: user_id
       description: int, foreign key to users_user
     - name: last_name
@@ -518,6 +521,59 @@ sources:
       description: string, user first name
     - name: updated_on
       description: timestamp, when the record was updated
+
+  - name: raw__mitxonline__app__postgres__users_userprofile
+    columns:
+    - name: id
+      description: int, sequential ID representing a single MITx Online user profile
+    - name: user_id
+      description: int, unique ID for user on MITx Online
+    - name: gender
+      description: str, one of  "m", "f", "o", "t", or "nb". May be blank
+    - name: company
+      description: str, user company
+    - name: company_size
+      description: int, company size choices are 1 - "Small/Start-up (1+ employees)",
+        9 - "Small/Home office (1-9 employees)", 99 - "Small (10-99 employees)", 999
+        - "Small to medium-sized (100-999 employees)", 9999 - "Medium-sized (1000-9999
+        employees)", 10000 - "Large Enterprise (10,000+ employees)", 0 - "Other (N/A
+        or Don't know)". May be blank
+    - name: years_experience
+      description: int, user years experience choices are - 2 - "Less than 2 years",
+        5 - "2-5 years", 10 - "6 - 10 years", 15 - "11 - 15 years", 20 - "16 - 20
+        years", 21 - "More than 20 years", 0 - "Prefer not to say". May be blank.
+    - name: job_function
+      description: str, user job function
+    - name: job_title
+      description: str, user job title
+    - name: highest_education
+      description: str, choices are "Doctorate", "Master's or professional degree",
+        "Bachelor's degree", "Associate degree", "Secondary/high school", "Junior
+        secondary/junior high/middle school", "Elementary/primary school", "No formal
+        education", "Other education"
+    - name: year_of_birth
+      description: int, user birth year
+    - name: leadership_level
+      description: str, user leadership level
+    - name: industry
+      description: str, user job industry
+    - name: type_is_student
+      description: boolean, indicating if learner is identified as Student
+    - name: type_is_professional
+      description: boolean, indicating if learner is identified as Professional
+    - name: type_is_educator
+      description: boolean, indicating if learner is identified as Educator
+    - name: type_is_other
+      description: boolean, indicating if learner is identified as Other (not Professional,
+        Student, or Educator)
+    - name: addl_field_flag
+      description: boolean, internal used flag if we've asked the user for additional
+        information during account creation
+    - name: created_on
+      description: timestamp, date and time when this profile data was initially created
+    - name: updated_on
+      description: timestamp, date and time when this profile data was most recently
+        updated
 
   - name: raw__mitxonline__app__postgres__courses_program
     columns:
