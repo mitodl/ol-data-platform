@@ -9,6 +9,7 @@ with source as (
     select
         id as user_address_id
         , country as user_address_country
+        , state as user_address_state
         , user_id
         , first_name as user_first_name
         , last_name as user_last_name
