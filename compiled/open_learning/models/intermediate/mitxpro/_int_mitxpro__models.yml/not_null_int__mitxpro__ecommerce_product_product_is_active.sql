@@ -1,0 +1,3 @@
+select product_is_active
+from dev.main_intermediate.int__mitxpro__ecommerce_product
+where product_is_active is null

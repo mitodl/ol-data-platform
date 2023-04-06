@@ -1,0 +1,3 @@
+select blockedcountry_code
+from dev.main_intermediate.int__mitxonline__course_blockedcountries
+where blockedcountry_code is null

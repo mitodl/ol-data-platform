@@ -1,0 +1,3 @@
+select courserunenrollment_enrollment_mode
+from dev.main_staging.stg__mitxresidential__openedx__courserun_enrollment
+where courserunenrollment_enrollment_mode is null

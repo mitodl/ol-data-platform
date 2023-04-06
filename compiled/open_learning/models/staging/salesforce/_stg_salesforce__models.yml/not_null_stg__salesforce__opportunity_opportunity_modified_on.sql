@@ -1,0 +1,3 @@
+select opportunity_modified_on
+from dev.main_staging.stg__salesforce__opportunity
+where opportunity_modified_on is null

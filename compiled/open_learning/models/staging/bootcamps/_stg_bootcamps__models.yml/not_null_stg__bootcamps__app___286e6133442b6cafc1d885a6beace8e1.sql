@@ -1,0 +1,3 @@
+select wiretransferreceipt_import_id
+from dev.main_staging.stg__bootcamps__app__postgres__ecommerce_wiretransferreceipt
+where wiretransferreceipt_import_id is null

@@ -1,0 +1,3 @@
+select user_leadership_level
+from dev.main_staging.stg__mitxpro__app__postgres__users_profile
+where user_leadership_level is null

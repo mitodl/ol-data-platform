@@ -1,0 +1,3 @@
+select courserun_title
+from dev.main_staging.stg__mitxresidential__openedx__courserun
+where courserun_title is null

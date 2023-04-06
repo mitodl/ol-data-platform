@@ -1,0 +1,3 @@
+select order_created_on
+from dev.main_intermediate.int__bootcamps__ecommerce_order
+where order_created_on is null

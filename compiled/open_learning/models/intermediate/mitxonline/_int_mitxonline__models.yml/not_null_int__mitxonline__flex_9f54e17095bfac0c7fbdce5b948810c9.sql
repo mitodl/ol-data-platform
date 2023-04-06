@@ -1,0 +1,3 @@
+select countryincomethreshold_updated_on
+from dev.main_intermediate.int__mitxonline__flexiblepricing_countryincomethreshold
+where countryincomethreshold_updated_on is null

@@ -1,0 +1,3 @@
+select program_title
+from dev.main_intermediate.int__mitxonline__programenrollments
+where program_title is null

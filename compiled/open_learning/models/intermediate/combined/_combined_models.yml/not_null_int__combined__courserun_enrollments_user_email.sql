@@ -1,0 +1,3 @@
+select user_email
+from dev.main_intermediate.int__combined__courserun_enrollments
+where user_email is null

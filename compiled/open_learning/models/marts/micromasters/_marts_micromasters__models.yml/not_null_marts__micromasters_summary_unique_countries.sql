@@ -1,0 +1,3 @@
+select unique_countries
+from dev.main_mart.marts__micromasters_summary
+where unique_countries is null

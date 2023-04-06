@@ -1,0 +1,3 @@
+select order_id
+from dev.main_staging.stg__mitxonline__app__postgres__ecommerce_line
+where order_id is null

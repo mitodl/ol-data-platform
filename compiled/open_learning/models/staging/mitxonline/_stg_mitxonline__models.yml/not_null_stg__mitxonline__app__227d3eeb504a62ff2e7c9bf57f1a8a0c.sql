@@ -1,0 +1,3 @@
+select courserunenrollment_has_edx_email_subscription
+from dev.main_staging.stg__mitxonline__app__postgres__courses_courserunenrollment
+where courserunenrollment_has_edx_email_subscription is null

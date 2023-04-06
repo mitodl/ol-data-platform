@@ -1,0 +1,3 @@
+select user_id
+from dev.main_staging.stg__edxorg__bigquery__mitx_user_info_combo
+where user_id is null

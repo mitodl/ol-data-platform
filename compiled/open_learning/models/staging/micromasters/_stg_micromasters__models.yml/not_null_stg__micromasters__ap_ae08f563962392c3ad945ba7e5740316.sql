@@ -1,0 +1,3 @@
+select user_username
+from dev.main_staging.stg__micromasters__app__postgres__auth_usersocialauth
+where user_username is null

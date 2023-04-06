@@ -1,0 +1,3 @@
+select courserunenrollment_created_on
+from dev.main_staging.stg__mitxpro__app__postgres__courses_courserunenrollment
+where courserunenrollment_created_on is null

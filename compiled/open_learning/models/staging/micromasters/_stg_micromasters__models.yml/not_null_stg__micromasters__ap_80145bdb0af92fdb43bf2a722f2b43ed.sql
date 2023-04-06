@@ -1,0 +1,3 @@
+select user_full_name
+from dev.main_staging.stg__micromasters__app__postgres__profiles_profile
+where user_full_name is null

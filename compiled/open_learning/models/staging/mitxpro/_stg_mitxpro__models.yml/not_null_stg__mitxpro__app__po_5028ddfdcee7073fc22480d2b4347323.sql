@@ -1,0 +1,3 @@
+select productversion_id
+from dev.main_staging.stg__mitxpro__app__postgres__b2becommerce_b2border
+where productversion_id is null

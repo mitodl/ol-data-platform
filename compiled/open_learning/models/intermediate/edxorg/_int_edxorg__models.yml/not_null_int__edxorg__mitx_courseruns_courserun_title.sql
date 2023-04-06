@@ -1,0 +1,3 @@
+select courserun_title
+from dev.main_intermediate.int__edxorg__mitx_courseruns
+where courserun_title is null

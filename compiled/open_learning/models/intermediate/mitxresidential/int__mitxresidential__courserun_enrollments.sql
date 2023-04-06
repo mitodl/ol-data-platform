@@ -1,0 +1,29 @@
+with enrollments as (
+    select * from dev.main_staging.stg__mitxresidential__openedx__courserun_enrollment
+)
+
+, runs as (
+    select * from dev.main_staging.stg__mitxresidential__openedx__courserun
+)
+
+, users as (
+    select * from dev.main_staging.stg__mitxresidential__openedx__auth_user
+)
+
+, courserun_enrollments as (
+    select
+        enrollments.courserunenrollment_id
+        , enrollments.user_id
+        , enrollments.courserun_readable_id
+        , enrollments.courserunenrollment_enrollment_mode
+        , enrollments.courserunenrollment_is_active
+        , enrollments.courserunenrollment_created_on
+        , runs.courserun_title
+        , users.user_username
+        , users.user_email
+    from enrollments
+    left join runs on enrollments.courserun_readable_id = runs.courserun_readable_id
+    left join users on enrollments.user_id = users.user_id
+)
+
+select * from courserun_enrollments

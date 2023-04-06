@@ -1,0 +1,3 @@
+select user_id
+from dev.main_intermediate.__micromasters_course_enrollments_from_edxorg
+where user_id is null

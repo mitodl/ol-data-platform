@@ -1,0 +1,3 @@
+select courserunenrollment_is_active
+from dev.main_staging.stg__bootcamps__app__postgres__courserunenrollment
+where courserunenrollment_is_active is null

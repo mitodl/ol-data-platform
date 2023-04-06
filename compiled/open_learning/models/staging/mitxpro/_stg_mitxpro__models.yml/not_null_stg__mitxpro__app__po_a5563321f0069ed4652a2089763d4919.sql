@@ -1,0 +1,3 @@
+select user_job_title
+from dev.main_staging.stg__mitxpro__app__postgres__users_profile
+where user_job_title is null

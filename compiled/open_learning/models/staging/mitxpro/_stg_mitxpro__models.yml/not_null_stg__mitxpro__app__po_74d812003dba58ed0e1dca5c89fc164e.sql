@@ -1,0 +1,3 @@
+select linerunselection_updated_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_linerunselection
+where linerunselection_updated_on is null

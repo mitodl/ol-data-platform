@@ -1,0 +1,3 @@
+select courserun_title
+from dev.main_intermediate.__micromasters_course_enrollments_from_mitxonline
+where courserun_title is null

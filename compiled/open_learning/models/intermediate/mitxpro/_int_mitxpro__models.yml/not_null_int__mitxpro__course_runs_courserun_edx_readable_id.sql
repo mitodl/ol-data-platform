@@ -1,0 +1,3 @@
+select courserun_edx_readable_id
+from dev.main_intermediate.int__mitxpro__course_runs
+where courserun_edx_readable_id is null

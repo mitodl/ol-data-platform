@@ -1,0 +1,3 @@
+select total_enrollments
+from dev.main_mart.marts__micromasters_summary
+where total_enrollments is null

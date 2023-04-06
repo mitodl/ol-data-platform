@@ -1,0 +1,3 @@
+select currencyexchangerate_currency_code
+from dev.main_staging.stg__mitxonline__app__postgres__flexiblepricing_currencyexchangerate
+where currencyexchangerate_currency_code is null

@@ -1,0 +1,3 @@
+select userdiscount_updated_on
+from dev.main_intermediate.int__mitxonline__ecommerce_userdiscount
+where userdiscount_updated_on is null

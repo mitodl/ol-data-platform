@@ -1,0 +1,3 @@
+select program_completion_timestamp
+from dev.main_intermediate.__micromasters_program_certificates_dedp_from_micromasters
+where program_completion_timestamp is null

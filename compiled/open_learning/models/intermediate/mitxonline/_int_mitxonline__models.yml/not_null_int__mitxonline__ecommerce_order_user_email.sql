@@ -1,0 +1,3 @@
+select user_email
+from dev.main_intermediate.int__mitxonline__ecommerce_order
+where user_email is null

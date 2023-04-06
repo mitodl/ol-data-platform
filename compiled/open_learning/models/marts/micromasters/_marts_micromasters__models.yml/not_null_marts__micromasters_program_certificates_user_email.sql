@@ -1,0 +1,3 @@
+select user_email
+from dev.main_mart.marts__micromasters_program_certificates
+where user_email is null

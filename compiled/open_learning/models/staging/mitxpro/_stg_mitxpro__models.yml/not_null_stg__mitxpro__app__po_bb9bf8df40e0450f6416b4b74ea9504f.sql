@@ -1,0 +1,3 @@
+select coupon_is_active
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_coupon
+where coupon_is_active is null

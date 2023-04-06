@@ -1,0 +1,3 @@
+select courserun_title
+from dev.main_staging.stg__mitxpro__app__postgres__courses_courserun
+where courserun_title is null

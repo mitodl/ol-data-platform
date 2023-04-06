@@ -1,0 +1,3 @@
+select opportunitylineitem_product_name
+from dev.main_intermediate.int__salesforce__opportunitylineitem
+where opportunitylineitem_product_name is null

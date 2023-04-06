@@ -1,0 +1,3 @@
+select opportunitylineitem_total_price
+from dev.main_staging.stg__salesforce__opportunitylineitem
+where opportunitylineitem_total_price is null

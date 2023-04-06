@@ -1,0 +1,3 @@
+select user_email
+from dev.main_intermediate.int__edxorg__mitx_courserun_grades
+where user_email is null

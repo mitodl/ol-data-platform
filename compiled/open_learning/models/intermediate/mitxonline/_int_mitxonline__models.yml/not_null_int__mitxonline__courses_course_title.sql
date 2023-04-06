@@ -1,0 +1,3 @@
+select course_title
+from dev.main_intermediate.int__mitxonline__courses
+where course_title is null

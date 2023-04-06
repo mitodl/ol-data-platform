@@ -1,0 +1,3 @@
+select user_first_name
+from dev.main_staging.stg__bootcamps__app__postgres__profiles_legaladdress
+where user_first_name is null

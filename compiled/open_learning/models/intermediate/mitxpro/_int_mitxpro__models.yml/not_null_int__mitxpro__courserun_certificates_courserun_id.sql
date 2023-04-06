@@ -1,0 +1,3 @@
+select courserun_id
+from dev.main_intermediate.int__mitxpro__courserun_certificates
+where courserun_id is null

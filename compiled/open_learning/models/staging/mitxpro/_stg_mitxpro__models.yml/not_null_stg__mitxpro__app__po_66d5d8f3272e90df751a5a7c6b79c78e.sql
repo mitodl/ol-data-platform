@@ -1,0 +1,3 @@
+select programenrollment_updated_on
+from dev.main_staging.stg__mitxpro__app__postgres__courses_programenrollment
+where programenrollment_updated_on is null

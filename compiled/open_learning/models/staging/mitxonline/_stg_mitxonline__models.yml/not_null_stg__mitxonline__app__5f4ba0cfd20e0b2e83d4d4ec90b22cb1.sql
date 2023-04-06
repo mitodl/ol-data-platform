@@ -1,0 +1,3 @@
+select courserun_readable_id
+from dev.main_staging.stg__mitxonline__app__postgres__courses_courserun
+where courserun_readable_id is null

@@ -1,0 +1,3 @@
+select receipt_id
+from dev.main_staging.stg__micromasters__app__postgres__ecommerce_receipt
+where receipt_id is null

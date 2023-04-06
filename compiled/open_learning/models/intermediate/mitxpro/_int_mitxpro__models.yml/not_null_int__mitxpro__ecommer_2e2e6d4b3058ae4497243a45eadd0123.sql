@@ -1,0 +1,3 @@
+select productversion_description
+from dev.main_intermediate.int__mitxpro__ecommerce_productversion
+where productversion_description is null

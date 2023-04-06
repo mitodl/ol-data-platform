@@ -1,0 +1,3 @@
+select user_id
+from dev.main_staging.stg__mitxonline__app__postgres__ecommerce_userdiscount
+where user_id is null

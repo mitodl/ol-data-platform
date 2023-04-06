@@ -1,0 +1,3 @@
+select contenttype_id
+from dev.main_staging.stg__mitxonline__app__postgres__django_contenttype
+where contenttype_id is null

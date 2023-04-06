@@ -1,0 +1,3 @@
+select company_created_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_company
+where company_created_on is null

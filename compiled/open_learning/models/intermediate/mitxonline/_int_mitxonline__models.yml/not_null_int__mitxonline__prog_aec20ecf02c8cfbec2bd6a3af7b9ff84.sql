@@ -1,0 +1,3 @@
+select programrequirement_numchild
+from dev.main_intermediate.int__mitxonline__programrequirements
+where programrequirement_numchild is null

@@ -1,0 +1,3 @@
+select programcertificate_uuid
+from dev.main_staging.stg__mitxonline__app__postgres__courses_programcertificate
+where programcertificate_uuid is null

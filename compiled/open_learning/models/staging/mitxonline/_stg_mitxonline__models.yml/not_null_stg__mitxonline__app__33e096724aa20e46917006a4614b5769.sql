@@ -1,0 +1,3 @@
+select courserunenrollment_is_active
+from dev.main_staging.stg__mitxonline__app__postgres__courses_courserunenrollment
+where courserunenrollment_is_active is null

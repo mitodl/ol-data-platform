@@ -1,0 +1,3 @@
+select user_id
+from dev.main_staging.stg__micromasters__app__postgres__profiles_profile
+where user_id is null

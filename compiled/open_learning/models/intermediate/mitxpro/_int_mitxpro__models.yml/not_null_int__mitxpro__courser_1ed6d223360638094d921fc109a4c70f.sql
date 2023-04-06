@@ -1,0 +1,3 @@
+select courserun_readable_id
+from dev.main_intermediate.int__mitxpro__courserunenrollments
+where courserun_readable_id is null

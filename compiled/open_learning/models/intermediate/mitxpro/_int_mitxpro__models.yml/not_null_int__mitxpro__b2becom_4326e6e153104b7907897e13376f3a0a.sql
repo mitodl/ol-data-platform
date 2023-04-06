@@ -1,0 +1,3 @@
+select b2border_updated_on
+from dev.main_intermediate.int__mitxpro__b2becommerce_b2border
+where b2border_updated_on is null

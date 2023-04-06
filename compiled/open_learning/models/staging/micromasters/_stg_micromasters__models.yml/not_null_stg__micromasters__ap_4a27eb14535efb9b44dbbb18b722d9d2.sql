@@ -1,0 +1,3 @@
+select user_auth_provider
+from dev.main_staging.stg__micromasters__app__postgres__auth_usersocialauth
+where user_auth_provider is null

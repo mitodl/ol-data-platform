@@ -1,0 +1,3 @@
+select courseware_object_id
+from dev.main_intermediate.int__mitxonline__flexiblepricing_flexiblepricetier
+where courseware_object_id is null

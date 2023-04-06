@@ -1,0 +1,19 @@
+select
+    count(*) as failures
+    , count(*) != 0 as should_warn
+    , count(*) != 0 as should_error
+from (
+
+
+
+
+
+
+    select coursetopic_name
+    from ol_data_lake_production.ol_warehouse_production_intermediate.int__mitxpro__course_to_topics
+    where coursetopic_name is null
+
+
+
+
+) as dbt_internal_test

@@ -1,0 +1,3 @@
+select receipt_updated_on
+from dev.main_intermediate.int__mitxpro__ecommerce_receipt
+where receipt_updated_on is null

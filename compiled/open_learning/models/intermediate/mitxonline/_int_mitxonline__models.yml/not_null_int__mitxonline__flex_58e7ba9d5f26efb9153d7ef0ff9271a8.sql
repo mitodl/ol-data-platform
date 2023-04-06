@@ -1,0 +1,3 @@
+select discount_id
+from dev.main_intermediate.int__mitxonline__flexiblepricing_flexiblepricetier
+where discount_id is null

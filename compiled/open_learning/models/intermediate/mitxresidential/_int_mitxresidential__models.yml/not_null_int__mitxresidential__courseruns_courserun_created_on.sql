@@ -1,0 +1,3 @@
+select courserun_created_on
+from dev.main_intermediate.int__mitxresidential__courseruns
+where courserun_created_on is null

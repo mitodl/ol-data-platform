@@ -1,0 +1,3 @@
+select coupon_applies_to_future_runs
+from dev.main_intermediate.int__mitxpro__ecommerce_coupon
+where coupon_applies_to_future_runs is null

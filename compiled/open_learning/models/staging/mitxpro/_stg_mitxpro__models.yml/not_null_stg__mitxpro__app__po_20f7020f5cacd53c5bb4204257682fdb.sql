@@ -1,0 +1,3 @@
+select b2bcoupon_created_on
+from dev.main_staging.stg__mitxpro__app__postgres__b2becommerce_b2bcoupon
+where b2bcoupon_created_on is null

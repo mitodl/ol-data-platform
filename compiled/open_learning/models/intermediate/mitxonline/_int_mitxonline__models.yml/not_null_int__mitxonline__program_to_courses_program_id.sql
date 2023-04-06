@@ -1,0 +1,3 @@
+select program_id
+from dev.main_intermediate.int__mitxonline__program_to_courses
+where program_id is null

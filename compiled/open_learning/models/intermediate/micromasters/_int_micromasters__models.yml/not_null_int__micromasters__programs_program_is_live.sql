@@ -1,0 +1,3 @@
+select program_is_live
+from dev.main_intermediate.int__micromasters__programs
+where program_is_live is null

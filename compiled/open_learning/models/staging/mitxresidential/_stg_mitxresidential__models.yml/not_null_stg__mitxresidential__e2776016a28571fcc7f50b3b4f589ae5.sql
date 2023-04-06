@@ -1,0 +1,3 @@
+select user_first_name
+from dev.main_staging.stg__mitxresidential__openedx__auth_user
+where user_first_name is null

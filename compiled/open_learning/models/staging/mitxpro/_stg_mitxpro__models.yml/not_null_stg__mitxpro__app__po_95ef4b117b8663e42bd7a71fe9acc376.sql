@@ -1,0 +1,3 @@
+select b2border_unique_uuid
+from dev.main_staging.stg__mitxpro__app__postgres__b2becommerce_b2border
+where b2border_unique_uuid is null

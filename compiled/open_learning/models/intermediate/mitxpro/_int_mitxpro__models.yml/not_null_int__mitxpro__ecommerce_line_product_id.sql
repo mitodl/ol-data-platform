@@ -1,0 +1,3 @@
+select product_id
+from dev.main_intermediate.int__mitxpro__ecommerce_line
+where product_id is null

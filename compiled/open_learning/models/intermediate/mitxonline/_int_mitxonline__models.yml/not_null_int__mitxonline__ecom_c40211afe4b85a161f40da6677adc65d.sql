@@ -1,0 +1,3 @@
+select order_reference_number
+from dev.main_intermediate.int__mitxonline__ecommerce_order
+where order_reference_number is null

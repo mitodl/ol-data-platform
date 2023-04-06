@@ -1,0 +1,3 @@
+select programrequirement_type
+from dev.main_intermediate.int__micromasters__program_requirements
+where programrequirement_type is null

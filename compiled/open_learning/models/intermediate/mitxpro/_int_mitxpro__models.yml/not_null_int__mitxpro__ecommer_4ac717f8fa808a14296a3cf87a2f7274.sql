@@ -1,0 +1,3 @@
+select couponpaymentversion_max_redemptions_per_user
+from dev.main_intermediate.int__mitxpro__ecommerce_couponpaymentversion
+where couponpaymentversion_max_redemptions_per_user is null

@@ -1,0 +1,3 @@
+select course_id
+from dev.main_intermediate.int__bootcamps__courserun_certificates
+where course_id is null

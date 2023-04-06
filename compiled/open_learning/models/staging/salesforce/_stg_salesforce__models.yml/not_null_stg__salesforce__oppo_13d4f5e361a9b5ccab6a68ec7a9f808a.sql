@@ -1,0 +1,3 @@
+select opportunitylineitem_created_on
+from dev.main_staging.stg__salesforce__opportunitylineitem
+where opportunitylineitem_created_on is null

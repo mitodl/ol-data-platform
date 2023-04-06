@@ -1,0 +1,3 @@
+select receipt_created_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_receipt
+where receipt_created_on is null

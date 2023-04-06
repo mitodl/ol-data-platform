@@ -1,0 +1,3 @@
+select user_first_name
+from dev.main_staging.stg__mitxpro__app__postgres__users_legaladdress
+where user_first_name is null

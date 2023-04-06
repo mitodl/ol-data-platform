@@ -1,0 +1,3 @@
+select mitxonline_user_id
+from dev.main_intermediate.int__openedx_mitxonline__users
+where mitxonline_user_id is null

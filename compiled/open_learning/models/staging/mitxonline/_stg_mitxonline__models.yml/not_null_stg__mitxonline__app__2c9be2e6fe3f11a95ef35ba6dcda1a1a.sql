@@ -1,0 +1,3 @@
+select blockedcountry_id
+from dev.main_staging.stg__mitxonline__app__postgres__courses_blockedcountry
+where blockedcountry_id is null

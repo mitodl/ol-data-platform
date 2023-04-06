@@ -1,0 +1,3 @@
+select courserun_readable_id
+from dev.main_staging.stg__edxorg__bigquery__mitx_user_email_opt_in
+where courserun_readable_id is null

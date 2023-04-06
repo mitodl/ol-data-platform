@@ -1,0 +1,3 @@
+select opportunity_mit_is_sales_lead
+from dev.main_intermediate.int__salesforce__opportunity
+where opportunity_mit_is_sales_lead is null

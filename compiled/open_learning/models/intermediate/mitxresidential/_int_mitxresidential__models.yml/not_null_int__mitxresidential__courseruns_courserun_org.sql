@@ -1,0 +1,3 @@
+select courserun_org
+from dev.main_intermediate.int__mitxresidential__courseruns
+where courserun_org is null

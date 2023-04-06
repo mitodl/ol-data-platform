@@ -1,0 +1,3 @@
+select couponpaymentversion_coupon_type
+from dev.main_intermediate.int__mitxpro__ecommerce_couponpaymentversion
+where couponpaymentversion_coupon_type is null

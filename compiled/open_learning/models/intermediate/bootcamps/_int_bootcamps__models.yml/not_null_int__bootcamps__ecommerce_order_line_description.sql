@@ -1,0 +1,3 @@
+select line_description
+from dev.main_intermediate.int__bootcamps__ecommerce_order
+where line_description is null

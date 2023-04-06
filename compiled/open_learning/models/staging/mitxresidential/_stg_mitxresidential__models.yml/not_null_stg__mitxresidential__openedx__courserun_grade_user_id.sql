@@ -1,0 +1,3 @@
+select user_id
+from dev.main_staging.stg__mitxresidential__openedx__courserun_grade
+where user_id is null

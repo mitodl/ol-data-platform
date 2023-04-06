@@ -1,0 +1,3 @@
+select coursetopic_name
+from dev.main_intermediate.int__mitxonline__course_to_topics
+where coursetopic_name is null

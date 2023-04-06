@@ -1,0 +1,3 @@
+select line_updated_on
+from dev.main_staging.stg__micromasters__app__postgres__ecommerce_line
+where line_updated_on is null

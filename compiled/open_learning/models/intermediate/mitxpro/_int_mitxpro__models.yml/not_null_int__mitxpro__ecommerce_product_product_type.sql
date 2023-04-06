@@ -1,0 +1,3 @@
+select product_type
+from dev.main_intermediate.int__mitxpro__ecommerce_product
+where product_type is null

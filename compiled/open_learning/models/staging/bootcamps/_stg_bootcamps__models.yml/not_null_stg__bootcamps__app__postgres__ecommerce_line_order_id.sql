@@ -1,0 +1,3 @@
+select order_id
+from dev.main_staging.stg__bootcamps__app__postgres__ecommerce_line
+where order_id is null

@@ -1,0 +1,3 @@
+select product_version_id
+from dev.main_intermediate.int__mitxonline__ecommerce_order
+where product_version_id is null

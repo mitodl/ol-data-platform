@@ -1,0 +1,3 @@
+select course_readable_id
+from dev.main_staging.stg__mitxpro__app__postgres__courses_course
+where course_readable_id is null

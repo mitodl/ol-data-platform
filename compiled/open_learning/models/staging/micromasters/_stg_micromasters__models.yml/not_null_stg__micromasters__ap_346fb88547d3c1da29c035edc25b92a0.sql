@@ -1,0 +1,3 @@
+select order_id
+from dev.main_staging.stg__micromasters__app__postgres__ecommerce_order
+where order_id is null

@@ -1,0 +1,3 @@
+select opportunity_is_won
+from dev.main_staging.stg__salesforce__opportunity
+where opportunity_is_won is null

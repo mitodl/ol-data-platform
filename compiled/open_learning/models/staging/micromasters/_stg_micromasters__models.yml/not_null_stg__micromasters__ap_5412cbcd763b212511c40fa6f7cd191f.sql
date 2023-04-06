@@ -1,0 +1,3 @@
+select user_edxorg_id
+from dev.main_staging.stg__micromasters__app__user_program_certificate_override_list
+where user_edxorg_id is null

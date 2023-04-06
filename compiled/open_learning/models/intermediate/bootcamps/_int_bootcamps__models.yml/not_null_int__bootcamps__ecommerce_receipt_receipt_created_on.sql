@@ -1,0 +1,3 @@
+select receipt_created_on
+from dev.main_intermediate.int__bootcamps__ecommerce_receipt
+where receipt_created_on is null

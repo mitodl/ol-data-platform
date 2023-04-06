@@ -1,0 +1,3 @@
+select program_num_required_courses
+from dev.main_staging.stg__micromasters__app__postgres__courses_program
+where program_num_required_courses is null

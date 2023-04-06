@@ -1,0 +1,3 @@
+select user_address_postal_code
+from dev.main_staging.stg__bootcamps__app__postgres__profiles_legaladdress
+where user_address_postal_code is null

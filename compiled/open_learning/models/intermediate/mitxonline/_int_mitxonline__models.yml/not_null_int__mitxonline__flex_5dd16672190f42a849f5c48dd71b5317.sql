@@ -1,0 +1,3 @@
+select flexiblepricetier_created_on
+from dev.main_intermediate.int__mitxonline__flexiblepricing_flexiblepricetier
+where flexiblepricetier_created_on is null

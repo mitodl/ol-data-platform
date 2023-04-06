@@ -1,0 +1,18 @@
+with source as (
+    select * from dev.main_raw.raw__mitx__openedx__mysql__student_courseenrollment
+)
+
+, cleaned as (
+    select
+        id as courserunenrollment_id
+        , course_id as courserun_readable_id
+        , user_id
+        , is_active as courserunenrollment_is_active
+        , mode as courserunenrollment_enrollment_mode
+        ,
+        to_iso8601(from_iso8601_timestamp(created))
+        as courserunenrollment_created_on
+    from source
+)
+
+select * from cleaned

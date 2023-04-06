@@ -1,0 +1,3 @@
+select courserun_tag
+from dev.main_intermediate.int__mitxonline__course_runs
+where courserun_tag is null

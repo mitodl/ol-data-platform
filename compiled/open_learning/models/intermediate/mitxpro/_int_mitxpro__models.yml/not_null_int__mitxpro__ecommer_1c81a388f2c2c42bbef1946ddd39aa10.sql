@@ -1,0 +1,3 @@
+select productcouponassignment_is_redeemed
+from dev.main_intermediate.int__mitxpro__ecommerce_productcouponassignment
+where productcouponassignment_is_redeemed is null

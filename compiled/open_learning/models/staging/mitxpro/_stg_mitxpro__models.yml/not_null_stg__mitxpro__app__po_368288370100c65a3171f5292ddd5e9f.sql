@@ -1,0 +1,3 @@
+select line_id
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_programrunline
+where line_id is null

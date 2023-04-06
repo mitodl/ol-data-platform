@@ -1,0 +1,3 @@
+select program_title
+from dev.main_intermediate.__micromasters_program_certificates_dedp_from_micromasters
+where program_title is null

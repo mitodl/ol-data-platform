@@ -1,0 +1,3 @@
+select programrequirement_path
+from dev.main_intermediate.int__mitxonline__programrequirements
+where programrequirement_path is null

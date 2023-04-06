@@ -1,0 +1,3 @@
+select user_username
+from dev.main_intermediate.int__bootcamps__courserunenrollments
+where user_username is null

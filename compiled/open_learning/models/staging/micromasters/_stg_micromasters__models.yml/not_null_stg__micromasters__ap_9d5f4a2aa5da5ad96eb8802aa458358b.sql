@@ -1,0 +1,3 @@
+select redeemedcoupon_created_on
+from dev.main_staging.stg__micromasters__app__postgres__ecommerce_redeemedcoupon
+where redeemedcoupon_created_on is null

@@ -1,0 +1,3 @@
+select couponversion_updated_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_couponversion
+where couponversion_updated_on is null

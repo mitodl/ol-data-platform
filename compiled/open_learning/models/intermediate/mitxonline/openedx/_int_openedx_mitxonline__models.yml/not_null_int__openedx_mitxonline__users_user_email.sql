@@ -1,0 +1,3 @@
+select user_email
+from dev.main_intermediate.int__openedx_mitxonline__users
+where user_email is null

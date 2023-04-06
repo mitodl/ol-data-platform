@@ -1,0 +1,3 @@
+select couponproduct_id
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_couponproduct
+where couponproduct_id is null

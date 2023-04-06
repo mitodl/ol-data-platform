@@ -1,0 +1,3 @@
+select programrequirement_type
+from dev.main_intermediate.int__mitxonline__program_to_courses
+where programrequirement_type is null

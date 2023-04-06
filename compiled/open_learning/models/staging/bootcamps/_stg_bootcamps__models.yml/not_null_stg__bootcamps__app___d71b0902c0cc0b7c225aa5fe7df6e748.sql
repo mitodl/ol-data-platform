@@ -1,0 +1,3 @@
+select order_purchaser_user_id
+from dev.main_staging.stg__bootcamps__app__postgres__ecommerce_order
+where order_purchaser_user_id is null

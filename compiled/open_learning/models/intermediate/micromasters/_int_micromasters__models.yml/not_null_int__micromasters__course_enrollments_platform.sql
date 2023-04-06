@@ -1,0 +1,3 @@
+select platform
+from dev.main_intermediate.int__micromasters__course_enrollments
+where platform is null

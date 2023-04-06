@@ -1,0 +1,3 @@
+select user_email
+from dev.main_staging.stg__micromasters__app__postgres__auth_user
+where user_email is null

@@ -1,0 +1,3 @@
+select flexiblepriceapplication_country_of_residence
+from dev.main_intermediate.int__mitxonline__flexiblepricing_flexiblepriceapplication
+where flexiblepriceapplication_country_of_residence is null

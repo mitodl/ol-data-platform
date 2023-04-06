@@ -1,0 +1,3 @@
+select programcertificate_uuid
+from dev.main_intermediate.int__mitxonline__program_certificates
+where programcertificate_uuid is null

@@ -1,0 +1,3 @@
+select order_id
+from dev.main_intermediate.int__mitxonline__ecommerce_transaction
+where order_id is null

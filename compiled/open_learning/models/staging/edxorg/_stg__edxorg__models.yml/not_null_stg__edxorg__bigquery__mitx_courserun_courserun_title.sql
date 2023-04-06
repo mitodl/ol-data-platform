@@ -1,0 +1,3 @@
+select courserun_title
+from dev.main_staging.stg__edxorg__bigquery__mitx_courserun
+where courserun_title is null

@@ -1,0 +1,3 @@
+select productcouponassignment_email
+from dev.main_intermediate.int__mitxpro__ecommerce_productcouponassignment
+where productcouponassignment_email is null

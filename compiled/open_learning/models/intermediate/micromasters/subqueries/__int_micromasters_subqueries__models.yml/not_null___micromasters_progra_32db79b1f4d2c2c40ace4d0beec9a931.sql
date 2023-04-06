@@ -1,0 +1,3 @@
+select user_email
+from dev.main_intermediate.__micromasters_program_certificates_non_dedp
+where user_email is null

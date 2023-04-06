@@ -1,0 +1,3 @@
+select courserunenrollment_is_active
+from dev.main_intermediate.int__mitxpro__courserunenrollments
+where courserunenrollment_is_active is null

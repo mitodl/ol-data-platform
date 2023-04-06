@@ -1,0 +1,3 @@
+select opportunity_name
+from dev.main_intermediate.int__salesforce__opportunity
+where opportunity_name is null

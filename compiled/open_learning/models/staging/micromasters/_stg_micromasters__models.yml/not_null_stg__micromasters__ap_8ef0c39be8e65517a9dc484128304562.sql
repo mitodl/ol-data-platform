@@ -1,0 +1,3 @@
+select course_position_in_program
+from dev.main_staging.stg__micromasters__app__postgres__courses_course
+where course_position_in_program is null

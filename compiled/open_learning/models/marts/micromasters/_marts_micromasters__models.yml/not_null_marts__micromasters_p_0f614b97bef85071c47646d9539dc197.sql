@@ -1,0 +1,3 @@
+select user_edxorg_username
+from dev.main_mart.marts__micromasters_program_certificates
+where user_edxorg_username is null

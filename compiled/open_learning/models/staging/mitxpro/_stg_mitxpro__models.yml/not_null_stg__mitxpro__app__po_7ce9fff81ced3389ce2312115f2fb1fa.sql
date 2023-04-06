@@ -1,0 +1,3 @@
+select b2borderaudit_created_on
+from dev.main_staging.stg__mitxpro__app__postgres__b2becommerce_b2borderaudit
+where b2borderaudit_created_on is null

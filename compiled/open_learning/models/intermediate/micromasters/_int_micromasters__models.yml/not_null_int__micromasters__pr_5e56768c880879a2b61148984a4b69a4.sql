@@ -1,0 +1,3 @@
+select programcertificate_id
+from ol_data_lake_production.ol_warehouse_production_intermediate.int__micromasters__program_certificates
+where programcertificate_id is null

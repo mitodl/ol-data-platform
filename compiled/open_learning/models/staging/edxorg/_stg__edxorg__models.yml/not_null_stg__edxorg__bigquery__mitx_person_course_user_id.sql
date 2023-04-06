@@ -1,0 +1,3 @@
+select user_id
+from dev.main_staging.stg__edxorg__bigquery__mitx_person_course
+where user_id is null

@@ -1,0 +1,3 @@
+select coupon_created_on
+from dev.main_intermediate.int__mitxpro__ecommerce_coupon
+where coupon_created_on is null

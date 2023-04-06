@@ -1,0 +1,3 @@
+select flexiblepricetier_id
+from dev.main_staging.stg__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
+where flexiblepricetier_id is null

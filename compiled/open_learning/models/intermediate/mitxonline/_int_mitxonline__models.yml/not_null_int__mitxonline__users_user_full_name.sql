@@ -1,0 +1,3 @@
+select user_full_name
+from dev.main_intermediate.int__mitxonline__users
+where user_full_name is null

@@ -1,0 +1,3 @@
+select product_price
+from dev.main_staging.stg__mitxonline__app__postgres__ecommerce_product
+where product_price is null

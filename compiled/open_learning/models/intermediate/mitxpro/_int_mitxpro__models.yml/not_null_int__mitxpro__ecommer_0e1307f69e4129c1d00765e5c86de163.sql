@@ -1,0 +1,3 @@
+select basketrunselection_updated_on
+from dev.main_intermediate.int__mitxpro__ecommerce_basketrunselection
+where basketrunselection_updated_on is null

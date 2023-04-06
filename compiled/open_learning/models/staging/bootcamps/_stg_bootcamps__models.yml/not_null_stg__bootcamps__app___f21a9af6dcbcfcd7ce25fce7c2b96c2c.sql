@@ -1,0 +1,3 @@
+select order_created_on
+from dev.main_staging.stg__bootcamps__app__postgres__ecommerce_order
+where order_created_on is null

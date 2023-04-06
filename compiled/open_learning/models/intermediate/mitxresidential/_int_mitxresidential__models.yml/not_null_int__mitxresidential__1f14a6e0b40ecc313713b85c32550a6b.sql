@@ -1,0 +1,3 @@
+select courserunenrollment_created_on
+from dev.main_intermediate.int__mitxresidential__courserun_enrollments
+where courserunenrollment_created_on is null

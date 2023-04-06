@@ -1,0 +1,3 @@
+select flexiblepriceapplication_country_of_residence
+from dev.main_staging.stg__mitxonline__app__postgres__flexiblepricing_flexiblepriceapplication
+where flexiblepriceapplication_country_of_residence is null

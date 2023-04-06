@@ -1,0 +1,3 @@
+select courserun_title
+from dev.main_intermediate.int__mitxpro__course_runs
+where courserun_title is null

@@ -1,0 +1,3 @@
+select user_username
+from dev.main_intermediate.int__openedx_mitxonline__user_courseactivities
+where user_username is null

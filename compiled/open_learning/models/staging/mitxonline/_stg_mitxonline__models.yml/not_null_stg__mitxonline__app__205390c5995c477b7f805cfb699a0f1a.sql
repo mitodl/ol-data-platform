@@ -1,0 +1,3 @@
+select transaction_data
+from dev.main_staging.stg__mitxonline__app__postgres__ecommerce_transaction
+where transaction_data is null

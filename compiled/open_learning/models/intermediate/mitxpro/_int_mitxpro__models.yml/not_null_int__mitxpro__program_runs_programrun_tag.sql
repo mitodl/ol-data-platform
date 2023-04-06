@@ -1,0 +1,3 @@
+select programrun_tag
+from dev.main_intermediate.int__mitxpro__program_runs
+where programrun_tag is null

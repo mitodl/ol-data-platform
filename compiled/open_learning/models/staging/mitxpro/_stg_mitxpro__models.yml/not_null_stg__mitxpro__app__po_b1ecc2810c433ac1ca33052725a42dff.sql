@@ -1,0 +1,3 @@
+select company_updated_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_company
+where company_updated_on is null

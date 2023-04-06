@@ -1,0 +1,3 @@
+select flexiblepriceapplication_id
+from dev.main_intermediate.int__mitxonline__flexiblepricing_flexiblepriceapplication
+where flexiblepriceapplication_id is null

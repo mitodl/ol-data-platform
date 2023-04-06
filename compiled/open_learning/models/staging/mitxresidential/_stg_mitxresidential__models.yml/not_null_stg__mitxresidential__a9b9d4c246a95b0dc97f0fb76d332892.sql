@@ -1,0 +1,3 @@
+select courserungrade_updated_on
+from dev.main_staging.stg__mitxresidential__openedx__courserun_grade
+where courserungrade_updated_on is null

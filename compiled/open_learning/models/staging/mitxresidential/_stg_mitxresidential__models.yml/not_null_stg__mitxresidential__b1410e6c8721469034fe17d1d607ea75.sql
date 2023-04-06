@@ -1,0 +1,3 @@
+select courseaccessrole_role
+from dev.main_staging.stg__mitxresidential__openedx__user_courseaccessrole
+where courseaccessrole_role is null

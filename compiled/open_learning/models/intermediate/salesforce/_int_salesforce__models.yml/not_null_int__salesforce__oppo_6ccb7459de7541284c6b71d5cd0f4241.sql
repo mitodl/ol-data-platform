@@ -1,0 +1,3 @@
+select opportunity_revenue_share_or_commission_contract
+from dev.main_intermediate.int__salesforce__opportunity
+where opportunity_revenue_share_or_commission_contract is null

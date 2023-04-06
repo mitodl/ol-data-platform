@@ -1,0 +1,3 @@
+select program_is_live
+from dev.main_staging.stg__micromasters__app__postgres__courses_program
+where program_is_live is null

@@ -1,0 +1,3 @@
+select usercoupon_created_on
+from dev.main_staging.stg__micromasters__app__postgres__ecommerce_usercoupon
+where usercoupon_created_on is null

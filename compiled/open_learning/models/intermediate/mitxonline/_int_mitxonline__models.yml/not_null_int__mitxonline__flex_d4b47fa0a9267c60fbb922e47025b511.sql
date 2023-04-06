@@ -1,0 +1,3 @@
+select currencyexchangerate_created_on
+from dev.main_intermediate.int__mitxonline__flexiblepricing_currencyexchangerate
+where currencyexchangerate_created_on is null

@@ -1,0 +1,3 @@
+select user_highest_education
+from dev.main_staging.stg__mitxpro__app__postgres__users_profile
+where user_highest_education is null

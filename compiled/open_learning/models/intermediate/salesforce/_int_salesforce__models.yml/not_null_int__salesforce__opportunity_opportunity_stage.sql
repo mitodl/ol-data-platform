@@ -1,0 +1,3 @@
+select opportunity_stage
+from dev.main_intermediate.int__salesforce__opportunity
+where opportunity_stage is null

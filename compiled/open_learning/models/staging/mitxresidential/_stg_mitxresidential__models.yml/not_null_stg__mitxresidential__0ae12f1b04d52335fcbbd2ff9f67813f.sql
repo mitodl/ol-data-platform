@@ -1,0 +1,3 @@
+select user_is_active
+from dev.main_staging.stg__mitxresidential__openedx__auth_user
+where user_is_active is null

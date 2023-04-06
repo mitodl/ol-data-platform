@@ -1,0 +1,3 @@
+select flexiblepricetier_income_threshold_usd
+from dev.main_staging.stg__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
+where flexiblepricetier_income_threshold_usd is null

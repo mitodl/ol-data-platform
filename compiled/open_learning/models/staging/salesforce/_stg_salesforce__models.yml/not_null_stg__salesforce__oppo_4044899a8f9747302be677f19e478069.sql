@@ -1,0 +1,3 @@
+select opportunitylineitem_quantity
+from dev.main_staging.stg__salesforce__opportunitylineitem
+where opportunitylineitem_quantity is null

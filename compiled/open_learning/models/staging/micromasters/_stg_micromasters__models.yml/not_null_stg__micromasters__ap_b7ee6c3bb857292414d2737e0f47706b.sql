@@ -1,0 +1,3 @@
+select electiveset_id
+from dev.main_staging.stg__micromasters__app__postgres__courses_electiveset
+where electiveset_id is null

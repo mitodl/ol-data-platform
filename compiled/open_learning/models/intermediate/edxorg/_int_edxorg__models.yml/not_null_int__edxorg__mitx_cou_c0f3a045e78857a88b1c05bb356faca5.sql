@@ -1,0 +1,3 @@
+select courserun_readable_id
+from dev.main_intermediate.int__edxorg__mitx_courserun_certificates
+where courserun_readable_id is null

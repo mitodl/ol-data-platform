@@ -1,0 +1,3 @@
+select user_last_login
+from dev.main_intermediate.int__openedx_mitxonline__users
+where user_last_login is null

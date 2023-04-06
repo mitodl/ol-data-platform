@@ -1,0 +1,3 @@
+select opportunity_id
+from dev.main_staging.stg__salesforce__opportunitylineitem
+where opportunity_id is null

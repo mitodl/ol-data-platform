@@ -1,0 +1,3 @@
+select productcouponassignment_created_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_productcouponassignment
+where productcouponassignment_created_on is null

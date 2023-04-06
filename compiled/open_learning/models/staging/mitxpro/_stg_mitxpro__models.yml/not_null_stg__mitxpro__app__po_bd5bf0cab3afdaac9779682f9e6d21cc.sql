@@ -1,0 +1,3 @@
+select couponpaymentversion_discount_type
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_couponpaymentversion
+where couponpaymentversion_discount_type is null

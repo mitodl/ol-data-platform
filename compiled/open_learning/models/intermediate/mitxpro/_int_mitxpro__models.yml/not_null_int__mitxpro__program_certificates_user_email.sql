@@ -1,0 +1,3 @@
+select user_email
+from dev.main_intermediate.int__mitxpro__program_certificates
+where user_email is null

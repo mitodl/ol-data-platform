@@ -1,0 +1,3 @@
+select flexiblepriceapplication_updated_on
+from dev.main_staging.stg__mitxonline__app__postgres__flexiblepricing_flexiblepriceapplication
+where flexiblepriceapplication_updated_on is null

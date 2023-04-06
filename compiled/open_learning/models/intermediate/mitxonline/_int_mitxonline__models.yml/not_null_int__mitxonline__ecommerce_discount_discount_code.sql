@@ -1,0 +1,3 @@
+select discount_code
+from dev.main_intermediate.int__mitxonline__ecommerce_discount
+where discount_code is null

@@ -1,0 +1,19 @@
+select
+    count(*) as failures
+    , count(*) != 0 as should_warn
+    , count(*) != 0 as should_error
+from (
+
+
+
+
+
+
+    select user_auth_provider
+    from ol_data_lake_production.ol_warehouse_production_staging.stg__micromasters__app__postgres__auth_usersocialauth
+    where user_auth_provider is null
+
+
+
+
+) as dbt_internal_test

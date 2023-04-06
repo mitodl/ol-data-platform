@@ -1,0 +1,3 @@
+select discount_is_for_flexible_pricing
+from ol_data_lake_production.ol_warehouse_production_staging.stg__mitxonline__app__postgres__ecommerce_discount
+where discount_is_for_flexible_pricing is null

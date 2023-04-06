@@ -1,0 +1,3 @@
+select program_ga_tracking_id
+from dev.main_staging.stg__micromasters__app__postgres__courses_program
+where program_ga_tracking_id is null

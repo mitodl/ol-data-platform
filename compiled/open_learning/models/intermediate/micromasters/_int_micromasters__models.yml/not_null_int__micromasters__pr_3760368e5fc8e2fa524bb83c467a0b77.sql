@@ -1,0 +1,3 @@
+select program_num_required_courses
+from dev.main_intermediate.int__micromasters__programs
+where program_num_required_courses is null

@@ -1,0 +1,46 @@
+create table ol_data_lake_production.ol_warehouse_production_intermediate.int__mitxpro__ecommerce_product__dbt_tmp
+
+as (
+    with products as (
+        select *
+        from ol_data_lake_production.ol_warehouse_production_staging.stg__mitxpro__app__postgres__ecommerce_product
+    )
+
+    , contenttypes as (
+        select *
+        from ol_data_lake_production.ol_warehouse_production_staging.stg__mitxpro__app__postgres__django_contenttype
+    )
+
+    , courseruns as (
+        select *
+        from ol_data_lake_production.ol_warehouse_production_staging.stg__mitxpro__app__postgres__courses_courserun
+    )
+
+    , product_subquery as (
+        select
+            products.product_id
+            , products.product_is_active
+            , products.product_created_on
+            , products.product_updated_on
+            , products.product_is_visible_in_bulk_form
+            , case contenttypes.contenttype_full_name
+                when 'courses_courserun' then products.product_object_id
+            end as courserun_id
+            , case contenttypes.contenttype_full_name
+                when 'courses_program' then products.product_object_id
+            end as program_id
+            , case contenttypes.contenttype_full_name
+                when 'courses_courserun' then 'course run'
+                when 'courses_program' then 'program'
+                else contenttypes.contenttype_full_name
+            end as product_type
+        from products
+        inner join contenttypes on products.contenttype_id = contenttypes.contenttype_id
+    )
+
+    select
+        product_subquery.*
+        , courseruns.course_id
+    from product_subquery
+    left join courseruns on product_subquery.courserun_id = courseruns.courserun_id
+);

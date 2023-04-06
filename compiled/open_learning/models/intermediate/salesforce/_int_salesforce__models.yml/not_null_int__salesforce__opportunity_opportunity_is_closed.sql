@@ -1,0 +1,3 @@
+select opportunity_is_closed
+from dev.main_intermediate.int__salesforce__opportunity
+where opportunity_is_closed is null

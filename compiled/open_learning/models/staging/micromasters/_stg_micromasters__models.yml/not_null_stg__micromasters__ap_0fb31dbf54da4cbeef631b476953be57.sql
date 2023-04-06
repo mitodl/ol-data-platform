@@ -1,0 +1,3 @@
+select programcertificate_hash
+from dev.main_staging.stg__micromasters__app__postgres__grades_programcertificate
+where programcertificate_hash is null

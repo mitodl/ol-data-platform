@@ -1,0 +1,3 @@
+select contenttype_full_name
+from dev.main_staging.stg__micromasters__app__postgres__django_contenttype
+where contenttype_full_name is null

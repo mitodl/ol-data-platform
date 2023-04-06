@@ -1,0 +1,3 @@
+select user_street_address
+from dev.main_staging.stg__mitxpro__app__postgres__users_legaladdress
+where user_street_address is null

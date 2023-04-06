@@ -1,0 +1,3 @@
+select user_address_country
+from dev.main_staging.stg__bootcamps__app__postgres__profiles_legaladdress
+where user_address_country is null

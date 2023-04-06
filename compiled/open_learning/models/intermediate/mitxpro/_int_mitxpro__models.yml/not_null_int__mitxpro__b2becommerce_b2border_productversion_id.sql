@@ -1,0 +1,3 @@
+select productversion_id
+from dev.main_intermediate.int__mitxpro__b2becommerce_b2border
+where productversion_id is null

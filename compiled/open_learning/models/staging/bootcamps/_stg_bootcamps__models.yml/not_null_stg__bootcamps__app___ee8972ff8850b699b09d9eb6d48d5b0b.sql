@@ -1,0 +1,3 @@
+select orderaudit_id
+from dev.main_staging.stg__bootcamps__app__postgres__ecommerce_orderaudit
+where orderaudit_id is null

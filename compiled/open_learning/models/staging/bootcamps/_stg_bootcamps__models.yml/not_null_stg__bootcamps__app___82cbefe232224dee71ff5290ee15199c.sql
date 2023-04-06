@@ -1,0 +1,3 @@
+select order_total_price_paid
+from dev.main_staging.stg__bootcamps__app__postgres__ecommerce_order
+where order_total_price_paid is null

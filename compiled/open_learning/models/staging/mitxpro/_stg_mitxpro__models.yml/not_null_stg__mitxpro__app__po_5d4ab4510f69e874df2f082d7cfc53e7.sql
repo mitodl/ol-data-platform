@@ -1,0 +1,3 @@
+select contenttype_id
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_product
+where contenttype_id is null

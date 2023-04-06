@@ -1,0 +1,3 @@
+select programrequirement_id
+from dev.main_intermediate.int__mitxonline__program_to_courses
+where programrequirement_id is null

@@ -1,0 +1,3 @@
+select userdiscount_created_on
+from dev.main_intermediate.int__mitxonline__ecommerce_userdiscount
+where userdiscount_created_on is null

@@ -1,0 +1,8 @@
+select
+    user_mail_id as unique_field
+    , count(*) as n_records
+
+from dev.main_staging.stg__micromasters__app__postgres__profiles_profile
+where user_mail_id is not null
+group by user_mail_id
+having count(*) > 1

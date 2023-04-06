@@ -1,0 +1,3 @@
+select courserun_is_self_paced
+from dev.main_staging.stg__mitxresidential__openedx__courserun
+where courserun_is_self_paced is null

@@ -1,0 +1,3 @@
+select program_readable_id
+from dev.main_intermediate.int__mitxpro__programs
+where program_readable_id is null

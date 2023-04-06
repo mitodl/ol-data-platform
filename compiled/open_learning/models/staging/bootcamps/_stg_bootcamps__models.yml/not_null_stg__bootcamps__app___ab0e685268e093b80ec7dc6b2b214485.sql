@@ -1,0 +1,3 @@
+select order_updated_on
+from dev.main_staging.stg__bootcamps__app__postgres__ecommerce_order
+where order_updated_on is null

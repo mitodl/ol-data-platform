@@ -1,0 +1,3 @@
+select user_street_address
+from dev.main_staging.stg__bootcamps__app__postgres__profiles_legaladdress
+where user_street_address is null

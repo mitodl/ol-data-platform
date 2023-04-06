@@ -1,0 +1,3 @@
+select courserun_id
+from dev.main_intermediate.int__mitxonline__courserun_grades
+where courserun_id is null

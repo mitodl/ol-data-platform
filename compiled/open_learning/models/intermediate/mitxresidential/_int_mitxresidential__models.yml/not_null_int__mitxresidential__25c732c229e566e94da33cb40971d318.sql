@@ -1,0 +1,3 @@
+select courserunenrollment_enrollment_mode
+from dev.main_intermediate.int__mitxresidential__courserun_enrollments
+where courserunenrollment_enrollment_mode is null

@@ -1,0 +1,3 @@
+select linerunselection_updated_on
+from dev.main_intermediate.int__mitxpro__ecommerce_linerunselection
+where linerunselection_updated_on is null

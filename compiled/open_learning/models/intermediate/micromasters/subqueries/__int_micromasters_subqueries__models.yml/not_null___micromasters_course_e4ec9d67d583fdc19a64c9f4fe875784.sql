@@ -1,0 +1,3 @@
+select courserunenrollment_is_active
+from dev.main_intermediate.__micromasters_course_enrollments_from_mitxonline
+where courserunenrollment_is_active is null

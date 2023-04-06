@@ -1,0 +1,3 @@
+select b2breceipt_id
+from dev.main_intermediate.int__mitxpro__b2becommerce_b2breceipt
+where b2breceipt_id is null

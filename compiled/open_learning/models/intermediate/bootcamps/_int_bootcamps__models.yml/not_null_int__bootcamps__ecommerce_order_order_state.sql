@@ -1,0 +1,3 @@
+select order_state
+from dev.main_intermediate.int__bootcamps__ecommerce_order
+where order_state is null

@@ -1,0 +1,3 @@
+select coupon_amount
+from dev.main_staging.stg__micromasters__app__postgres__ecommerce_coupon
+where coupon_amount is null

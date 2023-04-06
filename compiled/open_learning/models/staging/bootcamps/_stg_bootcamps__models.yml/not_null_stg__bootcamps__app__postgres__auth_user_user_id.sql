@@ -1,0 +1,3 @@
+select user_id
+from dev.main_staging.stg__bootcamps__app__postgres__auth_user
+where user_id is null

@@ -1,0 +1,3 @@
+select program_title
+from dev.main_intermediate.int__mitxonline__program_certificates
+where program_title is null

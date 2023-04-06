@@ -1,0 +1,3 @@
+select courserun_readable_id
+from dev.main_intermediate.__micromasters_course_enrollments_from_edxorg
+where courserun_readable_id is null

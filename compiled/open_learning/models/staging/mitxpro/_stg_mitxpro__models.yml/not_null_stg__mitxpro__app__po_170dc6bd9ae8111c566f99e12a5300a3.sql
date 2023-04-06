@@ -1,0 +1,3 @@
+select b2breceipt_data
+from dev.main_staging.stg__mitxpro__app__postgres__b2becommerce_b2breceipt
+where b2breceipt_data is null

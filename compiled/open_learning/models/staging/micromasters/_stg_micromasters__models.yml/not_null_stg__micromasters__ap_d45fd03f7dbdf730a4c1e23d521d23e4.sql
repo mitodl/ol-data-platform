@@ -1,0 +1,3 @@
+select programcertificate_created_on
+from dev.main_staging.stg__micromasters__app__postgres__grades_programcertificate
+where programcertificate_created_on is null

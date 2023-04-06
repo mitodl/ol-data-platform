@@ -1,0 +1,3 @@
+select couponpayment_updated_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_couponpayment
+where couponpayment_updated_on is null

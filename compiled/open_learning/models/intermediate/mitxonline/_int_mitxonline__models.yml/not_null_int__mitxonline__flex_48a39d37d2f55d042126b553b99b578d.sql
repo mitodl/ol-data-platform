@@ -1,0 +1,3 @@
+select flexiblepricetier_income_threshold_usd
+from dev.main_intermediate.int__mitxonline__flexiblepricing_flexiblepricetier
+where flexiblepricetier_income_threshold_usd is null

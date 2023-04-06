@@ -1,0 +1,3 @@
+select order_reference_number
+from dev.main_staging.stg__mitxonline__app__postgres__ecommerce_order
+where order_reference_number is null

@@ -1,0 +1,3 @@
+select discount_redemption_type
+from dev.main_intermediate.int__mitxonline__ecommerce_discount
+where discount_redemption_type is null

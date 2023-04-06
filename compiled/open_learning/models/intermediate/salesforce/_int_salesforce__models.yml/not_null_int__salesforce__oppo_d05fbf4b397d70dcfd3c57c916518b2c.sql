@@ -1,0 +1,3 @@
+select opportunitylineitem_modified_on
+from dev.main_intermediate.int__salesforce__opportunitylineitem
+where opportunitylineitem_modified_on is null

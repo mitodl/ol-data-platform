@@ -1,0 +1,3 @@
+select self_paced
+from dev.main_intermediate.int__mitxresidential__courseruns
+where self_paced is null

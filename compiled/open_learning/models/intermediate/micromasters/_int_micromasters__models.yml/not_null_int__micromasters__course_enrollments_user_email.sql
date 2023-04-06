@@ -1,0 +1,3 @@
+select user_email
+from dev.main_intermediate.int__micromasters__course_enrollments
+where user_email is null

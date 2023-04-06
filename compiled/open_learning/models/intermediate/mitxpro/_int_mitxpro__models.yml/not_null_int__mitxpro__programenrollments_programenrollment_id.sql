@@ -1,0 +1,3 @@
+select programenrollment_id
+from dev.main_intermediate.int__mitxpro__programenrollments
+where programenrollment_id is null

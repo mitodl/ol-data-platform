@@ -1,0 +1,3 @@
+select programrun_id
+from dev.main_staging.stg__mitxonline__app__postgres__courses_programrun
+where programrun_id is null

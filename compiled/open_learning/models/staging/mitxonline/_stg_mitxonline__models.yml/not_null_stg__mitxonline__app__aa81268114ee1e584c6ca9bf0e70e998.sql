@@ -1,0 +1,3 @@
+select countryincomethreshold_updated_on
+from dev.main_staging.stg__mitxonline__app__postgres__flexiblepricing_countryincomethreshold
+where countryincomethreshold_updated_on is null

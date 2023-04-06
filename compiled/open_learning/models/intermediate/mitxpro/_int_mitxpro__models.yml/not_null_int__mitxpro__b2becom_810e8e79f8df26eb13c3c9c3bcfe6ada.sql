@@ -1,0 +1,3 @@
+select b2breceipt_updated_on
+from dev.main_intermediate.int__mitxpro__b2becommerce_b2breceipt
+where b2breceipt_updated_on is null

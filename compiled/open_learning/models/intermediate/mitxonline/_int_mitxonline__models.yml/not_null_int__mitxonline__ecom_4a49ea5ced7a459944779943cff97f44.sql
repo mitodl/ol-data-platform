@@ -1,0 +1,3 @@
+select transaction_readable_identifier
+from dev.main_intermediate.int__mitxonline__ecommerce_transaction
+where transaction_readable_identifier is null

@@ -1,0 +1,3 @@
+select productversion_description
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_productversion
+where productversion_description is null

@@ -1,0 +1,3 @@
+select user_email
+from dev.main_intermediate.int__mitxpro__programenrollments
+where user_email is null

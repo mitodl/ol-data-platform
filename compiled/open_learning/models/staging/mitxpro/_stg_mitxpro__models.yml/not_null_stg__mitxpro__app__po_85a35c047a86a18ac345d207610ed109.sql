@@ -1,0 +1,3 @@
+select couponredemption_created_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_couponredemption
+where couponredemption_created_on is null

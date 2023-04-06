@@ -1,0 +1,3 @@
+select courserungrade_grade
+from dev.main_intermediate.int__mitxresidential__courserun_grades
+where courserungrade_grade is null

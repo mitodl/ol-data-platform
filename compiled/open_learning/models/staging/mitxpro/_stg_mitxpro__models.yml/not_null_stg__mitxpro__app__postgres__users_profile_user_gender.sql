@@ -1,0 +1,3 @@
+select user_gender
+from dev.main_staging.stg__mitxpro__app__postgres__users_profile
+where user_gender is null

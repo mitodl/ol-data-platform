@@ -1,0 +1,3 @@
+select product_price
+from dev.main_intermediate.int__mitxonline__ecommerce_product
+where product_price is null

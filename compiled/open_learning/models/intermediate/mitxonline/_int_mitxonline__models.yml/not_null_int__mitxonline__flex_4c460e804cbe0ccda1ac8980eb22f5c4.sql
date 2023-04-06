@@ -1,0 +1,3 @@
+select flexiblepricetier_id
+from dev.main_intermediate.int__mitxonline__flexiblepricing_flexiblepricetier
+where flexiblepricetier_id is null

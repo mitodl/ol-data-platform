@@ -1,0 +1,3 @@
+select courserunenrollment_created_on
+from dev.main_staging.stg__mitxresidential__openedx__courserun_enrollment
+where courserunenrollment_created_on is null

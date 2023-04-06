@@ -1,0 +1,3 @@
+select courserun_id
+from dev.main_intermediate.int__combined__courserun_enrollments
+where courserun_id is null

@@ -1,0 +1,3 @@
+select programrequirement_id
+from dev.main_staging.stg__mitxonline__app__postgres__courses_programrequirement
+where programrequirement_id is null

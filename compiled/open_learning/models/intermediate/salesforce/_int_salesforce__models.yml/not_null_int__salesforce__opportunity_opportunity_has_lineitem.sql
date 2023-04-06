@@ -1,0 +1,3 @@
+select opportunity_has_lineitem
+from dev.main_intermediate.int__salesforce__opportunity
+where opportunity_has_lineitem is null

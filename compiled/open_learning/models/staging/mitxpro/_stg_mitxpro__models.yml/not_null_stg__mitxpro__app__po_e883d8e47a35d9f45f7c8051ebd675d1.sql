@@ -1,0 +1,3 @@
+select basketrunselection_id
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_basketrunselection
+where basketrunselection_id is null

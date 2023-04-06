@@ -1,0 +1,3 @@
+select user_edxorg_username
+from dev.main_intermediate.__micromasters_program_certificates_dedp_from_micromasters
+where user_edxorg_username is null

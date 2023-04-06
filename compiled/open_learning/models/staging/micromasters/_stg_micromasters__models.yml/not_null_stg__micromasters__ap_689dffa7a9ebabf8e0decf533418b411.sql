@@ -1,0 +1,3 @@
+select course_should_display_progress
+from dev.main_staging.stg__micromasters__app__postgres__courses_course
+where course_should_display_progress is null

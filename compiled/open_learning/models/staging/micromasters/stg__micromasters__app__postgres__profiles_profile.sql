@@ -1,0 +1,96 @@
+-- MicroMasters User Profile Information
+
+with source as (
+    select * from dev.main_raw.raw__micromasters__app__postgres__profiles_profile
+)
+
+, cleaned as (
+    select
+        id as user_profile_id
+        , user_id
+        , country as user_address_country
+        , city as user_address_city
+        , state_or_territory as user_address_state_or_territory
+        , postal_code as user_address_postal_code
+        , address as user_street_address
+        , preferred_name as user_preferred_name
+        , mail_id as user_mail_id
+        , student_id as user_student_id
+        , email_optin as user_email_is_optin
+        , filled_out as user_profile_is_filled_out
+        , image as user_profile_image
+        , image_small as user_profile_image_small
+        , image_medium as user_profile_image_medium
+        , nationality as user_nationality
+        , phone_number as user_phone_number
+        , edx_employer as user_employer
+        , edx_job_title as user_job_title
+        , preferred_language as user_preferred_language
+        , edx_mailing_address as user_mailing_address
+        , verified_micromaster_user as user_is_verified
+        , agreed_to_terms_of_service as user_has_agreed_to_terms_of_service
+        , edx_language_proficiencies as user_language_proficiencies
+        , edx_requires_parental_consent as user_profile_parental_consent_is_required
+        , edx_bio as user_bio
+        , about_me as user_about_me
+        , edx_name as user_edx_name
+        , edx_goals as user_edx_goals
+        , fake_user as user_profile_is_fake
+        ,
+        to_iso8601(from_iso8601_date(date_of_birth))
+        as user_birth_date
+        , coalesce(romanized_first_name, first_name) as user_first_name
+        , coalesce(romanized_last_name, last_name) as user_last_name
+        , concat_ws(
+            chr(32)
+            , nullif(first_name, '')
+            , nullif(last_name, '')
+        ) as user_full_name
+        , concat_ws(
+            chr(32)
+            , nullif(romanized_first_name, '')
+            , nullif(romanized_last_name, '')
+        ) as user_romanized_full_name
+        ,
+        case
+            when edx_level_of_education = 'p' then 'Doctorate'
+            when edx_level_of_education = 'm' then 'Master''s or professional degree'
+            when edx_level_of_education = 'b' then 'Bachelor''s degree'
+            when edx_level_of_education = 'a' then 'Associate degree'
+            when edx_level_of_education = 'hs' then 'Secondary/high school'
+            when edx_level_of_education = 'jhs' then 'Junior secondary/junior high/middle school'
+            when edx_level_of_education = 'el' then 'Elementary/primary school'
+            when edx_level_of_education = 'none' then 'No formal education'
+            when edx_level_of_education = 'other' or edx_level_of_education = 'o' then 'Other education'
+            --- the following two are no longer used, but there are still user's profiles have these values
+            when edx_level_of_education = 'p_se' then 'Doctorate in science or engineering'
+            when edx_level_of_education = 'p_oth' then 'Doctorate in another field'
+            else edx_level_of_education
+        end
+        as user_highest_education
+        ,
+        case
+            when gender = 'm' then 'Male'
+            when gender = 'f' then 'Female'
+            when gender = 't' then 'Transgender'
+            when gender = 'nb' then 'Non-binary/non-conforming'
+            when gender = 'o' then 'Other/Prefer Not to Say'
+            else gender
+        end
+        as user_gender
+        , case
+            when account_privacy = 'public' then 'Public to everyone'
+            when account_privacy = 'public_to_mm' then 'Public to logged in users'
+            when account_privacy = 'private' then 'Private'
+            else account_privacy
+        end as user_account_privacy
+        ,
+        to_iso8601(from_iso8601_timestamp(date_joined_micromasters))
+        as user_joined_on
+        ,
+        to_iso8601(from_iso8601_timestamp(updated_on))
+        as user_profile_updated_on
+    from source
+)
+
+select * from cleaned

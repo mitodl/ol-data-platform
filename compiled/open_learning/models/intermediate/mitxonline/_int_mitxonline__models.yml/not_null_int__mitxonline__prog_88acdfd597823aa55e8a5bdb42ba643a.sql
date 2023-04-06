@@ -1,0 +1,3 @@
+select programenrollment_is_active
+from dev.main_intermediate.int__mitxonline__programenrollments
+where programenrollment_is_active is null

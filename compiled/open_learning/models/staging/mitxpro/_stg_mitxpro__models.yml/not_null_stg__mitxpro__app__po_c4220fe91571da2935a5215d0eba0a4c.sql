@@ -1,0 +1,3 @@
+select couponpaymentversion_max_redemptions
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_couponpaymentversion
+where couponpaymentversion_max_redemptions is null

@@ -1,0 +1,3 @@
+select user_joined_on
+from dev.main_staging.stg__mitxresidential__openedx__auth_user
+where user_joined_on is null

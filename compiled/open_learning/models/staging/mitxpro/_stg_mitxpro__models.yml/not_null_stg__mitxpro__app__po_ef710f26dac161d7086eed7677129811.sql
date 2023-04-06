@@ -1,0 +1,3 @@
+select order_id
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_couponredemption
+where order_id is null

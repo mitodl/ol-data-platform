@@ -1,0 +1,3 @@
+select courserun_edx_readable_id
+from dev.main_staging.stg__micromasters__app__postgres__ecommerce_line
+where courserun_edx_readable_id is null

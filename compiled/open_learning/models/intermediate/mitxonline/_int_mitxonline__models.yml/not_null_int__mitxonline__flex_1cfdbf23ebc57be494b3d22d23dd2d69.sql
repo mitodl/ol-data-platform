@@ -1,0 +1,3 @@
+select courseware_type
+from dev.main_intermediate.int__mitxonline__flexiblepricing_flexiblepriceapplication
+where courseware_type is null

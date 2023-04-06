@@ -1,0 +1,3 @@
+select receipt_updated_on
+from dev.main_staging.stg__bootcamps__app__postgres__ecommerce_receipt
+where receipt_updated_on is null

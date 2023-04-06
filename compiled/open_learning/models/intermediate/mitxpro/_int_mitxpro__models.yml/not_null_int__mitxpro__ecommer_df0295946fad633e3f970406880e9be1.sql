@@ -1,0 +1,3 @@
+select productversion_requires_enrollment_code
+from dev.main_intermediate.int__mitxpro__ecommerce_productversion
+where productversion_requires_enrollment_code is null

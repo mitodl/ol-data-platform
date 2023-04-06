@@ -1,0 +1,3 @@
+select wiretransferreceipt_data
+from dev.main_intermediate.int__bootcamps__ecommerce_wiretransferreceipt
+where wiretransferreceipt_data is null

@@ -1,0 +1,3 @@
+select couponpaymentversion_num_coupon_codes
+from dev.main_intermediate.int__mitxpro__ecommerce_couponpaymentversion
+where couponpaymentversion_num_coupon_codes is null

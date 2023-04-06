@@ -1,0 +1,3 @@
+select course_id
+from dev.main_intermediate.int__mitxpro__course_to_topics
+where course_id is null

@@ -1,0 +1,3 @@
+select programrun_id
+from dev.main_intermediate.int__mitxpro__program_runs
+where programrun_id is null

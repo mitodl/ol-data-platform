@@ -1,0 +1,3 @@
+select discount_type
+from dev.main_staging.stg__mitxonline__app__postgres__ecommerce_discount
+where discount_type is null

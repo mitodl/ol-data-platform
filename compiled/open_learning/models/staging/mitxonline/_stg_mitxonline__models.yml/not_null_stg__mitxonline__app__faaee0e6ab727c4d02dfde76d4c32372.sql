@@ -1,0 +1,3 @@
+select flexiblepricetier_created_on
+from dev.main_staging.stg__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
+where flexiblepricetier_created_on is null

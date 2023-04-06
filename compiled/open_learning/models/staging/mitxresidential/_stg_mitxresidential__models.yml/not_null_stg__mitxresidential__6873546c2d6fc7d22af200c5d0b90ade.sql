@@ -1,0 +1,3 @@
+select courserun_readable_id
+from dev.main_staging.stg__mitxresidential__openedx__courserun
+where courserun_readable_id is null

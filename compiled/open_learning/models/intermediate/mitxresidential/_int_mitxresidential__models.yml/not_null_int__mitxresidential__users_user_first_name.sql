@@ -1,0 +1,3 @@
+select user_first_name
+from dev.main_intermediate.int__mitxresidential__users
+where user_first_name is null

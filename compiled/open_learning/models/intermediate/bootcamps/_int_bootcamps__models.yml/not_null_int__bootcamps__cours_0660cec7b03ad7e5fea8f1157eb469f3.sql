@@ -1,0 +1,3 @@
+select courserunenrollment_created_on
+from dev.main_intermediate.int__bootcamps__courserunenrollments
+where courserunenrollment_created_on is null

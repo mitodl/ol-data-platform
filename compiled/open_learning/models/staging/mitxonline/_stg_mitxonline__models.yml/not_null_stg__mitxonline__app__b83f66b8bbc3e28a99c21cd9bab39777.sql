@@ -1,0 +1,3 @@
+select user_profile_id
+from dev.main_staging.stg__mitxonline__app__postgres__users_userprofile
+where user_profile_id is null

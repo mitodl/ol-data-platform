@@ -1,0 +1,3 @@
+select user_id
+from dev.main_staging.stg__mitxpro__app__postgres__courses_programcertificate
+where user_id is null

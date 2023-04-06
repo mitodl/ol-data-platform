@@ -1,0 +1,3 @@
+select user_is_staff
+from dev.main_staging.stg__mitxresidential__openedx__auth_user
+where user_is_staff is null

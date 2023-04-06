@@ -1,0 +1,3 @@
+select order_updated_on
+from dev.main_intermediate.int__mitxpro__ecommerce_order
+where order_updated_on is null

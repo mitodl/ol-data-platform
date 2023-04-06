@@ -1,0 +1,3 @@
+select user_username
+from dev.main_staging.stg__edxorg__bigquery__mitx_user_email_opt_in
+where user_username is null

@@ -1,0 +1,3 @@
+select micromasters_program_id
+from dev.main_staging.stg__micromasters__app__user_program_certificate_override_list
+where micromasters_program_id is null

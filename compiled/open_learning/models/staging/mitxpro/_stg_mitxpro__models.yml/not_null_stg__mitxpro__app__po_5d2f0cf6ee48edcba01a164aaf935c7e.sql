@@ -1,0 +1,3 @@
+select product_created_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_product
+where product_created_on is null

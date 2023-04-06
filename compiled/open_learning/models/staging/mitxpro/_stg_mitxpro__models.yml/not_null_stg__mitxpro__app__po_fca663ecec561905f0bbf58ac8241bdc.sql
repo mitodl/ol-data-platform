@@ -1,0 +1,3 @@
+select couponproduct_updated_on
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_couponproduct
+where couponproduct_updated_on is null

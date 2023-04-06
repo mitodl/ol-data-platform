@@ -1,0 +1,3 @@
+select company_name
+from dev.main_intermediate.int__mitxpro__ecommerce_company
+where company_name is null

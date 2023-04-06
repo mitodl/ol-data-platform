@@ -1,0 +1,3 @@
+select platform
+from dev.main_intermediate.int__combined__courserun_enrollments
+where platform is null

@@ -1,0 +1,3 @@
+select receipt_data
+from dev.main_intermediate.int__mitxpro__ecommerce_receipt
+where receipt_data is null

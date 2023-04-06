@@ -1,0 +1,3 @@
+select order_total_price_paid
+from dev.main_intermediate.int__mitxpro__ecommerce_order
+where order_total_price_paid is null

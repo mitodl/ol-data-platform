@@ -1,0 +1,3 @@
+select revision_date_created
+from dev.main_staging.stg__mitxonline__app__postgres__reversion_revision
+where revision_date_created is null

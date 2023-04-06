@@ -1,0 +1,3 @@
+select user_company
+from dev.main_staging.stg__mitxpro__app__postgres__users_profile
+where user_company is null

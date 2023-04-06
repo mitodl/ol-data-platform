@@ -1,0 +1,3 @@
+select user_id
+from dev.main_intermediate.int__micromasters__course_enrollments
+where user_id is null

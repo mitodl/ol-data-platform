@@ -1,0 +1,3 @@
+select product_is_visible_in_bulk_form
+from dev.main_staging.stg__mitxpro__app__postgres__ecommerce_product
+where product_is_visible_in_bulk_form is null

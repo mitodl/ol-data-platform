@@ -1,0 +1,3 @@
+select userdiscount_updated_on
+from dev.main_staging.stg__mitxonline__app__postgres__ecommerce_userdiscount
+where userdiscount_updated_on is null

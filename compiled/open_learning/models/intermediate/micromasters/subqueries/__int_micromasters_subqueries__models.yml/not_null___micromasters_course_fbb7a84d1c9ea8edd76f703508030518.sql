@@ -1,0 +1,3 @@
+select program_title
+from dev.main_intermediate.__micromasters_course_enrollments_from_edxorg
+where program_title is null

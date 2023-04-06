@@ -1,0 +1,3 @@
+select revision_id
+from dev.main_staging.stg__mitxonline__app__postgres__reversion_version
+where revision_id is null

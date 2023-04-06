@@ -1,0 +1,3 @@
+select coupon_is_global
+from dev.main_intermediate.int__mitxpro__ecommerce_coupon
+where coupon_is_global is null

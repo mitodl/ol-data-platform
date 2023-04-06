@@ -1,0 +1,3 @@
+select user_company
+from dev.main_staging.stg__bootcamps__app__postgres__profiles_profile
+where user_company is null
