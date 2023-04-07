@@ -2,8 +2,8 @@ import os
 
 from dagster import (
     AssetMaterialization,
+    MetadataValue,
     Field,
-    MetadataEntry,
     OpExecutionContext,
     Out,
     Output,
@@ -99,11 +99,11 @@ def upload_edx_gcs_course_data_to_s3(
     yield AssetMaterialization(
         asset_key="edx_daily_results",
         description="Daily export directory for edX export pipeline",
-        metadata_entries=[
-            MetadataEntry.fspath(
+        metadata={
+            "bucket_path": MetadataValue.path(
                 f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
             ),
-        ],
+        },
     )
     context.resources.results_dir.clean_dir()
     yield Output(
