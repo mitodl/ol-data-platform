@@ -9,7 +9,7 @@ python_distribution(
         "//:requirements#dagster-aws",
         "//:requirements#dagster-gcp",
         "//:requirements#dbt-trino",
-        "//:requirements#dbt-sqlite",
+        "//:requirements#dbt-duckdb",
         "./repositories",
     ],
     provides=python_artifact(
@@ -24,7 +24,7 @@ python_distribution(
         "//:requirements#dagster-postgres",
         "//:requirements#dagster-aws",
         "//:requirements#dbt-trino",
-        "//:requirements#dbt-sqlite",
+        "//:requirements#dbt-duckdb",
         "./definitions",
     ],
     provides=python_artifact(
