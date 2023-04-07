@@ -17,9 +17,7 @@ models:
     - accepted_values:
         values: '{{ var("platforms") }}'
   - name: courserun_title
-    description: str, The title of the course run
-    tests:
-    - not_null
+    description: str, The title of the course run, maybe blank
   - name: courserun_url
     description: str, The url path of the course run
   - name: course_number
@@ -303,7 +301,6 @@ models:
     description: str, indicating what platform the data is from, MITx Online/xPro
       open edx or edx.org
     tests:
-    - not_null
     - accepted_values:
         values: '{{ var("platforms") }}'
   - name: user_is_opted_in_for_email

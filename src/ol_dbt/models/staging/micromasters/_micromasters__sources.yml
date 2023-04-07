@@ -155,6 +155,100 @@ sources:
     - name: user_id
       description: int, foreign key referece to auth_user
 
+  - name: raw__micromasters__app__postgres__grades_micromasterscoursecertificate
+    description: source table for DEDP course certificates in MicroMasters database
+    columns:
+    - name: id
+      description: int, sequential ID representing a DEDP course certificate
+    - name: hash
+      description: str, unique hash used to identify this DEDP course certificate
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: user_id
+      description: int, foreign key to auth_user
+    - name: created_on
+      description: timestamp, date and time when DEDP course certificate was initially
+        created
+    - name: updated_on
+      description: timestamp, date and time when DEDP course certificate was most
+        recently updated
+
+  - name: raw__micromasters__app__postgres__grades_combinedfinalgrade
+    description: source table for DEDP course final grades combined from course run
+      and proctored exam in MicroMasters database
+    columns:
+    - name: id
+      description: int, sequential ID representing a combined course grade for DEDP
+        course
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: user_id
+      description: int, foreign key to auth_user
+    - name: grade
+      description: float, calculated course grade, combined from course run and proctored
+        exam using formula - course run grade * 0.4 + exam grade * 0.6, range between
+        0 to 100
+    - name: created_on
+      description: timestamp, date and time when this grade was initially calculated
+    - name: updated_on
+      description: timestamp, date and time when this grade was most recently updated
+
+  - name: raw__micromasters__app__postgres__grades_finalgrade
+    description: source table for edx course run final grades stored in MicroMasters
+      database
+    columns:
+    - name: id
+      description: int, sequential ID representing a edx course run grade
+    - name: course_run_id
+      description: int, foreign key to courses_courserun
+    - name: user_id
+      description: int, foreign key to auth_user
+    - name: grade
+      description: float, course run grade range between 0 to 1
+    - name: status
+      description: str, final grade status - either pending or complete
+    - name: passed
+      description: boolean, indicating whether the user has passed the passing score
+        set for this course
+    - name: course_run_paid_on_edx
+      description: boolean, indicating if user paid on edx
+    - name: created_on
+      description: timestamp, date and time when this grade was initially created
+    - name: updated_on
+      description: timestamp, date and time when this grade was most recently updated
+
+  - name: raw__micromasters__app__postgres__grades_proctoredexamgrade
+    description: source table for DEDP proctor exam grades stored in MicroMasters
+      database
+    columns:
+    - name: id
+      description: int, sequential ID representing a DEDP proctor exam grade
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: user_id
+      description: int, foreign key to auth_user
+    - name: grade
+      description: str, letter grade indicating it's pass or fail
+    - name: passing_score
+      description: float, passing score for the course, range between 0 to 100
+    - name: passed
+      description: boolean, indicating whether the user has passed the passing score
+        set for this course
+    - name: percentage_grade
+      description: float, user percentage grade for the course, range between 0 to
+        1
+    - name: score
+      description: float, user score for the course, range between 0 to 100
+    - name: exam_run_id
+      description: int, foreign key to exams_examrun
+    - name: exam_date
+      description: timestamp, date and time for the exam
+    - name: created_on
+      description: timestamp, date and time when this grade was initially created
+    - name: updated_on
+      description: timestamp, date and time when this grade was most recently updated
+
+
   - name: raw__micromasters__app__postgres__auth_user
     columns:
     - name: id
@@ -293,6 +387,43 @@ sources:
       description: str, user name string to identify a user within a social auth provider
     - name: extra_data
       description: str, extra data for this user social auth in JSON string
+
+  - name: raw__micromasters__app__postgres__courses_courserun
+    columns:
+    - name: id
+      description: int, primary key representing a course run
+    - name: title
+      description: str, title of the course run
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: edx_course_key
+      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: enrollment_url
+      description: str, url to enroll in the course run
+    - name: is_discontinued
+      description: boolean, setting this to true discontinues the course run
+    - name: prerequisites
+      description: str, prerequisites for the course
+    - name: courseware_backend
+      description: str, indicating the platform where this course runs on. It's either
+        mitxonline or edxorg.
+    - name: fuzzy_start_date
+      description: str, fuzzy start date e.g. Fall 2019
+    - name: fuzzy_enrollment_start_date
+      description: str, str, fuzzy enrollment start date e.g. Fall 2019
+    - name: end_date
+      description: timestamp, date and time when the run ends
+    - name: start_date
+      description: timestamp, date and time when the run begins
+    - name: enrollment_start
+      description: timestamp, date and time when enrollment starts
+    - name: enrollment_end
+      description: timestamp, date and time when enrollment ends
+    - name: freeze_grade_date
+      description: timestamp, date and time when the run freeze for grade
+    - name: upgrade_deadline
+      description: timestamp, date and time beyond which users can not enroll in paid
+        course mode
 
   - name: raw__micromasters__app__postgres__courses_course
     columns:

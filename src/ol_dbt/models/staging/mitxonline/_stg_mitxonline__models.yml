@@ -766,6 +766,11 @@ models:
     tests:
     - unique
     - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - unique
+    - not_null
   - name: course_created_on
     description: timestamp, specifying when a course was initially created
   - name: course_updated_on

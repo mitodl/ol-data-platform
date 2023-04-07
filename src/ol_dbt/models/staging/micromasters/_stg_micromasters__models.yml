@@ -255,6 +255,161 @@ models:
     tests:
     - not_null
 
+- name: stg__micromasters__app__postgres__grades_coursecertificate
+  description: DEDP course certificates stored in MicroMasters database
+  columns:
+  - name: coursecertificate_id
+    description: int, sequential ID representing a DEDP course certificate
+    tests:
+    - unique
+    - not_null
+  - name: coursecertificate_hash
+    description: str, unique hash used to identify this DEDP course certificate
+    tests:
+    - unique
+    - not_null
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_course')
+        field: course_id
+  - name: user_id
+    description: int, foreign key to auth_user
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__auth_user')
+        field: user_id
+  - name: coursecertificate_created_on
+    description: timestamp, date and time when DEDP course certificate was initially
+      created
+    tests:
+    - not_null
+  - name: coursecertificate_updated_on
+    description: timestamp, date and time when DEDP course certificate was most recently
+      updated
+    tests:
+    - not_null
+
+- name: stg__micromasters__app__postgres__grades_combinedcoursegrade
+  description: DEDP course combined final grades stored in MicroMasters database
+  columns:
+  - name: coursegrade_id
+    description: int, sequential ID representing a combined grade for DEDP course
+    tests:
+    - unique
+    - not_null
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_course')
+        field: course_id
+  - name: user_id
+    description: int, foreign key to auth_user
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__auth_user')
+        field: user_id
+  - name: coursegrade_grade
+    description: float, calculated course grade, combined from course run and proctored
+      exam using formula - course run grade * 0.4 + exam grade * 0.6, range between
+      0.0 to 100.0
+    tests:
+    - not_null
+  - name: coursegrade_created_on
+    description: timestamp, date and time when this grade was initially calculated
+    tests:
+    - not_null
+  - name: coursegrade_updated_on
+    description: timestamp, date and time when this grade was most recently updated
+    tests:
+    - not_null
+
+- name: stg__micromasters__app__postgres__grades_courserungrade
+  description: edx course run final grades stored in MicroMasters database
+  columns:
+  - name: courserungrade_id
+    description: int, sequential ID representing a edx course run grade
+    tests:
+    - unique
+    - not_null
+  - name: courserun_id
+    description: int, foreign key to courses_courserun
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_courserun')
+        field: courserun_id
+  - name: user_id
+    description: int, foreign key to auth_user
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__auth_user')
+        field: user_id
+  - name: courserungrade_grade
+    description: float, course run grade range between 0.0 to 1.0
+    tests:
+    - not_null
+  - name: courserungrade_status
+    description: str, final grade status - either pending or complete
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["complete", "pending"]
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course
+  - name: courserungrade_courserun_paid_on_edx
+    description: boolean, indicating if user paid on edx
+    tests:
+    - not_null
+  - name: coursegrade_created_on
+    description: timestamp, date and time when this grade was initially created
+    tests:
+    - not_null
+  - name: coursegrade_updated_on
+    description: timestamp, date and time when this grade was most recently updated
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_id", "user_id"]
+
+- name: stg__micromasters__app__postgres__grades_proctoredexamgrade
+  description: DEDP proctor exam grades stored in MicroMasters database
+  columns:
+  - name: proctoredexamgrade_id
+    description: int, sequential ID representing a DEDP proctor exam grade
+  - name: course_id
+    description: int, foreign key to courses_course
+  - name: user_id
+    description: int, foreign key to auth_user
+  - name: proctoredexamgrade_letter_grade
+    description: str, letter grade indicating it's pass or fail
+  - name: proctoredexamgrade_passing_score
+    description: float, passing score for the course, range between 0 to 100
+  - name: proctoredexamgrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course
+  - name: proctoredexamgrade_percentage_grade
+    description: float, user percentage grade for the course, range between 0 to 1
+  - name: proctoredexamgrade_score
+    description: float, user score for the course, range between 0 to 100
+  - name: examrun_id
+    description: int, foreign key to exams_examrun
+  - name: proctoredexamgrade_exam_on
+    description: timestamp, date and time for the exam
+  - name: proctoredexamgrade_created_on
+    description: timestamp, date and time when this grade was initially created
+  - name: proctoredexamgrade_updated_on
+    description: timestamp, date and time when this grade was most recently updated
+
 - name: stg__micromasters__app__postgres__auth_user
   columns:
   - name: user_id
@@ -459,6 +614,54 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_id", "course_position_in_program"]
+
+- name: stg__micromasters__app__postgres__courses_courserun
+  columns:
+  - name: courserun_id
+    description: int, primary key representing a course run
+    tests:
+    - not_null
+    - unique
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__courses_course')
+        field: course_id
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag},
+      maybe blank
+  - name: courserun_enrollment_url
+    description: str, url to enroll in the course run
+  - name: courserun_is_discontinued
+    description: boolean, setting this to true discontinues the course run
+    tests:
+    - not_null
+  - name: courserun_prerequisites
+    description: str, prerequisites for the course
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg.
+    tests:
+    - not_null
+  - name: courserun_start_on
+    description: timestamp, date and time when the run begins
+  - name: courserun_end_on
+    description: timestamp, date and time when the run ends
+  - name: courserun_enrollment_start_on
+    description: timestamp, date and time when enrollment starts
+  - name: courserun_enrollment_end_on
+    description: timestamp, date and time when enrollment ends
+  - name: courserun_grade_freeze_on
+    description: timestamp, date and time when the run freeze for grade
+  - name: courserun_upgrade_deadline
+    description: timestamp, date and time beyond which users can not enroll in paid
+      course mode
 
 - name: stg__micromasters__app__postgres__courses_program
   columns:

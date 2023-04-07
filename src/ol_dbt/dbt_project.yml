@@ -35,6 +35,8 @@ vars:
     mitxpro: 'xPro'
     micromasters: 'MicroMasters'
     mitxonline: 'MITx Online'
+    dedp_micromasters_program_id: 2
+    dedp_mitxonline_program_id: 1
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
