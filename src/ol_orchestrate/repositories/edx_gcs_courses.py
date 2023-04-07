@@ -11,7 +11,9 @@ from ol_orchestrate.sensors.sync_gcs_to_s3 import check_new_gcs_assets_sensor
 
 resources = {
     "gcp_gcs": gcp_gcs_resource.configured(
-        load_yaml_config("/etc/dagster/edxorg_gcp.yaml")["resources"]["gcp_gcs"]
+        load_yaml_config("/etc/dagster/edxorg_gcp.yaml")["resources"]["gcp_gcs"][
+            "config"
+        ]
     ),
     "s3": s3_resource,
     "results_dir": daily_dir,
