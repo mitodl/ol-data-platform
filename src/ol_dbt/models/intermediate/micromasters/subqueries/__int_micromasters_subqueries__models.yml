@@ -6,7 +6,7 @@ models:
   description: MicroMasters enrollments on mitxonline
   columns:
   - name: program_title
-    description: str, tite of micromasters program the course is part of
+    description: str, title of micromasters program the course is part of
     tests:
     - not_null
   - name: user_id
@@ -52,7 +52,7 @@ models:
   description: MicroMasters enrollments on edx.org
   columns:
   - name: program_title
-    description: str, tite of micromasters program the course is part of
+    description: str, title of micromasters program the course is part of
     tests:
     - not_null
   - name: user_id
@@ -293,3 +293,260 @@ models:
       program
   - name: micromasters_user_id
     description: str, user id in the micromasters database
+
+- name: __micromasters_course_certificates_dedp_from_micromasters
+  description: DEDP course certificates from MicroMasters database
+  columns:
+  - name: program_title
+    description: str, title of program the course is part of
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course run ID from MicroMasters database
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+  - name: user_email
+    description: str, user email on edX.org
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on edX.org
+  - name: user_country
+    description: str, user country on edX.org
+  - name: coursecertificate_created_on
+    description: timestamp, date and time when DEDP course certificate was initially
+      created in MicroMaster database
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "courserun_readable_id"]
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__micromasters__app__postgres__grades_coursecertificate')
+
+- name: __micromasters_course_certificates_dedp_from_mitxonline
+  description: DEDP course certificates earned (excluded revoked) on MITxOnline
+  columns:
+  - name: program_title
+    description: str, title of program the course is part of
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course run ID on MITx Online
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: user_country
+    description: str, user country on MITx Online
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when DEDP course certificate was initially
+      created on MITx Online
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_mitxonline_username", "courserun_readable_id"]
+
+- name: __micromasters_course_certificates_non_dedp_from_edxorg
+  description: Non-DEDP program course certificates earned on edX.org
+  columns:
+  - name: program_title
+    description: str, title of program the course is part of
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course run ID on edX.org
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+    tests:
+    - not_null
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+  - name: user_email
+    description: str, user email on edX.org
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on edX.org
+  - name: user_country
+    description: str, user country on edX.org
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_edxorg_username", "courserun_readable_id"]
+
+- name: __micromasters_course_grades_dedp_from_micromasters
+  description: DEDP course grades from MicroMasters database
+  columns:
+  - name: program_title
+    description: str, title of program the course is part of
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course run ID on edX.org
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+  - name: user_email
+    description: str, user email on edX.org
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on edX.org
+  - name: user_country
+    description: str, user country on edX.org
+  - name: coursegrade_grade
+    description: float, course grade on edX.org range from 0 to 1
+    tests:
+    - not_null
+  - name: coursegrade_created_on
+    description: timestamp, date and time when this grade was initially calculated
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "courserun_readable_id"]
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__micromasters__app__postgres__grades_combinedcoursegrade')
+
+
+- name: __micromasters_course_grades_dedp_from_mitxonline
+  description: DEDP course grades on MITx Online
+  columns:
+  - name: program_title
+    description: str, title of program the course is part of
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course run ID on MITx Online
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: user_country
+    description: str, user country on MITx Online
+  - name: courserungrade_grade
+    description: float, course grade range from 0 to 1
+    tests:
+    - not_null
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on MITxOnline
+    tests:
+    - not_null
+  - name: courserungrade_created_on
+    description: timestamp, date and time when this grade was initially calculated
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_mitxonline_username", "courserun_readable_id"]
+
+- name: __micromasters_course_grades_non_dedp_from_edxorg
+  description: Non-DEDP program course certificates on edX.org
+  columns:
+  - name: program_title
+    description: str, title of program the course is part of
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course run ID on edX.org
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+    tests:
+    - not_null
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+  - name: user_email
+    description: str, user email on edX.org
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on edX.org
+  - name: user_country
+    description: str, user country on edX.org
+  - name: courserungrade_user_grade
+    description: float, course grade range from 0 to 1, maybe blank
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on edX.org
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_edxorg_username", "courserun_readable_id"]

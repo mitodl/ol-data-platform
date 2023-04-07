@@ -11,9 +11,7 @@ models:
     - unique
     - not_null
   - name: courserun_title
-    description: str, The title of the course run on edx.org
-    tests:
-    - not_null
+    description: str, The title of the course run on edx.org, maybe blank
   - name: courserun_url
     description: str, The url path of the course run
   - name: course_number

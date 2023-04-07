@@ -10,4 +10,5 @@ select
     , course_title
     , course_is_live
     , course_readable_id
+    , course_number
 from courses

@@ -617,6 +617,11 @@ models:
     tests:
     - unique
     - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - unique
+    - not_null
 
 - name: int__mitxonline__course_to_topics
   description: Intermediate model for MITxOnline course to topics
