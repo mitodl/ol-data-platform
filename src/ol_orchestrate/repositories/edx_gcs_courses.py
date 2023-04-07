@@ -19,10 +19,25 @@ resources = {
     "results_dir": daily_dir,
 }
 
+course_upload_bucket = {
+    "qa": "edxorg-qa-edxapp-courses",
+    "production": "edxorg-production-edxapp-courses",
+}
+
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
 
 gcs_sync_job = sync_gcs_to_s3.to_job(
-    name="edx_gcs_course_retrieval", resource_defs=resources
+    name="edx_gcs_course_retrieval",
+    resource_defs=resources,
+    config={
+        "ops": {
+            "edx_upload_gcs_course_tarballs": {
+                "config": {
+                    "edx_etl_results_bucket": course_upload_bucket[dagster_deployment]
+                }
+            }
+        }
+    },
 )
 
 edx_gcs_courses = Definitions(
