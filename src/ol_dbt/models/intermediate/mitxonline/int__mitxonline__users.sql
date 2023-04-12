@@ -32,6 +32,10 @@ with users as (
     inner join micromasters_auth on micromasters_auth.user_id = micromasters_profiles.user_id
 )
 
+, micromasters_users as (
+    select * from {{ ref('__micromasters__users') }}
+)
+
 select
     users.user_id
     , users.user_username
@@ -59,7 +63,10 @@ select
     , users_profile.user_type_is_educator
     , users_profile.user_type_is_other
     , micromasters_profile.user_profile_id as user_micromasters_profile_id
+    , micromasters_users.user_edxorg_username
 from users
 left join users_legaladdress on users_legaladdress.user_id = users.user_id
 left join users_profile on users_profile.user_id = users.user_id
 left join micromasters_profile on micromasters_profile.user_username = users.user_username
+left join micromasters_users
+    on micromasters_profile.user_profile_id = micromasters_users.user_profile_id

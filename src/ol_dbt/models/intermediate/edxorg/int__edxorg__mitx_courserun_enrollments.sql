@@ -1,6 +1,7 @@
 -- Course Run Enrollment information from edx.org
+-- For DEDP courses that run on edX.org, enrollments are verified via their purchased orders in MicroMasters
 
-with enrollments as (
+with person_courses as (
     select
         user_id
         , user_username
@@ -12,33 +13,106 @@ with enrollments as (
     where courserun_platform = '{{ var("edxorg") }}'
 )
 
-, runs as (
+, user_info_combo as (
+    select
+        user_id
+        , courserunenrollment_courserun_readable_id
+    from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
+    where
+        courserun_platform = '{{ var("edxorg") }}'
+        and courserunenrollment_courserun_readable_id is not null
+)
+
+, edxorg_enrollments as (
+    select
+        person_courses.user_id
+        , person_courses.user_username
+        , person_courses.courserun_readable_id
+        , person_courses.courserunenrollment_created_on
+        , person_courses.courserunenrollment_enrollment_mode
+        , person_courses.courserunenrollment_is_active
+    from
+        person_courses
+    inner join user_info_combo
+        on
+            user_info_combo.user_id = person_courses.user_id
+            and user_info_combo.courserunenrollment_courserun_readable_id = person_courses.courserun_readable_id
+)
+
+, edxorg_runs as (
     select
         courserun_readable_id
         , courserun_title
     from {{ ref('stg__edxorg__bigquery__mitx_courserun') }}
 )
 
-, users as (
+, edxorg_users as (
     select * from {{ ref('int__edxorg__mitx_users') }}
 )
 
-, edxorg_enrollments as (
-    select
-        enrollments.courserun_readable_id
-        , enrollments.courserunenrollment_created_on
-        , enrollments.courserunenrollment_enrollment_mode
-        , enrollments.courserunenrollment_is_active
-        , users.user_id
-        , users.user_email
-        , users.user_username
-        , runs.courserun_title
-    from enrollments
-    inner join
-        users on
-        enrollments.user_id = users.user_id
-    ---- there are certificates issued for courses that don't exist in course model.
-    left join runs on enrollments.courserun_readable_id = runs.courserun_readable_id
+, micromasters_orders as (
+    select * from {{ ref('stg__micromasters__app__postgres__ecommerce_order') }}
 )
 
-select * from edxorg_enrollments
+, micromasters_lines as (
+    select * from {{ ref('stg__micromasters__app__postgres__ecommerce_line') }}
+)
+
+, micromasters_runs as (
+    select * from {{ ref('stg__micromasters__app__postgres__courses_courserun') }}
+)
+
+, micromasters_courses as (
+    select * from {{ ref('stg__micromasters__app__postgres__courses_course') }}
+)
+
+, micromasters_users as (
+    select * from {{ ref('__micromasters__users') }}
+)
+
+, dedp_edxorg_enrollments_verified as (
+    select distinct
+        edxorg_enrollments.user_id
+        , edxorg_enrollments.courserun_readable_id
+    from edxorg_enrollments
+    inner join edxorg_users on edxorg_enrollments.user_id = edxorg_users.user_id
+    inner join micromasters_users on edxorg_users.user_username = micromasters_users.user_edxorg_username
+    inner join micromasters_orders on micromasters_users.user_id = micromasters_orders.user_id
+    inner join micromasters_lines
+        on
+            edxorg_enrollments.courserun_readable_id = micromasters_lines.courserun_edxorg_readable_id
+            and micromasters_orders.order_id = micromasters_lines.order_id
+    inner join micromasters_runs on micromasters_lines.courserun_readable_id = micromasters_runs.courserun_readable_id
+    inner join micromasters_courses on micromasters_runs.course_id = micromasters_courses.course_id
+    where
+        micromasters_courses.program_id = {{ var("dedp_micromasters_program_id") }}
+        and micromasters_orders.order_state = 'fulfilled'
+)
+
+, enrollments as (
+    select
+        edxorg_enrollments.courserun_readable_id
+        , edxorg_enrollments.courserunenrollment_created_on
+        , edxorg_enrollments.courserunenrollment_is_active
+        , edxorg_users.user_id
+        , edxorg_users.user_email
+        , edxorg_users.user_username
+        , micromasters_users.user_mitxonline_username
+        , edxorg_runs.courserun_title
+        , case
+            when
+                dedp_edxorg_enrollments_verified.user_id is not null
+                and dedp_edxorg_enrollments_verified.courserun_readable_id is not null then 'verified'
+            else edxorg_enrollments.courserunenrollment_enrollment_mode
+        end as courserunenrollment_enrollment_mode
+    from edxorg_enrollments
+    inner join edxorg_users on edxorg_enrollments.user_id = edxorg_users.user_id
+    left join micromasters_users on edxorg_users.user_username = micromasters_users.user_edxorg_username
+    left join edxorg_runs on edxorg_enrollments.courserun_readable_id = edxorg_runs.courserun_readable_id
+    left join dedp_edxorg_enrollments_verified
+        on
+            edxorg_enrollments.user_id = dedp_edxorg_enrollments_verified.user_id
+            and edxorg_enrollments.courserun_readable_id = dedp_edxorg_enrollments_verified.courserun_readable_id
+)
+
+select * from enrollments

@@ -11,6 +11,10 @@ with source as (
         , title as courserun_title
         , edx_course_key as courserun_readable_id
         , case
+            when edx_course_key like 'MITx/%' then split(edx_course_key, '/')[3]
+            when edx_course_key like 'course-v1:%' then split(edx_course_key, '+')[3]
+        end as courserun_tag
+        , case
             when courseware_backend = 'mitxonline' then '{{ var("mitxonline") }}'
             when courseware_backend = 'edxorg' then '{{ var("edxorg") }}'
             else courseware_backend

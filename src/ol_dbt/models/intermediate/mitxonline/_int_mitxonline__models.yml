@@ -518,14 +518,28 @@ models:
     tests:
     - not_null
   - name: courserunenrollment_enrollment_mode
-    description: str, enrollment mode for user
+    description: str, enrollment mode for enrolled courses in MITx Online database.
+      DEDP enrollments for MITx Online courses are verified in either MITx Online
+      or MicroMasters orders. For DEDP runs on MITx Online in '3T2021', '1T2022',
+      '2T2022', these are paid and verified in MicroMasters. For other DEDP courses
+      that run on MITx Online, they are paid and verified in MITx Online
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['verified', 'audit', 'honor']
   - name: courserunenrollment_enrollment_status
     description: str, enrollment status for users whose enrollment changed. Options
-      are 'deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled'
+      are 'deferred', 'transferred', 'refunded', 'unenrolled', maybe null
     tests:
     - accepted_values:
-        values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
-          '']
+        values: ['deferred', 'transferred', 'refunded', 'unenrolled']
+  - name: courserunenrollment_platform
+    description: str, indicating what platform user enrolled in the course run as
+      some of edx.org enrollments were migrated from MicroMasters
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["MITx Online", "edX.org"]
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -542,6 +556,9 @@ models:
     description: str, user email associated with their account
     tests:
     - not_null
+  - name: user_edxorg_username
+    description: str, username in edx.org. For the very small number of users with
+      multiple edx usernames, this is the username with the latest logins
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
@@ -666,6 +683,10 @@ models:
       course
     tests:
     - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -681,6 +702,13 @@ models:
     tests:
     - unique
     - not_null
+  - name: courserun_platform
+    description: str, indicating whether the course runs on MITx Online or edX.org,
+      those edx.org DEDP courses were migrated from MicroMasters
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["MITx Online", "edX.org"]
   - name: courserun_tag
     description: str, string that identifies a single run in a course E.g. 1T2022
     tests:
@@ -1025,6 +1053,9 @@ models:
     description: boolean, indicating if user is active or not
   - name: user_micromasters_profile_id
     description: int, foreign key to profiles_profile in MicroMasters
+  - name: user_edxorg_username
+    description: str, username in edx.org. For the very small number of users with
+      multiple edx usernames, this is the username with the latest logins
   - name: user_first_name
     description: str, first name
   - name: user_last_name
