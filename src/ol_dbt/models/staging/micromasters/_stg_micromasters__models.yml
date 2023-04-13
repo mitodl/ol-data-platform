@@ -62,10 +62,13 @@ models:
     description: timestamp, specifying when the line was most recently updated
     tests:
     - not_null
-  - name: courserun_edx_readable_id
-    description: string, edx_course_key from courses_courserun
+  - name: courserun_readable_id
+    description: string, courserun_readable_id from courses_courserun
     tests:
     - not_null
+  - name: courserun_edxorg_readable_id
+    description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
+      to match course in edxorg
   - name: line_price
     description: numeric, price paid for the course run
     tests:
@@ -636,6 +639,8 @@ models:
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag},
       maybe blank
+  - name: courserun_tag
+    description: str, string that identifies a single run in a course E.g. 1T2022
   - name: courserun_enrollment_url
     description: str, url to enroll in the course run
   - name: courserun_is_discontinued

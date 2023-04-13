@@ -131,7 +131,8 @@ models:
   - name: courserunenrollment_created_on
     description: timestamp, timestamp of user's enrollment in the course
   - name: courserunenrollment_enrollment_mode
-    description: str, enrollment mode, e.g. honor, audit, verified
+    description: str, enrollment mode, e.g. honor, audit, verified. For edx.org DEDP
+      courses, enrollments are verified in MicroMasters orders
   - name: courserunenrollment_is_active
     description: boolean, indicating if enrollment is active or not
   - name: courserun_title
@@ -196,6 +197,9 @@ models:
   - name: user_last_login
     description: timestamp, Timestamp indicating the last time the user logged into
       the edX platform
+  - name: user_mitxonline_username
+    description: str, username on MITx Online if user's account is linked on MicroMasters
+      portal
 
 - name: int__edxorg__mitx_courserun_grades
   description: Intermediate model for course run grades from edx.org

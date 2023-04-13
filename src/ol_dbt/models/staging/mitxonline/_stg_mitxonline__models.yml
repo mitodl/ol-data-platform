@@ -19,7 +19,10 @@ models:
     - not_null
   - name: courserunenrollment_enrollment_status
     description: str, enrollment status for users whose enrollment is no longer active.
-      Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
+      Options are 'deferred', 'transferred', 'refunded', 'unenrolled', maybe blank
+    tests:
+    - accepted_values:
+        values: ['deferred', 'transferred', 'refunded', 'unenrolled']
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the run
     tests:
@@ -892,6 +895,13 @@ models:
     tests:
     - unique
     - not_null
+  - name: courserun_platform
+    description: str, indicating whether this course runs on MITx Online or edX.org.
+      Some of edx.org data were migrated from MicroMasters
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["MITx Online", "edX.org"]
   - name: courserun_url
     description: str, url location for the course run in MITx Online
   - name: courserun_is_self_paced
