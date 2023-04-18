@@ -15,9 +15,9 @@ with source as (
         , leadership_level as user_leadership_level
         , user_id
         , highest_education as user_highest_education
-        , {{ transform_gender_value('gender') }} as user_gender
-        , {{ transform_company_size_value('company_size') }} as user_company_size
-        , {{ transform_years_experience_value('years_experience') }} as user_years_experience
+        ,{{ transform_gender_value('gender') }} as user_gender
+        ,{{ transform_company_size_value('company_size') }} as user_company_size
+        ,{{ transform_years_experience_value('years_experience') }} as user_years_experience
     from source
 )
 

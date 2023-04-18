@@ -15,10 +15,10 @@ with source as (
         , name as b2bcoupon_name
         , reusable as b2bcoupon_is_reusable
         , coupon_code as b2bcoupon_coupon_code
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as b2bcoupon_updated_on
-        , {{ cast_timestamp_to_iso8601('created_on') }} as b2bcoupon_created_on
-        , {{ cast_timestamp_to_iso8601('expiration_date') }} as b2bcoupon_expires_on
-        , {{ cast_timestamp_to_iso8601('activation_date') }} as b2bcoupon_activated_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as b2bcoupon_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as b2bcoupon_created_on
+        ,{{ cast_timestamp_to_iso8601('expiration_date') }} as b2bcoupon_expires_on
+        ,{{ cast_timestamp_to_iso8601('activation_date') }} as b2bcoupon_activated_on
     from source
 )
 

@@ -18,8 +18,8 @@ with source as (
             when change_status = '' then null
             else change_status
         end as courserunenrollment_enrollment_status
-        , {{ cast_timestamp_to_iso8601('created_on') }} as courserunenrollment_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as courserunenrollment_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as courserunenrollment_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as courserunenrollment_updated_on
     from source
 )
 

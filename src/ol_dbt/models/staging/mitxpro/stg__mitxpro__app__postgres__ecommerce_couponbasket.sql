@@ -10,8 +10,8 @@ with source as (
         id as couponbasket_id
         , basket_id
         , coupon_id
-        , {{ cast_timestamp_to_iso8601('created_on') }} as couponbasket_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as couponbasket_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as couponbasket_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as couponbasket_updated_on
     from source
 
 )

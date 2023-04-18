@@ -11,8 +11,8 @@ with source as (
         , quantity as basketitem_quantity
         , basket_id
         , product_id
-        , {{ cast_timestamp_to_iso8601('created_on') }} as basketitem_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as basketitem_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as basketitem_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as basketitem_updated_on
 
     from source
 

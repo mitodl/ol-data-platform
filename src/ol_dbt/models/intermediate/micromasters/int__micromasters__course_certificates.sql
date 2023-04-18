@@ -65,10 +65,12 @@ with course_certificates_dedp_from_micromasters as (
         , user_email
         , case
             when
-                user_mitxonline_username is not null then
-                row_number() over (
-                    partition by courserun_readable_id, user_mitxonline_username order by created_on desc
-                )
+                user_mitxonline_username is not null
+                then
+                    row_number()
+                        over (
+                            partition by courserun_readable_id, user_mitxonline_username order by created_on desc
+                        )
             else 1
         end as row_num
     from dedp_course_certificates_combined

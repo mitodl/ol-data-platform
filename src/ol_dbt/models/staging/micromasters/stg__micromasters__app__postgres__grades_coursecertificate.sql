@@ -11,8 +11,8 @@ with source as (
         , user_id
         , course_id
         , hash as coursecertificate_hash
-        , {{ cast_timestamp_to_iso8601('created_on') }} as coursecertificate_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as coursecertificate_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as coursecertificate_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as coursecertificate_updated_on
 
 
     from source

@@ -12,7 +12,7 @@ with source as (
     select
         user_id
         , replace(course_id, 'ESD.SCM1x', 'CTL.SC1x') as courserun_readable_id
-        , {{ translate_course_id_to_platform('course_id') }} as courserun_platform
+        ,{{ translate_course_id_to_platform('course_id') }} as courserun_platform
 
         --- users
         , username as user_username
@@ -49,15 +49,15 @@ with source as (
         , certified as courseruncertificate_is_earned
         , cert_status as courseruncertificate_status
         , coalesce(is_active = 1, false) as courserunenrollment_is_active
-        , {{ transform_gender_value('gender') }} as user_gender
-        , {{ transform_education_value('loe') }} as user_highest_education
-        , {{ cast_timestamp_to_iso8601('start_time') }} as courserunenrollment_created_on
-        , {{ cast_timestamp_to_iso8601('verified_enroll_time') }} as courserunenrollment_enrolled_on
-        , {{ cast_timestamp_to_iso8601('verified_unenroll_time') }} as courserunenrollment_unenrolled_on
-        , {{ cast_timestamp_to_iso8601('cert_created_date') }} as courseruncertificate_created_on
-        , {{ cast_timestamp_to_iso8601('cert_modified_date') }} as courseruncertificate_updated_on
-        , {{ cast_timestamp_to_iso8601('first_event') }} as courseactivitiy_first_event_timestamp
-        , {{ cast_timestamp_to_iso8601('last_event') }} as courseactivitiy_last_event_timestamp
+        ,{{ transform_gender_value('gender') }} as user_gender
+        ,{{ transform_education_value('loe') }} as user_highest_education
+        ,{{ cast_timestamp_to_iso8601('start_time') }} as courserunenrollment_created_on
+        ,{{ cast_timestamp_to_iso8601('verified_enroll_time') }} as courserunenrollment_enrolled_on
+        ,{{ cast_timestamp_to_iso8601('verified_unenroll_time') }} as courserunenrollment_unenrolled_on
+        ,{{ cast_timestamp_to_iso8601('cert_created_date') }} as courseruncertificate_created_on
+        ,{{ cast_timestamp_to_iso8601('cert_modified_date') }} as courseruncertificate_updated_on
+        ,{{ cast_timestamp_to_iso8601('first_event') }} as courseactivitiy_first_event_timestamp
+        ,{{ cast_timestamp_to_iso8601('last_event') }} as courseactivitiy_last_event_timestamp
     from source
     where user_id is not null --- temporary fix to filter the bad data
 

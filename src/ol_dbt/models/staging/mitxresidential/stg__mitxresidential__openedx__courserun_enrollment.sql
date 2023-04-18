@@ -9,7 +9,7 @@ with source as (
         , user_id
         , is_active as courserunenrollment_is_active
         , mode as courserunenrollment_enrollment_mode
-        , {{ cast_timestamp_to_iso8601('created') }} as courserunenrollment_created_on
+        ,{{ cast_timestamp_to_iso8601('created') }} as courserunenrollment_created_on
     from source
 )
 

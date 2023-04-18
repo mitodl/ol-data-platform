@@ -8,8 +8,8 @@ with source as (
 , cleaned as (
     select
         id as programcertificate_id
-        , {{ cast_timestamp_to_iso8601('created_on') }} as programcertificate_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as programcertificate_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as programcertificate_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as programcertificate_updated_on
         , hash as programcertificate_hash
         , program_id
         , user_id

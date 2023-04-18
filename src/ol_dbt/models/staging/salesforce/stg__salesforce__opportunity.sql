@@ -46,9 +46,9 @@ with source as (
         , hasopportunitylineitem as opportunity_has_lineitem
         , data_quality_score__c as opportunity_data_quality_score
         , data_quality_description__c as opportunity_data_quality_description
-        , {{ cast_date_to_iso8601('closedate') }} as opportunity_close_date
-        , {{ cast_timestamp_to_iso8601('createddate') }} as opportunity_created_on
-        , {{ cast_timestamp_to_iso8601('systemmodstamp') }} as opportunity_modified_on
+        ,{{ cast_date_to_iso8601('closedate') }} as opportunity_close_date
+        ,{{ cast_timestamp_to_iso8601('createddate') }} as opportunity_created_on
+        ,{{ cast_timestamp_to_iso8601('systemmodstamp') }} as opportunity_modified_on
     from most_recent_source
 )
 

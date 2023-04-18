@@ -13,8 +13,8 @@ with source as (
         , order_id
         , transaction_id as transaction_readable_identifier
         , transaction_type as transaction_type
-        , {{ cast_timestamp_to_iso8601('created_on') }} as transaction_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as transaction_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as transaction_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as transaction_updated_on
     from source
 
 )

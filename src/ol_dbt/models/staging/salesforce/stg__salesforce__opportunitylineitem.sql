@@ -37,9 +37,9 @@ with source as (
         , discount as opportunitylineitem_discount_percent
         , quantity as opportunitylineitem_quantity
         , totalprice as opportunitylineitem_total_price
-        , {{ cast_date_to_iso8601('servicedate') }} as opportunitylineitem_service_date
-        , {{ cast_timestamp_to_iso8601('createddate') }} as opportunitylineitem_created_on
-        , {{ cast_timestamp_to_iso8601('systemmodstamp') }} as opportunitylineitem_modified_on
+        ,{{ cast_date_to_iso8601('servicedate') }} as opportunitylineitem_service_date
+        ,{{ cast_timestamp_to_iso8601('createddate') }} as opportunitylineitem_created_on
+        ,{{ cast_timestamp_to_iso8601('systemmodstamp') }} as opportunitylineitem_modified_on
     from most_recent_source
 )
 
