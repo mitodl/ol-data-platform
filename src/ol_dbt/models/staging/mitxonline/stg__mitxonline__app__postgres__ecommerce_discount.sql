@@ -14,10 +14,10 @@ with source as (
         , max_redemptions as discount_max_redemptions
         , redemption_type as discount_redemption_type
         , payment_type as discount_source
-        , {{ cast_timestamp_to_iso8601('created_on') }} as discount_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as discount_updated_on
-        , {{ cast_timestamp_to_iso8601('activation_date') }} as discount_activated_on
-        , {{ cast_timestamp_to_iso8601('expiration_date') }} as discount_expires_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as discount_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as discount_updated_on
+        ,{{ cast_timestamp_to_iso8601('activation_date') }} as discount_activated_on
+        ,{{ cast_timestamp_to_iso8601('expiration_date') }} as discount_expires_on
 
     from source
 

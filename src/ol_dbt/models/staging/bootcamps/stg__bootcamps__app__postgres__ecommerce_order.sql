@@ -12,8 +12,8 @@ with source as (
         , application_id as application_id
         , payment_type as order_payment_type
         , total_price_paid as order_total_price_paid
-        , {{ cast_timestamp_to_iso8601('created_on') }} as order_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as order_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as order_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as order_updated_on
     from source
 
 )

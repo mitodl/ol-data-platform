@@ -12,8 +12,8 @@ with source as (
         , is_active as user_is_active
         , is_staff as user_is_staff
         , is_superuser as user_is_superuser
-        , {{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
-        , {{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
+        ,{{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
+        ,{{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
     from source
 )
 

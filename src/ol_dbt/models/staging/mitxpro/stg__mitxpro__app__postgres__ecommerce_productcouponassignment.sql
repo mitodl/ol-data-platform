@@ -14,9 +14,9 @@ with source as (
         , message_status as productcouponassignment_message_status
         , email as productcouponassignment_email
         , original_email as productcouponassignment_original_email
-        , {{ cast_timestamp_to_iso8601('message_status_date') }} as productcouponassignment_message_status_updated_on
-        , {{ cast_timestamp_to_iso8601('created_on') }} as productcouponassignment_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as productcouponassignment_updated_on
+        ,{{ cast_timestamp_to_iso8601('message_status_date') }} as productcouponassignment_message_status_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as productcouponassignment_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as productcouponassignment_updated_on
 
     from source
 

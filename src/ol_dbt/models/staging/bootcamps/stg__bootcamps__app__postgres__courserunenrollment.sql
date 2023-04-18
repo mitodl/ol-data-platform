@@ -12,9 +12,9 @@ with source as (
         , bootcamp_run_id as courserun_id
         , change_status as courserunenrollment_enrollment_status
         , user_certificate_is_blocked as courserunenrollment_is_certificate_blocked
-        , {{ cast_timestamp_to_iso8601('created_on') }} as courserunenrollment_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as courserunenrollment_updated_on
-        , {{ cast_timestamp_to_iso8601('novoed_sync_date') }} as courserunenrollment_novoed_sync_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as courserunenrollment_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as courserunenrollment_updated_on
+        ,{{ cast_timestamp_to_iso8601('novoed_sync_date') }} as courserunenrollment_novoed_sync_on
     from source
 )
 

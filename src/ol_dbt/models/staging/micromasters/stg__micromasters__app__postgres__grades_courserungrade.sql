@@ -14,8 +14,8 @@ with source as (
         , passed as courserungrade_is_passing
         , status as courserungrade_status
         , course_run_paid_on_edx as courserungrade_courserun_paid_on_edx
-        , {{ cast_timestamp_to_iso8601('created_on') }} as coursegrade_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as coursegrade_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as coursegrade_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as coursegrade_updated_on
     from source
 )
 

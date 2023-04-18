@@ -10,8 +10,8 @@ with source as (
         id as usercoupon_id
         , user_id
         , coupon_id
-        , {{ cast_timestamp_to_iso8601('created_on') }} as usercoupon_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as usercoupon_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as usercoupon_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as usercoupon_updated_on
     from source
 
 )

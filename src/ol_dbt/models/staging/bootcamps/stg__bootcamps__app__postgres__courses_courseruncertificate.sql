@@ -11,8 +11,8 @@ with source as (
         , bootcamp_run_id as courserun_id
         , user_id
         , is_revoked as courseruncertificate_is_revoked
-        , {{ cast_timestamp_to_iso8601('created_on') }} as courseruncertificate_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as courseruncertificate_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as courseruncertificate_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as courseruncertificate_updated_on
     from source
 )
 

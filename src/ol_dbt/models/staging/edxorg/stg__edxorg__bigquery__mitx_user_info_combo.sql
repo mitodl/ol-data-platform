@@ -10,7 +10,7 @@ with source as (
 
     select
         user_id
-        , {{ translate_course_id_to_platform('enrollment_course_id') }} as courserun_platform
+        ,{{ translate_course_id_to_platform('enrollment_course_id') }} as courserun_platform
         , email as user_email
         , username as user_username
         , id_map_hash_id as user_map_hash_id
@@ -36,13 +36,13 @@ with source as (
         , certificate_verify_uuid as courseruncertificate_verify_uuid
         , certificate_name as courseruncertificate_name
         , certificate_status as courseruncertificate_status
-        , {{ transform_gender_value('profile_gender') }} as user_gender
-        , {{ transform_education_value('profile_level_of_education') }} as user_highest_education
-        , {{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
-        , {{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
-        , {{ cast_timestamp_to_iso8601('enrollment_created') }} as courserunenrollment_created_on
-        , {{ cast_timestamp_to_iso8601('certificate_created_date') }} as courseruncertificate_created_on
-        , {{ cast_timestamp_to_iso8601('certificate_modified_date') }} as courseruncertificate_updated_on
+        ,{{ transform_gender_value('profile_gender') }} as user_gender
+        ,{{ transform_education_value('profile_level_of_education') }} as user_highest_education
+        ,{{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
+        ,{{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
+        ,{{ cast_timestamp_to_iso8601('enrollment_created') }} as courserunenrollment_created_on
+        ,{{ cast_timestamp_to_iso8601('certificate_created_date') }} as courseruncertificate_created_on
+        ,{{ cast_timestamp_to_iso8601('certificate_modified_date') }} as courseruncertificate_updated_on
         , replace(enrollment_course_id, 'ESD.SCM1x', 'CTL.SC1x') as courserunenrollment_courserun_readable_id
         , replace(certificate_course_id, 'ESD.SCM1x', 'CTL.SC1x') as courseruncertificate_courserun_readable_id
     from source

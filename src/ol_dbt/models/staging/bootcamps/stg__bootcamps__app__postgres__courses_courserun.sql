@@ -10,8 +10,8 @@ with source as (
         , bootcamp_id as course_id
         , title as courserun_title
         , bootcamp_run_id as courserun_readable_id
-        , {{ cast_timestamp_to_iso8601('start_date') }} as courserun_start_on
-        , {{ cast_timestamp_to_iso8601('end_date') }} as courserun_end_on
+        ,{{ cast_timestamp_to_iso8601('start_date') }} as courserun_start_on
+        ,{{ cast_timestamp_to_iso8601('end_date') }} as courserun_end_on
     from source
 )
 

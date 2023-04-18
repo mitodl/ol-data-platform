@@ -15,10 +15,10 @@ with source as (
         , enabled as coupon_is_active
         , content_type_id as contenttype_id
         , invoice_id as couponinvoice_id
-        , {{ cast_timestamp_to_iso8601('created_on') }} as coupon_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as coupon_updated_on
-        , {{ cast_timestamp_to_iso8601('activation_date') }} as coupon_activated_on
-        , {{ cast_timestamp_to_iso8601('expiration_date') }} as coupon_expires_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as coupon_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as coupon_updated_on
+        ,{{ cast_timestamp_to_iso8601('activation_date') }} as coupon_activated_on
+        ,{{ cast_timestamp_to_iso8601('expiration_date') }} as coupon_expires_on
 
     from source
 

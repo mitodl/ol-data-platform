@@ -36,7 +36,7 @@ with source as (
         , edx_name as user_edx_name
         , edx_goals as user_edx_goals
         , fake_user as user_profile_is_fake
-        , {{ cast_date_to_iso8601('date_of_birth') }} as user_birth_date
+        ,{{ cast_date_to_iso8601('date_of_birth') }} as user_birth_date
         , coalesce(romanized_first_name, first_name) as user_first_name
         , coalesce(romanized_last_name, last_name) as user_last_name
         , concat_ws(
@@ -49,16 +49,16 @@ with source as (
             , nullif(romanized_first_name, '')
             , nullif(romanized_last_name, '')
         ) as user_romanized_full_name
-        , {{ transform_education_value('edx_level_of_education') }} as user_highest_education
-        , {{ transform_gender_value('gender') }} as user_gender
+        ,{{ transform_education_value('edx_level_of_education') }} as user_highest_education
+        ,{{ transform_gender_value('gender') }} as user_gender
         , case
             when account_privacy = 'public' then 'Public to everyone'
             when account_privacy = 'public_to_mm' then 'Public to logged in users'
             when account_privacy = 'private' then 'Private'
             else account_privacy
         end as user_account_privacy
-        , {{ cast_timestamp_to_iso8601('date_joined_micromasters') }} as user_joined_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as user_profile_updated_on
+        ,{{ cast_timestamp_to_iso8601('date_joined_micromasters') }} as user_joined_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as user_profile_updated_on
     from source
 )
 

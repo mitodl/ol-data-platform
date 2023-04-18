@@ -22,12 +22,12 @@ with source as (
         , enrollment_url as courserun_enrollment_url
         , is_discontinued as courserun_is_discontinued
         , prerequisites as courserun_prerequisites
-        , {{ cast_timestamp_to_iso8601('start_date') }} as courserun_start_on
-        , {{ cast_timestamp_to_iso8601('end_date') }} as courserun_end_on
-        , {{ cast_timestamp_to_iso8601('enrollment_start') }} as courserun_enrollment_start_on
-        , {{ cast_timestamp_to_iso8601('enrollment_end') }} as courserun_enrollment_end_on
-        , {{ cast_timestamp_to_iso8601('freeze_grade_date') }} as courserun_grade_freeze_on
-        , {{ cast_timestamp_to_iso8601('upgrade_deadline') }} as courserun_upgrade_deadline
+        ,{{ cast_timestamp_to_iso8601('start_date') }} as courserun_start_on
+        ,{{ cast_timestamp_to_iso8601('end_date') }} as courserun_end_on
+        ,{{ cast_timestamp_to_iso8601('enrollment_start') }} as courserun_enrollment_start_on
+        ,{{ cast_timestamp_to_iso8601('enrollment_end') }} as courserun_enrollment_end_on
+        ,{{ cast_timestamp_to_iso8601('freeze_grade_date') }} as courserun_grade_freeze_on
+        ,{{ cast_timestamp_to_iso8601('upgrade_deadline') }} as courserun_upgrade_deadline
     from source
 )
 

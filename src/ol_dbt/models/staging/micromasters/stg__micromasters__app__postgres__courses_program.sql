@@ -14,8 +14,8 @@ with source as (
         , num_required_courses as program_num_required_courses
         , ga_tracking_id as program_ga_tracking_id
         , financial_aid_availability as program_is_financial_aid_available
-        , {{ cast_timestamp_to_iso8601('created_on') }} as program_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as program_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as program_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as program_updated_on
     from source
 )
 

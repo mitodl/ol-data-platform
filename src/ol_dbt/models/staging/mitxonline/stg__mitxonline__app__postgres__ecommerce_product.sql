@@ -13,8 +13,8 @@ with source as (
         , object_id as product_object_id
         , description as product_description
         , content_type_id as contenttype_id
-        , {{ cast_timestamp_to_iso8601('created_on') }} as product_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as product_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as product_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as product_updated_on
     from source
 )
 

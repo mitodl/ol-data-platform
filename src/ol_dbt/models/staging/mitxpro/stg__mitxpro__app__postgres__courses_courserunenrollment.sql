@@ -14,8 +14,8 @@ with source as (
         , user_id
         , company_id as ecommerce_company_id
         , order_id as ecommerce_order_id
-        , {{ cast_timestamp_to_iso8601('created_on') }} as courserunenrollment_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as courserunenrollment_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as courserunenrollment_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as courserunenrollment_updated_on
     from source
 )
 

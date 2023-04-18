@@ -11,8 +11,8 @@ with source as (
         , description as line_description
         , order_id
         , bootcamp_run_id as courserun_id
-        , {{ cast_timestamp_to_iso8601('created_on') }} as line_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as line_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as line_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as line_updated_on
     from source
 
 )

@@ -12,8 +12,8 @@ with source as (
         , program_id
         , user_id
         , enrollment_mode as programenrollment_enrollment_mode
-        , {{ cast_timestamp_to_iso8601('created_on') }} as programenrollment_created_on
-        , {{ cast_timestamp_to_iso8601('updated_on') }} as programenrollment_updated_on
+        ,{{ cast_timestamp_to_iso8601('created_on') }} as programenrollment_created_on
+        ,{{ cast_timestamp_to_iso8601('updated_on') }} as programenrollment_updated_on
     from source
 )
 

@@ -48,8 +48,9 @@ with user_info_combo as (
         , user_info_combo.user_joined_on
         , user_info_combo.user_gender
         , user_info_combo.user_last_login
-        , row_number() over (partition by user_info_combo.user_id order by user_info_combo.user_last_login desc
-        ) as row_num
+        , row_number()
+            over (partition by user_info_combo.user_id order by user_info_combo.user_last_login desc
+            ) as row_num
     from user_info_combo
     inner join most_recent_user_info
         on
