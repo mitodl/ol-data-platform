@@ -24,6 +24,8 @@ models:
       edX.org
     tests:
     - not_null
+  - name: user_full_name
+    description: str, user full name
   - name: user_address_country
     description: str, country code provided by the user on the corresponding platform
       - MITx Online or edX.org
@@ -76,8 +78,7 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, course run ID on edX.org or MITxOnline. Open edX Course ID formatted
-      as course-v1:{org}+{course code}+{run_tag}
+    description: str, course run ID on edX.org or MITxOnline
     tests:
     - not_null
   - name: courserun_title
@@ -92,6 +93,45 @@ models:
   - name: user_edxorg_username
     description: str, username in edx.org. For the very small number of users with
       multiple edx usernames, this is the username with the latest logins
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "courserun_readable_id"]
+
+- name: int__mitx__courserun_certificates
+  description: MITx course certificates combined from MITx Online and edX.org. It
+    includes certificates that are not revoked from MITx Online, and downloadable
+    certificates for courses run on edx.org
+  columns:
+  - name: platform
+    description: string, indicating application where the data is from. It's either
+      MITx Online or edX.org
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["MITx Online", "edX.org"]
+  - name: courserun_title
+    description: str, title of the course run, maybe blank for some edX.org runs
+  - name: courserun_readable_id
+    description: str, course run ID on edX.org or MITxOnline.
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+  - name: user_email
+    description: str, user email on edX.org or MITxOnline
+    tests:
+    - not_null
+  - name: courseruncertificate_url
+    description: str, the full URL to this DEDP course certificate
+    tests:
+    - not_null
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when this course certificate was initially
+      created
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id"]

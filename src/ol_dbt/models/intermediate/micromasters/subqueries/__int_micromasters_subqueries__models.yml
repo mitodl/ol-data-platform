@@ -309,6 +309,16 @@ models:
     description: str, course run ID from MicroMasters database
     tests:
     - not_null
+  - name: courserun_edxorg_readable_id
+    description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
+      to match course in edxorg
+    tests:
+    - not_null
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg
+    tests:
+    - not_null
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
     tests:
@@ -325,9 +335,24 @@ models:
     description: str, user full name on edX.org
   - name: user_country
     description: str, user country on edX.org
+  - name: coursecertificate_hash
+    description: str, unique hash used to identify this DEDP course certificate
+    tests:
+    - unique
+    - not_null
+  - name: coursecertificate_url
+    description: str, the full URL to this DEDP course certificate on MicroMasters
+    tests:
+    - unique
+    - not_null
   - name: coursecertificate_created_on
     description: timestamp, date and time when DEDP course certificate was initially
-      created in MicroMaster database
+      created on MicroMasters
+    tests:
+    - not_null
+  - name: coursecertificate_updated_on
+    description: timestamp, date and time when DEDP course certificate was most recently
+      updated on MicroMasters
     tests:
     - not_null
   tests:
@@ -351,6 +376,11 @@ models:
     description: str, course run ID on MITx Online
     tests:
     - not_null
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg. edxorg runs were migrated from MicroMasters.
+    tests:
+    - not_null
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
     tests:
@@ -369,9 +399,24 @@ models:
     description: str, user full name on MITx Online
   - name: user_country
     description: str, user country on MITx Online
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on MITx Online
+    tests:
+    - unique
+    - not_null
+  - name: courseruncertificate_url
+    description: str, the full URL to this DEDP course certificate on MITx Online
+    tests:
+    - unique
+    - not_null
   - name: courseruncertificate_created_on
     description: timestamp, date and time when DEDP course certificate was initially
       created on MITx Online
+    tests:
+    - not_null
+  - name: courseruncertificate_updated_on
+    description: timestamp, date and time when DEDP course certificate was most recently
+      updated
     tests:
     - not_null
   tests:
@@ -393,6 +438,10 @@ models:
     description: str, course run ID on edX.org
     tests:
     - not_null
+  - name: courserun_platform
+    description: str, indicating the edx.org platform where this course runs on
+    tests:
+    - not_null
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
     tests:
@@ -411,6 +460,21 @@ models:
     description: str, user full name on edX.org
   - name: user_country
     description: str, user country on edX.org
+  - name: courseruncertificate_download_url
+    description: str, the full URL to the certificate
+  - name: courseruncertificate_download_uuid
+    description: str, A hash code that identifies this student’s certificate. Included
+      as part of the download_url.
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when this course certificate was initially
+      created on edX.org
+    tests:
+    - not_null
+  - name: courseruncertificate_updated_on
+    description: timestamp, date and time when this course certificate was most recently
+      updated
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_edxorg_username", "courserun_readable_id"]
@@ -428,6 +492,11 @@ models:
     - not_null
   - name: courserun_readable_id
     description: str, course run ID on edX.org
+    tests:
+    - not_null
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg.
     tests:
     - not_null
   - name: course_number

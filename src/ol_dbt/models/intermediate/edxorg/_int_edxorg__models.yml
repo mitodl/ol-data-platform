@@ -45,13 +45,9 @@ models:
         field: course_id
 
 - name: int__edxorg__mitx_courserun_certificates
-  description: Intermediate model for course run certificates from edx.org
+  description: Intermediate model for course run certificates for edx.org courses
+    For edx.org DEDP courses, certificates are sourced from MicroMasters
   columns:
-  - name: courseruncertificate_id
-    description: int, sequential ID of the certificate on edx.org
-    tests:
-    - not_null
-    - unique
   - name: user_id
     description: int, Numerical user ID of a learner on edx.org
     tests:
@@ -69,6 +65,8 @@ models:
     description: str, The username of the learner on edx.org
     tests:
     - not_null
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
   - name: user_email
     description: str, The email address of the learner on edx.org
     tests:
@@ -100,6 +98,8 @@ models:
     description: str, The enrollment mode associated with the certificate
   - name: courserun_title
     description: str, The title of the course run
+  - name: micromasters_program_id
+    description: int, foreign key to int__micromasters__programs
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]

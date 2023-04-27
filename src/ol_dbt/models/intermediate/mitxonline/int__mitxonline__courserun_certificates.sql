@@ -5,11 +5,11 @@ with certificates as (
 )
 
 , runs as (
-    select * from {{ ref('stg__mitxonline__app__postgres__courses_courserun') }}
+    select * from {{ ref('int__mitxonline__course_runs') }}
 )
 
 , users as (
-    select * from {{ ref('stg__mitxonline__app__postgres__users_user') }}
+    select * from {{ ref('int__mitxonline__users') }}
 )
 
 , courserun_certificates as (
@@ -20,12 +20,15 @@ with certificates as (
         , runs.courserun_title
         , runs.courserun_readable_id
         , runs.courserun_url
+        , runs.courserun_platform
         , runs.course_id
+        , certificates.courseruncertificate_url
         , certificates.courseruncertificate_is_revoked
         , certificates.courseruncertificate_created_on
         , certificates.courseruncertificate_updated_on
         , certificates.user_id
         , users.user_username
+        , users.user_edxorg_username
         , users.user_email
     from certificates
     inner join runs on certificates.courserun_id = runs.courserun_id
