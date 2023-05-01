@@ -271,6 +271,11 @@ models:
     tests:
     - unique
     - not_null
+  - name: coursecertificate_url
+    description: str, the full URL to this DEDP course certificate on MicroMasters
+    tests:
+    - unique
+    - not_null
   - name: course_id
     description: int, foreign key to courses_course
     tests:
@@ -639,6 +644,9 @@ models:
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag},
       maybe blank
+  - name: courserun_edxorg_readable_id
+    description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
+      to match course in edxorg
   - name: courserun_tag
     description: str, string that identifies a single run in a course E.g. 1T2022
   - name: courserun_enrollment_url

@@ -52,6 +52,7 @@ select
     programs.program_title
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
+    , courseruns.courserun_platform
     , courses.course_number
     , mm_users.user_edxorg_username
     , mm_users.user_mitxonline_username

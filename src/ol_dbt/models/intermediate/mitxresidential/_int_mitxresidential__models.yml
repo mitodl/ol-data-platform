@@ -58,7 +58,7 @@ models:
     description: str, course organization e.g. MITx
     tests:
     - not_null
-  - name: self_paced
+  - name: courserun_is_self_paced
     description: boolean, indicating whether students can take this course at their
       own pace
     tests:

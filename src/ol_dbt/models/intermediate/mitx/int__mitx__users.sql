@@ -16,6 +16,7 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
+        , user_full_name
         , user_address_country
         , user_highest_education
         , user_gender
@@ -29,6 +30,7 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
+        , user_full_name
         , user_country as user_address_country
         , user_highest_education
         , user_gender

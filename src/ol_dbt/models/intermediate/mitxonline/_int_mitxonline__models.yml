@@ -812,6 +812,11 @@ models:
     tests:
     - unique
     - not_null
+  - name: courseruncertificate_url
+    description: str, the full URL to the certificate on MITx Online
+    tests:
+    - unique
+    - not_null
   - name: courserun_id
     description: int, foreign key to courses_courserun representing a single course
       run
@@ -820,6 +825,13 @@ models:
     - relationships:
         to: ref('int__mitxonline__course_runs')
         field: courserun_id
+  - name: courserun_platform
+    description: str, indicating whether the course runs on MITx Online or edX.org,
+      those edx.org DEDP courses were migrated from MicroMasters
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["MITx Online", "edX.org"]
   - name: course_id
     description: int, foreign key to courses_course representing a single course
     tests:
@@ -854,6 +866,9 @@ models:
     description: string, username
     tests:
     - not_null
+  - name: user_edxorg_username
+    description: str, username in edx.org if applicable. For the very small number
+      of users with multiple edx usernames, this is the username with the latest logins
   - name: user_email
     description: string, email
     tests:
@@ -1077,7 +1092,7 @@ models:
     tests:
     - accepted_values:
         values: ['Male', 'Female', 'Transgender', 'Non-binary/non-conforming', 'Other/Prefer
-            Not to Say']
+            Not to Say', '']
   - name: user_company_size
     description: str, company size
     tests:

@@ -716,7 +716,7 @@ models:
     tests:
     - accepted_values:
         values: ['Male', 'Female', 'Transgender', 'Non-binary/non-conforming', 'Other/Prefer
-            Not to Say']
+            Not to Say', '']
   - name: user_company_size
     description: str, company size
     tests:
@@ -1008,6 +1008,11 @@ models:
     - not_null
   - name: courseruncertificate_uuid
     description: str, unique identifier for the certificate
+    tests:
+    - unique
+    - not_null
+  - name: courseruncertificate_url
+    description: str, the full URL to the certificate on MITx Online
     tests:
     - unique
     - not_null

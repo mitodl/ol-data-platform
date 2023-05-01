@@ -50,13 +50,18 @@ select
     programs.program_title
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
+    , courseruns.courserun_edxorg_readable_id
+    , courseruns.courserun_platform
     , courses.course_number
     , mm_users.user_edxorg_username
     , mm_users.user_mitxonline_username
     , mm_users.user_email
     , mm_users.user_full_name
     , mm_users.user_address_country as user_country
+    , dedp_course_certificates.coursecertificate_hash
+    , dedp_course_certificates.coursecertificate_url
     , dedp_course_certificates.coursecertificate_created_on
+    , dedp_course_certificates.coursecertificate_updated_on
 from dedp_course_certificates
 inner join highest_courserun_grades
     on

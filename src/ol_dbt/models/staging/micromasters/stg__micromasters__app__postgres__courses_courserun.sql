@@ -10,6 +10,7 @@ with source as (
         , course_id
         , title as courserun_title
         , edx_course_key as courserun_readable_id
+        , replace(replace(edx_course_key, 'course-v1:', ''), '+', '/') as courserun_edxorg_readable_id
         , case
             when edx_course_key like 'MITx/%' then split(edx_course_key, '/')[3]
             when edx_course_key like 'course-v1:%' then split(edx_course_key, '+')[3]

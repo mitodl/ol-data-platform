@@ -43,13 +43,17 @@ select
     micromasters_programs.program_title
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
+    , courseruns.courserun_platform
     , courses.course_number
     , micromasters_users.user_edxorg_username
     , mitxonline_users.user_username as user_mitxonline_username
     , mitxonline_users.user_full_name
     , mitxonline_users.user_address_country as user_country
     , mitxonline_users.user_email
+    , courserun_certificates.courseruncertificate_uuid
+    , courserun_certificates.courseruncertificate_url
     , courserun_certificates.courseruncertificate_created_on
+    , courserun_certificates.courseruncertificate_updated_on
 from courserun_certificates
 inner join courseruns on courserun_certificates.courserun_id = courseruns.courserun_id
 inner join courses on courserun_certificates.course_id = courses.course_id

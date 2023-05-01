@@ -11,6 +11,7 @@ with source as (
         , user_id
         , course_id
         , hash as coursecertificate_hash
+        , concat('https://micromasters.mit.edu/certificate/course/', hash) as coursecertificate_url
         ,{{ cast_timestamp_to_iso8601('created_on') }} as coursecertificate_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as coursecertificate_updated_on
 

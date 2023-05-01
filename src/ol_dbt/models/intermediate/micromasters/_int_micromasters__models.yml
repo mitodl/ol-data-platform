@@ -167,6 +167,11 @@ models:
     description: str, course run ID on edX.org or MITxOnline
     tests:
     - not_null
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg.
+    tests:
+    - not_null
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
     tests:
@@ -183,6 +188,13 @@ models:
     description: str, user full name on edX.org or MITxOnline
   - name: user_country
     description: str, user country on edX.org or MITxOnline
+  - name: courseruncertificate_url
+    description: str, the full URL to this DEDP course certificate on MITx Online
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when this course certificate was initially
+      created
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id"]

@@ -24,13 +24,15 @@ with course_certificates_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username
         , user_full_name
         , user_country
         , user_email
-        , coursecertificate_created_on as created_on
+        , coursecertificate_url as courseruncertificate_url
+        , coursecertificate_created_on as courseruncertificate_created_on
     from course_certificates_dedp_from_micromasters
     where coursecertificate_created_on < '2022-10-01'
 
@@ -40,13 +42,15 @@ with course_certificates_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username
         , user_full_name
         , user_country
         , user_email
-        , courseruncertificate_created_on as created_on
+        , courseruncertificate_url
+        , courseruncertificate_created_on
     from course_certificates_dedp_from_mitxonline
     where courseruncertificate_created_on >= '2022-10-01'
 
@@ -57,19 +61,23 @@ with course_certificates_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username
         , user_full_name
         , user_country
         , user_email
+        , courseruncertificate_url
+        , courseruncertificate_created_on
         , case
             when
                 user_mitxonline_username is not null
                 then
                     row_number()
                         over (
-                            partition by courserun_readable_id, user_mitxonline_username order by created_on desc
+                            partition by courserun_readable_id, user_mitxonline_username
+                            order by courseruncertificate_created_on desc
                         )
             else 1
         end as row_num
@@ -89,12 +97,15 @@ with course_certificates_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username
         , user_full_name
         , user_country
         , user_email
+        , courseruncertificate_url
+        , courseruncertificate_created_on
     from dedp_course_certificates
 
     union all
@@ -103,12 +114,15 @@ with course_certificates_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username
         , user_full_name
         , user_country
         , user_email
+        , courseruncertificate_download_url as courseruncertificate_url
+        , courseruncertificate_created_on
     from course_certificates_non_dedp_program
 )
 
