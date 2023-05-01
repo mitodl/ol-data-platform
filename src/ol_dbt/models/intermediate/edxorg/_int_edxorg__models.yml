@@ -137,6 +137,9 @@ models:
     description: boolean, indicating if enrollment is active or not
   - name: courserun_title
     description: str, The title of the course run
+  - name: course_number
+    description: str, The MIT course number for this course e.g. SysEngx1 is the course
+      number for MITxPRO/SysEngx1/1T2018
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]

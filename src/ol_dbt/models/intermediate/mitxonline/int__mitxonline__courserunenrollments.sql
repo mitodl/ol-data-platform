@@ -100,6 +100,7 @@ with enrollments as (
         , mitxonline_runs.courserun_platform as courserunenrollment_platform
         , mitxonline_runs.courserun_title
         , mitxonline_runs.courserun_readable_id
+        , mitxonline_runs.course_number
         , mitxonline_users.user_username
         , mitxonline_users.user_email
         , mitxonline_users.user_edxorg_username
