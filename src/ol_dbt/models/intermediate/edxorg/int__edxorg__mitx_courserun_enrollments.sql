@@ -42,6 +42,7 @@ with person_courses as (
 , edxorg_runs as (
     select
         courserun_readable_id
+        , course_number
         , courserun_title
     from {{ ref('stg__edxorg__bigquery__mitx_courserun') }}
 )
@@ -92,6 +93,7 @@ with person_courses as (
 , enrollments as (
     select
         edxorg_enrollments.courserun_readable_id
+        , edxorg_runs.course_number
         , edxorg_enrollments.courserunenrollment_created_on
         , edxorg_enrollments.courserunenrollment_is_active
         , edxorg_users.user_id

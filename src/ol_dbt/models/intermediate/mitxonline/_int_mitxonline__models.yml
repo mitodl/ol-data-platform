@@ -559,6 +559,10 @@ models:
   - name: user_edxorg_username
     description: str, username in edx.org. For the very small number of users with
       multiple edx usernames, this is the username with the latest logins
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
@@ -896,12 +900,12 @@ models:
     - unique
     - not_null
 
-- name: int__mitxonline__programrequirements
+- name: int__mitxonline__program_requirements
   columns:
-  - name: programrequirement_id
-    description: int, primary key representing a MITx Online program requirement node
+  - name: programrequirement_requirement_id
+    description: int, primary key representing the primary key in stg__mitxonline__app__postgres__courses_programrequirement
+      of the operator node
     tests:
-    - unique
     - not_null
   - name: course_id
     description: int, foreign key to courses_course representing a single course
@@ -916,40 +920,30 @@ models:
     - relationships:
         to: ref('stg__mitxonline__app__postgres__courses_program')
         field: program_id
-  - name: programrequirement_node_type
-    description: str, there are 3 types of nodes that exist in a requirement tree
-      - program_root (represent a program) - course (represent a reference to a course)
-      - operator (represent a logical operation over a set of courses)
+  - name: programrequirement_type
+    description: str, one of 'Elective' or 'Core'
     tests:
     - accepted_values:
-        values: ["program_root", "course", "operator"]
-  - name: programrequirement_path
-    description: str, the full materialized path for each node (readonly) e.g. 0001
-      is root path, 00010001 is the path to a node in this requirement tree
-    tests:
-    - not_null
-  - name: programrequirement_depth
-    description: int, depth of a node in the tree. A root node has a depth of 1. (readonly)
-    tests:
-    - not_null
-  - name: programrequirement_numchild
-    description: int, the number of children of a node (readonly)
-    tests:
+        values: ["Elective", "Core"]
     - not_null
   - name: programrequirement_title
-    description: str, title of the requirement
-  - name: programrequirement_operator
-    description: str, the logical operation over a set of courses, it can be all_of,
-      min_number_of or blank
+    description: str, the title of the requirement
     tests:
-    - accepted_values:
-        values: ["all_of", "min_number_of"]
-  - name: programrequirement_operator_value
-    description: str, value of the operator for this requirement e.g. if operator
-      is all_of, the corresponding operator_value 3 means all of 3 courses
-  tests:
-  - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxonline__app__postgres__courses_programrequirement')
+    - not_null
+  - name: electiveset_required_number
+    description: int, the number of required courses for requirements that are electives
+  - name: programrequirement_is_a_nested_requirement
+    description: boolean, whether the requirement is nested inside another requirement.
+      For example DEDP requires the user to take 2 Elective Courses one of which must
+      be An Intro Elective Course. "Elective Intro Courses" is a nested requirement
+  - name: programrequirement_parent_requirement_id
+    description: int, primary key representing the primary key in stg__mitxonline__app__postgres__courses_programrequirement
+      of the operator node of the parent requirement for nested requirements
+  - name: program_num_required_courses
+    description: int, indicating the number of required courses to earn certificate
+    tests:
+    - not_null
+
 
 - name: int__mitxonline__program_to_courses
   description: intermediate table contains information about program to courses relationship

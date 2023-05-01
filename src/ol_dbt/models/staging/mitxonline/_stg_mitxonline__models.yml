@@ -851,7 +851,7 @@ models:
     - accepted_values:
         values: ["all_of", "min_number_of"]
   - name: programrequirement_operator_value
-    description: str, value of the operator for this requirement e.g. if operator
+    description: int, value of the operator for this requirement e.g. if operator
       is all_of, the corresponding operator_value 3 means all of 3 courses
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:

@@ -24,6 +24,7 @@ with mitxonline_enrollments as (
         , courserunenrollment_enrollment_status
         , courserun_title
         , courserun_readable_id
+        , course_number
         , user_id
         , user_email
         , user_edxorg_username
@@ -40,6 +41,7 @@ with mitxonline_enrollments as (
         , null as courserunenrollment_enrollment_status
         , courserun_title
         , courserun_readable_id
+        , course_number
         , user_id
         , user_email
         , user_username as user_edxorg_username

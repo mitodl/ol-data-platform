@@ -3,6 +3,7 @@
 with mitxonline_enrollments as (
     select *
     from {{ ref('int__mitxonline__courserunenrollments') }}
+    where courserunenrollment_platform = '{{ var("mitxonline") }}'
 )
 
 , mitxonline_users as (

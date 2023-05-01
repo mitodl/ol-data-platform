@@ -15,7 +15,7 @@ with source as (
         , numchild as programrequirement_numchild
         , title as programrequirement_title
         , operator as programrequirement_operator
-        , operator_value as programrequirement_operator_value
+        , cast(operator_value as INTEGER) as programrequirement_operator_value
     from source
 )
 
