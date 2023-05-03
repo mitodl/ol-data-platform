@@ -11,5 +11,13 @@
   "timezone": "US/Eastern",
   "lockFileMaintenance": {
     "enabled": true
-  }
+  },
+  "packageRules": [
+    {
+      "matchPackagePrefixes": [
+        "dagster-"
+      ],
+      "groupName": "dagster-plugins"
+    }
+  ]
 }
