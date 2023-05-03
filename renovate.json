@@ -2,7 +2,6 @@
   "extends": [
     ":automergeMinor",
     ":rebaseStalePrs",
-    ":recommended",
     ":separateMajorReleases",
     "config:base"
   ],
@@ -19,17 +18,6 @@
         "dagster-"
       ],
       "groupName": "dagster-plugins"
-    },
-    {
-      "groupName": "all non-major dependencies",
-      "groupSlug": "all-minor-patch",
-      "matchPackagePatterns": [
-        "*"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ]
     }
   ]
 }
