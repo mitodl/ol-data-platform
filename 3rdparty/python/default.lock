@@ -11,7 +11,7 @@
 //   "generated_with_requirements": [
 //     "PyPika<0.49.0,>=0.48.9",
 //     "black",
-//     "dagit<2.0.0,>=1.2",
+//     "dagit<2.0.0,>=1.3",
 //     "dagster-airbyte<0.20.0,>=0.19.0",
 //     "dagster-aws<0.20.0,>=0.19.0",
 //     "dagster-dbt<0.20.0,>=0.19.0",
@@ -20,7 +20,7 @@
 //     "dagster-ge<0.20.0,>=0.19.0",
 //     "dagster-postgres<0.20.0,>=0.19.0",
 //     "dagster-shell<0.20.0,>=0.19.0",
-//     "dagster<2.0.0,>=1.2",
+//     "dagster<2.0.0,>=1.3",
 //     "dbt-duckdb<2.0.0,>=1.4.1",
 //     "dbt-trino<2.0.0,>=1.3.0",
 //     "dynaconf<4.0.0,>=3.1.11",
@@ -28,10 +28,10 @@
 //     "hvac<2.0.0,>=1.0",
 //     "mypy",
 //     "pre-commit<4.0.0,>=3",
-//     "pyarrow>=9.0.0",
+//     "pyarrow<13.0.0,>=12",
 //     "pymysql<2.0.0,>=1.0.0",
 //     "pytest<8.0.0,>=7.1.2",
-//     "ruff<1.0.0,>=0",
+//     "ruff",
 //     "setuptools<68.0.0,>=67.0.0",
 //     "sqlfluff<3.0.0,>=2.0.0"
 //   ],
@@ -3174,13 +3174,13 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "1c80d08f04144a1994cda25569eab07fbdc4989bd8d8793e3a4ff643065ccb51",
-              "url": "https://files.pythonhosted.org/packages/7c/3a/946a16933f6544aff3495978924d3ed8328ce1f42b8b7caef56b63e31bd7/ipython-8.13.1-py3-none-any.whl"
+              "hash": "ffca270240fbd21b06b2974e14a86494d6d29290184e788275f55e0b55914926",
+              "url": "https://files.pythonhosted.org/packages/d5/16/2161195dd2f617933f8ada5bc567eb47ddbb7c99dc16ffa3e729dd25a1a0/ipython-8.13.2-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "9c8487ac18f330c8a683fc50ab6d7bc0fcf9ef1d7a9f6ce7926938261067b81f",
-              "url": "https://files.pythonhosted.org/packages/0f/89/5a81b01529537e0f59c72679846d8b33c66225055b3ba520e161c42c8e02/ipython-8.13.1.tar.gz"
+              "hash": "7dff3fad32b97f6488e02f87b970f309d082f758d7b7fc252e3b19ee0e432dbb",
+              "url": "https://files.pythonhosted.org/packages/ee/ad/d908d8aac3e8ac8aec2b89103b6c10f289544623879be0e249de3e508123/ipython-8.13.2.tar.gz"
             }
           ],
           "project_name": "ipython",
@@ -3256,7 +3256,7 @@
             "typing-extensions; python_version < \"3.10\""
           ],
           "requires_python": ">=3.9",
-          "version": "8.13.1"
+          "version": "8.13.2"
         },
         {
           "artifacts": [
@@ -4301,13 +4301,13 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "e3c8b7de80046c4a36a74662a5e325386d345289906c618366d8154e03dc2322",
-              "url": "https://files.pythonhosted.org/packages/8b/24/63cd9d8b11fb3778ac11de109558e5f2bcd2eed5be01a14ab3162bc95b68/nbclassic-0.5.6-py3-none-any.whl"
+              "hash": "f99e4769b4750076cd4235c044b61232110733322384a94a63791d2e7beacc66",
+              "url": "https://files.pythonhosted.org/packages/84/ae/eaa71c0ed64e8ddc426a4c902e83d31c4925e9d3418d6b240dd5752b6e71/nbclassic-1.0.0-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "aab53fa1bea084fb6ade5c538b011a4f070c69f88d72878a8e8fb356f152509f",
-              "url": "https://files.pythonhosted.org/packages/c3/3d/8f8cbe374c60476e0165bdc18aec6952820a595b70032ad7881d3c5ed7aa/nbclassic-0.5.6.tar.gz"
+              "hash": "0ae11eb2319455d805596bf320336cda9554b41d99ab9a3c31bf8180bffa30e3",
+              "url": "https://files.pythonhosted.org/packages/8b/11/6e6084bad2b2f8faa787bd5f72fd1171c741801a03872b518965d7653ba5/nbclassic-1.0.0.tar.gz"
             }
           ],
           "project_name": "nbclassic",
@@ -4347,7 +4347,7 @@
             "traitlets>=4.2.1"
           ],
           "requires_python": ">=3.7",
-          "version": "0.5.6"
+          "version": "1.0.0"
         },
         {
           "artifacts": [
@@ -6336,13 +6336,13 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "0847bd888329ae45375724bed2ac8a4ab9d2ddc48331e98ec2de679d276de254",
-              "url": "https://files.pythonhosted.org/packages/9c/71/bdd6c2141877450bbebc04273ef9ae28a38daf8bf0699a6734588d868c6e/sqlfluff-2.0.7-py3-none-any.whl"
+              "hash": "681cecbaed1534e6bcb51e618613c090d8f3d764ab0ac56982e83b9e89930174",
+              "url": "https://files.pythonhosted.org/packages/4d/ac/7e2c675162608f7dadb1ff13a05ccae6345436d3737a1423012df986b3fd/sqlfluff-2.1.0-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "c5349f1a8dc70a79a766a6cb0f84d3b73382c43b0abe76e33873d6eaffef1f84",
-              "url": "https://files.pythonhosted.org/packages/cf/69/e4b86c721610f99cfed1aa1f7d1ef197da17e4d36fbb69ba3b2981ca0067/sqlfluff-2.0.7.tar.gz"
+              "hash": "66017f63987bebb24ec9fd28228a12b3d224cc40ad5a85976768a38591b7b4b2",
+              "url": "https://files.pythonhosted.org/packages/ef/01/51d18936e3340f73d587c51ead2936e77da6f04d6e8990181ad098710014/sqlfluff-2.1.0.tar.gz"
             }
           ],
           "project_name": "sqlfluff",
@@ -6365,7 +6365,7 @@
             "typing-extensions"
           ],
           "requires_python": ">=3.7",
-          "version": "2.0.7"
+          "version": "2.1.0"
         },
         {
           "artifacts": [
@@ -7552,7 +7552,7 @@
   "requirements": [
     "PyPika<0.49.0,>=0.48.9",
     "black",
-    "dagit<2.0.0,>=1.2",
+    "dagit<2.0.0,>=1.3",
     "dagster-airbyte<0.20.0,>=0.19.0",
     "dagster-aws<0.20.0,>=0.19.0",
     "dagster-dbt<0.20.0,>=0.19.0",
@@ -7561,7 +7561,7 @@
     "dagster-ge<0.20.0,>=0.19.0",
     "dagster-postgres<0.20.0,>=0.19.0",
     "dagster-shell<0.20.0,>=0.19.0",
-    "dagster<2.0.0,>=1.2",
+    "dagster<2.0.0,>=1.3",
     "dbt-duckdb<2.0.0,>=1.4.1",
     "dbt-trino<2.0.0,>=1.3.0",
     "dynaconf<4.0.0,>=3.1.11",
@@ -7569,10 +7569,10 @@
     "hvac<2.0.0,>=1.0",
     "mypy",
     "pre-commit<4.0.0,>=3",
-    "pyarrow>=9.0.0",
+    "pyarrow<13.0.0,>=12",
     "pymysql<2.0.0,>=1.0.0",
     "pytest<8.0.0,>=7.1.2",
-    "ruff<1.0.0,>=0",
+    "ruff",
     "setuptools<68.0.0,>=67.0.0",
     "sqlfluff<3.0.0,>=2.0.0"
   ],
