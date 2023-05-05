@@ -22,6 +22,7 @@ with course_grades_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username
@@ -40,6 +41,7 @@ with course_grades_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username
@@ -59,6 +61,7 @@ with course_grades_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username
@@ -91,6 +94,7 @@ with course_grades_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username
@@ -107,6 +111,7 @@ with course_grades_dedp_from_micromasters as (
         program_title
         , courserun_title
         , courserun_readable_id
+        , courserun_platform
         , course_number
         , user_edxorg_username
         , user_mitxonline_username

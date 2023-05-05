@@ -51,8 +51,8 @@ models:
   description: MITx courserun enrollments combined from MITx Online and edX.org
   columns:
   - name: platform
-    description: string, indicating application where the data is from. It's either
-      MITx Online or edX.org
+    description: str, indicating the platform where course runs on. It's either MITx
+      Online or edX.org
     tests:
     - not_null
     - accepted_values:
@@ -110,8 +110,8 @@ models:
     certificates for courses run on edx.org
   columns:
   - name: platform
-    description: string, indicating application where the data is from. It's either
-      MITx Online or edX.org
+    description: str, indicating the platform where course runs on. It's either MITx
+      Online or edX.org
     tests:
     - not_null
     - accepted_values:
@@ -137,6 +137,47 @@ models:
   - name: courseruncertificate_created_on
     description: timestamp, date and time when this course certificate was initially
       created
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "courserun_readable_id"]
+
+- name: int__mitx__courserun_grades
+  description: MITx course grades combined from MITx Online and edX.org
+  columns:
+  - name: platform
+    description: str, indicating the platform where course runs on. It's either MITx
+      Online or edX.org
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["MITx Online", "edX.org"]
+  - name: courserun_title
+    description: str, title of the course run, maybe blank for some edX.org runs
+  - name: courserun_readable_id
+    description: str, course run ID on edX.org or MITxOnline.
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+  - name: user_email
+    description: str, user email on edX.org or MITxOnline
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on edX.org or MITxOnline
+    tests:
+    - not_null
+  - name: courserungrade_grade
+    description: float, course grade on edX.org or MITxOnline range from 0 to 1
+    tests:
+    - not_null
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on edX.org or MITxOnline
     tests:
     - not_null
   tests:

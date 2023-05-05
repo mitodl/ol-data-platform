@@ -543,6 +543,11 @@ models:
     description: str, course run ID on MITx Online
     tests:
     - not_null
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg. edxorg runs were migrated from MicroMasters.
+    tests:
+    - not_null
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
     tests:
@@ -589,6 +594,10 @@ models:
     - not_null
   - name: courserun_readable_id
     description: str, course run ID on edX.org
+    tests:
+    - not_null
+  - name: courserun_platform
+    description: str, indicating the edx.org platform where this course runs on
     tests:
     - not_null
   - name: course_number

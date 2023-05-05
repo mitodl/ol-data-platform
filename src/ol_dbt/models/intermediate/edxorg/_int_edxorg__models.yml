@@ -219,6 +219,8 @@ models:
     description: str, The username of the learner on edx.org
     tests:
     - not_null
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
   - name: user_email
     description: str, The email address of the learner on edx.org
     tests:
@@ -233,6 +235,12 @@ models:
       grade
   - name: courserun_title
     description: str, The title of the course run
+  - name: micromasters_program_id
+    description: int, foreign key to int__micromasters__programs
+    tests:
+    - relationships:
+        to: ref('int__micromasters__programs')
+        field: program_id
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]
