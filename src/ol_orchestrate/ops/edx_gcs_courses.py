@@ -2,6 +2,7 @@ import os
 
 from dagster import (
     AssetMaterialization,
+    Config,
     MetadataValue,
     Field,
     OpExecutionContext,
@@ -15,24 +16,38 @@ from dagster.core.definitions.input import In
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
 
 
+class DownloadEdxGcsCourseConfig(Config):
+    edx_gcs_course_tarballs: str = Field(
+        String,
+        default_value="simeon-mitx-course-tarballs",
+        description="The GCS bucket that contains the MITx course exports from edx.org",  # noqa: E501
+    )
+
+
+class UploadEdxGcsCourseConfig(Config):
+    edx_etl_results_bucket: str = Field(
+        String,
+        default_value="odl-developer-testing-sandbox",
+        is_required=False,
+        description="S3 bucket to use for uploading results of pipeline execution.",
+    )
+
+
 @op(
     name="edx_course_tarballs",
     description="Download edx course tarballs from GCS bucket",
     required_resource_keys={"gcp_gcs", "results_dir"},
-    config_schema={
-        "edx_gcs_course_tarballs": Field(
-            String,
-            default_value="simeon-mitx-course-tarballs",
-            description="The GCS bucket that contains the MITx course exports from edx.org",  # noqa: E501
-        ),
-    },
     out={"edx_course_tarball_directory": Out(dagster_type=DagsterPath)},
 )
-def download_edx_gcs_course_data(context):
+def download_edx_gcs_course_data(context, config: DownloadEdxGcsCourseConfig):
+    # todo: replace context and config with a new asset config
+    # once resources have been migrated
     storage_client = context.resources.gcp_gcs
+    # todo: why is this hardcoded? Wasn't that available in the
+    #  context.edx_gcs_course_tarballs?
     bucket = storage_client.get_bucket("simeon-mitx-course-tarballs")
     edx_course_tarball_path = context.resources.results_dir.path.joinpath(
-        context.op_config["edx_gcs_course_tarballs"]
+        config.edx_gcs_course_tarballs
     )
     os.makedirs(edx_course_tarball_path, exist_ok=True)  # noqa: PTH103
     blobs = storage_client.list_blobs(bucket)
@@ -48,14 +63,6 @@ def download_edx_gcs_course_data(context):
     name="edx_upload_gcs_course_tarballs",
     description="Upload all data from GCS downloaded course tarballs provided by institutional research.",  # noqa: E501
     required_resource_keys={"results_dir", "s3"},
-    config_schema={
-        "edx_etl_results_bucket": Field(
-            String,
-            default_value="odl-developer-testing-sandbox",
-            is_required=False,
-            description="S3 bucket to use for uploading results of pipeline execution.",
-        ),
-    },
     ins={
         "edx_gcs_course_tarball_directory": In(dagster_type=DagsterPath),
     },
@@ -64,18 +71,24 @@ def download_edx_gcs_course_data(context):
 def upload_edx_gcs_course_data_to_s3(
     context: OpExecutionContext,
     edx_gcs_course_tarball_directory: DagsterPath,
+    config: UploadEdxGcsCourseConfig,
 ):
     """Upload course tarballs to S3 from gcs provided by institutional research.
 
-    :param context: Dagster execution context for propagaint configuration data
+    :param context: Dagster execution context for propagating configuration data
     :type context: OpExecutionContext
 
     :param edx_gcs_course_tarball_directory: Directory path containing course tarballs.
     :type edx_gcs_course_tarball_directory: DagsterPath
 
+    :param config: Directory path containing course tarballs.
+    :type UploadEdxGcsCourseConfig: Config
+
     :yield: The S3 path of the uploaded directory
     """
-    results_bucket = context.op_config["edx_etl_results_bucket"]
+    # todo: replace context and config with a new asset config once
+    #  resources have been migrated
+    results_bucket = config.edx_etl_results_bucket
     for path_object in context.resources.results_dir.path.iterdir():
         if path_object.is_dir():
             for fpath in path_object.iterdir():
