@@ -5,6 +5,7 @@ with transactions as (
 
 select
     transactions.transaction_id
+    , transaction_data
     , transactions.transaction_amount
     , transactions.order_id
     , transactions.transaction_created_on

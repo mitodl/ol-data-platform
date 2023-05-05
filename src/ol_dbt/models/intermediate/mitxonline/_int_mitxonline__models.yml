@@ -352,6 +352,10 @@ models:
     tests:
     - unique
     - not_null
+  - name: transaction_data
+    description: json, data returned from cybersource when the transaction is fulfilled
+    tests:
+    - not_null
   - name: transaction_amount
     description: numeric, transaction ammount
     tests:
@@ -533,6 +537,10 @@ models:
     tests:
     - accepted_values:
         values: ['deferred', 'transferred', 'refunded', 'unenrolled']
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, indicating whether the user is enrolled on edx
+    tests:
+    - not_null
   - name: courserunenrollment_platform
     description: str, indicating what platform user enrolled in the course run as
       some of edx.org enrollments were migrated from MicroMasters

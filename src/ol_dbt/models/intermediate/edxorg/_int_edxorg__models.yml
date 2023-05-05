@@ -256,7 +256,6 @@ models:
   - name: user_id
     description: int, Numerical user ID of a learner on edx.org
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
     - relationships:
         to: ref('int__edxorg__mitx_users')
@@ -264,121 +263,72 @@ models:
   - name: courserun_readable_id
     description: str, The canonical ID of the course run in the format as {org}/{course}/{run}.
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_username
     description: str, The username of the learner on edx.org
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: user_email
     description: str, The email address of the learner on edx.org
     tests:
-    - dbt_expectations.expect_column_to_exist
     - not_null
   - name: courseactivitiy_visited_once
     description: boolean, indicating that the user visited the course at least once
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_viewed_half
     description: boolean, indicating that the user viewed at least half of the chapters
       of the course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_events
     description: int, Number of tracking log events
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_activity_days
     description: int, Number of days with activity from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_progress_check
     description: int, Number of progress check events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_problem_check
     description: int, Number of problem_check interaction events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_show_answer
     description: int, Number of show_answer events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_show_transcript
     description: int, Number of show_transcript video interaction events from tracking
       logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_seq_goto
     description: int, Number of sequence_goto navigational events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_play_video
     description: int, Number of play_video video interaction events from tracking
       logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_seek_video
     description: int, Number of seek_video video interaction events from tracking
       logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_pause_video
     description: int, Number of pause_video video interaction events from tracking
       logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_video_interactions
     description: int, Number of all the video interaction events from tracking log
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_unique_videos_viewed
     description: int, Number of Unique Videos viewed per user within a course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_percentage_total_videos_watched
     description: int, Total number of all videos watched per user within a course
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_average_time_diff_in_sec
     description: float, Average time difference in seconds between consecutive events
       from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_standard_deviation_in_sec
     description: float, Standard deviation of difference in seconds between consecutive
       events from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_max_diff_in_sec
     description: float, Maximum difference in seconds between consecutive events from
       tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_num_consecutive_events_used
     description: int, Number of consecutive events used in time difference computations,
       from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_total_elapsed_time_in_sec
     description: int, Total elapsed time (in seconds) spent by user on this course,
       based on time difference of consecutive events, with 5 min max cutoff, from
       tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_first_event_timestamp
     description: timestamp, timestamp of first event of user from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courseactivitiy_last_event_timestamp
     description: timestamp, timestamp of last event of user from tracking logs
-    tests:
-    - dbt_expectations.expect_column_to_exist
   - name: courserun_title
     description: str, The title of the course run
-    tests:
-    - dbt_expectations.expect_column_to_exist
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]

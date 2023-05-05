@@ -97,6 +97,7 @@ with enrollments as (
         , enrollments.courserun_id
         , enrollments.courserunenrollment_created_on
         , enrollments.courserunenrollment_enrollment_status
+        , enrollments.courserunenrollment_is_edx_enrolled
         , mitxonline_runs.courserun_platform as courserunenrollment_platform
         , mitxonline_runs.courserun_title
         , mitxonline_runs.courserun_readable_id
