@@ -214,6 +214,11 @@ models:
     description: str, course run ID on edX.org or MITxOnline
     tests:
     - not_null
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg.
+    tests:
+    - not_null
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
     tests:

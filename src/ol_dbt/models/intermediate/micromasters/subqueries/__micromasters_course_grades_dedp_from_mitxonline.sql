@@ -42,6 +42,7 @@ select
     micromasters_programs.program_title
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
+    , courseruns.courserun_platform
     , courses.course_number
     , micromasters_users.user_edxorg_username
     , mitxonline_users.user_username as user_mitxonline_username
