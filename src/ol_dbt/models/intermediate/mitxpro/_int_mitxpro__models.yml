@@ -707,6 +707,10 @@ models:
     - accepted_values:
         values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
           '', null]
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, indicating whether the user is enrolled on edx
+    tests:
+    - not_null
   - name: courserun_title
     description: str, title of the course run
     tests:
