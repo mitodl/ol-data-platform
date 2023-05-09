@@ -4,7 +4,7 @@
 with source as (
 
     select *
-    from {{ source('ol_warehouse_raw_data', 'raw__thirdparty__salesforce__opportunity') }}
+    from {{ source('ol_warehouse_raw_data', 'raw__thirdparty__salesforce__Opportunity') }}
     where isdeleted = false
 
 )

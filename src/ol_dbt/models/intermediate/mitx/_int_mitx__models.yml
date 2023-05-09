@@ -52,12 +52,14 @@ models:
     tests:
     - relationships:
         to: ref('int__micromasters__programs')
+        field: program_id
   - name: mitxonline_program_id
     description: int, foreign key to courses_program representing a single program
       in the mitxonline database
     tests:
     - relationships:
         to: ref('int__mitxonline__programs')
+        field: program_id
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
     tests:
