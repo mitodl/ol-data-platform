@@ -268,9 +268,8 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: str, user full name on edX.org or MITxOnline
-    tests:
-    - not_null
+    description: str, user full name on edX.org or MITxOnline. Maybe blank for a few
+      edX.org users their name are not populated in edxorg source
   - name: courserungrade_grade
     description: float, course grade on edX.org or MITxOnline range from 0 to 1
     tests:

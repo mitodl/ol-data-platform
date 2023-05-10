@@ -52,9 +52,8 @@ models:
     tests:
     - not_null
   - name: courserun_id
-    description: int, internal course ID on the corresponding platform
-    tests:
-    - not_null
+    description: int, internal course ID on the corresponding platform. Null for course
+      runs from edx.org
   - name: courserunenrollment_created_on
     description: timestamp, specifying when an enrollment was initially created on
       the corresponding platform
@@ -66,9 +65,8 @@ models:
     description: string, enrollment status for users whose enrollment changed on the
       corresponding platform
   - name: courserun_title
-    description: string, title of the course run on the corresponding platform
-    tests:
-    - not_null
+    description: string, title of the course run on the corresponding platform. Maybe
+      blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
   - name: courserun_readable_id
     description: str, unique string to identify a course run on the corresponding
       platform
