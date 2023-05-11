@@ -130,9 +130,8 @@ models:
     tests:
     - unique
   - name: user_edxorg_email
-    description: str, user email on edX.org
-    tests:
-    - unique
+    description: str, user email on edX.org. Not unique as some edxorg users found
+      with same email for different username and user ID
   - name: user_full_name
     description: str, user full name from MITx Online or edX.org
   - name: user_address_country
