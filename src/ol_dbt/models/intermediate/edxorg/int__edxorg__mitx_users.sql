@@ -1,8 +1,6 @@
 ---Intermediate MITx users from edx.org
----user data is mostly in user_info_combo but email or username could be blank in user_info_combo in some older courses,
----to get the most recent user data, we combine user_info_combo and email_opt_in here to always use username
--- and email from email_opt_in and the rest profile fields from user_info_combo
--- Both tables are unique on user_id + course_id
+---User data mostly comes from user_info_combo but email or username could be blank in user_info_combo for some older
+-- courses. For these cases, we use email or username from email_opt_in.
 
 with user_info_combo as (
     select *
@@ -34,9 +32,7 @@ with user_info_combo as (
 
 , combined_user_info as (
     select
-        most_recent_user_info.user_id
-        , most_recent_user_info.user_email
-        , most_recent_user_info.user_username
+        user_info_combo.user_id
         , user_info_combo.user_full_name
         , user_info_combo.user_country
         , user_info_combo.user_city
@@ -48,14 +44,14 @@ with user_info_combo as (
         , user_info_combo.user_joined_on
         , user_info_combo.user_gender
         , user_info_combo.user_last_login
+        , coalesce(user_info_combo.user_email, most_recent_user_info.user_email) as user_email
+        , coalesce(user_info_combo.user_username, most_recent_user_info.user_username) as user_username
         , row_number()
             over (partition by user_info_combo.user_id order by user_info_combo.user_last_login desc
             ) as row_num
     from user_info_combo
-    inner join most_recent_user_info
-        on
-            user_info_combo.user_id = most_recent_user_info.user_id
-            and user_info_combo.user_username = most_recent_user_info.user_username
+    left join most_recent_user_info
+        on user_info_combo.user_id = most_recent_user_info.user_id
 )
 
 , users as (
