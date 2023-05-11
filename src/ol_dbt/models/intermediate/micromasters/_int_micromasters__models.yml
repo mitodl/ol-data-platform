@@ -106,8 +106,8 @@ models:
   columns:
   - name: user_edxorg_username
     description: str, The username of the learner on the edX platform. For users who
-      got DEDP certificated on MITx Online, this could be blank if they don't have
-      linked edxorg account on MicroMasters
+      got DEDP certificates on MITx Online, this could be blank if they don't have
+      their edxorg account linked on MicroMasters.
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:
@@ -228,7 +228,7 @@ models:
   - name: user_mitxonline_username
     description: str, username on MITxOnline
   - name: user_email
-    description: str, user email on edX.org or MITxOnline
+    description: str, user email on edX.org or MITxOnline.
     tests:
     - not_null
   - name: user_full_name

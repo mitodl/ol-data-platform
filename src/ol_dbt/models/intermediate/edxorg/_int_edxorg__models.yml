@@ -160,7 +160,8 @@ models:
     - unique
   - name: user_email
     description: str, The current default email address of the learner on the edX
-      platform
+      platform. Not unique as some edxorg users found with same email for different
+      username and user ID
     tests:
     - not_null
   - name: user_full_name
@@ -233,9 +234,13 @@ models:
   - name: courserungrade_user_grade
     description: float, Final grade user earned in the course, (range between 0.0
       to 1.0)
+    tests:
+    - not_null
   - name: courserungrade_is_passing
     description: boolean, indicating that the user completed the course with a passing
       grade
+    tests:
+    - not_null
   - name: courserun_title
     description: str, The title of the course run
   - name: micromasters_program_id

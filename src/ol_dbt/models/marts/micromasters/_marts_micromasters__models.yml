@@ -29,9 +29,9 @@ models:
   description: MicroMasters program certificate earners
   columns:
   - name: user_edxorg_username
-    description: str, The username of the learner on the edX platform
-    tests:
-    - not_null
+    description: str, The username of the learner on the edX platform. For users who
+      got DEDP certificates on MITx Online, this could be blank if they don't have
+      their edxorg account linked on MicroMasters
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:

@@ -8,7 +8,9 @@ with grades as (
         , courserungrade_user_grade
         , courserungrade_is_passing
     from {{ ref('stg__edxorg__bigquery__mitx_person_course') }}
-    where courserun_platform = '{{ var("edxorg") }}'
+    where
+        courserun_platform = '{{ var("edxorg") }}'
+        and courserungrade_user_grade is not null
 )
 
 , runs as (
