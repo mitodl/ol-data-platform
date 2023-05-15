@@ -71,6 +71,10 @@ models:
     description: str, The email address of the learner on edx.org
     tests:
     - not_null
+  - name: user_full_name
+    description: str, The full name of the user on edx.org. Very small number of edX.org
+      users have blank full name, their names aren't populated unless they have their
+      accounts linked on MicroMasters.
   - name: courseruncertificate_created_on
     description: timestamp, Timestamp indicating when the certificate was created
   - name: courseruncertificate_updated_on
@@ -128,6 +132,10 @@ models:
     description: str, The email address of the learner on edx.org
     tests:
     - not_null
+  - name: user_full_name
+    description: str, The full name of the user on edx.org. Very small number of edX.org
+      users have blank full name, their names aren't populated unless they have their
+      accounts linked on MicroMasters.
   - name: courserunenrollment_created_on
     description: timestamp, timestamp of user's enrollment in the course
   - name: courserunenrollment_enrollment_mode

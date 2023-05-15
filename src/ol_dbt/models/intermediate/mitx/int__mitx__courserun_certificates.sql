@@ -45,6 +45,7 @@ with mitxonline_certificates as (
         , user_username as user_mitxonline_username
         , user_edxorg_username
         , user_email
+        , user_full_name
     from mitxonline_non_dedp_course_certificates
 
     union all
@@ -58,6 +59,7 @@ with mitxonline_certificates as (
         , user_mitxonline_username
         , user_username as user_edxorg_username
         , user_email
+        , user_full_name
     from edxorg_non_program_course_certificates
 
     union all
@@ -71,6 +73,7 @@ with mitxonline_certificates as (
         , user_mitxonline_username
         , user_edxorg_username
         , user_email
+        , user_full_name
     from program_course_certificates
 )
 

@@ -105,6 +105,7 @@ with enrollments as (
         , mitxonline_users.user_username
         , mitxonline_users.user_email
         , mitxonline_users.user_edxorg_username
+        , mitxonline_users.user_full_name
         , case
             when
                 dedp_enrollments_verified.user_id is not null

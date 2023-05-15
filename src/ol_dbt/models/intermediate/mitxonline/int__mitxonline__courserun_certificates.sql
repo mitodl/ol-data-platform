@@ -30,6 +30,7 @@ with certificates as (
         , users.user_username
         , users.user_edxorg_username
         , users.user_email
+        , users.user_full_name
     from certificates
     inner join runs on certificates.courserun_id = runs.courserun_id
     inner join users on certificates.user_id = users.user_id
