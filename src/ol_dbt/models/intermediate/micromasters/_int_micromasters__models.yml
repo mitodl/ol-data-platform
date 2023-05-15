@@ -23,6 +23,10 @@ models:
     description: str, user email
     tests:
     - not_null
+  - name: user_full_name
+    description: str, user full name on edX.org or MITxOnline. Very small number of
+      edX.org users have blank full name, their names aren't populated unless they
+      have their accounts linked on MicroMasters.
   - name: courserun_readable_id
     description: str, course ID on edx.org or openedx
     tests:
@@ -39,6 +43,10 @@ models:
     - not_null
   - name: courserun_title
     description: str, title of the course
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
     tests:
     - not_null
   tests:

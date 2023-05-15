@@ -567,6 +567,10 @@ models:
   - name: user_edxorg_username
     description: str, username in edx.org. For the very small number of users with
       multiple edx usernames, this is the username with the latest logins
+  - name: user_full_name
+    description: str, user full name
+    tests:
+    - not_null
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
     tests:
@@ -895,6 +899,10 @@ models:
       of users with multiple edx usernames, this is the username with the latest logins
   - name: user_email
     description: string, email
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name
     tests:
     - not_null
   tests:

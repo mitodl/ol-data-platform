@@ -101,6 +101,7 @@ with person_courses as (
         , edxorg_users.user_username
         , micromasters_users.user_mitxonline_username
         , edxorg_runs.courserun_title
+        , coalesce(edxorg_users.user_full_name, micromasters_users.user_full_name) as user_full_name
         , case
             when
                 dedp_edxorg_enrollments_verified.user_id is not null

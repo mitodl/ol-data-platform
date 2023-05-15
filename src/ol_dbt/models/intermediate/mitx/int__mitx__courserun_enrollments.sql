@@ -27,6 +27,7 @@ with mitxonline_enrollments as (
         , course_number
         , user_id
         , user_email
+        , user_full_name
         , user_edxorg_username
         , user_username as user_mitxonline_username
     from mitxonline_enrollments
@@ -44,6 +45,7 @@ with mitxonline_enrollments as (
         , course_number
         , user_id
         , user_email
+        , user_full_name
         , user_username as user_edxorg_username
         , user_mitxonline_username
     from edxorg_enrollments

@@ -133,7 +133,9 @@ models:
     description: str, user email on edX.org. Not unique as some edxorg users found
       with same email for different username and user ID
   - name: user_full_name
-    description: str, user full name from MITx Online or edX.org
+    description: str, user full name on edX.org or MITxOnline. Very small number of
+      edX.org users have blank full name, their name couldn't be populated from other
+      sources if they don't have their accounts linked on MicroMasters.
   - name: user_address_country
     description: str, country code provided by the user from MITx Online or edX.org
   - name: user_highest_education
@@ -197,6 +199,10 @@ models:
   - name: user_edxorg_username
     description: str, username in edx.org. For the very small number of users with
       multiple edx usernames, this is the username with the latest logins
+  - name: user_full_name
+    description: str, user full name on edX.org or MITxOnline. Very small number of
+      edX.org users have blank full name, their name couldn't be populated from other
+      sources if they don't have their accounts linked on MicroMasters.
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
   tests:
@@ -267,8 +273,9 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: str, user full name on edX.org or MITxOnline. Maybe blank for a few
-      edX.org users their name are not populated in edxorg source
+    description: str, user full name on edX.org or MITxOnline. Very small number of
+      edX.org users have blank full name, their name couldn't be populated from other
+      sources if they don't have their accounts linked on MicroMasters.
   - name: courserungrade_grade
     description: float, course grade on edX.org or MITxOnline range from 0 to 1
     tests:

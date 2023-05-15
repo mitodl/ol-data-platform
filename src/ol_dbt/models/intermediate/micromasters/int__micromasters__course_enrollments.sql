@@ -13,7 +13,9 @@ select
     , user_username
     , user_country
     , user_email
+    , user_full_name
     , courserun_readable_id
+    , course_number
     , platform
     , courserunenrollment_created_on
     , courserunenrollment_is_active
@@ -26,7 +28,9 @@ select
     , user_username
     , user_country
     , user_email
+    , user_full_name
     , courserun_readable_id
+    , course_number
     , platform
     , courserunenrollment_created_on
     , courserunenrollment_is_active

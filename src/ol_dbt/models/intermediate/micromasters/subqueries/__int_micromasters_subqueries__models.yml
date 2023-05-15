@@ -10,23 +10,31 @@ models:
     tests:
     - not_null
   - name: user_id
-    description: int, edxorg id for the user
+    description: int, user id on MITx Online
     tests:
     - not_null
   - name: user_username
-    description: str, edxorg username for the user
+    description: str, username on MITx Online
     tests:
     - not_null
   - name: user_country
     description: string, country code for the user's address
   - name: user_email
-    description: str, user email
+    description: str, user email on MITx Online
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on MITx Online
     tests:
     - not_null
   - name: courserunenrollment_enrollment_mode
     description: string, enrollment mode for the user
   - name: courserun_readable_id
     description: str, open edX course id
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
     tests:
     - not_null
   - name: platform
@@ -69,12 +77,20 @@ models:
     description: str, user email
     tests:
     - not_null
+  - name: user_full_name
+    description: str, user full name on edX.org. Very small number of edX.org users
+      have blank full name, their names aren't populated unless they have their accounts
+      linked on MicroMasters.
   - name: courserunenrollment_enrollment_mode
     description: str, enrollment mode according to edxorg. Users who paid for the
       course through another platform than edx, such as micromasters are still listed
       as 'audit' users
   - name: courserun_readable_id
     description: str, the canonical ID of the course run in the format as {org}/{course}/{run}
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
     tests:
     - not_null
   - name: platform
