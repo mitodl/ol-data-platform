@@ -13,7 +13,7 @@ with source as (
 , renamed as (
 
     select
-        trim(course_number) as course_number
+        replace(trim(course_number), '14.74x', '14.740x') as course_number
         , course_title as courserun_title
         , semester as courserun_semester
         , url as courserun_url
