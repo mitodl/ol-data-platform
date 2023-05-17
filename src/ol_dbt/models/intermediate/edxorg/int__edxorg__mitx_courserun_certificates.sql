@@ -127,7 +127,9 @@ with person_courses as (
         on certificates.courserun_readable_id = runs.courserun_readable_id
     left join micromasters_users
         on certificates.user_username = micromasters_users.user_edxorg_username
-    where runs.micromasters_program_id != {{ var("dedp_micromasters_program_id") }}
+    where
+        runs.micromasters_program_id != {{ var("dedp_micromasters_program_id") }}
+        or runs.micromasters_program_id is null
 )
 
 
