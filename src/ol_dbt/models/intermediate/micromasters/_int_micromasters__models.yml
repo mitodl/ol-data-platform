@@ -165,7 +165,7 @@ models:
       the micromasters database
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "program_title"]
+      column_list: ["user_email", "micromasters_program_id"]
 
 - name: int__micromasters__course_certificates
   description: course certificates earned for MicroMasters programs. This include
