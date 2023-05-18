@@ -1044,11 +1044,17 @@ models:
     tests:
     - not_null
   - name: user_username
-    description: string, username
+    description: str, username on MITx Online
     tests:
     - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
   - name: user_email
-    description: string, email
+    description: str, user email on MITx Online
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on MITx Online
     tests:
     - not_null
   tests:

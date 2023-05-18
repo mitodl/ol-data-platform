@@ -116,12 +116,18 @@ models:
     description: str, The username of the learner on the edX platform. For users who
       got DEDP certificates on MITx Online, this could be blank if they don't have
       their edxorg account linked on MicroMasters.
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:
     - not_null
   - name: program_title
     description: str, title of the program
+    tests:
+    - not_null
+  - name: micromasters_program_id
+    description: int, sequential ID representing a program in MicroMasters
     tests:
     - not_null
   - name: user_edxorg_id
@@ -157,6 +163,9 @@ models:
   - name: user_address_state_or_territory
     description: str,  state or territory where user lives in from the profile in
       the micromasters database
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "program_title"]
 
 - name: int__micromasters__course_certificates
   description: course certificates earned for MicroMasters programs. This include

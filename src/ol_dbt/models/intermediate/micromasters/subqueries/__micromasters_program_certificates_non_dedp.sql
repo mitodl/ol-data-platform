@@ -13,6 +13,7 @@ with edx_course_certificates as (
 , micromasters_program_requirements as (
     select *
     from {{ ref('int__micromasters__program_requirements') }}
+    where program_id != {{ var("dedp_micromasters_program_id") }}
 )
 
 , micromasters_users as (
@@ -24,6 +25,7 @@ with edx_course_certificates as (
 , micromasters_programs as (
     select *
     from {{ ref('int__micromasters__programs') }}
+    where program_id != {{ var("dedp_micromasters_program_id") }}
 )
 
 , program_certificates_override_list as (
@@ -122,6 +124,7 @@ with edx_course_certificates as (
 , non_dedp_certificates as (
     select
         edx_users.user_username as user_edxorg_username
+        , micromasters_users.user_mitxonline_username
         , edx_users.user_email
         , micromasters_programs.program_id as micromasters_program_id
         , micromasters_programs.program_title
@@ -157,6 +160,7 @@ with edx_course_certificates as (
 , non_dedp_overides as (
     select
         edx_users.user_username as user_edxorg_username
+        , micromasters_users.user_mitxonline_username
         , edx_users.user_email
         , micromasters_programs.program_id as micromasters_program_id
         , micromasters_programs.program_title
