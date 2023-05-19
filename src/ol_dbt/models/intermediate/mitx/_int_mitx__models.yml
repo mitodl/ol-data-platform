@@ -288,3 +288,32 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id"]
+
+- name: int__mitx__program_certificates
+  description: MITx program certificates combined from MicroMasters and MITx Online
+  columns:
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+  - name: mitxonline_program_id
+    description: int, primary key representing the program in the MITx Online database
+  - name: micromasters_program_id
+    description: int, primary key representing the program in the MicroMasters database
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
+  - name: user_email
+    description: str, user email from either MITx Online or MicroMasters
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, The full name of the user taken from either MITx Online or edX.org
+  - name: program_completion_timestamp
+    description: timestamp, For MicroMasters Non DEDP programs, this is timestamp
+      of the course certificate that completed the program. For other programs, this
+      is timestamp for when program certificates were initially created
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "program_title"]

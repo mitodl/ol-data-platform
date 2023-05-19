@@ -153,6 +153,8 @@ models:
     description: str, The username of the learner on the edX platform
     tests:
     - not_null
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:
@@ -206,6 +208,10 @@ models:
   columns:
   - name: user_edxorg_username
     description: str, The username of the learner on the edX platform
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
+    tests:
+    - not_null
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:
@@ -262,6 +268,8 @@ models:
     description: str, The username of the learner on the edX platform
     tests:
     - not_null
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
   - name: user_email
     description: str, The email address of the learner on the edX platform
     tests:

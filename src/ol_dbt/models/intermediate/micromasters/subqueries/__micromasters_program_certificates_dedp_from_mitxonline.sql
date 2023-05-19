@@ -28,6 +28,7 @@ with mitxonline_program_certificates as (
 
 select
     micromasters_users.user_edxorg_username as user_edxorg_username
+    , mitxonline_users.user_username as user_mitxonline_username
     , micromasters_users.user_email
     , micromasters_programs.program_id as micromasters_program_id
     , micromasters_programs.program_title
