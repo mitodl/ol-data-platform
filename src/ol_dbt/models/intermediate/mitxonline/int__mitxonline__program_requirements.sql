@@ -30,10 +30,10 @@ with program_requirements as (
             when 'all_of' then 'Core' end
             as programrequirement_type
 
-        , ROW_NUMBER()
+        , row_number()
             over (
                 partition by course_nodes.course_id, course_nodes.program_id
-                order by LENGTH(operator_nodes.programrequirement_path) desc
+                order by length(operator_nodes.programrequirement_path) desc
             )
             as requirement_nesting
     from course_nodes
@@ -89,7 +89,7 @@ with program_requirements as (
 , core_courses_count as (
     select
         program_id
-        , COUNT_IF(programrequirement_type = 'Core') as program_num_core_courses
+        , count_if(programrequirement_type = 'Core') as program_num_core_courses
     from combined_requirements
     group by program_id
 )
@@ -97,12 +97,12 @@ with program_requirements as (
 , elective_courses_count as (
     select
         program_id
-        , SUM(electiveset_required_number) as program_num_elective_courses
+        , sum(electiveset_required_number) as program_num_elective_courses
     from (
         select
             program_id
             , programrequirement_requirement_id
-            , AVG(electiveset_required_number) as electiveset_required_number
+            , avg(electiveset_required_number) as electiveset_required_number
         from combined_requirements
         where
             programrequirement_type = 'Elective'
