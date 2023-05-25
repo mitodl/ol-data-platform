@@ -27,7 +27,8 @@ models:
   description: Intermediate model for combined MITxOnline and edxorg courses
   columns:
   - name: course_number
-    description: str, unique string for the course e.g. 14.009x
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x
     tests:
     - unique
     - not_null
@@ -61,7 +62,8 @@ models:
         to: ref('int__mitxonline__programs')
         field: program_id
   - name: course_number
-    description: str, unique string for the course e.g. 14.009x
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x
     tests:
     - not_null
   - name: program_title
@@ -204,7 +206,8 @@ models:
       edX.org users have blank full name, their name couldn't be populated from other
       sources if they don't have their accounts linked on MicroMasters.
   - name: course_number
-    description: str, unique string for the course e.g. 14.009x
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id"]
@@ -223,6 +226,9 @@ models:
         values: ["MITx Online", "edX.org"]
   - name: courserun_title
     description: str, title of the course run, maybe blank for some edX.org runs
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x
   - name: courserun_readable_id
     description: str, course run ID on edX.org or MITxOnline.
     tests:
@@ -258,6 +264,9 @@ models:
     - not_null
     - accepted_values:
         values: ["MITx Online", "edX.org"]
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x
   - name: courserun_title
     description: str, title of the course run, maybe blank for some edX.org runs
   - name: courserun_readable_id

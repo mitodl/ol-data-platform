@@ -572,7 +572,8 @@ models:
     tests:
     - not_null
   - name: course_number
-    description: str, unique string for the course e.g. 14.009x
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
     tests:
     - not_null
   tests:
@@ -651,7 +652,8 @@ models:
     - unique
     - not_null
   - name: course_number
-    description: str, unique string for the course e.g. 14.009x
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
     tests:
     - unique
     - not_null
@@ -700,7 +702,8 @@ models:
     tests:
     - not_null
   - name: course_number
-    description: str, unique string for the course e.g. 14.009x
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
     tests:
     - not_null
   - name: courserun_title
@@ -765,6 +768,11 @@ models:
     - relationships:
         to: ref('int__mitxonline__course_runs')
         field: courserun_id
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -886,6 +894,11 @@ models:
     - not_null
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
     tests:
     - not_null
   - name: courserun_url

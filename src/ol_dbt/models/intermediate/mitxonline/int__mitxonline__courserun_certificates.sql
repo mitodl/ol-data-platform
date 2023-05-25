@@ -18,6 +18,7 @@ with certificates as (
         , certificates.courseruncertificate_uuid
         , certificates.courserun_id
         , runs.courserun_title
+        , runs.course_number
         , runs.courserun_readable_id
         , runs.courserun_url
         , runs.courserun_platform
