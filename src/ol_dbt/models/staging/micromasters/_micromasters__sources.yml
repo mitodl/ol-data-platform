@@ -506,3 +506,56 @@ sources:
       description: int, foreign key to courses_electivesset
     - name: course_id
       description: int, foreign key to courses_course
+
+  - name: raw__micromasters__app__postgres__profiles_education
+    columns:
+    - name: id
+      description: int, primary key representing a user education record
+    - name: profile_id
+      description: int, foreign key to profiles_profile
+    - name: degree_name
+      description: >
+        str, user degree choice are:
+        "p" - "Doctorate"
+        "m" - "Master's or professional degree"
+        "b" - "Bachelor's degree"
+        "a" - "Associate degree"
+        "hs" - "Secondary/high school"
+        "other" - "Other education"
+    - name: field_of_study
+      description: str, field of study for this education degree
+    - name: online_degree
+      description: boolean, indicating if it's online education degree
+    - name: school_name
+      description: str, name of school for this education
+    - name: school_city
+      description: str, city where school is located
+    - name: school_state_or_territory
+      description: str, state or territory where school is located
+    - name: school_country
+      description: str, country code where school is located
+    - name: graduation_date
+      description: date, graduation date for this education
+
+  - name: raw__micromasters__app__postgres__profiles_employment
+    columns:
+    - name: id
+      description: int, primary key representing a user employment record
+    - name: profile_id
+      description: int, foreign key to profiles_profile
+    - name: company_name
+      description: str, name of the company for this employment
+    - name: position
+      description: str, user's position in this company
+    - name: industry
+      description: str, industry of this company
+    - name: city
+      description: str, city where this company is located
+    - name: state_or_territory
+      description: str, state or territory where this company is located
+    - name: country
+      description: str, country code where this company is located
+    - name: start_date
+      description: date, start date for this employment
+    - name: end_date
+      description: date, end date for this employment

@@ -477,7 +477,7 @@ models:
   - name: user_street_address
     description: str, street address where user lives in
   - name: user_highest_education
-    description: str, user's level of education
+    description: str, user's level of education reported on edx
     tests:
     - accepted_values:
         values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
@@ -758,3 +758,77 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["course_id", "electiveset_id"]
+
+
+- name: stg__micromasters__app__postgres__profiles_education
+  columns:
+  - name: user_education_id
+    description: int, primary key representing a user education record
+    tests:
+    - not_null
+    - unique
+  - name: user_profile_id
+    description: int, foreign key to profiles_profile
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__profiles_profile')
+        field: user_profile_id
+  - name: user_education_degree
+    description: str, user education degree
+    tests:
+    - accepted_values:
+        values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
+          "Associate degree", "Secondary/high school", "Other education"]
+  - name: user_field_of_study
+    description: str, field of study for this education degree
+  - name: user_education_is_online_degree
+    description: boolean, indicating if it's online education degree
+    tests:
+    - not_null
+  - name: user_school_name
+    description: str, name of school for this education
+    tests:
+    - not_null
+  - name: user_school_city
+    description: str, city where school is located
+  - name: user_school_state
+    description: str, state or territory where school is located
+  - name: user_school_country
+    description: str, country code where school is located
+  - name: user_graduation_date
+    description: date, graduation date for this education
+    tests:
+    - not_null
+
+- name: stg__micromasters__app__postgres__profiles_employment
+  columns:
+  - name: user_employment_id
+    description: int, primary key representing a user employment record
+  - name: user_profile_id
+    description: int, foreign key to profiles_profile
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__micromasters__app__postgres__profiles_profile')
+        field: user_profile_id
+  - name: user_company_name
+    description: str, name of the company for this employment
+    tests:
+    - not_null
+  - name: user_job_position
+    description: str, user's job position in this company
+  - name: user_company_industry
+    description: str, industry of this company
+  - name: user_company_city
+    description: str, city where this company is located
+  - name: user_company_state
+    description: str, state or territory where this company is located
+  - name: user_company_country
+    description: str, country code where this company is located
+  - name: user_start_date
+    description: date, start date for this employment
+    tests:
+    - not_null
+  - name: user_end_date
+    description: date, end date for this employment
