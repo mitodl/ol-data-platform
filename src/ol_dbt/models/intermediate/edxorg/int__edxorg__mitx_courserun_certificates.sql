@@ -83,6 +83,7 @@ with person_courses as (
         , users.user_username
         , edxorg_enrollments.user_mitxonline_username
         , runs.courserun_title
+        , runs.course_number
         , coalesce(users.user_full_name, dedp_edxorg_certificates_from_micromasters.user_full_name) as user_full_name
     from dedp_edxorg_certificates_from_micromasters
     inner join users on dedp_edxorg_certificates_from_micromasters.user_edxorg_username = users.user_username
@@ -118,6 +119,7 @@ with person_courses as (
         , users.user_username
         , micromasters_users.user_mitxonline_username
         , runs.courserun_title
+        , runs.course_number
         , runs.micromasters_program_id
         , coalesce(users.user_full_name, micromasters_users.user_full_name) as user_full_name
     from certificates
@@ -150,6 +152,7 @@ select
     , user_full_name
     , user_mitxonline_username
     , courserun_title
+    , course_number
     , micromasters_program_id
 from edxorg_non_dedp_certificates
 
@@ -172,5 +175,6 @@ select
     , user_full_name
     , user_mitxonline_username
     , courserun_title
+    , course_number
     , {{ var("dedp_micromasters_program_id") }} as micromasters_program_id
 from edxorg_dedp_certificates_from_micromasters

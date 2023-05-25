@@ -37,6 +37,7 @@ with grades as (
         , users.user_full_name
         , micromasters_users.user_mitxonline_username
         , runs.courserun_title
+        , runs.course_number
         , runs.micromasters_program_id
     from grades
     inner join users on grades.user_id = users.user_id

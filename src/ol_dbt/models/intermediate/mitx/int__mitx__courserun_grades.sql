@@ -32,6 +32,7 @@ with mitxonline_grades as (
 , mitx_grades as (
     select
         '{{ var("mitxonline") }}' as platform
+        , course_number
         , courserun_title
         , courserun_readable_id
         , courserungrade_grade
@@ -46,6 +47,7 @@ with mitxonline_grades as (
 
     select
         '{{ var("edxorg") }}' as platform
+        , course_number
         , courserun_title
         , courserun_readable_id
         , courserungrade_user_grade as courserungrade_grade
@@ -60,6 +62,7 @@ with mitxonline_grades as (
 
     select
         courserun_platform as platform
+        , course_number
         , courserun_title
         , courserun_readable_id
         , grade as courserungrade_grade

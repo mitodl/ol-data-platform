@@ -38,6 +38,7 @@ with mitxonline_certificates as (
 , mitx_certificates as (
     select
         '{{ var("mitxonline") }}' as platform
+        , course_number
         , courserun_title
         , courserun_readable_id
         , courseruncertificate_url
@@ -52,6 +53,7 @@ with mitxonline_certificates as (
 
     select
         '{{ var("edxorg") }}' as platform
+        , course_number
         , courserun_title
         , courserun_readable_id
         , courseruncertificate_download_url as courseruncertificate_url
@@ -66,6 +68,7 @@ with mitxonline_certificates as (
 
     select
         courserun_platform as platform
+        , course_number
         , courserun_title
         , courserun_readable_id
         , courseruncertificate_url

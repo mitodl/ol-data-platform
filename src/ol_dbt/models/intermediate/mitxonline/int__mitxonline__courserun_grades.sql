@@ -17,6 +17,7 @@ with grades as (
         grades.courserungrade_id
         , grades.courserun_id
         , runs.course_id
+        , runs.course_number
         , runs.courserun_title
         , runs.courserun_readable_id
         , runs.courserun_platform
