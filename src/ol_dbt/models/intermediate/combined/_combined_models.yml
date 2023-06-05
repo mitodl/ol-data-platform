@@ -52,8 +52,8 @@ models:
     tests:
     - not_null
   - name: courserun_id
-    description: int, internal course ID on the corresponding platform. Null for course
-      runs from edx.org
+    description: int, primary key representing a single course run on the corresponding
+      platform. Null for course runs from edx.org
   - name: courserunenrollment_created_on
     description: timestamp, specifying when an enrollment was initially created on
       the corresponding platform
