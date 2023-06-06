@@ -185,6 +185,9 @@ models:
     description: int, user ID on the corresponding platform - MITx Online or edX.org
     tests:
     - not_null
+  - name: courserun_id
+    description: int, primary key representing a single course run in MITx Online.
+      Null for edX.org courses
   - name: courserun_readable_id
     description: str, course run ID on edX.org or MITxOnline
     tests:
@@ -193,6 +196,10 @@ models:
     description: str, title of the course run, maybe blank for some edX.org runs
   - name: user_email
     description: str, user email associated with their account
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username on the corresponding platform - MITx Online or edX.org
     tests:
     - not_null
   - name: user_mitxonline_username

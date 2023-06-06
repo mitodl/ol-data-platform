@@ -22,12 +22,14 @@ with mitxonline_enrollments as (
         , courserunenrollment_created_on
         , courserunenrollment_enrollment_mode
         , courserunenrollment_enrollment_status
+        , courserun_id
         , courserun_title
         , courserun_readable_id
         , course_number
         , user_id
         , user_email
         , user_full_name
+        , user_username
         , user_edxorg_username
         , user_username as user_mitxonline_username
     from mitxonline_enrollments
@@ -40,12 +42,14 @@ with mitxonline_enrollments as (
         , courserunenrollment_created_on
         , courserunenrollment_enrollment_mode
         , null as courserunenrollment_enrollment_status
+        , null as courserun_id
         , courserun_title
         , courserun_readable_id
         , course_number
         , user_id
         , user_email
         , user_full_name
+        , user_username
         , user_username as user_edxorg_username
         , user_mitxonline_username
     from edxorg_enrollments
