@@ -107,8 +107,18 @@ def date_chunk_files(  # noqa: PLR0913
                     )
                     dbucket.copy({"Bucket": source_bucket, "Key": srckey}, destkey)
                 if destructive:
-                    sys.stdout.write(f"Deleting {obj_key} from {source_bucket}\n")
-                    sbucket.delete_objects(Delete=[{}])
+                    if cleanup and s3.list_objects_v2(
+                        Bucket=dest_bucket, Prefix=destkey
+                    ).get("Contents"):
+                        sys.stdout.write(f"Deleting {obj_key} from {source_bucket}\n")
+                        sbucket.delete_objects(
+                            Delete={"Objects": [{"Key": srckey}], "Quiet": False}
+                        )
+                    else:
+                        sys.stdout.write(
+                            f"Refusing to delete {source_bucket}/{srckey} because it "
+                            f"hasn't yet been copied to {dest_bucket}/{destkey}\n"
+                        )
         key_date += increment
 
 
