@@ -2,114 +2,6 @@
 version: 2
 
 models:
-- name: __micromasters_course_enrollments_from_mitxonline
-  description: MicroMasters enrollments on mitxonline
-  columns:
-  - name: program_title
-    description: str, title of micromasters program the course is part of
-    tests:
-    - not_null
-  - name: user_id
-    description: int, user id on MITx Online
-    tests:
-    - not_null
-  - name: user_username
-    description: str, username on MITx Online
-    tests:
-    - not_null
-  - name: user_country
-    description: string, country code for the user's address
-  - name: user_email
-    description: str, user email on MITx Online
-    tests:
-    - not_null
-  - name: user_full_name
-    description: str, user full name on MITx Online
-    tests:
-    - not_null
-  - name: courserunenrollment_enrollment_mode
-    description: string, enrollment mode for the user
-  - name: courserun_readable_id
-    description: str, open edX course id
-    tests:
-    - not_null
-  - name: course_number
-    description: str, unique string for the course e.g. 14.009x
-    tests:
-    - not_null
-  - name: platform
-    description: string, the platform of the course - always 'MITx Online'
-    tests:
-    - not_null
-  - name: courserunenrollment_created_on
-    description: timestamp, timestamp of user's enrollment in the course
-    tests:
-    - not_null
-  - name: courserunenrollment_is_active
-    description: boolean, whether the enrollment is active
-    tests:
-    - not_null
-  - name: courserun_title
-    description: string, title of the course
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "platform", "courserun_readable_id"]
-- name: __micromasters_course_enrollments_from_edxorg
-  description: MicroMasters enrollments on edx.org
-  columns:
-  - name: program_title
-    description: str, title of micromasters program the course is part of
-    tests:
-    - not_null
-  - name: user_id
-    description: int, edxorg id for the user
-    tests:
-    - not_null
-  - name: user_username
-    description: str, edxorg username for the user
-    tests:
-    - not_null
-  - name: user_country
-    description: str, country code for the user's address
-  - name: user_email
-    description: str, user email
-    tests:
-    - not_null
-  - name: user_full_name
-    description: str, user full name on edX.org. Very small number of edX.org users
-      have blank full name, their names aren't populated unless they have their accounts
-      linked on MicroMasters.
-  - name: courserunenrollment_enrollment_mode
-    description: str, enrollment mode according to edxorg. Users who paid for the
-      course through another platform than edx, such as micromasters are still listed
-      as 'audit' users
-  - name: courserun_readable_id
-    description: str, the canonical ID of the course run in the format as {org}/{course}/{run}
-    tests:
-    - not_null
-  - name: course_number
-    description: str, unique string for the course e.g. 14.009x
-    tests:
-    - not_null
-  - name: platform
-    description: str, the platform of the course- always 'edX.org'
-    tests:
-    - not_null
-  - name: courserunenrollment_created_on
-    description: timestamp, timestamp of user's enrollment in the course
-  - name: courserunenrollment_is_active
-    description: boolean, whether the enrollment is active
-    tests:
-    - not_null
-  - name: courserun_title
-    description: str, title of the course
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "platform", "courserun_readable_id"]
 - name: __micromasters__users
   description: MicroMasters users according to the micromasters database. Does not
     include users who have a login on mitxonline only
@@ -325,6 +217,10 @@ models:
     description: str, title of program the course is part of
     tests:
     - not_null
+  - name: micromasters_program_id
+    description: str, id of program the course is part of in the micromasters database
+    tests:
+    - not_null
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -392,6 +288,10 @@ models:
     description: str, title of program the course is part of
     tests:
     - not_null
+  - name: micromasters_program_id
+    description: str, id of program the course is part of in the micromasters database
+    tests:
+    - not_null
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -452,6 +352,10 @@ models:
   columns:
   - name: program_title
     description: str, title of program the course is part of
+    tests:
+    - not_null
+  - name: micromasters_program_id
+    description: str, id of program the course is part of in the micromasters database
     tests:
     - not_null
   - name: courserun_title

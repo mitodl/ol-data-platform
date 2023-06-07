@@ -41,6 +41,7 @@ with courserun_certificates as (
 ----program title and id are different between MM and MITxOnline, use title from MM
 select
     micromasters_programs.program_title
+    , micromasters_programs.program_id as micromasters_program_id
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
     , courseruns.courserun_platform

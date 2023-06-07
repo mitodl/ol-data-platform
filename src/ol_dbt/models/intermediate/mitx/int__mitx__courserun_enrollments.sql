@@ -32,6 +32,7 @@ with mitxonline_enrollments as (
         , user_username
         , user_edxorg_username
         , user_username as user_mitxonline_username
+        , user_address_country
     from mitxonline_enrollments
 
     union all
@@ -52,6 +53,7 @@ with mitxonline_enrollments as (
         , user_username
         , user_username as user_edxorg_username
         , user_mitxonline_username
+        , user_address_country
     from edxorg_enrollments
 )
 

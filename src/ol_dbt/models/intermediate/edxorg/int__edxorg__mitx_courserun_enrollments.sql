@@ -101,6 +101,7 @@ with person_courses as (
         , edxorg_users.user_username
         , micromasters_users.user_mitxonline_username
         , edxorg_runs.courserun_title
+        , edxorg_users.user_country as user_address_country
         , coalesce(edxorg_users.user_full_name, micromasters_users.user_full_name) as user_full_name
         , case
             when

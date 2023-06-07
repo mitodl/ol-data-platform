@@ -9,15 +9,19 @@ models:
     description: str, title of micromasters program the course is part of
     tests:
     - not_null
+  - name: micromasters_program_id
+    description: int, id of the program in the micromasters database
+    tests:
+    - not_null
   - name: user_id
     description: str, either the edx.org or the mitxonline id for the user
     tests:
     - not_null
-  - name: user_username
-    description: str, either the edxorg or the mitxonline username for the user
-    tests:
-    - not_null
-  - name: user_country
+  - name: user_mitxonline_username
+    description: str, mitxonline username for the user
+  - name: user_edxorg_username
+    description: str, edxorg username for the user
+  - name: user_address_country
     description: str, country code for the user's address
   - name: user_email
     description: str, user email
@@ -47,6 +51,11 @@ models:
     - not_null
   - name: course_number
     description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
+  - name: courserunenrollment_enrollment_mode
+    description: str, enrollment mode for MITx courses. May be different from the
+      enrollment mode form the edxorg database if the user paid through micromasters
     tests:
     - not_null
   tests:
@@ -173,7 +182,12 @@ models:
     edX.org
   columns:
   - name: program_title
-    description: str, title of program the course is part of
+    description: str, title of the program the course is part of
+    tests:
+    - not_null
+  - name: micromasters_program_id
+    description: int, id of the program the course is part of in the micromasters
+      database
     tests:
     - not_null
   - name: courserun_title

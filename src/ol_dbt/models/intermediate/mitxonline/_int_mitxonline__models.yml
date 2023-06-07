@@ -576,6 +576,8 @@ models:
       or periods. e.g. 18.03.1x
     tests:
     - not_null
+  - name: user_address_country
+    description: string, country code for the user's address
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__courses_courserunenrollment')
