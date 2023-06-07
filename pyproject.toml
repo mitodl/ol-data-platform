@@ -46,6 +46,7 @@ pre-commit = "^3"
 pytest = "^7.1.2"
 ruff = "*"
 sqlfluff = "^2.0.0"
+typer = {extras = ["all"], version = "^0.9.0"}
 
 [tool.black]
 target-version = ["py311"]
