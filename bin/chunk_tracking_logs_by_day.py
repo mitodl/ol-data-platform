@@ -29,25 +29,39 @@ def date_chunk_files(  # noqa: PLR0913
     start_date: Annotated[
         str,
         typer.Option(
-            help="The date of the earliest tracking log to process (based on the formatted file name). In %Y-%m-%d format"  # noqa: E501
+            help="The date of the earliest tracking log to process "
+            "(based on the formatted file name). In %Y-%m-%d format"
         ),
     ] = "2017-01-01",
     end_date: Annotated[
         Optional[str],
         typer.Option(
-            help="The date of the last tracking log to process (based on the formatted file name). In %Y-%m-%d format"  # noqa: E501
+            help="The date of the last tracking log to process "
+            "(based on the formatted file name). In %Y-%m-%d format"
         ),
     ] = None,
     dry_run: Annotated[
         bool,
         typer.Option(
-            help="Set to True to just see what the source and destination paths will be without performing any modifications"  # noqa: E501
+            help="Set to True to just see what the source and destination paths "
+            "will be without performing any modifications"
         ),
     ] = True,
     destructive: Annotated[
         bool,
         typer.Option(
-            help="Perform a `move` operation instead of `copy` to clear the source object out of its original location"  # noqa: E501
+            help="Perform a `move` operation instead of `copy` to clear the source "
+            "object out of its original location"
+        ),
+    ] = False,
+    cleanup: Annotated[
+        bool,
+        typer.Option(
+            help="Run in destructive mode, but don't copy the files to the destination."
+            " This is intended to be run after using `--no-dry-run` and "
+            "`--no-destructive`. This way we can clear out old files without affecting "
+            "the modified timestamp on the destination files so that they don't get "
+            "re-processed by Airbyte."
         ),
     ] = False,
 ):
@@ -87,7 +101,8 @@ def date_chunk_files(  # noqa: PLR0913
             )
         else:
             for srckey, destkey in copy_map.items():
-                dbucket.copy({"Bucket": sbucket, "Key": srckey}, destkey)
+                if not cleanup:
+                    dbucket.copy({"Bucket": source_bucket, "Key": srckey}, destkey)
                 if destructive:
                     sbucket.delete_objects(Delete=[{}])
         key_date += increment
