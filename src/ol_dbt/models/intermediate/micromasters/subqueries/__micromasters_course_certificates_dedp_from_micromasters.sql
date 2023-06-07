@@ -57,6 +57,7 @@ with dedp_course_certificates as (
 
 select
     programs.program_title
+    , programs.program_id as micromasters_program_id
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
     , courseruns.courserun_edxorg_readable_id

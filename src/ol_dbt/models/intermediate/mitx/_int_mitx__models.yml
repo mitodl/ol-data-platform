@@ -215,6 +215,8 @@ models:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
       or periods. e.g. 6.002.1x
+  - name: user_address_country
+    description: str, country code provided by the user from MITx Online or edX.org
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id"]
