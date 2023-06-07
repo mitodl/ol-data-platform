@@ -28,25 +28,25 @@ def date_chunk_files(  # noqa: PLR0913
     ],
     start_date: Annotated[
         str,
-        typer.Argument(
+        typer.Option(
             help="The date of the earliest tracking log to process (based on the formatted file name). In %Y-%m-%d format"  # noqa: E501
         ),
     ] = "2017-01-01",
     end_date: Annotated[
         Optional[str],
-        typer.Argument(
+        typer.Option(
             help="The date of the last tracking log to process (based on the formatted file name). In %Y-%m-%d format"  # noqa: E501
         ),
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Argument(
+        typer.Option(
             help="Set to True to just see what the source and destination paths will be without performing any modifications"  # noqa: E501
         ),
     ] = True,
     destructive: Annotated[
         bool,
-        typer.Argument(
+        typer.Option(
             help="Perform a `move` operation instead of `copy` to clear the source object out of its original location"  # noqa: E501
         ),
     ] = False,
