@@ -102,8 +102,12 @@ def date_chunk_files(  # noqa: PLR0913
         else:
             for srckey, destkey in copy_map.items():
                 if not cleanup:
+                    sys.stdout.write(
+                        f"Copying {source_bucket}/{srckey} to {dest_bucket}/{destkey}\n"
+                    )
                     dbucket.copy({"Bucket": source_bucket, "Key": srckey}, destkey)
                 if destructive:
+                    sys.stdout.write(f"Deleting {obj_key} from {source_bucket}\n")
                     sbucket.delete_objects(Delete=[{}])
         key_date += increment
 
