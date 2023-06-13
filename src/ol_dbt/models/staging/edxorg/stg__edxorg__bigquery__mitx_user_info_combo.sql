@@ -43,8 +43,8 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('enrollment_created') }} as courserunenrollment_created_on
         ,{{ cast_timestamp_to_iso8601('certificate_created_date') }} as courseruncertificate_created_on
         ,{{ cast_timestamp_to_iso8601('certificate_modified_date') }} as courseruncertificate_updated_on
-        , replace(enrollment_course_id, 'ESD.SCM1x', 'CTL.SC1x') as courserunenrollment_courserun_readable_id
-        , replace(certificate_course_id, 'ESD.SCM1x', 'CTL.SC1x') as courseruncertificate_courserun_readable_id
+        , enrollment_course_id as courserunenrollment_courserun_readable_id
+        , certificate_course_id as courseruncertificate_courserun_readable_id
     from source
     --- user_id could be blank due to parsing error on edx data so filter out these
     where user_id is not null
