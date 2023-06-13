@@ -103,6 +103,20 @@ models:
       flexible pricing
     tests:
     - not_null
+  - name: user_username
+    description: string, username of the user requesting flexible pricing
+    tests:
+    - not_null
+  - name: user_full_name
+    description: string, full name of the user requesting flexible pricing
+    tests:
+    - not_null
+  - name: user_email
+    description: string, email of the user requesting flexible pricing
+    tests:
+    - not_null
+  - name: user_address_country
+    description: string, country code of the user requesting flexible pricing
   - name: courseware_type
     description: string, type of courseware that the user is applying for a discount
       for. May be either 'course' or 'program'
@@ -114,6 +128,22 @@ models:
   - name: flexiblepricetier_id
     description: int, primary key in flexiblepricing_flexiblepricetier of the price
       tier the user applied for
+  - name: discount_id
+    description: int, id of ecommerce_discount associated with the flexible price
+      tier
+    tests:
+    - not_null
+  - name: discount_amount
+    description: numeric, discount amount. May be a percent or dollar amount
+    tests:
+    - not_null
+  - name: discount_type
+    description: string, specify if discount amount refers to a percent of, a dollar
+      amount off, or a discounted price
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["percent-off", "dollars-off", "fixed-price"]
   - name: course_id
     description: int, primary key in either the courses_course table courseware_type
       is "course"
@@ -293,7 +323,7 @@ models:
   - name: discount_updated_on
     description: timestamp, specifying when the discount was most recently updated
   - name: discount_amount
-    description: numeric, discount amount. May be a precent or dollar amount
+    description: numeric, discount amount. May be a percent or dollar amount
     tests:
     - not_null
   - name: discount_type
