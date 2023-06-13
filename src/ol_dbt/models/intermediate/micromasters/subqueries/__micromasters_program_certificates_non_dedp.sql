@@ -43,6 +43,11 @@ with edx_course_certificates as (
     from {{ ref('stg__micromasters__app__postgres__courses_course') }}
 )
 
+, micromasters_runs as (
+    select *
+    from {{ ref('stg__micromasters__app__postgres__courses_courserun') }}
+)
+
 , micromasters_user_requirement_completions as (
     select
         edx_course_certificates.user_id as user_edxorg_id
@@ -68,9 +73,11 @@ with edx_course_certificates as (
         ) as user_course_certificate_number
     from edx_course_certificates
     inner join
+        micromasters_runs
+        on edx_course_certificates.courserun_readable_id like micromasters_runs.courserun_edxorg_readable_id || '%'
+    inner join
         micromasters_courses
-        on
-            edx_course_certificates.courserun_readable_id like micromasters_courses.course_readable_id || '%'
+        on micromasters_courses.course_id = micromasters_runs.course_id
     inner join
         micromasters_program_requirements
         on micromasters_program_requirements.course_id = micromasters_courses.course_id
