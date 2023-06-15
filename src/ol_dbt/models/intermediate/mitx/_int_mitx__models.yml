@@ -195,7 +195,9 @@ models:
   - name: courserun_title
     description: str, title of the course run, maybe blank for some edX.org runs
   - name: user_email
-    description: str, user email associated with their account
+    description: str, current user email on edX.org or MITxOnline. For edx.org, learners
+      can update their emails, so this is not necessary the same email as when learner
+      enrolled for the course
     tests:
     - not_null
   - name: user_username
@@ -219,7 +221,7 @@ models:
     description: str, country code provided by the user from MITx Online or edX.org
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id"]
+      column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
 
 - name: int__mitx__courserun_certificates
   description: MITx course certificates combined from MITx Online and edX.org. It
@@ -247,7 +249,9 @@ models:
   - name: user_mitxonline_username
     description: str, username on MITxOnline
   - name: user_email
-    description: str, user email on edX.org or MITxOnline
+    description: str, current user email on edX.org or MITxOnline. For edx.org, learners
+      can update their emails, so this is not necessary the same email as when learner
+      earned certificate for the course
     tests:
     - not_null
   - name: courseruncertificate_url
@@ -261,7 +265,7 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id"]
+      column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
 
 - name: int__mitx__courserun_grades
   description: MITx course grades combined from MITx Online and edX.org
@@ -287,7 +291,9 @@ models:
   - name: user_mitxonline_username
     description: str, username on MITxOnline
   - name: user_email
-    description: str, user email on edX.org or MITxOnline
+    description: str, current user email on edX.org or MITxOnline. Learners can update
+      their emails on edx.org, so this is not necessary the same email as when learner
+      enrolled for the course
     tests:
     - not_null
   - name: user_full_name
@@ -305,7 +311,7 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id"]
+      column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
 
 - name: int__mitx__program_certificates
   description: MITx program certificates combined from MicroMasters and MITx Online
