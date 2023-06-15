@@ -71,7 +71,9 @@ models:
   - name: user_mitxonline_username
     description: str, username on MITx Online
   - name: user_email
-    description: str, The email address of the learner on edx.org
+    description: str, The current email address of the learner on edx.org. Learners
+      can update their emails on edx.org, so this is not necessary the same email
+      as when learner earned certificate for the course.
     tests:
     - not_null
   - name: user_full_name
@@ -128,11 +130,13 @@ models:
     tests:
     - not_null
   - name: user_username
-    description: str, username of a learner on the edX platform (some blank from source)
+    description: str, username of a learner on the edX platform
     tests:
     - not_null
   - name: user_email
-    description: str, The email address of the learner on edx.org
+    description: str, The current email address of the learner on edx.org. Learners
+      can update their emails on edx.org, so this is not necessary the same email
+      as when learner enrolled for the course.
     tests:
     - not_null
   - name: user_full_name
@@ -242,7 +246,9 @@ models:
   - name: user_mitxonline_username
     description: str, username on MITx Online
   - name: user_email
-    description: str, The email address of the learner on edx.org
+    description: str, The current email address of the learner on edx.org. Learners
+      can update their emails on edx.org, so this is not necessary the same email
+      as when learner enrolled for the course.
     tests:
     - not_null
   - name: courserungrade_passing_grade
@@ -293,7 +299,9 @@ models:
     tests:
     - not_null
   - name: user_email
-    description: str, The email address of the learner on edx.org
+    description: str, The current email address of the learner on edx.org. Learners
+      can update their emails on edx.org, so this is not necessary the same email
+      as when learner enrolled for the course.
     tests:
     - not_null
   - name: courseactivitiy_visited_once
