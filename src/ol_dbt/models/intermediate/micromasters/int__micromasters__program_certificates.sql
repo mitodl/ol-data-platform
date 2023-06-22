@@ -22,8 +22,10 @@ with program_certificates_dedp_from_micromasters as (
 , report as (
     select
         user_edxorg_username
+        , user_mitxonline_username
         , user_email
         , program_title
+        , micromasters_program_id
         , user_edxorg_id
         , program_completion_timestamp
         , user_gender
@@ -43,8 +45,10 @@ with program_certificates_dedp_from_micromasters as (
 
     select
         user_edxorg_username
+        , user_mitxonline_username
         , user_email
         , program_title
+        , micromasters_program_id
         , user_edxorg_id
         , program_completion_timestamp
         , user_gender
@@ -64,8 +68,10 @@ with program_certificates_dedp_from_micromasters as (
 
     select
         user_edxorg_username
+        , user_mitxonline_username
         , user_email
         , program_title
+        , micromasters_program_id
         , user_edxorg_id
         , program_completion_timestamp
         , user_gender
@@ -84,8 +90,10 @@ with program_certificates_dedp_from_micromasters as (
 
 select
     user_edxorg_username
+    , user_mitxonline_username
     , user_email
     , program_title
+    , micromasters_program_id
     , user_edxorg_id
     , program_completion_timestamp
     , user_gender

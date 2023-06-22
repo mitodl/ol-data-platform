@@ -7,7 +7,7 @@ sources:
   database: '{{ target.database }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
-  - name: raw__thirdparty__salesforce__opportunity
+  - name: raw__thirdparty__salesforce__Opportunity
     description: Salesforce opportunity, which is a sale or pending deal
     columns:
     - name: id
@@ -179,7 +179,7 @@ sources:
         by Airbyte connector. This field should be used internally to deduplicate
         records.
 
-  - name: raw__thirdparty__salesforce__opportunitylineitem
+  - name: raw__thirdparty__salesforce__OpportunityLineItem
     description: Salesforce opportunity product line items
     columns:
     - name: id

@@ -1,5 +1,7 @@
---- Unlike other platforms, DEDP course certificate from MM is based on course not run, we try to match it with
---- course run from learner's highest grades
+--- Unlike other platforms, MicroMasters DEDP course certificates are based on course not run, we try to find the run
+--- with highest grade for the course. If there are multiple runs with the highest grade, pick the latest grade from
+--  runs before DEDP course certificates were generated
+
 with dedp_course_certificates as (
     select * from {{ ref('stg__micromasters__app__postgres__grades_coursecertificate') }}
 )
@@ -20,10 +22,17 @@ with dedp_course_certificates as (
         , courseruns.course_id
         , row_number() over (
             partition by courserun_grades.user_id, courseruns.course_id
-            order by courserun_grades.courserungrade_grade desc
+            --- in case of multiple highest grades, use secondary sorting to ensure the consistent result
+            order by courserun_grades.courserungrade_grade desc, courserun_grades.coursegrade_created_on desc
         ) as row_num
     from courserun_grades
     inner join courseruns on courseruns.courserun_id = courserun_grades.courserun_id
+    inner join dedp_course_certificates
+        on
+            dedp_course_certificates.user_id = courserun_grades.user_id
+            and dedp_course_certificates.course_id = courseruns.course_id
+            and dedp_course_certificates.coursecertificate_created_on > courseruns.courserun_start_on
+
 )
 
 
@@ -48,6 +57,7 @@ with dedp_course_certificates as (
 
 select
     programs.program_title
+    , programs.program_id as micromasters_program_id
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
     , courseruns.courserun_edxorg_readable_id

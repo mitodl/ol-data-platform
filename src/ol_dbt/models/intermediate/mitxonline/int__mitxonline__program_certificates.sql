@@ -9,7 +9,7 @@ with certificates as (
 )
 
 , users as (
-    select * from {{ ref('stg__mitxonline__app__postgres__users_user') }}
+    select * from {{ ref('int__mitxonline__users') }}
 )
 
 , program_certificates as (
@@ -24,6 +24,8 @@ with certificates as (
         , certificates.programcertificate_updated_on
         , certificates.user_id
         , users.user_username
+        , users.user_edxorg_username
+        , users.user_full_name
         , users.user_email
     from certificates
     inner join programs on certificates.program_id = programs.program_id

@@ -2,8 +2,8 @@
 -- it's built as view with no additional data is stored
 {{ config(materialized='view') }}
 
-with mitxonline_enrollments as (
-    select * from {{ ref('int__mitxonline__courserunenrollments') }}
+with mitx_enrollments as (
+    select * from {{ ref('int__mitx__courserun_enrollments') }}
 )
 
 , mitxpro_enrollments as (
@@ -14,13 +14,9 @@ with mitxonline_enrollments as (
     select * from {{ ref('int__bootcamps__courserunenrollments') }}
 )
 
-, edxorg_enrollments as (
-    select * from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
-)
-
 , combined_enrollments as (
     select
-        '{{ var("mitxonline") }}' as platform
+        platform
         , courserunenrollment_is_active
         , courserunenrollment_created_on
         , courserunenrollment_enrollment_mode
@@ -31,7 +27,7 @@ with mitxonline_enrollments as (
         , courserun_readable_id
         , user_username
         , user_email
-    from mitxonline_enrollments
+    from mitx_enrollments
 
     union all
 
@@ -64,22 +60,6 @@ with mitxonline_enrollments as (
         , user_username
         , user_email
     from bootcamps_enrollments
-
-    union all
-
-    select
-        '{{ var("edxorg") }}' as platform
-        , courserunenrollment_is_active
-        , courserunenrollment_created_on
-        , courserunenrollment_enrollment_mode
-        , null as courserunenrollment_enrollment_status
-        , user_id
-        , null as courserun_id
-        , courserun_title
-        , courserun_readable_id
-        , user_username
-        , user_email
-    from edxorg_enrollments
 )
 
 select * from combined_enrollments

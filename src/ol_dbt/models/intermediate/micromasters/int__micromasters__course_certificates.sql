@@ -22,6 +22,7 @@ with course_certificates_dedp_from_micromasters as (
 , dedp_course_certificates_combined as (
     select
         program_title
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -40,6 +41,7 @@ with course_certificates_dedp_from_micromasters as (
 
     select
         program_title
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -59,6 +61,7 @@ with course_certificates_dedp_from_micromasters as (
 , dedp_course_certificates_sorted as (
     select
         program_title
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -95,6 +98,7 @@ with course_certificates_dedp_from_micromasters as (
 , program_course_certificates as (
     select
         program_title
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -112,6 +116,7 @@ with course_certificates_dedp_from_micromasters as (
 
     select
         program_title
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform

@@ -58,3 +58,10 @@ models:
     marts:
       +materialized: table
       +schema: mart
+
+
+# Test severity config
+# default for error_if and warn_if are !=0
+tests:
+  open_learning:
+    +error_if: ">10"

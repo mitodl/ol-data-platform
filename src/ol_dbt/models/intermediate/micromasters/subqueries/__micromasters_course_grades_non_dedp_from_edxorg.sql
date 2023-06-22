@@ -22,6 +22,7 @@ select
     micromasters_programs.program_title
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
+    , '{{ var("edxorg") }}' as courserun_platform
     , courseruns.course_number
     , edxorg_users.user_username as user_edxorg_username
     , micromasters_users.user_mitxonline_username

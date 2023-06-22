@@ -16,7 +16,6 @@ from dagster_dbt import (
     dbt_cli_resource,
     load_assets_from_dbt_manifest,
 )
-from requests.auth import HTTPBasicAuth
 
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "dev")
 configured_airbyte_resource = airbyte_resource.configured(
@@ -24,8 +23,9 @@ configured_airbyte_resource = airbyte_resource.configured(
         "host": {"env": "DAGSTER_AIRBYTE_HOST"},
         "port": {"env": "DAGSTER_AIRBYTE_PORT"},
         "use_https": True,
+        "username": os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")[0],
+        "password": os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")[1],
         "request_additional_params": {
-            "auth": HTTPBasicAuth(*os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")),
             "verify": False,
         },
     }

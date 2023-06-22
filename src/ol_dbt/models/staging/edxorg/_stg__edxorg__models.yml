@@ -21,8 +21,8 @@ models:
   - name: courserun_url
     description: str, The url path of the course run
   - name: course_number
-    description: str, The MIT course number for this course e.g. SysEngx1 is the course
-      number for MITxPRO/SysEngx1/1T2018
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x (extra space are cleaned up for this data set)
   - name: courserun_semester
     description: str, The semester during which the course was launched e.g Fall 2020
   - name: courserun_enrollment_start_date

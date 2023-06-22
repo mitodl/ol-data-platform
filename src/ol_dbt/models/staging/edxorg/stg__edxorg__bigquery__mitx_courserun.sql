@@ -13,19 +13,25 @@ with source as (
 , renamed as (
 
     select
-        course_number
-        , course_title as courserun_title
+        course_title as courserun_title
         , semester as courserun_semester
         , url as courserun_url
         , instructors as courserun_instructors
         , registration_open as courserun_enrollment_start_date
         , course_launch as courserun_start_date
         , course_wrap as courserun_end_date
+        , case course_id
+            when 'MITx/14.74x/3T2015' then '14.740x'
+            when 'MITx/ESD.SCM1x/3T2014' then 'CTL.SC1x'
+            when 'MITx/6.041x_3/2T2016' then '6.431x'
+            when 'MITx/6.041x_4/1T2017' then '6.431x'
+            else replace(course_number, ' ', '')
+        end as course_number
         , case
             when institution = 'MITx_PRO' then 'MITxPRO'
             else institution
         end as courserun_institution
-        , replace(course_id, 'ESD.SCM1x', 'CTL.SC1x') as courserun_readable_id
+        , course_id as courserun_readable_id
         ,{{ translate_course_id_to_platform('course_id') }} as courserun_platform
         , coalesce(self_paced = 1, false) as courserun_is_self_paced
     from source

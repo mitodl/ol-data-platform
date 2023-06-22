@@ -13,6 +13,7 @@ with edx_course_certificates as (
 , micromasters_program_requirements as (
     select *
     from {{ ref('int__micromasters__program_requirements') }}
+    where program_id != {{ var("dedp_micromasters_program_id") }}
 )
 
 , micromasters_users as (
@@ -24,6 +25,7 @@ with edx_course_certificates as (
 , micromasters_programs as (
     select *
     from {{ ref('int__micromasters__programs') }}
+    where program_id != {{ var("dedp_micromasters_program_id") }}
 )
 
 , program_certificates_override_list as (
@@ -39,6 +41,11 @@ with edx_course_certificates as (
         , course_number
         , course_edx_key as course_readable_id
     from {{ ref('stg__micromasters__app__postgres__courses_course') }}
+)
+
+, micromasters_runs as (
+    select *
+    from {{ ref('stg__micromasters__app__postgres__courses_courserun') }}
 )
 
 , micromasters_user_requirement_completions as (
@@ -66,9 +73,11 @@ with edx_course_certificates as (
         ) as user_course_certificate_number
     from edx_course_certificates
     inner join
+        micromasters_runs
+        on edx_course_certificates.courserun_readable_id like micromasters_runs.courserun_edxorg_readable_id || '%'
+    inner join
         micromasters_courses
-        on
-            edx_course_certificates.courserun_readable_id like micromasters_courses.course_readable_id || '%'
+        on micromasters_courses.course_id = micromasters_runs.course_id
     inner join
         micromasters_program_requirements
         on micromasters_program_requirements.course_id = micromasters_courses.course_id
@@ -122,6 +131,7 @@ with edx_course_certificates as (
 , non_dedp_certificates as (
     select
         edx_users.user_username as user_edxorg_username
+        , micromasters_users.user_mitxonline_username
         , edx_users.user_email
         , micromasters_programs.program_id as micromasters_program_id
         , micromasters_programs.program_title
@@ -157,6 +167,7 @@ with edx_course_certificates as (
 , non_dedp_overides as (
     select
         edx_users.user_username as user_edxorg_username
+        , micromasters_users.user_mitxonline_username
         , edx_users.user_email
         , micromasters_programs.program_id as micromasters_program_id
         , micromasters_programs.program_title
