@@ -255,7 +255,7 @@ models:
     tests:
     - not_null
   - name: courseruncertificate_url
-    description: str, the full URL to this DEDP course certificate
+    description: str, URL to the course certificate
     tests:
     - not_null
   - name: courseruncertificate_created_on
