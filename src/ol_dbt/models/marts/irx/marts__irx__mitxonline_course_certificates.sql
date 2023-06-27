@@ -1,5 +1,3 @@
-{{ config(tags=['IRx']) }}
-
 with course_certificates as (
     select * from {{ ref('int__mitx__courserun_certificates') }}
     where platform = '{{ var("mitxonline") }}'

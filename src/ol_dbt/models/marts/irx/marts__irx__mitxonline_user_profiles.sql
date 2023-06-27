@@ -1,5 +1,3 @@
-{{ config(tags=['IRx']) }}
-
 with users as (
     select * from {{ ref('int__mitxonline__users') }}
 )

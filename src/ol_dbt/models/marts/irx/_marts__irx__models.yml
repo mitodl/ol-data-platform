@@ -2,8 +2,8 @@
 version: 2
 
 models:
-- name: marts__mitxonline_course_certificates
-  description: course certificates from MITx Online app
+- name: marts__irx__mitxonline_course_certificates
+  description: course certificates from MITx Online app for IRx
   columns:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
@@ -38,8 +38,8 @@ models:
     tests:
     - not_null
 
-- name: marts__mitxonline_user_profiles
-  description: MITx Online user profiles
+- name: marts__irx__mitxonline_user_profiles
+  description: MITx Online user profiles for IRx
   columns:
   - name: user_username
     description: str, username on MITx Online
@@ -65,13 +65,9 @@ models:
     description: str, user gender
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Transgender', 'Non-binary/non-conforming', 'Other/Prefer
-            Not to Say', '']
+        values: '{{ var("gender_values") }}'
   - name: user_highest_education
     description: str, user highest education
     tests:
     - accepted_values:
-        values: ['Doctorate', "Master''s or professional degree", "Bachelor''s degree",
-          'Associate degree', 'Secondary/high school', 'Junior secondary/junior high/middle
-            school', 'Elementary/primary school', 'No formal education', 'Other education',
-          '']
+        values: '{{ var("highest_education_values") }}'
