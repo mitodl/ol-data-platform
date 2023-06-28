@@ -45,4 +45,4 @@ left join micromasters_users on mm_program_certificates.user_id = micromasters_u
 left join micromasters_programs
     on micromasters_programs.program_id = mm_program_certificates.program_id
 left join edx_users on edx_users.user_username = micromasters_users.user_edxorg_username
-where micromasters_programs.program_title = 'Data, Economics, and Development Policy'
+where micromasters_programs.program_id = {{ var("dedp_micromasters_program_id") }}
