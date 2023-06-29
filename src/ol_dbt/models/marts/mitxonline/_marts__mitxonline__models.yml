@@ -2,8 +2,8 @@
 version: 2
 
 models:
-- name: marts__irx__mitxonline_course_certificates
-  description: course certificates from MITx Online app for IRx
+- name: marts__mitxonline_course_certificates
+  description: course certificates from MITx Online app
   columns:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
@@ -38,8 +38,8 @@ models:
     tests:
     - not_null
 
-- name: marts__irx__mitxonline_user_profiles
-  description: MITx Online user profiles for IRx
+- name: marts__mitxonline_user_profiles
+  description: MITx Online user profiles
   columns:
   - name: user_username
     description: str, username on MITx Online
