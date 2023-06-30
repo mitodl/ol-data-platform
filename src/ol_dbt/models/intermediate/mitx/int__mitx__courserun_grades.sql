@@ -13,13 +13,6 @@ with mitxonline_grades as (
     where program_id = {{ var("dedp_mitxonline_program_id") }}
 )
 
-, mitxonline_non_dedp_course_grades as (
-    select mitxonline_grades.*
-    from mitxonline_grades
-    left join mitxonline_dedp_courses on mitxonline_grades.course_id = mitxonline_dedp_courses.course_id
-    where mitxonline_dedp_courses.course_id is null
-)
-
 , edxorg_non_program_course_grades as (
     select * from {{ ref('int__edxorg__mitx_courserun_grades') }}
     where micromasters_program_id is null
@@ -27,6 +20,17 @@ with mitxonline_grades as (
 
 , all_program_course_grades as (
     select * from {{ ref('int__micromasters__course_grades') }}
+)
+
+, mitxonline_non_dedp_course_grades as (
+    select mitxonline_grades.*
+    from mitxonline_grades
+    left join mitxonline_dedp_courses on mitxonline_grades.course_id = mitxonline_dedp_courses.course_id
+    left join all_program_course_grades
+        on
+            mitxonline_grades.courserun_readable_id = all_program_course_grades.courserun_readable_id
+            and mitxonline_grades.user_username = all_program_course_grades.user_mitxonline_username
+    where mitxonline_dedp_courses.course_id is null and all_program_course_grades.courserun_readable_id is null
 )
 
 , mitx_grades as (

@@ -19,13 +19,6 @@ with mitxonline_certificates as (
     where program_id = {{ var("dedp_mitxonline_program_id") }}
 )
 
-, mitxonline_non_dedp_course_certificates as (
-    select mitxonline_certificates.*
-    from mitxonline_certificates
-    left join mitxonline_dedp_courses on mitxonline_certificates.course_id = mitxonline_dedp_courses.course_id
-    where mitxonline_dedp_courses.course_id is null
-)
-
 , edxorg_non_program_course_certificates as (
     select * from {{ ref('int__edxorg__mitx_courserun_certificates') }}
     where micromasters_program_id is null
@@ -33,6 +26,19 @@ with mitxonline_certificates as (
 
 , program_course_certificates as (
     select * from {{ ref('int__micromasters__course_certificates') }}
+)
+
+, mitxonline_non_dedp_course_certificates as (
+    select mitxonline_certificates.*
+    from mitxonline_certificates
+    left join mitxonline_dedp_courses on mitxonline_certificates.course_id = mitxonline_dedp_courses.course_id
+    left join program_course_certificates
+        on
+            mitxonline_certificates.courserun_readable_id = program_course_certificates.courserun_readable_id
+            and mitxonline_certificates.user_username = program_course_certificates.user_mitxonline_username
+    where
+        mitxonline_dedp_courses.course_id is null
+        and program_course_certificates.courserun_readable_id is null
 )
 
 , mitx_certificates as (
