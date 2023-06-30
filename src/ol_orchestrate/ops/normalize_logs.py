@@ -22,20 +22,20 @@ from dagster.core.definitions.input import In
         "tracking_log_bucket": Field(
             String,
             is_required=True,
-            description="S3 bucket where tracking logs are stored"
+            description="S3 bucket where tracking logs are stored",
         ),
         "start_date": Field(
             String,
             is_required=True,
-            description="First date of tracking logs to process"
-        )
+            description="First date of tracking logs to process",
+        ),
     },
     out={
         "log_date_prefixes": Out(
             dagster_type=List[String],
-            description="List of date prefixes ('YYYY-MM-DD/') to iterate over"
+            description="List of date prefixes ('YYYY-MM-DD/') to iterate over",
         )
-    }
+    },
 )
 def get_log_dates(
     context: OpExecutionContext,
@@ -51,21 +51,16 @@ def get_log_dates(
     start_date = context.op_config["start_date"]
 
     response = context.resources.s3.list_objects(
-        Bucket=source_bucket,
-        Prefix="logs/",
-        Delimiter="/"
+        Bucket=source_bucket, Prefix="logs/", Delimiter="/"
     )
     log_dates = []
     # isolate log dates from the list of bucket object prefixes
     for log_date in response.get("CommonPrefixes"):
         log_date_time = datetime.strptime(log_date.get("Prefix"), "logs/%Y-%m-%d/")
         # filter out logs before start_date
-        if (start_date <= log_date_time):
+        if start_date <= log_date_time:
             log_dates.append(log_date.get("Prefix").split("/", maxsplit=1)[-1])
-    yield Output(
-        log_dates,
-        "log_date_prefixes"
-    )
+    yield Output(log_dates, "log_date_prefixes")
 
 
 @op(
@@ -76,48 +71,41 @@ def get_log_dates(
         "tracking_log_bucket": Field(
             String,
             is_required=True,
-            description="S3 bucket where tracking logs are stored"
+            description="S3 bucket where tracking logs are stored",
         ),
     },
     ins={
         "log_date": In(
             dagster_type=List[String],
-            description="S3 Bucket date prefix ('YYYY-MM-DD/') to check for log files"
+            description="S3 Bucket date prefix ('YYYY-MM-DD/') to check for log files",
         )
     },
     out={
         "log_file_names": Out(
             dagster_type=List[String],
-            description="List of log files that will be normalized"
+            description="List of log files that will be normalized",
         )
-    }
+    },
 )
-def get_log_file_names(
-    context: OpExecutionContext,
-    log_date: String
-) -> List[String]:
+def get_log_file_names(context: OpExecutionContext, log_date: String) -> List[String]:
     """List the log file names in the bucket with the date prefix.
 
     :param context: Dagster execution context for propagaint configuration data.
     :type context: OpExecutionContext
 
-	:log_date: S3 Bucket Object Prefix to check for log files (Format 'YYYY-MM-DD/').
-	:type log_date: str
+        :log_date: S3 Bucket Object Prefix to check for log files (Format 'YYYY-MM-DD/').
+        :type log_date: str
 
     :yield: List of tracking log files (Format '{fileName}.log.gz').
     """
     source_bucket = context.op_config["tracking_log_bucket"]
     response = context.resources.s3.list_objects_v2(
-        Bucket=source_bucket,
-        Prefix=f"logs/{log_date}"
+        Bucket=source_bucket, Prefix=f"logs/{log_date}"
     )
     log_files = []
     for item in response.get("Contents", []):
         log_files.append(item["Key"].split("/", maxsplit=2)[-1])
-    yield Output(
-        log_files,
-        "log_file_names"
-    )
+    yield Output(log_files, "log_file_names")
 
 
 @op(
@@ -128,20 +116,17 @@ def get_log_file_names(
         "tracking_log_bucket": Field(
             String,
             is_required=True,
-            description="S3 bucket where tracking logs are stored"
+            description="S3 bucket where tracking logs are stored",
         ),
     },
     ins={
         "log_date": In(
             dagster_type=String,
-            description="Log date prefix to load files from (Format 'YYYY-MM-DD/')}'"
+            description="Log date prefix to load files from (Format 'YYYY-MM-DD/')}'",
         )
-    }
+    },
 )
-def load_files_to_table(
-    context: OpExecutionContext,
-    log_date: String
-) -> None:
+def load_files_to_table(context: OpExecutionContext, log_date: String) -> None:
     """Creates an in-memory DuckDB table from a newline delimited JSON file,
     auto-inferring schema on read and only parsing top level JSON.
     Supports file lists, glob patterns, and compressed files. All log files for
@@ -157,25 +142,25 @@ def load_files_to_table(
     # DuckDB Glob Syntax: ** matches any number of subdirectories (including none)
     s3_path = f"s3://{source_bucket}/logs/{log_date}**"
     conn.execute("DROP TABLE IF EXISTS tracking_logs")
-    conn.execute(f"""
+    conn.execute(
+        f"""
         CREATE TABLE tracking_logs AS
         SELECT * FROM read_ndjson_auto('{s3_path}',
         FILENAME=1, union_by_name=1, maximum_depth=1)
-    """)
+    """
+    )
 
 
 @op(
     name="transform_data_in_duckdb",
     description="Executes table updates to normalize data to a consistent format",
-    required_resource_keys={"duckDB"}
+    required_resource_keys={"duckDB"},
 )
-def transform_log_data(
-    context: OpExecutionContext
-) -> None:
+def transform_log_data(context: OpExecutionContext) -> None:
     """Transforms records in the tracking_log table to normalize data.
-	context, event, and time columns are converted to VARCHAR and JSON
-	is extracted to a string without escape characters. Integer time
-	values are normalized to ISO8601 format.
+        context, event, and time columns are converted to VARCHAR and JSON
+        is extracted to a string without escape characters. Integer time
+        values are normalized to ISO8601 format.
 
     :param context: Dagster execution context for propagaint configuration data.
     :type context: OpExecutionContext
@@ -187,20 +172,27 @@ def transform_log_data(
     conn.execute("ALTER TABLE tracking_logs ALTER context TYPE VARCHAR")
     conn.execute("ALTER TABLE tracking_logs ALTER event TYPE VARCHAR")
     conn.execute("ALTER TABLE tracking_logs ALTER time TYPE VARCHAR")
-    conn.execute("""UPDATE tracking_logs SET
+    conn.execute(
+        """UPDATE tracking_logs SET
     			context = json_extract_string(context, '$'),
     			event = json_extract_string(event, '$'),
     			time = json_extract_string(time, '$')
-    		""")
+    		"""
+    )
     # convert integer timestamps to datetime
-    conn.execute("""UPDATE tracking_logs
+    conn.execute(
+        """UPDATE tracking_logs
     			SET time = to_timestamp(CAST(time AS BIGINT))
     			WHERE TRY_CAST(time AS BIGINT) IS NOT NULL
-    		""")
+    		"""
+    )
     # convert all timestamps to iso8601 format
-    conn.execute("""UPDATE tracking_logs
+    conn.execute(
+        """UPDATE tracking_logs
     			SET time = strftime(TRY_CAST(time AS TIMESTAMP), '%Y-%m-%d %H:%M:%S.%f')
-    		""")
+    		"""
+    )
+
 
 @op(
     name="export_processed_data_to_s3",
@@ -210,19 +202,19 @@ def transform_log_data(
         "tracking_log_bucket": Field(
             String,
             is_required=True,
-            description="S3 bucket where tracking logs are stored"
+            description="S3 bucket where tracking logs are stored",
         ),
     },
     ins={
         "log_date": In(
             dagster_type=String,
-            description="Log date prefix to load files from (Format 'YYYY-MM-DD/')}'"
+            description="Log date prefix to load files from (Format 'YYYY-MM-DD/')}'",
         ),
         "log_file": In(
             dagster_type=String,
-            description="Tracking log file name (Format '{fileName}.log.gz')"
-        )
-    }
+            description="Tracking log file name (Format '{fileName}.log.gz')",
+        ),
+    },
 )
 def write_file_to_s3(
     context: OpExecutionContext,

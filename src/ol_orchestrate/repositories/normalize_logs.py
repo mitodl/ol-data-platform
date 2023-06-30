@@ -44,8 +44,8 @@ mitx_normalization_job = normalize_tracking_logs.to_job(
             "get_bucket_prefixes_from_s3": {
                 "config": {
                     "tracking_log_bucket": mitx_tracking_log_bucket[dagster_deployment],
-                    "start_date":
-                 }
+                    # TODO "start_date":
+                }
             },
             "get_file_names_from_s3": {
                 "config": {
@@ -68,12 +68,11 @@ mitx_normalization_job = normalize_tracking_logs.to_job(
     }
 )
 
-mitxonline_normalization_job = normalize_tracking_logs.to_job(
-    name="mitxonline_s3_log_normalization",
 
 normalize_logs = Definitions(
     jobs=[
         mitx_normalization_job,
-        mitxonline_normalization_job,
-        xpro_normalization_job]
+        # mitxonline_normalization_job,
+        # xpro_normalization_job
+    ]
 )
