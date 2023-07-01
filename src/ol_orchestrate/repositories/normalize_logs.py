@@ -16,7 +16,7 @@ resources = {
         ]
     ),
     # TODO IMPORT AND CONFIGURE DUCKDB RESOURCE
-    "duckDB": duckdb
+    "duckDB": duckdb,
 }
 
 mitx_tracking_log_bucket = {
@@ -57,15 +57,14 @@ mitx_normalization_job = normalize_tracking_logs.to_job(
                     "tracking_log_bucket": mitx_tracking_log_bucket[dagster_deployment],
                 }
             },
-            "transform_data_in_duckdb": {
-            },
+            "transform_data_in_duckdb": {},
             "export_processed_data_to_s3": {
                 "config": {
                     "tracking_log_bucket": mitx_tracking_log_bucket[dagster_deployment],
                 }
             },
         }
-    }
+    },
 )
 
 
