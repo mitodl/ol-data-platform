@@ -2,8 +2,6 @@ from dagster import graph
 
 
 from ol_orchestrate.ops.normalize_logs import (
-    get_log_dates,
-    get_log_file_names,
     load_files_to_table,
     transform_log_data,
     write_file_to_s3,
@@ -25,22 +23,5 @@ from ol_orchestrate.ops.normalize_logs import (
     },
 )
 def normalize_tracking_logs():
-    log_dates = (
-        get_log_dates()
-    )  # configs: bucket, start_date | args: NONE, | resources: s3,
-    # split up work by date
-    for date in log_dates:
-        # load all files for one date to duckDB
-        load_files_to_table(
-            log_date=date
-        )  # configs: bucket | args: log_date, | resources: s3, duckDB
-        transform_log_data()  # configs: NONE | args: NONE, | resources: duckDB
-        # get a list of file names for export query
-        log_files = get_log_file_names(
-            log_date=date
-        )  # configs: bucket | args: log_date, | resources: s3,
-        # write one outfile per source file
-        for file in log_files:
-            write_file_to_s3(
-                log_file=file
-            )  # configs: bucket | args: log_date, log_file | resources: s3, duckDB
+    # load all files for one date to duckDB
+    write_file_to_s3(transform_log_data(load_files_to_table()))

@@ -38,6 +38,8 @@ hvac = "^1.0"
 pyarrow = "^12"
 pymysql = "^1.0.0"
 setuptools = "^67.0.0"  # Add this to avoid errors with installing packages that depend on it for building
+dagster-duckdb = "^0.19.13"
+dagster-duckdb-pandas = "^0.19.13"
 
 [tool.poetry.group.dev.dependencies]
 black = "*"
