@@ -961,10 +961,7 @@ models:
     description: str, user highest education
     tests:
     - accepted_values:
-        values: ['Doctorate', "Master''s or professional degree", "Bachelor''s degree",
-          'Associate degree', 'Secondary/high school', 'Junior secondary/junior high/middle
-            school', 'Elementary/primary school', 'No formal education', 'Other education',
-          '']
+        values: '{{ var("highest_education_values") }}'
     - not_null
 
 - name: stg__mitxpro__app__postgres__courses_program

@@ -268,10 +268,7 @@ models:
     description: str, user highest education
     tests:
     - accepted_values:
-        values: ['Doctorate', "Master''s or professional degree", "Bachelor''s degree",
-          'Associate degree', 'Secondary/high school', 'Junior secondary/junior high/middle
-            school', 'Elementary/primary school', 'No formal education', 'Other education',
-          '']
+        values: '{{ var("highest_education_values") }}'
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__auth_user')

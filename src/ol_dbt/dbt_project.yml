@@ -38,6 +38,13 @@ vars:
     dedp_micromasters_program_id: 2
     dedp_mitxonline_program_id: 1
 
+    highest_education_values: ['Doctorate', "Master''s or professional degree", "Bachelor''s\
+        \ degree", 'Associate degree', 'Secondary/high school', 'Junior secondary/junior
+        high/middle school', 'Elementary/primary school', 'No formal education', 'Other
+        education', '']
+    gender_values: ['Male', 'Female', 'Transgender', 'Non-binary/non-conforming',
+      'Other/Prefer Not to Say', '']
+
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
