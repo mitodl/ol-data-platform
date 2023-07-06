@@ -1,32 +1,38 @@
+from boto3 import Session
 from typing import Literal
-from dagster_duckdb import DuckDBResource, build_duckdb_io_manager
-from dagster_duckdb_pandas import DuckDBPandasTypeHandler
+from dagster_duckdb import DuckDBResource
 from dagster_aws.s3.resources import s3_resource
 import os
 from dagster import Definitions, daily_partitioned_config
-from datetime import datetime
+from datetime import datetime, UTC  # type: ignore
 
 from ol_orchestrate.jobs.normalize_logs import normalize_tracking_logs
 
 
-dagster_env = os.environ.get("DAGSTER_ENVIRONMENT", "dev")
-deployment = os.environ["OPEN_EDX_DEPLOYMENT_NAME"]
+dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore
+    "DAGSTER_ENVIRONMENT", "dev"
+)
+deployment: Literal["mitx", "mitxonline", "xpro"] = os.environ[  # type: ignore
+    "OPEN_EDX_DEPLOYMENT_NAME"
+]
 
 
 def earliest_log_date(
-    dagster_env: Literal["qa", "production"],
+    dagster_env: Literal["dev", "qa", "production"],
     deployment_name: Literal["mitx", "mitxonline", "xpro"],
 ) -> datetime:
+    if dagster_env == "dev":
+        dagster_env = "qa"
     date_map = {
         "qa": {
-            "mitx": datetime(2021, 3, 10),  # noqa: DTZ001
-            "mitxonline": datetime(2021, 7, 26),  # noqa: DTZ001
-            "xpro": datetime(2021, 3, 31),  # noqa: DTZ001
+            "mitx": datetime(2021, 3, 10, tzinfo=UTC),
+            "mitxonline": datetime(2021, 7, 26, tzinfo=UTC),
+            "xpro": datetime(2021, 3, 31, tzinfo=UTC),
         },
         "production": {
-            "mitx": datetime(2017, 6, 13),  # noqa: DTZ001
-            "mitxonline": datetime(2021, 8, 18),  # noqa: DTZ001
-            "xpro": datetime(2019, 8, 28),  # noqa: DTZ001
+            "mitx": datetime(2017, 6, 13, tzinfo=UTC),
+            "mitxonline": datetime(2021, 8, 18, tzinfo=UTC),
+            "xpro": datetime(2019, 8, 28, tzinfo=UTC),
         },
     }
     return date_map[dagster_env][deployment_name]
@@ -34,33 +40,32 @@ def earliest_log_date(
 
 @daily_partitioned_config(start_date=earliest_log_date(dagster_env, deployment))
 def daily_tracking_log_config(log_date: datetime, _end: datetime):
+    log_bucket = f"{deployment}-{dagster_env}-edxapp-tracking"
+    session = Session()
+    credentials = session.get_credentials()
+    current_credentials = credentials.get_frozen_credentials()
     return {
         "ops": {
             "load_s3_files_to_duckdb": {
                 "config": {
-                    "tracking_log_bucket": f"{deployment}-{dagster_env}-tracking-logs"
+                    "tracking_log_bucket": log_bucket,
+                    "s3_key": current_credentials.access_key,
+                    "s3_secret": current_credentials.secret_key,
                 },
                 "inputs": {
                     "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
                 },
             },
             "export_processed_data_to_s3": {
-                "config": {
-                    "tracking_log_bucket": f"{deployment}-{dagster_env}-tracking-logs"
-                }
+                "config": {"tracking_log_bucket": log_bucket},
             },
         }
     }
 
 
-duckdb_io_manager = build_duckdb_io_manager([DuckDBPandasTypeHandler])
-
 normalize_logs = Definitions(
     resources={
         "duckdb": DuckDBResource(database="tracking_logs.duckdb"),
-        "duckdb_io": duckdb_io_manager.configured(
-            {"database": "tracking_logs_io.duckdb"}
-        ),
         "s3": s3_resource,
     },
     jobs=[
