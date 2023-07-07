@@ -40,6 +40,9 @@ def earliest_log_date(
 
 @daily_partitioned_config(start_date=earliest_log_date(dagster_env, deployment))
 def daily_tracking_log_config(log_date: datetime, _end: datetime):
+    global dagster_env
+    if dagster_env == "dev":
+        dagster_env = "qa"
     log_bucket = f"{deployment}-{dagster_env}-edxapp-tracking"
     session = Session()
     credentials = session.get_credentials()
@@ -57,7 +60,11 @@ def daily_tracking_log_config(log_date: datetime, _end: datetime):
                 },
             },
             "export_processed_data_to_s3": {
-                "config": {"tracking_log_bucket": log_bucket},
+                "config": {
+                    "tracking_log_bucket": log_bucket,
+                    "s3_key": current_credentials.access_key,
+                    "s3_secret": current_credentials.secret_key,
+                },
             },
         }
     }

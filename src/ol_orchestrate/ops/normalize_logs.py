@@ -1,4 +1,4 @@
-from dagster import Field, OpExecutionContext, String, op, Nothing
+from dagster import Field, List, Nothing, op, OpExecutionContext, Out, Output, String
 
 from dagster.core.definitions.input import In
 
@@ -71,34 +71,39 @@ def load_files_to_table(context: OpExecutionContext, log_date: str) -> Nothing:
     description="Executes table updates to normalize data to a consistent format",
     required_resource_keys={"duckdb"},
     ins={"log_db": In(dagster_type=Nothing)},
+    out={"columns": Out(dagster_type=List[String])},
 )
 def transform_log_data(context: OpExecutionContext) -> Nothing:
     """Transform records in the tracking_log table to normalize data.
 
-    context, event, and time columns are converted to VARCHAR and JSON is extracted to a
+    All columns are converted to VARCHAR and JSON is extracted to a
     string without escape characters. Integer time values are normalized to ISO8601
     format.
 
     :param context: Dagster execution context for propagaint configuration data.
     :type context: OpExecutionContext
 
-    :log_date: S3 Bucket log date prefix to load logs from (Format 'YYYY-MM-DD/**')
-    :type log_date: str
-
+    :yield: The list of columns from the log file
     """
-
     with context.resources.duckdb.get_connection() as conn:
-        # explicity convert event, context, and time fields to VARCHAR
-        conn.execute("ALTER TABLE tracking_logs ALTER context TYPE VARCHAR")
-        conn.execute("ALTER TABLE tracking_logs ALTER event TYPE VARCHAR")
-        conn.execute("ALTER TABLE tracking_logs ALTER time TYPE VARCHAR")
-        conn.execute(
-            """UPDATE tracking_logs SET
-                    context = json_extract_string(context, '$'),
-                    event = json_extract_string(event, '$'),
-                    time = json_extract_string(time, '$')
+        # update every column to VARCHAR type
+        col_names = conn.execute(
+            """SELECT column_name FROM temp.information_schema.columns
+                    WHERE table_name = 'tracking_logs'
                 """
+        ).fetchall()
+        # exclude filename, which is already a VARCHAR
+        columns = ["".join(i) for i in col_names]
+        columns.remove("filename")
+        update_stmts = []
+        for col in columns:
+            conn.execute(f"ALTER TABLE tracking_logs ALTER {col} TYPE VARCHAR")
+            update_stmts.append(f"{col} = json_extract_string({col}, '$')")
+        # extract VARCHAR strings from json for every field
+        update_query = (
+            f"UPDATE tracking_logs SET {', '.join(update_stmts)}"  # noqa: S608
         )
+        conn.execute(update_query)
         # convert integer timestamps to datetime
         conn.execute(
             """UPDATE tracking_logs
@@ -112,6 +117,7 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
                     SET time = strftime(TRY_CAST(time AS TIMESTAMP), '%Y-%m-%d %H:%M:%S.%f')
                 """  # noqa: E501
         )
+        yield Output(columns, "columns")
 
 
 @op(
@@ -124,10 +130,20 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
             is_required=True,
             description="S3 bucket where tracking logs are stored",
         ),
+        "s3_key": Field(
+            String,
+            is_required=True,
+            description="S3 bucket where tracking logs are stored",
+        ),
+        "s3_secret": Field(
+            String,
+            is_required=True,
+            description="S3 bucket where tracking logs are stored",
+        ),
     },
-    ins={"log_db": In(dagster_type=Nothing)},
+    ins={"log_db": In(dagster_type=Nothing), "columns": In(dagster_type=List[String])},
 )
-def write_file_to_s3(context: OpExecutionContext) -> None:
+def write_file_to_s3(context: OpExecutionContext, columns: List[String]) -> None:
     """Export data from the tracking_logs table in DuckDB to the S3 bucket.
 
     Processed files are written to the 'valid/' directory in the bucket and original
@@ -136,12 +152,29 @@ def write_file_to_s3(context: OpExecutionContext) -> None:
     :param context: Dagster execution context for propagaint configuration data.
     :type context: OpExecutionContext
 
-    :log_date: S3 Bucket log date prefix to export logs to (Format 'YYYY-MM-DD/')
-    :type log_date: str
-
-    :log_file: Tracking log file name (Format '{fileName}.log.gz')
-    :type log_file: str
-
+    :param columns: List of columns to export from table
+    :type columns: List[String]
     """
     with context.resources.duckdb.get_connection() as conn:
-        context.log.info(conn.execute("SELECT * FROM tracking_logs").fetch_df().columns)
+        conn.execute(
+            f"""
+            LOAD httpfs;
+            SET s3_access_key_id="{context.op_config["s3_key"]}";
+            SET s3_secret_access_key="{context.op_config["s3_secret"]}";
+            SET s3_region="us-east-1";
+            """
+        )
+        # get filenames from table
+        file_names = conn.execute(
+            "SELECT DISTINCT filename FROM tracking_logs"
+        ).fetchall()
+        files = ["".join(i) for i in file_names]
+        for file_name in files:
+            new_file_name = file_name.replace("logs", "valid")
+            context.log.info(new_file_name)
+            conn.execute(
+                f"""COPY (SELECT {columns} FROM tracking_logs
+                        WHERE filename = '{file_name}')
+                        TO '{new_file_name}' (FORMAT JSON)
+                    """  # noqa: S608
+            )
