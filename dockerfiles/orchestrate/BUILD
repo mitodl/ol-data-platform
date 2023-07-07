@@ -80,7 +80,7 @@ docker_image(
 docker_image(
     name="lakehouse-assets-graph",
     dependencies=[
-        "src/ol_orchestrate/definitions/lakehouse:ol-data-lakehouse",
+        "src/ol_orchestrate:ol-data-lakehouse",
         "src/ol_dbt:dbt_project",
     ],
     source="Dockerfile.dbt_pipeline",
@@ -92,7 +92,7 @@ docker_image(
 docker_image(
     name="tracking-log-reprocessing",
     dependencies=[
-        "src/ol_orchestrate/definitions/edx:ol-data-edx",
+        "src/ol_orchestrate:ol-data-edx",
     ],
     source="Dockerfile.basic_pipeline",
     extra_build_args=["PACKAGE_NAME=tracking-log-reprocessing"],
