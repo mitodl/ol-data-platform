@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from dagster import Field, List, Nothing, op, OpExecutionContext, Out, Output, String
 
 from dagster.core.definitions.input import In
@@ -93,7 +95,7 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
                 """
         ).fetchall()
         # exclude filename, which is already a VARCHAR
-        columns = ["".join(i) for i in col_names]
+        columns = [i[0] for i in col_names]
         columns.remove("filename")
         update_stmts = []
         for col in columns:
@@ -141,9 +143,18 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
             description="S3 bucket where tracking logs are stored",
         ),
     },
-    ins={"log_db": In(dagster_type=Nothing), "columns": In(dagster_type=List[String])},
+    ins={
+        "log_db": In(dagster_type=Nothing),
+        "columns": In(dagster_type=List[String]),
+        "log_date": In(
+            dagster_type=String,
+            description="Log date prefix to load files from (Format 'YYYY-MM-DD/')}'",
+        ),
+    },
 )
-def write_file_to_s3(context: OpExecutionContext, columns: List[String]) -> None:
+def write_file_to_s3(
+    context: OpExecutionContext, columns: List[String], log_date: String
+) -> None:
     """Export data from the tracking_logs table in DuckDB to the S3 bucket.
 
     Processed files are written to the 'valid/' directory in the bucket and original
@@ -171,10 +182,18 @@ def write_file_to_s3(context: OpExecutionContext, columns: List[String]) -> None
         files = ["".join(i) for i in file_names]
         for file_name in files:
             new_file_name = file_name.replace("logs", "valid")
+            local_file_name = new_file_name.rsplit("/", maxsplit=1)[-1]
             context.log.info(new_file_name)
             conn.execute(
-                f"""COPY (SELECT {columns} FROM tracking_logs
+                f"""COPY (SELECT {', '.join(columns)} FROM tracking_logs
                         WHERE filename = '{file_name}')
-                        TO '{new_file_name}' (FORMAT JSON)
+                        TO '{local_file_name}' (FORMAT JSON)
                     """  # noqa: S608
             )
+            # copy to S3
+            context.resources.s3.upload_file(
+                Filename=local_file_name,
+                Bucket=context.op_config["tracking_log_bucket"],
+                Key=f"valid/{log_date}{local_file_name}",
+            )
+            Path.unlink(Path(local_file_name))

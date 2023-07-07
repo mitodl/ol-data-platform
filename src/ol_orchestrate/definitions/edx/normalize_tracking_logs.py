@@ -65,6 +65,9 @@ def daily_tracking_log_config(log_date: datetime, _end: datetime):
                     "s3_key": current_credentials.access_key,
                     "s3_secret": current_credentials.secret_key,
                 },
+                "inputs": {
+                    "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
+                },
             },
         }
     }
