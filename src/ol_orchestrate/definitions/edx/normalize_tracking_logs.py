@@ -1,9 +1,13 @@
+from functools import partial
 from boto3 import Session
 from typing import Literal
 from dagster_duckdb import DuckDBResource
 from dagster_aws.s3.resources import s3_resource
 import os
-from dagster import Definitions, daily_partitioned_config
+from dagster import (
+    Definitions,
+    daily_partitioned_config,
+)
 from datetime import datetime, UTC  # type: ignore
 
 from ol_orchestrate.jobs.normalize_logs import normalize_tracking_logs
@@ -12,9 +16,8 @@ from ol_orchestrate.jobs.normalize_logs import normalize_tracking_logs
 dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore
     "DAGSTER_ENVIRONMENT", "dev"
 )
-deployment: Literal["mitx", "mitxonline", "xpro"] = os.environ[  # type: ignore
-    "OPEN_EDX_DEPLOYMENT_NAME"
-]
+# deployment: Literal["mitx", "mitxonline", "xpro"] = os.environ.get(  # type: ignore
+#     "OPEN_EDX_DEPLOYMENT_NAME", "xpro")
 
 
 def earliest_log_date(
@@ -38,8 +41,7 @@ def earliest_log_date(
     return date_map[dagster_env][deployment_name]
 
 
-@daily_partitioned_config(start_date=earliest_log_date(dagster_env, deployment))
-def daily_tracking_log_config(log_date: datetime, _end: datetime):
+def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
     global dagster_env
     if dagster_env == "dev":
         dagster_env = "qa"
@@ -80,8 +82,11 @@ normalize_logs = Definitions(
     },
     jobs=[
         normalize_tracking_logs.to_job(
-            config=daily_tracking_log_config,
+            config=daily_partitioned_config(
+                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore
+            )(partial(daily_tracking_log_config, deployment)),
             name=f"normalize_{deployment}_{dagster_env}_tracking_logs",
         )
+        for deployment in ["xpro", "mitx", "mitxonline"]
     ],
 )

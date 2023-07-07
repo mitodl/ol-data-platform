@@ -8,7 +8,7 @@ from dagster.core.definitions.input import In
 @op(
     name="load_s3_files_to_duckdb",
     description="Creates a new DuckDB table from all th files in the bucket",
-    required_resource_keys={"s3", "duckdb"},
+    required_resource_keys={"duckdb"},
     config_schema={
         "tracking_log_bucket": Field(
             String,
