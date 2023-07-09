@@ -18,12 +18,17 @@ from dagster.core.definitions.input import In
         "s3_key": Field(
             String,
             is_required=True,
-            description="S3 bucket where tracking logs are stored",
+            description="S3 key for accessing tracking log bucket",
         ),
         "s3_secret": Field(
             String,
             is_required=True,
-            description="S3 bucket where tracking logs are stored",
+            description="S3 secret key for accessing tracking log bucket",
+        ),
+        "s3_token": Field(
+            String,
+            is_required=True,
+            description="STS token indicating the role assumed for the IAM credentials",
         ),
     },
     ins={
@@ -60,6 +65,7 @@ def load_files_to_table(context: OpExecutionContext, log_date: str) -> Nothing:
             LOAD httpfs;
             SET s3_access_key_id="{context.op_config["s3_key"]}";
             SET s3_secret_access_key="{context.op_config["s3_secret"]}";
+            SET s3_session_token="{context.op_config["s3_token"]}";
             SET s3_region="us-east-1";
             CREATE TABLE tracking_logs AS
             SELECT * FROM read_ndjson_auto('{s3_path}',
@@ -132,16 +138,6 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
             is_required=True,
             description="S3 bucket where tracking logs are stored",
         ),
-        "s3_key": Field(
-            String,
-            is_required=True,
-            description="S3 bucket where tracking logs are stored",
-        ),
-        "s3_secret": Field(
-            String,
-            is_required=True,
-            description="S3 bucket where tracking logs are stored",
-        ),
     },
     ins={
         "log_db": In(dagster_type=Nothing),
@@ -167,14 +163,6 @@ def write_file_to_s3(
     :type columns: List[String]
     """
     with context.resources.duckdb.get_connection() as conn:
-        conn.execute(
-            f"""
-            LOAD httpfs;
-            SET s3_access_key_id="{context.op_config["s3_key"]}";
-            SET s3_secret_access_key="{context.op_config["s3_secret"]}";
-            SET s3_region="us-east-1";
-            """
-        )
         # get filenames from table
         file_names = conn.execute(
             "SELECT DISTINCT filename FROM tracking_logs"

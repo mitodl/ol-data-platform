@@ -56,6 +56,7 @@ def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
                     "tracking_log_bucket": log_bucket,
                     "s3_key": current_credentials.access_key,
                     "s3_secret": current_credentials.secret_key,
+                    "s3_token": current_credentials.token,
                 },
                 "inputs": {
                     "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
@@ -64,8 +65,6 @@ def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
             "export_processed_data_to_s3": {
                 "config": {
                     "tracking_log_bucket": log_bucket,
-                    "s3_key": current_credentials.access_key,
-                    "s3_secret": current_credentials.secret_key,
                 },
                 "inputs": {
                     "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
