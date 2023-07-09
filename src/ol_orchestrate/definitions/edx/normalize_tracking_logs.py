@@ -50,6 +50,13 @@ def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
     credentials = session.get_credentials()
     current_credentials = credentials.get_frozen_credentials()
     return {
+        "resources": {
+            "duckdb": {
+                "config": {
+                    "database": f"{deployment}_tracking_logs_{log_date.strftime('%Y_%m_%d')}.duckdb"  # noqa: E501
+                }
+            }
+        },
         "ops": {
             "load_s3_files_to_duckdb": {
                 "config": {
@@ -70,13 +77,13 @@ def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
                     "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
                 },
             },
-        }
+        },
     }
 
 
 normalize_logs = Definitions(
     resources={
-        "duckdb": DuckDBResource(database="tracking_logs.duckdb"),
+        "duckdb": DuckDBResource.configure_at_launch(),
         "s3": s3_resource,
     },
     jobs=[
