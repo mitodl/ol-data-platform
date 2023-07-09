@@ -27,7 +27,7 @@ from dagster.core.definitions.input import In
         ),
         "s3_token": Field(
             String,
-            is_required=True,
+            is_required=False,
             description="STS token indicating the role assumed for the IAM credentials",
         ),
     },
@@ -65,7 +65,16 @@ def load_files_to_table(context: OpExecutionContext, log_date: str) -> Nothing:
             LOAD httpfs;
             SET s3_access_key_id="{context.op_config["s3_key"]}";
             SET s3_secret_access_key="{context.op_config["s3_secret"]}";
-            SET s3_session_token="{context.op_config["s3_token"]}";
+            """
+        )
+        if context.op_config.get("s3_token"):
+            conn.execute(
+                f"""
+            SET s3_session_token="{context.op_config.get("s3_token")}";
+            """
+            )
+        conn.execute(
+            f"""
             SET s3_region="us-east-1";
             CREATE TABLE tracking_logs AS
             SELECT * FROM read_ndjson_auto('{s3_path}',

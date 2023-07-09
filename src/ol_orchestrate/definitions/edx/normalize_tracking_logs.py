@@ -49,11 +49,17 @@ def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
     session = Session()
     credentials = session.get_credentials()
     current_credentials = credentials.get_frozen_credentials()
+    s3_creds = {
+        "s3_key": current_credentials.access_key,
+        "s3_secret": current_credentials.secret_key,
+    }
+    if current_credentials.token:
+        s3_creds["s3_token"] = current_credentials.token
     return {
         "resources": {
             "duckdb": {
                 "config": {
-                    "database": f"{deployment}_tracking_logs_{log_date.strftime('%Y_%m_%d')}.duckdb"  # noqa: E501
+                    "database": f"{deployment}_tracking_logs_{log_date.strftime('%Y_%m_%d')}.duckdb",  # noqa: E501
                 }
             }
         },
@@ -61,9 +67,7 @@ def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
             "load_s3_files_to_duckdb": {
                 "config": {
                     "tracking_log_bucket": log_bucket,
-                    "s3_key": current_credentials.access_key,
-                    "s3_secret": current_credentials.secret_key,
-                    "s3_token": current_credentials.token,
+                    **s3_creds,
                 },
                 "inputs": {
                     "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
