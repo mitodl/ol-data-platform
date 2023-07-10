@@ -72,4 +72,8 @@ models:
   - name: b2border_contract_number
     description: string, contract number used to identify the order
   - name: req_reference_number
+<<<<<<< HEAD
     description: string, reference number for a payment
+=======
+    description: string, reference number for a payment
+>>>>>>> origin/KatelynGit-mitxpro_marts1
