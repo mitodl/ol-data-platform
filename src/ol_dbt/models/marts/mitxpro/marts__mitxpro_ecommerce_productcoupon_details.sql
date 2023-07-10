@@ -26,7 +26,7 @@ ecommerce_productversion.productversion_readable_id
 from commerce_coupon
 left join ecommerce_productcouponassignment
     on commerce_coupon.coupon_id = ecommerce_productcouponassignment.coupon_id
-left join ecommerce_productversion 
+left join ecommerce_productversion
     on ecommerce_productversion.product_id=ecommerce_productcouponassignment.product_id and productversion_readable_id is not null
 =======
 select
