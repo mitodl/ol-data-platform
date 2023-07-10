@@ -1,5 +1,5 @@
 ---
-version: 1
+version: 2
 
 models:
 - name: marts__mitxpro_ecommerce_productcoupon_details
