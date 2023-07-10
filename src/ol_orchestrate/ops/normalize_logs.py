@@ -193,4 +193,5 @@ def write_file_to_s3(
                 Bucket=context.op_config["tracking_log_bucket"],
                 Key=f"valid/{log_date}{local_file_name}",
             )
-            Path.unlink(Path(local_file_name))
+            Path(local_file_name).unlink()
+    Path(context.resources.duckdb.database).unlink()
