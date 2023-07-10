@@ -1,0 +1,75 @@
+---
+version: 2
+
+models:
+- name: marts__mitxpro_ecommerce_productcoupon_details
+  description: product and coupon detail data from MITXPRO
+  columns:
+  - name: coupon_id
+    description: int, foreign key representing a coupon
+    tests:
+    - not_null
+  - name: product_id
+    description: int, foreign key representing a product
+  - name: coupon_code
+    description: string, coupon code for the coupon
+    tests:
+    - not_null
+  - name: couponpayment_name
+    description: string, human readable tag for coupon payment associated with the
+      coupon
+    tests:
+    - not_null
+  - name: coupon_created_on
+    description: timestamp, specifying when the coupon was initially created
+    tests:
+    - not_null
+  - name: maxproductcouponassignment_created_on
+    description: timestamp, specifying the max when the coupon assignment was created
+  - name: productcouponassignment_is_redeemed
+    description: boolean, whether the user redeemed the coupon to enroll in the course
+  - name: productcouponassignment_email
+    description:  string, user email that can redeem the coupon
+  - name: productversion_readable_id
+    description: string, the readable_id field from the product object
+
+models:
+- name: marts__mitxpro_ecommerce_userorder_details
+  description: user and order detail data from MITXPRO
+  columns:
+  - name: coupon_id
+    description: int, foreign key representing a coupon
+  - name: product_id
+    description: int, foreign key representing a product
+  - name: order_id
+    description: int, foreign key representing an order
+    tests:
+    - not_null
+  - name: order_state
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded"
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['fulfilled', 'failed', 'created', 'refunded']
+  - name: user_email
+    description: str, user email associated with their account
+  - name: b2border_email
+    description: string, email where the enrollment codes were sent
+  - name: couponpaymentversion_payment_transaction
+    description:  string that identifies the payment invoice for coupon purchases
+      by companies
+  - name: couponpaymentversion_coupon_type
+    description:  string, one of 'single-use' or 'promo'. Promo coupon codes can be
+      used multiple times
+  - name: couponpaymentversion_discount_amount
+    description: number, either dollar amount or percentage (between 0 and 1) discount
+  - name: couponpayment_name
+    description: string, human readable name for the coupon payment
+  - name: couponpaymentversion_id
+    description: int, foreign key to ecommerce_couponpaymentversion for orders that
+      use a coupon
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
+  - name: req_reference_number
+    description: string, reference number for a payment
