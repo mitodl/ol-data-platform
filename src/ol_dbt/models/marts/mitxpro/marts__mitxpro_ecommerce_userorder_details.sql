@@ -38,9 +38,9 @@ select
     , b2becommerce_b2border.b2border_contract_number
     , JSON_EXTRACT_SCALAR(b2becommerce_b2breceipt.b2breceipt_data, '$.req_reference_number') as req_reference_number
 from ecommerce_order
-inner join users
+left join users
     on ecommerce_order.order_purchaser_user_id = users.user_id
-inner join couponpaymentversion
+left join couponpaymentversion
     on ecommerce_order.couponpaymentversion_id = couponpaymentversion.couponpaymentversion_id
 left join b2becommerce_b2border
     on b2becommerce_b2border.couponpaymentversion_id = couponpaymentversion.couponpaymentversion_id
