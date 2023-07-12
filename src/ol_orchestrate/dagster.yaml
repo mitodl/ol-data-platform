@@ -25,6 +25,9 @@ run_storage:
       db_name:
         env: DAGSTER_PG_DB_NAME
       port: 5432
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
 event_log_storage:
   module: dagster_postgres.event_log
   class: PostgresEventLogStorage
