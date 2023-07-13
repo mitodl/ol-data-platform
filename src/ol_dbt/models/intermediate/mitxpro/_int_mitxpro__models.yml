@@ -2,6 +2,33 @@
 version: 2
 
 models:
+- name: int__mitxpro__ecommerce_couponredemption
+  description: A row in this table is added when an order uses a coupon code
+  columns:
+  - name: couponredemption_id
+    description: int, primary key representing a coupon redemption
+    tests:
+    - not_null
+  - name: couponredemption_created_on
+    description: timestamp, specifying when the coupon was redeemed
+    tests:
+    - not_null
+  - name: couponredemption_updated_on
+    description: timestamp, specifying when the coupon redemption was updated most
+      recently updated
+    tests:
+    - not_null
+  - name: couponversion_id
+    description: int, foreign key for ecommerce_couponversion
+    tests:
+    - not_null
+  - name: order_id
+    description: int, foreign key for ecommerce_order
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["couponversion_id", "order_id"]
 - name: int__mitxpro__b2becommerce_b2breceipt
   description: Data returned from cybersource when a user pays for a b2b order
   columns:
