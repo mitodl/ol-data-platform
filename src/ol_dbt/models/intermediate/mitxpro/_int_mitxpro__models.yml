@@ -2,51 +2,6 @@
 version: 2
 
 models:
-- name: int__mitxpro__ecommerce_couponversion
-  description: A version of a coupon linked to a specific couponpaymentversion record
-  columns:
-  - name: couponversion_id
-    description: int, primary key representing a coupon version
-    tests:
-    - unique
-    - not_null
-  - name: couponversion_created_on
-    description: timestamp, specifying when the coupon version was initially created
-    tests:
-    - not_null
-  - name: couponversion_updated_on
-    description: timestamp, specifying when the coupon version was most recently updated
-    tests:
-    - not_null
-  - name: coupon_id
-    description: int, foreign key referencing ecommerce_coupon
-    tests:
-    - not_null
-  - name: couponpaymentversion_id
-    description: int, foreign key to ecommerce_couponpaymentversion
-    tests:
-    - not_null
-- name: int__mitxpro__ecommerce_couponpayment
-  description: Most of the information for coupon payments is in couponpaymentversion
-  columns:
-  - name: couponpayment_id
-    description: int, primary key representing a coupon payment
-    tests:
-    - unique
-    - not_null
-  - name: couponpayment_created_on
-    description: timestamp, specifying when the coupon payment was initially created
-    tests:
-    - not_null
-  - name: couponpayment_updated_on
-    description: timestamp, specifying when the coupon paymemt was most recently updated
-    tests:
-    - not_null
-  - name: couponpayment_name
-    description: string, human readable name for the coupon payment
-    tests:
-    - unique
-    - not_null
 - name: int__mitxpro__ecommerce_couponredemption
   description: A row in this table is added when an order uses a coupon code
   columns:
@@ -393,6 +348,10 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__ecommerce_couponpaymentversion')
+  - name: coupon_id
+    description: int, foreign key referencing ecommerce_coupon
+    tests:
+    - not_null
 - name: int__mitxpro__ecommerce_coupon
   description: A coupon code that can be used to recieve a discount on a course or
     program
