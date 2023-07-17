@@ -8,10 +8,6 @@ with couponpaymentversion as (
     from {{ ref('stg__mitxpro__app__postgres__ecommerce_couponpayment') }}
 )
 
-, coupon as (
-    select *
-    from {{ ref('stg__mitxpro__app__postgres__ecommerce_coupon') }}
-)
 
 select
     couponpaymentversion.couponpaymentversion_id
@@ -31,7 +27,5 @@ select
     , couponpaymentversion.couponpaymentversion_tag
     , couponpaymentversion.couponpaymentversion_discount_type
     , couponpaymentversion.couponpaymentversion_max_redemptions
-    , coupon.coupon_id
 from couponpaymentversion
 inner join couponpayment on couponpayment.couponpayment_id = couponpaymentversion.couponpayment_id
-left join coupon on coupon.couponpayment_id = couponpayment.couponpayment_id
