@@ -35,5 +35,3 @@ select
 from couponpaymentversion
 inner join couponpayment on couponpayment.couponpayment_id = couponpaymentversion.couponpayment_id
 left join coupon on coupon.couponpayment_id = couponpayment.couponpayment_id
-
-

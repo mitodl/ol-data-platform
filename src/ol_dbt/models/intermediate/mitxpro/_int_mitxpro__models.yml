@@ -345,13 +345,11 @@ models:
     description: one of percent-off or dollars-off
     tests:
     - not_null
+  - name: coupon_id
+    description: int, foreign key referencing ecommerce_coupon
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__ecommerce_couponpaymentversion')
-  - name: coupon_id
-    description: int, foreign key referencing ecommerce_coupon
-    tests:
-    - not_null
 - name: int__mitxpro__ecommerce_coupon
   description: A coupon code that can be used to recieve a discount on a course or
     program
