@@ -8,7 +8,6 @@ with couponpaymentversion as (
     from {{ ref('stg__mitxpro__app__postgres__ecommerce_couponpayment') }}
 )
 
-
 select
     couponpaymentversion.couponpaymentversion_id
     , couponpaymentversion.couponpaymentversion_expires_on
