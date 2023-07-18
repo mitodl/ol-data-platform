@@ -17,9 +17,7 @@ def write_parquet_file(file_system, output_folder, arrow_table, file_name):
     :file_name: Name for parquet file
     :type file_name: String
     """
-    file_path = "{output_folder}/{file_name}.parquet".format(
-        output_folder=output_folder, file_name=file_name
-    )
+    file_path = f"{output_folder}/{file_name}.parquet"
 
     if file_system.type_name == "local":
         file_system.create_dir(output_folder)
