@@ -19,16 +19,30 @@ python_distribution(
 )
 
 python_distribution(
-    name="ol-data-code-locations",
+    name="ol-data-lakehouse",
     dependencies=[
         "//:requirements#dagster-postgres",
         "//:requirements#dagster-aws",
         "//:requirements#dbt-trino",
         "//:requirements#dbt-duckdb",
-        "./definitions",
+        "./definitions/lakehouse:lakehouse-code-locations",
     ],
     provides=python_artifact(
-        name="dagster-code-locations",
+        name="dagster-lakehouse",
+        version="0.6.1",
+    )
+)
+
+python_distribution(
+    name="ol-data-edx",
+    dependencies=[
+        "//:requirements#dagster-postgres",
+        "//:requirements#dagster-aws",
+        "//:requirements#dagster-duckdb",
+        "./definitions/edx:edx-code-locations",
+    ],
+    provides=python_artifact(
+        name="dagster-edx",
         version="0.6.1",
     )
 )

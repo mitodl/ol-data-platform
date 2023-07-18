@@ -49,6 +49,6 @@ from mitxonline_program_certificates
 left join mitxonline_users on mitxonline_users.user_id = mitxonline_program_certificates.user_id
 left join micromasters_users on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
 left join micromasters_programs
-    on micromasters_programs.program_title = 'Data, Economics, and Development Policy'
+    on micromasters_programs.program_id = {{ var("dedp_micromasters_program_id") }}
 left join edx_users on edx_users.user_username = micromasters_users.user_edxorg_username
-where mitxonline_program_certificates.program_title = 'Data, Economics and Development Policy'
+where mitxonline_program_certificates.program_id = {{ var("dedp_mitxonline_program_id") }}

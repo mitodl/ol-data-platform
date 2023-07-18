@@ -19,9 +19,8 @@ models:
     tests:
     - unique
   - name: program_description
-    description: str, description of the program
-    tests:
-    - not_null
+    description: str, description of the program. blank for MITx Online programs as
+      this field is only applicable for MicroMasters programs
 
 - name: int__mitx__courses
   description: Intermediate model for combined MITxOnline and edxorg courses
@@ -255,7 +254,7 @@ models:
     tests:
     - not_null
   - name: courseruncertificate_url
-    description: str, the full URL to this DEDP course certificate
+    description: str, URL to the course certificate
     tests:
     - not_null
   - name: courseruncertificate_created_on

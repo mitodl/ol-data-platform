@@ -12,3 +12,7 @@ load_from:
     host: lakehouse-assets-graph
     port: 4000
     location_name: lakehouse-assets-graph
+- grpc_server:
+    host: tracking-log-reprocessing
+    port: 4000
+    location_name: tracking-log-reprocessing

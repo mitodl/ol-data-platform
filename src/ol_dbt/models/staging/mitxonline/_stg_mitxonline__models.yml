@@ -715,8 +715,7 @@ models:
     description: str, user gender
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Transgender', 'Non-binary/non-conforming', 'Other/Prefer
-            Not to Say', '']
+        values: '{{ var("gender_values") }}'
   - name: user_company_size
     description: str, company size
     tests:
@@ -735,10 +734,7 @@ models:
     description: str, user highest education
     tests:
     - accepted_values:
-        values: ['Doctorate', "Master''s or professional degree", "Bachelor''s degree",
-          'Associate degree', 'Secondary/high school', 'Junior secondary/junior high/middle
-            school', 'Elementary/primary school', 'No formal education', 'Other education',
-          '']
+        values: '{{ var("highest_education_values") }}'
   - name: user_profile_created_on
     description: timestamp, date and time when this profile data was initially created
   - name: user_profile_updated_on
