@@ -15,8 +15,12 @@ with mitxonline_certificates as (
 )
 
 , mitxonline_dedp_courses as (
-    select course_id from {{ ref('int__mitxonline__program_to_courses') }}
-    where program_id = {{ var("dedp_mitxonline_program_id") }}
+    select distinct course_id from {{ ref('int__mitxonline__program_requirements') }}
+    where
+        program_id in (
+            {{ var("dedp_mitxonline_international_development_program_id") }}
+            , {{ var("dedp_mitxonline_public_policy_program_id") }}
+        )
 )
 
 , edxorg_non_program_course_certificates as (
@@ -72,7 +76,7 @@ with mitxonline_certificates as (
 
     union all
 
-    select
+    select distinct
         courserun_platform as platform
         , course_number
         , courserun_title

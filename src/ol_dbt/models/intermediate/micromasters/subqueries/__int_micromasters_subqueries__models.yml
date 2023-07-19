@@ -35,6 +35,76 @@ models:
   - name: user_edxorg_username
     description: str, username in edx.org. For the very small number of users with
       multiple edx usernames, this is the username with the latest logins
+  - name: user_about_me
+    description: str, about me in user profile
+  - name: user_account_privacy
+    description: str, whether user account is "Public to everyone" (public), "Public
+      to logged in users" (public_to_mm) or "Private" (private)
+  - name: user_address_city
+    description: str, city where user lives in
+  - name: user_address_state_or_territory
+    description: str,  state or territory where user lives in
+  - name: user_address_postal_code
+    description: str, postal code where user lives in
+  - name: user_bio
+    description: str, user's biography on micromasters
+  - name: user_birth_date
+    description: timestamp, user's date of birth
+  - name: user_edx_goals
+    description: str, user's personal goal on edx.org
+  - name: user_edx_name
+    description: str, user's full name on edx.org
+  - name: user_email_is_optin
+    description: boolean, whether user has opted to receive email
+  - name: user_employer
+    description: str, user's employer on edx.org
+  - name: user_first_name
+    description: str, first name on user profile
+  - name: user_gender
+    description: str, user gender (could be blank)
+    tests:
+    - accepted_values:
+        values: ['Male', 'Female', 'Other/Prefer Not to Say']
+  - name: user_has_agreed_to_terms_of_service
+    description: boolean, whether the user has agreed to term of service
+  - name: user_highest_education
+    description: str, user's level of education reported on edx
+    tests:
+    - accepted_values:
+        values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
+          "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
+            \ school", "Elementary/primary school", "No formal education", "Other\
+            \ education", "Doctorate in science or engineering", "Doctorate in another\
+            \ field"]
+  - name: user_is_verified
+    description: boolean, whether the user is a verified MicroMasters user (currently
+      false to all users on production)
+  - name: user_job_title
+    description: str, user's job title on edx.org
+  - name: user_language_proficiencies
+    description: str, JSON string of user's language proficiencies on edx.org
+  - name: user_last_name
+    description: str, last name on user profile
+  - name: user_mailing_address
+    description: str, user's mailing address on edx.org
+  - name: user_nationality
+    description: str, user's nationality (stored as country code)
+  - name: user_phone_number
+    description: str, user's phone number
+  - name: user_preferred_language
+    description: str, user's preferred language
+  - name: user_preferred_name
+    description: str, user's Nickname / Preferred name
+  - name: user_profile_id
+    description: int, foreign key to profiles_profile
+    tests:
+    - not_null
+  - name: user_profile_is_filled_out
+    description: boolean, whether user filled out the profile
+  - name: user_profile_parental_consent_is_required
+    description: boolean, user profile requires parental consent on edx.org
+  - name: user_street_address
+    description: str, street address where user lives in
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__auth_user')
@@ -53,8 +123,8 @@ models:
     - not_null
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
-    tests:
-    - not_null
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in Mitxonline
   - name: program_title
     description: str, title of the program
     tests:
@@ -110,8 +180,8 @@ models:
     - not_null
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
-    tests:
-    - not_null
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in Mitxonline
   - name: program_title
     description: str, title of the program
     tests:
@@ -168,8 +238,8 @@ models:
     - not_null
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
-    tests:
-    - not_null
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in Mitxonline
   - name: program_title
     description: str, title of the program
     tests:
@@ -218,9 +288,9 @@ models:
     tests:
     - not_null
   - name: micromasters_program_id
-    description: str, id of program the course is part of in the micromasters database
-    tests:
-    - not_null
+    description: int, sequential ID representing a program in MicroMasters
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in Mitxonline
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -258,12 +328,10 @@ models:
   - name: coursecertificate_hash
     description: str, unique hash used to identify this DEDP course certificate
     tests:
-    - unique
     - not_null
   - name: coursecertificate_url
     description: str, the full URL to this DEDP course certificate on MicroMasters
     tests:
-    - unique
     - not_null
   - name: coursecertificate_created_on
     description: timestamp, date and time when DEDP course certificate was initially
@@ -289,9 +357,9 @@ models:
     tests:
     - not_null
   - name: micromasters_program_id
-    description: str, id of program the course is part of in the micromasters database
-    tests:
-    - not_null
+    description: int, sequential ID representing a program in MicroMasters
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in Mitxonline
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -326,12 +394,10 @@ models:
   - name: courseruncertificate_uuid
     description: str, unique identifier for the certificate on MITx Online
     tests:
-    - unique
     - not_null
   - name: courseruncertificate_url
     description: str, the full URL to this DEDP course certificate on MITx Online
     tests:
-    - unique
     - not_null
   - name: courseruncertificate_created_on
     description: timestamp, date and time when DEDP course certificate was initially
@@ -345,7 +411,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_username", "courserun_readable_id"]
+      column_list: ["user_mitxonline_username", "courserun_readable_id", "micromasters_program_id",
+        "mitxonline_program_id"]
 
 - name: __micromasters_course_certificates_non_dedp_from_edxorg
   description: Non-DEDP program course certificates earned on edX.org
@@ -355,9 +422,9 @@ models:
     tests:
     - not_null
   - name: micromasters_program_id
-    description: str, id of program the course is part of in the micromasters database
-    tests:
-    - not_null
+    description: int, sequential ID representing a program in MicroMasters
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in Mitxonline
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -414,6 +481,10 @@ models:
     description: str, title of program the course is part of
     tests:
     - not_null
+  - name: micromasters_program_id
+    description: int, sequential ID representing a program in MicroMasters
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in Mitxonline
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -463,6 +534,10 @@ models:
     description: str, title of program the course is part of
     tests:
     - not_null
+  - name: micromasters_program_id
+    description: int, sequential ID representing a program in MicroMasters
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in Mitxonline
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -507,7 +582,8 @@ models:
     description: timestamp, date and time when this grade was initially calculated
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_username", "courserun_readable_id"]
+      column_list: ["user_mitxonline_username", "courserun_readable_id", "micromasters_program_id",
+        "mitxonline_program_id"]
 
 - name: __micromasters_course_grades_non_dedp_from_edxorg
   description: Non-DEDP program course certificates on edX.org
@@ -516,6 +592,10 @@ models:
     description: str, title of program the course is part of
     tests:
     - not_null
+  - name: micromasters_program_id
+    description: int, sequential ID representing a program in MicroMasters
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in Mitxonline
   - name: courserun_title
     description: str, title of the course run
     tests:

@@ -20,6 +20,8 @@ with course_grades_dedp_from_micromasters as (
 , dedp_course_grades_combined as (
     select
         program_title
+        , mitxonline_program_id
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -39,6 +41,8 @@ with course_grades_dedp_from_micromasters as (
 
     select
         program_title
+        , mitxonline_program_id
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -59,6 +63,8 @@ with course_grades_dedp_from_micromasters as (
 , dedp_course_grades_sorted as (
     select
         program_title
+        , mitxonline_program_id
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -76,7 +82,8 @@ with course_grades_dedp_from_micromasters as (
                 then
                     row_number()
                         over (
-                            partition by courserun_readable_id, user_mitxonline_username order by created_on desc
+                            partition by courserun_readable_id, user_mitxonline_username, mitxonline_program_id
+                            order by created_on desc
                         )
             else 1
         end as row_num
@@ -92,6 +99,8 @@ with course_grades_dedp_from_micromasters as (
 , program_course_grades as (
     select
         program_title
+        , mitxonline_program_id
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -109,6 +118,8 @@ with course_grades_dedp_from_micromasters as (
 
     select
         program_title
+        , mitxonline_program_id
+        , micromasters_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform

@@ -23,6 +23,7 @@ with course_certificates_dedp_from_micromasters as (
     select
         program_title
         , micromasters_program_id
+        , mitxonline_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -42,6 +43,7 @@ with course_certificates_dedp_from_micromasters as (
     select
         program_title
         , micromasters_program_id
+        , mitxonline_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -62,6 +64,7 @@ with course_certificates_dedp_from_micromasters as (
     select
         program_title
         , micromasters_program_id
+        , mitxonline_program_id
         , courserun_title
         , courserun_readable_id
         , courserun_platform
@@ -79,7 +82,7 @@ with course_certificates_dedp_from_micromasters as (
                 then
                     row_number()
                         over (
-                            partition by courserun_readable_id, user_mitxonline_username
+                            partition by courserun_readable_id, user_mitxonline_username, mitxonline_program_id
                             order by courseruncertificate_created_on desc
                         )
             else 1
@@ -98,6 +101,7 @@ with course_certificates_dedp_from_micromasters as (
 , program_course_certificates as (
     select
         program_title
+        , mitxonline_program_id
         , micromasters_program_id
         , courserun_title
         , courserun_readable_id
@@ -116,6 +120,7 @@ with course_certificates_dedp_from_micromasters as (
 
     select
         program_title
+        , mitxonline_program_id
         , micromasters_program_id
         , courserun_title
         , courserun_readable_id

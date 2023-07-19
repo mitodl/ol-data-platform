@@ -17,7 +17,7 @@ with enrollments as (
 )
 
 , mitxonline_programs as (
-    select * from {{ ref('int__mitxonline__program_to_courses') }}
+    select * from {{ ref('int__mitxonline__program_requirements') }}
 )
 
 , mitxonline_orders as (
@@ -37,7 +37,7 @@ with enrollments as (
 )
 
 , dedp_enrollments_verified_in_micromasters as (
-    select
+    select distinct
         enrollments.user_id
         , enrollments.courserun_id
     from enrollments
@@ -53,12 +53,15 @@ with enrollments as (
             and micromasters_orders.order_id = micromasters_lines.order_id
     where
         mitxonline_runs.courserun_tag in ('2T2022', '1T2022', '3T2021')
-        and mitxonline_programs.program_id = {{ var("dedp_mitxonline_program_id") }}
+        and mitxonline_programs.program_id in (
+            {{ var("dedp_mitxonline_international_development_program_id") }}
+            , {{ var("dedp_mitxonline_public_policy_program_id") }}
+        )
         and micromasters_orders.order_state = 'fulfilled'
 )
 
 , dedp_enrollments_verified_in_mitxonline as (
-    select
+    select distinct
         enrollments.user_id
         , enrollments.courserun_id
     from enrollments
@@ -70,7 +73,10 @@ with enrollments as (
     inner join mitxonline_programs on mitxonline_programs.course_id = mitxonline_runs.course_id
     where
         mitxonline_runs.courserun_tag not in ('2T2022', '1T2022', '3T2021')
-        and mitxonline_programs.program_id = {{ var("dedp_mitxonline_program_id") }}
+        and mitxonline_programs.program_id in (
+            {{ var("dedp_mitxonline_international_development_program_id") }}
+            , {{ var("dedp_mitxonline_public_policy_program_id") }}
+        )
         and mitxonline_orders.order_state = 'fulfilled'
 
 )
@@ -102,6 +108,7 @@ with enrollments as (
         , mitxonline_runs.courserun_title
         , mitxonline_runs.courserun_readable_id
         , mitxonline_runs.course_number
+        , mitxonline_runs.course_id
         , mitxonline_users.user_username
         , mitxonline_users.user_email
         , mitxonline_users.user_edxorg_username
@@ -123,4 +130,5 @@ with enrollments as (
 
 )
 
-select * from mitxonline_enrollments
+select *
+from mitxonline_enrollments
