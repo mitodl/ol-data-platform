@@ -100,7 +100,7 @@ select
     , 'regular coupon' as combinedcoupon_table_source
     , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
     , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount
-    , coalesce (count(couponredemption.couponredemption_id) > 0, false) as coupon_redeemed
+    , coalesce(count(couponredemption.couponredemption_id) > 0, false) as coupon_redeemed
     , array_join(array_distinct(array_agg(users_user.user_email)), ', ') as combined_user_emails
     , array_join(array_distinct(array_agg(users_user.user_address_country)), ', ') as user_address_countries
     , array_join(array_distinct(array_agg(ecommerce_order.order_id)), ', ') as order_ids
@@ -153,7 +153,7 @@ select
     , 'b2b coupon' as combinedcoupon_table_source
     , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
     , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount
-    , coalesce (count(ecommerce_couponredemption.couponredemption_id) > 0, false) as coupon_redeemed
+    , coalesce(count(ecommerce_couponredemption.couponredemption_id) > 0, false) as coupon_redeemed
     , array_join(array_distinct(array_agg(users_user.user_email)), ', ') as combined_user_emails
     , array_join(array_distinct(array_agg(users_user.user_address_country)), ', ') as user_address_countries
     , array_join(array_distinct(array_agg(ecommerce_order.order_id)), ', ') as order_ids
