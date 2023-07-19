@@ -2,6 +2,110 @@
 version: 2
 
 models:
+<<<<<<< Updated upstream
+=======
+- name: int__mitxpro__ecommerce_combinedcoupons
+  description: B2B and regular coupons combined into one table with denormalized data
+  columns:
+  - name: coupon_email
+    description: string, email associated to the coupon
+  - name: coupon_code
+    description: string, coupon code for the coupon
+  - name: coupon_created_on
+    description: timestamp, specifying when the coupon was initially created
+  - name: couponpayment_name
+    description: string, human readable name for the coupon payment
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
+  - name: product_id
+    description: int, foreign key in ecommerce_product
+  - name: couponpaymentversion_payment_transaction
+    description: string, string that identifies the payment invoice for coupon purchases
+      by companies
+  - name: req_reference_number
+    description: b2b receipt req reference number for a payment
+  - name: programrun_readable_id
+    description: str, unique program run ID formatted as program-v1:{org}+{program
+      code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
+  - name: program_title
+    description: str, title of the course run
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      e.g. course-v1:xPRO+MLx1+R0
+  - name: course_title
+    description: str, title of the course
+  - name: productversion_readable_id
+    description: string, the readable_id field from the product object
+  - name: combinedcoupon_table_source
+    description:  Describes whether the data on the combioned coupon table is coming from b2b or elsewhere
+  - name: couponpaymentversion_coupon_type
+    description: string, one of 'single-use' or 'promo'. Promo coupon codes can be
+      used multiple times
+  - name: couponpaymentversion_discount_amount
+    description: number, either dollar amount or percentage (between 0 and 1) discount
+  - name: coupon_redeemed
+    description: boolean, whether the user redeemed the coupon to enroll in the course
+  - name: combined_user_emails
+    description: str, user emails associated with the coupons
+  - name: user_address_countries
+    description: str, country codes for the user(s)
+  - name: order_ids
+    description: int, foreign key for ecommerce_orders
+  - name: combined_order_status
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded"
+- name: int__mitxpro__ecommerce_couponversion
+  description: A version of a coupon linked to a specific couponpaymentversion record
+  columns:
+  - name: couponversion_id
+    description: int, primary key representing a coupon version
+    tests:
+    - unique
+    - not_null
+  - name: couponversion_created_on
+    description: timestamp, specifying when the coupon version was initially created
+    tests:
+    - not_null
+  - name: couponversion_updated_on
+    description: timestamp, specifying when the coupon version was most recently updated
+    tests:
+    - not_null
+  - name: coupon_id
+    description: int, foreign key referencing ecommerce_coupon
+    tests:
+    - not_null
+  - name: couponpaymentversion_id
+    description: int, foreign key to ecommerce_couponpaymentversion
+    tests:
+    - not_null
+- name: int__mitxpro__ecommerce_couponredemption
+  description: A row in this table is added when an order uses a coupon code
+  columns:
+  - name: couponredemption_id
+    description: int, primary key representing a coupon redemption
+    tests:
+    - not_null
+  - name: couponredemption_created_on
+    description: timestamp, specifying when the coupon was redeemed
+    tests:
+    - not_null
+  - name: couponredemption_updated_on
+    description: timestamp, specifying when the coupon redemption was updated most
+      recently updated
+    tests:
+    - not_null
+  - name: couponversion_id
+    description: int, foreign key for ecommerce_couponversion
+    tests:
+    - not_null
+  - name: order_id
+    description: int, foreign key for ecommerce_order
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["couponversion_id", "order_id"]
+>>>>>>> Stashed changes
 - name: int__mitxpro__b2becommerce_b2breceipt
   description: Data returned from cybersource when a user pays for a b2b order
   columns:
