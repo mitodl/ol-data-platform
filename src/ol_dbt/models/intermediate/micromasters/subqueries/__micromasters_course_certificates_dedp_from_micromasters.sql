@@ -47,7 +47,7 @@ with dedp_course_certificates as (
 )
 
 , programs as (
-    select * from {{ ref('stg__micromasters__app__postgres__courses_program') }}
+    select * from {{ ref('int__mitx__programs') }}
 )
 
 , mm_users as (
@@ -57,7 +57,8 @@ with dedp_course_certificates as (
 
 select
     programs.program_title
-    , programs.program_id as micromasters_program_id
+    , programs.micromasters_program_id
+    , programs.mitxonline_program_id
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
     , courseruns.courserun_edxorg_readable_id
@@ -79,5 +80,5 @@ inner join highest_courserun_grades
         and dedp_course_certificates.course_id = highest_courserun_grades.course_id
 inner join courseruns on highest_courserun_grades.courserun_id = courseruns.courserun_id
 inner join courses on dedp_course_certificates.course_id = courses.course_id
-inner join programs on courses.program_id = programs.program_id
+inner join programs on courses.program_id = programs.micromasters_program_id
 inner join mm_users on dedp_course_certificates.user_id = mm_users.user_id

@@ -21,11 +21,10 @@ with edx_course_certificates as (
     from {{ ref('__micromasters__users') }}
 )
 
-
-, micromasters_programs as (
+, programs as (
     select *
-    from {{ ref('int__micromasters__programs') }}
-    where program_id != {{ var("dedp_micromasters_program_id") }}
+    from {{ ref('int__mitx__programs') }}
+    where is_dedp_program = false
 )
 
 , program_certificates_override_list as (
@@ -133,8 +132,9 @@ with edx_course_certificates as (
         edx_users.user_username as user_edxorg_username
         , micromasters_users.user_mitxonline_username
         , edx_users.user_email
-        , micromasters_programs.program_id as micromasters_program_id
-        , micromasters_programs.program_title
+        , programs.micromasters_program_id
+        , programs.program_title
+        , programs.mitxonline_program_id
         , program_completions.user_edxorg_id
         , edx_users.user_gender
         , edx_users.user_country
@@ -149,14 +149,12 @@ with edx_course_certificates as (
         , micromasters_users.user_id as micromasters_user_id
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from program_completions
-
-
     left join edx_users
         on edx_users.user_id = program_completions.user_edxorg_id
     left join micromasters_users
         on micromasters_users.user_edxorg_username = program_completions.user_edxorg_username
-    left join micromasters_programs
-        on micromasters_programs.program_id = program_completions.program_id
+    left join programs
+        on programs.micromasters_program_id = program_completions.program_id
 )
 
 -- Some users should recieve a certificate even though they don't fulfill the requirements according
@@ -169,8 +167,9 @@ with edx_course_certificates as (
         edx_users.user_username as user_edxorg_username
         , micromasters_users.user_mitxonline_username
         , edx_users.user_email
-        , micromasters_programs.program_id as micromasters_program_id
-        , micromasters_programs.program_title
+        , programs.micromasters_program_id
+        , programs.program_title
+        , programs.mitxonline_program_id
         , edx_users.user_id as user_edxorg_id
         , edx_users.user_gender
         , edx_users.user_country
@@ -189,8 +188,8 @@ with edx_course_certificates as (
         on edx_users.user_id = program_certificates_override_list.user_edxorg_id
     left join micromasters_users
         on micromasters_users.user_edxorg_username = edx_users.user_username
-    inner join micromasters_programs
-        on micromasters_programs.program_id = program_certificates_override_list.micromasters_program_id
+    inner join programs
+        on programs.micromasters_program_id = program_certificates_override_list.micromasters_program_id
     left join non_dedp_certificates
         on
             non_dedp_certificates.user_edxorg_id

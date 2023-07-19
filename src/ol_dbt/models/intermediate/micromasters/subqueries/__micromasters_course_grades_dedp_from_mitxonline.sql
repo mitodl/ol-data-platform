@@ -25,21 +25,14 @@ with courserun_grades as (
     select * from {{ ref('int__mitxonline__courses') }}
 )
 
-, programs as (
-    select * from {{ ref('int__mitxonline__programs') }}
+, enrollments_with_program as (
+    select * from {{ ref('int__mitxonline__courserunenrollments_with_programs') }}
 )
 
-, program_to_courses as (
-    select * from {{ ref('int__mitxonline__program_to_courses') }}
-)
-
-, micromasters_programs as (
-    select * from {{ ref('int__micromasters__programs') }}
-)
-
-----program title and id are different between MM and MITxOnline, use title from MM
 select
-    micromasters_programs.program_title
+    enrollments_with_program.program_title
+    , enrollments_with_program.micromasters_program_id
+    , enrollments_with_program.mitxonline_program_id
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
     , courseruns.courserun_platform
@@ -55,12 +48,12 @@ select
 from courserun_grades
 inner join courseruns on courserun_grades.courserun_id = courseruns.courserun_id
 inner join courses on courserun_grades.course_id = courses.course_id
-inner join program_to_courses on program_to_courses.course_id = courses.course_id
-inner join programs on program_to_courses.program_id = programs.program_id
+inner join enrollments_with_program
+    on
+        enrollments_with_program.courserun_id = courseruns.courserun_id
+        and enrollments_with_program.user_id = courserun_grades.user_id
 inner join mitxonline_users on courserun_grades.user_id = mitxonline_users.user_id
-inner join micromasters_programs
-    on micromasters_programs.program_id = {{ var("dedp_micromasters_program_id") }}
 left join micromasters_users
     on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
 left join edx_users on edx_users.user_username = micromasters_users.user_edxorg_username
-where programs.program_id = {{ var("dedp_mitxonline_program_id") }}
+where enrollments_with_program.is_dedp_program = true

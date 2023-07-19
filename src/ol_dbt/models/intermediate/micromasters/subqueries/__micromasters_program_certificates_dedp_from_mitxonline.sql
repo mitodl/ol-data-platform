@@ -16,10 +16,11 @@ with mitxonline_program_certificates as (
 )
 
 
-, micromasters_programs as (
+, mitx_programs as (
     select *
-    from {{ ref('int__micromasters__programs') }}
+    from {{ ref('int__mitx__programs') }}
 )
+
 
 , mitxonline_users as (
     select *
@@ -30,8 +31,9 @@ select
     micromasters_users.user_edxorg_username as user_edxorg_username
     , mitxonline_users.user_username as user_mitxonline_username
     , micromasters_users.user_email
-    , micromasters_programs.program_id as micromasters_program_id
-    , micromasters_programs.program_title
+    , mitx_programs.micromasters_program_id
+    , mitx_programs.program_title
+    , mitx_programs.mitxonline_program_id
     , edx_users.user_id as user_edxorg_id
     , edx_users.user_gender
     , micromasters_users.user_address_city
@@ -48,7 +50,6 @@ select
 from mitxonline_program_certificates
 left join mitxonline_users on mitxonline_users.user_id = mitxonline_program_certificates.user_id
 left join micromasters_users on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
-left join micromasters_programs
-    on micromasters_programs.program_id = {{ var("dedp_micromasters_program_id") }}
 left join edx_users on edx_users.user_username = micromasters_users.user_edxorg_username
-where mitxonline_program_certificates.program_id = {{ var("dedp_mitxonline_program_id") }}
+left join mitx_programs on mitxonline_program_certificates.program_id = mitx_programs.mitxonline_program_id
+where mitx_programs.is_dedp_program = true

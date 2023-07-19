@@ -14,13 +14,14 @@ with courserun_certificates as (
     select * from {{ ref('int__edxorg__mitx_courseruns') }}
 )
 
-, micromasters_programs as (
-    select * from {{ ref('int__micromasters__programs') }}
+, programs as (
+    select * from {{ ref('int__mitx__programs') }}
 )
 
 select
-    micromasters_programs.program_title
-    , micromasters_programs.program_id as micromasters_program_id
+    programs.program_title
+    , programs.micromasters_program_id
+    , programs.mitxonline_program_id
     , courseruns.courserun_title
     , courseruns.courserun_readable_id
     , '{{ var("edxorg") }}' as courserun_platform
@@ -36,7 +37,7 @@ select
     , courserun_certificates.courseruncertificate_updated_on
 from courserun_certificates
 inner join courseruns on courserun_certificates.courserun_readable_id = courseruns.courserun_readable_id
-inner join micromasters_programs on courseruns.micromasters_program_id = micromasters_programs.program_id
+inner join programs on courseruns.micromasters_program_id = programs.micromasters_program_id
 inner join edxorg_users on courserun_certificates.user_id = edxorg_users.user_id
 left join micromasters_users on edxorg_users.user_username = micromasters_users.user_edxorg_username
-where micromasters_programs.program_id != {{ var("dedp_micromasters_program_id") }}
+where programs.is_dedp_program = false

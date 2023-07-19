@@ -1,14 +1,16 @@
 with mitx_enrollments as (
-    select * from {{ ref('int__mitx__courserun_enrollments') }}
+    select * from {{ ref('int__mitx__courserun_enrollments_with_programs') }}
 )
 
-, program_requirements as (
-    select * from {{ ref('int__mitx__program_requirements') }}
+, programs as (
+    select * from {{ ref('int__mitx__programs') }}
+
 )
 
 select
-    program_requirements.program_title
-    , program_requirements.micromasters_program_id
+    mitx_enrollments.program_title
+    , mitx_enrollments.micromasters_program_id
+    , mitx_enrollments.mitxonline_program_id
     , mitx_enrollments.user_id
     , mitx_enrollments.user_mitxonline_username
     , mitx_enrollments.user_edxorg_username
@@ -23,6 +25,8 @@ select
     , mitx_enrollments.courserun_title
     , mitx_enrollments.courserunenrollment_enrollment_mode
 from mitx_enrollments
-inner join program_requirements
-    on program_requirements.course_number = mitx_enrollments.course_number
-where program_requirements.micromasters_program_id is not null
+inner join programs
+    on
+        programs.micromasters_program_id = mitx_enrollments.micromasters_program_id
+        or programs.mitxonline_program_id = mitx_enrollments.mitxonline_program_id
+where programs.is_micromasters_program = true
