@@ -2,8 +2,6 @@
 version: 2
 
 models:
-<<<<<<< Updated upstream
-=======
 - name: int__mitxpro__ecommerce_combinedcoupons
   description: B2B and regular coupons combined into one table with denormalized data
   columns:
@@ -16,19 +14,19 @@ models:
   - name: couponpayment_name
     description: string, human readable name for the coupon payment
   - name: b2border_contract_number
-    description: string, contract number used to identify the order
+    description: string, contract number used to identify the order  
   - name: product_id
-    description: int, foreign key in ecommerce_product
+    description: int, foreign key in ecommerce_product 
   - name: couponpaymentversion_payment_transaction
     description: string, string that identifies the payment invoice for coupon purchases
-      by companies
+      by companies 
   - name: req_reference_number
     description: b2b receipt req reference number for a payment
   - name: programrun_readable_id
     description: str, unique program run ID formatted as program-v1:{org}+{program
       code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
   - name: program_title
-    description: str, title of the course run
+    description: str, title of the course run   
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
       e.g. course-v1:xPRO+MLx1+R0
@@ -36,8 +34,9 @@ models:
     description: str, title of the course
   - name: productversion_readable_id
     description: string, the readable_id field from the product object
-  - name: combinedcoupon_table_source
-    description:  Describes whether the data on the combioned coupon table is coming from b2b or elsewhere
+  - name: combinedcoupon_table_source   
+    description:  Describes whether the data on the combioned coupon table is 
+      coming from b2b or elsewhere
   - name: couponpaymentversion_coupon_type
     description: string, one of 'single-use' or 'promo'. Promo coupon codes can be
       used multiple times
@@ -105,7 +104,6 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["couponversion_id", "order_id"]
->>>>>>> Stashed changes
 - name: int__mitxpro__b2becommerce_b2breceipt
   description: Data returned from cybersource when a user pays for a b2b order
   columns:
