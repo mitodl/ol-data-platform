@@ -2,73 +2,54 @@
 version: 2
 
 models:
-- name: marts__mitxpro_ecommerce_productcoupon_details
-  description: product and coupon detail data from MITXPRO
+- name: marts__mitxpro_ecommerce_combinedcoupons
+  description: B2B and regular coupons combined into one table with denormalized data
   columns:
-  - name: coupon_id
-    description: int, foreign key representing a coupon
-    tests:
-    - not_null
-  - name: product_id
-    description: int, foreign key representing a product
+  - name: coupon_email
+    description: string, email associated to the coupon
   - name: coupon_code
     description: string, coupon code for the coupon
-    tests:
-    - not_null
-  - name: couponpayment_name
-    description: string, human readable tag for coupon payment associated with the
-      coupon
-    tests:
-    - not_null
   - name: coupon_created_on
     description: timestamp, specifying when the coupon was initially created
-    tests:
-    - not_null
-  - name: maxproductcouponassignment_created_on
-    description: timestamp, specifying the max when the coupon assignment was created
-  - name: productcouponassignment_is_redeemed
-    description: boolean, whether the user redeemed the coupon to enroll in the course
-  - name: productcouponassignment_email
-    description: string, user email that can redeem the coupon
+  - name: couponpayment_name
+    description: string, human readable name for the coupon payment
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
+  - name: product_id
+    description: int, foreign key in ecommerce_product
+  - name: couponpaymentversion_payment_transaction
+    description: string, string that identifies the payment invoice for coupon purchases
+      by companies
+  - name: req_reference_number
+    description: b2b receipt req reference number for a payment
+  - name: programrun_readable_id
+    description: str, unique program run ID formatted as program-v1:{org}+{program
+      code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
+  - name: program_title
+    description: str, title of the course run
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      e.g. course-v1:xPRO+MLx1+R0
+  - name: course_title
+    description: str, title of the course
   - name: productversion_readable_id
     description: string, the readable_id field from the product object
-
-- name: marts__mitxpro_ecommerce_userorder_details
-  description: user and order detail data from MITXPRO
-  columns:
-  - name: coupon_id
-    description: int, foreign key representing a coupon
-  - name: product_id
-    description: int, foreign key representing a product
-  - name: order_id
-    description: int, foreign key representing an order
-    tests:
-    - not_null
-  - name: order_state
-    description: string, order state. Options are "fulfilled", "failed", "created"
-      "refunded"
-    tests:
-    - not_null
-    - accepted_values:
-        values: ['fulfilled', 'failed', 'created', 'refunded']
-  - name: user_email
-    description: str, user email associated with their account
-  - name: b2border_email
-    description: string, email where the enrollment codes were sent
-  - name: couponpaymentversion_payment_transaction
-    description: string that identifies the payment invoice for coupon purchases by
-      companies
+  - name: combinedcoupon_table_source
+    description: string, Describes whether the data on the combioned coupon table
+      is coming from b2b or elsewhere
   - name: couponpaymentversion_coupon_type
     description: string, one of 'single-use' or 'promo'. Promo coupon codes can be
       used multiple times
   - name: couponpaymentversion_discount_amount
     description: number, either dollar amount or percentage (between 0 and 1) discount
-  - name: couponpayment_name
-    description: string, human readable name for the coupon payment
-  - name: couponpaymentversion_id
-    description: int, foreign key to ecommerce_couponpaymentversion for orders that
-      use a coupon
-  - name: b2border_contract_number
-    description: string, contract number used to identify the order
-  - name: req_reference_number
-    description: string, reference number for a payment
+  - name: coupon_redeemed
+    description: boolean, whether the user redeemed the coupon to enroll in the course
+  - name: combined_user_emails
+    description: str, user emails associated with the coupons
+  - name: user_address_countries
+    description: str, country codes for the user(s)
+  - name: order_ids
+    description: int, foreign key for ecommerce_orders
+  - name: combined_order_state
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded"
