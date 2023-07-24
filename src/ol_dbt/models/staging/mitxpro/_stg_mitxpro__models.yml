@@ -988,6 +988,10 @@ models:
     description: timestamp, specifying when a program was initially created
   - name: program_updated_on
     description: timestamp, specifying when a program was most recently updated
+  - name: program_is_external
+    description: boolean, whether the program is on an external platform
+    tests:
+    - not_null
 
 - name: stg__mitxpro__app__postgres__courses_programrun
   columns:
@@ -1051,6 +1055,10 @@ models:
     description: timestamp, specifying when a course was initially created
   - name: course_updated_on
     description: timestamp, specifying when a course was most recently updated
+  - name: course_is_external
+    description: boolean, whether the course is on an external platform
+    tests:
+    - not_null
 
 - name: stg__mitxpro__app__postgres__courses_courserun
   columns:
@@ -1124,6 +1132,9 @@ models:
     description: timestamp, specifying when a course topic was initially created
   - name: coursetopic_updated_on
     description: timestamp, specifying when a course topic was most recently updated
+  - name: coursetopic_parent_coursetopic_id
+    description: int, id for the parent coursetopic for subtopics. For example 'Technology'
+      is the parent topic for 'Technology:Data Science'
 
 - name: stg__mitxpro__app__postgres__courses_courserungrade
   columns:
@@ -1245,27 +1256,6 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id"]
-
-- name: stg__mitxpro__app__postgres__courses_course_to_topic
-  columns:
-  - name: coursetotopic_id
-    description: int, primary key representing a single MITxPro course tagged to a
-      topic
-    tests:
-    - unique
-    - not_null
-  - name: coursetopic_id
-    description: int, foreign key to courses_coursetopic representing a single course
-      topic
-    tests:
-    - not_null
-  - name: course_id
-    description: int, foreign key to courses_course representing a single course
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursetopic_id", "course_id"]
 - name: stg__mitxpro__app__postgres__courses_courserunenrollment
   columns:
   - name: courserunenrollment_id
