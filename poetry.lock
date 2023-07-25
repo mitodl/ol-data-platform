@@ -1143,19 +1143,19 @@ files = [
 
 [[package]]
 name = "dbt-trino"
-version = "1.5.0"
+version = "1.5.1"
 description = "The trino adapter plugin for dbt (data build tool)"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "dbt-trino-1.5.0.tar.gz", hash = "sha256:db8a2b1f4b377a3b9f6a37399723681dd0c528fd4f4c3f8cdb56d50e6991cbda"},
-    {file = "dbt_trino-1.5.0-py3-none-any.whl", hash = "sha256:cb1681f462719b8bad44da78d6b43c986f9a611b7d2788bfa2e2c9f49ac78d0b"},
+    {file = "dbt-trino-1.5.1.tar.gz", hash = "sha256:00435e658da37244e4de9a5a2cffe1eb4d307a4e648d282d72b3bfbc388ab830"},
+    {file = "dbt_trino-1.5.1-py3-none-any.whl", hash = "sha256:57ea56675ad93215c4bad22ab068dc4278e00789c6b3fcdba7f43667942dc5fa"},
 ]
 
 [package.dependencies]
 dbt-core = ">=1.5.0,<1.6.0"
-trino = ">=0.322,<1.0"
+trino = ">=0.326,<1.0"
 
 [[package]]
 name = "debugpy"
