@@ -626,6 +626,8 @@ sources:
       description: timestamp, specifying when a program was initially created
     - name: updated_on
       description: timestamp, specifying when a program was most recently updated
+    - name: is_external
+      description: boolean, whether the program is on an external platform
 
   - name: raw__xpro__app__postgres__courses_programrun
     columns:
@@ -663,6 +665,8 @@ sources:
     - name: position_in_program
       description: int, sequential number indicating the course display order in a
         program on MITxPro website
+    - name: is_external
+      description: boolean, whether the course is on an external platform
     - name: created_on
       description: timestamp, specifying when a course was initially created
     - name: updated_on
@@ -703,7 +707,6 @@ sources:
       description: timestamp, specifying when a course run was initially created
     - name: updated_on
       description: timestamp, specifying when a course run was most recently updated
-
   - name: raw__xpro__app__postgres__courses_courserungrade
     columns:
     - name: id
@@ -779,17 +782,9 @@ sources:
       description: timestamp, specifying when a course topic was initially created
     - name: updated_on
       description: timestamp, specifying when a course topic was most recently updated
-
-  - name: raw__xpro__app__postgres__courses_course_topics
-    columns:
-    - name: id
-      description: int, primary key representing a single MITxPro course tagged to
-        a topic
-    - name: course_id
-      description: int, foreign key to courses_course representing a single course
-    - name: coursetopic_id
-      description: int, foreign key to courses_coursetopic representing a single course
-        topic
+    - name: parent_id
+      description: int, id for the parent coursetopic for subtopics. For example 'Technology'
+        is the parent topic for 'Technology:Data Science'
 
   - name: raw__xpro__app__postgres__users_user
     columns:

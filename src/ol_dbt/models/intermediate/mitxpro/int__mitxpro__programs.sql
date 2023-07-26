@@ -9,4 +9,5 @@ select
     , program_title
     , program_is_live
     , program_readable_id
+    , program_is_external
 from courses
