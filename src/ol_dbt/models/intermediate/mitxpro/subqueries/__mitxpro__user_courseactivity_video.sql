@@ -1,3 +1,4 @@
+{{ config(materialized='view') }}
 with course_activities as (
     select * from {{ ref('__mitxpro__user_courseactivities') }}
 )
