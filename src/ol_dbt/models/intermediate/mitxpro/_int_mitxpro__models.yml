@@ -1259,3 +1259,41 @@ models:
   - name: coursetopic_parent_coursetopic_id
     description: int, id for the parent coursetopic for subtopics. For example 'Technology'
       is the parent topic for 'Technology:Data Science'
+
+- name: int__mitxpro__user_courseactivities
+  description: xPro open edX user activities aggregated statistics per course from
+    tracking logs
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: courseactivity_num_events
+    description: int, number of tracking log events
+    tests:
+    - not_null
+  - name: courseactivity_num_days_activity
+    description: int, number of days with activity
+    tests:
+    - not_null
+  - name: courseactivity_first_event_timestamp
+    description: timestamp, timestamp of user's first event within a course
+    tests:
+    - not_null
+  - name: courseactivity_last_event_timestamp
+    description: timestamp, timestamp of user's last event within a course
+    tests:
+    - not_null
+  - name: courseactivity_num_play_video
+    description: int, number of play_video events
+  - name: courseactivity_num_unique_play_video
+    description: int, number of unique videos played within a course
+  - name: courseactivity_last_play_video_timestamp
+    description: timestamp, timestamp of user's last play_video event within a course
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id"]

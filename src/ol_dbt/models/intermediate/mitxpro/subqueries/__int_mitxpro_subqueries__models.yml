@@ -1,0 +1,117 @@
+---
+version: 2
+
+models:
+- name: __mitxpro__user_courseactivities
+  description: xPro open edX user activities within a course from tracking logs
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, reference user id in auth_user from open edX. Extracted from
+      context field.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+  - name: org_id
+    description: str, reference name in organizations_organization from open edX.
+      e.g. xPRO . Extracted from context field
+  - name: useractivity_path
+    description: str, URL that generated this event. Extracted from context field
+  - name: useractivity_context_object
+    description: object, it includes member fields that provide contextual information.
+      Common fields apply to all events are course_id, org_id, path, user_id. Other
+      member fields for applicable events are course_user_tags, module.
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The values are - browser, mobile, server, task
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, type of event triggered. Values depend on event_source.
+    tests:
+    - not_null
+  - name: useractivity_event_name
+    description: str, type of event triggered. When this field is present for an event,
+      it supersedes the event_type field.
+  - name: useractivity_event_object
+    description: object,it includes member fields that identify specifics of each
+      triggered event. Different member fields are supplied for different events.
+    tests:
+    - not_null
+  - name: useractivity_page_url
+    description: str, url of the page the user was visiting when the event was emitted.
+  - name: useractivity_session_id
+    description: str, 32-character value to identify the user’s session. All browser
+      events and the server 'enrollment' events include session value. Other server
+      events and mobile events do not include a session value.
+  - name: useractivity_ip
+    description: str, IP address of the user who triggered the event. Empty for mobile
+      events.
+  - name: useractivity_timestamp
+    description: timestamp, time at which the event was emitted, formatted as ISO
+      8601 string
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref("stg__mitxpro__openedx__tracking_logs__user_activity")
+      row_condition: "courserun_readable_id is not null"
+      compare_row_condition: "courserun_readable_id is not null"
+
+- name: __mitxpro__user_courseactivity_video
+  description: xPro open edX user video activities within a course from tracking logs
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, reference user id in auth_user from open edX.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: useractivity_context_object
+    description: object, it includes member fields that provide contextual information.
+      Common fields apply to all events are course_id, org_id, path, user_id. Other
+      member fields for applicable events are course_user_tags, module.
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The values are - browser, mobile, server, task
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, type of event triggered. Values depend on event_source.
+    tests:
+    - not_null
+  - name: useractivity_event_name
+    description: str, type of event triggered. When this field is present for an event,
+      it supersedes the event_type field.
+  - name: useractivity_event_object
+    description: object,it includes member fields that identify specifics of each
+      triggered video event. seek_video events have new_time and old_time fields,
+      speed_change_video events have new_speed and old_speed fields
+    tests:
+    - not_null
+  - name: useractivity_video_id
+    description: str, hash code for the video being watched. This value is part of
+      the courseware_studentmodule.module_id
+    tests:
+    - not_null
+  - name: useractivity_video_duration
+    description: number, The length of the video file, in seconds.
+    tests:
+    - not_null
+  - name: useractivity_video_currenttime
+    description: number, The time in the video played. Applicable for some video events,
+      load_video, speed_change_video and seek_video don't have this field
+  - name: useractivity_timestamp
+    description: timestamp, time at which the video event was emitted
+    tests:
+    - not_null
