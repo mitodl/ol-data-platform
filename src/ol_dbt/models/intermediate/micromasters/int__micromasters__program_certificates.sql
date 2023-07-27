@@ -26,6 +26,7 @@ with program_certificates_dedp_from_micromasters as (
         , user_email
         , program_title
         , micromasters_program_id
+        , mitxonline_program_id
         , user_edxorg_id
         , program_completion_timestamp
         , user_gender
@@ -49,6 +50,7 @@ with program_certificates_dedp_from_micromasters as (
         , user_email
         , program_title
         , micromasters_program_id
+        , mitxonline_program_id
         , user_edxorg_id
         , program_completion_timestamp
         , user_gender
@@ -72,6 +74,7 @@ with program_certificates_dedp_from_micromasters as (
         , user_email
         , program_title
         , micromasters_program_id
+        , mitxonline_program_id
         , user_edxorg_id
         , program_completion_timestamp
         , user_gender
@@ -94,6 +97,7 @@ select
     , user_email
     , program_title
     , micromasters_program_id
+    , mitxonline_program_id
     , user_edxorg_id
     , program_completion_timestamp
     , user_gender

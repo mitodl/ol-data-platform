@@ -865,6 +865,10 @@ models:
     tests:
     - unique
     - not_null
+  - name: program_is_external
+    description: boolean, whether the program is on an external platform
+    tests:
+    - not_null
 
 - name: int__mitxpro__program_runs
   description: Intermediate model of program runs in MITxPro
@@ -924,6 +928,10 @@ models:
     tests:
     - unique
     - not_null
+  - name: course_is_external
+    description: boolean, whether the course is on an external platform
+    tests:
+    - not_null
 
 - name: int__mitxpro__course_runs
   description: Intermediate model of course runs in MIT xPro.
@@ -971,23 +979,6 @@ models:
     description: timestamp, specifying when enrollment starts
   - name: courserun_enrollment_end_on
     description: timestamp, specifying when enrollment ends
-
-- name: int__mitxpro__course_to_topics
-  description: Intermediate model for MITxPro course to topics
-  columns:
-  - name: coursetopic_name
-    description: str, name of a course topic
-    tests:
-    - not_null
-  - name: course_id
-    description: int, foreign key to courses_course representing a single course
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursetopic_name", "course_id"]
-  - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__courses_course_to_topic')
 
 - name: int__mitxpro__users
   description: Intermediate model of users in MIT xPro.
@@ -1248,3 +1239,61 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__courses_programcertificate')
+
+- name: int__mitxpro__coursetopic
+  columns:
+  - name: coursetopic_id
+    description: int, primary key representing a single MITxPro course topic
+    tests:
+    - unique
+    - not_null
+  - name: coursetopic_name
+    description: str, name of a course topic
+    tests:
+    - unique
+    - not_null
+  - name: coursetopic_created_on
+    description: timestamp, specifying when a course topic was initially created
+  - name: coursetopic_updated_on
+    description: timestamp, specifying when a course topic was most recently updated
+  - name: coursetopic_parent_coursetopic_id
+    description: int, id for the parent coursetopic for subtopics. For example 'Technology'
+      is the parent topic for 'Technology:Data Science'
+
+- name: int__mitxpro__user_courseactivities
+  description: xPro open edX user activities aggregated statistics per course from
+    tracking logs
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: courseactivity_num_events
+    description: int, number of tracking log events
+    tests:
+    - not_null
+  - name: courseactivity_num_days_activity
+    description: int, number of days with activity
+    tests:
+    - not_null
+  - name: courseactivity_first_event_timestamp
+    description: timestamp, timestamp of user's first event within a course
+    tests:
+    - not_null
+  - name: courseactivity_last_event_timestamp
+    description: timestamp, timestamp of user's last event within a course
+    tests:
+    - not_null
+  - name: courseactivity_num_play_video
+    description: int, number of play_video events
+  - name: courseactivity_num_unique_play_video
+    description: int, number of unique videos played within a course
+  - name: courseactivity_last_play_video_timestamp
+    description: timestamp, timestamp of user's last play_video event within a course
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id"]

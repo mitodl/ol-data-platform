@@ -251,6 +251,10 @@ models:
       as when learner enrolled for the course.
     tests:
     - not_null
+  - name: user_full_name
+    description: str, The full name of the user on edx.org. Very small number of edX.org
+      users have blank full name, their names aren't populated unless they have their
+      accounts linked on MicroMasters.
   - name: courserungrade_passing_grade
     description: float, Passing grade for the course, (range between 0.0 to 1.0)
   - name: courserungrade_user_grade

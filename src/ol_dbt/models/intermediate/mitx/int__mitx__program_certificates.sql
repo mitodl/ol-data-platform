@@ -7,7 +7,11 @@ with micromasters_program_certificates as (
 , mitxonline_program_certificates as (
     select * from {{ ref('int__mitxonline__program_certificates') }}
     --- dedp is handled in micromasters_program_certificates
-    where program_id != {{ var("dedp_mitxonline_program_id") }}
+    where
+        program_id not in (
+            {{ var("dedp_mitxonline_public_policy_program_id") }}
+            , {{ var("dedp_mitxonline_international_development_program_id") }}
+        )
 )
 
 , mitx_programs as (

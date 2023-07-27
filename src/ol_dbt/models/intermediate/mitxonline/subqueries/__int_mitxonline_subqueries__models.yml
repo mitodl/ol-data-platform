@@ -1,0 +1,26 @@
+---
+version: 2
+
+models:
+- name: __mitxonline_good_economics_for_hard_times_program
+  description: After the dedp micromasters was divided into two tracks the rules for
+    which DEDP program the user can apply 14.009x Good Economics for Hard Times are
+    as follows 'If you completed 14.009x Good Economics for Hard Times before the
+    launch of the Public Policy Track in fall 2023, you can apply the course to the
+    International Development Track indefinitely. However, if you completed 14.009x
+    before fall 2023 and wish to apply it to the Public Policy Track, it cannot be
+    counted towards the International Development Track. In this case, you will need
+    to complete two other International Development Track electives excluding 14.009x)
+    and the three core courses to earn the International Development credential. Starting
+    from fall 2023, completing 14.009x will only be credited towards the Public Policy
+    Track.' Users can recieve both DEDP certificates but only count 14.009x once
+  columns:
+  - name: courserunenrollment_id
+    description: int, sequential ID representing an enrollment in 14.009x
+    tests:
+    - unique
+    - not_null
+  - name: program_id
+    description: int, id of dedp version that the user may apply the course to
+    tests:
+    - not_null

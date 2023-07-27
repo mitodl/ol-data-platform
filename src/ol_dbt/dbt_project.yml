@@ -36,7 +36,10 @@ vars:
     micromasters: 'MicroMasters'
     mitxonline: 'MITx Online'
     dedp_micromasters_program_id: 2
-    dedp_mitxonline_program_id: 1
+    dedp_mitxonline_international_development_program_id: 1
+    dedp_mitxonline_public_policy_program_id: 2
+    dedp_mitxonline_good_economics_for_hard_times_course_number: '14.009x'
+    dedp_mitxonline_good_economics_for_hard_times_internation_development_cutoff: '2023-08-01'
 
     highest_education_values: ['Doctorate', "Master''s or professional degree", "Bachelor''s\
         \ degree", 'Associate degree', 'Secondary/high school', 'Junior secondary/junior

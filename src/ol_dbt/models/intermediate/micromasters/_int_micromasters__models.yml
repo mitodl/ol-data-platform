@@ -3,7 +3,8 @@ version: 2
 
 models:
 - name: int__micromasters__course_enrollments
-  description: MicroMasters enrollments
+  description: MicroMasters enrollments. Enrollments in courses that satisfy the requirements
+    for multiple programs appear in multiple rows.
   columns:
   - name: program_title
     description: str, title of micromasters program the course is part of
@@ -11,8 +12,8 @@ models:
     - not_null
   - name: micromasters_program_id
     description: int, id of the program in the micromasters database
-    tests:
-    - not_null
+  - name: mitxonline_program_id
+    description: int, id of the program in the mitxonline database
   - name: user_id
     description: str, either the edx.org or the mitxonline id for the user
     tests:
@@ -60,7 +61,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "platform", "courserun_readable_id"]
+      column_list: ["user_id", "platform", "courserun_readable_id", "micromasters_program_id",
+        "mitxonline_program_id"]
 
 - name: int__micromasters__programs
   description: Intermediate model for programs in MicroMasters
@@ -137,8 +139,8 @@ models:
     - not_null
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
-    tests:
-    - not_null
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in the mitxonline database
   - name: user_edxorg_id
     description: int, Numerical user ID of a learner on the edX platform
   - name: program_completion_timestamp
@@ -179,7 +181,8 @@ models:
 - name: int__micromasters__course_certificates
   description: course certificates earned for MicroMasters programs. This include
     certificates are downloadable and not revoked from MITx Online, MicroMaster and
-    edX.org
+    edX.org. Certificates earned for courses that satisfy the requirements for multiple
+    programs appear in multiple rows for each program
   columns:
   - name: program_title
     description: str, title of the program the course is part of
@@ -188,8 +191,8 @@ models:
   - name: micromasters_program_id
     description: int, id of the program the course is part of in the micromasters
       database
-    tests:
-    - not_null
+  - name: mitxonline_program_id
+    description: int, id of the program the course is part of in the mitxonline database
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -228,15 +231,22 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id"]
+      column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
+        "mitxonline_program_id"]
 
 - name: int__micromasters__course_grades
-  description: course grades for MicroMasters programs
+  description: course grades for MicroMasters programs. Grades for courses that satisfy
+    the requirements for multiple programs appear in multiple rows
   columns:
   - name: program_title
     description: str, title of program the course is part of
     tests:
     - not_null
+  - name: micromasters_program_id
+    description: int, id of the program the course is part of in the micromasters
+      database
+  - name: mitxonline_program_id
+    description: int, id of the program the course is part of in the mitxonline database
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -276,7 +286,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id"]
+      column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
+        "mitxonline_program_id"]
 
 - name: int__micromasters__users
   description: MicroMasters users
@@ -348,6 +359,10 @@ models:
     tests:
     - accepted_values:
         values: ['Male', 'Female', 'Other/Prefer Not to Say']
+  - name: user_birth_date
+    description: timestamp, user's date of birth
+  - name: user_phone_number
+    description: str, user's phone number
   - name: user_highest_education
     description: str, user highest education pulled from users education history in
       MicroMasters database or level of education reported on edx if former doesn't

@@ -11,9 +11,9 @@ with mm_program_certificates as (
 )
 
 
-, micromasters_programs as (
+, programs as (
     select *
-    from {{ ref('int__micromasters__programs') }}
+    from {{ ref('int__mitx__programs') }}
 )
 
 , edx_users as (
@@ -25,8 +25,9 @@ select
     micromasters_users.user_edxorg_username as user_edxorg_username
     , micromasters_users.user_mitxonline_username
     , micromasters_users.user_email
-    , micromasters_programs.program_id as micromasters_program_id
-    , micromasters_programs.program_title
+    , programs.micromasters_program_id
+    , programs.program_title
+    , programs.mitxonline_program_id
     , edx_users.user_id as user_edxorg_id
     , edx_users.user_gender
     , edx_users.user_country
@@ -42,7 +43,7 @@ select
     , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
 from mm_program_certificates
 left join micromasters_users on mm_program_certificates.user_id = micromasters_users.user_id
-left join micromasters_programs
-    on micromasters_programs.program_id = mm_program_certificates.program_id
+left join programs
+    on programs.micromasters_program_id = mm_program_certificates.program_id
 left join edx_users on edx_users.user_username = micromasters_users.user_edxorg_username
-where micromasters_programs.program_id = {{ var("dedp_micromasters_program_id") }}
+where programs.is_dedp_program = true

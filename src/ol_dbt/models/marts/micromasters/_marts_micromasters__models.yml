@@ -94,8 +94,6 @@ models:
     - not_null
   - name: program_certificates
     description: int, count of program certificates earned for the the program
-    tests:
-    - not_null
 - name: marts__micromasters_program_certificates
   description: MicroMasters program certificate earners
   columns:
@@ -144,3 +142,9 @@ models:
   - name: user_address_state_or_territory
     description: str,  state or territory where user lives in from the profile in
       the micromasters database
+  - name: micromasters_program_id
+    description: int, id of the program in the micromasters database
+  - name: mitxonline_program_id
+    description: int, id of the program in the mitxonline database
+  - name: user_mitxonline_username
+    description: str, The username of the learner on the mitxonline platform

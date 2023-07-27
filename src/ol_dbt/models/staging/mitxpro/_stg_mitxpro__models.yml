@@ -988,6 +988,10 @@ models:
     description: timestamp, specifying when a program was initially created
   - name: program_updated_on
     description: timestamp, specifying when a program was most recently updated
+  - name: program_is_external
+    description: boolean, whether the program is on an external platform
+    tests:
+    - not_null
 
 - name: stg__mitxpro__app__postgres__courses_programrun
   columns:
@@ -1051,6 +1055,10 @@ models:
     description: timestamp, specifying when a course was initially created
   - name: course_updated_on
     description: timestamp, specifying when a course was most recently updated
+  - name: course_is_external
+    description: boolean, whether the course is on an external platform
+    tests:
+    - not_null
 
 - name: stg__mitxpro__app__postgres__courses_courserun
   columns:
@@ -1124,6 +1132,9 @@ models:
     description: timestamp, specifying when a course topic was initially created
   - name: coursetopic_updated_on
     description: timestamp, specifying when a course topic was most recently updated
+  - name: coursetopic_parent_coursetopic_id
+    description: int, id for the parent coursetopic for subtopics. For example 'Technology'
+      is the parent topic for 'Technology:Data Science'
 
 - name: stg__mitxpro__app__postgres__courses_courserungrade
   columns:
@@ -1245,27 +1256,6 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id"]
-
-- name: stg__mitxpro__app__postgres__courses_course_to_topic
-  columns:
-  - name: coursetotopic_id
-    description: int, primary key representing a single MITxPro course tagged to a
-      topic
-    tests:
-    - unique
-    - not_null
-  - name: coursetopic_id
-    description: int, foreign key to courses_coursetopic representing a single course
-      topic
-    tests:
-    - not_null
-  - name: course_id
-    description: int, foreign key to courses_course representing a single course
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursetopic_id", "course_id"]
 - name: stg__mitxpro__app__postgres__courses_courserunenrollment
   columns:
   - name: courserunenrollment_id
@@ -1355,3 +1345,76 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id", "ecommerce_order_id"]
+
+- name: stg__mitxpro__openedx__tracking_logs__user_activity
+  description: xPro open edX user activity table that tracks student and course team
+    events
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, reference user id in auth_user from open edX. Extracted from
+      context field.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+      Extracted from context field. Could be blank for any events that are not for
+      any specific course .e.g. user login/out, visiting dashboard, some course team
+      events e.g. course export from studio
+  - name: org_id
+    description: str, reference name in organizations_organization from open edX.
+      e.g. xPRO . Extracted from context field
+  - name: useractivity_path
+    description: str, URL that generated this event. Extracted from context field
+  - name: useractivity_context_object
+    description: object, it includes member fields that provide contextual information.
+      Common fields apply to all events are course_id, org_id, path, user_id. Other
+      member fields for applicable events are course_user_tags, module.
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The values are - browser, mobile, server, task
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, type of event triggered. Values depend on event_source.
+    tests:
+    - not_null
+  - name: useractivity_event_name
+    description: str, type of event triggered. When this field is present for an event,
+      it supersedes the event_type field.
+  - name: useractivity_event_object
+    description: object,it includes member fields that identify specifics of each
+      triggered event. Different member fields are supplied for different events.
+    tests:
+    - not_null
+  - name: useractivity_page_url
+    description: str, url of the page the user was visiting when the event was emitted.
+  - name: useractivity_session_id
+    description: str, 32-character value to identify the user’s session. All browser
+      events and the server 'enrollment' events include session value. Other server
+      events and mobile events do not include a session value.
+  - name: useractivity_ip
+    description: str, IP address of the user who triggered the event. Empty for mobile
+      events.
+  - name: useractivity_http_host
+    description: str, The site visited by the user. e.g. courses.xpro.mit.edu
+    tests:
+    - not_null
+  - name: useractivity_http_user_agent
+    description: str, browser agent string of the user who triggered the event.
+  - name: useractivity_http_accept_language
+    description: str, value from the HTTP Accept-Language request-header field
+  - name: useractivity_http_referer
+    description: str, URI from the HTTP Referer request-header field
+  - name: useractivity_timestamp
+    description: timestamp, time at which the event was emitted, formatted as ISO
+      8601 string
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "useractivity_event_type", "useractivity_context_object",
+        "useractivity_timestamp"]

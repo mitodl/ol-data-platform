@@ -626,6 +626,8 @@ sources:
       description: timestamp, specifying when a program was initially created
     - name: updated_on
       description: timestamp, specifying when a program was most recently updated
+    - name: is_external
+      description: boolean, whether the program is on an external platform
 
   - name: raw__xpro__app__postgres__courses_programrun
     columns:
@@ -663,6 +665,8 @@ sources:
     - name: position_in_program
       description: int, sequential number indicating the course display order in a
         program on MITxPro website
+    - name: is_external
+      description: boolean, whether the course is on an external platform
     - name: created_on
       description: timestamp, specifying when a course was initially created
     - name: updated_on
@@ -703,7 +707,6 @@ sources:
       description: timestamp, specifying when a course run was initially created
     - name: updated_on
       description: timestamp, specifying when a course run was most recently updated
-
   - name: raw__xpro__app__postgres__courses_courserungrade
     columns:
     - name: id
@@ -779,17 +782,9 @@ sources:
       description: timestamp, specifying when a course topic was initially created
     - name: updated_on
       description: timestamp, specifying when a course topic was most recently updated
-
-  - name: raw__xpro__app__postgres__courses_course_topics
-    columns:
-    - name: id
-      description: int, primary key representing a single MITxPro course tagged to
-        a topic
-    - name: course_id
-      description: int, foreign key to courses_course representing a single course
-    - name: coursetopic_id
-      description: int, foreign key to courses_coursetopic representing a single course
-        topic
+    - name: parent_id
+      description: int, id for the parent coursetopic for subtopics. For example 'Technology'
+        is the parent topic for 'Technology:Data Science'
 
   - name: raw__xpro__app__postgres__users_user
     columns:
@@ -890,3 +885,58 @@ sources:
         "Bachelor's degree", "Associate degree", "Secondary/high school", "Junior
         secondary/junior high/middle school", "Elementary/primary school", "No formal
         education", "Other education"
+
+  - name: raw__xpro__openedx__tracking_logs
+    description: event data that are emitted by server, the browser, or the mobile
+      device to capture information about user's interactions with a course
+    columns:
+    - name: username
+      description: str, username of the open edX user who caused the event to be emitted.
+        Some events are recorded with a blank username. This can occur when a user
+        logs out, or the login session times out, while a browser window remains open.
+        EdX recommends to ignore these events.
+    - name: context
+      description: object, it includes member fields that provide contextual information.
+        Common fields apply to all events are course_id, org_id, path, user_id. Other
+        member fields for applicable events are course_user_tags, module.
+    - name: event_source
+      description: str, specifies the source of the interaction that triggered the
+        event. The values are - browser, mobile, server, task
+    - name: event_type
+      description: str, type of event triggered. Values depend on event_source.
+    - name: name
+      description: str, type of event triggered. When this field is present for an
+        event, it supersedes the event_type field.
+    - name: event
+      description: object, it includes member fields that identify specifics of each
+        triggered event. Different member fields are supplied for different events.
+    - name: page
+      description: str, url of the page the user was visiting when the event was emitted.
+    - name: session
+      description: str, 32-character value to identify the user’s session. All browser
+        events and the server 'enrollment' events include a session value. Other server
+        events and mobile events do not include a session value.
+    - name: ip
+      description: str, IP address of the user who triggered the event. Empty for
+        mobile events.
+    - name: host
+      description: str, the site visited by the user. e.g. courses.xpro.mit.edu
+    - name: time
+      description: str, time at which the event was emitted. It has inconsistent formats
+        due to log collector switches, YYYY-MM-DD HH:mm:ss.SSSSSS for older records,
+        YYYY-MM-ddTHH:mm:ss.SSSSSS for newer records
+    - name: agent
+      description: str, browser agent string of the user who triggered the event.
+    - name: accept_language
+      description: str, value from the HTTP Accept-Language request-header field
+    - name: referer
+      description: str, URI from the HTTP Referer request-header field
+    - name: log_file
+      description: str, internal used field for log file location
+    - name: _ab_source_file_url
+      description: str, url path for the raw log file
+    - name: vector_timestamp
+      description: str, time when Vector processed this record. Blank for old records.
+    - name: environment
+      description: str, internal used field to indicate environment for the event.
+        e.g. xpro-production
