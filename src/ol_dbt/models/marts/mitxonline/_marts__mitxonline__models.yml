@@ -37,6 +37,9 @@ models:
     description: str, user full name on MITx Online
     tests:
     - not_null
+  - name: openedx_user_id
+    description: int, foreign key to open edX users. Not all app users have openedx_user_id
+      due to username mismatch between app and open edX.
 
 - name: marts__mitxonline_user_profiles
   description: MITx Online user profiles

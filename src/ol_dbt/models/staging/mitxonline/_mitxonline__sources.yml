@@ -722,3 +722,32 @@ sources:
       description: timestamp, specifying when a grade was initially created
     - name: updated_on
       description: timestamp, specifying when a grade was most recently updated
+
+  - name: raw__mitxonline__openedx__mysql__auth_user
+    description: MITx Online open edX users
+    columns:
+    - name: id
+      description: int, sequential ID representing a user on MITx Online open edX
+        platform
+    - name: username
+      description: str, unique username on the open edX platform
+    - name: password
+      description: str, hashed password
+    - name: first_name
+      description: str, user's first name. This field is not populated on production.
+    - name: last_name
+      description: str, user's last name. This field is not populated on production.
+    - name: email
+      description: str, user's email associated with their account
+    - name: is_active
+      description: boolean, used to soft delete users
+    - name: is_staff
+      description: boolean, indicating whether user can log into admin site
+    - name: is_superuser
+      description: boolean, indicating whether user has all permissions on open edx
+        platform
+    - name: date_joined
+      description: timestamp, date and time when a user account was initially created
+        on the open edX platform
+    - name: last_login
+      description: timestamp, date and time when user last login on the open edX platform

@@ -1193,6 +1193,11 @@ models:
     tests:
     - unique
     - not_null
+  - name: openedx_user_id
+    description: int, foreign key to open edX users. Not all app users have openedx_user_id
+      due to username mismatch between app and open edX.
+    tests:
+    - unique
   - name: user_username
     description: string, username
     tests:
