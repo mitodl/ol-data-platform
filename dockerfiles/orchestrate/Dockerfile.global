@@ -24,8 +24,9 @@ ENV DAGSTER_HOME=/opt/dagster/dagster_home/
 COPY --chown=dagster:dagster src/ol_orchestrate/workspace.yaml /opt/dagster/app/
 
 # Collect code from github
-RUN git clone https://github.com/mitodl/ol-data-platform.git /opt/dagster/code && \
-    cp /opt/dagster/code/src/ol_orchestrate/dagster.yaml /opt/dagster/dagster_home && \
+COPY --chown=dagster:dagster . /opt/dagster/code
+#RUN git clone https://github.com/mitodl/ol-data-platform.git /opt/dagster/code && \
+RUN cp /opt/dagster/code/src/ol_orchestrate/dagster.yaml /opt/dagster/dagster_home && \
     cp -r /opt/dagster/code/src/ol_dbt /opt/dbt && \
     chown -R dagster:dagster /opt/dbt
 
