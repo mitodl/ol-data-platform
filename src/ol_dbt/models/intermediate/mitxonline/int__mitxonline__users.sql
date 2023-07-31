@@ -36,8 +36,13 @@ with users as (
     select * from {{ ref('__micromasters__users') }}
 )
 
+, openedx_users as (
+    select * from {{ ref('stg__mitxonline__openedx__mysql__auth_user') }}
+)
+
 select
     users.user_id
+    , openedx_users.openedx_user_id
     , users.user_username
     , users.user_full_name
     , users.user_email
@@ -70,3 +75,5 @@ left join users_profile on users_profile.user_id = users.user_id
 left join micromasters_profile on micromasters_profile.user_username = users.user_username
 left join micromasters_users
     on micromasters_profile.user_profile_id = micromasters_users.user_profile_id
+left join openedx_users
+    on users.user_username = openedx_users.user_username

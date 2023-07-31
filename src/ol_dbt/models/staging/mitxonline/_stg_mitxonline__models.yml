@@ -1119,3 +1119,35 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_id"]
+
+- name: stg__mitxonline__openedx__mysql__auth_user
+  description: MITx Online open edX users
+  columns:
+  - name: openedx_user_id
+    description: int, sequential ID representing a user on MITx Online open edX platform
+    tests:
+    - unique
+    - not_null
+  - name: user_username
+    description: str, unique username on the open edX platform
+    tests:
+    - unique
+    - not_null
+  - name: user_email
+    description: str, user's email associated with their account
+    tests:
+    - unique
+    - not_null
+  - name: user_is_active
+    description: boolean, used to soft delete users
+    tests:
+    - not_null
+  - name: user_is_staff
+    description: boolean, indicating whether user can log into admin site
+    tests:
+    - not_null
+  - name: user_is_superuser
+    description: boolean, indicating whether user has all permissions on open edx
+      platform
+    tests:
+    - not_null
