@@ -78,10 +78,17 @@ with coupon as (
     where ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction is not null
 )
 
+, latest_couponversion as (
+    select
+        coupon_id
+        , max(couponversion_updated_on) as max_couponversion_updated_on
+    from ecommerce_couponversion
+    group by coupon_id
+)
+
 , reg_coupon_summary as (
     select
         coupon.coupon_id
-        , ecommerce_couponversion.couponversion_updated_on
         , program_runs.programrun_readable_id
         , program_runs.program_title
         , course_runs.courserun_readable_id
@@ -95,8 +102,12 @@ with coupon as (
         , array_join(array_distinct(array_agg(ecommerce_order.order_id)), ', ') as order_ids
         , array_join(array_distinct(array_agg(ecommerce_order.order_state)), ', ') as combined_order_state
     from coupon
+    left join latest_couponversion
+        on coupon.coupon_id = latest_couponversion.coupon_id
     left join ecommerce_couponversion
-        on coupon.coupon_id = ecommerce_couponversion.coupon_id
+        on
+            latest_couponversion.coupon_id = ecommerce_couponversion.coupon_id
+            and ecommerce_couponversion.couponversion_updated_on = latest_couponversion.max_couponversion_updated_on
     left join couponredemption
         on ecommerce_couponversion.couponversion_id = couponredemption.couponversion_id
     left join ecommerce_couponpaymentversion
@@ -147,7 +158,6 @@ with coupon as (
 , b2b_coupon_fields as (
     select
         b2b_ecommerce_b2border.b2border_email
-        , ecommerce_couponversion.couponversion_updated_on
         , coupon.coupon_code
         , coupon.coupon_id
         , coupon.coupon_created_on
@@ -162,10 +172,10 @@ with coupon as (
         , productversion.productversion_readable_id
         , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
         , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount
-        , try_cast(users_user.user_email as BigInt) as combined_user_emails
-        , try_cast(users_user.user_address_country as BigInt) as user_address_countries
-        , try_cast(ecommerce_order.order_id as BigInt) as order_ids
-        , try_cast(ecommerce_order.order_state as BigInt) as combined_order_state
+        , users_user.user_email as combined_user_emails
+        , users_user.user_address_country as user_address_countries
+        , ecommerce_order.order_id as order_ids
+        , ecommerce_order.order_state as combined_order_state
         , replace(
             cast(
                 json_extract(b2b_ecommerce_b2breceipt.b2breceipt_data, '$.req_reference_number'
@@ -210,7 +220,6 @@ select
     reg_coupon_fields.coupon_email
     , reg_coupon_fields.coupon_code
     , reg_coupon_fields.coupon_id
-    , reg_coupon_summary.couponversion_updated_on
     , reg_coupon_fields.coupon_created_on
     , reg_coupon_fields.couponpayment_name
     , null as b2border_contract_number
@@ -226,22 +235,21 @@ select
     , reg_coupon_summary.couponpaymentversion_coupon_type
     , reg_coupon_summary.couponpaymentversion_discount_amount
     , reg_coupon_summary.coupon_redeemed
-    , try_cast(reg_coupon_summary.combined_user_emails as BigInt) as combined_user_emails
-    , try_cast(reg_coupon_summary.user_address_countries as BigInt) as user_address_countries
-    , try_cast(reg_coupon_summary.order_ids as BigInt) as order_ids
-    , try_cast(reg_coupon_summary.combined_order_state as BigInt) as combined_order_state
+    , reg_coupon_summary.combined_user_emails as combined_user_emails
+    , reg_coupon_summary.user_address_countries as user_address_countries
+    , reg_coupon_summary.order_ids as order_ids
+    , reg_coupon_summary.combined_order_state as combined_order_state
 from reg_coupon_fields
 inner join reg_coupon_summary
     on reg_coupon_fields.coupon_id = reg_coupon_summary.coupon_id
 where reg_coupon_fields.coupon_id not in (select coupon_id from b2b_coupon_fields)
 
-union distinct
+union all
 
 select
     b2b_coupon_fields.b2border_email as coupon_email
     , b2b_coupon_fields.coupon_code
     , b2b_coupon_fields.coupon_id
-    , b2b_coupon_fields.couponversion_updated_on
     , b2b_coupon_fields.coupon_created_on
     , b2b_coupon_fields.couponpayment_name
     , b2b_coupon_fields.b2border_contract_number
