@@ -82,7 +82,7 @@ def upload_edx_gcs_course_data_to_s3(
     :type edx_gcs_course_tarball_directory: DagsterPath
 
     :param config: Directory path containing course tarballs.
-    :type UploadEdxGcsCourseConfig: Config
+    :type Config
 
     :yield: The S3 path of the uploaded directory
     """

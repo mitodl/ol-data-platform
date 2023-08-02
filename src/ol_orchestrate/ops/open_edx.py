@@ -141,18 +141,13 @@ class UploadExtractedDataConfig(Config):
         "to be used in subsequent steps to pull data per course."
     ),
 )
-def list_courses(
-    context: OpExecutionContext, config: ListCoursesConfig
-) -> List[String]:
+def list_courses(config: ListCoursesConfig) -> List[String]:
     """
     Retrieve the list of course IDs active in the edX instance to be used in subsequent
     steps to pull data per course.
 
-    :param context: Dagster context object for passing configuration
-    :type context: OpExecutionContext
-
     :param config: Client details pertaining to the Open edX API
-    :type ListCoursesConfig: Config
+    :type Config
 
     :yield: List of edX course IDs
     """
@@ -529,14 +524,14 @@ def export_edx_forum_database(  # type: ignore
     :param context: Dagster execution context for propagaint configuration data
     :type context: OpExecutionContext
 
-    :raises Failure: Raise a failure event if the mongo dump returns a non-zero exit
-        code
-
     :param config: Details pertaining to the MongoDB database
-    :type ExportEdxForumDatabaseConfig: Config
+    :type Config
 
     :yield: Path object to the directory where the exported Mongo database is
         located
+
+    :raises Failure: Raise a failure event if the mongo dump returns a non-zero exit
+        code
     """
     forum_data_path = context.resources.results_dir.path.joinpath(
         config.edx_mongodb_forum_database_name
@@ -561,7 +556,7 @@ def export_edx_forum_database(  # type: ignore
     mongodump_output, mongodump_retcode = run_bash(
         " ".join(command_array),
         output_logging="BUFFER",
-        log=context.log,
+        log=config.log,
         cwd=str(context.resources.results_dir.root_dir),
     )
 
@@ -621,7 +616,7 @@ def export_edx_courses(
     successful_exports: set[str] = set()
     failed_exports: set[str] = set()
     tasks = exported_courses["upload_task_ids"]
-    context.log.info("Exporting %s tasks from Open edX", len(tasks))
+    config.log.info("Exporting %s tasks from Open edX", len(tasks))
     # Possible status values found here:
     # https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
     while len(successful_exports.union(failed_exports)) < len(tasks):
@@ -638,7 +633,7 @@ def export_edx_courses(
             if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
                 failed_exports.add(course_id)
     for course_id in successful_exports:
-        context.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
+        config.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
         course_file = f"{course_id}.tar.gz"
         source_object = {
             "Bucket": config.edx_course_bucket,
@@ -736,8 +731,8 @@ def upload_extracted_data(  # noqa: PLR0913
         Open edX forum activity
     :type edx_forum_data_directory: DagsterPath
 
-    :param config: S3 bucket to use for uploading results of pipeline execution
-    :type ListCoursesConfig: Config
+    :param config: Details pertaining to the S3 bucket to use for uploading results
+    :type Config
 
     :yield: The S3 path of the uploaded directory
     """
