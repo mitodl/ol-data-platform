@@ -1,0 +1,49 @@
+FROM --platform=linux/amd64 python:3.11-slim AS dagster-base
+RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app && \
+    useradd -s /bin/bash -d /opt/dagster/dagster_home/ dagster && \
+    chown -R dagster: /opt/dagster
+RUN apt update && \
+    apt install -y git wget gnupg2 && \
+    apt clean && \
+    apt autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+# Install packages needed to talk to edxapp mongodb
+RUN wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | apt-key add - && \
+    echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/5.0 main" > /etc/apt/sources.list.d/mongodb-org-5.0.list && \
+    apt update && \
+    apt install -y mongodb-org-tools && \
+    apt clean && \
+    apt autoremove && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip install poetry
+
+ENV DAGSTER_HOME=/opt/dagster/dagster_home/
+
+# Copy your code and workspace to /opt/dagster/app
+COPY --chown=dagster:dagster src/ol_orchestrate/workspace.yaml /opt/dagster/app/
+
+# Collect code from github
+COPY --chown=dagster:dagster . /opt/dagster/code
+#RUN git clone https://github.com/mitodl/ol-data-platform.git /opt/dagster/code && \
+RUN cp /opt/dagster/code/src/ol_orchestrate/dagster.yaml /opt/dagster/dagster_home && \
+    cp -r /opt/dagster/code/src/ol_dbt /opt/dbt && \
+    chown -R dagster:dagster /opt/dbt
+
+
+USER dagster
+EXPOSE 3000
+WORKDIR /opt/dagster/code
+RUN poetry install
+
+RUN cd /opt/dbt && \
+    poetry run -C /opt/dagster/code dbt deps && \
+    poetry run -C /opt/dagster/code dbt ls --target dev
+
+# ENTRYPOINTS
+# Dagster Daemon
+# ENTRYPOINT ["poetry", "run", "dagster-daemon", "run"]
+# Dagit
+# ENTRYPOINT ["poetry", "run", "dagit", "-h", "0.0.0.0", "-p", "3000"]
+# Pipeline
+# ENTRYPOINT ["poetry", "run", "dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000"]
