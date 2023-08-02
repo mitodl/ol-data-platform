@@ -69,17 +69,17 @@ with coupon as (
 )
 
 , payment_transactions as (
-    select distinct 
+    select distinct
         ecommerce_couponversion.coupon_id
         , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
     from ecommerce_couponpaymentversion
-    inner join ecommerce_couponversion 
+    inner join ecommerce_couponversion
         on ecommerce_couponpaymentversion.couponpaymentversion_id = ecommerce_couponversion.couponpaymentversion_id
     where ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction is not null
 )
 
 , latest_couponversion as (
-    select 
+    select
         coupon_id
         , max(couponversion_updated_on) as max_couponversion_updated_on
     from ecommerce_couponversion
@@ -87,38 +87,38 @@ with coupon as (
 )
 
 , reg_coupon_summary as (
-    select 
+    select
         coupon.coupon_id
-        , cast(array_join(array_distinct(array_agg(program_runs.programrun_readable_id)), ', ') as varchar) 
+        , cast(array_join(array_distinct(array_agg(program_runs.programrun_readable_id)), ', ') as varchar)
             as programrun_readable_id
         , cast(array_join(array_distinct(array_agg(program_runs.program_title)), ', ') as varchar) as program_title
-        , cast(array_join(array_distinct(array_agg(course_runs.courserun_readable_id)), ', ') as varchar) 
+        , cast(array_join(array_distinct(array_agg(course_runs.courserun_readable_id)), ', ') as varchar)
             as courserun_readable_id
         , cast(array_join(array_distinct(array_agg(courses.course_title)), ', ') as varchar) as course_title
-        , cast(array_join(array_distinct(array_agg(productversion.productversion_readable_id)), ', ') as varchar) 
+        , cast(array_join(array_distinct(array_agg(productversion.productversion_readable_id)), ', ') as varchar)
             as productversion_readable_id
         , cast(array_join(array_distinct(array_agg(users_user.user_email)), ', ') as varchar) as combined_user_emails
-        , cast(array_join(array_distinct(array_agg(users_user.user_address_country)), ', ') as varchar) 
+        , cast(array_join(array_distinct(array_agg(users_user.user_address_country)), ', ') as varchar)
             as user_address_countries
         , cast(array_join(array_distinct(array_agg(ecommerce_order.order_id)), ', ') as varchar) as order_ids
-        , cast(array_join(array_distinct(array_agg(ecommerce_order.order_state)), ', ') as varchar) 
+        , cast(array_join(array_distinct(array_agg(ecommerce_order.order_state)), ', ') as varchar)
             as combined_order_state
         , case when (count(couponredemption.couponredemption_id) >= 1) then 'true' else 'false' end as coupon_redeemed
-        
+
     from coupon
     left join latest_couponversion
         on coupon.coupon_id = latest_couponversion.coupon_id
-    left join ecommerce_couponversion 
-        on 
-            latest_couponversion.coupon_id = ecommerce_couponversion.coupon_id 
+    left join ecommerce_couponversion
+        on
+            latest_couponversion.coupon_id = ecommerce_couponversion.coupon_id
             and ecommerce_couponversion.couponversion_updated_on = latest_couponversion.max_couponversion_updated_on
     left join couponredemption
         on ecommerce_couponversion.couponversion_id = couponredemption.couponversion_id
-    left join ecommerce_couponpaymentversion 
+    left join ecommerce_couponpaymentversion
         on ecommerce_couponpaymentversion.couponpaymentversion_id = ecommerce_couponversion.couponpaymentversion_id
     left join ecommerce_order
         on ecommerce_order.order_id = couponredemption.order_id
-    left join ecommerce_line 
+    left join ecommerce_line
         on ecommerce_line.order_id = ecommerce_order.order_id
     left join program_runs
         on ecommerce_line.programrun_id = program_runs.programrun_id
@@ -128,22 +128,22 @@ with coupon as (
         on course_runs.course_id = courses.course_id
     left join productversion
         on productversion.productversion_id = ecommerce_line.productversion_id
-    left join users_user    
+    left join users_user
         on ecommerce_order.order_purchaser_user_id = users_user.user_id
     where ecommerce_order.order_state = 'fulfilled' or ecommerce_order.order_state = 'refunded'
-    group by 
+    group by
         coupon.coupon_id
 )
 
 , reg_coupon_fields as (
-    select 
+    select
         productcouponassignment.productcouponassignment_email as coupon_email
         , coupon.coupon_code
         , coupon.coupon_id
         , coupon.coupon_created_on
         , coupon.couponpayment_name
         , productcouponassignment.product_id
-        , payment_transactions.couponpaymentversion_payment_transaction 
+        , payment_transactions.couponpaymentversion_payment_transaction
         , productcouponassignment.productcouponassignment_is_redeemed
     from coupon
     left join productcouponassignment
@@ -153,13 +153,13 @@ with coupon as (
 )
 
 , unassigned_enrollment_codes as (
-    select 
+    select
         coupon.coupon_code
         , coupon.coupon_id
         , coupon.coupon_created_on as coupon_created_on
         , coupon.couponpayment_name
         , b2b_ecommerce_b2border.b2border_contract_number
-        , payment_transactions.couponpaymentversion_payment_transaction  
+        , payment_transactions.couponpaymentversion_payment_transaction
         , program_runs.programrun_readable_id
         , program_runs.program_title
         , course_runs.courserun_readable_id
@@ -177,22 +177,22 @@ with coupon as (
     inner join latest_couponversion
         on coupon.coupon_id = latest_couponversion.coupon_id
     inner join ecommerce_couponversion
-        on 
-            latest_couponversion.coupon_id = ecommerce_couponversion.coupon_id 
+        on
+            latest_couponversion.coupon_id = ecommerce_couponversion.coupon_id
             and ecommerce_couponversion.couponversion_updated_on = latest_couponversion.max_couponversion_updated_on
     inner join ecommerce_couponpaymentversion
-        on ecommerce_couponpaymentversion.couponpaymentversion_id = ecommerce_couponversion.couponpaymentversion_id 
-    left join b2b_ecommerce_b2border 
+        on ecommerce_couponpaymentversion.couponpaymentversion_id = ecommerce_couponversion.couponpaymentversion_id
+    left join b2b_ecommerce_b2border
         on ecommerce_couponpaymentversion.couponpaymentversion_id = b2b_ecommerce_b2border.couponpaymentversion_id
-    left join payment_transactions 
-        on payment_transactions.coupon_id = coupon.coupon_id   
+    left join payment_transactions
+        on payment_transactions.coupon_id = coupon.coupon_id
     left join couponredemption
         on couponredemption.couponversion_id = ecommerce_couponversion.couponversion_id
-    left join ecommerce_order 
+    left join ecommerce_order
         on couponredemption.order_id = ecommerce_order.order_id
-    left join users_user 
-        on users_user.user_id = ecommerce_order.order_purchaser_user_id 
-    left join ecommerce_line 
+    left join users_user
+        on users_user.user_id = ecommerce_order.order_purchaser_user_id
+    left join ecommerce_line
         on ecommerce_line.order_id = ecommerce_order.order_id
     left join program_runs
         on ecommerce_line.programrun_id = program_runs.programrun_id
@@ -202,19 +202,19 @@ with coupon as (
         on course_runs.course_id = courses.course_id
     left join productversion
         on productversion.productversion_id = ecommerce_line.productversion_id
-    where 
-        ecommerce_couponpaymentversion.couponpaymentversion_coupon_type = 'single-use' 
-        and ecommerce_couponpaymentversion.couponpaymentversion_discount_amount = 1.0000 
+    where
+        ecommerce_couponpaymentversion.couponpaymentversion_coupon_type = 'single-use'
+        and ecommerce_couponpaymentversion.couponpaymentversion_discount_amount = 1.0000
         and coupon.coupon_id not in (
             select coupon_id
-            from ecommerce_productcouponassignment 
+            from ecommerce_productcouponassignment
         )
         and not exists (
             select b2b_ecommerce_b2border.couponpaymentversion_id
             from b2b_ecommerce_b2border
-            where 
+            where
                 b2b_ecommerce_b2border.couponpaymentversion_id = ecommerce_couponpaymentversion.couponpaymentversion_id
-        ) 
+        )
 )
 
 , b2b_coupon_fields as (
@@ -226,7 +226,7 @@ with coupon as (
         , coupon.couponpayment_name
         , b2b_ecommerce_b2border.b2border_contract_number
         , b2b_ecommerce_b2border.product_id
-        , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction 
+        , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
         , program_runs.programrun_readable_id
         , program_runs.program_title
         , course_runs.courserun_readable_id
@@ -243,25 +243,25 @@ with coupon as (
                 as varchar
             ), '"', ''
         ) as req_reference_number
-        , case 
+        , case
             when couponredemption.couponredemption_id is not null
-                then 'true' 
-            else 'false' 
+                then 'true'
+            else 'false'
         end as coupon_redeemed
-    from b2b_ecommerce_b2border 
-    inner join ecommerce_couponpaymentversion 
+    from b2b_ecommerce_b2border
+    inner join ecommerce_couponpaymentversion
         on ecommerce_couponpaymentversion.couponpaymentversion_id = b2b_ecommerce_b2border.couponpaymentversion_id
-    inner join ecommerce_couponversion 
+    inner join ecommerce_couponversion
         on ecommerce_couponversion.couponpaymentversion_id = ecommerce_couponpaymentversion.couponpaymentversion_id
-    inner join coupon 
+    inner join coupon
         on coupon.coupon_id = ecommerce_couponversion.coupon_id
-    left join couponredemption 
+    left join couponredemption
         on couponredemption.couponversion_id = ecommerce_couponversion.couponversion_id
-    left join ecommerce_order 
+    left join ecommerce_order
         on ecommerce_order.order_id = couponredemption.order_id
-    left join b2b_ecommerce_b2breceipt 
+    left join b2b_ecommerce_b2breceipt
         on b2b_ecommerce_b2breceipt.b2border_id = b2b_ecommerce_b2border.b2border_id
-    left join ecommerce_line 
+    left join ecommerce_line
         on ecommerce_line.order_id = ecommerce_order.order_id
     left join program_runs
         on ecommerce_line.programrun_id = program_runs.programrun_id
@@ -271,12 +271,12 @@ with coupon as (
         on course_runs.course_id = courses.course_id
     left join productversion
         on productversion.productversion_id = b2b_ecommerce_b2border.productversion_id
-    left join users_user    
+    left join users_user
         on ecommerce_order.order_purchaser_user_id = users_user.user_id
 )
 
 
-select 
+select
     reg_coupon_fields.coupon_email
     , reg_coupon_fields.coupon_code
     , reg_coupon_fields.coupon_id
@@ -303,7 +303,7 @@ where reg_coupon_fields.coupon_id not in (select coupon_id from b2b_coupon_field
 
 union distinct
 
-select 
+select
     b2b_coupon_fields.b2border_email as coupon_email
     , b2b_coupon_fields.coupon_code
     , b2b_coupon_fields.coupon_id
@@ -327,7 +327,7 @@ from b2b_coupon_fields
 
 union distinct
 
-select 
+select
     coupon_email
     , coupon_code
     , coupon_id
@@ -335,7 +335,7 @@ select
     , couponpayment_name
     , b2border_contract_number
     , product_id
-    , couponpaymentversion_payment_transaction  
+    , couponpaymentversion_payment_transaction
     , req_reference_number
     , programrun_readable_id
     , program_title
