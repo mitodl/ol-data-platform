@@ -27,15 +27,15 @@ with ecommerce_product as (
     select *
     from (
         select
-            * 
+            *
             , rank() over (partition by product_id order by productversion_updated_on desc) as myrank
         from ecommerce_productversion
-    ) as a 
+    ) as a
     where myrank = 1
     order by product_id
 )
 
-select  
+select
     'xPRO' as product_platform
     , ecommerce_product.product_id as eproductid
     , course_runs.courserun_title as product_name
@@ -47,8 +47,8 @@ select
     , course_runs.courserun_end_on as end_date
     , course_runs.courserun_enrollment_start_on as enrollment_start
     , course_runs.courserun_enrollment_end_on as enrollment_end
-    , '<a href="https://xpro.mit.edu/checkout?product=' 
-    || cast(ecommerce_product.product_id as varchar (50)) 
+    , '<a href="https://xpro.mit.edu/checkout?product='
+    || cast(ecommerce_product.product_id as varchar (50))
     || '">' || course_runs.courserun_readable_id || '</a>' as link
 from ecommerce_product
 left join ecommerce_productversion_latest
@@ -57,9 +57,9 @@ left join course_runs
     on ecommerce_product.courserun_id = course_runs.courserun_id
 where ecommerce_product.product_type = 'course run'
 
-union all 
+union all
 
-select 
+select
     'xPRO' as product_platform
     , ecommerce_product.product_id as eproductid
     , program_runs.program_title as product_name
@@ -71,9 +71,9 @@ select
     , program_runs.programrun_end_on as end_date
     , null as enrollment_start
     , null as enrollment_end
-    , '<a href="https://xpro.mit.edu/checkout?product=' 
-    || program_runs.programrun_readable_id 
-    || '">' || program_runs.programrun_readable_id || '</a>' as link           
+    , '<a href="https://xpro.mit.edu/checkout?product='
+    || program_runs.programrun_readable_id
+    || '">' || program_runs.programrun_readable_id || '</a>' as link
 from ecommerce_product
 left join ecommerce_productversion_latest
     on ecommerce_product.product_id = ecommerce_productversion_latest.product_id
