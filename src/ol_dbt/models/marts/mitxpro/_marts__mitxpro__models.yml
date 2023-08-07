@@ -8,7 +8,7 @@ models:
   - name: product_platform
     description: string, defaulted to xPro
   - name: product_id
-    description: int, foreign key in ecommerce_product 
+    description: int, foreign key in ecommerce_product
   - name: product_name
     description: str, title of the course run
   - name: product_id
@@ -30,4 +30,4 @@ models:
   - name: enrollment_end
     description: timestamp, specifying when enrollment ends
   - name: link
-    description:  link to the xPro checkout page
+    description: link to the xPro checkout page
