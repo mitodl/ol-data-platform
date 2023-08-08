@@ -69,7 +69,7 @@ def load_files_to_table(
     source_bucket = config.tracking_log_bucket
     # DuckDB Glob Syntax: ** matches any number of subdirectories (including none)
     s3_path = f"s3://{source_bucket}/logs/{log_date}**"
-    config.log.info(s3_path)
+    context.log.info(s3_path)
     with context.resources.duckdb.get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS tracking_logs")
         conn.execute(
@@ -193,7 +193,7 @@ def write_file_to_s3(
         for file_name in files:
             new_file_name = file_name.replace("logs", "valid")
             local_file_name = new_file_name.rsplit("/", maxsplit=1)[-1]
-            config.log.info(new_file_name)
+            context.log.info(new_file_name)
             conn.execute(
                 f"""COPY (SELECT {', '.join(columns)} FROM tracking_logs
                         WHERE filename = '{file_name}')
@@ -203,7 +203,7 @@ def write_file_to_s3(
             # copy to S3
             context.resources.s3.upload_file(
                 Filename=local_file_name,
-                Bucket=config.op_config.tracking_log_bucket,
+                Bucket=config.tracking_log_bucket,
                 Key=f"valid/{log_date}{local_file_name}",
             )
             Path(local_file_name).unlink()

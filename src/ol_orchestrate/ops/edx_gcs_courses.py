@@ -4,7 +4,6 @@ from dagster import (
     AssetMaterialization,
     Config,
     MetadataValue,
-    Field,
     OpExecutionContext,
     Out,
     Output,
@@ -14,6 +13,7 @@ from dagster import (
 from dagster.core.definitions.input import In
 
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
+from pydantic import Field
 
 
 class DownloadEdxGcsCourseConfig(Config):

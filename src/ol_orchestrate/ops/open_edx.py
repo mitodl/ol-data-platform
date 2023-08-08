@@ -6,7 +6,6 @@ from dagster import (
     Config,
     ExpectationResult,
     Failure,
-    Field,
     List,
     MetadataValue,
     OpExecutionContext,
@@ -28,6 +27,7 @@ from ol_orchestrate.lib.edx_api_client import (
     get_edx_course_ids,
 )
 from ol_orchestrate.lib.file_rendering import write_csv
+from pydantic import Field
 
 
 class ListCoursesConfig(Config):
@@ -55,12 +55,6 @@ class ListCoursesConfig(Config):
         description="The number of records to return per API request. This can be "
         "modified to address issues with rate limiting.",
     )
-
-    # class EnrolledUsersConfig(Config):
-    # class StudentSumbissionsConfig(Config):
-    # class CourseEnrollmentsConfig(Config):
-    # class CourseRolesConfig(Config):
-    # class UserRolesConfig(Config):
 
 
 class ExportEdxForumDatabaseConfig(Config):
@@ -122,8 +116,6 @@ class ExportEdxCoursesConfig(Config):
         description="Bucket name that the edX installation uses for uploading "
         "course exports",
     )
-
-    # class WriteCourseListCsvConfig(Config):
 
 
 class UploadExtractedDataConfig(Config):
@@ -556,7 +548,7 @@ def export_edx_forum_database(  # type: ignore
     mongodump_output, mongodump_retcode = run_bash(
         " ".join(command_array),
         output_logging="BUFFER",
-        log=config.log,
+        log=context.log,
         cwd=str(context.resources.results_dir.root_dir),
     )
 
@@ -616,7 +608,7 @@ def export_edx_courses(
     successful_exports: set[str] = set()
     failed_exports: set[str] = set()
     tasks = exported_courses["upload_task_ids"]
-    config.log.info("Exporting %s tasks from Open edX", len(tasks))
+    context.log.info("Exporting %s tasks from Open edX", len(tasks))
     # Possible status values found here:
     # https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
     while len(successful_exports.union(failed_exports)) < len(tasks):
@@ -633,7 +625,7 @@ def export_edx_courses(
             if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
                 failed_exports.add(course_id)
     for course_id in successful_exports:
-        config.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
+        context.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
         course_file = f"{course_id}.tar.gz"
         source_object = {
             "Bucket": config.edx_course_bucket,
