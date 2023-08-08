@@ -1360,10 +1360,12 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
-      Extracted from context field. Could be blank for any events that are not for
-      any specific course .e.g. user login/out, visiting dashboard, some course team
-      events e.g. course export from studio
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course number}+{run_tag}.
+      Extracted from various fields - context.course_id, context.path, event_type
+      and page. The course ID extracted from context field may not be valid, it would
+      require joining with courserun table to be sure. This field could be blank for
+      any events that are not for any specific course .e.g. user login/out, visiting
+      dashboard, some course team events e.g. course export from studio
   - name: org_id
     description: str, reference name in organizations_organization from open edX.
       e.g. xPRO . Extracted from context field

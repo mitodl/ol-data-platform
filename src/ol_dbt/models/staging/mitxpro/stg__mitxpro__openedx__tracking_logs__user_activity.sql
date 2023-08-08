@@ -45,8 +45,8 @@ with source as (
         , referer as useractivity_http_referer
         , name as useractivity_event_name
         , event_type as useractivity_event_type
+        , {{ extract_course_id_from_tracking_log() }} as courserun_readable_id
         --- extract common fields from context object
-        , nullif(json_query(context, 'lax $.course_id' omit quotes), '') as courserun_readable_id
         , json_query(context, 'lax $.user_id' omit quotes) as openedx_user_id
         , json_query(context, 'lax $.org_id' omit quotes) as org_id
         , json_query(context, 'lax $.path' omit quotes) as useractivity_path
