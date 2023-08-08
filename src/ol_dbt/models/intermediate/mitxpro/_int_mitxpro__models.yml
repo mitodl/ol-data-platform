@@ -869,7 +869,17 @@ models:
     description: boolean, whether the program is on an external platform
     tests:
     - not_null
-
+  - name: cms_programpage_description
+    description: str, the description displayed on the page
+  - name: cms_programpage_duration
+    description: str, a short description indicating how long the program takes to
+      complete
+  - name: cms_programpage_subhead
+    description: str, short subheading to appear below the title on the program page
+  - name: cms_programpage_time_commitment
+    description: str, short description indicating about the time commitments
+  - name: cms_programpage_catalog_details
+    description: str, the description shown on the catalog page for this product
 - name: int__mitxpro__program_runs
   description: Intermediate model of program runs in MITxPro
   columns:
@@ -932,7 +942,17 @@ models:
     description: boolean, whether the course is on an external platform
     tests:
     - not_null
-
+  - name: cms_coursepage_description
+    description: str, the description displayed on the page
+  - name: cms_coursepage_duration
+    description: str, a short description indicating how long the course takes to
+      complete (e.g. '4 weeks')
+  - name: cms_coursepage_subhead
+    description: str, short subheading to appear below the title on the course page
+  - name: cms_coursepage_time_commitment
+    description: str, short description indicating about the time commitments
+  - name: cms_coursepage_catalog_details
+    description: str, the description shown on the catalog page for this product
 - name: int__mitxpro__course_runs
   description: Intermediate model of course runs in MIT xPro.
   columns:
@@ -1259,7 +1279,6 @@ models:
   - name: coursetopic_parent_coursetopic_id
     description: int, id for the parent coursetopic for subtopics. For example 'Technology'
       is the parent topic for 'Technology:Data Science'
-
 - name: int__mitxpro__user_courseactivities
   description: xPro open edX user activities aggregated statistics per course from
     tracking logs
@@ -1297,3 +1316,63 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
+- name: int__mitxpro__courses_to_topics
+  columns:
+  - name: course_id
+    description: int, primary key in the courses_course table
+    tests:
+    - not_null
+  - name: coursetopic_id
+    description: int, primary key in courses_coursetopic
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_id", "coursetopic_id"]
+
+- name: int__mitxpro__coursesinprogram
+  description: MIT xPro courses in programs. stg__mitxpro__app__postgres__cms_coursesinprogrampage
+    contains other lists as well, such as upcoming courses and programs, but this
+    table is just courses in programs
+  columns:
+  - name: course_id
+    description: int, primary key in the courses_course table
+    tests:
+    - not_null
+  - name: program_id
+    description: int, primary key in courses_program
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_id", "program_id"]
+
+- name: int__mitxpro__coursesfaculty
+  columns:
+  - name: course_id
+    description: int, primary key in the courses_course table
+    tests:
+    - not_null
+  - name: cms_facultymemberspage_facultymember_name
+    description: str,faculty member name
+    tests:
+    - not_null
+  - name: cms_facultymemberspage_facultymember_description
+    description: str,faculty member name
+    tests:
+    - not_null
+
+- name: int__mitxpro__programsfaculty
+  columns:
+  - name: program_id
+    description: int, primary key in the courses_program table
+    tests:
+    - not_null
+  - name: cms_facultymemberspage_facultymember_name
+    description: str,faculty member name
+    tests:
+    - not_null
+  - name: cms_facultymemberspage_facultymember_description
+    description: str,faculty member name
+    tests:
+    - not_null

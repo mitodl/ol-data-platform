@@ -1421,3 +1421,281 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
         "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
+- name: stg__mitxpro__app__postgres__cms_certificatepage
+  columns:
+  - name: wagtail_page_id
+    description: int, wagtail_page record corresponding to the certificate page
+    tests:
+    - not_null
+    - unique
+  - name: cms_certificate_product_name
+    description: str, name of product associated with the certificate
+    tests:
+    - not_null
+  - name: cms_certificate_ceus
+    description: str, number continuing education units that are earned with the certificate.
+      Text input that is generally a number
+  - name: cms_certificate_signitory_ids
+    description: Array, Array of int of wagtail_page_ids associated with cms_signatory
+      records
+  - name: cms_certificate_overrides
+    description: json,Overrides for cms_certificate_page field for specific program/course
+      runs. specific program/course runs.
+  - name: cms_certificate_institute_text
+    description: str, text of certificate issuing institute
+
+- name: stg__mitxpro__app__postgres__cms_coursepage
+  description: Course page records. This incudes records from both raw__xpro__app__postgres__cms_coursepage
+    and raw__xpro__app__postgres__cms_externalcoursepage
+  columns:
+  - name: wagtail_page_id
+    description: int, wagtailcore_page record corresponding to the course page
+    tests:
+    - not_null
+    - unique
+  - name: cms_coursepage_description
+    description: str, the description displayed on the page
+    tests:
+    - not_null
+  - name: course_id
+    description: int, primary key for the course in the courses_course table
+    tests:
+    - not_null
+    - unique
+  - name: cms_coursepage_duration
+    description: str, a short description indicating how long the course takes to
+      complete (e.g. '4 weeks')
+  - name: cms_coursepage_subhead
+    description: str, short subheading to appear below the title on the course page
+    tests:
+    - not_null
+  - name: cms_coursepage_time_commitment
+    description: str, short description indicating about the time commitments
+  - name: cms_coursepage_catalog_details
+    description: str, the description shown on the catalog page for this product
+    tests:
+    - not_null
+  - name: cms_coursepage_external_marketing_url
+    description: str,  the URL of the external course web page
+  - name: cms_coursepage_model
+    description: str,  whether the course page record is in the cms_coursepage or
+      cms_externalcoursepage table. This can not be used reliably to determine if
+      the course is external
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['cms_coursepage', 'cms_externalcoursepage']
+- name: stg__mitxpro__app__postgres__cms_coursepage_topics
+  columns:
+  - name: wagtail_page_id
+    description: int, wagtail_page_id of cms_coursepage associated with this topic
+      course pairing
+    tests:
+    - not_null
+  - name: coursetopic_id
+    description: int, primary key in courses_coursetopic
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["wagtail_page_id", "coursetopic_id"]
+
+- name: stg__mitxpro__app__postgres__wagtail_page
+  description: There is a record in this table for each record in cms_ tables. wagtail_page_id
+    refers to the primary key in this table
+  columns:
+  - name: wagtail_page_id
+    description: int, int primary key for this table.
+    tests:
+    - not_null
+    - unique
+  - name: wagtail_page_path
+    description: str, the full materialized path for each node (readonly) e.g. 0001
+      is root path, 00010001 is the path to a node in this requirement tree
+    tests:
+    - not_null
+    - unique
+  - name: wagtail_page_depth
+    description: int, depth of a node in the tree. A root node has a depth of 1.
+    tests:
+    - not_null
+  - name: wagtail_page_num_children
+    description: int, the number of children of a node
+    tests:
+    - not_null
+  - name: wagtail_page_title
+    description: str, human-readable title of the page
+    tests:
+    - not_null
+  - name: wagtail_page_slug
+    description: str, this is used for constructing the page’s URL.
+    tests:
+    - not_null
+  - name: wagtail_page_is_live
+    description: boolean, if set to true this page is published
+    tests:
+    - not_null
+  - name: wagtail_page_has_unpublished_changes
+    description: boolean, set to True when the page is either in draft or published
+      with draft changes.
+    tests:
+    - not_null
+  - name: wagtail_page_seo_title
+    description: str, alternate SEO-crafted title, for use in the page’s <title> HTML
+      tag.
+    tests:
+    - not_null
+  - name: wagtail_page_url_path
+    description: str, url path for the page
+    tests:
+    - not_null
+  - name: wagtail_page_search_description
+    description: str, SEO-crafted description of the content, used for search indexing.
+      This is also suitable for the page’s <meta name="description"> HTML tag.
+    tests:
+    - not_null
+  - name: contenttype_id
+    description: int, primary key in django_contenttype. The cms_ table of that has
+      data for this page
+    tests:
+    - not_null
+  - name: owner_user_id
+    description: int, primary key in users_user of the page owner
+  - name: wagtail_page_latest_revision_created_on
+    description: timestamp, timestamp of the page's latest revision
+  - name: wagtail_page_first_published_on
+    description: timestamp, timestamp when the page was first published
+  - name: wagtail_page_live_pagerevision_id
+    description: int, primary key in wagtailcore_pagerevision of the page's latest
+      revision
+  - name: wagtail_page_last_published_on
+    description: timestamp, timestamp when the page was last published
+
+- name: stg__mitxpro__app__postgres__wagtail_pagerevision
+  description: There is a record in this table for each revision of a wagtail page
+  columns:
+  - name: wagtail_pagerevision_id
+    description: int, int primary key for this table.
+    tests:
+    - not_null
+    - unique
+  - name: wagtail_pagerevision_created_on
+    description: timestamp, timestamp when the revision was created
+    tests:
+    - not_null
+  - name: wagtail_pagerevision_content_json
+    description: json, json of the page data
+    tests:
+    - not_null
+  - name: wagtail_page_id
+    description: int, primary key in wagtail_page
+    tests:
+    - not_null
+  - name: user_id
+    description: int, primary key in users_user of the author
+
+
+- name: stg__mitxpro__app__postgres__cms_programpage
+  description: Program page records. This incudes records from both raw__xpro__app__postgres__cms_programpage
+    and raw__xpro__app__postgres__cms_externalprogrampage
+  columns:
+  - name: wagtail_page_id
+    description: int, wagtailcore_page record corresponding to the program page
+    tests:
+    - not_null
+    - unique
+  - name: cms_programpage_description
+    description: str, the description displayed on the page
+    tests:
+    - not_null
+  - name: program_id
+    description: int, primary key for the program in the courses_program table
+    tests:
+    - not_null
+    - unique
+  - name: cms_programpage_duration
+    description: str, a short description indicating how long the program takes to
+      complete (e.g. '4 weeks')
+  - name: cms_programpage_subhead
+    description: str, short subheading to appear below the title on the program page
+    tests:
+    - not_null
+  - name: cms_programpage_time_commitment
+    description: str, short description indicating about the time commitments
+  - name: cms_programpage_catalog_details
+    description: str, the description shown on the catalog page for this product
+    tests:
+    - not_null
+  - name: cms_programpage_external_marketing_url
+    description: str,  the URL of the external program web page
+  - name: cms_programpage_is_featured
+    description: bool, whether the program is featured
+  - name: cms_programpage_model
+    description: str,  whether the program page record is in the cms_programpage or
+      cms_externalprogramepage table. This can not be used reliably to determine if
+      the program is external
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['cms_programpage', 'cms_externalprogrampage']
+- name: stg__mitxpro__app__postgres__cms_coursesinprogrampage
+  description: This table contains 1) Lists of courses in programs 2) Additional lists
+    - for example upcoming courses and programs The type of list can be determined
+    by the parent page of the record using  wagtail_page_path in the wagtail_page
+    table
+  columns:
+  - name: wagtail_page_id
+    description: int, wagtailcore_page record corresponding to the courses in program
+      page
+    tests:
+    - not_null
+    - unique
+  - name: cms_coursesinprogrampage_heading
+    description: str, the heading displayed on the page
+    tests:
+    - not_null
+  - name: cms_coursesinprogrampage_body
+    description: str, the body displayed on the page
+  - name: cms_coursesinprogrampage_coursepage_wagtail_page_ids
+    description: array of int,  json, with the wagtail_page_ids of cms_coursepage,
+      cms_externalcoursepage , cms_programpage, cms_externalprogrampage
+    tests:
+    - not_null
+- name: stg__mitxpro__app__postgres__cms_signatorypage
+  description: This table contains signatories for certificates
+  columns:
+  - name: wagtail_page_id
+    description: int, wagtailcore_page record corresponding to the signatory page
+    tests:
+    - not_null
+    - unique
+  - name: cms_signatorypage_name
+    description: str, name
+    tests:
+    - not_null
+  - name: cms_signatorypage_title_1
+    description: str, the certifate signatory title
+  - name: cms_signatorypage_title_2
+    description: str, the certifate signatory title
+  - name: cms_signatorypage_organization
+    description: str, organization text
+
+
+- name: stg__mitxpro__app__postgres__cms_facultymemberspage
+  description: This table contains the faculty for a course
+  columns:
+  - name: wagtail_page_id
+    description: int, wagtailcore_page record corresponding to the faculty page
+    tests:
+    - not_null
+    - unique
+  - name: cms_facultymemberspage_heading
+    description: str, heading for the page
+    tests:
+    - not_null
+  - name: cms_facultymemberspage_subhead
+    description: str, tsubheading for the page
+  - name: cms_facultymemberspage_faculty
+    description: json, json of the course or program faculty, contains name and description
+    tests:
+    - not_null
