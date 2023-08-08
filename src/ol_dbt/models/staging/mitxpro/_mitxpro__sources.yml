@@ -941,3 +941,343 @@ sources:
     - name: environment
       description: str, internal used field to indicate environment for the event.
         e.g. xpro-production
+  - name: raw__xpro__app__postgres__cms_certificatepage
+    columns:
+    - name: page_ptr_id
+      description: int, wagtailcore_page record corresponding to the certificate page
+    - name: product_name
+      description: str, name of product associated with the certificate
+    - name: CEUs
+      description: str, number continuing education units that are earned with the
+        certificate. Text input that is generally a number
+    - name: signatories
+      description: str, Array of json stored as a string list of signatories for the
+        certificate format
+    - name: overrides
+      description: str, array of json stored as string. Overrides for cms_certificate_page
+        field for specific program/course runs.
+    - name: institute_text
+      description: str, text of certificate issuing institute displayed on the page
+    - name: partner_logo_id
+      description: int, primary key of partner institution log in wagtailimages_image
+    - name: partner_logo_placement
+      description: int, placement of parter institution's logo relative to mit logo.
+        1 = first 2 = second
+
+  - name: raw__xpro__app__postgres__cms_coursepage
+    columns:
+    - name: page_ptr_id
+      description: int, wagtailcore_page record corresponding to the course page
+    - name: description
+      description: str, the description displayed on the page
+    - name: content
+      description: json, currently always a blank array
+    - name: course_id
+      description: int, primary key for the course in the courses_course table
+    - name: thumbnail_image_id
+      description: int, primary key of the thumbnail image in wagtailimages_image
+    - name: duration
+      description: str, a short description indicating how long the course takes to
+        complete (e.g. '4 weeks')
+    - name: background_image_id
+      description: int, primary key of the background image in wagtailimages_image
+    - name: video_url
+      description: str, URL to the video to be displayed for this course. It can be
+        an HLS or Youtube video URL
+    - name: video_title
+      description: str, title to be displayed for the course video
+    - name: subhead
+      description: str, short subheading to appear below the title on the course page
+    - name: time_commitment
+      description: str, short description indicating about the time commitments
+    - name: background_video_url
+      description: str, currently blank for all courses
+    - name: search_image_id
+      description: int, int, primary key of search image in wagtailimages_image
+    - name: featured
+      description: boolean, when checked, product will be shown as featured. currenly
+        always false for courses
+    - name: catalog_details
+      description: str, the description shown on the catalog page for this product
+    - name: external_marketing_url
+      description: str, currenly always blank
+  - name: raw__xpro__app__postgres__cms_externalcoursepage
+    description: Course page for external courses. Not reliable for determining if
+      the course is external. Some external courses have a regular course page
+    columns:
+    - name: page_ptr_id
+      description: int, wagtailcore_page record corresponding to the course page
+    - name: description
+      description: str, the description displayed on the page
+    - name: content
+      description: json, currently always a blank array
+    - name: course_id
+      description: int, primary key for the course in the courses_course table
+    - name: thumbnail_image_id
+      description: int, primary key of the thumbnail image in wagtailimages_image
+    - name: duration
+      description: str, a short description indicating how long the course takes to
+        complete (e.g. '4 weeks')
+    - name: background_image_id
+      description: int, primary key of the backgound image in wagtailimages_image
+    - name: video_url
+      description: str, URL to the video to be displayed for this course. It can be
+        an HLS or Youtube video URL
+    - name: video_title
+      description: str, title to be displayed for the course video
+    - name: subhead
+      description: str, short subheading to appear below the title on the course page
+    - name: time_commitment
+      description: str, short description indicating about the time commitments
+    - name: background_video_url
+      description: str, currently blank for all courses
+    - name: search_image_id
+      description: int, int, primary key of search image in wagtailimages_image
+    - name: featured
+      description: boolean, when checked, product will be shown as featured. currenly
+        always false for courses
+    - name: catalog_details
+      description: str, the description shown on the catalog page for this product
+    - name: external_marketing_url
+      description: str,  the URL of the external program web page
+  - name: raw__xpro__app__postgres__cms_coursepage_topics
+    columns:
+    - name: id
+      description: int, int primary key for this table
+    - name: coursepage_id
+      description: int, page_ptr_id of cms_coursepage
+    - name: coursetopic_id
+      description: int, primary key in courses_coursetopic
+
+  - name: raw__xpro__app__postgres__cms_externalcoursepage_topics
+    description: topics for external courses. Some external courses have a regular
+      course page and topics in coursepage_topics
+    columns:
+    - name: id
+      description: int, int primary key for this table
+    - name: externalcoursepage_id
+      description: int, page_ptr_id of cms_externalcoursepage
+    - name: coursetopic_id
+      description: int, primary key in courses_coursetopic
+
+  - name: raw__xpro__app__postgres__wagtailcore_page
+    description: There is a record in this table for each record in cms_ tables. page_ptr_id
+      refers to the primary key in this table
+    columns:
+    - name: id
+      description: int, int primary key for this table.
+    - name: path
+      description: str, the full materialized path for each node (readonly) e.g. 0001
+        is root path, 00010001 is the path to a node in this requirement tree
+    - name: depth
+      description: int, depth of a node in the tree. A root node has a depth of 1.
+    - name: numchild
+      description: int, the number of children of a node
+    - name: title
+      description: str, human-readable title of the page
+    - name: slug
+      description: str, this is used for constructing the page’s URL.
+    - name: live
+      description: boolean, if set to true this page is published
+    - name: has_unpublished_changes
+      description: boolean, set to True when the page is either in draft or published
+        with draft changes.
+    - name: seo_title
+      description: str, alternate SEO-crafted title, for use in the page’s <title>
+        HTML tag.
+    - name: url_path
+      description: str, url path for the page
+    - name: show_in_menus
+      description: boolean, toggles whether the page should be included in site-wide
+        menus
+    - name: search_description
+      description: str, SEO-crafted description of the content, used for search indexing.
+        This is also suitable for the page’s <meta name="description"> HTML tag.
+    - name: go_live_at
+      description: timestamp, timestamp for when the page is scheduled to go live
+    - name: expire_at
+      description: timestamp, timestamp for when the page is scheduled to be expired.
+        This functionality is not used by xpro
+    - name: expired
+      description: boolean, whether the page has expired. This functionality is not
+        used by xpro
+    - name: content_type_id
+      description: int, primary key in django_contenttype. The cms_ table of that
+        has data for this page
+    - name: owner_id
+      description: int, primary key in users_user of the page owner
+    - name: locked
+      description: boolean, when set to True, the Wagtail editor will not allow any
+        users to edit the content of the page. This functionality is not used by xpro
+    - name: latest_revision_created_at
+      description: timestamp, timestamp of the page's latest revision
+    - name: first_published_at
+      description: timestamp, timestamp when the page was first published
+    - name: live_revision_id
+      description: int, primary key in wagtailcore_pagerevision of the page's latest
+        revision
+    - name: last_published_at
+      description: timestamp, timestamp when the page was last published
+    - name: draft_title
+      description: str, human-readable title of the page, incorporating any changes
+        that have been made in a draft edit (in contrast to the title field, which
+        for published pages will be the title as it exists in the current published
+        version).
+    - name: locked_at
+      description: timestamp, timestamp when the page was locked. This functionality
+        is not used by xpro
+    - name: locked_by_id
+      description: int, primary key in users_user of the user that locked the page.
+        This functionality is not used by xpro
+    - name: translation_key
+      description: uuid, A UUID that is shared between translations of a page. These
+        are randomly generated when a new page is created and copied when a translation
+        of a page is made.
+    - name: locale_id
+      description: int, primary key in wagtailcore_locale of the language code for
+        the page. Currently always en (english) for xpro
+    - name: alias_of_id
+      description: int, always blank in xpro
+  - name: raw__xpro__app__postgres__wagtailcore_pagerevision
+    description: There is a record in this table for each revision of a wagtail page
+    columns:
+    - name: id
+      description: int, int primary key for this table.
+    - name: submitted_for_moderation
+      description: boolean, always blank in xpro
+    - name: created_at
+      description: timestamp, timestamp when the revision was created
+    - name: content_json
+      description: json, json of the page data
+    - name: approved_go_live_at
+      description: timestamp, always blank in xpro
+    - name: page_id
+      description: int, primary key in wagtail_page
+    - name: user_id
+      description: int, primary key in users_user of the author
+
+
+  - name: raw__xpro__app__postgres__cms_programpage
+    columns:
+    - name: page_ptr_id
+      description: int, wagtailcore_page record corresponding to the program page
+    - name: description
+      description: str, the description displayed on the page
+    - name: content
+      description: json, currently always a blank array
+    - name: program_id
+      description: int, primary key for the program in the courses_program table
+    - name: thumbnail_image_id
+      description: int, primary key of the thumbnail image in wagtailimages_image
+    - name: duration
+      description: str, a short description indicating how long the program takes
+        to complete (e.g. '4 weeks')
+    - name: background_image_id
+      description: int, primary key of the background image in wagtailimages_image
+    - name: video_url
+      description: str, URL to the video to be displayed for this program. It can
+        be an HLS or Youtube video URL
+    - name: video_title
+      description: str, title to be displayed for the program video
+    - name: subhead
+      description: str, short subheading to appear below the title on the program
+        page
+    - name: time_commitment
+      description: str, short description indicating about the time commitments
+    - name: background_video_url
+      description: str, currently blank for all programs
+    - name: search_image_id
+      description: int, primary key of search image in wagtailimages_image
+    - name: featured
+      description: boolean, when checked, product will be shown as featured
+    - name: catalog_details
+      description: str, the description shown on the catalog page for this product
+    - name: external_marketing_url
+      description: str, the URL of the external program web page.
+  - name: raw__xpro__app__postgres__cms_externalprogrampage
+    description: External programs. Not reliable to determine if the program is external.
+      Some external programs have a regular program page
+    columns:
+    - name: page_ptr_id
+      description: int, wagtailcore_page record corresponding to the program page
+    - name: description
+      description: str, the description displayed on the page
+    - name: content
+      description: json, currently always a blank array
+    - name: program_id
+      description: int, primary key for the program in the courses_program table
+    - name: thumbnail_image_id
+      description: int, primary key of the thumbnail image in wagtailimages_image
+    - name: duration
+      description: str, a short description indicating how long the program takes
+        to complete (e.g. '4 weeks')
+    - name: background_image_id
+      description: int, primary key of the background image in wagtailimages_image
+    - name: video_url
+      description: str, URL to the video to be displayed for this program. It can
+        be an HLS or Youtube video URL
+    - name: video_title
+      description: str, title to be displayed for the program video
+    - name: subhead
+      description: str, short subheading to appear below the title on the program
+        page
+    - name: time_commitment
+      description: str, short description indicating about the time commitments
+    - name: background_video_url
+      description: str, currently blank for all programs
+    - name: search_image_id
+      description: int, int, primary key of search image in wagtailimages_image
+    - name: featured
+      description: boolean, when checked, product will be shown as featured
+    - name: catalog_details
+      description: str, the description shown on the catalog page for this product
+    - name: external_marketing_url
+      description: str, the URL of the external program web page.
+
+  - name: raw__xpro__app__postgres__cms_coursesinprogrampage
+    description: This table contains 1) Lists of courses in programs 2) Additional
+      lists - for example upcoming courses and programs The type of list can be determined
+      by the parent page of the record using the path in wagtailcore_page
+    columns:
+    - name: page_ptr_id
+      description: int, wagtailcore_page record corresponding to the courses in program
+        page
+    - name: heading
+      description: str, the heading displayed on the page
+    - name: body
+      description: str, the body displayed on the page
+    - name: contents
+      description: json, json with the page_ptr_ids of cms_coursepage, cms_externalcoursepage
+        , cms_cprogrampage, cms_externalprogrampage
+    - name: override_contents
+      description: boolean, whether the contents was set manually
+
+  - name: raw__xpro__app__postgres__cms_signatorypage
+    description: This table contains signatories for certificates
+    columns:
+    - name: page_ptr_id
+      description: int, wagtailcore_page record corresponding to the signatory page
+    - name: name
+      description: str, name
+    - name: title_1
+      description: str, the certifate signatory title
+    - name: title_2
+      description: str, the certifate signatory title
+    - name: organization
+      description: str, organization text
+    - name: signature_image_id
+      description: int, primary key of signature image in wagtailimages_image
+
+
+  - name: raw__xpro__app__postgres__cms_facultymemberspage
+    description: This table contains the faculty for a course or program
+    columns:
+    - name: page_ptr_id
+      description: int, wagtailcore_page record corresponding to the faculty page
+    - name: heading
+      description: str, heading for the page
+    - name: subhead
+      description: str, tsubheading for the page
+    - name: members
+      description: json, json of the course or program faculty, contains name and
+        description
