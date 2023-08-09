@@ -10,15 +10,15 @@ models:
     tests:
     - not_null
   - name: eproduct_id
-    description: int, foreign key in ecommerce_product
-    tests:
-    - not_null
+    description: int, foreign key in ecommerce_product 
   - name: product_name
     description: str, title of the course run
   - name: product_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
       e.g. course-v1:xPRO+MLx1+R0 or unique program run ID formatted as program-v1:{org}+{program
       code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
+    tests:
+    - not_null
   - name: product_type
     description: string, readable product type
   - name: list_price
@@ -34,7 +34,7 @@ models:
   - name: enrollment_end
     description: timestamp, specifying when enrollment ends
   - name: link
-    description: link to the xPro checkout page
+    description:  link to the xPro checkout page
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["product_id"]
