@@ -7,8 +7,12 @@ models:
   columns:
   - name: product_platform
     description: string, defaulted to xPro
+    tests:
+    - not_null
   - name: eproduct_id
-    description: int, foreign key in ecommerce_product
+    description: int, foreign key in ecommerce_product 
+    tests:
+    - not_null
   - name: product_name
     description: str, title of the course run
   - name: product_id
@@ -30,4 +34,7 @@ models:
   - name: enrollment_end
     description: timestamp, specifying when enrollment ends
   - name: link
-    description: link to the xPro checkout page
+    description:  link to the xPro checkout page
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["product_id"]
