@@ -10,7 +10,7 @@ models:
     tests:
     - not_null
   - name: eproduct_id
-    description: int, foreign key in ecommerce_product
+    description: int, foreign key in ecommerce_product 
   - name: product_name
     description: str, title of the course run
   - name: product_id
@@ -19,6 +19,7 @@ models:
       code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
     tests:
     - not_null
+    - unique
   - name: product_type
     description: string, readable product type
   - name: list_price
@@ -34,7 +35,4 @@ models:
   - name: enrollment_end
     description: timestamp, specifying when enrollment ends
   - name: link
-    description: link to the xPro checkout page
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["product_id"]
+    description:  link to the xPro checkout page
