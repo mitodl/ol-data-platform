@@ -1,0 +1,38 @@
+---
+version: 2
+
+models:
+- name: marts__mitxpro_ecommerce_productlist
+  description: Xpro product line table with denormalized data
+  columns:
+  - name: product_platform
+    description: string, defaulted to xPro
+    tests:
+    - not_null
+  - name: eproduct_id
+    description: int, foreign key in ecommerce_product
+  - name: product_name
+    description: str, title of the course run
+  - name: product_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      e.g. course-v1:xPRO+MLx1+R0 or unique program run ID formatted as program-v1:{org}+{program
+      code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
+    tests:
+    - not_null
+    - unique
+  - name: product_type
+    description: string, readable product type
+  - name: list_price
+    description: numeric, the product price for this version
+  - name: Product_description
+    description: string, product version discriptiom
+  - name: start_date
+    description: timestamp, specifying when the course or program begins
+  - name: end_date
+    description: timestamp, specifying when the course or program ends
+  - name: enrollment_start
+    description: timestamp, specifying when enrollment starts
+  - name: enrollment_end
+    description: timestamp, specifying when enrollment ends
+  - name: link
+    description: link to the xPro checkout page
