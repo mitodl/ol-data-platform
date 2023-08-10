@@ -1,6 +1,7 @@
 {% macro extract_course_id_from_tracking_log() %}
     ---course ID format: course-v1:{org}+{course number}+{run_tag}
-    {% set course_id_regex = 'course-v(\d{1}):([^\/]+)\+([^\/]+)\+([^\/\]]+)' %}
+    ---Course number and run tag can be letters, numbers, period, dashes, underscores
+    {% set course_id_regex = 'course-v(\d{1}):([\w\.\-\_]+)\+([\w\.\-\_]+)\+([\w\.\-\_]+)' %}
       case
           when regexp_extract(json_query(context, 'lax $.course_id' omit quotes), '{{ course_id_regex }}') is not null
              then json_query(context, 'lax $.course_id' omit quotes)

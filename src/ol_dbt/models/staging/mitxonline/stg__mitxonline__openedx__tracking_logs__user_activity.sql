@@ -1,4 +1,4 @@
--- xPro user activities from tracking logs
+-- MITx Online user activities from tracking logs
 -- Due to size of the raw table, build this model as incremental and apply dedup on new rows
 {{ config(
     materialized='incremental',
@@ -10,7 +10,7 @@
 }}
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__tracking_logs') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__tracking_logs') }}
     where
         username != ''
         and json_query(context, 'lax $.user_id' omit quotes) is not null
@@ -25,7 +25,7 @@ with source as (
     select
         *
         , row_number() over (
-            partition by username, context, event_source, event_type, event, "time"   --noqa
+            partition by username, context, event_source, event_type, event, "time"  --noqa
             order by _airbyte_emitted_at desc, _ab_source_file_last_modified desc, vector_timestamp desc
         ) as row_num
     from source
