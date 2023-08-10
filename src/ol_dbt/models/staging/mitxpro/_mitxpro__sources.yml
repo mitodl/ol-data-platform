@@ -887,8 +887,9 @@ sources:
         education", "Other education"
 
   - name: raw__xpro__openedx__tracking_logs
-    description: event data that are emitted by server, the browser, or the mobile
-      device to capture information about user's interactions with a course
+    description: MIT xPro Open edX event data that are emitted by server, the browser,
+      or the mobile device to capture information about user's interactions with a
+      course
     columns:
     - name: username
       description: str, username of the open edX user who caused the event to be emitted.

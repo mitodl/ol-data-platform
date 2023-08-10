@@ -1347,8 +1347,9 @@ models:
       column_list: ["user_id", "program_id", "ecommerce_order_id"]
 
 - name: stg__mitxpro__openedx__tracking_logs__user_activity
-  description: xPro open edX user activity table that tracks student and course team
-    events
+  description: This table is deduped as raw table has duplicate events. It filters
+    out blank username events since these don't supply user identifiers and also those
+    server "exception" events due to server errors
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
@@ -1418,5 +1419,5 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "useractivity_event_type", "useractivity_context_object",
-        "useractivity_timestamp"]
+      column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
+        "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
