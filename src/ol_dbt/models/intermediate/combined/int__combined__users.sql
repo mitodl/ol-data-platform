@@ -91,7 +91,7 @@ with mitxonline_users as (
 
     union all
 
-    select  
+    select
         '{{ var("micromasters") }}' as platform
         , user_id
         , user_username
