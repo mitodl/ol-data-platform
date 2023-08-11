@@ -1,15 +1,23 @@
--- xPro user activities from tracking logs
 with course_activities as (
-    select * from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
+    select * from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where courserun_readable_id is not null
 )
 
 , course_activities_video as (
-    select * from {{ ref('int__mitxpro__user_courseactivity_video') }}
+    select * from {{ ref('int__mitxonline__user_courseactivity_video') }}
 )
 
 , problem_check as (
     select * from {{ ref('int__mitxonline__user_courseactivity_problemcheck') }}
+)
+
+, problem_check_stats as (
+    select
+        user_username
+        , courserun_readable_id
+        , max(useractivity_timestamp) as courseactivity_last_problem_check_timestamp
+    from problem_check
+    group by user_username, courserun_readable_id
 )
 
 , play_video_stats as (
@@ -21,15 +29,6 @@ with course_activities as (
         , max(useractivity_timestamp) as courseactivity_last_play_video_timestamp
     from course_activities_video
     where useractivity_event_type = 'play_video'
-    group by user_username, courserun_readable_id
-)
-
-, problem_check_stats as (
-    select
-        user_username
-        , courserun_readable_id
-        , max(useractivity_timestamp) as courseactivity_last_problem_check_timestamp
-    from problem_check
     group by user_username, courserun_readable_id
 )
 

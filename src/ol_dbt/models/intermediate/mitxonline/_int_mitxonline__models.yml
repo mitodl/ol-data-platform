@@ -1280,3 +1280,146 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__users_user')
+
+- name: int__mitxonline__user_courseactivity_video
+  description: It tracks MITx Online open edX users video activities within a course
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, reference user id in auth_user from open edX.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The values are - browser, mobile, server, task
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, type of video event triggered play_video - When a user selects
+      the video player’s play control pause_video - When a user selects the video
+      player’s pause control stop_video - When the video player reaches the end of
+      the video file and play automatically stops
+    tests:
+    - not_null
+  - name: useractivity_video_id
+    description: str, hash code for the video being watched. This value is part of
+      the courseware_studentmodule.module_id
+    tests:
+    - not_null
+  - name: useractivity_video_duration
+    description: number, The length of the video file, in seconds.
+    tests:
+    - not_null
+  - name: useractivity_video_currenttime
+    description: number, The time in the video when this event was emitted
+    tests:
+    - not_null
+  - name: useractivity_timestamp
+    description: timestamp, time when this event was emitted
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
+        "useractivity_timestamp"]
+
+- name: int__mitxonline__user_courseactivity_problemcheck
+  description: It tracks MITx Online open edX users problem_check activities within
+    a course
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, reference user id in auth_user from open edX.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, problem_check - when a problem is successfully checked.
+    tests:
+    - not_null
+  - name: useractivity_problem_id
+    description: str, Unique ID for this problem in a course. It's recorded as a URL
+      format - block-v1:{org)+{course ID}+type@problem+block@{hash code}
+    tests:
+    - not_null
+  - name: useractivity_problem_name
+    description: str, display name of this problem in a course
+    tests:
+    - not_null
+  - name: useractivity_problem_attempts
+    description: number, The number of times the user attempted to answer this problem
+    tests:
+    - not_null
+  - name: useractivity_problem_success
+    description: str, It's either 'correct' or 'incorrect'
+    tests:
+    - not_null
+  - name: useractivity_problem_current_grade
+    description: number, current grade value for this user
+    tests:
+    - not_null
+  - name: useractivity_problem_max_grade
+    description: number, Maximum possible grade value for this problem
+    tests:
+    - not_null
+  - name: useractivity_timestamp
+    description: timestamp, time when this event was emitted
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+        "useractivity_timestamp"]
+
+- name: int__mitxonline__user_courseactivities
+  description: MITx Online open edX user activities aggregated statistics per course
+    from tracking logs
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: courseactivity_num_events
+    description: int, number of tracking log events
+    tests:
+    - not_null
+  - name: courseactivity_num_days_activity
+    description: int, number of days with activity
+    tests:
+    - not_null
+  - name: courseactivity_first_event_timestamp
+    description: timestamp, timestamp of user's first event within a course
+    tests:
+    - not_null
+  - name: courseactivity_last_event_timestamp
+    description: timestamp, timestamp of user's last event within a course
+    tests:
+    - not_null
+  - name: courseactivity_num_play_video
+    description: int, number of play_video events
+  - name: courseactivity_num_unique_play_video
+    description: int, number of unique videos played within a course
+  - name: courseactivity_last_play_video_timestamp
+    description: timestamp, timestamp of user's last play_video event within a course
+  - name: courseactivity_last_problem_check_timestamp
+    description: timestamp, timestamp of user's last play_video event within a course
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id"]
