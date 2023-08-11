@@ -32,6 +32,12 @@ models:
       platform
   - name: user_birth_year
     description: int, user's birth year
+  - name: user_job_title
+    description: str, user's job title
+  - name: user_company
+    description: str, user company
+  - name: user_industry
+    description: str, user job industry
 
 - name: int__combined__courserun_enrollments
   description: Intermediate model for user course enrollments from different platforms
