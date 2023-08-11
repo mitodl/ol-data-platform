@@ -99,7 +99,7 @@ with mitxonline_users as (
         , user_address_country
         , user_highest_education
         , user_gender
-        , substr(user_birth_date, 1, 4) as user_birth_year
+        , cast(substr(user_birth_date, 1, 4) as bigint) as user_birth_year
         , user_job_position as user_job_title
         , user_company_name as user_company
         , user_company_industry as user_industry
