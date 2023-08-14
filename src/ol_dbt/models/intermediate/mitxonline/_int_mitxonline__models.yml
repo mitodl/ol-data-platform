@@ -1419,7 +1419,8 @@ models:
   - name: courseactivity_last_play_video_timestamp
     description: timestamp, timestamp of user's last play_video event within a course
   - name: courseactivity_last_problem_check_timestamp
-    description: timestamp, timestamp of user's last play_video event within a course
+    description: timestamp, timestamp of user's last problem_check event within a
+      course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
