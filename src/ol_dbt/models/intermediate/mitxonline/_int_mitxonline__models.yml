@@ -1298,11 +1298,11 @@ models:
     - not_null
   - name: useractivity_event_source
     description: str, specifies the source of the interaction that triggered the event.
-      The values are - browser, mobile, server, task
+      The values are either browser or mobile for this event
     tests:
     - not_null
   - name: useractivity_event_type
-    description: str, type of video event triggered play_video - When a user selects
+    description: str, type of video event triggered - play_video - When a user selects
       the video player’s play control pause_video - When a user selects the video
       player’s pause control stop_video - When the video player reaches the end of
       the video file and play automatically stops
@@ -1328,7 +1328,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
-        "useractivity_timestamp"]
+        "useractivity_video_id", "useractivity_video_currenttime", "useractivity_timestamp"]
 
 - name: int__mitxonline__user_courseactivity_problemcheck
   description: It tracks MITx Online open edX users problem_check activities within
