@@ -21,4 +21,4 @@ select
     , lines.line_description
     , lines.courserun_id
 from lines
-inner join orders on orders.order_id = lines.order_id
+inner join orders on lines.order_id = orders.order_id

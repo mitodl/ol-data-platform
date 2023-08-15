@@ -29,7 +29,7 @@ with users as (
         , micromasters_profiles.user_id
         , micromasters_auth.user_username
     from micromasters_profiles
-    inner join micromasters_auth on micromasters_auth.user_id = micromasters_profiles.user_id
+    inner join micromasters_auth on micromasters_profiles.user_id = micromasters_auth.user_id
 )
 
 , micromasters_users as (
@@ -70,9 +70,9 @@ select
     , micromasters_profile.user_profile_id as user_micromasters_profile_id
     , micromasters_users.user_edxorg_username
 from users
-left join users_legaladdress on users_legaladdress.user_id = users.user_id
-left join users_profile on users_profile.user_id = users.user_id
-left join micromasters_profile on micromasters_profile.user_username = users.user_username
+left join users_legaladdress on users.user_id = users_legaladdress.user_id
+left join users_profile on users.user_id = users_profile.user_id
+left join micromasters_profile on users.user_username = micromasters_profile.user_username
 left join micromasters_users
     on micromasters_profile.user_profile_id = micromasters_users.user_profile_id
 left join openedx_users

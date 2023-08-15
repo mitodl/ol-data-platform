@@ -45,7 +45,7 @@ select
     , programpageswithpath.program_id
 from unnestedcoursesinprogram
 left join coursepages
-    on coursepages.wagtail_page_id = unnestedcoursesinprogram.coursepage_wagtail_page_id
+    on unnestedcoursesinprogram.coursepage_wagtail_page_id = coursepages.wagtail_page_id
 left join wagtailpages
     on unnestedcoursesinprogram.coursesinprogrampage_wagtail_page_id = wagtailpages.wagtail_page_id
 inner join programpageswithpath

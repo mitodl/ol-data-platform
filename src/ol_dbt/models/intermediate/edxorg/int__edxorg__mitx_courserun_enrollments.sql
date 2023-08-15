@@ -35,8 +35,8 @@ with person_courses as (
         person_courses
     inner join user_info_combo
         on
-            user_info_combo.user_id = person_courses.user_id
-            and user_info_combo.courserunenrollment_courserun_readable_id = person_courses.courserun_readable_id
+            person_courses.user_id = user_info_combo.user_id
+            and person_courses.courserun_readable_id = user_info_combo.courserunenrollment_courserun_readable_id
 )
 
 , edxorg_runs as (

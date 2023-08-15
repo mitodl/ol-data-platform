@@ -56,6 +56,6 @@ select
     end as courseware_type
 from flexiblepriceapplication
 inner join contenttypes on flexiblepriceapplication.contenttype_id = contenttypes.contenttype_id
-inner join users on users.user_id = flexiblepriceapplication.user_id
+inner join users on flexiblepriceapplication.user_id = users.user_id
 inner join flexiblepricetier on flexiblepriceapplication.flexiblepricetier_id = flexiblepricetier.flexiblepricetier_id
 inner join discount on flexiblepricetier.discount_id = discount.discount_id

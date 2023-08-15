@@ -33,7 +33,7 @@ from programs
 inner join mitxonline_program_requirements
     on programs.mitxonline_program_id = mitxonline_program_requirements.program_id
 inner join courses
-    on courses.mitxonline_course_id = mitxonline_program_requirements.course_id
+    on mitxonline_program_requirements.course_id = courses.mitxonline_course_id
 where programs.mitxonline_program_id is not null
 
 union all
@@ -55,5 +55,5 @@ from programs
 inner join micromasters_program_requirements
     on programs.micromasters_program_id = micromasters_program_requirements.program_id
 inner join courses
-    on courses.micromasters_course_id = micromasters_program_requirements.course_id
+    on micromasters_program_requirements.course_id = courses.micromasters_course_id
 where programs.mitxonline_program_id is null

@@ -23,4 +23,4 @@ select
 
 from courses
 left join cms_courses
-    on cms_courses.course_id = courses.course_id
+    on courses.course_id = cms_courses.course_id

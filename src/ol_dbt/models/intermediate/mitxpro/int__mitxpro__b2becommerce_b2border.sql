@@ -56,6 +56,6 @@ select
     , products.product_type
     , salesforce_b2border.opportunity_id as salesforce_opportunity_id
 from b2borders
-inner join productversions on productversions.productversion_id = b2borders.productversion_id
+inner join productversions on b2borders.productversion_id = productversions.productversion_id
 inner join products on productversions.product_id = products.product_id
 left join salesforce_b2border on b2borders.b2border_id = salesforce_b2border.b2border_id

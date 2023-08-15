@@ -44,6 +44,6 @@ select
 from mm_program_certificates
 left join micromasters_users on mm_program_certificates.user_id = micromasters_users.user_id
 left join programs
-    on programs.micromasters_program_id = mm_program_certificates.program_id
-left join edx_users on edx_users.user_username = micromasters_users.user_edxorg_username
+    on mm_program_certificates.program_id = programs.micromasters_program_id
+left join edx_users on micromasters_users.user_edxorg_username = edx_users.user_username
 where programs.is_dedp_program = true

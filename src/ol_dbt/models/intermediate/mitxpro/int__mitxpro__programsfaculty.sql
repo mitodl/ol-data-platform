@@ -46,6 +46,6 @@ select
 
 from unnestedfacultymemberspage
 inner join wagtailpages
-    on wagtailpages.wagtail_page_id = unnestedfacultymemberspage.wagtail_page_id
+    on unnestedfacultymemberspage.wagtail_page_id = wagtailpages.wagtail_page_id
 inner join programspageswithpath
     on wagtailpages.wagtail_page_path like programspageswithpath.wagtail_page_path || '%'

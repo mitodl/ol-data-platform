@@ -27,4 +27,4 @@ select
     , couponpaymentversion.couponpaymentversion_discount_type
     , couponpaymentversion.couponpaymentversion_max_redemptions
 from couponpaymentversion
-inner join couponpayment on couponpayment.couponpayment_id = couponpaymentversion.couponpayment_id
+inner join couponpayment on couponpaymentversion.couponpayment_id = couponpayment.couponpayment_id
