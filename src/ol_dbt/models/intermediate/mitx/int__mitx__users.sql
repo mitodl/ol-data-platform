@@ -1,6 +1,5 @@
 ---MITx users from MITx Online and edX with dedup
--- For users exist on both MITx Online and edX.org, profile data are COALESCE from both sources
--- in order of MITx Online and then edX.org
+---For users exist on both MITx Online and edX.org, profile data are COALESCE from MITx Online, MicroMasters or edX.org
 
 {{ config(materialized='view') }}
 
@@ -10,6 +9,10 @@ with mitxonline_users as (
 
 , edxorg_users as (
     select * from {{ ref('int__edxorg__mitx_users') }}
+)
+
+, micromasters_users as (
+    select * from {{ ref('int__micromasters__users') }}
 )
 
 , mitxonline_users_view as (
@@ -23,6 +26,9 @@ with mitxonline_users as (
         , mitxonline_users.user_highest_education
         , mitxonline_users.user_gender
         , mitxonline_users.user_birth_year
+        , mitxonline_users.user_company
+        , mitxonline_users.user_job_title
+        , mitxonline_users.user_industry
         , true as is_mitxonline_user
     from mitxonline_users
 )
@@ -37,8 +43,12 @@ with mitxonline_users as (
         , edxorg_users.user_highest_education
         , edxorg_users.user_gender
         , edxorg_users.user_birth_year
+        , micromasters_users.user_company_name
+        , micromasters_users.user_company_industry
+        , micromasters_users.user_job_position
         , true as is_edxorg_user
     from edxorg_users
+    left join micromasters_users on edxorg_users.user_username = micromasters_users.user_edxorg_username
 )
 
 , mitx_users_combined as (
@@ -58,6 +68,9 @@ with mitxonline_users as (
             as user_highest_education
         , coalesce(mitxonline_users_view.user_gender, edxorg_users_view.user_gender) as user_gender
         , coalesce(mitxonline_users_view.user_birth_year, edxorg_users_view.user_birth_year) as user_birth_year
+        , coalesce(mitxonline_users_view.user_company, edxorg_users_view.user_company_name) as user_company
+        , coalesce(mitxonline_users_view.user_job_title, edxorg_users_view.user_job_position) as user_job_title
+        , coalesce(mitxonline_users_view.user_industry, edxorg_users_view.user_company_industry) as user_industry
     from mitxonline_users_view
     full outer join edxorg_users_view
         on mitxonline_users_view.user_edxorg_username = edxorg_users_view.user_edxorg_username
