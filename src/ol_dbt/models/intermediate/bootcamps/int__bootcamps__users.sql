@@ -36,5 +36,5 @@ select
     , users_profile.user_company_size
     , users_profile.user_years_experience
 from users
-left join users_legaladdress on users_legaladdress.user_id = users.user_id
-left join users_profile on users_profile.user_id = users.user_id
+left join users_legaladdress on users.user_id = users_legaladdress.user_id
+left join users_profile on users.user_id = users_profile.user_id

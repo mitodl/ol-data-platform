@@ -27,6 +27,6 @@ select
 from mitx_enrollments
 inner join programs
     on
-        programs.micromasters_program_id = mitx_enrollments.micromasters_program_id
-        or programs.mitxonline_program_id = mitx_enrollments.mitxonline_program_id
+        mitx_enrollments.micromasters_program_id = programs.micromasters_program_id
+        or mitx_enrollments.mitxonline_program_id = programs.mitxonline_program_id
 where programs.is_micromasters_program = true

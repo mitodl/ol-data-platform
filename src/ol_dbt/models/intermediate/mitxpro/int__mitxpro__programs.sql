@@ -22,4 +22,4 @@ select
 
 from programs
 left join cms_programs
-    on cms_programs.program_id = programs.program_id
+    on programs.program_id = cms_programs.program_id

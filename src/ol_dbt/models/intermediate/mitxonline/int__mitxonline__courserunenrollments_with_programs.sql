@@ -41,9 +41,9 @@ with enrollments as (
         , programs.is_micromasters_program
         , programs.is_dedp_program
     from enrollments
-    inner join program_requirements on program_requirements.course_number = enrollments.course_number
+    inner join program_requirements on enrollments.course_number = program_requirements.course_number
     inner join programs
-        on programs.mitxonline_program_id = program_requirements.mitxonline_program_id
+        on program_requirements.mitxonline_program_id = programs.mitxonline_program_id
     where enrollments.course_number != '{{ "dedp_mitxonline_good_economics_for_hard_times_course_number" }}'
 )
 
@@ -74,9 +74,9 @@ with enrollments as (
         , programs.is_dedp_program
     from enrollments
     inner join mitxonline_good_economics_for_hard_times_programs
-        on mitxonline_good_economics_for_hard_times_programs.courserunenrollment_id = enrollments.courserunenrollment_id
+        on enrollments.courserunenrollment_id = mitxonline_good_economics_for_hard_times_programs.courserunenrollment_id
     inner join programs
-        on programs.mitxonline_program_id = mitxonline_good_economics_for_hard_times_programs.program_id
+        on mitxonline_good_economics_for_hard_times_programs.program_id = programs.mitxonline_program_id
     where enrollments.course_number = '{{ "dedp_mitxonline_good_economics_for_hard_times_course_number" }}'
 )
 

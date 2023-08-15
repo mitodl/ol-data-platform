@@ -18,4 +18,4 @@ select
     , coupon.coupon_updated_on
     , coupon.coupon_created_on
 from coupon
-inner join couponpayment on couponpayment.couponpayment_id = coupon.couponpayment_id
+inner join couponpayment on coupon.couponpayment_id = couponpayment.couponpayment_id

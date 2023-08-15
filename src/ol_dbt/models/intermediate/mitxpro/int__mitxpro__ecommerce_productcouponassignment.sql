@@ -22,4 +22,4 @@ select
     , couponproduct.product_id
     , couponproduct.programrun_id
 from productcouponassignment
-inner join couponproduct on couponproduct.couponproduct_id = productcouponassignment.couponproduct_id
+inner join couponproduct on productcouponassignment.couponproduct_id = couponproduct.couponproduct_id

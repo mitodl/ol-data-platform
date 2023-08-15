@@ -13,4 +13,4 @@ select
     , coursepagetopic.coursetopic_id
 from coursepagetopic
 inner join coursepages
-    on coursepages.wagtail_page_id = coursepagetopic.wagtail_page_id
+    on coursepagetopic.wagtail_page_id = coursepages.wagtail_page_id

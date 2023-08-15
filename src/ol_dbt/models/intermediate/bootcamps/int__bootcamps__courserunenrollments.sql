@@ -25,8 +25,8 @@ with enrollments as (
         , users.user_username
         , users.user_email
     from enrollments
-    inner join runs on runs.courserun_id = enrollments.courserun_id
-    inner join users on users.user_id = enrollments.user_id
+    inner join runs on enrollments.courserun_id = runs.courserun_id
+    inner join users on enrollments.user_id = users.user_id
 )
 
 select * from bootcamps_enrollments
