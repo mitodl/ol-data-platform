@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 from dagster import (
     AssetMaterialization,
@@ -18,17 +19,14 @@ from pydantic import Field
 
 class DownloadEdxGcsCourseConfig(Config):
     edx_gcs_course_tarballs: str = Field(
-        String,
-        default_value="simeon-mitx-course-tarballs",
+        "simeon-mitx-course-tarballs",
         description="The GCS bucket that contains the MITx course exports from edx.org",  # noqa: E501
     )
 
 
 class UploadEdxGcsCourseConfig(Config):
-    edx_etl_results_bucket: str = Field(
-        String,
-        default_value="odl-developer-testing-sandbox",
-        is_required=False,
+    edx_etl_results_bucket: Optional[str] = Field(
+        "odl-developer-testing-sandbox",
         description="S3 bucket to use for uploading results of pipeline execution.",
     )
 
@@ -43,9 +41,7 @@ def download_edx_gcs_course_data(context, config: DownloadEdxGcsCourseConfig):
     # todo: replace context and config with a new asset config
     # once resources have been migrated
     storage_client = context.resources.gcp_gcs
-    # todo: why is this hardcoded? Wasn't that available in the
-    #  context.edx_gcs_course_tarballs?
-    bucket = storage_client.get_bucket("simeon-mitx-course-tarballs")
+    bucket = storage_client.get_bucket(config.edx_gcs_course_tarballs)
     edx_course_tarball_path = context.resources.results_dir.path.joinpath(
         config.edx_gcs_course_tarballs
     )

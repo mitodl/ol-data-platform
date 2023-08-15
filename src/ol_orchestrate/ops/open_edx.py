@@ -31,27 +31,21 @@ from pydantic import Field
 
 
 class ListCoursesConfig(Config):
-    edx_client_id: str = Field(
-        is_required=True, description="OAUTH2 Client ID for Open edX API"
-    )
+    edx_client_id: str = Field(description="OAUTH2 Client ID for Open edX API")
     edx_client_secret: str = Field(
-        is_required=True,
         description="OAUTH2 Client secret for Open edX API",
     )
     edx_base_url: str = Field(
-        is_required=False,
-        default_value="lms.mitx.mit.edu",
+        default="lms.mitx.mit.edu",
         description="Domain of edX installation",
     )
     edx_token_type: str = Field(
-        is_required=False,
-        default_value="jwt",
+        default="jwt",
         description="Type of OAuth token to use for authenticating to the edX API. "
         'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
     )
     edx_course_api_page_size: int = Field(
-        is_required=False,
-        default_value=100,
+        default=100,
         description="The number of records to return per API request. This can be "
         "modified to address issues with rate limiting.",
     )
@@ -59,60 +53,47 @@ class ListCoursesConfig(Config):
 
 class ExportEdxForumDatabaseConfig(Config):
     mongodump_path: str = Field(
-        is_required=False,
-        default_value="/usr/bin/mongodump",
+        default="/usr/bin/mongodump",
         description="The mongodump path for a MongoDB replicat set",
     )
     edx_mongodb_uri: str = Field(
-        is_required=True,
         description="The URI for connecting to a MongoDB replicat set",
     )
     edx_mongodb_username: str = Field(
-        is_required=False,
-        default_value="",
+        default="",
         description="Username for account with permissions to read forum database",
     )
     edx_mongodb_password: str = Field(
-        is_required=False,
-        default_value="",
+        default="",
         description="Password for account with permissions to read forum database",
     )
     edx_mongodb_auth_db: str = Field(
-        is_required=False,
-        default_value="admin",
+        default="admin",
         description="The MongoDB database that contains the account information for the"
         " authenticating user.",
     )
     edx_mongodb_forum_database_name: str = Field(
-        is_required=True,
         description="Name of database that contains forum data for Open edX installation",  # noqa: E501
     )
 
 
 class ExportEdxCoursesConfig(Config):
     edx_base_url: str = Field(
-        is_required=True,
         description="Domain of edX installation",
     )
-    edx_client_id: str = Field(
-        is_required=True, description="OAUTH2 Client ID for Open edX API"
-    )
+    edx_client_id: str = Field(description="OAUTH2 Client ID for Open edX API")
     edx_client_secret: str = Field(
-        is_required=True,
         description="OAUTH2 Client secret for Open edX API",
     )
     edx_studio_base_url: str = Field(
-        is_required=True,
         description="Domain of edX studio installation",
     )
     edx_token_type: str = Field(
-        is_required=False,
-        default_value="jwt",
+        default="jwt",
         description="Type of OAuth token to use for authenticating to the edX API. "
         'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
     )
     edx_course_bucket: str = Field(
-        is_required=True,
         description="Bucket name that the edX installation uses for uploading "
         "course exports",
     )
@@ -120,8 +101,7 @@ class ExportEdxCoursesConfig(Config):
 
 class UploadExtractedDataConfig(Config):
     edx_etl_results_bucket: str = Field(
-        is_required=False,
-        default_value="odl-developer-testing-sandbox",
+        default="odl-developer-testing-sandbox",
         description="S3 bucket to use for uploading results of pipeline execution.",
     )
 
