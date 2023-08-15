@@ -43,6 +43,6 @@ select
         as cms_facultymemberspage_facultymember_description
 from unnestedfacultymemberspage
 inner join wagtailpages
-    on wagtailpages.wagtail_page_id = unnestedfacultymemberspage.wagtail_page_id
+    on unnestedfacultymemberspage.wagtail_page_id = wagtailpages.wagtail_page_id
 inner join coursepageswithpath
     on wagtailpages.wagtail_page_path like coursepageswithpath.wagtail_page_path || '%'

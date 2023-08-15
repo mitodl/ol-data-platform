@@ -17,4 +17,4 @@ select
     , program_runs.programrun_end_on
     , concat(programs.program_readable_id, '+', program_runs.programrun_tag) as programrun_readable_id
 from program_runs
-inner join programs on programs.program_id = program_runs.program_id
+inner join programs on program_runs.program_id = programs.program_id

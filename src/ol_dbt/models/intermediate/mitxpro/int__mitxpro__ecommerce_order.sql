@@ -23,5 +23,5 @@ select
     , couponversion.coupon_id
     , couponversion.couponpaymentversion_id
 from orders
-left join couponredemption on couponredemption.order_id = orders.order_id
-left join couponversion on couponversion.couponversion_id = couponredemption.couponversion_id
+left join couponredemption on orders.order_id = couponredemption.order_id
+left join couponversion on couponredemption.couponversion_id = couponversion.couponversion_id

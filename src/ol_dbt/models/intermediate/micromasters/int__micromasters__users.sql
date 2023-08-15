@@ -73,5 +73,5 @@ select
     , most_recent_employment.user_job_position
     , coalesce(highest_education.user_education_degree, users.user_highest_education) as user_highest_education
 from users
-left join highest_education on highest_education.user_profile_id = users.user_profile_id
-left join most_recent_employment on most_recent_employment.user_profile_id = users.user_profile_id
+left join highest_education on users.user_profile_id = highest_education.user_profile_id
+left join most_recent_employment on users.user_profile_id = most_recent_employment.user_profile_id

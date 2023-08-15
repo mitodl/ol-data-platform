@@ -36,7 +36,7 @@ with edx_enrollments as (
         , program_requirements.mitxonline_program_id
         , program_requirements.program_title
     from edx_enrollments
-    inner join program_requirements on program_requirements.course_number = edx_enrollments.course_number
+    inner join program_requirements on edx_enrollments.course_number = program_requirements.course_number
 )
 
 , mitxonline_query as (

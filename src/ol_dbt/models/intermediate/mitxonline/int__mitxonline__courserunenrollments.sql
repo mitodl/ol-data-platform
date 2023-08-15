@@ -42,7 +42,7 @@ with enrollments as (
         , enrollments.courserun_id
     from enrollments
     inner join mitxonline_runs on enrollments.courserun_id = mitxonline_runs.courserun_id
-    inner join mitxonline_programs on mitxonline_programs.course_id = mitxonline_runs.course_id
+    inner join mitxonline_programs on mitxonline_runs.course_id = mitxonline_programs.course_id
     inner join mitxonline_users on enrollments.user_id = mitxonline_users.user_id
     inner join micromasters_users
         on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
@@ -67,10 +67,10 @@ with enrollments as (
     from enrollments
     inner join mitxonline_orders
         on
-            mitxonline_orders.user_id = enrollments.user_id
-            and mitxonline_orders.courserun_id = enrollments.courserun_id
+            enrollments.user_id = mitxonline_orders.user_id
+            and enrollments.courserun_id = mitxonline_orders.courserun_id
     inner join mitxonline_runs on enrollments.courserun_id = mitxonline_runs.courserun_id
-    inner join mitxonline_programs on mitxonline_programs.course_id = mitxonline_runs.course_id
+    inner join mitxonline_programs on mitxonline_runs.course_id = mitxonline_programs.course_id
     where
         mitxonline_runs.courserun_tag not in ('2T2022', '1T2022', '3T2021')
         and mitxonline_programs.program_id in (

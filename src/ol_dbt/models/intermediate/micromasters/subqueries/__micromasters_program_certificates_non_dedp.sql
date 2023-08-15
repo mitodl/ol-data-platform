@@ -76,10 +76,10 @@ with edx_course_certificates as (
         on edx_course_certificates.courserun_readable_id like micromasters_runs.courserun_edxorg_readable_id || '%'
     inner join
         micromasters_courses
-        on micromasters_courses.course_id = micromasters_runs.course_id
+        on micromasters_runs.course_id = micromasters_courses.course_id
     inner join
         micromasters_program_requirements
-        on micromasters_program_requirements.course_id = micromasters_courses.course_id
+        on micromasters_courses.course_id = micromasters_program_requirements.course_id
 )
 
 -- Some users continue to take courses in the program after earning a program certificate.
@@ -150,11 +150,11 @@ with edx_course_certificates as (
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from program_completions
     left join edx_users
-        on edx_users.user_id = program_completions.user_edxorg_id
+        on program_completions.user_edxorg_id = edx_users.user_id
     left join micromasters_users
-        on micromasters_users.user_edxorg_username = program_completions.user_edxorg_username
+        on program_completions.user_edxorg_username = micromasters_users.user_edxorg_username
     left join programs
-        on programs.micromasters_program_id = program_completions.program_id
+        on program_completions.program_id = programs.micromasters_program_id
 )
 
 -- Some users should recieve a certificate even though they don't fulfill the requirements according
@@ -185,16 +185,16 @@ with edx_course_certificates as (
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from program_certificates_override_list
     inner join edx_users
-        on edx_users.user_id = program_certificates_override_list.user_edxorg_id
+        on program_certificates_override_list.user_edxorg_id = edx_users.user_id
     left join micromasters_users
-        on micromasters_users.user_edxorg_username = edx_users.user_username
+        on edx_users.user_username = micromasters_users.user_edxorg_username
     inner join programs
-        on programs.micromasters_program_id = program_certificates_override_list.micromasters_program_id
+        on program_certificates_override_list.micromasters_program_id = programs.micromasters_program_id
     left join non_dedp_certificates
         on
-            non_dedp_certificates.user_edxorg_id
-            = program_certificates_override_list.user_edxorg_id and non_dedp_certificates.micromasters_program_id
-            = program_certificates_override_list.micromasters_program_id
+            program_certificates_override_list.user_edxorg_id
+            = non_dedp_certificates.user_edxorg_id and program_certificates_override_list.micromasters_program_id
+            = non_dedp_certificates.micromasters_program_id
     where non_dedp_certificates.user_edxorg_username is null
 )
 

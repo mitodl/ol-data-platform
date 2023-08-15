@@ -48,8 +48,8 @@ select
     , coalesce(edx_users.user_full_name, mitxonline_users.user_full_name) as user_full_name
     , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
 from mitxonline_program_certificates
-left join mitxonline_users on mitxonline_users.user_id = mitxonline_program_certificates.user_id
+left join mitxonline_users on mitxonline_program_certificates.user_id = mitxonline_users.user_id
 left join micromasters_users on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
-left join edx_users on edx_users.user_username = micromasters_users.user_edxorg_username
+left join edx_users on micromasters_users.user_edxorg_username = edx_users.user_username
 left join mitx_programs on mitxonline_program_certificates.program_id = mitx_programs.mitxonline_program_id
 where mitx_programs.is_dedp_program = true

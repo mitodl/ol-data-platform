@@ -50,10 +50,10 @@ inner join courseruns on courserun_grades.courserun_id = courseruns.courserun_id
 inner join courses on courserun_grades.course_id = courses.course_id
 inner join enrollments_with_program
     on
-        enrollments_with_program.courserun_id = courseruns.courserun_id
-        and enrollments_with_program.user_id = courserun_grades.user_id
+        courseruns.courserun_id = enrollments_with_program.courserun_id
+        and courserun_grades.user_id = enrollments_with_program.user_id
 inner join mitxonline_users on courserun_grades.user_id = mitxonline_users.user_id
 left join micromasters_users
     on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
-left join edx_users on edx_users.user_username = micromasters_users.user_edxorg_username
+left join edx_users on micromasters_users.user_edxorg_username = edx_users.user_username
 where enrollments_with_program.is_dedp_program = true

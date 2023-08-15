@@ -88,6 +88,6 @@ select
     , mitxonline_auth.user_mitxonline_username
     , most_recent_edx_username.user_edxorg_username
 from users
-left join profiles on profiles.user_id = users.user_id
-left join mitxonline_auth on mitxonline_auth.user_id = users.user_id
-left join most_recent_edx_username on most_recent_edx_username.user_id = users.user_id
+left join profiles on users.user_id = profiles.user_id
+left join mitxonline_auth on users.user_id = mitxonline_auth.user_id
+left join most_recent_edx_username on users.user_id = most_recent_edx_username.user_id

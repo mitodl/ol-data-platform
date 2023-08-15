@@ -15,4 +15,4 @@ select
     , basket.basket_updated_on
     , couponbasket.coupon_id
 from basket
-left join couponbasket on couponbasket.basket_id = basket.basket_id
+left join couponbasket on basket.basket_id = couponbasket.basket_id

@@ -35,9 +35,9 @@ with mitxonline_programenrollments as (
         end as program_id
     from mitxonline_courserunenrollments
     inner join mitxonline_courseruns
-        on mitxonline_courseruns.courserun_id = mitxonline_courserunenrollments.courserun_id
+        on mitxonline_courserunenrollments.courserun_id = mitxonline_courseruns.courserun_id
     left join mitxonline_programenrollments
-        on mitxonline_programenrollments.user_id = mitxonline_courserunenrollments.user_id
+        on mitxonline_courserunenrollments.user_id = mitxonline_programenrollments.user_id
     where
         mitxonline_programenrollments.program_id in (
             {{ var("dedp_mitxonline_international_development_program_id") }}

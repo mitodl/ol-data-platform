@@ -26,12 +26,12 @@ with dedp_course_certificates as (
             order by courserun_grades.courserungrade_grade desc, courserun_grades.coursegrade_created_on desc
         ) as row_num
     from courserun_grades
-    inner join courseruns on courseruns.courserun_id = courserun_grades.courserun_id
+    inner join courseruns on courserun_grades.courserun_id = courseruns.courserun_id
     inner join dedp_course_certificates
         on
-            dedp_course_certificates.user_id = courserun_grades.user_id
-            and dedp_course_certificates.course_id = courseruns.course_id
-            and dedp_course_certificates.coursecertificate_created_on > courseruns.courserun_start_on
+            courserun_grades.user_id = dedp_course_certificates.user_id
+            and courseruns.course_id = dedp_course_certificates.course_id
+            and courseruns.courserun_start_on < dedp_course_certificates.coursecertificate_created_on
 
 )
 
