@@ -7,12 +7,12 @@ with source as (
         id as user_profile_id
         , user_id
         , year_of_birth as user_birth_year
-        , company as user_company
-        , industry as user_industry
-        , job_title as user_job_title
-        , job_function as user_job_function
-        , leadership_level as user_leadership_level
-        , highest_education as user_highest_education
+        , nullif(company, '') as user_company
+        , nullif(industry, '') as user_industry
+        , nullif(job_title, '') as user_job_title
+        , nullif(job_function, '') as user_job_function
+        , nullif(leadership_level, '') as user_leadership_level
+        , nullif(highest_education, '') as user_highest_education
         , type_is_student as user_type_is_student
         , type_is_professional as user_type_is_professional
         , type_is_educator as user_type_is_educator

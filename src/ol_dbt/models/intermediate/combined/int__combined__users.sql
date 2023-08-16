@@ -1,5 +1,5 @@
---- This model combines intermediate users from different platform,
--- it's built as view with no additional data is stored
+--- This model combines intermediate users from different platforms, it contains duplicates for
+--  MITx Online and edX.org users, deduplication is handled in int__mitx__users
 {{ config(materialized='view') }}
 
 with mitxonline_users as (
