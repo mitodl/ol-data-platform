@@ -1699,3 +1699,35 @@ models:
     description: json, json of the course or program faculty, contains name and description
     tests:
     - not_null
+
+- name: stg__mitxpro__openedx__mysql__auth_user
+  description: xPro open edX users
+  columns:
+  - name: openedx_user_id
+    description: int, sequential ID representing a user on xPro open edX platform
+    tests:
+    - unique
+    - not_null
+  - name: user_username
+    description: str, unique username on the open edX platform
+    tests:
+    - unique
+    - not_null
+  - name: user_email
+    description: str, user's email associated with their account
+    tests:
+    - unique
+    - not_null
+  - name: user_is_active
+    description: boolean, used to soft delete users
+    tests:
+    - not_null
+  - name: user_is_staff
+    description: boolean, indicating whether user can log into admin site
+    tests:
+    - not_null
+  - name: user_is_superuser
+    description: boolean, indicating whether user has all permissions on open edx
+      platform
+    tests:
+    - not_null
