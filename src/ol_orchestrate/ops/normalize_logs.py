@@ -28,11 +28,21 @@ class LoadFilesConfig(Config):
     s3_token: str = Field(
         description="STS token indicating the role assumed for the IAM credentials",
     )
+    path_prefix: str = Field(
+        default="logs", description="Path prefix where the target logs are located"
+    )
 
 
 class WriteFilesConfig(Config):
     tracking_log_bucket: str = Field(
         description="S3 bucket where tracking logs are stored",
+    )
+    source_path_prefix: str = Field(
+        default="logs",
+        description="Path prefix where the logs are being loaded from",
+    )
+    destination_path_prefix: str = Field(
+        default="valid", description="Path prefix where the logs are being written to"
     )
 
 
@@ -67,8 +77,9 @@ def load_files_to_table(
 
     """
     source_bucket = config.tracking_log_bucket
+    path_prefix = config.path_prefix
     # DuckDB Glob Syntax: ** matches any number of subdirectories (including none)
-    s3_path = f"s3://{source_bucket}/logs/{log_date}**"
+    s3_path = f"s3://{source_bucket}/{path_prefix}/{log_date}**"
     context.log.info(s3_path)
     with context.resources.duckdb.get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS tracking_logs")
@@ -138,16 +149,63 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
         # convert integer timestamps to datetime
         conn.execute(
             """UPDATE tracking_logs
+            SET time = to_timestamp(CAST(time AS BIGINT))
+            WHERE TRY_CAST(time AS BIGINT) IS NOT NULL
+            """
+        )
+        # convert all timestamps to iso8601 format
+        conn.execute(
+            """
+            UPDATE tracking_logs
+            SET time = strftime(TRY_CAST(time AS TIMESTAMP), '%Y-%m-%d %H:%M:%S.%f')
+            """
+        )
+        yield Output(columns, "columns")
+
+
+@op(
+    name="jsonify_data_in_duckdb",
+    description="Executes table updates to convert context and event string fields "
+    "to JSON format",
+    required_resource_keys={"duckdb"},
+    ins={"log_db": In(dagster_type=Nothing)},
+    out={"columns": Out(dagster_type=List[String])},
+)
+def jsonify_log_data(context: OpExecutionContext) -> Nothing:
+    """Transform records in the tracking_log table to normalize data.
+
+    All columns are converted to VARCHAR and JSON is extracted to a
+    string without escape characters. Integer time values are normalized to ISO8601
+    format.
+
+    :param context: Dagster execution context for propagaint configuration data.
+    :type context: OpExecutionContext
+
+    :yield: The list of columns from the log file
+    """
+    with context.resources.duckdb.get_connection() as conn:
+        columns = ["event", "context"]
+        for col in columns:
+            conn.execute(f"ALTER TABLE tracking_logs ALTER {col} TYPE JSON")
+            # extract JSON from VARCHAR for context and event fields
+            update_query = f"UPDATE tracking_logs SET {col} = json({col}) WHERE json_valid({col});"  # noqa: S608, E501
+            conn.execute(update_query)
+        # convert integer timestamps to datetime
+        conn.execute(
+            """UPDATE tracking_logs
                     SET time = to_timestamp(CAST(time AS BIGINT))
                     WHERE TRY_CAST(time AS BIGINT) IS NOT NULL
                 """
         )
-        # convert all timestamps to iso8601 format
-        conn.execute(
-            """UPDATE tracking_logs
-                    SET time = strftime(TRY_CAST(time AS TIMESTAMP), '%Y-%m-%d %H:%M:%S.%f')
-                """  # noqa: E501
-        )
+        # Ensure that we are exporting all columns, not just the transformed ones.
+        col_names = conn.execute(
+            """SELECT column_name FROM temp.information_schema.columns
+                    WHERE table_name = 'tracking_logs'
+                """
+        ).fetchall()
+        # exclude filename, which is already a VARCHAR
+        columns = [i[0] for i in col_names]
+        columns.remove("filename")
         yield Output(columns, "columns")
 
 
@@ -191,7 +249,9 @@ def write_file_to_s3(
         ).fetchall()
         files = ["".join(i) for i in file_names]
         for file_name in files:
-            new_file_name = file_name.replace("logs", "valid")
+            new_file_name = file_name.replace(
+                config.source_path_prefix, config.destination_path_prefix
+            )
             local_file_name = new_file_name.rsplit("/", maxsplit=1)[-1]
             context.log.info(new_file_name)
             conn.execute(
@@ -204,7 +264,7 @@ def write_file_to_s3(
             context.resources.s3.upload_file(
                 Filename=local_file_name,
                 Bucket=config.tracking_log_bucket,
-                Key=f"valid/{log_date}{local_file_name}",
+                Key=f"{config.destination_path_prefix}/{log_date}{local_file_name}",
             )
             Path(local_file_name).unlink()
     Path(context.resources.duckdb.database).unlink()
