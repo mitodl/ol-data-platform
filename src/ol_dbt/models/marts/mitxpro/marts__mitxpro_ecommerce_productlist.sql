@@ -81,13 +81,12 @@ left join ecommerce_productversion_latest
     on ecommerce_product.product_id = ecommerce_productversion_latest.product_id
 inner join course_runs
     on ecommerce_product.courserun_id = course_runs.courserun_id
-inner join courses
-    on course_runs.course_id = courses.course_id
 left join coursesinprogram
     on course_runs.course_id = coursesinprogram.course_id
 left join programs
     on coursesinprogram.program_id = programs.program_id
-
+left join courses
+    on course_runs.course_id = courses.course_id
 left join course_to_topics
     on course_runs.course_id = course_to_topics.course_id
 left join coursetopic
