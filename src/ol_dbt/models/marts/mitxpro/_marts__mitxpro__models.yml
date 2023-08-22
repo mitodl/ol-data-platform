@@ -36,15 +36,15 @@ models:
   - name: link
     description: link to the xPro checkout page
   - name: product_parent_run_id
-    description: str, Open edX ID which includes the Run number. For example the Product
-      Parent Run of course-v1:xPRO+SysEngx4+R18 is program-v1:xPRO+SysEngx+R18.
+    description: str, Open edX ID which includes the Run number. For example 
+      the Product Parent Run of course-v1:xPRO+SysEngx4+R18 is program-v1:xPRO+SysEngx+R18.
   - name: duration
-    description: str, a short description indicating how long the course or program
-      takes to complete (e.g. '4 weeks')
+    description: str, a short description indicating how long the course or program takes to
+      complete (e.g. '4 weeks')
   - name: time_commitment
     description: str, short description indicating about the time commitments
   - name: coursetopic_name
     description: str, name of a course topic
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["product_id", "product_parent_run_id"]
+      column_list: ["product_id", "product_parent_run_id", "coursetopic_name"]
