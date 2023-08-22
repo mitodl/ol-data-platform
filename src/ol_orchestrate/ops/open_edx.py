@@ -3,10 +3,9 @@ from datetime import timedelta
 
 from dagster import (
     AssetMaterialization,
+    Config,
     ExpectationResult,
     Failure,
-    Field,
-    Int,
     List,
     MetadataValue,
     OpExecutionContext,
@@ -28,6 +27,83 @@ from ol_orchestrate.lib.edx_api_client import (
     get_edx_course_ids,
 )
 from ol_orchestrate.lib.file_rendering import write_csv
+from pydantic import Field
+
+
+class ListCoursesConfig(Config):
+    edx_client_id: str = Field(description="OAUTH2 Client ID for Open edX API")
+    edx_client_secret: str = Field(
+        description="OAUTH2 Client secret for Open edX API",
+    )
+    edx_base_url: str = Field(
+        default="lms.mitx.mit.edu",
+        description="Domain of edX installation",
+    )
+    edx_token_type: str = Field(
+        default="jwt",
+        description="Type of OAuth token to use for authenticating to the edX API. "
+        'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
+    )
+    edx_course_api_page_size: int = Field(
+        default=100,
+        description="The number of records to return per API request. This can be "
+        "modified to address issues with rate limiting.",
+    )
+
+
+class ExportEdxForumDatabaseConfig(Config):
+    mongodump_path: str = Field(
+        default="/usr/bin/mongodump",
+        description="The mongodump path for a MongoDB replicat set",
+    )
+    edx_mongodb_uri: str = Field(
+        description="The URI for connecting to a MongoDB replicat set",
+    )
+    edx_mongodb_username: str = Field(
+        default="",
+        description="Username for account with permissions to read forum database",
+    )
+    edx_mongodb_password: str = Field(
+        default="",
+        description="Password for account with permissions to read forum database",
+    )
+    edx_mongodb_auth_db: str = Field(
+        default="admin",
+        description="The MongoDB database that contains the account information for the"
+        " authenticating user.",
+    )
+    edx_mongodb_forum_database_name: str = Field(
+        description="Name of database that contains forum data for Open edX installation",  # noqa: E501
+    )
+
+
+class ExportEdxCoursesConfig(Config):
+    edx_base_url: str = Field(
+        description="Domain of edX installation",
+    )
+    edx_client_id: str = Field(description="OAUTH2 Client ID for Open edX API")
+    edx_client_secret: str = Field(
+        description="OAUTH2 Client secret for Open edX API",
+    )
+    edx_studio_base_url: str = Field(
+        description="Domain of edX studio installation",
+    )
+    edx_token_type: str = Field(
+        default="jwt",
+        description="Type of OAuth token to use for authenticating to the edX API. "
+        'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
+    )
+    edx_course_bucket: str = Field(
+        description="Bucket name that the edX installation uses for uploading "
+        "course exports",
+    )
+
+
+class UploadExtractedDataConfig(Config):
+    edx_etl_results_bucket: str = Field(
+        default="odl-developer-testing-sandbox",
+        description="S3 bucket to use for uploading results of pipeline execution.",
+    )
 
 
 @op(
@@ -36,64 +112,28 @@ from ol_orchestrate.lib.file_rendering import write_csv
         "Retrieve the list of course IDs active in the edX instance "
         "to be used in subsequent steps to pull data per course."
     ),
-    config_schema={
-        "edx_client_id": Field(
-            String, is_required=True, description="OAUTH2 Client ID for Open edX API"
-        ),
-        "edx_client_secret": Field(
-            String,
-            is_required=True,
-            description="OAUTH2 Client secret for Open edX API",
-        ),
-        "edx_base_url": Field(
-            String,
-            default_value="lms.mitx.mit.edu",
-            is_required=False,
-            description="Domain of edX installation",
-        ),
-        "edx_token_type": Field(
-            String,
-            default_value="jwt",
-            is_required=False,
-            description="Type of OAuth token to use for authenticating to the edX API. "
-            'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
-        ),
-        "edx_course_api_page_size": Field(
-            Int,
-            default_value=100,
-            is_required=False,
-            description="The number of records to return per API request. This can be "
-            "modified to address issues with rate limiting.",
-        ),
-    },
-    out={
-        "edx_course_ids": Out(
-            dagster_type=List[String],
-            description="List of course IDs active on Open edX installation",
-        )
-    },
 )
-def list_courses(context: OpExecutionContext) -> List[String]:
+def list_courses(config: ListCoursesConfig) -> List[String]:
     """
     Retrieve the list of course IDs active in the edX instance to be used in subsequent
     steps to pull data per course.
 
-    :param context: Dagster context object for passing configuration
-    :type context: OpExecutionContext
+    :param config: Client details pertaining to the Open edX API
+    :type Config
 
     :yield: List of edX course IDs
     """
     access_token = get_access_token(
-        client_id=context.op_config["edx_client_id"],
-        client_secret=context.op_config["edx_client_secret"],
-        edx_url=context.op_config["edx_base_url"],
-        token_type=context.op_config["edx_token_type"],
+        client_id=config.edx_client_id,
+        client_secret=config.edx_client_secret,
+        edx_url=config.edx_base_url,
+        token_type=config.edx_token_type,
     )
     course_ids = []
     course_id_generator = get_edx_course_ids(
-        context.op_config["edx_base_url"],
+        config.edx_base_url,
         access_token,
-        page_size=context.op_config["edx_course_api_page_size"],
+        page_size=config.edx_course_api_page_size,
     )
     for result_set in course_id_generator:
         course_ids.extend([course["id"] for course in result_set])
@@ -440,42 +480,6 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
     name="export_edx_forum_database",
     description="Solid to build the command line string for executing mongodump against the Open edX forum database",  # noqa: E501
     required_resource_keys={"results_dir"},
-    config_schema={
-        "mongodump_path": Field(
-            String,
-            is_required=False,
-            default_value="/usr/bin/mongodump",
-            description="The mongodump path for a MongoDB replicat set",
-        ),
-        "edx_mongodb_uri": Field(
-            String,
-            is_required=True,
-            description="The URI for connecting to a MongoDB replicat set",
-        ),
-        "edx_mongodb_username": Field(
-            String,
-            is_required=False,
-            default_value="",
-            description="Username for account with permissions to read forum database",
-        ),
-        "edx_mongodb_password": Field(
-            String,
-            is_required=False,
-            default_value="",
-            description="Password for account with permissions to read forum database",
-        ),
-        "edx_mongodb_auth_db": Field(
-            String,
-            is_required=False,
-            default_value="admin",
-            description="The MongoDB database that contains the account information for the authenticating user.",  # noqa: E501
-        ),
-        "edx_mongodb_forum_database_name": Field(
-            String,
-            is_required=True,
-            description="Name of database that contains forum data for Open edX installation",  # noqa: E501
-        ),
-    },
     out={
         "edx_forum_data_directory": Out(
             dagster_type=DagsterPath,
@@ -485,36 +489,40 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
 )
 def export_edx_forum_database(  # type: ignore
     context: OpExecutionContext,
+    config: ExportEdxForumDatabaseConfig,
 ) -> DagsterPath:
     """Export the edX forum database using mongodump.
 
     :param context: Dagster execution context for propagaint configuration data
     :type context: OpExecutionContext
 
-    :raises Failure: Raise a failure event if the mongo dump returns a non-zero exit
-        code
+    :param config: Details pertaining to the MongoDB database
+    :type Config
 
     :yield: Path object to the directory where the exported Mongo database is
         located
+
+    :raises Failure: Raise a failure event if the mongo dump returns a non-zero exit
+        code
     """
     forum_data_path = context.resources.results_dir.path.joinpath(
-        context.op_config["edx_mongodb_forum_database_name"]
+        config.edx_mongodb_forum_database_name
     )
-    mongo_uri = context.op_config["edx_mongodb_uri"]
+    mongo_uri = config.edx_mongodb_uri
     command_array = [
-        context.op_config["mongodump_path"],
+        config.mongodump_path,
         "--uri",
         f"'{mongo_uri}'",
         "--db",
-        context.op_config["edx_mongodb_forum_database_name"],
+        config.edx_mongodb_forum_database_name,
         "--authenticationDatabase",
-        context.op_config["edx_mongodb_auth_db"],
+        config.edx_mongodb_auth_db,
         "--out",
         context.resources.results_dir.absolute_path,
     ]
-    if password := context.op_config["edx_mongodb_password"]:
+    if password := config.edx_mongodb_password:
         command_array.extend(["--password", password])
-    if username := context.op_config["edx_mongodb_username"]:
+    if username := config.edx_mongodb_username:
         command_array.extend(["--username", username])
 
     mongodump_output, mongodump_retcode = run_bash(
@@ -549,39 +557,6 @@ def export_edx_forum_database(  # type: ignore
     name="edx_export_courses",
     description="Export the contents of all active courses to S3",
     required_resource_keys={"s3"},
-    config_schema={
-        "edx_base_url": Field(
-            String,
-            is_required=True,
-            description="Domain of edX installation",
-        ),
-        "edx_client_id": Field(
-            String, is_required=True, description="OAUTH2 Client ID for Open edX API"
-        ),
-        "edx_client_secret": Field(
-            String,
-            is_required=True,
-            description="OAUTH2 Client secret for Open edX API",
-        ),
-        "edx_studio_base_url": Field(
-            String,
-            is_required=True,
-            description="Domain of edX studio installation",
-        ),
-        "edx_token_type": Field(
-            String,
-            default_value="jwt",
-            is_required=False,
-            description="Type of OAuth token to use for authenticating to the edX API. "
-            'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
-        ),
-        "edx_course_bucket": Field(
-            String,
-            is_required=True,
-            description="Bucket name that the edX installation uses for uploading "
-            "course exports",
-        ),
-    },
     ins={
         "edx_course_ids": In(
             dagster_type=List[String],
@@ -594,16 +569,19 @@ def export_edx_forum_database(  # type: ignore
     },
 )
 def export_edx_courses(
-    context: OpExecutionContext, edx_course_ids: List[str], daily_extracts_dir: str
+    context: OpExecutionContext,
+    edx_course_ids: List[str],
+    daily_extracts_dir: str,
+    config: ExportEdxCoursesConfig,
 ) -> None:
     access_token = get_access_token(
-        client_id=context.op_config["edx_client_id"],
-        client_secret=context.op_config["edx_client_secret"],
-        edx_url=context.op_config["edx_base_url"],
-        token_type=context.op_config["edx_token_type"],
+        client_id=config.edx_client_id,
+        client_secret=config.edx_client_secret,
+        edx_url=config.edx_base_url,
+        token_type=config.edx_token_type,
     )
     exported_courses = export_courses(
-        context.op_config["edx_studio_base_url"],
+        config.edx_studio_base_url,
         access_token=access_token,
         course_ids=edx_course_ids,
     )
@@ -617,7 +595,7 @@ def export_edx_courses(
         time.sleep(timedelta(seconds=5).seconds)
         for course_id, task_id in tasks.items():
             task_status = check_course_export_status(
-                context.op_config["edx_studio_base_url"],
+                config.edx_studio_base_url,
                 access_token,
                 course_id,
                 task_id,
@@ -630,7 +608,7 @@ def export_edx_courses(
         context.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
         course_file = f"{course_id}.tar.gz"
         source_object = {
-            "Bucket": context.op_config["edx_course_bucket"],
+            "Bucket": config.edx_course_bucket,
             "Key": course_file,
         }
         dest_bucket, dest_prefix = daily_extracts_dir.split("/", maxsplit=1)
@@ -670,14 +648,6 @@ def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]
     name="edx_upload_daily_extracts",
     description="Upload all data from daily extracts to S3 for institutional research.",
     required_resource_keys={"results_dir", "s3"},
-    config_schema={
-        "edx_etl_results_bucket": Field(
-            String,
-            default_value="odl-developer-testing-sandbox",
-            is_required=False,
-            description="S3 bucket to use for uploading results of pipeline execution.",
-        ),
-    },
     ins={
         "edx_course_ids_csv": In(dagster_type=DagsterPath),
         "edx_course_roles": In(dagster_type=DagsterPath),
@@ -698,6 +668,7 @@ def upload_extracted_data(  # noqa: PLR0913
     edx_student_submissions: DagsterPath,
     edx_enrollment_records: DagsterPath,
     edx_forum_data_directory: DagsterPath,
+    config: UploadExtractedDataConfig,
 ):
     """Upload all data exports to S3 so that institutional research can ingest.
 
@@ -732,9 +703,12 @@ def upload_extracted_data(  # noqa: PLR0913
         Open edX forum activity
     :type edx_forum_data_directory: DagsterPath
 
+    :param config: Details pertaining to the S3 bucket to use for uploading results
+    :type Config
+
     :yield: The S3 path of the uploaded directory
     """
-    results_bucket = context.op_config["edx_etl_results_bucket"]
+    results_bucket = config.edx_etl_results_bucket
     for path_object in context.resources.results_dir.path.iterdir():
         if path_object.is_dir():
             for fpath in path_object.iterdir():

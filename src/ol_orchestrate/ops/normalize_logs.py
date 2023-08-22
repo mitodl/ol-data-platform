@@ -1,36 +1,45 @@
 from pathlib import Path
 
-from dagster import Field, List, Nothing, op, OpExecutionContext, Out, Output, String
+from dagster import (
+    List,
+    Nothing,
+    op,
+    OpExecutionContext,
+    Out,
+    Output,
+    String,
+    Config,
+)
 
 from dagster.core.definitions.input import In
+from pydantic import Field
+
+
+class LoadFilesConfig(Config):
+    tracking_log_bucket: str = Field(
+        description="S3 bucket where tracking logs are stored",
+    )
+    s3_key: str = Field(
+        description="S3 key for accessing tracking log bucket",
+    )
+    s3_secret: str = Field(
+        description="S3 secret key for accessing tracking log bucket",
+    )
+    s3_token: str = Field(
+        description="STS token indicating the role assumed for the IAM credentials",
+    )
+
+
+class WriteFilesConfig(Config):
+    tracking_log_bucket: str = Field(
+        description="S3 bucket where tracking logs are stored",
+    )
 
 
 @op(
     name="load_s3_files_to_duckdb",
     description="Creates a new DuckDB table from all th files in the bucket",
     required_resource_keys={"duckdb"},
-    config_schema={
-        "tracking_log_bucket": Field(
-            String,
-            is_required=True,
-            description="S3 bucket where tracking logs are stored",
-        ),
-        "s3_key": Field(
-            String,
-            is_required=True,
-            description="S3 key for accessing tracking log bucket",
-        ),
-        "s3_secret": Field(
-            String,
-            is_required=True,
-            description="S3 secret key for accessing tracking log bucket",
-        ),
-        "s3_token": Field(
-            String,
-            is_required=False,
-            description="STS token indicating the role assumed for the IAM credentials",
-        ),
-    },
     ins={
         "log_date": In(
             dagster_type=String,
@@ -38,7 +47,9 @@ from dagster.core.definitions.input import In
         )
     },
 )
-def load_files_to_table(context: OpExecutionContext, log_date: str) -> Nothing:
+def load_files_to_table(
+    context: OpExecutionContext, log_date: str, config: LoadFilesConfig
+) -> Nothing:
     """Create an in-memory DuckDB table from a newline delimited JSON file.
 
     The schema is auto-inferred on read and only parses top level JSON. Supports file
@@ -48,11 +59,14 @@ def load_files_to_table(context: OpExecutionContext, log_date: str) -> Nothing:
     :param context: Dagster execution context for propagaint configuration data.
     :type context: OpExecutionContext
 
+    :param config: Dagster execution config for propagaint configuration data.
+    :type config: Config
+
     :log_date: S3 Bucket log date prefix to load logs from (Format 'YYYY-MM-DD/')
     :type log_date: str
 
     """
-    source_bucket = context.op_config["tracking_log_bucket"]
+    source_bucket = config.tracking_log_bucket
     # DuckDB Glob Syntax: ** matches any number of subdirectories (including none)
     s3_path = f"s3://{source_bucket}/logs/{log_date}**"
     context.log.info(s3_path)
@@ -63,14 +77,14 @@ def load_files_to_table(context: OpExecutionContext, log_date: str) -> Nothing:
             INSTALL httpfs;
             INSTALL json;
             LOAD httpfs;
-            SET s3_access_key_id="{context.op_config["s3_key"]}";
-            SET s3_secret_access_key="{context.op_config["s3_secret"]}";
+            SET s3_access_key_id="{config.s3_key}";
+            SET s3_secret_access_key="{config.s3_secret}";
             """
         )
-        if context.op_config.get("s3_token"):
+        if config.s3_token:
             conn.execute(
                 f"""
-            SET s3_session_token="{context.op_config.get("s3_token")}";
+            SET s3_session_token="{config.s3_token}";
             """
             )
         conn.execute(
@@ -141,13 +155,6 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
     name="export_processed_data_to_s3",
     description="Exports data from the DuckDB table to a JSON file in S3",
     required_resource_keys={"s3", "duckdb"},
-    config_schema={
-        "tracking_log_bucket": Field(
-            String,
-            is_required=True,
-            description="S3 bucket where tracking logs are stored",
-        ),
-    },
     ins={
         "log_db": In(dagster_type=Nothing),
         "columns": In(dagster_type=List[String]),
@@ -158,7 +165,10 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
     },
 )
 def write_file_to_s3(
-    context: OpExecutionContext, columns: List[String], log_date: String
+    context: OpExecutionContext,
+    columns: List[String],
+    log_date: String,
+    config: WriteFilesConfig,
 ) -> None:
     """Export data from the tracking_logs table in DuckDB to the S3 bucket.
 
@@ -167,6 +177,9 @@ def write_file_to_s3(
 
     :param context: Dagster execution context for propagaint configuration data.
     :type context: OpExecutionContext
+
+    :param config: Dagster execution config for propagaint configuration data.
+    :type config: Config
 
     :param columns: List of columns to export from table
     :type columns: List[String]
@@ -190,7 +203,7 @@ def write_file_to_s3(
             # copy to S3
             context.resources.s3.upload_file(
                 Filename=local_file_name,
-                Bucket=context.op_config["tracking_log_bucket"],
+                Bucket=config.tracking_log_bucket,
                 Key=f"valid/{log_date}{local_file_name}",
             )
             Path(local_file_name).unlink()
