@@ -55,6 +55,16 @@ with ecommerce_product as (
     order by product_id
 )
 
+, ecommerce_course_to_topics as (
+    select 
+        course_to_topics.course_id
+        , array_join(array_distinct(array_agg(coursetopic.coursetopic_name)), ', ') as coursetopic_name
+    from course_to_topics
+    left join coursetopic
+        on course_to_topics.coursetopic_id = coursetopic.coursetopic_id
+    group by course_to_topics.course_id
+)
+
 select
     'xPRO' as product_platform
     , ecommerce_product.product_id as eproductid
@@ -75,22 +85,20 @@ select
     , concat(programs.program_readable_id, '+', course_runs.courserun_tag) as product_parent_run_id
     , courses.cms_coursepage_duration as duration
     , courses.cms_coursepage_time_commitment as time_commitment
-    , coursetopic.coursetopic_name
+    , ecommerce_course_to_topics.coursetopic_names
 from ecommerce_product
 left join ecommerce_productversion_latest
     on ecommerce_product.product_id = ecommerce_productversion_latest.product_id
 inner join course_runs
     on ecommerce_product.courserun_id = course_runs.courserun_id
+inner join courses
+    on course_runs.course_id = courses.course_id
 left join coursesinprogram
     on course_runs.course_id = coursesinprogram.course_id
 left join programs
     on coursesinprogram.program_id = programs.program_id
-left join courses
-    on course_runs.course_id = courses.course_id
-left join course_to_topics
-    on course_runs.course_id = course_to_topics.course_id
-left join coursetopic
-    on course_to_topics.coursetopic_id = coursetopic.coursetopic_id
+left join ecommerce_course_to_topics
+    on course_runs.course_id = ecommerce_course_to_topics.course_id
 where ecommerce_product.product_type = 'course run'
 
 union all
@@ -115,7 +123,7 @@ select
     , null as product_parent_run_id
     , programs.cms_programpage_duration as duration
     , programs.cms_programpage_time_commitment as time_commitment
-    , null as coursetopic_name
+    , null as coursetopic_names
 from ecommerce_product
 left join ecommerce_productversion_latest
     on ecommerce_product.product_id = ecommerce_productversion_latest.product_id
