@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 from dagster import (
     List,
@@ -25,7 +26,8 @@ class LoadFilesConfig(Config):
     s3_secret: str = Field(
         description="S3 secret key for accessing tracking log bucket",
     )
-    s3_token: str = Field(
+    s3_token: Optional[str] = Field(
+        default=None,
         description="STS token indicating the role assumed for the IAM credentials",
     )
     path_prefix: str = Field(
@@ -185,18 +187,15 @@ def jsonify_log_data(context: OpExecutionContext) -> Nothing:
     """
     with context.resources.duckdb.get_connection() as conn:
         columns = ["event", "context"]
+        conn.execute("INSTALL json;")
         for col in columns:
-            conn.execute(f"ALTER TABLE tracking_logs ALTER {col} TYPE JSON")
             # extract JSON from VARCHAR for context and event fields
-            update_query = f"UPDATE tracking_logs SET {col} = json({col}) WHERE json_valid({col});"  # noqa: S608, E501
+            update_query = f"""
+            UPDATE tracking_logs SET {col} = regexp_replace({col}, '^\"{{', '');
+            UPDATE tracking_logs SET {col} = regexp_replace({col}, '}}\"$', '');
+            UPDATE tracking_logs SET {col} = regexp_replace({col}, '\\\"', '"', 'g');
+            """  # noqa: S608
             conn.execute(update_query)
-        # convert integer timestamps to datetime
-        conn.execute(
-            """UPDATE tracking_logs
-                    SET time = to_timestamp(CAST(time AS BIGINT))
-                    WHERE TRY_CAST(time AS BIGINT) IS NOT NULL
-                """
-        )
         # Ensure that we are exporting all columns, not just the transformed ones.
         col_names = conn.execute(
             """SELECT column_name FROM temp.information_schema.columns
