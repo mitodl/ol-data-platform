@@ -56,7 +56,7 @@ with ecommerce_product as (
 )
 
 , ecommerce_course_to_topics as (
-    select
+    select 
         course_to_topics.course_id
         , array_join(array_distinct(array_agg(coursetopic.coursetopic_name)), ', ') as coursetopic_name
     from course_to_topics
@@ -85,7 +85,7 @@ select
     , concat(programs.program_readable_id, '+', course_runs.courserun_tag) as product_parent_run_id
     , courses.cms_coursepage_duration as duration
     , courses.cms_coursepage_time_commitment as time_commitment
-    , ecommerce_course_to_topics.coursetopic_names
+    , ecommerce_course_to_topics.coursetopic_name as coursetopic_names
 from ecommerce_product
 left join ecommerce_productversion_latest
     on ecommerce_product.product_id = ecommerce_productversion_latest.product_id
