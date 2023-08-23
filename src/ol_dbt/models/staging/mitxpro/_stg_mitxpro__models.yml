@@ -1302,6 +1302,13 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_id", "ecommerce_order_id"]
+  - dbt_utils.recency:
+      datepart: day
+      field: from_iso8601_timestamp(courserunenrollment_created_on)
+      interval: 3
+      config:
+        severity: error
+        error_if: "!=0"
 
 - name: stg__mitxpro__app__postgres__courses_programenrollment
   columns:

@@ -373,6 +373,10 @@ sources:
       description: string, the  functional group the model belongs to
 
   - name: raw__mitxonline__app__postgres__courses_courserunenrollment
+    freshness:
+      warn_after: {count: 1, period: day}
+      error_after: {count: 2, period: day}
+    loaded_at_field: "from_iso8601_timestamp(created_on)"
     columns:
     - name: id
       description: int, sequential ID tracking a single user enrollment
