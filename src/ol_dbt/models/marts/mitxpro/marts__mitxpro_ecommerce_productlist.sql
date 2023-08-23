@@ -56,7 +56,7 @@ with ecommerce_product as (
 )
 
 , ecommerce_course_to_topics as (
-    select 
+    select
         course_to_topics.course_id
         , array_join(array_distinct(array_agg(coursetopic.coursetopic_name)), ', ') as coursetopic_name
     from course_to_topics
