@@ -10,7 +10,10 @@ from dagster import (
 )
 from datetime import datetime, UTC  # type: ignore
 
-from ol_orchestrate.jobs.normalize_logs import normalize_tracking_logs
+from ol_orchestrate.jobs.normalize_logs import (
+    normalize_tracking_logs,
+    jsonify_tracking_logs,
+)
 
 
 dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore
@@ -41,7 +44,9 @@ def earliest_log_date(
     return date_map[dagster_env][deployment_name]
 
 
-def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
+def daily_tracking_log_config(
+    deployment, destination, log_date: datetime, _end: datetime
+):
     global dagster_env
     if dagster_env == "dev":
         dagster_env = "qa"
@@ -68,6 +73,7 @@ def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
                 "config": {
                     "tracking_log_bucket": log_bucket,
                     **s3_creds,
+                    "path_prefix": "logs" if destination == "valid" else "valid",
                 },
                 "inputs": {
                     "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
@@ -76,6 +82,8 @@ def daily_tracking_log_config(deployment, log_date: datetime, _end: datetime):
             "export_processed_data_to_s3": {
                 "config": {
                     "tracking_log_bucket": log_bucket,
+                    "source_path_prefix": "logs" if destination == "valid" else "valid",
+                    "destination_path_prefix": destination,
                 },
                 "inputs": {
                     "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
@@ -94,8 +102,17 @@ normalize_logs = Definitions(
         normalize_tracking_logs.to_job(
             config=daily_partitioned_config(
                 start_date=earliest_log_date(dagster_env, deployment)  # type: ignore
-            )(partial(daily_tracking_log_config, deployment)),
+            )(partial(daily_tracking_log_config, deployment, "valid")),
             name=f"normalize_{deployment}_{dagster_env}_tracking_logs",
+        )
+        for deployment in ["xpro", "mitx", "mitxonline"]
+    ]
+    + [
+        jsonify_tracking_logs.to_job(
+            config=daily_partitioned_config(
+                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore
+            )(partial(daily_tracking_log_config, deployment, "logs")),
+            name=f"jsonify_{deployment}_{dagster_env}_tracking_logs",
         )
         for deployment in ["xpro", "mitx", "mitxonline"]
     ],
