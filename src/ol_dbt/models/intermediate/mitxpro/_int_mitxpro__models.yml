@@ -1008,6 +1008,10 @@ models:
     tests:
     - unique
     - not_null
+  - name: openedx_user_id
+    description: int, foreign key to open edX users. Null for most inactive app users.
+    tests:
+    - unique
   - name: user_username
     description: string, username
     tests:

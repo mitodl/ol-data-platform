@@ -13,9 +13,14 @@ with users as (
     from {{ ref('stg__mitxpro__app__postgres__users_profile') }}
 )
 
+, openedx_users as (
+    select * from {{ ref('stg__mitxpro__openedx__mysql__auth_user') }}
+)
+
 
 select
     users.user_id
+    , openedx_users.openedx_user_id
     , users.user_username
     , users.user_full_name
     , users.user_email
@@ -40,3 +45,5 @@ select
 from users
 left join users_legaladdress on users.user_id = users_legaladdress.user_id
 left join users_profile on users.user_id = users_profile.user_id
+left join openedx_users
+    on users.user_username = openedx_users.user_username
