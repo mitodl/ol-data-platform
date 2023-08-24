@@ -22,10 +22,8 @@ models:
         values: ["Existing Business", "Expansion Business", "New Business"]
   - name: opportunity_business_type
     description: string, indicating business type - B2C (Business to Consumer), B2B
-      (Business to Business) or B2X (Business-to-Exchange). B2X is inactive.
-    tests:
-    - accepted_values:
-        values: ["B2C", "B2B", "B2X"]
+      (Business to Business) or B2X (Business-to-Exchange). B2X is inactive. There
+      are also other possible values e.g. 3rd Party – B2C
   - name: opportunity_agreement_type
     description: string, type of Agreement. Possible values - 3rd Party Hosted, Additional
       MSA Order Form, Affiliate Direct, Affiliate via Intermediary, Bulk Sales, Content

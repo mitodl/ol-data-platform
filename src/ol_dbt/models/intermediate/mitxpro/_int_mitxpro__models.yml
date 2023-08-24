@@ -1373,7 +1373,10 @@ models:
         "useractivity_video_id", "useractivity_video_currenttime", "useractivity_timestamp"]
 
 - name: int__mitxpro__user_courseactivity_problemcheck
-  description: It tracks xPro open edX users problem_check activities within a course
+  description: It tracks xPro open edX users problem_check activities within a course.
+    Some events from 2019 don't have nanosecond in their timestamp, if learners had
+    problem check events during those periods, use problem_attempts, problem_success
+    or other fields to gauge which one happens first
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
@@ -1423,7 +1426,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
-        "useractivity_timestamp"]
+        "useractivity_problem_attempts", "useractivity_problem_success", "useractivity_timestamp"]
 
 - name: int__mitxpro__courses_to_topics
   columns:
