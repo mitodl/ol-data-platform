@@ -191,8 +191,8 @@ def jsonify_log_data(context: OpExecutionContext) -> Nothing:
         for col in columns:
             # extract JSON from VARCHAR for context and event fields
             update_query = f"""
-            UPDATE tracking_logs SET {col} = regexp_replace({col}, '^\"{{', '');
-            UPDATE tracking_logs SET {col} = regexp_replace({col}, '}}\"$', '');
+            UPDATE tracking_logs SET {col} = regexp_replace({col}, '^\"{{', '{{');
+            UPDATE tracking_logs SET {col} = regexp_replace({col}, '}}\"$', '}}');
             UPDATE tracking_logs SET {col} = regexp_replace({col}, '\\\"', '"', 'g');
             """  # noqa: S608
             conn.execute(update_query)
