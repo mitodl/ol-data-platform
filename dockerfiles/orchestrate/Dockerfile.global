@@ -34,7 +34,7 @@ RUN cp /opt/dagster/code/src/ol_orchestrate/dagster.yaml /opt/dagster/dagster_ho
 USER dagster
 EXPOSE 3000
 WORKDIR /opt/dagster/code
-RUN poetry install
+RUN poetry install --without=dev
 
 RUN cd /opt/dbt && \
     poetry run -C /opt/dagster/code dbt deps && \
