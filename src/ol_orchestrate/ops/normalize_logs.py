@@ -190,10 +190,12 @@ def jsonify_log_data(context: OpExecutionContext) -> Nothing:
         conn.execute("INSTALL json;")
         for col in columns:
             # extract JSON from VARCHAR for context and event fields
-            update_query = f"""
-            UPDATE tracking_logs SET {col} = regexp_replace({col}, '^\"{{', '{{');
-            UPDATE tracking_logs SET {col} = regexp_replace({col}, '}}\"$', '}}');
-            UPDATE tracking_logs SET {col} = regexp_replace({col}, '\\\"', '"', 'g');
+            update_query = rf"""
+            UPDATE tracking_logs SET {col} = regexp_replace(
+              regexp_replace(
+                replace(context::VARCHAR, '\"', '"'),
+              '^\"{{', '{{', 'g'),
+            '}}\"$', '}}', 'g');
             """  # noqa: S608
             conn.execute(update_query)
         # Ensure that we are exporting all columns, not just the transformed ones.
