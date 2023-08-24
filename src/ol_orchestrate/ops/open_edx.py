@@ -112,6 +112,7 @@ class UploadExtractedDataConfig(Config):
         "Retrieve the list of course IDs active in the edX instance "
         "to be used in subsequent steps to pull data per course."
     ),
+    out={"edx_course_ids": Out(description="List of course IDs in the app")},
 )
 def list_courses(config: ListCoursesConfig) -> List[String]:
     """
