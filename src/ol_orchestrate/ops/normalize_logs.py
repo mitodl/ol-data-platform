@@ -193,7 +193,7 @@ def jsonify_log_data(context: OpExecutionContext) -> Nothing:
             update_query = rf"""
             UPDATE tracking_logs SET {col} = regexp_replace(
               regexp_replace(
-                replace(context::VARCHAR, '\"', '"'),
+                replace(replace(context::VARCHAR, '\"', '"'), '\\', '\'),
               '^\"{{', '{{', 'g'),
             '}}\"$', '}}', 'g');
             """  # noqa: S608
