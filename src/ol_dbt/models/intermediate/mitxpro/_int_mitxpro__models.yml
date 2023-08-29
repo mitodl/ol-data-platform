@@ -10,14 +10,14 @@ models:
     tests:
     - not_null
   - name: coupon_name
-    description: string, human readable name for the coupon payment  
+    description: string, human readable name for the coupon payment
   - name: coupon_created_on
     description: timestamp, specifying when the coupon was initially created
     tests:
     - not_null
   - name: payment_transaction
     description: string, string that identifies the payment invoice for coupon purchases
-      by companies 
+      by companies
   - name: discount_amount
     description: number, either dollar amount or percentage (between 0 and 1) discount
   - name: coupon_type
@@ -34,15 +34,16 @@ models:
   - name: activated_on
     description: timestamp, activation timestamp for the coupon
   - name: expires_on
-    description: timestamp, expiration timestamp for the coupon 
+    description: timestamp, expiration timestamp for the coupon
   - name: coupon_source_table
-    description: string, the table that the coupon data is coming from. 
-      Options are "ecommerce_coupon", "b2bcoupon".
+    description: string, the table that the coupon data is coming from. Options are
+      "ecommerce_coupon", "b2bcoupon".
   - name: b2bcoupon_id
     description: int, foreign key to b2becommerce_b2bcoupon. A coupon that was redeemed
       for the order.
   - name: coupon_id
     description: int, foreign key referencing ecommerce_coupon
+  tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["b2bcoupon_id", "coupon_id"]
 - name: int__mitxpro__ecommerce_couponversion
