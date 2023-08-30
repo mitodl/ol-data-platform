@@ -4,12 +4,12 @@ from pathlib import Path
 
 from dagster import (
     AssetSelection,
+    AutoMaterializePolicy,
     DefaultScheduleStatus,
-    DefaultSensorStatus,
     Definitions,
     ScheduleDefinition,
-    build_asset_reconciliation_sensor,
     define_asset_job,
+    load_assets_from_current_module,
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
 from dagster_dbt import (
@@ -32,7 +32,7 @@ configured_airbyte_resource = airbyte_resource.configured(
 )
 
 dbt_repo_dir = (
-    Path(__file__).parent.parent.parent.joinpath("ol_dbt")
+    Path(__file__).parent.parent.parent.parent.joinpath("ol_dbt")
     if dagster_deployment == "dev"
     else Path("/opt/dbt")
 )
@@ -72,26 +72,17 @@ airbyte_update_schedule = ScheduleDefinition(
 )
 
 dbt_assets = load_assets_from_dbt_manifest(
-    manifest_json=json.loads(
+    manifest=json.loads(
         dbt_repo_dir.joinpath("target", "manifest.json").read_text(),
     ),
-    use_build_command=True,
 )
 
 elt = Definitions(
-    assets=[
-        airbyte_assets,
-        *dbt_assets,
-    ],
+    assets=load_assets_from_current_module(
+        auto_materialize_policy=AutoMaterializePolicy.eager(),
+    ),
     resources={"dbt": configured_dbt_cli},
-    sensors=[
-        build_asset_reconciliation_sensor(
-            name="dbt_asset_sensor",
-            asset_selection=AssetSelection.assets(*dbt_assets),
-            minimum_interval_seconds=60 * 5,
-            default_status=DefaultSensorStatus.RUNNING,
-        )
-    ],
+    sensors=[],
     jobs=[airbyte_asset_job],
     schedules=[airbyte_update_schedule],
 )
