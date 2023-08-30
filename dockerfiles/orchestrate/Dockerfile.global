@@ -34,7 +34,7 @@ RUN cp /opt/dagster/code/src/ol_orchestrate/dagster.yaml /opt/dagster/dagster_ho
 USER dagster
 EXPOSE 3000
 WORKDIR /opt/dagster/code
-RUN poetry install --without=dev
+RUN poetry install --without=dev --no-cache
 
 RUN cd /opt/dbt && \
     poetry run -C /opt/dagster/code dbt deps && \
@@ -44,6 +44,6 @@ RUN cd /opt/dbt && \
 # Dagster Daemon
 # ENTRYPOINT ["poetry", "run", "dagster-daemon", "run"]
 # Dagit
-# ENTRYPOINT ["poetry", "run", "dagit", "-h", "0.0.0.0", "-p", "3000"]
+# ENTRYPOINT ["poetry", "run", "dagster-webserver", "-h", "0.0.0.0", "-p", "3000"]
 # Pipeline
 # ENTRYPOINT ["poetry", "run", "dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000"]

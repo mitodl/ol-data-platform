@@ -70,7 +70,7 @@ class DailyResultsDir(ResultsDir):
             is_required=False,
             description=(
                 "Base directory used for creating a results folder. Should be configured to allow writing "  # noqa: E501
-                "by the Dagster/Dagit user"
+                "by the Dagster user"
             ),
         ),
         "outputs_directory_date_format": Field(
