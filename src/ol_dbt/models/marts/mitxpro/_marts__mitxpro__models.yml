@@ -19,6 +19,7 @@ models:
       code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
     tests:
     - not_null
+    - unique
   - name: product_type
     description: string, readable product type
   - name: list_price
@@ -45,6 +46,3 @@ models:
     description: str, short description indicating about the time commitments
   - name: coursetopic_names
     description: str, all associated course topic names
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["product_id", "product_parent_run_id"]

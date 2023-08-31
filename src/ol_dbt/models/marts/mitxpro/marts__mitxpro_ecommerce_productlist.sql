@@ -23,11 +23,6 @@ with ecommerce_product as (
     from {{ ref('int__mitxpro__program_runs') }}
 )
 
-, coursesinprogram as (
-    select *
-    from {{ ref('int__mitxpro__coursesinprogram') }}
-)
-
 , courses as (
     select *
     from {{ ref('int__mitxpro__courses') }}
@@ -94,10 +89,8 @@ inner join course_runs
     on ecommerce_product.courserun_id = course_runs.courserun_id
 inner join courses
     on course_runs.course_id = courses.course_id
-left join coursesinprogram
-    on course_runs.course_id = coursesinprogram.course_id
 left join programs
-    on coursesinprogram.program_id = programs.program_id
+    on courses.program_id = programs.program_id
 left join ecommerce_course_to_topics
     on course_runs.course_id = ecommerce_course_to_topics.course_id
 where ecommerce_product.product_type = 'course run'
