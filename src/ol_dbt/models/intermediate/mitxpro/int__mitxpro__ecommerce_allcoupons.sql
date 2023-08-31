@@ -77,9 +77,9 @@ select
     , coupon_created_on
     , payment_transaction
     , discount_amount
+    , discount_type
     , coupon_type
     , discount_source
-    , discount_type
     , activated_on
     , expires_on
     , coupon_source_table
@@ -95,9 +95,9 @@ select
     , coupon_created_on
     , payment_transaction
     , discount_amount
+    , discount_type
     , coupon_type
     , discount_source
-    , discount_type
     , activated_on
     , expires_on
     , coupon_source_table
