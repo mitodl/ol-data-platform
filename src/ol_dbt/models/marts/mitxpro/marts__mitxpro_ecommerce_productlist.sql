@@ -78,7 +78,7 @@ select
         , cast(ecommerce_product.product_id as varchar (50))
         , '">', course_runs.courserun_readable_id, '</a>'
     ) as link
-    , programs.program_readable_id as product_parent_run_id
+    , concat(programs.program_readable_id, '+', course_runs.courserun_tag) as product_parent_run_id
     , courses.cms_coursepage_duration as duration
     , courses.cms_coursepage_time_commitment as time_commitment
     , ecommerce_course_to_topics.coursetopic_name as coursetopic_names
