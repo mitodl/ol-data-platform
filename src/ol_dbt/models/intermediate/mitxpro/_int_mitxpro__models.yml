@@ -13,7 +13,7 @@ models:
     description: string, order state. Options are "fulfilled", "failed", "created"
       "refunded"
   - name: line_id
-    description: int, foreign key for ecommerce_line
+    description: int, foreign key for ecommerce_line  
   - name: product_id
     description: int, foreign key for ecommerce_product
   - name: couponpaymentversion_payment_transaction
@@ -24,9 +24,9 @@ models:
       used multiple times
   - name: couponpaymentversion_discount_amount
     description: number, either dollar amount or percentage (between 0 and 1) discount
-  - name: redeemed
-    description: boolean, when an order uses a coupon this field will be 'Y' otherwise
-      it will be 'N'
+  - name: redeemed 
+    description: boolean, when an order uses a coupon this field will be 'Y' 
+      otherwise it will be 'N'      
   - name: user_email
     description: str, user email associated with their account
   - name: product_type
@@ -43,7 +43,7 @@ models:
     description: int, foreign key to b2becommerce_b2bcoupon
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["order_id", "b2border_id", "coupon_id"]
+      column_list: ["order_id", "b2border_id", "line_id", "coupon_id"]                                        
 - name: int__mitxpro__ecommerce_allcoupons
   description: B2B and regular coupons combined into one table
   columns:

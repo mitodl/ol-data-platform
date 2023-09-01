@@ -49,7 +49,7 @@ with b2becommerce_b2border as (
 )
 
 , latest_ecommerce_couponversion as (
-    select
+    select 
         coupon_id
         , max(couponversion_updated_on) as max_couponversion_updated_on
     from ecommerce_couponversion
@@ -57,23 +57,23 @@ with b2becommerce_b2border as (
 )
 
 , b2b_order_fields as (
-    select
+    select 
         ecommerce_order.order_id
         , b2becommerce_b2border.b2border_id
-        , ecommerce_order.order_state
         , ecommerce_line.line_id
         , ecommerce_line.product_id
         , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
         , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
         , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount
-        , users.user_email
-        , ecommerce_line.product_type
         , course_runs.courserun_readable_id
         , programs.program_readable_id
         , ecommerce_coupon.coupon_id
         , b2becommerce_b2border.b2bcoupon_id
         , case when ecommerce_couponredemption.couponredemption_id is not null then 'Y' else 'N' end as redeemed
-    from b2becommerce_b2border
+        , coalesce(ecommerce_order.order_state, b2becommerce_b2border.b2border_status) as order_state
+        , coalesce(ecommerce_line.product_type, b2becommerce_b2border.product_type) as product_type
+        , coalesce(users.user_email, b2border_email) as user_email
+    from b2becommerce_b2border 
     left join ecommerce_couponpaymentversion
         on b2becommerce_b2border.couponpaymentversion_id = ecommerce_couponpaymentversion.couponpaymentversion_id
     left join ecommerce_coupon
@@ -81,9 +81,9 @@ with b2becommerce_b2border as (
     left join latest_ecommerce_couponversion
         on ecommerce_coupon.coupon_id = latest_ecommerce_couponversion.coupon_id
     left join ecommerce_couponversion
-        on
+        on 
             latest_ecommerce_couponversion.coupon_id = ecommerce_couponversion.coupon_id
-            and latest_ecommerce_couponversion.max_couponversion_updated_on
+            and latest_ecommerce_couponversion.max_couponversion_updated_on 
             = ecommerce_couponversion.couponversion_updated_on
     left join ecommerce_couponredemption
         on ecommerce_couponversion.couponversion_id = ecommerce_couponredemption.couponversion_id
@@ -106,7 +106,7 @@ with b2becommerce_b2border as (
 )
 
 , reg_order_fields as (
-    select
+    select   
         ecommerce_order.order_id
         , null as b2border_id
         , ecommerce_order.order_state
@@ -140,27 +140,7 @@ with b2becommerce_b2border as (
     where order_id_test.order_id is null
 )
 
-select
-    order_id
-    , b2border_id
-    , order_state
-    , line_id
-    , product_id
-    , couponpaymentversion_payment_transaction
-    , couponpaymentversion_coupon_type
-    , couponpaymentversion_discount_amount
-    , redeemed
-    , user_email
-    , product_type
-    , courserun_readable_id
-    , program_readable_id
-    , coupon_id
-    , b2bcoupon_id
-from b2b_order_fields
-
-union distinct
-
-select
+select 
     order_id
     , b2border_id
     , order_state
@@ -177,3 +157,23 @@ select
     , coupon_id
     , b2bcoupon_id
 from reg_order_fields
+
+union distinct
+
+select 
+    order_id
+    , b2border_id
+    , order_state
+    , line_id
+    , product_id
+    , couponpaymentversion_payment_transaction
+    , couponpaymentversion_coupon_type
+    , couponpaymentversion_discount_amount
+    , redeemed
+    , user_email
+    , product_type
+    , courserun_readable_id
+    , program_readable_id
+    , coupon_id
+    , b2bcoupon_id
+from b2b_order_fields
