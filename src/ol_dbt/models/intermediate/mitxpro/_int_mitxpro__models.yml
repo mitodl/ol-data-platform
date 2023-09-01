@@ -12,8 +12,6 @@ models:
   - name: order_state
     description: string, order state. Options are "fulfilled", "failed", "created"
       "refunded"
-    - accepted_values:
-        values: ['fulfilled', 'failed', 'created', 'refunded'] 
   - name: line_id
     description: int, foreign key for ecommerce_line  
   - name: product_id
