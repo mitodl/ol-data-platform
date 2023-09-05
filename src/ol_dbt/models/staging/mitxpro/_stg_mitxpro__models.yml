@@ -969,13 +969,13 @@ models:
   - name: platform_id
     description: int, primary key representing a single platform
     tests:
-      - unique
-      - not_null
+    - unique
+    - not_null
   - name: platform_name
     description: str, name of the platform
     tests:
-      - unique
-      - not_null
+    - unique
+    - not_null
 
 - name: stg__mitxpro__app__postgres__courses_program
   columns:
