@@ -9,6 +9,10 @@ models:
     description: int, foreign key for ecommerce_order
   - name: b2border_id
     description: int, foreign key for b2becommerce_b2border
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created
+    tests:
+    - not_null
   - name: order_state
     description: string, order state. Options are "fulfilled", "failed", "created"
       "refunded"
@@ -22,11 +26,11 @@ models:
   - name: couponpaymentversion_coupon_type
     description: string, one of 'single-use' or 'promo'. Promo coupon codes can be
       used multiple times
-  - name: couponpaymentversion_discount_amount
+  - name: discount_amount
     description: number, either dollar amount or percentage (between 0 and 1) discount
   - name: redeemed
     description: boolean, when an order uses a coupon this field will be 'Y' otherwise
-      it will be 'N'
+      it will be null
   - name: user_email
     description: str, user email associated with their account
   - name: product_type
