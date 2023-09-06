@@ -64,7 +64,7 @@ with b2becommerce_b2border as (
         , ecommerce_line.product_id
         , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
         , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
-        , b2becommerce_b2border.b2border_discount as discount_amount
+        , b2becommerce_b2border.b2border_discount 
         , course_runs.courserun_readable_id
         , programs.program_readable_id
         , ecommerce_coupon.coupon_id
@@ -115,7 +115,7 @@ with b2becommerce_b2border as (
         , ecommerce_line.product_id
         , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
         , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
-        , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount as discount_amount
+        , null as b2border_discount
         , users.user_email
         , ecommerce_line.product_type
         , course_runs.courserun_readable_id
@@ -151,7 +151,7 @@ select
     , product_id
     , couponpaymentversion_payment_transaction
     , couponpaymentversion_coupon_type
-    , discount_amount
+    , b2border_discount
     , redeemed
     , user_email
     , product_type
@@ -172,7 +172,7 @@ select
     , product_id
     , couponpaymentversion_payment_transaction
     , couponpaymentversion_coupon_type
-    , discount_amount
+    , b2border_discount
     , redeemed
     , user_email
     , product_type

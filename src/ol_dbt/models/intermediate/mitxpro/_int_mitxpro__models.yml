@@ -26,8 +26,8 @@ models:
   - name: couponpaymentversion_coupon_type
     description: string, one of 'single-use' or 'promo'. Promo coupon codes can be
       used multiple times
-  - name: discount_amount
-    description: number, either dollar amount or percentage (between 0 and 1) discount
+  - name: b2border_discount
+    description: numeric, dollar discount amount for the order
   - name: redeemed
     description: boolean, when an order uses a coupon this field will be 'Y' otherwise
       it will be null
