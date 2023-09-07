@@ -46,7 +46,7 @@ with coupon as (
                         '$'
                         || cast(
                             ecommerce_couponpaymentversion.couponpaymentversion_discount_amount
-                            as varchar (100)
+                            as varchar
                         )
                         || ' off'
                     )
@@ -55,7 +55,7 @@ with coupon as (
                     (
                         cast(
                             (ecommerce_couponpaymentversion.couponpaymentversion_discount_amount * 100)
-                            as varchar (100)
+                            as varchar
                         )
                         || '% off'
                     )
@@ -85,7 +85,7 @@ with coupon as (
         , 'b2bcoupon' as coupon_source_table
         , b2bcoupon_id
         , null as coupon_id
-        , cast((b2bcoupon_discount_percent * 100) as varchar (9)) || '% off' as discount_amount
+        , cast((b2bcoupon_discount_percent * 100) as varchar) || '% off' as discount_amount
     from b2becommerce_b2bcoupon
 )
 
