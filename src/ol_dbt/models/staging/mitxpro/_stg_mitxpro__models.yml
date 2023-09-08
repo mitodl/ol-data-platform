@@ -737,8 +737,8 @@ models:
     description: boolean, whether or not the product is currently purchasable
     tests:
     - not_null
-  - name: product_is_visible_in_bulk_form
-    description: boolean, whether or not the product is purchasable through the bulk
+  - name: product_is_private
+    description: boolean, Public product is purchasable through the bulk
       form at /ecommerce/bulk
     tests:
     - not_null

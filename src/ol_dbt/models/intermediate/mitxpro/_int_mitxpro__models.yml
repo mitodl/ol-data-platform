@@ -756,8 +756,8 @@ models:
     description: timestamp, the timestamp the product was created
   - name: product_updated_on
     description: timestamp, the timestamp the product was last updated
-  - name: product_is_visible_in_bulk_form
-    description: boolean, whether or not the product is purchasable through the bulk
+  - name: product_is_private
+    description: boolean, Public product is purchasable through the bulk
       form at /ecommerce/bulk
     tests:
     - not_null
