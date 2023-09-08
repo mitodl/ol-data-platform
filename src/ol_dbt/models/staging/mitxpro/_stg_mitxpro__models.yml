@@ -738,8 +738,7 @@ models:
     tests:
     - not_null
   - name: product_is_private
-    description: boolean, Public product is purchasable through the bulk
-      form at /ecommerce/bulk
+    description: boolean, Public product is purchasable through the bulk form at /ecommerce/bulk
     tests:
     - not_null
   tests:

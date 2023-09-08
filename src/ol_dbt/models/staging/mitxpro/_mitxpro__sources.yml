@@ -505,8 +505,8 @@ sources:
     - name: is_active
       description: boolean, whether or not the product is currently purchasable
     - name: is_private
-      description: boolean, Public product is purchasable through the
-        bulk form at /ecommerce/bulk
+      description: boolean, Public product is purchasable through the bulk form at
+        /ecommerce/bulk
 
   - name: raw__xpro__app__postgres__ecommerce_productversion
     columns:
