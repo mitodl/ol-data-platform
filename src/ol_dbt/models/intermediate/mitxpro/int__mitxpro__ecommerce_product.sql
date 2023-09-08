@@ -19,7 +19,7 @@ with products as (
         , products.product_is_active
         , products.product_created_on
         , products.product_updated_on
-        , products.product_is_visible_in_bulk_form
+        , products.product_is_private
         , case contenttypes.contenttype_full_name
             when 'courses_courserun' then products.product_object_id
         end as courserun_id
