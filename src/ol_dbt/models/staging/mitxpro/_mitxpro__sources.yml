@@ -614,6 +614,13 @@ sources:
       description: int, id of the company associated with the payment for the enrollment
         for enrollments that are made through bulk purchases by companies
 
+  - name: raw__xpro__app__postgres__courses_platform
+    columns:
+    - name: id
+      description: int, primary key representing a single platform
+    - name: name
+      description: str, name of the platform
+
   - name: raw__xpro__app__postgres__courses_program
     columns:
     - name: id
@@ -632,6 +639,8 @@ sources:
       description: timestamp, specifying when a program was most recently updated
     - name: is_external
       description: boolean, whether the program is on an external platform
+    - name: platform_id
+      description: int, id of the program platform
 
   - name: raw__xpro__app__postgres__courses_programrun
     columns:
@@ -671,6 +680,8 @@ sources:
         program on MITxPro website
     - name: is_external
       description: boolean, whether the course is on an external platform
+    - name: platform_id
+      description: int, id of the course platform
     - name: created_on
       description: timestamp, specifying when a course was initially created
     - name: updated_on

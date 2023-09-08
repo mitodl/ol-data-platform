@@ -14,6 +14,7 @@ select
     , programs.program_is_live
     , programs.program_readable_id
     , programs.program_is_external
+    , programs.platform_id
     , cms_programs.cms_programpage_description
     , cms_programs.cms_programpage_subhead
     , cms_programs.cms_programpage_catalog_details
