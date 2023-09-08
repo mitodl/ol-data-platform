@@ -964,6 +964,19 @@ models:
         values: '{{ var("highest_education_values") }}'
     - not_null
 
+- name: stg__mitxpro__app__postgres__courses_platform
+  columns:
+  - name: platform_id
+    description: int, primary key representing a single platform
+    tests:
+    - unique
+    - not_null
+  - name: platform_name
+    description: str, name of the platform
+    tests:
+    - unique
+    - not_null
+
 - name: stg__mitxpro__app__postgres__courses_program
   columns:
   - name: program_id
@@ -992,6 +1005,8 @@ models:
     description: boolean, whether the program is on an external platform
     tests:
     - not_null
+  - name: platform_id
+    description: int, id of the program platform
 
 - name: stg__mitxpro__app__postgres__courses_programrun
   columns:
@@ -1059,6 +1074,8 @@ models:
     description: boolean, whether the course is on an external platform
     tests:
     - not_null
+  - name: platform_id
+    description: int, id of the course platform
 
 - name: stg__mitxpro__app__postgres__courses_courserun
   columns:

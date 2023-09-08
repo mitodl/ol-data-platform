@@ -15,6 +15,7 @@ select
     , courses.course_is_live
     , courses.course_readable_id
     , courses.course_is_external
+    , courses.platform_id
     , cms_courses.cms_coursepage_description
     , cms_courses.cms_coursepage_subhead
     , cms_courses.cms_coursepage_catalog_details
