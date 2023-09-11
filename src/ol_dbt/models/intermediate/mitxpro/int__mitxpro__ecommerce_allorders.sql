@@ -61,10 +61,10 @@ with b2becommerce_b2border as (
         ecommerce_order.order_id
         , b2becommerce_b2border.b2border_id
         , ecommerce_line.line_id
-        , ecommerce_line.product_id
+        , b2becommerce_b2border.product_id
         , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
         , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
-        , b2becommerce_b2border.b2border_discount
+        , b2becommerce_b2border.b2border_discount 
         , course_runs.courserun_readable_id
         , programs.program_readable_id
         , ecommerce_coupon.coupon_id
@@ -92,8 +92,6 @@ with b2becommerce_b2border as (
         on ecommerce_couponredemption.order_id = ecommerce_order.order_id
     left join ecommerce_line
         on ecommerce_order.order_id = ecommerce_line.order_id
-    left join users
-        on ecommerce_order.order_purchaser_user_id = users.user_id
     left join course_runs
         on ecommerce_line.courserun_id = course_runs.courserun_id
     left join programs

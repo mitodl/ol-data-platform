@@ -10,7 +10,9 @@ models:
   - name: b2border_id
     description: int, foreign key for b2becommerce_b2border
   - name: order_created_on
-    description: timestamp, specifying when the order was initially created
+    description: timestamp, specifying when the order was initially created.
+      If this is a b2b order it will be the timestamp that order was created 
+      otherwise it will be when the regular order was created.
     tests:
     - not_null
   - name: order_state
@@ -938,19 +940,7 @@ models:
       compare_model: ref('stg__mitxpro__app__postgres__courses_programenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id", "ecommerce_order_id"]
-- name: int__mitxpro__platforms
-  description: Intermediate model of platforms in MITxPro
-  columns:
-  - name: platform_id
-    description: int, primary key representing a single platform
-    tests:
-    - unique
-    - not_null
-  - name: platform_name
-    description: str, name of the platform
-    tests:
-    - unique
-    - not_null
+
 - name: int__mitxpro__programs
   description: Intermediate model of programs in MITxPro
   columns:
@@ -976,8 +966,6 @@ models:
     description: boolean, whether the program is on an external platform
     tests:
     - not_null
-  - name: platform_id
-    description: int, id of the program platform
   - name: cms_programpage_description
     description: str, the description displayed on the page
   - name: cms_programpage_duration
@@ -1051,8 +1039,6 @@ models:
     description: boolean, whether the course is on an external platform
     tests:
     - not_null
-  - name: platform_id
-    description: int, id of the course platform
   - name: cms_coursepage_description
     description: str, the description displayed on the page
   - name: cms_coursepage_duration
