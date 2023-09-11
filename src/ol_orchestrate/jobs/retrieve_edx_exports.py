@@ -1,0 +1,23 @@
+from dagster import graph
+
+from ol_orchestrate.ops.retrieve_edx_exports import (
+    download_edx_data,
+    extract_files,
+    upload_files,
+)
+
+
+@graph(
+    description=(
+        "Retrieve and extract edX.org exports maintained by institutional research "
+        "from a gcs bucket into S3 buckets on a weekly basis."
+    ),
+    tags={
+        "source": "gcs",
+        "destination": "s3",
+        "owner": "institutional-research",
+        "consumer": "platform-engineering",
+    },
+)
+def sync_gcs_to_s3():
+    upload_files(extract_files(download_edx_data()))
