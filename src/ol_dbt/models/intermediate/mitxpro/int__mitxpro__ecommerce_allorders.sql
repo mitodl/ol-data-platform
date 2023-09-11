@@ -48,14 +48,6 @@ with b2becommerce_b2border as (
     from {{ ref('int__mitxpro__programs') }}
 )
 
-, latest_ecommerce_couponversion as (
-    select
-        coupon_id
-        , max(couponversion_updated_on) as max_couponversion_updated_on
-    from ecommerce_couponversion
-    group by coupon_id
-)
-
 , b2b_order_fields as (
     select
         ecommerce_order.order_id
@@ -64,7 +56,7 @@ with b2becommerce_b2border as (
         , b2becommerce_b2border.product_id
         , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
         , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
-        , b2becommerce_b2border.b2border_discount
+        , b2becommerce_b2border.b2border_discount 
         , course_runs.courserun_readable_id
         , programs.program_readable_id
         , ecommerce_coupon.coupon_id
@@ -79,13 +71,10 @@ with b2becommerce_b2border as (
         on b2becommerce_b2border.couponpaymentversion_id = ecommerce_couponpaymentversion.couponpaymentversion_id
     left join ecommerce_coupon
         on ecommerce_couponpaymentversion.couponpayment_name = ecommerce_coupon.couponpayment_name
-    left join latest_ecommerce_couponversion
-        on ecommerce_coupon.coupon_id = latest_ecommerce_couponversion.coupon_id
     left join ecommerce_couponversion
         on
-            latest_ecommerce_couponversion.coupon_id = ecommerce_couponversion.coupon_id
-            and latest_ecommerce_couponversion.max_couponversion_updated_on
-            = ecommerce_couponversion.couponversion_updated_on
+            ecommerce_coupon.coupon_id = ecommerce_couponversion.coupon_id
+            and ecommerce_couponversion.is_latest_couponversion = 'Y'
     left join ecommerce_couponredemption
         on ecommerce_couponversion.couponversion_id = ecommerce_couponredemption.couponversion_id
     left join ecommerce_order
