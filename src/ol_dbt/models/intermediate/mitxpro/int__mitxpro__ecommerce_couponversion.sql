@@ -18,16 +18,15 @@ select
     , ecommerce_couponversion.couponpaymentversion_id
     , ecommerce_couponversion.couponversion_updated_on
     , ecommerce_couponversion.couponversion_created_on
-    , case 
-        when 
-            latest_ecommerce_couponversion.max_couponversion_updated_on 
-            is not null then 'Y' 
-        else 'N' 
+    , case
+        when
+            latest_ecommerce_couponversion.max_couponversion_updated_on
+            is not null then 'Y'
+        else 'N'
     end as is_latest_couponversion
 from ecommerce_couponversion
 left join latest_ecommerce_couponversion
-    on 
+    on
         ecommerce_couponversion.coupon_id = latest_ecommerce_couponversion.coupon_id
-        and ecommerce_couponversion.couponversion_updated_on 
+        and ecommerce_couponversion.couponversion_updated_on
         = latest_ecommerce_couponversion.max_couponversion_updated_on
-
