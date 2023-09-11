@@ -64,7 +64,7 @@ with b2becommerce_b2border as (
         , b2becommerce_b2border.product_id
         , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
         , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
-        , b2becommerce_b2border.b2border_discount
+        , b2becommerce_b2border.b2border_discount 
         , course_runs.courserun_readable_id
         , programs.program_readable_id
         , ecommerce_coupon.coupon_id
