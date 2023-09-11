@@ -10,9 +10,9 @@ models:
   - name: b2border_id
     description: int, foreign key for b2becommerce_b2border
   - name: order_created_on
-    description: timestamp, specifying when the order was initially created.
-      If this is a b2b order it will be the timestamp that order was created 
-      otherwise it will be when the regular order was created.
+    description: timestamp, specifying when the order was initially created. If this
+      is a b2b order it will be the timestamp that order was created otherwise it
+      will be when the regular order was created.
     tests:
     - not_null
   - name: order_state
