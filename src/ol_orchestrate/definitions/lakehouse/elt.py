@@ -1,4 +1,4 @@
-import json
+import json  # noqa: INP001
 import os
 from pathlib import Path
 

@@ -12,7 +12,7 @@ class HealthchecksIO:
 
     def send_update(self, method: Optional[Literal["start", "fail"]] = None):
         httpx.post(
-            urllib.parse.urljoin(self.host, self.check_id, method)  # type: ignore
+            urllib.parse.urljoin(self.host, self.check_id, method)  # type: ignore  # noqa: E501, PGH003
         )
 
 
@@ -54,5 +54,5 @@ def healthchecks_io_resource(resource_context: InitResourceContext):
 
 
 @resource()
-def healthchecks_dummy_resource(resource_context: InitResourceContext):
+def healthchecks_dummy_resource(resource_context: InitResourceContext):  # noqa: ARG001
     yield

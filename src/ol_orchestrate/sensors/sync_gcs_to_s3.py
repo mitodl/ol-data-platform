@@ -1,7 +1,7 @@
 from dagster import RunRequest, SensorEvaluationContext, SkipReason, build_resources
 
-from ol_orchestrate.resources.gcp_gcs import gcp_gcs_resource
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
+from ol_orchestrate.resources.gcp_gcs import gcp_gcs_resource
 
 
 def check_new_gcs_assets_sensor(context: SensorEvaluationContext):

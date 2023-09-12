@@ -2,16 +2,15 @@ from pathlib import Path
 from typing import Optional
 
 from dagster import (
+    Config,
     List,
     Nothing,
-    op,
     OpExecutionContext,
     Out,
     Output,
     String,
-    Config,
+    op,
 )
-
 from dagster.core.definitions.input import In
 from pydantic import Field
 

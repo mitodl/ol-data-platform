@@ -59,7 +59,7 @@ class MySQLClient:
         with self.connection.cursor() as db_cursor:
             db_cursor.execute(str(query))
             query_fields = [field[0] for field in db_cursor.description]
-            return query_fields, db_cursor.fetchall()  # type: ignore
+            return query_fields, db_cursor.fetchall()  # type: ignore  # noqa: PGH003
 
 
 @resource(

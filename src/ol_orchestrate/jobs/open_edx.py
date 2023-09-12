@@ -10,13 +10,13 @@ from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 from ol_orchestrate.ops.open_edx import (
     course_enrollments,
     course_roles,
-    user_roles,
     enrolled_users,
     export_edx_courses,
     export_edx_forum_database,
     list_courses,
     student_submissions,
     upload_extracted_data,
+    user_roles,
     write_course_list_csv,
 )
 from ol_orchestrate.resources.healthchecks import (

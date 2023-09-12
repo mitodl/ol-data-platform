@@ -12,9 +12,9 @@ from dagster import (
     op,
 )
 from dagster.core.definitions.input import In
+from pydantic import Field
 
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
-from pydantic import Field
 
 
 class DownloadEdxGcsCourseConfig(Config):
@@ -38,7 +38,7 @@ class UploadEdxGcsCourseConfig(Config):
     out={"edx_course_tarball_directory": Out(dagster_type=DagsterPath)},
 )
 def download_edx_gcs_course_data(context, config: DownloadEdxGcsCourseConfig):
-    # todo: replace context and config with a new asset config
+    # TODO: replace context and config with a new asset config  # noqa: E501, FIX002, TD002, TD003
     # once resources have been migrated
     storage_client = context.resources.gcp_gcs
     bucket = storage_client.get_bucket(config.edx_gcs_course_tarballs)
@@ -66,7 +66,7 @@ def download_edx_gcs_course_data(context, config: DownloadEdxGcsCourseConfig):
 )
 def upload_edx_gcs_course_data_to_s3(
     context: OpExecutionContext,
-    edx_gcs_course_tarball_directory: DagsterPath,
+    edx_gcs_course_tarball_directory: DagsterPath,  # noqa: ARG001
     config: UploadEdxGcsCourseConfig,
 ):
     """Upload course tarballs to S3 from gcs provided by institutional research.
@@ -82,7 +82,7 @@ def upload_edx_gcs_course_data_to_s3(
 
     :yield: The S3 path of the uploaded directory
     """
-    # todo: replace context and config with a new asset config once
+    # TODO: replace context and config with a new asset config once  # noqa: E501, FIX002, TD002, TD003
     #  resources have been migrated
     results_bucket = config.edx_etl_results_bucket
     for path_object in context.resources.results_dir.path.iterdir():

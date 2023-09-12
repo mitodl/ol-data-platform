@@ -1,9 +1,8 @@
 from dagster import graph
 
-
 from ol_orchestrate.ops.normalize_logs import (
-    load_files_to_table,
     jsonify_log_data,
+    load_files_to_table,
     transform_log_data,
     write_file_to_s3,
 )

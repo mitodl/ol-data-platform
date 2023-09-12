@@ -33,7 +33,7 @@ class SQLiteClient:
             cursor = self.connection.cursor()
             cursor.execute(str(query))
             query_fields = [field[0] for field in cursor.description]
-            return query_fields, cursor.fetchall()  # type: ignore
+            return query_fields, cursor.fetchall()  # type: ignore  # noqa: PGH003
 
 
 @resource(
