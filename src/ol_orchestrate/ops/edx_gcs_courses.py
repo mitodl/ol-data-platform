@@ -40,7 +40,7 @@ class UploadEdxGcsCourseConfig(Config):
 def download_edx_gcs_course_data(context, config: DownloadEdxGcsCourseConfig):
     # TODO: replace context and config with a new asset config  # noqa: E501, FIX002, TD002, TD003
     # once resources have been migrated
-    storage_client = context.resources.gcp_gcs
+    storage_client = context.resources.gcp_gcs.client
     bucket = storage_client.get_bucket(config.edx_gcs_course_tarballs)
     edx_course_tarball_path = context.resources.results_dir.path.joinpath(
         config.edx_gcs_course_tarballs
