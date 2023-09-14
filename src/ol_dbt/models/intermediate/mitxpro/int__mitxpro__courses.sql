@@ -30,4 +30,4 @@ from courses
 left join cms_courses
     on courses.course_id = cms_courses.course_id
 left join platform
-    on platform.platform_id = programs.platform_id
+    on courses.platform_id = platform.platform_id
