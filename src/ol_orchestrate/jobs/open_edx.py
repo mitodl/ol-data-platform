@@ -24,7 +24,7 @@ from ol_orchestrate.resources.healthchecks import (
     healthchecks_io_resource,
 )
 from ol_orchestrate.resources.mysql_db import mysql_db_resource
-from ol_orchestrate.resources.outputs import daily_dir
+from ol_orchestrate.resources.outputs import DailyResultsDir
 from ol_orchestrate.resources.sqlite_db import sqlite_db_resource
 
 
@@ -64,7 +64,7 @@ def edx_course_pipeline():
 dev_resources = {
     "sqldb": sqlite_db_resource,
     "s3": s3_resource,
-    "results_dir": daily_dir,
+    "results_dir": DailyResultsDir.configure_at_launch(),
     "healthchecks": healthchecks_dummy_resource,
     "io_manager": fs_io_manager,
 }
@@ -72,7 +72,7 @@ dev_resources = {
 production_resources = {
     "sqldb": mysql_db_resource,
     "s3": s3_resource,
-    "results_dir": daily_dir,
+    "results_dir": DailyResultsDir.configure_at_launch(),
     "healthchecks": healthchecks_io_resource,
     "io_manager": s3_pickle_io_manager,
 }
