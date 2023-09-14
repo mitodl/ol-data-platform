@@ -931,8 +931,8 @@ models:
     description: boolean, whether the program is on an external platform
     tests:
     - not_null
-  - name: platform_id
-    description: int, id of the program platform
+  - name: platform_name
+    description: str, name of the program platform
   - name: cms_programpage_description
     description: str, the description displayed on the page
   - name: cms_programpage_duration
@@ -1006,8 +1006,8 @@ models:
     description: boolean, whether the course is on an external platform
     tests:
     - not_null
-  - name: platform_id
-    description: int, id of the course platform
+  - name: platform_name
+    description: str, name of the course platform
   - name: cms_coursepage_description
     description: str, the description displayed on the page
   - name: cms_coursepage_duration

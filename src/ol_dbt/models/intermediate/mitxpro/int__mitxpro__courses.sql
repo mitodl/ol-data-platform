@@ -8,6 +8,10 @@ with courses as (
     select * from {{ ref('stg__mitxpro__app__postgres__cms_coursepage') }}
 )
 
+, platform as (
+    select * from {{ ref('stg__mitxpro__app__postgres__courses_platform') }}
+)
+
 select
     courses.course_id
     , courses.program_id
@@ -15,7 +19,7 @@ select
     , courses.course_is_live
     , courses.course_readable_id
     , courses.course_is_external
-    , courses.platform_id
+    , platform.platform_name
     , cms_courses.cms_coursepage_description
     , cms_courses.cms_coursepage_subhead
     , cms_courses.cms_coursepage_catalog_details
@@ -25,3 +29,5 @@ select
 from courses
 left join cms_courses
     on courses.course_id = cms_courses.course_id
+left join platform
+    on platform.platform_id = programs.platform_id
