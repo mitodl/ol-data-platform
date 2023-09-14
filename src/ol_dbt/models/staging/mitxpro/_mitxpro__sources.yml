@@ -14,12 +14,12 @@ sources:
     - name: id
       description: int, primary key representing a b2b coupon redemption
     - name: order_id
-      description: int, primary key in b2becommerce_b2border  
+      description: int, primary key in b2becommerce_b2border
     - name: coupon_id
       description: int, foreign key to b2becommerce_b2bcoupon. A coupon that was redeemed
         for the order.
     - name: updated_on
-      description: timestamp, specifying when the b2b coupon redemption was most recently updated              
+      description: timestamp, specifying when the b2b coupon redemption was most recently updated
     - name: created_on
       description: timestamp, specifying when the b2b coupon redemption was initially created
 
