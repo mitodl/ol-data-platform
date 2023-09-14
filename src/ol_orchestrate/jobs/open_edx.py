@@ -20,8 +20,7 @@ from ol_orchestrate.ops.open_edx import (
     write_course_list_csv,
 )
 from ol_orchestrate.resources.healthchecks import (
-    healthchecks_dummy_resource,
-    healthchecks_io_resource,
+    HealthchecksIO,
 )
 from ol_orchestrate.resources.mysql_db import mysql_db_resource
 from ol_orchestrate.resources.outputs import DailyResultsDir
@@ -65,7 +64,7 @@ dev_resources = {
     "sqldb": sqlite_db_resource,
     "s3": s3_resource,
     "results_dir": DailyResultsDir.configure_at_launch(),
-    "healthchecks": healthchecks_dummy_resource,
+    "healthchecks": HealthchecksIO.configure_at_launch(),
     "io_manager": fs_io_manager,
 }
 
@@ -73,7 +72,7 @@ production_resources = {
     "sqldb": mysql_db_resource,
     "s3": s3_resource,
     "results_dir": DailyResultsDir.configure_at_launch(),
-    "healthchecks": healthchecks_io_resource,
+    "healthchecks": HealthchecksIO.configure_at_launch(),
     "io_manager": s3_pickle_io_manager,
 }
 
