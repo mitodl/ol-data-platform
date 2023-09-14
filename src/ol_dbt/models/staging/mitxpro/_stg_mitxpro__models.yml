@@ -10,7 +10,7 @@ models:
     description: int, primary key representing a b2b coupon redemption
     tests:
     - not_null
-    - unique
+    - unique 
   - name: b2border_id
     description: int, foreign key to b2becommerce_b2border
   - name: b2bcoupon_id
