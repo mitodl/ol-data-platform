@@ -6,7 +6,7 @@ from dagster_aws.s3.resources import s3_resource
 from ol_orchestrate.jobs.edx_gcs_courses import sync_gcs_to_s3
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
-from ol_orchestrate.resources.outputs import daily_dir
+from ol_orchestrate.resources.outputs import DailyResultsDir
 from ol_orchestrate.sensors.sync_gcs_to_s3 import check_new_gcs_assets_sensor
 
 resources = {
@@ -16,7 +16,7 @@ resources = {
         ]
     ),
     "s3": s3_resource,
-    "results_dir": daily_dir,
+    "results_dir": DailyResultsDir.configure_at_launch(),
 }
 
 course_upload_bucket = {
