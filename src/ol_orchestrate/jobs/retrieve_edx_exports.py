@@ -19,5 +19,5 @@ from ol_orchestrate.ops.retrieve_edx_exports import (
         "consumer": "platform-engineering",
     },
 )
-def sync_gcs_to_s3():
+def retrieve_edx_exports():
     upload_files(extract_files(download_edx_data()))

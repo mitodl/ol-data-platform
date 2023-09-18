@@ -3,12 +3,13 @@ import os
 from dagster import DefaultSensorStatus, Definitions, SensorDefinition
 from dagster_aws.s3.resources import s3_resource
 
-from ol_orchestrate.jobs.retrieve_edx_exports import sync_gcs_to_s3
+from ol_orchestrate.jobs.retrieve_edx_exports import retrieve_edx_exports
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 from ol_orchestrate.resources.gcp_gcs import gcp_gcs_resource
 from ol_orchestrate.resources.outputs import daily_dir
 from ol_orchestrate.sensors.sync_gcs_to_s3 import check_edx_exports_sensor
 
+# TODO add a readme to note that repositories is deprecated
 resources = {
     "gcp_gcs": gcp_gcs_resource.configured(
         # TODO: add yaml to deploy.py in ol-infrastructure
@@ -25,7 +26,7 @@ edx_exports_bucket = {
 
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
 
-gcs_sync_job = sync_gcs_to_s3.to_job(
+gcs_sync_job = retrieve_edx_exports.to_job(
     name="edx_gcs_course_retrieval",
     resource_defs=resources,
     config={

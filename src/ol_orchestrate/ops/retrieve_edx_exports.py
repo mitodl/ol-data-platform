@@ -25,6 +25,7 @@ class DownloadConfig(Config):
 
 
 class UploadConfig(Config):
+    # set defaults but make paramaterizable
     edx_irx_exports_bucket: Optional[str] = Field(
         description="The S3 bucket where CSV files will be staged",
     )
@@ -34,9 +35,6 @@ class UploadConfig(Config):
     course_exports_bucket: Optional[str] = Field(
         description="The S3 bucket where course_exports will be stored",
     )
-
-
-# detect files op/sensor?
 
 
 @op(
@@ -56,11 +54,21 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
         config.edx_exports_bucket
     )
     context.log.info(edx_exports_download_path)
-    Path.mkdir(edx_exports_download_path, parents=True)
-    blobs = storage_client.list_blobs(bucket)
+    blobs = bucket.list_blobs(prefix="COLD/")
     for blob in blobs:
+        Path(edx_exports_download_path).joinpath(Path(blob.name).parent).mkdir(
+            parents=True, exist_ok=True
+        )
+        if blob.name != "COLD/mitx-2023-03-28.zip":
+            continue
         blob.download_to_filename(f"{edx_exports_download_path}/{blob.name}")
+        # list all blobs, use regex pattern matching to filter subset
+        # COLD/mitx-2023-03-28.zip
+        # sensor should pass a complete list of objects
+        # is that overall set larger than last? if difference, yield set subtraction new-old
+        # pass delta to download fn
         context.log.info(blob.name)
+        context.log.info(blob.size)
     yield Output(
         edx_exports_download_path,
         "edx_exports_directory",
@@ -108,7 +116,6 @@ def extract_files(
     description="Upload extracted files to S3",
     required_resource_keys={"exports_dir", "s3"},
     ins={"extracted_edx_exports_directory": In(dagster_type=DagsterPath)},
-    out={"extracted_edx_exports_directory"},
 )
 def upload_files(
     context: OpExecutionContext,
@@ -122,6 +129,7 @@ def upload_files(
     :type extracted_edx_exports_directory: DagsterPath
     """
     # TODO: iterate through directories and files? what is the file structure?
+    # ideal s3 sync command, but we want assetmaterialization
     # load CSV files to s3
     csv_files = Path.glob(extracted_edx_exports_directory, "/*.csv")
     for file in csv_files:
@@ -132,6 +140,16 @@ def upload_files(
         )
         Path(file).unlink()
         context.log.info(file)
+        # TODO: csv file assets
+        yield AssetMaterialization(
+            asset_key="irx_edx_exports",
+            description="Export directory for IRx edx reports",
+            metadata={
+                "bucket_path": MetadataValue.path(
+                    f"s3://{config.course_exports_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
+                ),
+            },
+        )
 
     # load tracking logs to s3
     log_files = Path.glob(extracted_edx_exports_directory, "/*.log")
@@ -143,6 +161,16 @@ def upload_files(
         )
         Path(file).unlink()
         context.log.info(file)
+        # TODO: tracking log assets
+    yield AssetMaterialization(
+        asset_key="irx_edx_exports",
+        description="Export directory for IRx edx reports",
+        metadata={
+            "bucket_path": MetadataValue.path(
+                f"s3://{config.course_exports_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
+            ),
+        },
+    )
 
     # load course exports to s3
     # TODO: check for XML?
