@@ -20,6 +20,7 @@ def check_new_gcs_assets_sensor(
     else:
         yield SkipReason("No new files in GCS bucket")
 
+
 def check_edx_exports_sensor(context: SensorEvaluationContext):
     gcs_config = load_yaml_config("/etc/dagster/irx_gcp.yaml")
     with build_resources(
