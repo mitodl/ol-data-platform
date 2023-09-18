@@ -6,15 +6,15 @@ from dagster import (
     AssetMaterialization,
     Config,
     MetadataValue,
-    op,
     OpExecutionContext,
     Out,
     Output,
+    op,
 )
 from dagster.core.definitions.input import In
+from pydantic import Field
 
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
-from pydantic import Field
 
 
 class DownloadConfig(Config):
@@ -121,7 +121,7 @@ def upload_files(
     :param extracted_edx_exports_directory: The path with decompressed edx zip files.
     :type extracted_edx_exports_directory: DagsterPath
     """
-    # todo: iterate through directories and files? what is the file structure?
+    # TODO: iterate through directories and files? what is the file structure?
     # load CSV files to s3
     csv_files = Path.glob(extracted_edx_exports_directory, "/*.csv")
     for file in csv_files:
@@ -145,7 +145,7 @@ def upload_files(
         context.log.info(file)
 
     # load course exports to s3
-    # todo: check for XML?
+    # TODO: check for XML?
     course_export_files = Path.glob(extracted_edx_exports_directory, "/*.tar.gz")
     for file in course_export_files:
         context.resources.s3.upload_file(

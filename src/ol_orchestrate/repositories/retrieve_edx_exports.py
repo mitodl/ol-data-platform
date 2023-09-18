@@ -11,7 +11,7 @@ from ol_orchestrate.sensors.sync_gcs_to_s3 import check_edx_exports_sensor
 
 resources = {
     "gcp_gcs": gcp_gcs_resource.configured(
-        # todo: add yaml to deploy.py in ol-infrastructure
+        # TODO: add yaml to deploy.py in ol-infrastructure
         load_yaml_config("/etc/dagster/irx_gcp.yaml")["resources"]["gcp_gcs"]["config"]
     ),
     "s3": s3_resource,
