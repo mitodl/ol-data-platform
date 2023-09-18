@@ -93,6 +93,10 @@ def extract_files(
     :yield: The path where files have been decompressed.
     """
     # TODO: update with logic to handle gpg files?  # noqa: FIX002, TD002, TD003
+    # TODO: Add input for type of files, add logic to handle different groups of files  # noqa: E501, FIX002, TD002, TD003
+    # csv files
+    # tracking logs
+    # course exports
     for file in edx_exports_directory.glob("*.zip"):
         with zipfile.ZipFile(file, "r") as zippedFile:
             zippedFile.extractall(path=f"./{file.stem}")
