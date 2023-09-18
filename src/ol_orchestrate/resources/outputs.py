@@ -31,6 +31,10 @@ class BaseResultsDir(ConfigurableResource):
         shutil.rmtree(self.path)
 
     @property
+    def root_dir(self) -> Path:
+        return Path(self.outputs_root_dir)
+
+    @property
     def path(self) -> DagsterPath:
         return DagsterPath(Path(self.outputs_root_dir).joinpath(self.dir_name))
 
