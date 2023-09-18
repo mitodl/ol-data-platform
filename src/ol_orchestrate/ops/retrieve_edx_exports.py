@@ -62,7 +62,8 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
         Path(edx_exports_download_path).joinpath(Path(fname).parent).mkdir(
             parents=True, exist_ok=True
         )
-        # if fname != "COLD/mitx-2023-03-28.zip":
+        if fname != "COLD/internal-2023-09-10.zip":
+            continue
         blob = bucket.get_blob(fname)
         blob.download_to_filename(f"{edx_exports_download_path}/{fname}")
         context.log.info(blob.name)
@@ -91,21 +92,14 @@ def extract_files(
 
     :yield: The path where files have been decompressed.
     """
-    storage_client = context.resources.gcp_gcs.client
-    bucket = storage_client.get_bucket(edx_exports_directory)
-    edx_exports_path = context.resources.exports_dir.path.joinpath(
-        edx_exports_directory
-    )
+    # TODO: update with logic to handle gpg files?  # noqa: FIX002, TD002, TD003
     for file in edx_exports_directory.glob("*.zip"):
         with zipfile.ZipFile(file, "r") as zippedFile:
             zippedFile.extractall(path=f"./{file.stem}")
             context.log.info(file.name)
-    blobs = storage_client.list_blobs(bucket)
-    for blob in blobs:
-        blob.download_to_filename(f"{edx_exports_path}/{blob.name}")
     yield Output(
         edx_exports_directory,
-        "extracted_edx_exports_directory",
+        "edx_exports_directory",
     )
 
 
@@ -127,9 +121,9 @@ def upload_files(
     :type extracted_edx_exports_directory: DagsterPath
     """
     # TODO: iterate through directories and files? what is the file structure?  # noqa: E501, FIX002, TD002, TD003
-    # ideal s3 sync command, but we want assetmaterialization
+    # assetmaterialization
     # load CSV files to s3
-    csv_files = Path.glob(extracted_edx_exports_directory, "/*.csv")
+    csv_files = extracted_edx_exports_directory.glob("*.csv")
     for file in csv_files:
         context.resources.s3.upload_file(
             Filename=file,
@@ -150,7 +144,7 @@ def upload_files(
         )
 
     # load tracking logs to s3
-    log_files = Path.glob(extracted_edx_exports_directory, "/*.log")
+    log_files = extracted_edx_exports_directory.glob("*.log")
     for file in log_files:
         context.resources.s3.upload_file(
             Filename=file,
@@ -172,7 +166,7 @@ def upload_files(
 
     # load course exports to s3
     # TODO: check for XML?  # noqa: FIX002, TD002, TD003
-    course_export_files = Path.glob(extracted_edx_exports_directory, "/*.tar.gz")
+    course_export_files = extracted_edx_exports_directory.glob("*.tar.gz")
     for file in course_export_files:
         context.resources.s3.upload_file(
             Filename=file,

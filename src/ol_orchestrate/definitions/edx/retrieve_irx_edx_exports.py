@@ -20,12 +20,7 @@ dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignor
 )
 
 
-def weekly_edx_exports_config(
-    irx_edxorg_gcs_bucket,
-    ol_edxorg_raw_data_bucket,
-    ol_edxorg_tracking_log_prefix,
-    ol_edxorg_course_exports_prefix,
-):
+def weekly_edx_exports_config(irx_edxorg_gcs_bucket, ol_edxorg_raw_data_bucket):
     return {
         "ops": {
             "download_edx_data_exports": {
@@ -34,8 +29,8 @@ def weekly_edx_exports_config(
             "upload_edx_data_exports": {
                 "config": {
                     "edx_irx_exports_bucket": ol_edxorg_raw_data_bucket,
-                    "tracking_log_bucket": f"{ol_edxorg_raw_data_bucket}/{ol_edxorg_tracking_log_prefix}",  # noqa: E501
-                    "course_exports_bucket": f"{ol_edxorg_raw_data_bucket}/{ol_edxorg_course_exports_prefix}",  # noqa: E501
+                    "tracking_log_bucket": f"{ol_edxorg_raw_data_bucket}/logs",  # noqa: E501
+                    "course_exports_bucket": f"{ol_edxorg_raw_data_bucket}/course_exports",  # noqa: E501
                 }
             },
         }
@@ -46,8 +41,6 @@ s3_job_def = retrieve_edx_exports.to_job(
     name="retrieve_edx_exports",
     config=weekly_edx_exports_config(
         "simeon-mitx-pipeline-main",
-        "ol-devops-sandbox/pipeline-storage/",
-        "ol-devops-sandbox/pipeline-storage/",
         "ol-devops-sandbox/pipeline-storage/",
     ),
 )

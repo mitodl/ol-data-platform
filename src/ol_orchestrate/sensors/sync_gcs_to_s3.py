@@ -27,7 +27,7 @@ def check_edxorg_data_dumps_sensor(
 ):
     storage_client = gcp_gcs.client
     bucket = storage_client.get_bucket("simeon-mitx-pipeline-main")
-    file_match = r"COLD/mitx-\d{4}-\d{2}-\d{2}.zip$"
+    file_match = r"COLD/internal-\d{4}-\d{2}-\d{2}.zip$"
     bucket_files = {
         file.name
         for file in storage_client.list_blobs(bucket, prefix="COLD/")
