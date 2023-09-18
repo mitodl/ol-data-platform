@@ -19,8 +19,11 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
 
 class DownloadConfig(Config):
     irx_edxorg_gcs_bucket: str = Field(
-        "irx-edx-exports",
+        "simeon-mitx-pipeline-main",
         description="The GCS bucket where IRx stores data exports from edx.org",  # noqa: E501
+    )
+    files_to_sync: Optional[list[str]] = Field(
+        description="The list of new files to download", default=None
     )
 
 
@@ -31,11 +34,10 @@ class UploadConfig(Config):
     )
     tracking_log_bucket: Optional[str] = Field(
         description="The S3 bucket where tracking log files will be staged",  # noqa: E501
-        default=None
+        default=None,
     )
     course_exports_bucket: Optional[str] = Field(
-        description="The S3 bucket where course_exports will be stored",
-        default=None
+        description="The S3 bucket where course_exports will be stored", default=None
     )
 
 
@@ -56,19 +58,13 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
         config.irx_edxorg_gcs_bucket
     )
     context.log.info(edx_exports_download_path)
-    blobs = bucket.list_blobs(prefix="COLD/")
-    for blob in blobs:
-        Path(edx_exports_download_path).joinpath(Path(blob.name).parent).mkdir(
+    for fname in config.files_to_sync or []:
+        Path(edx_exports_download_path).joinpath(Path(fname).parent).mkdir(
             parents=True, exist_ok=True
         )
-        if blob.name != "COLD/mitx-2023-03-28.zip":
-            continue
-        blob.download_to_filename(f"{edx_exports_download_path}/{blob.name}")
-        # list all blobs, use regex pattern matching to filter subset
-        # COLD/mitx-2023-03-28.zip
-        # sensor should pass a complete list of objects
-        # is that overall set larger than last? if difference, yield set subtraction new-old
-        # pass delta to download fn
+        # if fname != "COLD/mitx-2023-03-28.zip":
+        blob = bucket.get_blob(fname)
+        blob.download_to_filename(f"{edx_exports_download_path}/{fname}")
         context.log.info(blob.name)
         context.log.info(blob.size)
     yield Output(
@@ -130,7 +126,7 @@ def upload_files(
     :param extracted_edx_exports_directory: The path with decompressed edx zip files.
     :type extracted_edx_exports_directory: DagsterPath
     """
-    # TODO: iterate through directories and files? what is the file structure?
+    # TODO: iterate through directories and files? what is the file structure?  # noqa: E501, FIX002, TD002, TD003
     # ideal s3 sync command, but we want assetmaterialization
     # load CSV files to s3
     csv_files = Path.glob(extracted_edx_exports_directory, "/*.csv")
@@ -142,7 +138,7 @@ def upload_files(
         )
         Path(file).unlink()
         context.log.info(file)
-        # TODO: csv file assets
+        # TODO: csv file assets  # noqa: FIX002, TD002, TD003
         yield AssetMaterialization(
             asset_key="irx_edx_exports",
             description="Export directory for IRx edx reports",
@@ -163,7 +159,7 @@ def upload_files(
         )
         Path(file).unlink()
         context.log.info(file)
-        # TODO: tracking log assets
+        # TODO: tracking log assets  # noqa: FIX002, TD002, TD003
     yield AssetMaterialization(
         asset_key="irx_edx_exports",
         description="Export directory for IRx edx reports",
@@ -175,7 +171,7 @@ def upload_files(
     )
 
     # load course exports to s3
-    # TODO: check for XML?
+    # TODO: check for XML?  # noqa: FIX002, TD002, TD003
     course_export_files = Path.glob(extracted_edx_exports_directory, "/*.tar.gz")
     for file in course_export_files:
         context.resources.s3.upload_file(
