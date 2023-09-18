@@ -18,7 +18,7 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
 
 
 class DownloadConfig(Config):
-    edx_exports_bucket: str = Field(
+    irx_edxorg_gcs_bucket: str = Field(
         "irx-edx-exports",
         description="The GCS bucket where IRx stores data exports from edx.org",  # noqa: E501
     )
@@ -31,9 +31,11 @@ class UploadConfig(Config):
     )
     tracking_log_bucket: Optional[str] = Field(
         description="The S3 bucket where tracking log files will be staged",  # noqa: E501
+        default=None
     )
     course_exports_bucket: Optional[str] = Field(
         description="The S3 bucket where course_exports will be stored",
+        default=None
     )
 
 
@@ -48,10 +50,10 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
 
     :yield: The path where files have been downloaded.
     """
-    storage_client = context.resources.gcp_gcs
-    bucket = storage_client.get_bucket(config.edx_exports_bucket)
+    storage_client = context.resources.gcp_gcs.client
+    bucket = storage_client.get_bucket(config.irx_edxorg_gcs_bucket)
     edx_exports_download_path = context.resources.exports_dir.path.joinpath(
-        config.edx_exports_bucket
+        config.irx_edxorg_gcs_bucket
     )
     context.log.info(edx_exports_download_path)
     blobs = bucket.list_blobs(prefix="COLD/")
@@ -93,7 +95,7 @@ def extract_files(
 
     :yield: The path where files have been decompressed.
     """
-    storage_client = context.resources.gcp_gcs
+    storage_client = context.resources.gcp_gcs.client
     bucket = storage_client.get_bucket(edx_exports_directory)
     edx_exports_path = context.resources.exports_dir.path.joinpath(
         edx_exports_directory

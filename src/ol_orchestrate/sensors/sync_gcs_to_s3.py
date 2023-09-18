@@ -25,8 +25,8 @@ def check_edxorg_data_dumps_sensor(
     context: SensorEvaluationContext, gcp_gcs: GCSConnection
 ):
     storage_client = gcp_gcs.client
-    bucket = storage_client.get_bucket("simeon-mitx-course-tarballs")
-    bucket_files = {file.name for file in storage_client.list_blobs(bucket)}
+    bucket = storage_client.get_bucket("simeon-mitx-pipeline-main")
+    bucket_files = {file.name for file in storage_client.list_blobs(bucket, prefix="COLD/")}
     new_files = bucket_files.difference(set(context.cursor or []))
     if new_files:
         context.update_cursor(json.dumps(list(bucket_files)))
