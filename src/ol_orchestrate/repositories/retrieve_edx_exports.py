@@ -5,18 +5,20 @@ from dagster_aws.s3.resources import s3_resource
 
 from ol_orchestrate.jobs.retrieve_edx_exports import retrieve_edx_exports
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
-from ol_orchestrate.resources.gcp_gcs import gcp_gcs_resource
-from ol_orchestrate.resources.outputs import daily_dir
-from ol_orchestrate.sensors.sync_gcs_to_s3 import check_edx_exports_sensor
+from ol_orchestrate.resources.gcp_gcs import GCSConnection
+from ol_orchestrate.resources.outputs import DailyResultsDir
+from ol_orchestrate.sensors.sync_gcs_to_s3 import check_new_gcs_assets_sensor
 
 # TODO add a readme to note that repositories is deprecated
 resources = {
-    "gcp_gcs": gcp_gcs_resource.configured(
+    "gcp_gcs": GCSConnection(
         # TODO: add yaml to deploy.py in ol-infrastructure
-        load_yaml_config("/etc/dagster/irx_gcp.yaml")["resources"]["gcp_gcs"]["config"]
+        **load_yaml_config("/etc/dagster/irx_gcp.yaml")["resources"]["gcp_gcs"][
+            "config"
+        ]
     ),
     "s3": s3_resource,
-    "exports_dir": daily_dir,
+    "exports_dir": DailyResultsDir,
 }
 
 edx_exports_bucket = {
@@ -41,7 +43,7 @@ gcs_sync_job = retrieve_edx_exports.to_job(
 edx_gcs_courses = Definitions(
     sensors=[
         SensorDefinition(
-            evaluation_fn=check_edx_exports_sensor,
+            evaluation_fn=check_new_gcs_assets_sensor,
             minimum_interval_seconds=86400,
             job=gcs_sync_job,
             default_status=DefaultSensorStatus.RUNNING,
