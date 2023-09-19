@@ -10,17 +10,19 @@ models:
     description: int, primary key representing a b2b coupon redemption
     tests:
     - not_null
-    - unique 
+    - unique
   - name: b2border_id
     description: int, foreign key to b2becommerce_b2border
   - name: b2bcoupon_id
     description: int, foreign key representing a b2b coupon
   - name: b2bcouponredemption_updated_on
-    description: timestamp, specifying when the b2b coupon redemption was most recently updated
+    description: timestamp, specifying when the b2b coupon redemption was most recently
+      updated
     tests:
     - not_null
   - name: b2bcouponredemption_created_on
-    description: timestamp, specifying when the b2b coupon redemption was initially created
+    description: timestamp, specifying when the b2b coupon redemption was initially
+      created
     tests:
     - not_null
   - dbt_expectations.expect_compound_columns_to_be_unique:
