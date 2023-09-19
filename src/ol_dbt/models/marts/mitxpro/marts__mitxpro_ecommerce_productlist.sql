@@ -82,6 +82,8 @@ select
     , courses.cms_coursepage_duration as duration
     , courses.cms_coursepage_time_commitment as time_commitment
     , ecommerce_course_to_topics.coursetopic_name as coursetopic_names
+    , ecommerce_product.product_is_private
+    , courses.platform_name
 from ecommerce_product
 left join ecommerce_productversion_latest
     on ecommerce_product.product_id = ecommerce_productversion_latest.product_id
@@ -118,6 +120,8 @@ select
     , programs.cms_programpage_duration as duration
     , programs.cms_programpage_time_commitment as time_commitment
     , null as coursetopic_names
+    , ecommerce_product.product_is_private
+    , programs.platform_name
 from ecommerce_product
 left join ecommerce_productversion_latest
     on ecommerce_product.product_id = ecommerce_productversion_latest.product_id
