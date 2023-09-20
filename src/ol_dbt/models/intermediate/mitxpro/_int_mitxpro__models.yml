@@ -56,7 +56,6 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["order_id", "b2border_id", "line_id", "coupon_id"]
-=======
 - name: int__mitxpro__b2becommerce_b2bcouponredemption
   description: A B2B coupon is considered redeemed when it's used to place an order.
     The coupon provides a discount on the company's bulk order.
@@ -65,7 +64,7 @@ models:
     description: int, primary key representing a b2b coupon redemption
     tests:
     - not_null
-    - unique
+    - unique 
   - name: b2border_id
     description: int, foreign key to b2becommerce_b2border
     tests:
@@ -75,13 +74,11 @@ models:
     tests:
     - not_null
   - name: b2bcouponredemption_updated_on
-    description: timestamp, specifying when the b2b coupon redemption was most recently
-      updated
+    description: timestamp, specifying when the b2b coupon redemption was most recently updated
     tests:
     - not_null
   - name: b2bcouponredemption_created_on
-    description: timestamp, specifying when the b2b coupon redemption was initially
-      created
+    description: timestamp, specifying when the b2b coupon redemption was initially created
     tests:
     - not_null
   tests:
@@ -841,8 +838,9 @@ models:
     description: timestamp, the timestamp the product was created
   - name: product_updated_on
     description: timestamp, the timestamp the product was last updated
-  - name: product_is_private
-    description: boolean, Public product is purchasable through the bulk form at /ecommerce/bulk
+  - name: product_is_visible_in_bulk_form
+    description: boolean, whether or not the product is purchasable through the bulk
+      form at /ecommerce/bulk
     tests:
     - not_null
   - name: courserun_id
@@ -1015,8 +1013,8 @@ models:
     description: boolean, whether the program is on an external platform
     tests:
     - not_null
-  - name: platform_name
-    description: str, name of the program platform
+  - name: platform_id
+    description: int, id of the program platform
   - name: cms_programpage_description
     description: str, the description displayed on the page
   - name: cms_programpage_duration
@@ -1090,8 +1088,8 @@ models:
     description: boolean, whether the course is on an external platform
     tests:
     - not_null
-  - name: platform_name
-    description: str, name of the course platform
+  - name: platform_id
+    description: int, id of the course platform
   - name: cms_coursepage_description
     description: str, the description displayed on the page
   - name: cms_coursepage_duration
