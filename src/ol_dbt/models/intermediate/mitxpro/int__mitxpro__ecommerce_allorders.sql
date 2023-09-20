@@ -3,6 +3,11 @@ with b2becommerce_b2border as (
     from {{ ref('int__mitxpro__b2becommerce_b2border') }}
 )
 
+, b2becommerce_b2breceipt as (
+    select *
+    from {{ ref('int__mitxpro__b2becommerce_b2breceipt') }}
+)
+
 , ecommerce_couponpaymentversion as (
     select *
     from {{ ref('int__mitxpro__ecommerce_couponpaymentversion') }}
@@ -48,6 +53,11 @@ with b2becommerce_b2border as (
     from {{ ref('int__mitxpro__programs') }}
 )
 
+, productversion as (
+    select *
+    from {{ ref('int__mitxpro__ecommerce_productversion') }}
+)
+
 , b2b_order_fields as (
     select
         ecommerce_order.order_id
@@ -65,6 +75,9 @@ with b2becommerce_b2border as (
         , b2becommerce_b2border.b2border_status as order_state
         , b2becommerce_b2border.product_type as product_type
         , b2becommerce_b2border.b2border_email as user_email
+        , b2becommerce_b2border.b2border_contract_number
+        , productversion.productversion_readable_id
+        , json_extract_scalar(b2becommerce_b2breceipt.b2breceipt_data, '$.req_reference_number') as req_reference_number
         , case when ecommerce_couponredemption.couponredemption_id is not null then 'Y' end as redeemed
     from b2becommerce_b2border
     left join ecommerce_couponpaymentversion
@@ -85,6 +98,10 @@ with b2becommerce_b2border as (
         on ecommerce_line.courserun_id = course_runs.courserun_id
     left join programs
         on ecommerce_line.program_id = programs.program_id
+    left join b2becommerce_b2breceipt
+        on b2becommerce_b2border.b2border_id = b2becommerce_b2breceipt.b2border_id
+    left join productversion
+        on b2becommerce_b2border.productversion_id = productversion.productversion_id
 )
 
 , order_id_test as (
@@ -109,7 +126,10 @@ with b2becommerce_b2border as (
         , programs.program_readable_id
         , ecommerce_order.coupon_id
         , ecommerce_order.order_created_on
+        , productversion.productversion_readable_id
         , null as b2bcoupon_id
+        , null as b2border_contract_number
+        , null as req_reference_number
         , case when ecommerce_couponredemption.couponredemption_id is not null then 'Y' end as redeemed
     from ecommerce_order
     inner join ecommerce_line
@@ -126,6 +146,8 @@ with b2becommerce_b2border as (
         on ecommerce_line.program_id = programs.program_id
     left join order_id_test
         on ecommerce_order.order_id = order_id_test.order_id
+    left join productversion
+        on ecommerce_line.productversion_id = productversion.productversion_id
     where order_id_test.order_id is null
 )
 
@@ -146,6 +168,9 @@ select
     , program_readable_id
     , coupon_id
     , b2bcoupon_id
+    , b2border_contract_number
+    , req_reference_number
+    , productversion_readable_id
 from reg_order_fields
 
 union distinct
@@ -167,4 +192,7 @@ select
     , program_readable_id
     , coupon_id
     , b2bcoupon_id
+    , b2border_contract_number
+    , req_reference_number
+    , productversion_readable_id
 from b2b_order_fields

@@ -47,6 +47,12 @@ models:
     description: int, foreign key referencing ecommerce_coupon
   - name: b2bcoupon_id
     description: int, foreign key to b2becommerce_b2bcoupon
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
+  - name: req_reference_number
+    description: json, cybersource req reference number for a payment
+  - name: productversion_readable_id
+    description: string, the readable_id field from the product object
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["order_id", "b2border_id", "line_id", "coupon_id"]
