@@ -10,21 +10,20 @@ from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 from ol_orchestrate.ops.open_edx import (
     course_enrollments,
     course_roles,
-    user_roles,
     enrolled_users,
     export_edx_courses,
     export_edx_forum_database,
     list_courses,
     student_submissions,
     upload_extracted_data,
+    user_roles,
     write_course_list_csv,
 )
 from ol_orchestrate.resources.healthchecks import (
-    healthchecks_dummy_resource,
-    healthchecks_io_resource,
+    HealthchecksIO,
 )
 from ol_orchestrate.resources.mysql_db import mysql_db_resource
-from ol_orchestrate.resources.outputs import daily_dir
+from ol_orchestrate.resources.outputs import DailyResultsDir
 from ol_orchestrate.resources.sqlite_db import sqlite_db_resource
 
 
@@ -64,16 +63,16 @@ def edx_course_pipeline():
 dev_resources = {
     "sqldb": sqlite_db_resource,
     "s3": s3_resource,
-    "results_dir": daily_dir,
-    "healthchecks": healthchecks_dummy_resource,
+    "results_dir": DailyResultsDir.configure_at_launch(),
+    "healthchecks": HealthchecksIO.configure_at_launch(),
     "io_manager": fs_io_manager,
 }
 
 production_resources = {
     "sqldb": mysql_db_resource,
     "s3": s3_resource,
-    "results_dir": daily_dir,
-    "healthchecks": healthchecks_io_resource,
+    "results_dir": DailyResultsDir.configure_at_launch(),
+    "healthchecks": HealthchecksIO.configure_at_launch(),
     "io_manager": s3_pickle_io_manager,
 }
 

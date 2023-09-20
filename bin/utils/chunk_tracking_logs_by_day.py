@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python  # noqa: INP001
 """
 Our tracking logs have gone through a few iterations of methods for loading them to S3.
 This is largely due to different agents being used for shipping the logs.  As a result,
@@ -8,12 +8,12 @@ This script is designed to take a source bucket and a destination bucket, and pr
 all files that are in the root of the bucket to be located in path prefixes that are
 chunked by date.
 """
-from typing import Optional
-import typer
 import sys
+from datetime import UTC, datetime, timedelta  # type: ignore  # noqa: PGH003
+from typing import Annotated, Optional
+
+import typer
 from boto3 import client, resource
-from datetime import UTC, datetime, timedelta  # type: ignore
-from typing import Annotated
 
 
 def date_chunk_files(  # noqa: PLR0913
@@ -40,21 +40,21 @@ def date_chunk_files(  # noqa: PLR0913
             "(based on the formatted file name). In %Y-%m-%d format"
         ),
     ] = None,
-    dry_run: Annotated[
+    dry_run: Annotated[  # noqa: FBT002
         bool,
         typer.Option(
             help="Set to True to just see what the source and destination paths "
             "will be without performing any modifications"
         ),
     ] = True,
-    destructive: Annotated[
+    destructive: Annotated[  # noqa: FBT002
         bool,
         typer.Option(
             help="Perform a `move` operation instead of `copy` to clear the source "
             "object out of its original location"
         ),
     ] = False,
-    cleanup: Annotated[
+    cleanup: Annotated[  # noqa: FBT002
         bool,
         typer.Option(
             help="Run in destructive mode, but don't copy the files to the destination."

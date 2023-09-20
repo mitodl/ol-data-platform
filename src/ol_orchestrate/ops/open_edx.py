@@ -16,6 +16,7 @@ from dagster import (
 )
 from dagster.core.definitions.input import In
 from dagster_shell.utils import execute as run_bash
+from pydantic import Field
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
@@ -27,7 +28,6 @@ from ol_orchestrate.lib.edx_api_client import (
     get_edx_course_ids,
 )
 from ol_orchestrate.lib.file_rendering import write_csv
-from pydantic import Field
 
 
 class ListCoursesConfig(Config):
@@ -164,7 +164,7 @@ def list_courses(config: ListCoursesConfig) -> List[String]:
         )
     },
 )
-def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -232,7 +232,7 @@ def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) ->
         )
     },
 )
-def student_submissions(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+def student_submissions(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -308,7 +308,7 @@ def student_submissions(context: OpExecutionContext, edx_course_ids: List[String
         )
     },
 )
-def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
     """Retrieve enrollment records for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -366,7 +366,7 @@ def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]
         )
     },
 )
-def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -422,7 +422,7 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
         )
     },
 )
-def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501
+def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -488,7 +488,7 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
         )
     },
 )
-def export_edx_forum_database(  # type: ignore
+def export_edx_forum_database(  # type: ignore  # noqa: PGH003
     context: OpExecutionContext,
     config: ExportEdxForumDatabaseConfig,
 ) -> DagsterPath:
@@ -662,13 +662,13 @@ def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]
 )
 def upload_extracted_data(  # noqa: PLR0913
     context: OpExecutionContext,
-    edx_course_ids_csv: DagsterPath,
-    edx_course_roles: DagsterPath,
-    edx_user_roles: DagsterPath,
-    edx_enrolled_users: DagsterPath,
-    edx_student_submissions: DagsterPath,
-    edx_enrollment_records: DagsterPath,
-    edx_forum_data_directory: DagsterPath,
+    edx_course_ids_csv: DagsterPath,  # noqa: ARG001
+    edx_course_roles: DagsterPath,  # noqa: ARG001
+    edx_user_roles: DagsterPath,  # noqa: ARG001
+    edx_enrolled_users: DagsterPath,  # noqa: ARG001
+    edx_student_submissions: DagsterPath,  # noqa: ARG001
+    edx_enrollment_records: DagsterPath,  # noqa: ARG001
+    edx_forum_data_directory: DagsterPath,  # noqa: ARG001
     config: UploadExtractedDataConfig,
 ):
     """Upload all data exports to S3 so that institutional research can ingest.

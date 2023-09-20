@@ -1,25 +1,24 @@
+import os  # noqa: INP001
+from datetime import UTC, datetime  # type: ignore  # noqa: PGH003
 from functools import partial
-from boto3 import Session
 from typing import Literal
-from dagster_duckdb import DuckDBResource
-from dagster_aws.s3.resources import s3_resource
-import os
+
+from boto3 import Session
 from dagster import (
     Definitions,
     daily_partitioned_config,
 )
-from datetime import datetime, UTC  # type: ignore
-
+from dagster_aws.s3.resources import s3_resource
+from dagster_duckdb import DuckDBResource
 from ol_orchestrate.jobs.normalize_logs import (
-    normalize_tracking_logs,
     jsonify_tracking_logs,
+    normalize_tracking_logs,
 )
 
-
-dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore
+dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: E501, PGH003
     "DAGSTER_ENVIRONMENT", "dev"
 )
-# deployment: Literal["mitx", "mitxonline", "xpro"] = os.environ.get(  # type: ignore
+# deployment: Literal["mitx", "mitxonline", "xpro"] = os.environ.get(  # type: ignore  # noqa: E501, PGH003
 #     "OPEN_EDX_DEPLOYMENT_NAME", "xpro")
 
 
@@ -47,7 +46,7 @@ def earliest_log_date(
 def daily_tracking_log_config(
     deployment, destination, log_date: datetime, _end: datetime
 ):
-    global dagster_env
+    global dagster_env  # noqa: PLW0603
     if dagster_env == "dev":
         dagster_env = "qa"
     log_bucket = f"{deployment}-{dagster_env}-edxapp-tracking"
@@ -101,7 +100,7 @@ normalize_logs = Definitions(
     jobs=[
         normalize_tracking_logs.to_job(
             config=daily_partitioned_config(
-                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore
+                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore  # noqa: E501, PGH003
             )(partial(daily_tracking_log_config, deployment, "valid")),
             name=f"normalize_{deployment}_{dagster_env}_tracking_logs",
         )
@@ -110,7 +109,7 @@ normalize_logs = Definitions(
     + [
         jsonify_tracking_logs.to_job(
             config=daily_partitioned_config(
-                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore
+                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore  # noqa: E501, PGH003
             )(partial(daily_tracking_log_config, deployment, "logs")),
             name=f"jsonify_{deployment}_{dagster_env}_tracking_logs",
         )
