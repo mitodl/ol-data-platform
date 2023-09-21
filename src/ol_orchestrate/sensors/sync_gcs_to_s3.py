@@ -2,7 +2,7 @@ import json
 from collections.abc import Callable
 
 from dagster import RunRequest, SensorEvaluationContext, SkipReason
-from dagster_aws.s3 import s3_resource
+from dagster_aws.s3 import S3Resource
 
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 
@@ -53,7 +53,7 @@ def check_new_gcs_assets_sensor(  # noqa: PLR0913
 def check_new_s3_assets_sensor(  # noqa: PLR0913
     bucket_name: str,
     context: SensorEvaluationContext,
-    s3: s3_resource,
+    s3: S3Resource,
     bucket_prefix: str = "",
     object_filter_fn: Callable[[str], bool] = dummy_filter,
     run_config_fn: Callable[[set[str]], dict] = dummy_run_config_fn,
@@ -68,11 +68,12 @@ def check_new_s3_assets_sensor(  # noqa: PLR0913
 
     :yields: RunRequest or SkipReason if there are no new files to operate on
     """
-    bucket = s3.Bucket(bucket_name)
     bucket_files = {
-        file.key
-        for file in bucket.objects.filter(prefix=bucket_prefix)
-        if object_filter_fn(file.key)
+        obj["Key"]
+        for obj in s3.list_objects_v2(Bucket=bucket_name, Prefix=bucket_prefix).get(
+            "Contents", []
+        )
+        if object_filter_fn(obj["Key"])
     }
     new_files: set[str] = bucket_files.difference(set(context.cursor or []))
     if new_files:
