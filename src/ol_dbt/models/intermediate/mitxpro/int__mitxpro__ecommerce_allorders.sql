@@ -23,11 +23,6 @@ with b2becommerce_b2border as (
     from {{ ref('int__mitxpro__ecommerce_coupon') }}
 )
 
-, ecommerce_couponversion as (
-    select *
-    from {{ ref('int__mitxpro__ecommerce_couponversion') }}
-)
-
 , ecommerce_couponredemption as (
     select *
     from {{ ref('int__mitxpro__ecommerce_couponredemption') }}
@@ -83,16 +78,12 @@ with b2becommerce_b2border as (
         , b2becommerce_b2border.b2border_contract_number
         , productversion.productversion_readable_id
         , json_extract_scalar(b2becommerce_b2breceipt.b2breceipt_data, '$.req_reference_number') as req_reference_number
-        , case when b2becommerce_b2bcouponredemption.b2bcouponredemption_id is not null then 'Y' end as redeemed
+        , case when b2becommerce_b2bcouponredemption.b2bcouponredemption_id is not null then true end as redeemed
     from b2becommerce_b2border
     left join ecommerce_couponpaymentversion
         on b2becommerce_b2border.couponpaymentversion_id = ecommerce_couponpaymentversion.couponpaymentversion_id
     left join ecommerce_coupon
         on ecommerce_couponpaymentversion.couponpayment_name = ecommerce_coupon.couponpayment_name
-    left join ecommerce_couponversion
-        on
-            ecommerce_coupon.coupon_id = ecommerce_couponversion.coupon_id
-            and ecommerce_couponversion.is_latest_couponversion = 'Y'
     left join ecommerce_order
         on ecommerce_couponpaymentversion.couponpaymentversion_id = ecommerce_order.couponpaymentversion_id
     left join ecommerce_line
@@ -106,7 +97,9 @@ with b2becommerce_b2border as (
     left join productversion
         on b2becommerce_b2border.productversion_id = productversion.productversion_id
     left join b2becommerce_b2bcouponredemption
-        on b2becommerce_b2border.b2border_id = b2becommerce_b2bcouponredemption.b2border_id
+        on 
+            b2becommerce_b2border.b2border_id = b2becommerce_b2bcouponredemption.b2border_id
+            and b2becommerce_b2border.b2bcoupon_id = b2becommerce_b2bcouponredemption.b2bcoupon_id
 )
 
 , order_id_test as (
@@ -135,7 +128,7 @@ with b2becommerce_b2border as (
         , null as b2bcoupon_id
         , null as b2border_contract_number
         , null as req_reference_number
-        , case when ecommerce_couponredemption.couponredemption_id is not null then 'Y' end as redeemed
+        , case when ecommerce_couponredemption.couponredemption_id is not null then true end as redeemed
     from ecommerce_order
     inner join ecommerce_line
         on ecommerce_order.order_id = ecommerce_line.order_id
