@@ -97,7 +97,7 @@ with b2becommerce_b2border as (
     left join productversion
         on b2becommerce_b2border.productversion_id = productversion.productversion_id
     left join b2becommerce_b2bcouponredemption
-        on 
+        on
             b2becommerce_b2border.b2border_id = b2becommerce_b2bcouponredemption.b2border_id
             and b2becommerce_b2border.b2bcoupon_id = b2becommerce_b2bcouponredemption.b2bcoupon_id
 )
