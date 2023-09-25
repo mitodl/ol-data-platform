@@ -1,3 +1,4 @@
+import re
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -24,6 +25,9 @@ class DownloadConfig(Config):
     )
     files_to_sync: Optional[list[str]] = Field(
         description="The list of new files to download", default=None
+    )
+    file_type: str = Field(
+        description="The subset of archive files to process", default=None
     )
 
 
@@ -62,12 +66,16 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
         Path(edx_exports_download_path).joinpath(Path(fname).parent).mkdir(
             parents=True, exist_ok=True
         )
-        if fname != "COLD/internal-2023-09-10.zip":
-            continue
-        blob = bucket.get_blob(fname)
-        blob.download_to_filename(f"{edx_exports_download_path}/{fname}")
-        context.log.info(blob.name)
-        context.log.info(blob.size)
+        file_type = {
+            "courses": r"COLD/internal-\d{4}-\d{2}-\d{2}.zip$",
+            "logs": r"COLD/mitx-edx-events-\d{4}-\d{2}-\d{2}.log.gz$",
+        }
+        file_match = file_type[config.file_type]
+        if re.match(file_match, fname):
+            blob = bucket.get_blob(fname)
+            blob.download_to_filename(f"{edx_exports_download_path}/{fname}")
+            context.log.info(blob.name)
+            context.log.info(blob.size)
     yield Output(
         edx_exports_download_path,
         "edx_exports_directory",
@@ -76,12 +84,12 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
 
 @op(
     name="extract_zip_files",
-    description="Decompresses zipped files with edx.org data.",
+    description="Decompresses zipped files with edx.org course data and csvs.",
     required_resource_keys={"exports_dir"},
     ins={"edx_exports_directory": In(dagster_type=DagsterPath)},
     out={"edx_exports_directory": Out(dagster_type=DagsterPath)},
 )
-def extract_files(
+def extract_course_files(
     context: OpExecutionContext,
     edx_exports_directory: DagsterPath,
 ):
@@ -92,10 +100,6 @@ def extract_files(
 
     :yield: The path where files have been decompressed.
     """
-    # TODO: update with logic to handle gpg files?  # noqa: FIX002, TD002, TD003
-    # TODO: Add input for type of files, add logic to handle different groups of files  # noqa: E501, FIX002, TD002, TD003
-    # csv files
-    # tracking logs
     # course exports
     for file in edx_exports_directory.glob("*.zip"):
         with zipfile.ZipFile(file, "r") as zippedFile:
@@ -112,6 +116,7 @@ def extract_files(
     description="Upload extracted files to S3",
     required_resource_keys={"exports_dir", "s3"},
     ins={"extracted_edx_exports_directory": In(dagster_type=DagsterPath)},
+    out={"uploaded_edx_exports_directory": Out(dagster_type=DagsterPath)},
 )
 def upload_files(
     context: OpExecutionContext,
@@ -124,14 +129,12 @@ def upload_files(
     :param extracted_edx_exports_directory: The path with decompressed edx zip files.
     :type extracted_edx_exports_directory: DagsterPath
     """
-    # TODO: iterate through directories and files? what is the file structure?  # noqa: E501, FIX002, TD002, TD003
-    # assetmaterialization
     # load CSV files to s3
     csv_files = extracted_edx_exports_directory.glob("*.csv")
     for file in csv_files:
         context.resources.s3.upload_file(
             Filename=file,
-            Bucket=config.csv_staging_bucket,
+            Bucket=config.edx_irx_exports_bucket,
             Key=f"csvs/{file}",
         )
         Path(file).unlink()
@@ -142,11 +145,10 @@ def upload_files(
             description="Export directory for IRx edx reports",
             metadata={
                 "bucket_path": MetadataValue.path(
-                    f"s3://{config.course_exports_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
+                    f"s3://{config.edx_irx_exports_bucket}/{context.resources.exports_dir.path.name}"  # noqa: E501
                 ),
             },
         )
-
     # load tracking logs to s3
     log_files = extracted_edx_exports_directory.glob("*.log")
     for file in log_files:
@@ -157,19 +159,17 @@ def upload_files(
         )
         Path(file).unlink()
         context.log.info(file)
-        # TODO: tracking log assets  # noqa: FIX002, TD002, TD003
     yield AssetMaterialization(
-        asset_key="irx_edx_exports",
-        description="Export directory for IRx edx reports",
+        asset_key="edxorg_tracking_logs",
+        description="Export directory for IRx edx tracking logs",
         metadata={
             "bucket_path": MetadataValue.path(
-                f"s3://{config.course_exports_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
+                f"s3://{config.tracking_log_bucket}/{context.resources.exports_dir.path.name}/logs"  # noqa: E501
             ),
         },
     )
 
     # load course exports to s3
-    # TODO: check for XML?  # noqa: FIX002, TD002, TD003
     course_export_files = extracted_edx_exports_directory.glob("*.tar.gz")
     for file in course_export_files:
         context.resources.s3.upload_file(
@@ -184,12 +184,13 @@ def upload_files(
         description="Export directory for IRx edx reports",
         metadata={
             "bucket_path": MetadataValue.path(
-                f"s3://{config.course_exports_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
+                f"s3://{config.course_exports_bucket}/{context.resources.exports_dir.path.name}/logs"  # noqa: E501
             ),
         },
     )
-    context.resources.results_dir.clean_dir()
+    context.resources.exports_dir.clean_dir()
+    edx_exports_upload_path = context.resources.exports_dir.path
     yield Output(
-        f"{config.course_exports_bucket}/{context.resources.results_dir.path.name}",
-        "edx_s3_course_tarball_directory",
+        edx_exports_upload_path,
+        "uploaded_edx_exports_directory",
     )
