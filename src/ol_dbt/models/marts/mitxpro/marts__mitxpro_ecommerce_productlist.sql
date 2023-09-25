@@ -67,12 +67,12 @@ select
     , course_runs.courserun_title as product_name
     , course_runs.courserun_readable_id as product_id
     , ecommerce_product.product_type
-    , ecommerce_productversion_latest.productversion_price as list_price
+    , cast(ecommerce_productversion_latest.productversion_price as decimal(38, 2)) as list_price
     , ecommerce_productversion_latest.productversion_description as product_description
-    , course_runs.courserun_start_on as start_date
-    , course_runs.courserun_end_on as end_date
-    , course_runs.courserun_enrollment_start_on as enrollment_start
-    , course_runs.courserun_enrollment_end_on as enrollment_end
+    , substring(course_runs.courserun_start_on, 1, 10) as start_date
+    , substring(course_runs.courserun_end_on, 1, 10) as end_date
+    , substring(course_runs.courserun_enrollment_start_on, 1, 10) as enrollment_start
+    , substring(course_runs.courserun_enrollment_end_on, 1, 10) as enrollment_end
     , concat(
         '<a href="https://xpro.mit.edu/checkout?product='
         , cast(ecommerce_product.product_id as varchar (50))
@@ -105,10 +105,10 @@ select
     , program_runs.program_title as product_name
     , program_runs.programrun_readable_id as product_id
     , 'programrun' as product_type
-    , ecommerce_productversion_latest.productversion_price as list_price
+    , cast(ecommerce_productversion_latest.productversion_price as decimal(38, 2)) as list_price
     , ecommerce_productversion_latest.productversion_description as product_description
-    , program_runs.programrun_start_on as start_date
-    , program_runs.programrun_end_on as end_date
+    , substring(program_runs.programrun_start_on, 1, 10) as start_date
+    , substring(program_runs.programrun_end_on, 1, 10) as end_date
     , null as enrollment_start
     , null as enrollment_end
     , concat(
