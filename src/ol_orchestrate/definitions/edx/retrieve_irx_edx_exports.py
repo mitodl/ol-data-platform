@@ -38,8 +38,7 @@ def weekly_edx_exports_config(
             "upload_edx_data_exports": {
                 "config": {
                     "edx_irx_exports_bucket": ol_edxorg_raw_data_bucket,
-                    "tracking_log_bucket": f"{ol_edxorg_raw_data_bucket}/logs",  # noqa: E501
-                    "course_exports_bucket": f"{ol_edxorg_raw_data_bucket}/course_exports",  # noqa: E501
+                    "bucket_prefix": "pipeline-storage",
                 }
             },
         }
@@ -61,8 +60,7 @@ def weekly_edx_logs_config(
             "upload_edx_data_exports": {
                 "config": {
                     "edx_irx_exports_bucket": ol_edxorg_raw_data_bucket,
-                    "tracking_log_bucket": f"{ol_edxorg_raw_data_bucket}/logs",  # noqa: E501
-                    "course_exports_bucket": f"{ol_edxorg_raw_data_bucket}/course_exports",  # noqa: E501
+                    "bucket_prefix": "pipeline-storage",
                 }
             },
         }
@@ -72,14 +70,14 @@ def weekly_edx_logs_config(
 s3_courses_job_def = retrieve_edx_course_exports.to_job(
     name="retrieve_edx_course_exports",
     config=weekly_edx_exports_config(
-        "simeon-mitx-pipeline-main", "ol-devops-sandbox/pipeline-storage/", set()
+        "simeon-mitx-pipeline-main", "ol-devops-sandbox", set()
     ),
 )
 
 s3_logs_job_def = retrieve_edx_tracking_logs.to_job(
     name="retrieve_edx_logs",
     config=weekly_edx_logs_config(
-        "simeon-mitx-pipeline-main", "ol-devops-sandbox/pipeline-storage/", set()
+        "simeon-mitx-pipeline-main", "ol-devops-sandbox", set()
     ),
 )
 
@@ -110,7 +108,7 @@ retrieve_edx_exports = Definitions(
                 ),
                 run_config_fn=lambda new_keys: weekly_edx_exports_config(
                     "simeon-mitx-pipeline-main",
-                    "ol-devops-sandbox/pipeline-storage/",
+                    "ol-devops-sandbox",
                     new_keys,
                 ),
             ),
@@ -129,7 +127,7 @@ retrieve_edx_exports = Definitions(
                 ),
                 run_config_fn=lambda new_keys: weekly_edx_logs_config(
                     "simeon-mitx-pipeline-main",
-                    "ol-devops-sandbox/pipeline-storage/",
+                    "ol-devops-sandbox",
                     new_keys,
                 ),
             ),

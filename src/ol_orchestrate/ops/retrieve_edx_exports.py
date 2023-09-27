@@ -36,12 +36,8 @@ class UploadConfig(Config):
     edx_irx_exports_bucket: Optional[str] = Field(
         description="The S3 bucket where CSV files will be staged",
     )
-    tracking_log_bucket: Optional[str] = Field(
-        description="The S3 bucket where tracking log files will be staged",  # noqa: E501
-        default=None,
-    )
-    course_exports_bucket: Optional[str] = Field(
-        description="The S3 bucket where course_exports will be stored", default=None
+    bucket_prefix: Optional[str] = Field(
+        description="The bucket prefix for uploaded edx exports"
     )
 
 
@@ -130,64 +126,91 @@ def upload_files(
     :type extracted_edx_exports_directory: DagsterPath
     """
     # load CSV files to s3
-    csv_files = extracted_edx_exports_directory.glob("*.csv")
+    csv_files = extracted_edx_exports_directory.rglob("*.csv")
     for file in csv_files:
         context.resources.s3.upload_file(
             Filename=file,
             Bucket=config.edx_irx_exports_bucket,
-            Key=f"csvs/{file}",
+            Key=f"{config.bucket_prefix}/csv/"
+            f"{str(file.relative_to(extracted_edx_exports_directory)).removeprefix('COLD/')}",
         )
         Path(file).unlink()
         context.log.info(file)
-        # TODO: csv file assets  # noqa: FIX002, TD002, TD003
         yield AssetMaterialization(
             asset_key="irx_edx_exports",
-            description="Export directory for IRx edx reports",
+            description="Export directory for IRx edx csvs",
             metadata={
                 "bucket_path": MetadataValue.path(
-                    f"s3://{config.edx_irx_exports_bucket}/{context.resources.exports_dir.path.name}"  # noqa: E501
+                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/"
+                    f"{context.resources.exports_dir.path.name}/csv"
                 ),
             },
         )
+
     # load tracking logs to s3
-    log_files = extracted_edx_exports_directory.glob("*.log")
+    log_files = extracted_edx_exports_directory.rglob("*.log.gz")
     for file in log_files:
         context.resources.s3.upload_file(
             Filename=file,
-            Bucket=config.tracking_log_bucket,
-            Key=f"logs/{file}",
+            Bucket=config.edx_irx_exports_bucket,
+            Key=f"{config.bucket_prefix}/logs/"
+            f"{str(file.relative_to(extracted_edx_exports_directory)).removeprefix('COLD/')}",
         )
         Path(file).unlink()
         context.log.info(file)
-    yield AssetMaterialization(
-        asset_key="edxorg_tracking_logs",
-        description="Export directory for IRx edx tracking logs",
-        metadata={
-            "bucket_path": MetadataValue.path(
-                f"s3://{config.tracking_log_bucket}/{context.resources.exports_dir.path.name}/logs"  # noqa: E501
-            ),
-        },
-    )
+        yield AssetMaterialization(
+            asset_key="edxorg_tracking_logs",
+            description="Export directory for IRx edx tracking logs",
+            metadata={
+                "bucket_path": MetadataValue.path(
+                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/"
+                    f"{context.resources.exports_dir.path.name}/logs"
+                ),
+            },
+        )
 
     # load course exports to s3
-    course_export_files = extracted_edx_exports_directory.glob("*.tar.gz")
+    course_export_files = extracted_edx_exports_directory.rglob("*.tar.gz")
     for file in course_export_files:
         context.resources.s3.upload_file(
             Filename=file,
-            Bucket=config.course_exports_bucket,
-            Key=f"exports/{file}",
+            Bucket=config.edx_irx_exports_bucket,
+            Key=f"{config.bucket_prefix}/courses/"
+            f"{str(file.relative_to(extracted_edx_exports_directory)).removeprefix('COLD/')}",
         )
         Path(file).unlink()
         context.log.info(file)
-    yield AssetMaterialization(
-        asset_key="irx_edx_exports",
-        description="Export directory for IRx edx reports",
-        metadata={
-            "bucket_path": MetadataValue.path(
-                f"s3://{config.course_exports_bucket}/{context.resources.exports_dir.path.name}/logs"  # noqa: E501
-            ),
-        },
-    )
+        yield AssetMaterialization(
+            asset_key="irx_edx_exports",
+            description="Export directory for IRx edx course exports",
+            metadata={
+                "bucket_path": MetadataValue.path(
+                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/"
+                    f"{context.resources.exports_dir.path.name}/courses"
+                ),
+            },
+        )
+    # load forum exports to s3
+    forum_files = extracted_edx_exports_directory.rglob("*.[json bson]*")
+    for file in forum_files:
+        context.resources.s3.upload_file(
+            Filename=file,
+            Bucket=config.edx_irx_exports_bucket,
+            Key=f"{config.bucket_prefix}/forum/"
+            f"{str(file.relative_to(extracted_edx_exports_directory)).removeprefix('COLD/')}",
+        )
+        Path(file).unlink()
+        context.log.info(file)
+        yield AssetMaterialization(
+            asset_key="irx_edx_exports",
+            description="Export directory for IRx edx csvs",
+            metadata={
+                "bucket_path": MetadataValue.path(
+                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/"
+                    f"{context.resources.exports_dir.path.name}/forum"
+                ),
+            },
+        )
     context.resources.exports_dir.clean_dir()
     edx_exports_upload_path = context.resources.exports_dir.path
     yield Output(
