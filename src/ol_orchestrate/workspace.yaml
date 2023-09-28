@@ -16,3 +16,7 @@ load_from:
     host: tracking-log-reprocessing
     port: 4000
     location_name: tracking-log-reprocessing
+- grpc_server:
+    host: edxorg-program-credentials
+    port: 4000
+    location_name: edxorg-program-credentials
