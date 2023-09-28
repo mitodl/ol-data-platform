@@ -141,8 +141,7 @@ def upload_files(
             description="Export directory for IRx edx csvs",
             metadata={
                 "bucket_path": MetadataValue.path(
-                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/"
-                    f"{context.resources.exports_dir.path.name}/csv"
+                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/csv"
                 ),
             },
         )
@@ -163,8 +162,7 @@ def upload_files(
             description="Export directory for IRx edx tracking logs",
             metadata={
                 "bucket_path": MetadataValue.path(
-                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/"
-                    f"{context.resources.exports_dir.path.name}/logs"
+                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/logs"
                 ),
             },
         )
@@ -185,8 +183,7 @@ def upload_files(
             description="Export directory for IRx edx course exports",
             metadata={
                 "bucket_path": MetadataValue.path(
-                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/"
-                    f"{context.resources.exports_dir.path.name}/courses"
+                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/courses"
                 ),
             },
         )
@@ -206,8 +203,7 @@ def upload_files(
             description="Export directory for IRx edx csvs",
             metadata={
                 "bucket_path": MetadataValue.path(
-                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/"
-                    f"{context.resources.exports_dir.path.name}/forum"
+                    f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/forum"
                 ),
             },
         )
