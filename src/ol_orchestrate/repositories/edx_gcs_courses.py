@@ -1,4 +1,5 @@
 import os
+from functools import partial
 
 from dagster import DefaultSensorStatus, Definitions, SensorDefinition
 from dagster_aws.s3.resources import s3_resource
@@ -42,7 +43,10 @@ gcs_sync_job = sync_gcs_to_s3.to_job(
 edx_gcs_courses = Definitions(
     sensors=[
         SensorDefinition(
-            evaluation_fn=check_new_gcs_assets_sensor,
+            evaluation_fn=partial(
+                check_new_gcs_assets_sensor, "simeon-mitx-course-tarballs"
+            ),
+            name="edxorg_course_bundle_sensor",
             minimum_interval_seconds=86400,
             job=gcs_sync_job,
             default_status=DefaultSensorStatus.RUNNING,

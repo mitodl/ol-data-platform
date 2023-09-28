@@ -1,4 +1,4 @@
-import os  # noqa: INP001
+import os
 from datetime import UTC, datetime  # type: ignore  # noqa: PGH003
 from functools import partial
 from typing import Literal
@@ -10,6 +10,7 @@ from dagster import (
 )
 from dagster_aws.s3.resources import s3_resource
 from dagster_duckdb import DuckDBResource
+
 from ol_orchestrate.jobs.normalize_logs import (
     jsonify_tracking_logs,
     normalize_tracking_logs,
