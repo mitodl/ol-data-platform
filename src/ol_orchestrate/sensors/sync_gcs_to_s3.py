@@ -40,7 +40,7 @@ def check_new_gcs_assets_sensor(  # noqa: PLR0913
         for file in storage_client.list_blobs(bucket, prefix=bucket_prefix)
         if object_filter_fn(file.name)
     }
-    new_files: set[str] = bucket_files.difference(set(context.cursor or []))
+    new_files: set[str] = bucket_files - set(json.loads(context.cursor or "[]"))
     if new_files:
         context.update_cursor(json.dumps(list(bucket_files)))
         yield RunRequest(
@@ -75,7 +75,7 @@ def check_new_s3_assets_sensor(  # noqa: PLR0913
         )
         if object_filter_fn(obj["Key"])
     }
-    new_files: set[str] = bucket_files.difference(set(context.cursor or []))
+    new_files: set[str] = bucket_files - set(json.loads(context.cursor or "[]"))
     if new_files:
         context.update_cursor(json.dumps(list(bucket_files)))
         yield RunRequest(
