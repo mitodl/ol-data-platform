@@ -33,7 +33,7 @@ class HealthchecksIO(ConfigurableResource):
         return self.ping_host
 
     def send_update(self, method: Optional[Literal["start", "fail"]] = None):
-        httpx.post(urllib.parse.urljoin(self.host, self.check_id, method))  # type: ignore[arg-type]  # noqa: E501
+        httpx.post(urllib.parse.urljoin(self.host, self.check_id, method))  # type: ignore[arg-type]
 
     def setup_for_execution(self, context: InitResourceContext) -> None:  # noqa: ARG002
         if self.measure_time:
