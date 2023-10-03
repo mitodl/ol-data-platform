@@ -811,3 +811,88 @@ sources:
     - name: environment
       description: str, internal used field to indicate environment for the event.
         e.g. mitxonline-production
+
+  - name: raw__mitxonline__openedx__mysql__student_courseenrollment
+    description: Course enrollment details sourced from the Open edX database.
+    columns:
+    - name: course_id
+      data_type: varchar
+    - name: mode
+      data_type: varchar
+    - name: _airbyte_emitted_at
+      data_type: bigint
+    - name: is_active
+      data_type: boolean
+    - name: id
+      data_type: bigint
+    - name: created
+      data_type: varchar
+    - name: _airbyte_ab_id
+      data_type: varchar
+    - name: user_id
+      data_type: bigint
+
+  - name: raw__mitxonline__openedx__mysql__auth_userprofile
+    description: User profile information sourced from the Open edX database
+    columns:
+    - name: phone_number
+      data_type: varchar
+    - name: _airbyte_emitted_at
+      data_type: bigint
+    - name: mailing_address
+      data_type: varchar
+    - name: _airbyte_ab_id
+      data_type: varchar
+    - name: location
+      data_type: varchar
+    - name: bio
+      data_type: varchar
+    - name: user_id
+      data_type: bigint
+    - name: name
+      data_type: varchar
+    - name: language
+      data_type: varchar
+    - name: profile_image_uploaded_at
+      data_type: varchar
+    - name: gender
+      data_type: varchar
+    - name: level_of_education
+      data_type: varchar
+    - name: meta
+      data_type: varchar
+    - name: id
+      data_type: bigint
+    - name: courseware
+      data_type: varchar
+    - name: goals
+      data_type: varchar
+    - name: country
+      data_type: varchar
+    - name: year_of_birth
+      data_type: bigint
+    - name: city
+      data_type: varchar
+    - name: state
+      data_type: varchar
+
+  - name: raw__mitxonline__openedx__mysql__user_api_userorgtag
+    columns:
+    - name: org
+      data_type: varchar
+    - name: _airbyte_emitted_at
+      data_type: bigint
+    - name: modified
+      data_type: varchar
+    - name: id
+      data_type: bigint
+    - name: created
+      data_type: varchar
+    - name: _airbyte_ab_id
+      data_type: varchar
+    - name: user_id
+      data_type: bigint
+    - name: key
+      data_type: varchar
+    - name: value
+      data_type: varchar
