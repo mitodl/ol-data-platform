@@ -31,7 +31,7 @@ def weekly_edx_exports_config(
             "download_edx_data_exports": {
                 "config": {
                     "irx_edxorg_gcs_bucket": irx_edxorg_gcs_bucket,
-                    "file_type": "courses",
+                    "export_type": "courses",
                     "files_to_sync": list(new_files_to_sync),
                 }
             },
@@ -53,7 +53,7 @@ def weekly_edx_logs_config(
             "download_edx_data_exports": {
                 "config": {
                     "irx_edxorg_gcs_bucket": irx_edxorg_gcs_bucket,
-                    "file_type": "logs",
+                    "export_type": "logs",
                     "files_to_sync": list(new_files_to_sync),
                 }
             },
