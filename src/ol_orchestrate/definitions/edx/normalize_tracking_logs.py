@@ -16,7 +16,7 @@ from ol_orchestrate.jobs.normalize_logs import (
     normalize_tracking_logs,
 )
 
-dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: E501, PGH003
+dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: PGH003
     "DAGSTER_ENVIRONMENT", "dev"
 )
 # deployment: Literal["mitx", "mitxonline", "xpro"] = os.environ.get(  # type: ignore  # noqa: E501, PGH003
@@ -101,7 +101,7 @@ normalize_logs = Definitions(
     jobs=[
         normalize_tracking_logs.to_job(
             config=daily_partitioned_config(
-                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore  # noqa: E501, PGH003
+                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore  # noqa: PGH003
             )(partial(daily_tracking_log_config, deployment, "valid")),
             name=f"normalize_{deployment}_{dagster_env}_tracking_logs",
         )
@@ -110,7 +110,7 @@ normalize_logs = Definitions(
     + [
         jsonify_tracking_logs.to_job(
             config=daily_partitioned_config(
-                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore  # noqa: E501, PGH003
+                start_date=earliest_log_date(dagster_env, deployment)  # type: ignore  # noqa: PGH003
             )(partial(daily_tracking_log_config, deployment, "logs")),
             name=f"jsonify_{deployment}_{dagster_env}_tracking_logs",
         )

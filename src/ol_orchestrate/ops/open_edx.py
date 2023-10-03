@@ -42,7 +42,7 @@ class ListCoursesConfig(Config):
     edx_token_type: str = Field(
         default="jwt",
         description="Type of OAuth token to use for authenticating to the edX API. "
-        'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
+        'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',
     )
     edx_course_api_page_size: int = Field(
         default=100,
@@ -91,7 +91,7 @@ class ExportEdxCoursesConfig(Config):
     edx_token_type: str = Field(
         default="jwt",
         description="Type of OAuth token to use for authenticating to the edX API. "
-        'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',  # noqa: E501
+        'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',
     )
     edx_course_bucket: str = Field(
         description="Bucket name that the edX installation uses for uploading "
@@ -735,7 +735,7 @@ def upload_extracted_data(  # noqa: PLR0913
         description="Daily export directory for edX export pipeline",
         metadata={
             "results_s3_path": MetadataValue.path(
-                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
+                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"
             ),
         },
     )
