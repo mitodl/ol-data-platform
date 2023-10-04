@@ -23,6 +23,20 @@ dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignor
 )
 
 
+def s3_uploads_bucket(
+    dagster_env: Literal["dev", "qa", "production"],
+) -> dict:
+    bucket_map = {
+        "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
+        "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": "edxorg-raw-data"},
+        "production": {
+            "bucket": "ol-data-lake-landing-zone-production",
+            "prefix": "edxorg-raw-data",
+        },
+    }
+    return bucket_map[dagster_env]
+
+
 def weekly_edx_exports_config(
     irx_edxorg_gcs_bucket, ol_edxorg_raw_data_bucket, new_files_to_sync
 ):
@@ -38,7 +52,7 @@ def weekly_edx_exports_config(
             "upload_edx_data_exports": {
                 "config": {
                     "edx_irx_exports_bucket": ol_edxorg_raw_data_bucket,
-                    "bucket_prefix": "pipeline-storage",
+                    "bucket_prefix": s3_uploads_bucket(dagster_env)["prefix"],
                 }
             },
         }
@@ -60,7 +74,7 @@ def weekly_edx_logs_config(
             "upload_edx_data_exports": {
                 "config": {
                     "edx_irx_exports_bucket": ol_edxorg_raw_data_bucket,
-                    "bucket_prefix": "pipeline-storage",
+                    "bucket_prefix": s3_uploads_bucket(dagster_env)["prefix"],
                 }
             },
         }
@@ -70,14 +84,14 @@ def weekly_edx_logs_config(
 s3_courses_job_def = retrieve_edx_course_exports.to_job(
     name="retrieve_edx_course_exports",
     config=weekly_edx_exports_config(
-        "simeon-mitx-pipeline-main", "ol-devops-sandbox", set()
+        "simeon-mitx-pipeline-main", s3_uploads_bucket(dagster_env)["bucket"], set()
     ),
 )
 
 s3_logs_job_def = retrieve_edx_tracking_logs.to_job(
     name="retrieve_edx_logs",
     config=weekly_edx_logs_config(
-        "simeon-mitx-pipeline-main", "ol-devops-sandbox", set()
+        "simeon-mitx-pipeline-main", s3_uploads_bucket(dagster_env)["bucket"], set()
     ),
 )
 
@@ -108,7 +122,7 @@ retrieve_edx_exports = Definitions(
                 ),
                 run_config_fn=lambda new_keys: weekly_edx_exports_config(
                     "simeon-mitx-pipeline-main",
-                    "ol-devops-sandbox",
+                    s3_uploads_bucket(dagster_env)["bucket"],
                     new_keys,
                 ),
             ),
@@ -127,7 +141,7 @@ retrieve_edx_exports = Definitions(
                 ),
                 run_config_fn=lambda new_keys: weekly_edx_logs_config(
                     "simeon-mitx-pipeline-main",
-                    "ol-devops-sandbox",
+                    s3_uploads_bucket(dagster_env)["bucket"],
                     new_keys,
                 ),
             ),

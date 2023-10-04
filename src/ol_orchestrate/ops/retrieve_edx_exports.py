@@ -37,7 +37,7 @@ class UploadConfig(Config):
     )
     bucket_prefix: Optional[str] = Field(
         description="The bucket prefix for uploaded edx exports",
-        default="pipeline-storage",
+        default="edxorg-raw-data",
     )
 
 
