@@ -16,8 +16,6 @@ from dagster import (
 )
 from pydantic import Field
 
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
-
 
 class DownloadConfig(Config):
     irx_edxorg_gcs_bucket: str = Field(
@@ -43,14 +41,6 @@ class UploadConfig(Config):
     )
 
 
-file_types = {
-    "logs": "*.log.gz",
-    "csv": "*.csv",
-    "courses": "*.tar.gz",
-    "forum": "*.[json bson]*",
-}
-
-
 @op(
     name="download_edx_data_exports",
     description="Download zip files from GCS",
@@ -58,16 +48,17 @@ file_types = {
     out={"export_type": Out(dagster_type=String)},
 )
 def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
-    """Download copies of edx.org data from IRx cold storage."""
+    """Download copies of edx.org data from IRx cold storage.
+
+    :yield: The type of edX export being processed
+    """
     storage_client = context.resources.gcp_gcs.client
     bucket = storage_client.get_bucket(config.irx_edxorg_gcs_bucket)
-    edx_exports_download_path = context.resources.exports_dir.path.joinpath(
-        config.export_type
-    )
-    context.log.info(edx_exports_download_path)
+    exports_path = context.resources.exports_dir.path
+    context.log.info(exports_path)
     for file in config.files_to_sync or []:
         fname = file.removeprefix("COLD/")
-        Path(edx_exports_download_path).joinpath(Path(fname).parent).mkdir(
+        Path(exports_path).joinpath(Path(fname).parent).mkdir(
             parents=True, exist_ok=True
         )
         export_type = {
@@ -77,7 +68,7 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
         file_match = export_type[config.export_type]
         if re.match(file_match, fname):
             blob = bucket.get_blob(file)
-            blob.download_to_filename(f"{edx_exports_download_path}/{fname}")
+            blob.download_to_filename(f"{exports_path}/{fname}")
             context.log.info(blob.name)
             context.log.info(blob.size)
     yield Output(
@@ -94,9 +85,15 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
     out={"export_type": Out(dagster_type=String)},
 )
 def extract_course_files(context: OpExecutionContext, export_type: str):
-    """Extract the contents of the downloaded zip files."""
+    """Extract the contents of the downloaded zip files for course data/
+
+    :param export_type: The type of edX export being processed
+    :type String
+
+    :yield: The type of edX export being processed
+    """
     if export_type == "courses":
-        exports_path = context.resources.exports_dir.path.joinpath(export_type)
+        exports_path = context.resources.exports_dir.path
         context.log.info(exports_path)
         zip_files = exports_path.glob("*.zip")
         bad_files = []
@@ -122,26 +119,42 @@ def extract_course_files(context: OpExecutionContext, export_type: str):
     description="Upload extracted files to S3",
     required_resource_keys={"exports_dir", "s3"},
     ins={"export_type": In(dagster_type=String)},
-    out={"uploaded_edx_exports_directory": Out(dagster_type=DagsterPath)},
+    out={"s3_upload_uri": Out(dagster_type=String)},
 )
 def upload_files(context: OpExecutionContext, config: UploadConfig, export_type: str):
     """Load files to staging locations.
-    There are separate S3 buckets for CSV files, tracking logs, and course_exports.
+    There are separate S3 buckets for CSV files, tracking logs,
+    course_exports, and forum data
+
+    :param export_type: The type of edX export being processed
+    :type String
     """
-    exports_path = context.resources.exports_dir.path.joinpath(export_type)
+    exports_path = context.resources.exports_dir.path
     context.log.info(exports_path)
+    log_file_types = {"logs": "*.log.gz"}
+    course_file_types = {
+        "csv": "*.csv",
+        "courses": "*.tar.gz",
+        "forum": "*.[json bson]*",
+    }
+    if export_type == "logs":
+        file_types = log_file_types
+    elif export_type == "courses":
+        file_types = course_file_types
     for file_type in file_types:
         files = exports_path.rglob(file_types[file_type])
-        context.log.info(files)
         for file in files:
+            if file_type in ["courses", "forum"]:
+                relative_path = Path(
+                    str(file.relative_to(exports_path)).replace(f"/{file_type}", "")
+                )
+            elif file_type in ["logs", "csv"]:
+                relative_path = file.relative_to(exports_path)
             s3_path = f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/{file_type}"
-            context.log.info(file)
-            context.log.info("%s", file.relative_to(exports_path))
-            context.log.info(s3_path)
             context.resources.s3.upload_file(
                 Filename=file,
                 Bucket=config.edx_irx_exports_bucket,
-                Key=f"{config.bucket_prefix}/{file_type}/{file.relative_to(exports_path)!s}",
+                Key=f"{config.bucket_prefix}/{file_type}/{relative_path!s}",
             )
             Path(file).unlink()
             yield AssetMaterialization(
@@ -150,6 +163,6 @@ def upload_files(context: OpExecutionContext, config: UploadConfig, export_type:
                 metadata={"bucket_path": MetadataValue.path(s3_path)},
             )
     yield Output(
-        exports_path,
-        "uploaded_edx_exports_directory",
+        f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/",
+        "s3_upload_uri",
     )
