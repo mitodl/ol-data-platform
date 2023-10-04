@@ -103,9 +103,9 @@ file_regex = {
 retrieve_edx_exports = Definitions(
     resources={
         "gcp_gcs": GCSConnection(
-            **load_yaml_config(
-                "/Users/qhoque/GIT/ol-data-platform/etc/edxorg_gcp.yaml"
-            )["resources"]["gcp_gcs"]["config"]
+            **load_yaml_config("/etc/dagster/edxorg_gcp.yaml")["resources"]["gcp_gcs"][
+                "config"
+            ]
         ),
         "s3": s3_resource,
         "exports_dir": DailyResultsDir.configure_at_launch(),
