@@ -1,3 +1,4 @@
+import secrets
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -21,7 +22,7 @@ class BaseResultsDir(ConfigurableResource):
     @validator("outputs_root_dir", always=True)
     def validate_outputs_root_dir(cls, value: str) -> str:  # noqa: N805
         if value is None:
-            value = Path.cwd()
+            value = Path.cwd().joinpath(secrets.token_hex(5))
         return str(value)
 
     def create_dir(self):

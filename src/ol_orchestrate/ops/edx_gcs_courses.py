@@ -20,7 +20,7 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
 class DownloadEdxGcsCourseConfig(Config):
     edx_gcs_course_tarballs: str = Field(
         "simeon-mitx-course-tarballs",
-        description="The GCS bucket that contains the MITx course exports from edx.org",  # noqa: E501
+        description="The GCS bucket that contains the MITx course exports from edx.org",
     )
 
 
@@ -110,7 +110,7 @@ def upload_edx_gcs_course_data_to_s3(
         description="Daily export directory for edX export pipeline",
         metadata={
             "bucket_path": MetadataValue.path(
-                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"  # noqa: E501
+                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"
             ),
         },
     )

@@ -27,13 +27,13 @@ models:
   - name: Product_description
     description: string, product version discriptiom
   - name: start_date
-    description: timestamp, specifying when the course or program begins
+    description: date, specifying when the course or program begins
   - name: end_date
-    description: timestamp, specifying when the course or program ends
+    description: date, specifying when the course or program ends
   - name: enrollment_start
-    description: timestamp, specifying when enrollment starts
+    description: date, specifying when enrollment starts
   - name: enrollment_end
-    description: timestamp, specifying when enrollment ends
+    description: date, specifying when enrollment ends
   - name: link
     description: link to the xPro checkout page
   - name: product_parent_run_id
@@ -46,3 +46,7 @@ models:
     description: str, short description indicating about the time commitments
   - name: coursetopic_names
     description: str, all associated course topic names
+  - name: product_is_private
+    description: boolean, Public product is purchasable through the bulk form at /ecommerce/bulk
+  - name: platform_name
+    description: str, name of the platform

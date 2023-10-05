@@ -2,6 +2,90 @@
 version: 2
 
 models:
+- name: int__mitxpro__ecommerce_allorders
+  description: B2B and regular orders combined into one table
+  columns:
+  - name: order_id
+    description: int, foreign key for ecommerce_order
+  - name: b2border_id
+    description: int, foreign key for b2becommerce_b2border
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created. If this
+      is a b2b order it will be the timestamp that order was created otherwise it
+      will be when the regular order was created.
+    tests:
+    - not_null
+  - name: order_state
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded"
+  - name: line_id
+    description: int, foreign key for ecommerce_line
+  - name: product_id
+    description: int, foreign key for ecommerce_product
+  - name: couponpaymentversion_payment_transaction
+    description: string, string that identifies the payment invoice for coupon purchases
+      by companies
+  - name: couponpaymentversion_coupon_type
+    description: string, one of 'single-use' or 'promo'. Promo coupon codes can be
+      used multiple times
+  - name: b2border_discount
+    description: numeric, dollar discount amount for the order
+  - name: redeemed
+    description: boolean, when an order uses a coupon this field will be 'Y' otherwise
+      it will be null
+  - name: user_email
+    description: str, user email associated with their account
+  - name: product_type
+    description: string, readable product type
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      e.g. course-v1:xPRO+MLx1+R0
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code} e.g.
+      program-v1:xPRO+MLx
+  - name: coupon_id
+    description: int, foreign key referencing ecommerce_coupon
+  - name: b2bcoupon_id
+    description: int, foreign key to b2becommerce_b2bcoupon
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
+  - name: req_reference_number
+    description: json, cybersource req reference number for a payment
+  - name: productversion_readable_id
+    description: string, the readable_id field from the product object
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["order_id", "b2border_id", "line_id", "coupon_id"]
+- name: int__mitxpro__b2becommerce_b2bcouponredemption
+  description: A B2B coupon is considered redeemed when it's used to place an order.
+    The coupon provides a discount on the company's bulk order.
+  columns:
+  - name: b2bcouponredemption_id
+    description: int, primary key representing a b2b coupon redemption
+    tests:
+    - not_null
+    - unique
+  - name: b2border_id
+    description: int, foreign key to b2becommerce_b2border
+    tests:
+    - not_null
+  - name: b2bcoupon_id
+    description: int, foreign key representing a b2b coupon
+    tests:
+    - not_null
+  - name: b2bcouponredemption_updated_on
+    description: timestamp, specifying when the b2b coupon redemption was most recently
+      updated
+    tests:
+    - not_null
+  - name: b2bcouponredemption_created_on
+    description: timestamp, specifying when the b2b coupon redemption was initially
+      created
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["b2border_id", "b2bcoupon_id"]
 - name: int__mitxpro__ecommerce_allcoupons
   description: B2B and regular coupons combined into one table
   columns:
@@ -756,8 +840,9 @@ models:
     description: timestamp, the timestamp the product was created
   - name: product_updated_on
     description: timestamp, the timestamp the product was last updated
-  - name: product_is_private
-    description: boolean, Public product is purchasable through the bulk form at /ecommerce/bulk
+  - name: product_is_visible_in_bulk_form
+    description: boolean, whether or not the product is purchasable through the bulk
+      form at /ecommerce/bulk
     tests:
     - not_null
   - name: courserun_id
@@ -891,7 +976,6 @@ models:
       compare_model: ref('stg__mitxpro__app__postgres__courses_programenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id", "ecommerce_order_id"]
-
 - name: int__mitxpro__platforms
   description: Intermediate model of platforms in MITxPro
   columns:
@@ -931,8 +1015,8 @@ models:
     description: boolean, whether the program is on an external platform
     tests:
     - not_null
-  - name: platform_name
-    description: str, name of the program platform
+  - name: platform_id
+    description: int, id of the program platform
   - name: cms_programpage_description
     description: str, the description displayed on the page
   - name: cms_programpage_duration
@@ -1006,8 +1090,8 @@ models:
     description: boolean, whether the course is on an external platform
     tests:
     - not_null
-  - name: platform_name
-    description: str, name of the course platform
+  - name: platform_id
+    description: int, id of the course platform
   - name: cms_coursepage_description
     description: str, the description displayed on the page
   - name: cms_coursepage_duration

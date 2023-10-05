@@ -26,7 +26,7 @@ with source as (
         *
         , row_number() over (
             partition by username, context, event_source, event_type, event, "time"   --noqa
-            order by _airbyte_emitted_at desc, _ab_source_file_last_modified desc, vector_timestamp desc
+            order by _airbyte_emitted_at desc, _ab_source_file_last_modified desc, "time" desc
         ) as row_num
     from source
 )
