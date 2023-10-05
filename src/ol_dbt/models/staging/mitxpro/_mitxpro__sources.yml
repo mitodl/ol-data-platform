@@ -579,6 +579,12 @@ sources:
       description: number, total order amount
     - name: purchaser_id
       description: int, primary key in users_user for the purchaser
+    - name: tax_country_code
+      description: string, the country code where the tax was applied
+    - name: tax_rate
+      description: numeric, the tax rate to apply
+    - name: tax_rate_name
+      description: string, name of the tax rate assessed
 
   - name: raw__xpro__app__postgres__courses_courserunenrollment
     freshness:
