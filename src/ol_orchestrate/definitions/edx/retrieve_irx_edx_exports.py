@@ -8,7 +8,7 @@ from dagster import (
     Definitions,
     SensorDefinition,
 )
-from dagster_aws.s3 import s3_resource
+from dagster_aws.s3 import S3Resource
 from ol_orchestrate.jobs.retrieve_edx_exports import (
     retrieve_edx_course_exports,
     retrieve_edx_tracking_logs,
@@ -107,7 +107,7 @@ retrieve_edx_exports = Definitions(
                 "config"
             ]
         ),
-        "s3": s3_resource,
+        "s3": S3Resource(),
         "exports_dir": DailyResultsDir.configure_at_launch(),
     },
     sensors=[

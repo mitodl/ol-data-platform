@@ -54,7 +54,7 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
     """
     storage_client = context.resources.gcp_gcs.client
     bucket = storage_client.get_bucket(config.irx_edxorg_gcs_bucket)
-    exports_path = context.resources.exports_dir.path
+    exports_path = f"{context.resources.exports_dir.path}/{config.export_type}"
     context.log.info(exports_path)
     for file in config.files_to_sync or []:
         fname = file.removeprefix("COLD/")
@@ -93,7 +93,7 @@ def extract_course_files(context: OpExecutionContext, export_type: str):
     :yield: The type of edX export being processed
     """
     if export_type == "courses":
-        exports_path = context.resources.exports_dir.path
+        exports_path = Path(f"{context.resources.exports_dir.path}/{export_type}")
         context.log.info(exports_path)
         zip_files = exports_path.glob("*.zip")
         bad_files = []
@@ -119,7 +119,7 @@ def extract_course_files(context: OpExecutionContext, export_type: str):
     description="Upload extracted files to S3",
     required_resource_keys={"exports_dir", "s3"},
     ins={"export_type": In(dagster_type=String)},
-    out={"s3_upload_uri": Out(dagster_type=String)},
+    out={"s3_upload_bucket": Out(dagster_type=String)},
 )
 def upload_files(context: OpExecutionContext, config: UploadConfig, export_type: str):
     """Load files to staging locations.
@@ -129,40 +129,40 @@ def upload_files(context: OpExecutionContext, config: UploadConfig, export_type:
     :param export_type: The type of edX export being processed
     :type String
     """
-    exports_path = context.resources.exports_dir.path
+    exports_path = Path(f"{context.resources.exports_dir.path}/{export_type}")
     context.log.info(exports_path)
-    log_file_types = {"logs": "*.log.gz"}
-    course_file_types = {
-        "csv": "*.csv",
-        "courses": "*.tar.gz",
-        "forum": "*.[json bson]*",
+    export_types = {
+        "logs": {
+            "logs": "*.log.gz",
+        },
+        "courses": {
+            "csv": "*.csv",
+            "courses": "*.tar.gz",
+            "forum": "*.[json bson]*",
+        },
     }
-    if export_type == "logs":
-        file_types = log_file_types
-    elif export_type == "courses":
-        file_types = course_file_types
+    file_types = export_types[export_type]
     for file_type in file_types:
         files = exports_path.rglob(file_types[file_type])
         for file in files:
-            if file_type in ["courses", "forum"]:
-                relative_path = Path(
-                    str(file.relative_to(exports_path)).replace(f"/{file_type}", "")
-                )
-            elif file_type in ["logs", "csv"]:
-                relative_path = file.relative_to(exports_path)
-            s3_path = f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/{file_type}"
+            relative_path = Path(
+                str(file.relative_to(exports_path)).replace(f"/{file_type}", "")
+            )
+            context.log.info(relative_path)
+            s3_key = f"{config.bucket_prefix}/{file_type}/{relative_path!s}"
+            s3_path = f"s3://{config.edx_irx_exports_bucket}/{s3_key}"
             context.resources.s3.upload_file(
                 Filename=file,
                 Bucket=config.edx_irx_exports_bucket,
-                Key=f"{config.bucket_prefix}/{file_type}/{relative_path!s}",
+                Key=s3_key,
             )
             Path(file).unlink()
             yield AssetMaterialization(
                 asset_key=f"edxorg_{file_type}/",
-                description=f"Export directory for IRx edx {file_type} data",
-                metadata={"bucket_path": MetadataValue.path(s3_path)},
+                description=f"S3 URI for IRx edx {file_type} upload",
+                metadata={"S3_URI": MetadataValue.path(s3_path)},
             )
     yield Output(
         f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/",
-        "s3_upload_uri",
+        "s3_upload_bucket",
     )
