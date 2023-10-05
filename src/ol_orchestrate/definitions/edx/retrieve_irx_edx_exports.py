@@ -1,4 +1,4 @@
-import os  # noqa: INP001
+import os
 import re
 from functools import partial
 from typing import Literal
@@ -9,6 +9,7 @@ from dagster import (
     SensorDefinition,
 )
 from dagster_aws.s3 import S3Resource
+
 from ol_orchestrate.jobs.retrieve_edx_exports import (
     retrieve_edx_course_exports,
     retrieve_edx_tracking_logs,
@@ -18,7 +19,7 @@ from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.outputs import DailyResultsDir
 from ol_orchestrate.sensors.sync_gcs_to_s3 import check_edxorg_data_dumps_sensor
 
-dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: E501, PGH003
+dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: PGH003
     "DAGSTER_ENVIRONMENT", "dev"
 )
 
