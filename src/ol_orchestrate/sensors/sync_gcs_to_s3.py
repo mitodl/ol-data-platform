@@ -23,11 +23,13 @@ def check_new_gcs_assets_sensor(  # noqa: PLR0913
     object_filter_fn: Callable[[str], bool] = dummy_filter,
     run_config_fn: Callable[[set[str]], dict] = dummy_run_config_fn,
 ):
-    """Check S3 bucket for new files to operate on.
+    """Check GCS bucket for new files to operate on.
 
     :param bucket_name: Name of the Google Cloud Storage bucket to watch
     :param context: The Dagster sensor evaluation context
-    :param s3: Configured GCSConnection resource
+    :param gcp_gcs: Configured GCSConnection resource
+    :param bucket_prefix: Prefix of the Google Cloud Storage bucket to watch
+    :param object_filter_fn: Optional function to filter file names, returns a boolean
     :param run_config_fn: Optional function that returns a dictionary of run config
         values when given a `set` object of new keys
 
@@ -50,41 +52,6 @@ def check_new_gcs_assets_sensor(  # noqa: PLR0913
         yield SkipReason("No new files in GCS bucket")
 
 
-def check_edxorg_data_dumps_sensor(  # noqa: PLR0913
-    bucket_name: str,
-    context: SensorEvaluationContext,
-    gcp_gcs: GCSConnection,
-    bucket_prefix: str = "",
-    object_filter_fn: Callable[[str], bool] = dummy_filter,
-    run_config_fn: Callable[[set[str]], dict] = dummy_run_config_fn,
-):
-    """Check S3 bucket for new files to operate on.
-
-    :param bucket_name: Name of the Google Cloud Storage bucket to watch
-    :param context: The Dagster sensor evaluation context
-    :param s3: Configured GCSConnection resource
-    :param run_config_fn: Optional function that returns a dictionary of run config
-        values when given a `set` object of new keys
-
-    :yields: RunRequest or SkipReason if there are no new files to operate on
-    """
-    storage_client = gcp_gcs.client
-    bucket = storage_client.get_bucket(bucket_name)
-    bucket_files = {
-        file.name
-        for file in storage_client.list_blobs(bucket, prefix=bucket_prefix)
-        if object_filter_fn(file.name)
-    }
-    new_files: set[str] = bucket_files.difference(set(context.cursor or []))
-    if new_files:
-        context.update_cursor(json.dumps(list(bucket_files)))
-        yield RunRequest(
-            run_config=run_config_fn(new_files),
-        )
-    else:
-        yield SkipReason("No new files in GCS bucket")
-
-
 def check_new_s3_assets_sensor(  # noqa: PLR0913
     bucket_name: str,
     context: SensorEvaluationContext,
@@ -98,6 +65,8 @@ def check_new_s3_assets_sensor(  # noqa: PLR0913
     :param bucket_name: Name of the S3 bucket to watch
     :param context: The Dagster sensor evaluation context
     :param s3: Configured S3 resource
+    :param bucket_prefix: Prefix of the Google Cloud Storage bucket to watch
+    :param object_filter_fn: Optional function to filter file names, returns a boolean
     :param run_config_fn: Optional function that returns a dictionary of run config
         values when given a `set` object of new keys
 
