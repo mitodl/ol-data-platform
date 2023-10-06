@@ -214,7 +214,7 @@ def upload_files(
             for file in files:
                 context.log.info(file)
                 relative_path = Path(
-                    str(file.relative_to(exports_path)).replace(f"/{file_type}", "")
+                    str(file.relative_to(exports_path)).replace(f"{file_type}/", "")
                 )
                 context.log.info(relative_path)
                 s3_key = f"{config.bucket_prefix}/{file_type}/{relative_path!s}"
