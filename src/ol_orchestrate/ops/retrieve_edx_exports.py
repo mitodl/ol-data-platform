@@ -89,8 +89,9 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
             context.log.info(blob.size)
             blob.download_to_filename(file_path)
             context.log.info(file_path)
+            file_date = str(match.group(1)).replace("-", "")
             downloaded_files.append(
-                [config.export_type, exports_path, file_name, match.group(1)]
+                [config.export_type, exports_path, file_name, file_date]
             )
     context.log.info("Downloaded archives: %s", downloaded_files)
     yield Output(
@@ -213,11 +214,13 @@ def upload_files(
             files = Path(exports_path).rglob(file_types[file_type])
             for file in files:
                 context.log.info(file)
-                relative_path = Path(
-                    str(file.relative_to(exports_path)).replace(f"{file_type}/", "")
+                relative_path = str(file.relative_to(exports_path)).replace(
+                    f"{file_type}/", ""
                 )
+                if export_type == "courses":
+                    relative_path = f"{file_date}/{relative_path}"
                 context.log.info(relative_path)
-                s3_key = f"{config.bucket_prefix}/{file_type}/{relative_path!s}"
+                s3_key = f"{config.bucket_prefix}/{file_type}/{relative_path}"
                 s3_path = f"s3://{config.edx_irx_exports_bucket}/{s3_key}"
                 context.log.info(s3_path)
                 context.resources.s3.upload_file(
