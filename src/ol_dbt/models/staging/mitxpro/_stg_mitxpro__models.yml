@@ -847,12 +847,18 @@ models:
     description: number, total order amount
     tests:
     - not_null
-  - name: order_updated_on
-    description: timestamp, specifying when the order was most recently updated
-    tests:
-    - not_null
   - name: order_purchaser_user_id
     description: int, primary key in users_user for the purchaser
+    tests:
+    - not_null
+  - name: order_tax_country_code
+    description: string, the country code where the tax was applied
+  - name: order_tax_rate
+    description: numeric, the tax rate to apply
+  - name: order_tax_rate_name
+    description: string, name of the tax rate assessed
+  - name: order_updated_on
+    description: timestamp, specifying when the order was most recently updated
     tests:
     - not_null
   - name: order_created_on
