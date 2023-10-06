@@ -20,3 +20,7 @@ load_from:
     host: edxorg-program-credentials
     port: 4000
     location_name: edxorg-program-credentials
+- grpc_server:
+    host: edxorg-raw-data-import
+    port: 4000
+    location_name: edxorg-raw-data-import
