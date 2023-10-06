@@ -23,11 +23,13 @@ def check_new_gcs_assets_sensor(  # noqa: PLR0913
     object_filter_fn: Callable[[str], bool] = dummy_filter,
     run_config_fn: Callable[[set[str]], dict] = dummy_run_config_fn,
 ):
-    """Check S3 bucket for new files to operate on.
+    """Check GCS bucket for new files to operate on.
 
     :param bucket_name: Name of the Google Cloud Storage bucket to watch
     :param context: The Dagster sensor evaluation context
-    :param s3: Configured GCSConnection resource
+    :param gcp_gcs: Configured GCSConnection resource
+    :param bucket_prefix: Prefix of the Google Cloud Storage bucket to watch
+    :param object_filter_fn: Optional function to filter file names, returns a boolean
     :param run_config_fn: Optional function that returns a dictionary of run config
         values when given a `set` object of new keys
 
@@ -63,6 +65,8 @@ def check_new_s3_assets_sensor(  # noqa: PLR0913
     :param bucket_name: Name of the S3 bucket to watch
     :param context: The Dagster sensor evaluation context
     :param s3: Configured S3 resource
+    :param bucket_prefix: Prefix of the Google Cloud Storage bucket to watch
+    :param object_filter_fn: Optional function to filter file names, returns a boolean
     :param run_config_fn: Optional function that returns a dictionary of run config
         values when given a `set` object of new keys
 
