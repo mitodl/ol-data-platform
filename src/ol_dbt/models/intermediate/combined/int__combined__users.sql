@@ -35,8 +35,8 @@ with mitxonline_users as (
         , user_company
         , user_job_title
         , user_industry
-        , users.user_joined_on
-        , users.user_last_login
+        , user_joined_on
+        , user_last_login
     from mitxonline_users
 
     union all
@@ -53,8 +53,8 @@ with mitxonline_users as (
         , user_company
         , user_job_title
         , user_industry
-        , users.user_joined_on
-        , users.user_last_login
+        , user_joined_on
+        , user_last_login
     from mitxpro_users
 
     union all
@@ -71,8 +71,8 @@ with mitxonline_users as (
         , user_company
         , user_job_title
         , user_industry
-        , users.user_joined_on
-        , users.user_last_login
+        , user_joined_on
+        , user_last_login
     from bootcamps_users
 
     union all
@@ -89,8 +89,8 @@ with mitxonline_users as (
         , micromasters_users.user_company_name as user_company
         , micromasters_users.user_job_position as user_job_title
         , micromasters_users.user_company_industry as user_industry
-        , edxorg_users.users.user_joined_on
-        , edxorg_users.users.user_last_login
+        , edxorg_users.user_joined_on
+        , edxorg_users.user_last_login
     from edxorg_users
     left join micromasters_users on edxorg_users.user_username = micromasters_users.user_edxorg_username
 )
