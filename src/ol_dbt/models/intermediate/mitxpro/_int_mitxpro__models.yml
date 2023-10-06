@@ -713,6 +713,12 @@ models:
   - name: couponpaymentversion_id
     description: int, foreign key to ecommerce_couponpaymentversion for orders that
       use a coupon
+  - name: order_tax_country_code
+    description: string, the country code where the tax was applied
+  - name: order_tax_rate
+    description: numeric, the tax rate to apply
+  - name: order_tax_rate_name
+    description: string, name of the tax rate assessed
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__ecommerce_order')
