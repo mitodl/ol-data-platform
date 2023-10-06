@@ -29,6 +29,8 @@ with mitxonline_users as (
         , mitxonline_users.user_company
         , mitxonline_users.user_job_title
         , mitxonline_users.user_industry
+        , mitxonline_users.user_joined_on
+        , mitxonline_users.user_last_login
         , true as is_mitxonline_user
     from mitxonline_users
 )
@@ -43,6 +45,8 @@ with mitxonline_users as (
         , edxorg_users.user_highest_education
         , edxorg_users.user_gender
         , edxorg_users.user_birth_year
+        , edxorg_users.user_joined_on
+        , edxorg_users.user_last_login
         , micromasters_users.user_company_name
         , micromasters_users.user_company_industry
         , micromasters_users.user_job_position
@@ -59,6 +63,10 @@ with mitxonline_users as (
         , edxorg_users_view.user_edxorg_username
         , mitxonline_users_view.user_mitxonline_email
         , edxorg_users_view.user_edxorg_email
+        , mitxonline_users_view.user_joined_on as user_joined_on_mitxonline
+        , edxorg_users_view.user_joined_on as user_joined_on_edxorg
+        , mitxonline_users_view.user_last_login as user_last_login_on_mitxonline
+        , edxorg_users_view.user_last_login as user_last_login_on_edxorg
         , coalesce(mitxonline_users_view.is_mitxonline_user is not null, false) as is_mitxonline_user
         , coalesce(edxorg_users_view.is_edxorg_user is not null, false) as is_edxorg_user
         , coalesce(mitxonline_users_view.user_full_name, edxorg_users_view.user_full_name) as user_full_name
