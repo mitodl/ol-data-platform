@@ -477,13 +477,13 @@ python-dateutil = "*"
 
 [[package]]
 name = "dagster"
-version = "1.5.1"
+version = "1.5.2"
 description = "Dagster is an orchestration platform for the development, production, and observation of data assets."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-1.5.1-py3-none-any.whl", hash = "sha256:8353a263d4293f6e652a6d8ec6d7ec221e6b5f15aa3ea149bb182c2f972185d5"},
-    {file = "dagster-1.5.1.tar.gz", hash = "sha256:ae4e71b03ed279c97fcb715887a30f0423ebde395f33c22fe2f0d39451279488"},
+    {file = "dagster-1.5.2-py3-none-any.whl", hash = "sha256:d0a40ae77bfbd464f2f4ebe745c31a85d7312ea48d3ee1edb42cdd490d2bb5ad"},
+    {file = "dagster-1.5.2.tar.gz", hash = "sha256:18dd70886fbb3440e9909db215e36d3e4eafe71cb7fec9c0d916b8ac57d7c933"},
 ]
 
 [package.dependencies]
@@ -491,7 +491,7 @@ alembic = ">=1.2.1,<1.6.3 || >1.6.3,<1.7.0 || >1.7.0,<1.11.0 || >1.11.0"
 click = ">=5.0"
 coloredlogs = ">=6.1,<=14.0"
 croniter = ">=0.3.34"
-dagster-pipes = "1.5.1"
+dagster-pipes = "1.5.2"
 docstring-parser = "*"
 grpcio = ">=1.44.0"
 grpcio-health-checking = ">=1.44.0"
@@ -527,37 +527,37 @@ test = ["buildkite-test-collector", "docker", "grpcio-tools (>=1.44.0)", "mock (
 
 [[package]]
 name = "dagster-airbyte"
-version = "0.21.1"
+version = "0.21.2"
 description = "Package for integrating Airbyte with Dagster."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-airbyte-0.21.1.tar.gz", hash = "sha256:c4fecc292d633538533530f05ba4d576f36e0fd2dc9553fa01f93033ebf17f6a"},
-    {file = "dagster_airbyte-0.21.1-py3-none-any.whl", hash = "sha256:7c0a9ace66ecb8648ef927f8ea205188ed5f22c4e1dd4212e114f00fc87aebed"},
+    {file = "dagster-airbyte-0.21.2.tar.gz", hash = "sha256:079f817ff9655364507b0d9f33255d26e46e58747e51652804242161cd3e01a1"},
+    {file = "dagster_airbyte-0.21.2-py3-none-any.whl", hash = "sha256:a28a708ff0fa05ed774c54fd32eb2d7db894e0f5be119bb1ee8271fbbcfeb80b"},
 ]
 
 [package.dependencies]
-dagster = "1.5.1"
+dagster = "1.5.2"
 requests = "*"
 
 [package.extras]
-managed = ["dagster-managed-elements (==0.21.1)"]
+managed = ["dagster-managed-elements (==0.21.2)"]
 test = ["requests-mock"]
 
 [[package]]
 name = "dagster-aws"
-version = "0.21.1"
+version = "0.21.2"
 description = "Package for AWS-specific Dagster framework solid and resource components."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-aws-0.21.1.tar.gz", hash = "sha256:a9ccd6b6a1c5ddb4363fc9489533b6c175e7b344b34858ff28e5940a96653540"},
-    {file = "dagster_aws-0.21.1-py3-none-any.whl", hash = "sha256:bb3bcee509fbefee268dc80d89449f8319aff9ba284d843f684d8969cd094bc7"},
+    {file = "dagster-aws-0.21.2.tar.gz", hash = "sha256:3a5ebdf3cdc28de156d4d0ee693a800a3160f48e7a10a76bba56d0585d7a02b3"},
+    {file = "dagster_aws-0.21.2-py3-none-any.whl", hash = "sha256:69f69da112a496392b8b88e61dcf95cc27555442cdb27aeb2a9dde2f9b7f9f1a"},
 ]
 
 [package.dependencies]
 boto3 = "*"
-dagster = "1.5.1"
+dagster = "1.5.2"
 packaging = "*"
 requests = "*"
 
@@ -568,17 +568,17 @@ test = ["botocore", "moto[s3,server] (>=2.2.8)", "requests-mock", "xmltodict (==
 
 [[package]]
 name = "dagster-dbt"
-version = "0.21.1"
+version = "0.21.2"
 description = "A Dagster integration for dbt"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-dbt-0.21.1.tar.gz", hash = "sha256:568f804113191ca13d786178973e3a29a4fb0083beb25a03e03857226e1303ca"},
-    {file = "dagster_dbt-0.21.1-py3-none-any.whl", hash = "sha256:ada3b2df342e8842c7d4bd727abac747d1ffcd0d05dbf6da17865dcfa6e35f56"},
+    {file = "dagster-dbt-0.21.2.tar.gz", hash = "sha256:aa819c76dd7790b1c6738b499ace47f5d8ceb516ff08edf68e11abba7f8c1c17"},
+    {file = "dagster_dbt-0.21.2-py3-none-any.whl", hash = "sha256:14295ddfd8ca09fb8b54e62808711051ec9eeb06ebce6da1af483900d4909784"},
 ]
 
 [package.dependencies]
-dagster = "1.5.1"
+dagster = "1.5.2"
 dbt-core = "<1.7"
 Jinja2 = "*"
 networkx = "*"
@@ -593,33 +593,33 @@ test = ["dagster-duckdb", "dagster-duckdb-pandas", "dbt-duckdb"]
 
 [[package]]
 name = "dagster-docker"
-version = "0.21.1"
+version = "0.21.2"
 description = "A Dagster integration for docker"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-docker-0.21.1.tar.gz", hash = "sha256:e4a765f54f842efa0f89a70c7ea1b470cc8e54ae287186ceb75f1ba883b3cd85"},
-    {file = "dagster_docker-0.21.1-py3-none-any.whl", hash = "sha256:a954d63f1bfd9c08c480aa95df10921aa70cc403916ce7335a356bd92a6d800e"},
+    {file = "dagster-docker-0.21.2.tar.gz", hash = "sha256:f995bb34f4873ea39915963d62757a87c344fb14283ef6dbf399c2d8ad3eeb7b"},
+    {file = "dagster_docker-0.21.2-py3-none-any.whl", hash = "sha256:62afff1ef6532111cab4e11e8b6fb0e61802e4eb6ec890825a21b9c02404b1d6"},
 ]
 
 [package.dependencies]
-dagster = "1.5.1"
+dagster = "1.5.2"
 docker = "*"
 docker-image-py = "*"
 
 [[package]]
 name = "dagster-duckdb"
-version = "0.21.1"
+version = "0.21.2"
 description = "Package for DuckDB-specific Dagster framework op and resource components."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-duckdb-0.21.1.tar.gz", hash = "sha256:c56b1c6f8c86a6dc988185db53c0d0b4f14cde751ef6e2ec2a4099952d885151"},
-    {file = "dagster_duckdb-0.21.1-py3-none-any.whl", hash = "sha256:aa3c223d14345e9262f934198820e1118379195fef4d4d7fee7204173b8cf76f"},
+    {file = "dagster-duckdb-0.21.2.tar.gz", hash = "sha256:af71af258ae5341326074511c618afdfd80300f5075da5e2572d377bf86f2fee"},
+    {file = "dagster_duckdb-0.21.2-py3-none-any.whl", hash = "sha256:f802a1c6e0389a5b653d7e378aec90e815a256c5c425de1d717ed3a6f5a0de33"},
 ]
 
 [package.dependencies]
-dagster = "1.5.1"
+dagster = "1.5.2"
 duckdb = "*"
 
 [package.extras]
@@ -628,18 +628,18 @@ pyspark = ["pyspark (>=3)"]
 
 [[package]]
 name = "dagster-gcp"
-version = "0.21.1"
+version = "0.21.2"
 description = "Package for GCP-specific Dagster framework op and resource components."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-gcp-0.21.1.tar.gz", hash = "sha256:d936f777eead37ff68ce0301b59e1bf9821ffc20f6fea7c5931ca4b01e1b078e"},
-    {file = "dagster_gcp-0.21.1-py3-none-any.whl", hash = "sha256:ddfafcc129163e40f04aa73b9d19ca5b7d2c6aa4406f801759544710a4efdb6f"},
+    {file = "dagster-gcp-0.21.2.tar.gz", hash = "sha256:2e4175cab69871f630deefaee18301e19c5e5c91b17a9c83c73b9c2dbd32f74c"},
+    {file = "dagster_gcp-0.21.2-py3-none-any.whl", hash = "sha256:82dfa2879d9b6a1da456b179ec9f65dc6c29e9eaff36621838cba0190e380e91"},
 ]
 
 [package.dependencies]
-dagster = "1.5.1"
-dagster-pandas = "0.21.1"
+dagster = "1.5.2"
+dagster-pandas = "0.21.2"
 db-dtypes = "*"
 google-api-python-client = "*"
 google-cloud-bigquery = "*"
@@ -651,17 +651,17 @@ pyarrow = ["pyarrow"]
 
 [[package]]
 name = "dagster-graphql"
-version = "1.5.1"
+version = "1.5.2"
 description = "The GraphQL frontend to python dagster."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-graphql-1.5.1.tar.gz", hash = "sha256:1fd51badeef229b467adf048b4c1332f2893eda3e1e5b62665c1f5a74ea178db"},
-    {file = "dagster_graphql-1.5.1-py3-none-any.whl", hash = "sha256:ba9c72a1071f53b7b9886ad90b8d47fa5ccc501a3db05f883924c509b153fdc4"},
+    {file = "dagster-graphql-1.5.2.tar.gz", hash = "sha256:0642e1fb8dfc4baea14795c4712a001245f6462b510f6ac86782faee1f6457d6"},
+    {file = "dagster_graphql-1.5.2-py3-none-any.whl", hash = "sha256:a2606e009ac6fc0c873b638deb512e63410fbf00411bdc9f2fbda0859a5d9f2d"},
 ]
 
 [package.dependencies]
-dagster = "1.5.1"
+dagster = "1.5.2"
 gql = {version = ">=3.0.0", extras = ["requests"]}
 graphene = ">=3"
 requests = "*"
@@ -669,77 +669,77 @@ starlette = "*"
 
 [[package]]
 name = "dagster-pandas"
-version = "0.21.1"
+version = "0.21.2"
 description = "Utilities and examples for working with pandas and dagster, an opinionated framework for expressing data pipelines"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-pandas-0.21.1.tar.gz", hash = "sha256:2aab1381b23ddb552ff7534a344ccb052793e9137bd88aa405bf4385eddf13d3"},
-    {file = "dagster_pandas-0.21.1-py3-none-any.whl", hash = "sha256:0e7c1b412796ae8f06b1721e4691a774a67884728ab54d8343b964a76747cfdd"},
+    {file = "dagster-pandas-0.21.2.tar.gz", hash = "sha256:87b1ddf504e86605b4feb7c8a2e0128a9590b9f93de37a862eccce0bcfb0f0a3"},
+    {file = "dagster_pandas-0.21.2-py3-none-any.whl", hash = "sha256:fb3b5f5d532f3a9ea10fa211c80d779feddf4fcab56b1c602b0a262f658c4dd1"},
 ]
 
 [package.dependencies]
-dagster = "1.5.1"
+dagster = "1.5.2"
 pandas = "*"
 
 [[package]]
 name = "dagster-pipes"
-version = "1.5.1"
+version = "1.5.2"
 description = "Toolkit for Dagster integrations with transform logic outside of Dagster"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-pipes-1.5.1.tar.gz", hash = "sha256:5c31b7f7c7449cfbdea0a9c65651ed389073fe0e464699c6e2a9305499eac7ae"},
-    {file = "dagster_pipes-1.5.1-py3-none-any.whl", hash = "sha256:740739cc82f75cd82af07dc2747840fb4d53490b2be3cba3356afbb25d5ddedc"},
+    {file = "dagster-pipes-1.5.2.tar.gz", hash = "sha256:369b6aa7e06bb33443f6875c929e2d4ceb4766a5b24ec3017c5620e2f444813a"},
+    {file = "dagster_pipes-1.5.2-py3-none-any.whl", hash = "sha256:1de630d439b17212dddca092970087b58e9fe38812d9d6fb4fe6e6e18f28b146"},
 ]
 
 [[package]]
 name = "dagster-postgres"
-version = "0.21.1"
+version = "0.21.2"
 description = "A Dagster integration for postgres"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-postgres-0.21.1.tar.gz", hash = "sha256:d600f6300461ff4f1222ed74995868af54e4d8eb627e4f16e89c164a4e46696d"},
-    {file = "dagster_postgres-0.21.1-py3-none-any.whl", hash = "sha256:66dae0c639bbac150f7cfdacb644ce412890c31e232488ae456c26d144fcf8ed"},
+    {file = "dagster-postgres-0.21.2.tar.gz", hash = "sha256:fb41b0a472f0294df8ad16fb795e802273e87705d3d64204b5ef63ecebf81929"},
+    {file = "dagster_postgres-0.21.2-py3-none-any.whl", hash = "sha256:c190edd4f229733189625ffc148921ad85dce4204026e7aab60eb80c46306943"},
 ]
 
 [package.dependencies]
-dagster = "1.5.1"
+dagster = "1.5.2"
 psycopg2-binary = "*"
 
 [[package]]
 name = "dagster-shell"
-version = "0.21.1"
+version = "0.21.2"
 description = "Package for Dagster shell ops."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-shell-0.21.1.tar.gz", hash = "sha256:74c4524e0a3a73b0e9a1e97ab489e6ddbecea7e496d35cd8a1b0767e8a1e3c73"},
-    {file = "dagster_shell-0.21.1-py3-none-any.whl", hash = "sha256:10b4c5111befb96bb8b53d7751fc1c7500f97f210781a7e7fdf91571e71ac9d0"},
+    {file = "dagster-shell-0.21.2.tar.gz", hash = "sha256:a7c8fe5ef0891e556e2bfb1b3daef322a594b6d02546eaae60c556404866e0b0"},
+    {file = "dagster_shell-0.21.2-py3-none-any.whl", hash = "sha256:45baa8c641b6967e68146a18915065d68782d942b131e9f8fda569c3f9a675ae"},
 ]
 
 [package.dependencies]
-dagster = "1.5.1"
+dagster = "1.5.2"
 
 [package.extras]
 test = ["psutil"]
 
 [[package]]
 name = "dagster-webserver"
-version = "1.5.1"
+version = "1.5.2"
 description = "Web UI for dagster."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster_webserver-1.5.1-py3-none-any.whl", hash = "sha256:ef2b10139a43ae74e3121f3c55644f067ea77259035d440ddbcda2f54c67649d"},
-    {file = "dagster_webserver-1.5.1.tar.gz", hash = "sha256:69980096bbb9692d82799d5a522a99373914dba8b664b174ddc1b0c75efcb269"},
+    {file = "dagster_webserver-1.5.2-py3-none-any.whl", hash = "sha256:4cae8eff804a24261ea27f3716f5eb73ac7fa73b6192263b8969390746a6befc"},
+    {file = "dagster_webserver-1.5.2.tar.gz", hash = "sha256:f21f8a0c97cf30dab5dde5727b21530c9a89ac3041602053b56c0d1063eac477"},
 ]
 
 [package.dependencies]
 click = ">=7.0,<9.0"
-dagster = "1.5.1"
-dagster-graphql = "1.5.1"
+dagster = "1.5.2"
+dagster-graphql = "1.5.2"
 starlette = "*"
 uvicorn = {version = "*", extras = ["standard"]}
 
