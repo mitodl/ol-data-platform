@@ -74,9 +74,9 @@ def check_new_s3_assets_sensor(  # noqa: PLR0913
     """
     bucket_files = {
         obj["Key"]
-        for obj in s3.list_objects_v2(Bucket=bucket_name, Prefix=bucket_prefix).get(
-            "Contents", []
-        )
+        for obj in s3.list_objects_objects_v2(
+            Bucket=bucket_name, Prefix=bucket_prefix, MaxKeys=100_000
+        ).get("Contents", [])
         if object_filter_fn(obj["Key"])
     }
     new_files: set[str] = bucket_files - set(json.loads(context.cursor or "[]"))
