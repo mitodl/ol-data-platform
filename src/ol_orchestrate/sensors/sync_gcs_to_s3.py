@@ -72,13 +72,18 @@ def check_new_s3_assets_sensor(  # noqa: PLR0913
 
     :yields: RunRequest or SkipReason if there are no new files to operate on
     """
-    bucket_files = {
-        obj["Key"]
-        for obj in s3.list_objects_v2(
-            Bucket=bucket_name, Prefix=bucket_prefix, MaxKeys=100_000
-        ).get("Contents", [])
-        if object_filter_fn(obj["Key"])
-    }
+    pages = s3.get_paginator("list_objects_v2").paginate(
+        Bucket=bucket_name, Prefix=bucket_prefix
+    )
+    bucket_files = set()
+    for page in pages:
+        bucket_files.update(
+            {
+                obj["Key"]
+                for obj in page.get("Contents", [])
+                if object_filter_fn(obj["Key"])
+            }
+        )
     new_files: set[str] = bucket_files - set(json.loads(context.cursor or "[]"))
     if new_files:
         context.update_cursor(json.dumps(list(bucket_files)))
