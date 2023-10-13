@@ -18,6 +18,10 @@ with mitxonline_users as (
     select * from {{ ref('int__edxorg__mitx_users') }}
 )
 
+, micromasters_users as (
+    select * from {{ ref('int__micromasters__users') }}
+)
+
 , combined_users as (
     select
         '{{ var("mitxonline") }}' as platform
@@ -28,6 +32,11 @@ with mitxonline_users as (
         , user_highest_education
         , user_gender
         , user_birth_year
+        , user_company
+        , user_job_title
+        , user_industry
+        , user_joined_on
+        , user_last_login
     from mitxonline_users
 
     union all
@@ -41,7 +50,11 @@ with mitxonline_users as (
         , user_highest_education
         , user_gender
         , user_birth_year
-
+        , user_company
+        , user_job_title
+        , user_industry
+        , user_joined_on
+        , user_last_login
     from mitxpro_users
 
     union all
@@ -55,21 +68,31 @@ with mitxonline_users as (
         , user_highest_education
         , user_gender
         , user_birth_year
+        , user_company
+        , user_job_title
+        , user_industry
+        , user_joined_on
+        , user_last_login
     from bootcamps_users
 
     union all
 
     select
         '{{ var("edxorg") }}' as platform
-        , user_id
-        , user_username
-        , user_email
-        , user_country as user_address_country
-        , user_highest_education
-        , user_gender
-        , user_birth_year
-
+        , edxorg_users.user_id
+        , edxorg_users.user_username
+        , edxorg_users.user_email
+        , edxorg_users.user_country as user_address_country
+        , edxorg_users.user_highest_education
+        , edxorg_users.user_gender
+        , edxorg_users.user_birth_year
+        , micromasters_users.user_company_name as user_company
+        , micromasters_users.user_job_position as user_job_title
+        , micromasters_users.user_company_industry as user_industry
+        , edxorg_users.user_joined_on
+        , edxorg_users.user_last_login
     from edxorg_users
+    left join micromasters_users on edxorg_users.user_username = micromasters_users.user_edxorg_username
 )
 
 select * from combined_users
