@@ -34,11 +34,13 @@ def earliest_log_date(
             "mitx": datetime(2021, 3, 10, tzinfo=UTC),
             "mitxonline": datetime(2021, 7, 26, tzinfo=UTC),
             "xpro": datetime(2021, 3, 31, tzinfo=UTC),
+            "edxorg": datetime(2021, 3, 31, tzinfo=UTC),
         },
         "production": {
             "mitx": datetime(2017, 6, 13, tzinfo=UTC),
             "mitxonline": datetime(2021, 8, 18, tzinfo=UTC),
             "xpro": datetime(2019, 8, 28, tzinfo=UTC),
+            "edxorg": datetime(2019, 8, 28, tzinfo=UTC),
         },
     }
     return date_map[dagster_env][deployment_name]
@@ -50,7 +52,12 @@ def daily_tracking_log_config(
     global dagster_env  # noqa: PLW0603
     if dagster_env == "dev":
         dagster_env = "qa"
-    log_bucket = f"{deployment}-{dagster_env}-edxapp-tracking"
+        path_prefix = "edxorg-raw-data/logs" if deployment == "edxorg" else "logs"
+    log_bucket = (
+        f"ol-data-lake-landing-zone-{dagster_env}"
+        if deployment == "edxorg"
+        else f"{deployment}-{dagster_env}-edxapp-tracking"
+    )
     session = Session()
     credentials = session.get_credentials()
     current_credentials = credentials.get_frozen_credentials()
@@ -73,7 +80,7 @@ def daily_tracking_log_config(
                 "config": {
                     "tracking_log_bucket": log_bucket,
                     **s3_creds,
-                    "path_prefix": "logs" if destination == "valid" else "valid",
+                    "path_prefix": path_prefix if destination == "valid" else "valid",
                 },
                 "inputs": {
                     "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
@@ -82,8 +89,12 @@ def daily_tracking_log_config(
             "export_processed_data_to_s3": {
                 "config": {
                     "tracking_log_bucket": log_bucket,
-                    "source_path_prefix": "logs" if destination == "valid" else "valid",
-                    "destination_path_prefix": destination,
+                    "source_path_prefix": path_prefix
+                    if destination == "valid"
+                    else "valid",
+                    "destination_path_prefix": f"{path_prefix}/{destination}"
+                    if deployment == "edxorg"
+                    else destination,
                 },
                 "inputs": {
                     "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
@@ -105,7 +116,7 @@ normalize_logs = Definitions(
             )(partial(daily_tracking_log_config, deployment, "valid")),
             name=f"normalize_{deployment}_{dagster_env}_tracking_logs",
         )
-        for deployment in ["xpro", "mitx", "mitxonline"]
+        for deployment in ["xpro", "mitx", "mitxonline", "edxorg"]
     ]
     + [
         jsonify_tracking_logs.to_job(
@@ -114,6 +125,6 @@ normalize_logs = Definitions(
             )(partial(daily_tracking_log_config, deployment, "logs")),
             name=f"jsonify_{deployment}_{dagster_env}_tracking_logs",
         )
-        for deployment in ["xpro", "mitx", "mitxonline"]
+        for deployment in ["xpro", "mitx", "mitxonline", "edxorg"]
     ],
 )
