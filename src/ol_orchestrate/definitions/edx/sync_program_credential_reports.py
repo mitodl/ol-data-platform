@@ -11,7 +11,7 @@ from ol_orchestrate.ops.object_storage import (
     upload_files_to_s3,
 )
 from ol_orchestrate.resources.outputs import SimpleResultsDir
-from ol_orchestrate.sensors.sync_gcs_to_s3 import check_new_s3_assets_sensor
+from ol_orchestrate.sensors.object_storage import check_new_s3_assets_sensor
 
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
 download_config = S3DownloadConfig(
