@@ -17,7 +17,7 @@ from ol_orchestrate.jobs.retrieve_edx_exports import (
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.outputs import DailyResultsDir
-from ol_orchestrate.sensors.sync_gcs_to_s3 import check_new_gcs_assets_sensor
+from ol_orchestrate.sensors.object_storage import check_new_gcs_assets_sensor
 
 dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: PGH003
     "DAGSTER_ENVIRONMENT", "dev"
