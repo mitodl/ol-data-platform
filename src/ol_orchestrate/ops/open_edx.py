@@ -150,6 +150,33 @@ def list_courses(config: ListCoursesConfig) -> List[String]:
 
 
 @op(
+    name="retrieve_edx_course_structure",
+    description=(
+        "Retrieve the JSON document describing the structure of the selected "
+        "course from a running Open edX instance."
+    ),
+    required_resource_keys={"openedx", "results_dir"},
+    ins={"course_ids": In()},
+    out={"course_structures": Out()},
+)
+def fetch_edx_course_structure(
+    context: OpExecutionContext, course_ids: list[str]
+) -> DagsterPath:
+    structures_file = context.resources.results_dir.path.joinpath(
+        "course_structures.json"
+    )
+    with structures_file.open() as structures:
+        for course_id in course_ids:
+            context.log.info("Retrieving course structure for %s", course_id)
+            course_structure = context.resources.openedx.get_course_structure_document(
+                course_id
+            )
+            structures.write(course_structure)
+            structures.write("\n")
+    return Output(structures_file, "course_structures")
+
+
+@op(
     required_resource_keys={"sqldb", "results_dir"},
     ins={
         "edx_course_ids": In(
