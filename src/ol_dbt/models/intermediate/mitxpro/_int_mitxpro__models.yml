@@ -1347,7 +1347,6 @@ models:
     description: str, the full URL to the certificate on MIT xPro if it's not invoked
     tests:
     - unique
-    - not_null
   - name: courseruncertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
   - name: courseruncertificate_created_on

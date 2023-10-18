@@ -19,8 +19,6 @@ select
     platform
     , courseruncertificate_url
     , courseruncertificate_created_on
-    , user_id
-    , courserun_id
     , courserun_title
     , courserun_readable_id
     , if(platform = '{{ var("mitxonline") }}', user_mitxonline_username, user_edxorg_username) as user_username
@@ -34,8 +32,6 @@ select
     '{{ var("mitxpro") }}' as platform
     , courseruncertificate_url
     , courseruncertificate_created_on
-    , user_id
-    , courserun_id
     , courserun_title
     , courserun_readable_id
     , user_username
@@ -49,8 +45,6 @@ select
     '{{ var("bootcamps") }}' as platform
     , courseruncertificate_url
     , courseruncertificate_created_on
-    , user_id
-    , courserun_id
     , courserun_title
     , courserun_readable_id
     , user_username

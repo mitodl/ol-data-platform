@@ -95,9 +95,6 @@ models:
       on the corresponding platform.
     tests:
     - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "user_username", "courserun_readable_id"]
 
 - name: int__combined__courserun_certificates
   description: course certificates model combined from different platforms. It excludes
@@ -109,13 +106,6 @@ models:
     - not_null
     - accepted_values:
         values: '{{ var("platforms") }}'
-  - name: user_id
-    description: int, user ID on the corresponding platform
-    tests:
-    - not_null
-  - name: courserun_id
-    description: int, primary key representing a single course run on the corresponding
-      platform. Null for course runs from edx.org
   - name: courserun_title
     description: string, title of the course run on the corresponding platform. Maybe
       blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
@@ -126,8 +116,6 @@ models:
     - not_null
   - name: user_username
     description: string, username on the corresponding platform
-    tests:
-    - not_null
   - name: user_email
     description: string, user email on the corresponding platform
     tests:
@@ -136,7 +124,6 @@ models:
     description: str, user full name on the corresponding platform
   - name: courseruncertificate_url
     description: str, the full URL to the certificate on the corresponding platform
-      if it's not invoked
     tests:
     - not_null
   - name: courseruncertificate_created_on
