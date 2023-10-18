@@ -9,7 +9,7 @@ with enrollments as (
 )
 
 , users as (
-    select * from {{ ref('stg__bootcamps__app__postgres__auth_user') }}
+    select * from {{ ref('int__bootcamps__users') }}
 )
 
 , bootcamps_enrollments as (
@@ -24,6 +24,7 @@ with enrollments as (
         , runs.courserun_title
         , users.user_username
         , users.user_email
+        , users.user_full_name
     from enrollments
     inner join runs on enrollments.courserun_id = runs.courserun_id
     inner join users on enrollments.user_id = users.user_id

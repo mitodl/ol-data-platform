@@ -1255,6 +1255,11 @@ models:
     - relationships:
         to: ref('stg__mitxpro__app__postgres__users_user')
         field: user_id
+  - name: courseruncertificate_url
+    description: str, the full URL to the certificate on xPro if it's not invoked
+    tests:
+    - unique
+    - not_null
   - name: certificate_page_revision_id
     description: int, foreign key to wagtailcore_pagerevision (could be blank)
   - name: courseruncertificate_created_on
