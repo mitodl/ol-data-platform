@@ -61,6 +61,7 @@ templater = "jinja"
 dialect = "hive"
 sql_file_exts = ".sql,.sql.j2,.dml,.ddl"
 max_line_length = 120
+exclude_rules = "CV10"
 
 [tool.sqlfluff.templater]
 unwrap_wrapped_queries = true

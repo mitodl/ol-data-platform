@@ -312,3 +312,128 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]
+
+- name: stg__edxorg__s3__program_learner_report
+  description: learners program and course records in MicroMasters and XSeries programs
+    from edX.org
+  columns:
+  - name: org_id
+    description: str, the name of the organization that is the author for the program
+      for which this report was generated. Currently, it's MITx for all records.
+    tests:
+    - not_null
+  - name: program_type
+    description: str, the type of the program. The value are 'MicroMasters' and 'XSeries'
+      for MITx programs on edX.org
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['MicroMasters', 'XSeries']
+  - name: program_uuid
+    description: str, the UUID of the program on edX.org. 'MIT Finance' and 'Finance'
+      are two different UUIDs, as they have different required courses. 'Statistics
+      and Data Science' is split into 'Statistics and Data Science' and 'Statistics
+      and Data Science (General track)', which are also two different program UUIDs.
+    tests:
+    - not_null
+  - name: program_title
+    description: str, title of the program on edX.org
+    tests:
+    - not_null
+  - name: user_id
+    description: int, the edX learner ID in the LMS in a user's course run enrollment
+      record.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the user on edX.org
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, the full name of an edX learner in the LMS in a user's user
+      profile record. Retired users will have no full name available.
+    tests:
+    - not_null
+  - name: user_roles
+    description: str, roles assigned to the user. A user can have multiple roles.
+      Values are beta_testers, data_researcher, finance_admin, sales_admin, instructor,
+      staff, etc.
+  - name: courserun_readable_id
+    description: str, the key of the course-run the learner has enrolled in, formatted
+      as course-v1:{org}+{course}+{run}
+    tests:
+    - not_null
+  - name: course_title
+    description: str, the course run title on edX.org
+    tests:
+    - not_null
+  - name: courserunenrollment_enrollment_mode
+    description: str, the course mode of the learner's enrollment in this course-run.
+      Also called enrollment mode. Values are 'audit', 'verified', 'honor' and 'credit'
+      in this table.
+    tests:
+    - not_null
+  - name: courserungrade_letter_grade
+    description: str, the letter grade for the user in the course run. This value
+      is based on the course run's grading policy. The letter grade may be blank if
+      the grading/credentials task has not yet run for this learner. Values are 'A',
+      'B', 'C', 'D', 'F', 'Pass'
+  - name: courserungrade_grade
+    description: str, the current grade for the user in this course-run as a decimal
+      (e.g. 0.84). If this value is null, the user does not yet have a course grade
+      in this course-run.
+  - name: courserunenrollment_is_active
+    description: boolean, whether the learner is currently enrolled in the course.
+    tests:
+    - not_null
+  - name: user_has_purchased_as_bundle
+    description: boolean, whether the learner has purchased this course as bundle.
+    tests:
+    - not_null
+  - name: user_has_completed_program
+    description: boolean, whether the learner has passed each of the courses in the
+      program with a grade that qualifies them for a verified certificate.
+    tests:
+    - not_null
+  - name: user_has_completed_course
+    description: boolean, whether the learner completed the course run. true if a
+      verified learner has earned a certificate in a course run that counts towards
+      program completion. This is based on the user's course certificate in the LMS.
+      A course certificate counts towards completion if the learner has passed the
+      course and the course run mode matches the mode of the course. Learner certificates
+      for unverified accounts do not count towards program completion until the account
+      is verified.
+  - name: completed_course_on
+    description: timestamp, the date in ISO-8601 format that the learner earned a
+      passing certificate for this course run. If a user passes the course before
+      verification, then the completed date will reflect the date the certificate
+      was generated for that verified learner.
+  - name: program_certificate_awarded_on
+    description: timestamp, the date in ISO-8601 format that the learner has passed
+      each of the courses in the program and was awarded a program certificate.
+  - name: courserun_start_on
+    description: timestamp, the start date of the course run in ISO-8601 string.
+    tests:
+    - not_null
+  - name: courserunenrollment_created_on
+    description: timestamp,the date in ISO-8601 format that the learner enrolled in
+      this course run for the first time. For example, if the learner enrolled in
+      the course run, unenrolled, and then re-enrolled, this value would represent
+      the time that they enrolled in the course run for the first time.
+    tests:
+    - not_null
+  - name: courseactivity_last_activity_date
+    description: date, the date in ISO-8601 format that the learner was last active
+      in the course run.
+  - name: courserunenrollment_unenrolled_on
+    description: timestamp, the date in ISO-8601 format that the learner last unenrolled
+      in this course run. This will be null if the learner has never unenrolled from
+      this course run. For example, if the learner enrolled in the course run, unenrolled,
+      reenrolled, and then unenrolled, this value would represent the most recent
+      time that they unenrolled in the course run.
+  - name: courserunenrollment_upgraded_on
+    description: timestamp, the date in ISO-8601 format that the learner first upgraded
+      to the verified track course mode.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id", "program_uuid"]

@@ -451,3 +451,99 @@ sources:
     - name: preference_set_datetime
       description: timestamp, specifying when email opt in preference was most recently
         updated
+
+  - name: raw__edxorg__program_learner_report
+    description: learners program and course performance in MicroMasters and XSeries
+      programs from edX.org
+    columns:
+    - name: authoring institution
+      description: str, the name of the organization that is the author for the program
+        for which this report was generated. Currently, it's MITx for all records.
+    - name: program type
+      description: str, the type of the program. The value are 'MicroMasters' and
+        'XSeries' for MITx programs on edX.org
+    - name: program uuid
+      description: str, the UUID of the program on edX.org. 'MIT Finance' and 'Finance'
+        are two different UUIDs, as they have different required courses. 'Statistics
+        and Data Science' is split into 'Statistics and Data Science' and 'Statistics
+        and Data Science (General track)', which are also two different program UUIDs
+    - name: program title
+      description: str, title of the program on edX.org
+    - name: user_id
+      description: str, the edX learner ID in the LMS in a user's course run enrollment
+        record.
+    - name: username
+      description: str, username of the user on edX.org
+    - name: name
+      description: str, The full name of an edX learner in the LMS in a user's user
+        profile record. Retired users will have no full name available.
+    - name: user roles
+      description: str, roles assigned to the user. A user can have multiple roles.
+        Values are beta_testers, data_researcher, finance_admin, sales_admin, instructor,
+        staff, etc.
+    - name: course run key
+      description: str, the key of the course-run the learner has enrolled in, formatted
+        as course-v1:{org}+{course}+{run}
+    - name: course title
+      description: str, the course run title on edX.org
+    - name: track
+      description: str, the course mode of the learner's enrollment in this course-run.
+        Also called enrollment mode. Values are 'audit', 'verified', 'honor' and 'credit'
+        in this table.
+    - name: letter grade
+      description: str, the letter grade for the user in the course run. This value
+        is based on the course run's grading policy. The letter grade may be blank
+        if the grading/credentials task has not yet run for this learner. Values are
+        'A', 'B', 'C', 'D', 'F', 'Pass'.
+    - name: grade
+      description: str, the current grade for the user in this course-run as a decimal
+        (e.g. 0.84). If this value is null, the user does not yet have a course grade
+        in this course-run.
+    - name: currently enrolled
+      description: str, whether the learner is currently enrolled in the course. 'true'
+        or 'false'
+    - name: purchased as bundle
+      description: str, whether the learner has purchased this course as bundle. 'true'
+        or 'false'
+    - name: completed
+      description: str, whether the learner completed the course run. 'true' if a
+        verified learner has earned a certificate in a course run that counts towards
+        program completion. This is based on the user's course certificate in the
+        LMS. A course certificate counts towards completion if the learner has passed
+        the course and the course run mode matches the mode of the course. Learner
+        certificates for unverified accounts do not count towards program completion
+        until the account is verified.
+    - name: completed program
+      description: str, whether the learner has passed each of the courses in the
+        program with a grade that qualifies them for a verified certificate. 'true'
+        or 'false'.
+    - name: date completed
+      description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that
+        the learner earned a passing certificate for this course run. If a user passes
+        the course before verification, then the completed date will reflect the date
+        the certificate was generated for that verified learner.
+    - name: date program certificate awarded
+      description: str, the date in the format 'YYYY-MM-DDTHH:mm:ssZ' in UTC that
+        the learner has passed each of the courses in the program and was awarded
+        a program certificate.
+    - name: last activity date
+      description: str, the date in the format 'YYYY-MM-DD' in UTC that the learner
+        was last active in the course run.
+    - name: date first enrolled
+      description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that
+        the learner enrolled in this course run for the first time. For example, if
+        the learner enrolled in the course run, unenrolled, and then re-enrolled,
+        this value would represent the time that they enrolled in the course run for
+        the first time.
+    - name: date last unenrolled
+      description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that
+        the learner last unenrolled in this course run. This will be null if the learner
+        has never unenrolled from this course run. For example, if the learner enrolled
+        in the course run, unenrolled, reenrolled, and then unenrolled, this value
+        would represent the most recent time that they unenrolled in the course run.
+    - name: date first upgraded to verified
+      description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that
+        the learner first upgraded to the verified track course mode.
+    - name: course run start date
+      description: str, the start date of the course run in the format 'YYYY-MM-DD
+        HH:mm:ss Z' in UTC
