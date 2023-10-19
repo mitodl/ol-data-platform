@@ -89,7 +89,7 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: str, user full name on the corresponding platform
+    description: str, user full name on user's profile on the corresponding platform
   - name: user_has_certificate
     description: boolean, indicating if user has earned certificate for enrolled course-run
       on the corresponding platform.
@@ -121,7 +121,7 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: str, user full name on the corresponding platform
+    description: str, user full name on user's profile on the corresponding platform
   - name: courseruncertificate_url
     description: str, the full URL to the certificate on the corresponding platform
     tests:

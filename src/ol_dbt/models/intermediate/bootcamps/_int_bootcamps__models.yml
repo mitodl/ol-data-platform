@@ -159,7 +159,7 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: string, full name
+    description: string, full name on user's profile
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__courserunenrollment')
@@ -216,7 +216,7 @@ models:
     - unique
     - not_null
   - name: user_full_name
-    description: string, full name
+    description: string, full name on user's profile
   - name: user_email
     description: string, email
     tests:
@@ -329,7 +329,7 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: string, full name
+    description: string, full name on user's profile
   - name: courseruncertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: courseruncertificate_updated_on
