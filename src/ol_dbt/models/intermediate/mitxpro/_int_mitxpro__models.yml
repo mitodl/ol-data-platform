@@ -918,6 +918,10 @@ models:
     description: str, user email associated with their account
     tests:
     - not_null
+  - name: user_full_name
+    description: str, the user's full name
+    tests:
+    - not_null
   - name: ecommerce_order_id
     description: int, id of order associated with the payment for the enrollment
   - name: ecommerce_company_id
@@ -1339,6 +1343,10 @@ models:
     - relationships:
         to: ref('int__mitxpro__users')
         field: user_id
+  - name: courseruncertificate_url
+    description: str, the full URL to the certificate on MIT xPro if it's not invoked
+    tests:
+    - unique
   - name: courseruncertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
   - name: courseruncertificate_created_on
@@ -1361,6 +1369,10 @@ models:
     - not_null
   - name: user_email
     description: str, email
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, the user's full name
     tests:
     - not_null
   tests:

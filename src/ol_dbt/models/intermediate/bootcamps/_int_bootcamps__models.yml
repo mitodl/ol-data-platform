@@ -158,6 +158,8 @@ models:
     description: str, user email associated with their account
     tests:
     - not_null
+  - name: user_full_name
+    description: string, full name on user's profile
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__courserunenrollment')
@@ -214,7 +216,7 @@ models:
     - unique
     - not_null
   - name: user_full_name
-    description: string, full name
+    description: string, full name on user's profile
   - name: user_email
     description: string, email
     tests:
@@ -308,6 +310,10 @@ models:
     - relationships:
         to: ref('int__bootcamps__users')
         field: user_id
+  - name: courseruncertificate_url
+    description: str, the full URL to the certificate on Bootcamps if it's not invoked
+    tests:
+    - unique
   - name: courseruncertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
   - name: courserun_title
@@ -322,6 +328,8 @@ models:
     description: string, email
     tests:
     - not_null
+  - name: user_full_name
+    description: string, full name on user's profile
   - name: courseruncertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: courseruncertificate_updated_on

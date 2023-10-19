@@ -13,6 +13,7 @@ with enrollments as (
         user_id
         , user_username
         , user_email
+        , user_full_name
     from {{ ref('stg__mitxpro__app__postgres__users_user') }}
 )
 
@@ -29,6 +30,7 @@ with enrollments as (
         , runs.courserun_title
         , users.user_username
         , users.user_email
+        , users.user_full_name
         , enrollments.ecommerce_company_id
         , enrollments.ecommerce_order_id
     from enrollments
