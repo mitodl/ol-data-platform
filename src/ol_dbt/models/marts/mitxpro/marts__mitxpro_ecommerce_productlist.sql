@@ -80,7 +80,7 @@ select
     ) as link
     , concat(programs.program_readable_id, '+', course_runs.courserun_tag) as product_parent_run_id
     , courses.cms_coursepage_duration as duration
-    , courses.cms_coursepage_format as format
+    , courses.cms_coursepage_format as course_format
     , courses.cms_coursepage_time_commitment as time_commitment
     , ecommerce_course_to_topics.coursetopic_name as coursetopic_names
     , ecommerce_product.product_is_private
@@ -119,7 +119,7 @@ select
     ) as link
     , null as product_parent_run_id
     , programs.cms_programpage_duration as duration
-    , programs.cms_programpage_format as format
+    , programs.cms_programpage_format as program_format
     , programs.cms_programpage_time_commitment as time_commitment
     , null as coursetopic_names
     , ecommerce_product.product_is_private
