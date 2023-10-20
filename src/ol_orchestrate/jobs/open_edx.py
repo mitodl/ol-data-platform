@@ -44,13 +44,15 @@ from ol_orchestrate.resources.sqlite_db import sqlite_db_resource
 def edx_course_pipeline():
     course_list = list_courses()
     extracts_upload = upload_extracted_data(
-        write_course_list_csv(edx_course_ids=course_list),
-        enrolled_users(edx_course_ids=course_list),
-        student_submissions(edx_course_ids=course_list),
-        course_roles(edx_course_ids=course_list),
-        user_roles(edx_course_ids=course_list),
-        course_enrollments(edx_course_ids=course_list),
-        export_edx_forum_database(),
+        uploads=[
+            write_course_list_csv(edx_course_ids=course_list),
+            enrolled_users(edx_course_ids=course_list),
+            student_submissions(edx_course_ids=course_list),
+            course_roles(edx_course_ids=course_list),
+            user_roles(edx_course_ids=course_list),
+            course_enrollments(edx_course_ids=course_list),
+            export_edx_forum_database(),
+        ]
     )
     export_edx_courses.with_hooks(
         {
