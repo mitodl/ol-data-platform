@@ -649,15 +649,7 @@ def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]
     name="edx_upload_daily_extracts",
     description="Upload all data from daily extracts to S3 for institutional research.",
     required_resource_keys={"results_dir", "s3"},
-    ins={
-        "edx_course_ids_csv": In(dagster_type=DagsterPath),
-        "edx_course_roles": In(dagster_type=DagsterPath),
-        "edx_user_roles": In(dagster_type=DagsterPath),
-        "edx_enrolled_users": In(dagster_type=DagsterPath),
-        "edx_student_submissions": In(dagster_type=DagsterPath),
-        "edx_enrollment_records": In(dagster_type=DagsterPath),
-        "edx_forum_data_directory": In(dagster_type=DagsterPath),
-    },
+    ins={"uploads": In(dagster_type=List[DagsterPath])},
     out={"edx_daily_extracts_directory": Out(dagster_type=String)},
 )
 def upload_extracted_data(
@@ -668,38 +660,8 @@ def upload_extracted_data(
     """Upload all data exports to S3 so that institutional research can ingest.
 
     :param context: Dagster execution context for propagaint configuration data
-    :type context: OpExecutionContext
-
-    :param edx_course_ids_csv: Flat file containing a list of course IDs active on the
-        Open edX instance.
-    :type edx_course_ids_csv: DagsterPath
-
-    :param edx_course_roles: Flat file containing tabular representation of course roles
-        in Open edX installation
-    :type edx_course_roles: DagsterPath
-
-    :param edx_user_roles: Flat file containing tabular representation of forum user
-        roles in Open edX installation
-    :type edx_user_roles: DagsterPath
-
-    :param edx_enrolled_users: Flat file containing tabular representation of users who
-        are enrolled in courses in Open edX installation
-    :type edx_enrolled_users: DagsterPath
-
-    :param edx_student_submissions: Flat file containing tabular representation of
-        student submissions in Open edX installation
-    :type edx_student_submissions: DagsterPath
-
-    :param edx_enrollment_records: Flat file containing tabular representation of
-        enrollment data in Open edX installation
-    :type edx_enrollment_records: DagsterPath
-
-    :param edx_forum_data_directory: Directory containing exported MongoDB database of
-        Open edX forum activity
-    :type edx_forum_data_directory: DagsterPath
-
-    :param config: Details pertaining to the S3 bucket to use for uploading results
-    :type Config
+    :param config: The configuration for the operation
+    :param uploads: The list of paths to upload to S3
 
     :yield: The S3 path of the uploaded directory
     """
