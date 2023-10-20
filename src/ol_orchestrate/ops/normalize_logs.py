@@ -95,7 +95,6 @@ def load_files_to_table(
             LOAD httpfs;
             SET s3_access_key_id="{config.s3_key}";
             SET s3_secret_access_key="{config.s3_secret}";
-            SET GLOBAL memory_limit="10GB";
             """
         )
         if config.s3_token:
