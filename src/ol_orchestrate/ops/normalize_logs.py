@@ -83,7 +83,7 @@ def load_files_to_table(
     s3_path = (
         f"s3://{source_bucket}/{path_prefix}/{log_date}**"
         if config.path_prefix == "logs"
-        else f"s3://{source_bucket}/{path_prefix}"
+        else f"s3://{source_bucket}/{path_prefix}**"
     )
     context.log.info(s3_path)
     with context.resources.duckdb.get_connection() as conn:

@@ -34,7 +34,7 @@ def earliest_log_date(
             "mitx": datetime(2021, 3, 10, tzinfo=UTC),
             "mitxonline": datetime(2021, 7, 26, tzinfo=UTC),
             "xpro": datetime(2021, 3, 31, tzinfo=UTC),
-            "edxorg": datetime(2021, 3, 31, tzinfo=UTC),
+            "edxorg": datetime(2023, 10, 10, tzinfo=UTC),
         },
         "production": {
             "mitx": datetime(2017, 6, 13, tzinfo=UTC),
