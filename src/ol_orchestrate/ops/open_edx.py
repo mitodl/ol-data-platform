@@ -660,16 +660,10 @@ def write_course_list_csv(context: OpExecutionContext, edx_course_ids: list[str]
     },
     out={"edx_daily_extracts_directory": Out(dagster_type=String)},
 )
-def upload_extracted_data(  # noqa: PLR0913
+def upload_extracted_data(
     context: OpExecutionContext,
-    edx_course_ids_csv: DagsterPath,  # noqa: ARG001
-    edx_course_roles: DagsterPath,  # noqa: ARG001
-    edx_user_roles: DagsterPath,  # noqa: ARG001
-    edx_enrolled_users: DagsterPath,  # noqa: ARG001
-    edx_student_submissions: DagsterPath,  # noqa: ARG001
-    edx_enrollment_records: DagsterPath,  # noqa: ARG001
-    edx_forum_data_directory: DagsterPath,  # noqa: ARG001
     config: UploadExtractedDataConfig,
+    uploads: list[DagsterPath],
 ):
     """Upload all data exports to S3 so that institutional research can ingest.
 
@@ -710,7 +704,7 @@ def upload_extracted_data(  # noqa: PLR0913
     :yield: The S3 path of the uploaded directory
     """
     results_bucket = config.edx_etl_results_bucket
-    for path_object in context.resources.results_dir.path.iterdir():
+    for path_object in uploads:
         if path_object.is_dir():
             for fpath in path_object.iterdir():
                 file_key = str(
