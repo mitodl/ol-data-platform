@@ -7,12 +7,14 @@ from ol_orchestrate.lib.hooks import (
     notify_healthchecks_io_on_success,
 )
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
+from ol_orchestrate.ops.object_storage import upload_files_to_s3
 from ol_orchestrate.ops.open_edx import (
     course_enrollments,
     course_roles,
     enrolled_users,
     export_edx_courses,
     export_edx_forum_database,
+    fetch_edx_course_structure_from_api,
     list_courses,
     student_submissions,
     upload_extracted_data,
@@ -96,3 +98,20 @@ mitxonline_edx_job = edx_course_pipeline.to_job(
     resource_defs=production_resources,
     config=load_yaml_config("/etc/dagster/mitxonline_edx.yaml"),
 )
+
+
+@graph(
+    name="mitol-openedx-data-extracts",
+    description=(
+        "Extract data from Open edX installations for consumption by the "
+        "Open Learning data platform."
+    ),
+    tags={
+        "source": "Open edX",
+        "destination": "s3",
+        "owner": "platform-engineering",
+        "consumer": "ol-data-platform",
+    },
+)
+def extract_open_edx_data_to_ol_data_platform():
+    upload_files_to_s3(fetch_edx_course_structure_from_api(list_courses()))

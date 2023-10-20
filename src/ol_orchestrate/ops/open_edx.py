@@ -153,15 +153,22 @@ def list_courses(config: ListCoursesConfig) -> List[String]:
     name="retrieve_edx_course_structure",
     description=(
         "Retrieve the JSON document describing the structure of the selected "
-        "course from a running Open edX instance."
+        "course via REST API from a running Open edX instance."
     ),
     required_resource_keys={"openedx", "results_dir"},
     ins={"course_ids": In()},
     out={"course_structures": Out()},
 )
-def fetch_edx_course_structure(
+def fetch_edx_course_structure_from_api(
     context: OpExecutionContext, course_ids: list[str]
 ) -> DagsterPath:
+    """Retrieve the course structure via the REST API of a running Open edX instance.
+
+    :param context: The Dagster execution context
+    :param course_ids: The list of course IDs for which to retrieve the structure
+
+    :returns: The path where the document is written to.
+    """
     structures_file = context.resources.results_dir.path.joinpath(
         "course_structures.json"
     )
