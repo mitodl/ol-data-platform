@@ -1015,10 +1015,9 @@ models:
     - unique
     - not_null
   - name: courseruncertificate_url
-    description: str, the full URL to the certificate on MITx Online
+    description: str, the full URL to the certificate on MITx Online if it's not invoked
     tests:
     - unique
-    - not_null
   - name: courserun_id
     description: int, foreign key to courses_courserun representing a single course
       run

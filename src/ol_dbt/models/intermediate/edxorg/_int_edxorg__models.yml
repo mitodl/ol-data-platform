@@ -368,3 +368,49 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]
+
+- name: int__edxorg__mitx_program_certificates
+  description: learners who completed MicroMasters and XSeries programs on edX.org.
+    program_certificate_awarded_on might be null for some programs such as SCM
+  columns:
+  - name: program_type
+    description: str, the type of the program. The value are 'MicroMasters' and 'XSeries'
+      for MITx programs on edX.org
+    tests:
+    - not_null
+  - name: program_uuid
+    description: str, the UUID of the program on edX.org. 'MIT Finance' and 'Finance'
+      are two different UUIDs, as they have different required courses. 'Statistics
+      and Data Science' is split into 'Statistics and Data Science' and 'Statistics
+      and Data Science (General track)', which are also two different program UUIDs.
+    tests:
+    - not_null
+  - name: program_title
+    description: str, title of the program on edX.org.
+    tests:
+    - not_null
+  - name: user_id
+    description: int, the edX learner ID in the LMS in a user's course run enrollment
+      record.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the user on edX.org
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, the full name of an edX learner in the LMS in a user's user
+      profile record. Retired users will have no full name available.
+    tests:
+    - not_null
+  - name: user_has_completed_program
+    description: boolean, whether the learner has passed each of the courses in the
+      program with a grade that qualifies them for a verified certificate.
+    tests:
+    - not_null
+  - name: program_certificate_awarded_on
+    description: timestamp, the date in ISO-8601 format that the learner has passed
+      each of the courses in the program and was awarded a program certificate.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "program_uuid"]

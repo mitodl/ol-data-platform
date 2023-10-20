@@ -36,7 +36,6 @@ httpx = "^0.25.0"
 pyarrow = "^13"
 pymysql = "^1.0.0"
 setuptools = "^68.1.0"  # Add this to avoid errors with installing packages that depend on it for building"
-urllib3 = "<2"  # Temporary workaround for botocore not being able to resolve version (TMM 2023-08-28) https://github.com/boto/botocore/issues/2926#issuecomment-1528863806
 
 [tool.poetry.group.dev.dependencies]
 black = "*"
@@ -62,6 +61,7 @@ templater = "jinja"
 dialect = "hive"
 sql_file_exts = ".sql,.sql.j2,.dml,.ddl"
 max_line_length = 120
+exclude_rules = "CV10"
 
 [tool.sqlfluff.templater]
 unwrap_wrapped_queries = true
