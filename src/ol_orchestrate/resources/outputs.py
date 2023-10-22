@@ -1,29 +1,30 @@
-import secrets
 import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from dagster import ConfigurableResource, InitResourceContext
-from pydantic import Field, validator
+from pydantic import Field
 
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
 
 
 class BaseResultsDir(ConfigurableResource):
     outputs_root_dir: str = Field(
-        default=None,
+        default_factory=Path.cwd,
         description=(
             "Base directory used for creating a results folder. Should be configured to"
             " allow writing by the Dagster user"
         ),
     )
-
-    @validator("outputs_root_dir", always=True)
-    def validate_outputs_root_dir(cls, value: str) -> str:  # noqa: N805
-        if value is None:
-            value = Path.cwd().joinpath(secrets.token_hex(5))
-        return str(value)
+    dir_prefix: Optional[str] = Field(
+        default=None,
+        description=(
+            "An optional directory name to nest the resource directory within. "
+            "This is useful for avoiding race conditions between pipelines running "
+            "in parallel."
+        ),
+    )
 
     def create_dir(self):
         self.path.mkdir(parents=True, exist_ok=True)
@@ -33,11 +34,11 @@ class BaseResultsDir(ConfigurableResource):
 
     @property
     def root_dir(self) -> Path:
-        return Path(self.outputs_root_dir)
+        return Path(self.outputs_root_dir).joinpath(self.dir_prefix or "")
 
     @property
     def path(self) -> DagsterPath:
-        return DagsterPath(Path(self.outputs_root_dir).joinpath(self.dir_name))
+        return DagsterPath(Path(self.root_dir).joinpath(self.dir_name))
 
     @property
     def absolute_path(self) -> str:
