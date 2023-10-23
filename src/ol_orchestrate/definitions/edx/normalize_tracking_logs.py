@@ -52,7 +52,7 @@ def daily_tracking_log_config(
     global dagster_env  # noqa: PLW0603
     if dagster_env == "dev":
         dagster_env = "qa"
-        path_prefix = "edxorg-raw-data/logs" if deployment == "edxorg" else "logs"
+    path_prefix = "edxorg-raw-data/logs" if deployment == "edxorg" else "logs"
     log_bucket = (
         f"ol-data-lake-landing-zone-{dagster_env}"
         if deployment == "edxorg"
