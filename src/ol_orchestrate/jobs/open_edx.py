@@ -1,12 +1,9 @@
-from dagster import fs_io_manager, graph
-from dagster_aws.s3.io_manager import s3_pickle_io_manager
-from dagster_aws.s3.resources import s3_resource
+from dagster import graph
 
 from ol_orchestrate.lib.hooks import (
     notify_healthchecks_io_on_failure,
     notify_healthchecks_io_on_success,
 )
-from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 from ol_orchestrate.ops.object_storage import upload_files_to_s3
 from ol_orchestrate.ops.open_edx import (
     course_enrollments,
@@ -21,12 +18,6 @@ from ol_orchestrate.ops.open_edx import (
     user_roles,
     write_course_list_csv,
 )
-from ol_orchestrate.resources.healthchecks import (
-    HealthchecksIO,
-)
-from ol_orchestrate.resources.mysql_db import mysql_db_resource
-from ol_orchestrate.resources.outputs import DailyResultsDir
-from ol_orchestrate.resources.sqlite_db import sqlite_db_resource
 
 
 @graph(
@@ -64,44 +55,8 @@ def edx_course_pipeline():
     )(course_list, extracts_upload)
 
 
-dev_resources = {
-    "sqldb": sqlite_db_resource,
-    "s3": s3_resource,
-    "results_dir": DailyResultsDir.configure_at_launch(),
-    "healthchecks": HealthchecksIO.configure_at_launch(),
-    "io_manager": fs_io_manager,
-}
-
-production_resources = {
-    "sqldb": mysql_db_resource,
-    "s3": s3_resource,
-    "results_dir": DailyResultsDir.configure_at_launch(),
-    "healthchecks": HealthchecksIO.configure_at_launch(),
-    "io_manager": s3_pickle_io_manager,
-}
-
-
-residential_edx_job = edx_course_pipeline.to_job(
-    name="residential_edx_course_pipeline",
-    resource_defs=production_resources,
-    config=load_yaml_config("/etc/dagster/residential_edx.yaml"),
-)
-
-xpro_edx_job = edx_course_pipeline.to_job(
-    name="xpro_edx_course_pipeline",
-    resource_defs=production_resources,
-    config=load_yaml_config("/etc/dagster/xpro_edx.yaml"),
-)
-
-mitxonline_edx_job = edx_course_pipeline.to_job(
-    name="mitxonline_edx_course_pipeline",
-    resource_defs=production_resources,
-    config=load_yaml_config("/etc/dagster/mitxonline_edx.yaml"),
-)
-
-
 @graph(
-    name="mitol-openedx-data-extracts",
+    name="mitol_openedx_data_extracts",
     description=(
         "Extract data from Open edX installations for consumption by the "
         "Open Learning data platform."

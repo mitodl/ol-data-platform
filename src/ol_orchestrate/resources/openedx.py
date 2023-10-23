@@ -1,31 +1,38 @@
 import time
 from collections.abc import Generator
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 import httpx
 from dagster import ConfigurableResource
-from pydantic import Field, HttpUrl, SecretStr
+from pydantic import Field, ValidationError, validator
 
 TOO_MANY_REQUESTS = 429
 
 
 class OpenEdxApiClient(ConfigurableResource):
     client_id: str = Field(description="OAUTH2 client ID for Open edX installation")
-    client_secret: SecretStr = Field(
+    client_secret: str = Field(
         description="OAUTH2 client secret for Open edX installation"
     )
-    lms_url: HttpUrl = Field(
+    lms_url: str = Field(
         description="Base URL of edX instance LMS being queried, including protocol. "
         "e.g. https://lms.mitx.mit.edu"
     )
-    studio_url: Optional[HttpUrl] = Field(
+    studio_url: Optional[str] = Field(
+        default=None,
         description="Base URL of edx instance Studio being queried, including protocol."
-        " e.g. https://studio.mitx.mit.edu"
+        " e.g. https://studio.mitx.mit.edu",
     )
-    token_type: Literal["JWT", "Bearer"] = Field(
+    token_type: str = Field(
         default="JWT",
         description="Token type to generate for use with authenticated requests",
     )
+
+    @validator("token_type")
+    def validate_token_type(cls, token_type):  # noqa: N805
+        if token_type.lower() not in ["jwt", "bearer"]:
+            raise ValidationError
+        return token_type
 
     @property
     def _access_token(self) -> str:
@@ -68,7 +75,7 @@ class OpenEdxApiClient(ConfigurableResource):
 
     def get_edx_course_ids(
         self, page_size: int = 100
-    ) -> Generator[list[dict], None, None]:
+    ) -> Generator[list[dict[str, str]], None, None]:
         """Retrieve all items from the edX courses REST API including pagination.
 
         :param page_size: The number of courses to retrieve per page via the API.
@@ -125,5 +132,5 @@ class OpenEdxApiClient(ConfigurableResource):
         :returns: JSON document representing the hierarchical structure of the target
                   course.
         """
-        request_url = f"{self.lms_url}/api/course-structure/v0/{course_id}"
+        request_url = f"{self.lms_url}/api/course-structure/v0/{course_id}/"
         return self._fetch_with_auth(request_url)
