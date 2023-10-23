@@ -1,7 +1,7 @@
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from dagster import ConfigurableResource, InitResourceContext
 from pydantic import Field
@@ -10,7 +10,7 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
 
 
 class BaseResultsDir(ConfigurableResource):
-    outputs_root_dir: str = Field(
+    outputs_root_dir: Union[str, Path] = Field(
         default_factory=Path.cwd,
         description=(
             "Base directory used for creating a results folder. Should be configured to"
