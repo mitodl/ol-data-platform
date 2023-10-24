@@ -83,7 +83,7 @@ def daily_tracking_log_config(
                     "path_prefix": path_prefix if destination == "valid" else "valid",
                 },
                 "inputs": {
-                    "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
+                    "log_date": f"{log_date.strftime('%Y-%m-%d')}",
                 },
             },
             "export_processed_data_to_s3": {
@@ -97,7 +97,7 @@ def daily_tracking_log_config(
                     else destination,
                 },
                 "inputs": {
-                    "log_date": f"{log_date.strftime('%Y-%m-%d')}/",
+                    "log_date": f"{log_date.strftime('%Y-%m-%d')}",
                 },
             },
         },
