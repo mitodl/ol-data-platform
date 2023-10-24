@@ -1,5 +1,6 @@
+import json
 import time
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from dagster import (
     AssetMaterialization,
@@ -139,10 +140,15 @@ def fetch_edx_course_structure_from_api(
             course_structure = context.resources.openedx.get_course_structure_document(
                 course_id
             )
+            table_row = {
+                "course_id": course_id,
+                "course_structure": course_structure,
+                "retrieved_at": datetime.now(tz=UTC).isoformat(),
+            }
             context.log.info(
                 "Course structure for course %s: %s", course_id, course_structure
             )
-            structures.write(course_structure)
+            structures.write(json.dumps(table_row))
             structures.write("\n")
     yield Output(structures_file, "course_structures")
 
