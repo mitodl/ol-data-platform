@@ -39,11 +39,10 @@ class WriteFilesConfig(Config):
         description="S3 bucket where tracking logs are stored",
     )
     source_path_prefix: str = Field(
-        default="logs",
         description="Path prefix where the logs are being loaded from",
     )
     destination_path_prefix: str = Field(
-        default="valid", description="Path prefix where the logs are being written to"
+        description="Path prefix where the logs are being written to"
     )
 
 

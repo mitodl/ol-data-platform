@@ -92,7 +92,8 @@ def daily_tracking_log_config(
                     "source_path_prefix": path_prefix
                     if destination == "valid"
                     else "valid",
-                    "destination_path_prefix": f"{path_prefix}/{destination}"
+                    # replace "edxorg-raw-data/logs" with "edxorg-raw-data/valid"
+                    "destination_path_prefix": f"{path_prefix.rsplit('/', maxsplit=1)[-2]}/{destination}"  # noqa: E501
                     if deployment == "edxorg"
                     else destination,
                 },
