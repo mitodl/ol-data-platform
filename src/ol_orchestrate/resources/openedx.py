@@ -1,10 +1,11 @@
 import time
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 
 import httpx
 from dagster import ConfigurableResource
-from pydantic import Field, ValidationError, validator
+from pydantic import Field, PrivateAttr, ValidationError, validator
 
 TOO_MANY_REQUESTS = 429
 
@@ -27,6 +28,8 @@ class OpenEdxApiClient(ConfigurableResource):
         default="JWT",
         description="Token type to generate for use with authenticated requests",
     )
+    _access_token: str = PrivateAttr(default=None)
+    _access_token_expires: datetime = PrivateAttr(default=None)
 
     @validator("token_type")
     def validate_token_type(cls, token_type):  # noqa: N805
@@ -34,23 +37,28 @@ class OpenEdxApiClient(ConfigurableResource):
             raise ValidationError
         return token_type
 
-    @property
-    def _access_token(self) -> str:
-        payload = {
-            "grant_type": "client_credentials",
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "token_type": self.token_type,
-        }
-        response = httpx.post(f"{self.lms_url}/oauth2/access_token", data=payload)
-        response.raise_for_status()
-        return response.json()["access_token"]
+    def _fetch_access_token(self) -> str:
+        now = datetime.now(tz=UTC)
+        if self._access_token is None or (self._access_token_expires or now) < now:
+            payload = {
+                "grant_type": "client_credentials",
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "token_type": self.token_type,
+            }
+            response = httpx.post(f"{self.lms_url}/oauth2/access_token", data=payload)
+            response.raise_for_status()
+            self._access_token = response.json()["access_token"]
+            self._access_token_expires = now + timedelta(
+                seconds=response.json()["expires_in"]
+            )
+        return self._access_token
 
     @property
     def _username(self) -> str:
         response = httpx.get(
             f"{self.lms_url}/api/user/v1/me",
-            headers={"Authorization": f"JWT {self._access_token}"},
+            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
         )
         response.raise_for_status()
         return response.json()["username"]
@@ -60,7 +68,7 @@ class OpenEdxApiClient(ConfigurableResource):
     ) -> dict[Any, Any]:
         response = httpx.get(
             request_url,
-            headers={"Authorization": f"JWT {self._access_token}"},
+            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
             params={"username": self._username, "page_size": page_size},
         )
 
@@ -107,7 +115,7 @@ class OpenEdxApiClient(ConfigurableResource):
         response = httpx.post(
             request_url,
             json={"courses": course_ids},
-            headers={"Authorization": f"JWT {self._access_token}"},
+            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
             timeout=60,
         )
         response.raise_for_status()
@@ -118,7 +126,7 @@ class OpenEdxApiClient(ConfigurableResource):
     ) -> dict[str, str]:
         response = httpx.get(
             f"{self.studio_url}/api/courses/v0/export/{course_id}/?task_id={task_id}",
-            headers={"Authorization": f"JWT {self._access_token}"},
+            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
             timeout=60,
         )
         response.raise_for_status()
