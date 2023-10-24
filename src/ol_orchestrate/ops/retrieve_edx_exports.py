@@ -217,10 +217,9 @@ def upload_files(
                 relative_path = str(file.relative_to(exports_path)).replace(
                     f"{file_type}/", ""
                 )
-                if export_type == "courses":
-                    relative_path = f"{file_date}/{relative_path}"
-                context.log.info(relative_path)
-                s3_key = f"{config.bucket_prefix}/{file_type}/{relative_path}"
+                dated_relative_path = f"{file_date}/{relative_path}"
+                context.log.info(dated_relative_path)
+                s3_key = f"{config.bucket_prefix}/{file_type}/{dated_relative_path}"
                 s3_path = f"s3://{config.edx_irx_exports_bucket}/{s3_key}"
                 context.log.info(s3_path)
                 context.resources.s3.upload_file(

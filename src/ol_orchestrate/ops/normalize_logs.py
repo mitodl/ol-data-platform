@@ -54,7 +54,7 @@ class WriteFilesConfig(Config):
     ins={
         "log_date": In(
             dagster_type=String,
-            description="Log date prefix to load files from (Format 'YYYY-MM-DD/')}'",
+            description="Log date prefix to load files from (Format 'YYYY-MM-DD')}'",
         )
     },
 )
@@ -73,18 +73,14 @@ def load_files_to_table(
     :param config: Dagster execution config for propagaint configuration data.
     :type config: Config
 
-    :log_date: S3 Bucket log date prefix to load logs from (Format 'YYYY-MM-DD/')
+    :log_date: S3 Bucket log date prefix to load logs from (Format 'YYYY-MM-DD')
     :type log_date: str
 
     """
     source_bucket = config.tracking_log_bucket
     path_prefix = config.path_prefix
     # DuckDB Glob Syntax: ** matches any number of subdirectories (including none)
-    s3_path = (
-        f"s3://{source_bucket}/{path_prefix}/{log_date}**"
-        if config.path_prefix == "logs"
-        else f"s3://{source_bucket}/{path_prefix}**"
-    )
+    s3_path = f"s3://{source_bucket}/{path_prefix}/{log_date}/**"
     context.log.info(s3_path)
     with context.resources.duckdb.get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS tracking_logs")
@@ -222,7 +218,7 @@ def jsonify_log_data(context: OpExecutionContext) -> Nothing:
         "columns": In(dagster_type=List[String]),
         "log_date": In(
             dagster_type=String,
-            description="Log date prefix to load files from (Format 'YYYY-MM-DD/')}'",
+            description="Log date prefix to load files from (Format 'YYYY-MM-DD')}'",
         ),
     },
 )
@@ -268,7 +264,7 @@ def write_file_to_s3(
             context.resources.s3.upload_file(
                 Filename=local_file_name,
                 Bucket=config.tracking_log_bucket,
-                Key=f"{config.destination_path_prefix}/{log_date}{local_file_name}",
+                Key=f"{config.destination_path_prefix}/{log_date}/{local_file_name}",
             )
             Path(local_file_name).unlink()
     Path(context.resources.duckdb.database).unlink()
