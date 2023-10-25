@@ -1,5 +1,7 @@
+import hashlib
+import json
 import time
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from dagster import (
     AssetMaterialization,
@@ -21,29 +23,10 @@ from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
-from ol_orchestrate.lib.edx_api_client import (
-    check_course_export_status,
-    export_courses,
-    get_access_token,
-    get_edx_course_ids,
-)
 from ol_orchestrate.lib.file_rendering import write_csv
 
 
 class ListCoursesConfig(Config):
-    edx_client_id: str = Field(description="OAUTH2 Client ID for Open edX API")
-    edx_client_secret: str = Field(
-        description="OAUTH2 Client secret for Open edX API",
-    )
-    edx_base_url: str = Field(
-        default="lms.mitx.mit.edu",
-        description="Domain of edX installation",
-    )
-    edx_token_type: str = Field(
-        default="jwt",
-        description="Type of OAuth token to use for authenticating to the edX API. "
-        'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',
-    )
     edx_course_api_page_size: int = Field(
         default=100,
         description="The number of records to return per API request. This can be "
@@ -78,21 +61,6 @@ class ExportEdxForumDatabaseConfig(Config):
 
 
 class ExportEdxCoursesConfig(Config):
-    edx_base_url: str = Field(
-        description="Domain of edX installation",
-    )
-    edx_client_id: str = Field(description="OAUTH2 Client ID for Open edX API")
-    edx_client_secret: str = Field(
-        description="OAUTH2 Client secret for Open edX API",
-    )
-    edx_studio_base_url: str = Field(
-        description="Domain of edX studio installation",
-    )
-    edx_token_type: str = Field(
-        default="jwt",
-        description="Type of OAuth token to use for authenticating to the edX API. "
-        'Default to "jwt" for edX Juniper and newer, or "bearer" for older releases.',
-    )
     edx_course_bucket: str = Field(
         description="Bucket name that the edX installation uses for uploading "
         "course exports",
@@ -112,9 +80,12 @@ class UploadExtractedDataConfig(Config):
         "Retrieve the list of course IDs active in the edX instance "
         "to be used in subsequent steps to pull data per course."
     ),
+    required_resource_keys={"openedx"},
     out={"edx_course_ids": Out(description="List of course IDs in the app")},
 )
-def list_courses(config: ListCoursesConfig) -> List[String]:
+def list_courses(
+    context: OpExecutionContext, config: ListCoursesConfig
+) -> List[String]:
     """
     Retrieve the list of course IDs active in the edX instance to be used in subsequent
     steps to pull data per course.
@@ -124,16 +95,8 @@ def list_courses(config: ListCoursesConfig) -> List[String]:
 
     :yield: List of edX course IDs
     """
-    access_token = get_access_token(
-        client_id=config.edx_client_id,
-        client_secret=config.edx_client_secret,
-        edx_url=config.edx_base_url,
-        token_type=config.edx_token_type,
-    )
     course_ids = []
-    course_id_generator = get_edx_course_ids(
-        config.edx_base_url,
-        access_token,
+    course_id_generator = context.resources.openedx.get_edx_course_ids(
         page_size=config.edx_course_api_page_size,
     )
     for result_set in course_id_generator:
@@ -147,6 +110,48 @@ def list_courses(config: ListCoursesConfig) -> List[String]:
         },
     )
     yield Output(course_ids, "edx_course_ids")
+
+
+@op(
+    name="retrieve_edx_course_structure",
+    description=(
+        "Retrieve the JSON document describing the structure of the selected "
+        "course via REST API from a running Open edX instance."
+    ),
+    required_resource_keys={"openedx", "results_dir"},
+    ins={"course_ids": In()},
+    out={"course_structures": Out(dagster_type=DagsterPath)},
+)
+def fetch_edx_course_structure_from_api(
+    context: OpExecutionContext, course_ids: list[str]
+) -> DagsterPath:
+    """Retrieve the course structure via the REST API of a running Open edX instance.
+
+    :param context: The Dagster execution context
+    :param course_ids: The list of course IDs for which to retrieve the structure
+
+    :returns: The path where the document is written to.
+    """
+    structures_file = context.resources.results_dir.path.joinpath(
+        "course_structures.json"
+    )
+    with structures_file.open("w") as structures:
+        for course_id in course_ids:
+            context.log.info("Retrieving course structure for %s", course_id)
+            course_structure = context.resources.openedx.get_course_structure_document(
+                course_id
+            )
+            table_row = {
+                "content_hash": hashlib.sha256(
+                    json.dumps(course_structure).encode("utf-8")
+                ).hexdigest(),
+                "course_id": course_id,
+                "course_structure": course_structure,
+                "retrieved_at": datetime.now(tz=UTC).isoformat(),
+            }
+            structures.write(json.dumps(table_row))
+            structures.write("\n")
+    yield Output(structures_file, "course_structures")
 
 
 @op(
@@ -164,7 +169,9 @@ def list_courses(config: ListCoursesConfig) -> List[String]:
         )
     },
 )
-def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
+def enrolled_users(
+    context: OpExecutionContext, edx_course_ids: List[String]
+) -> DagsterPath:
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -232,7 +239,9 @@ def enrolled_users(context: OpExecutionContext, edx_course_ids: List[String]) ->
         )
     },
 )
-def student_submissions(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
+def student_submissions(
+    context: OpExecutionContext, edx_course_ids: List[String]
+) -> DagsterPath:
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -308,7 +317,9 @@ def student_submissions(context: OpExecutionContext, edx_course_ids: List[String
         )
     },
 )
-def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
+def course_enrollments(
+    context: OpExecutionContext, edx_course_ids: List[String]
+) -> DagsterPath:
     """Retrieve enrollment records for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -366,7 +377,9 @@ def course_enrollments(context: OpExecutionContext, edx_course_ids: List[String]
         )
     },
 )
-def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
+def course_roles(
+    context: OpExecutionContext, edx_course_ids: List[String]
+) -> DagsterPath:
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -422,7 +435,9 @@ def course_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> D
         )
     },
 )
-def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> DagsterPath:  # type: ignore  # noqa: E501, PGH003
+def user_roles(
+    context: OpExecutionContext, edx_course_ids: List[String]
+) -> DagsterPath:
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -488,7 +503,7 @@ def user_roles(context: OpExecutionContext, edx_course_ids: List[String]) -> Dag
         )
     },
 )
-def export_edx_forum_database(  # type: ignore  # noqa: PGH003
+def export_edx_forum_database(
     context: OpExecutionContext,
     config: ExportEdxForumDatabaseConfig,
 ) -> DagsterPath:
@@ -557,7 +572,7 @@ def export_edx_forum_database(  # type: ignore  # noqa: PGH003
 @op(
     name="edx_export_courses",
     description="Export the contents of all active courses to S3",
-    required_resource_keys={"s3"},
+    required_resource_keys={"s3", "openedx"},
     ins={
         "edx_course_ids": In(
             dagster_type=List[String],
@@ -575,15 +590,7 @@ def export_edx_courses(
     daily_extracts_dir: str,
     config: ExportEdxCoursesConfig,
 ) -> None:
-    access_token = get_access_token(
-        client_id=config.edx_client_id,
-        client_secret=config.edx_client_secret,
-        edx_url=config.edx_base_url,
-        token_type=config.edx_token_type,
-    )
-    exported_courses = export_courses(
-        config.edx_studio_base_url,
-        access_token=access_token,
+    exported_courses = context.resources.openedx.export_courses(
         course_ids=edx_course_ids,
     )
     successful_exports: set[str] = set()
@@ -595,9 +602,7 @@ def export_edx_courses(
     while len(successful_exports.union(failed_exports)) < len(tasks):
         time.sleep(timedelta(seconds=5).seconds)
         for course_id, task_id in tasks.items():
-            task_status = check_course_export_status(
-                config.edx_studio_base_url,
-                access_token,
+            task_status = context.resources.openedx.check_course_export_status(
                 course_id,
                 task_id,
             )

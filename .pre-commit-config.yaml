@@ -51,6 +51,11 @@ repos:
   rev: v1.5.1
   hooks:
   - id: mypy
+    args:
+    - --explicit-package-bases
+    - --namespace-packages
+    - --config-file=pyproject.toml
+    - --warn-unused-configs
     additional_dependencies:
     - pydantic
     - types-PyYAML
