@@ -1,3 +1,4 @@
+import hashlib
 import json
 import time
 from datetime import UTC, datetime, timedelta
@@ -141,13 +142,13 @@ def fetch_edx_course_structure_from_api(
                 course_id
             )
             table_row = {
+                "content_hash": hashlib.sha256(
+                    json.dumps(course_structure).encode("utf-8")
+                ).hexdigest(),
                 "course_id": course_id,
                 "course_structure": course_structure,
                 "retrieved_at": datetime.now(tz=UTC).isoformat(),
             }
-            context.log.info(
-                "Course structure for course %s: %s", course_id, course_structure
-            )
             structures.write(json.dumps(table_row))
             structures.write("\n")
     yield Output(structures_file, "course_structures")

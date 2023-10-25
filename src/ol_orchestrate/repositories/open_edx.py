@@ -87,7 +87,9 @@ def open_edx_export_irx_job_config(
 
     class OpenEdxDatabaseConfig(VaultBaseSettings):
         mysql_db_name: str = "edxapp"
-        mysql_hostname: str = f"edxapp-db.service.{deployment}-{dagster_env}.consul"
+        mysql_hostname: str = (
+            f"edxapp-db-replica.service.{deployment}-{dagster_env}.consul"
+        )
         mysql_credentials: VaultDBCredentials = Field(
             ..., vault_secret_path=f"mariadb-{deployment}/creds/readonly"
         )

@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from dagster import Definitions
+from dagster import Definitions, ScheduleDefinition
 from dagster_aws.s3 import S3Resource
 from pydantic import BaseSettings, Field, SecretStr
 from pydantic_vault import vault_config_settings_source
@@ -78,18 +78,26 @@ def open_edx_extract_job_config(
     }
 
 
+ol_extract_jobs = [
+    extract_open_edx_data_to_ol_data_platform.to_job(
+        resource_defs={
+            "results_dir": DailyResultsDir(),
+            "s3_upload": S3Resource(),
+            "s3": S3Resource(),
+            "openedx": OpenEdxApiClient.configure_at_launch(),
+        },
+        name=f"extract_{deployment}_open_edx_data_to_data_platform",
+        config=open_edx_extract_job_config(deployment, dagster_env),  # type: ignore[arg-type]
+    )
+    for deployment in ("residential", "xpro", "mitxonline")
+]
+
 openedx_data_extracts = Definitions(
-    jobs=[
-        extract_open_edx_data_to_ol_data_platform.to_job(
-            resource_defs={
-                "results_dir": DailyResultsDir(),
-                "s3_upload": S3Resource(),
-                "s3": S3Resource(),
-                "openedx": OpenEdxApiClient.configure_at_launch(),
-            },
-            name=f"extract_{deployment}_open_edx_data_to_data_platform",
-            config=open_edx_extract_job_config(deployment, dagster_env),  # type: ignore[arg-type]
+    jobs=ol_extract_jobs,
+    schedules=[
+        ScheduleDefinition(
+            name=f"{job.name}_nightly", cron_schedule="0 0 * * *", job=job
         )
-        for deployment in ("residential", "xpro", "mitxonline")
+        for job in ol_extract_jobs
     ],
 )
