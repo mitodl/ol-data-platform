@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, BaseSettings, SecretStr
@@ -18,9 +17,6 @@ class VaultDBCredentials(BaseModel):
 class VaultBaseSettings(BaseSettings):  # type: ignore[valid-type,misc]
     class Config:
         vault_url: str = f"https://vault-{DAGSTER_ENV}.odl.mit.edu"
-        vault_token: SecretStr = os.environ.get(  # type: ignore[assignment]
-            "VAULT_TOKEN", Path.home().joinpath(".vault-token").read_text()
-        )
 
         @classmethod
         def customise_sources(
