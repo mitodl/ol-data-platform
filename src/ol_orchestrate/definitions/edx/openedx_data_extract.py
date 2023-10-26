@@ -1,13 +1,12 @@
 import os
-from pathlib import Path
 from typing import Literal
 
 from dagster import Definitions, ScheduleDefinition
 from dagster_aws.s3 import S3Resource
-from pydantic import BaseSettings, Field, SecretStr
-from pydantic_vault import vault_config_settings_source
+from pydantic import Field
 
 from ol_orchestrate.jobs.open_edx import extract_open_edx_data_to_ol_data_platform
+from ol_orchestrate.lib.vault_config_helper import VaultBaseSettings
 from ol_orchestrate.resources.openedx import OpenEdxApiClient
 from ol_orchestrate.resources.outputs import DailyResultsDir
 
@@ -18,7 +17,7 @@ def open_edx_extract_job_config(
     open_edx_deployment: Literal["residential", "mitxonline", "xpro"],
     dagster_env: Literal["qa", "production"],
 ):
-    class OpenEdxResourceRuntimeConfig(BaseSettings):  # type: ignore[valid-type,misc]
+    class OpenEdxResourceRuntimeConfig(VaultBaseSettings):
         client_id: str = Field(
             ...,
             vault_secret_path=f"secret-data/pipelines/edx/{open_edx_deployment}/edx-oauth-client",
@@ -40,28 +39,6 @@ def open_edx_extract_job_config(
             vault_secret_key="studio_url",  # noqa: S106 # pragma: allowlist secret
         )
         token_type: str = "JWT"
-
-        class Config:
-            vault_url: str = f"https://vault-{dagster_env}.odl.mit.edu"
-            vault_token: SecretStr = os.environ.get(  # type: ignore[assignment]
-                "VAULT_TOKEN", Path.home().joinpath(".vault-token").read_text()
-            )
-
-            @classmethod
-            def customise_sources(
-                cls,
-                init_settings,
-                env_settings,
-                file_secret_settings,
-            ):
-                # This is where you can choose which settings sources to use and their
-                # priority
-                return (
-                    vault_config_settings_source,
-                    init_settings,
-                    env_settings,
-                    file_secret_settings,
-                )
 
     return {
         "ops": {
