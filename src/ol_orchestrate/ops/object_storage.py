@@ -82,6 +82,8 @@ def upload_files_to_s3(
     context, config: S3UploadConfig, downloaded_objects: DagsterPath
 ) -> None:
     """Upload the contents of a directory to an S3 bucket."""
+    if not downloaded_objects.is_dir():
+        downloaded_objects = downloaded_objects.parent
     for fpath in downloaded_objects.rglob("*"):
         if fpath.is_file():
             object_key = fpath.relative_to(downloaded_objects)

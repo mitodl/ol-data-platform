@@ -77,13 +77,10 @@ def load_files_to_table(
 
     """
     source_bucket = config.tracking_log_bucket
-    path_prefix = (
-        f"{config.path_prefix}/{log_date}"
-        if "-edxapp-tracking" in config.tracking_log_bucket
-        else config.path_prefix
-    )
     # DuckDB Glob Syntax: ** matches any number of subdirectories (including none)
-    s3_path = f"s3://{source_bucket}/{path_prefix}/**"
+    # * matches anything but slashes (log file must have date in filename)
+    path_prefix = f"{config.path_prefix}/**/*{log_date}*"
+    s3_path = f"s3://{source_bucket}/{path_prefix}"
     context.log.info(s3_path)
     with context.resources.duckdb.get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS tracking_logs")
