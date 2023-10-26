@@ -24,3 +24,7 @@ load_from:
     host: edxorg-raw-data-import
     port: 4000
     location_name: edxorg-raw-data-import
+- grpc_server:
+    host: openedx-ol-data-exports
+    port: 4000
+    location_name: openedx-ol-data-exports
