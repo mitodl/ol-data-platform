@@ -31,7 +31,7 @@ select
     , orders.order_tax_rate
     , orders.order_tax_rate_name
     , (orders.order_total_price_paid * (orders.order_tax_rate / 100)) as order_tax_amount
-    , (orders.order_total_price_paid * (orders.order_tax_rate / 100))
+    , (orders.order_total_price_paid * (orders.order_tax_rate / 100)) 
     + orders.order_total_price_paid as order_total_price_paid_plus_tax
 from orders
 left join couponredemption on orders.order_id = couponredemption.order_id
