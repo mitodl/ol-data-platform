@@ -9,7 +9,7 @@ all files that are in the root of the bucket to be located in path prefixes that
 chunked by date.
 """
 import sys
-from datetime import UTC, datetime, timedelta  # type: ignore  # noqa: PGH003
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Optional
 
 import typer

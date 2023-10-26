@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 import pymysql
 from dagster import Field, InitResourceContext, Int, String, resource
@@ -43,7 +43,7 @@ class MySQLClient:
             cursorclass=DictCursor,
         )
 
-    def run_query(self, query: Query) -> tuple[list[str], list[dict]]:
+    def run_query(self, query: Query) -> tuple[list[str], list[dict[Any, Any]]]:
         """Execute the passed query against the MySQL database connection.
 
         Execute a query on the configured MySQL database and return the row data as a

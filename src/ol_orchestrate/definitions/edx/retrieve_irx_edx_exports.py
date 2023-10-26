@@ -1,7 +1,7 @@
 import os
 import re
 from functools import partial
-from typing import Literal
+from typing import Any, Literal
 
 from dagster import (
     DefaultSensorStatus,
@@ -26,7 +26,7 @@ dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignor
 
 def s3_uploads_bucket(
     dagster_env: Literal["dev", "qa", "production"],
-) -> dict:
+) -> dict[str, Any]:
     bucket_map = {
         "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
         "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": "edxorg-raw-data"},
