@@ -26,8 +26,8 @@ class DownloadConfig(Config):
     files_to_sync: Optional[list[str]] = Field(
         description="The list of new files to download", default=None
     )
-    export_type: str = Field(
-        description="The subset of archive files to process", default=None
+    export_type_type: str = Field(
+        description="The subset of archive files to process",
     )
 
 
