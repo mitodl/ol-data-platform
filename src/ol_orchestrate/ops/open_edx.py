@@ -132,8 +132,9 @@ def fetch_edx_course_structure_from_api(
 
     :returns: The path where the document is written to.
     """
+    today = datetime.now(tz=UTC)
     structures_file = context.resources.results_dir.path.joinpath(
-        "course_structures.json"
+        f"course_structures_{today.strftime('%Y-%m-%d')}.json"
     )
     with structures_file.open("w") as structures:
         for course_id in course_ids:
