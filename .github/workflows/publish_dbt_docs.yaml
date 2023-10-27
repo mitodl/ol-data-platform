@@ -1,0 +1,89 @@
+---
+name: "Publish dbt docs to GH Pages"
+
+# Triggers
+on:
+  # Triggers the workflow on push to main branch
+  push:
+    branches:
+    - main
+  # Triggers the workflow manually from GUI
+  workflow_dispatch:
+
+jobs:
+  # Build job
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: "Step 01 - Checkout current branch"
+      id: step-01
+      uses: actions/checkout@v3
+
+    - name: "Step 02 - Install dbt"
+      id: step-02
+      run: pip3 install dbt-core dbt-duckdb
+
+    - name: "Step 03 - Verify dbt"
+      id: step-03
+      run: dbt --version
+
+    - name: "Step 04 - Compile dbt"
+      id: step-04
+      working-directory: ./src/ol_dbt/
+      run: |
+        ls -ltra
+        export DBT_PROFILES_DIR=$PWD
+        dbt deps
+        dbt debug -t dev
+        dbt compile -t dev
+
+    - name: "Step 05 - Generate dbt docs"
+      id: step-05
+      working-directory: ./src/ol_dbt/
+      run: |
+        export DBT_PROFILES_DIR=$PWD
+        dbt deps
+        dbt docs generate -t dev
+        cd target
+        mkdir ${{ github.workspace }}/dbt_docs
+        cp *.json *.html graph.gpickle ${{ github.workspace }}/dbt_docs
+        ls -ltra ${{ github.workspace }}/dbt_docs
+
+    - name: "Step 06 - Upload pages to artifact"
+      id: step-06
+      uses: actions/upload-pages-artifact@v2
+      with:
+        path: ${{ github.workspace }}/dbt_docs
+
+    - name: "Step 07 - Zip artifact"
+      id: step-07
+      run: zip -jrq dbt_docs.zip ${{ github.workspace }}/dbt_docs
+
+    - name: "Step 08 - Upload artifact for deployment job"
+      id: step-08
+      uses: actions/upload-artifact@v3
+      with:
+        name: dbt_docs
+        path: dbt_docs.zip
+
+  # Deploy to Github pages
+  deploy-to-github-pages:
+    # Add a dependency to the build job
+    needs: build
+
+    # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
+    permissions:
+      pages: write # to deploy to Pages
+      id-token: write # to verify the deployment originates from an appropriate source
+
+    # Deploy to the github-pages environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    # Specify runner + deployment step
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v2   # or the latest "vX.X.X" version tag for this action
