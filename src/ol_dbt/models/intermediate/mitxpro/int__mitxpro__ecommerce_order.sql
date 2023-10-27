@@ -13,11 +13,6 @@ with orders as (
     from {{ ref('stg__mitxpro__app__postgres__ecommerce_couponversion') }}
 )
 
-, couponpaymentversion as (
-    select *
-    from {{ ref('stg__mitxpro__app__postgres__ecommerce_couponpaymentversion') }}
-)
-
 select
     orders.order_id
     , orders.order_state
@@ -31,9 +26,8 @@ select
     , orders.order_tax_rate
     , orders.order_tax_rate_name
     , (orders.order_total_price_paid * (orders.order_tax_rate / 100)) as order_tax_amount
-    , (orders.order_total_price_paid * (orders.order_tax_rate / 100))
+    , (orders.order_total_price_paid * (orders.order_tax_rate / 100)) 
     + orders.order_total_price_paid as order_total_price_paid_plus_tax
 from orders
 left join couponredemption on orders.order_id = couponredemption.order_id
 left join couponversion on couponredemption.couponversion_id = couponversion.couponversion_id
-left join couponpaymentversion on couponversion.couponpaymentversion_id = couponpaymentversion.couponpaymentversion_id
