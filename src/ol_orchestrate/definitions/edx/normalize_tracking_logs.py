@@ -1,5 +1,5 @@
 import os
-from datetime import UTC, datetime  # type: ignore  # noqa: PGH003
+from datetime import UTC, datetime
 from functools import partial
 from typing import Literal
 
