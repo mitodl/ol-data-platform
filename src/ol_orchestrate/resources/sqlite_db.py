@@ -1,4 +1,5 @@
 import sqlite3
+from typing import Any
 
 from dagster import Field, InitResourceContext, String, resource
 from pypika import Query
@@ -16,7 +17,7 @@ class SQLiteClient:
         self.connection = sqlite3.connect(db_name)
         self.connection.row_factory = sqlite3.Row
 
-    def run_query(self, query: Query) -> tuple[list[str], list[dict]]:
+    def run_query(self, query: Query) -> tuple[list[str], list[dict[Any, Any]]]:
         """Execute the passed query against the SQLite database connection.
 
         Executes a query on the configured SQLite database and returns the row data as a
@@ -33,7 +34,7 @@ class SQLiteClient:
             cursor = self.connection.cursor()
             cursor.execute(str(query))
             query_fields = [field[0] for field in cursor.description]
-            return query_fields, cursor.fetchall()  # type: ignore  # noqa: PGH003
+            return query_fields, cursor.fetchall()
 
 
 @resource(

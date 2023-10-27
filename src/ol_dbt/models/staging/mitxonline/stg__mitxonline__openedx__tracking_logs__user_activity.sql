@@ -16,9 +16,9 @@ with source as (
         and json_query(context, 'lax $.user_id' omit quotes) is not null
         and json_query(event, 'lax $.exception' omit quotes) is null
 
-        {% if is_incremental() %}
+    {% if is_incremental() %}
         and "time" > (select max(this.useractivity_timestamp) from {{ this }} as this) --noqa
-        {% endif %}
+    {% endif %}
 )
 
 , source_sorted as (

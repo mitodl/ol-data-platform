@@ -1,5 +1,6 @@
 import json
 from collections.abc import Callable
+from typing import Any
 
 from dagster import RunRequest, SensorEvaluationContext, SkipReason
 from dagster_aws.s3 import S3Resource
@@ -11,7 +12,7 @@ def dummy_filter(object_name: str) -> bool:  # noqa: ARG001
     return True
 
 
-def dummy_run_config_fn(object_keys: set[str]) -> dict:  # noqa: ARG001
+def dummy_run_config_fn(object_keys: set[str]) -> dict[Any, Any]:  # noqa: ARG001
     return {}
 
 
@@ -21,7 +22,7 @@ def check_new_gcs_assets_sensor(  # noqa: PLR0913
     gcp_gcs: GCSConnection,
     bucket_prefix: str = "",
     object_filter_fn: Callable[[str], bool] = dummy_filter,
-    run_config_fn: Callable[[set[str]], dict] = dummy_run_config_fn,
+    run_config_fn: Callable[[set[str]], dict[Any, Any]] = dummy_run_config_fn,
 ):
     """Check GCS bucket for new files to operate on.
 
@@ -58,7 +59,7 @@ def check_new_s3_assets_sensor(  # noqa: PLR0913
     s3: S3Resource,
     bucket_prefix: str = "",
     object_filter_fn: Callable[[str], bool] = dummy_filter,
-    run_config_fn: Callable[[set[str]], dict] = dummy_run_config_fn,
+    run_config_fn: Callable[[set[str]], dict[Any, Any]] = dummy_run_config_fn,
 ):
     """Check S3 bucket for new files to operate on.
 
