@@ -2,6 +2,18 @@
 version: 2
 
 models:
+- name: stg__mitxonline__openedx__mysql__bulk_email_optout
+  columns:
+  - name: email_optout_id
+    description: int, sequential ID tracking a email optout
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, unique ID for each user on the MITx Online platform
+  - name: course_id
+    description: int, primary key representing a single MITx Online course
+
 - name: stg__mitxonline__app__postgres__courses_courserunenrollment
   columns:
   - name: courserunenrollment_id
