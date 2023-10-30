@@ -161,7 +161,7 @@ def fetch_edx_course_structure_from_api(
                 "course_structure": course_structure,
                 "course_structure_flattened": flatdict.FlatDict(
                     course_structure, delimiter=config.flattened_dict_delimiter
-                ),
+                ).as_dict(),
                 "retrieved_at": datetime.now(tz=UTC).isoformat(),
             }
             structures.write(json.dumps(table_row))
