@@ -12,9 +12,9 @@ sources:
     - name: id
       description: int, sequential ID tracking a email optout
     - name: user_id
-      description: int, foreign key to the users_user table
+      description: int, unique ID for each user on the MITx Online platform
     - name: course_id
-      description: int, foreign key to courses_course representing a single MITx Online
+      description: string, unique ID representing a single MITx Online course run
         course
 
   - name: raw__mitxonline__app__postgres__ecommerce_basketdiscount

@@ -9,10 +9,10 @@ models:
     tests:
     - unique
     - not_null
-  - name: user_id
+  - name: openedx_user_id
     description: int, unique ID for each user on the MITx Online platform
-  - name: course_id
-    description: int, primary key representing a single MITx Online course
+  - name: courserun_readable_id
+    description: string, unique ID representing a single MITx Online course run
 
 - name: stg__mitxonline__app__postgres__courses_courserunenrollment
   columns:

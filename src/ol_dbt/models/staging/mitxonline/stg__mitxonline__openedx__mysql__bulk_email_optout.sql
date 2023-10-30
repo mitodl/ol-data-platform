@@ -7,8 +7,8 @@ with source as (
 , cleaned as (
     select
         id as email_optout_id
-        , user_id
-        , course_id
+        , user_id as openedx_user_id
+        , course_id as courserun_readable_id
     from source
 )
 
