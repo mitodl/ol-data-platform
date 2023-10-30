@@ -159,9 +159,11 @@ def fetch_edx_course_structure_from_api(
                 ).hexdigest(),
                 "course_id": course_id,
                 "course_structure": course_structure,
-                "course_structure_flattened": flatdict.FlatDict(
-                    course_structure, delimiter=config.flattened_dict_delimiter
-                ).as_dict(),
+                "course_structure_flattened": dict(
+                    flatdict.FlatDict(
+                        course_structure, delimiter=config.flattened_dict_delimiter
+                    ).iteritems()
+                ),
                 "retrieved_at": datetime.now(tz=UTC).isoformat(),
             }
             structures.write(json.dumps(table_row))
