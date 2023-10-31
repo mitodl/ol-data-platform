@@ -36,7 +36,11 @@ class OpenEdxApiClient(ConfigurableResource):
     )
     _access_token: str = PrivateAttr(default=None)
     _access_token_expires: datetime = PrivateAttr(default=None)
-    _http_client: httpx.Client = PrivateAttr
+    _http_client: httpx.Client = PrivateAttr(default=None)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._initialize_client()
 
     @validator("token_type")
     def validate_token_type(cls, token_type):  # noqa: N805
