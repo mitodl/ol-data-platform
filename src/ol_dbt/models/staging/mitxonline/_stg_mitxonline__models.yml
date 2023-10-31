@@ -10,9 +10,16 @@ models:
     - unique
     - not_null
   - name: openedx_user_id
-    description: int, unique ID for each user on the MITx Online platform
+    description: int, unique ID for each user on the MITx Online open edX platform
+    tests:
+    - not_null
   - name: courserun_readable_id
     description: string, unique ID representing a single MITx Online course run
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id"]
 
 - name: stg__mitxonline__app__postgres__courses_courserunenrollment
   columns:
