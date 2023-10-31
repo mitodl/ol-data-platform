@@ -2,6 +2,25 @@
 version: 2
 
 models:
+- name: int__mitxonline__openedx__mysql__bulk_email_optout
+  columns:
+  - name: email_optout_id
+    description: int, sequential ID tracking a email optout
+    tests:
+    - unique
+    - not_null
+  - name: openedx_user_id
+    description: int, unique ID for each user on the MITx Online open edX platform
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, unique ID representing a single MITx Online course run
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id"]
+
 - name: int__mitxonline__ecommerce_basketdiscount
   columns:
   - name: basketdiscount_id
