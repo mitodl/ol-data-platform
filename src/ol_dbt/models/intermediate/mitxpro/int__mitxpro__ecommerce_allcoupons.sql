@@ -39,28 +39,7 @@ with coupon as (
         , 'ecommerce_coupon' as coupon_source_table
         , null as b2bcoupon_id
         , coupon.coupon_id
-        , case
-            when ecommerce_couponpaymentversion.couponpaymentversion_discount_type = 'dollars-off'
-                then
-                    (
-                        '$'
-                        || cast(
-                            ecommerce_couponpaymentversion.couponpaymentversion_discount_amount
-                            as varchar
-                        )
-                        || ' off'
-                    )
-            when ecommerce_couponpaymentversion.couponpaymentversion_discount_type = 'percent-off'
-                then
-                    (
-                        cast(
-                            (ecommerce_couponpaymentversion.couponpaymentversion_discount_amount * 100)
-                            as varchar
-                        )
-                        || '% off'
-                    )
-        end
-            as discount_amount
+        , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount_text as discount_amount
     from coupon
     inner join latest_couponversion
         on coupon.coupon_id = latest_couponversion.coupon_id

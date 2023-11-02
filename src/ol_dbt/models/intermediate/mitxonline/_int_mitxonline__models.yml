@@ -408,6 +408,18 @@ models:
     tests:
     - accepted_values:
         values: ["refund", "payment"]
+  - name: transaction_status
+    description: str, transaction status from user's cybersource payment. Value could
+      be ACCEPT, REVIEW. May be blank for no payment required or refund.
+  - name: transaction_payment_method
+    description: str, payment method from cybersource Value could be 'paypal' or 'card'.
+      May be blank for no payment required or refund.
+  - name: transaction_authorization_code
+    description: str, authorization code from cybersource payment
+  - name: transaction_bill_to_address_state
+    description: str, address state from cybersource payment
+  - name: transaction_bill_to_address_country
+    description: str, address country from cybersource payment
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__ecommerce_transaction')
@@ -465,6 +477,10 @@ models:
     description: int. Versioned product
     tests:
     - not_null
+  - name: product_price
+    description: numeric, the price of the product for order line item
+    tests:
+    - not_null
   - name: product_type
     description: string, readable product type
     tests:
@@ -479,6 +495,27 @@ models:
     description: int, primary key representing a single MITx Online course run
   - name: programrun_id
     description: int, primary key representing a single MITx Online program run
+  - name: discount_amount_text
+    description: str, discount amount in readable format from the most recent coupon
+      redemption for the order. It can be percent-off which is <dollar amount>% off,
+      dollars-off which is $<dollar amount> off or fixed-price
+  - name: discount_code
+    description: str, discount code from the most recent coupon redemption for the
+      order
+  - name: discountredemption_timestamp
+    description: timestamp, specifying when the discount was redeemed from the most
+      recent coupon redemption for the order
+  - name: payment_transaction_id
+    description: str, unique identifier from most recent cybersource payment or UUID.
+  - name: payment_authorization_code
+    description: str, authorization code from most recent cybersource payment
+  - name: payment_method
+    description: str, payment method from most recent cybersource payment. Value could
+      be 'paypal' or 'card'.
+  - name: payment_bill_to_address_state
+    description: str, address state from most recent cybersource payment
+  - name: payment_bill_to_address_country
+    description: str, address country from most recent cybersource payment
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__ecommerce_order')

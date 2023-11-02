@@ -25,6 +25,7 @@ select
     , couponpaymentversion.couponpaymentversion_payment_transaction
     , couponpaymentversion.couponpaymentversion_tag
     , couponpaymentversion.couponpaymentversion_discount_type
+    , couponpaymentversion.couponpaymentversion_discount_amount_text
     , couponpaymentversion.couponpaymentversion_max_redemptions
 from couponpaymentversion
 inner join couponpayment on couponpaymentversion.couponpayment_id = couponpayment.couponpayment_id

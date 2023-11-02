@@ -15,6 +15,14 @@ with source as (
         , enabled as coupon_is_active
         , content_type_id as contenttype_id
         , invoice_id as couponinvoice_id
+        , case
+            when amount_type = 'fixed-discount'
+                then concat(cast(amount as varchar), ' off')
+            when amount_type = 'fixed-price'
+                then concat('Fixed Price: ', cast(amount as varchar))
+            when amount_type = 'percent-discount'
+                then concat(cast(amount * 100 as varchar), '% off')
+        end as coupon_discount_amount_text
         ,{{ cast_timestamp_to_iso8601('created_on') }} as coupon_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as coupon_updated_on
         ,{{ cast_timestamp_to_iso8601('activation_date') }} as coupon_activated_on
