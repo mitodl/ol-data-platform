@@ -7,11 +7,7 @@ with micromasters_program_certificates as (
 , mitxonline_program_certificates as (
     select * from {{ ref('int__mitxonline__program_certificates') }}
     --- dedp is handled in micromasters_program_certificates
-    where
-        program_id not in (
-            {{ var("dedp_mitxonline_public_policy_program_id") }}
-            , {{ var("dedp_mitxonline_international_development_program_id") }}
-        )
+    where program_is_dedp = false
 )
 
 , mitx_programs as (
@@ -22,15 +18,13 @@ with micromasters_program_certificates as (
     select
         micromasters_program_certificates.program_title
         , micromasters_program_certificates.micromasters_program_id
-        , mitx_programs.mitxonline_program_id
+        , micromasters_program_certificates.mitxonline_program_id
         , micromasters_program_certificates.program_completion_timestamp
         , micromasters_program_certificates.user_mitxonline_username
         , micromasters_program_certificates.user_edxorg_username
         , micromasters_program_certificates.user_email
         , micromasters_program_certificates.user_full_name
     from micromasters_program_certificates
-    left join mitx_programs
-        on micromasters_program_certificates.micromasters_program_id = mitx_programs.micromasters_program_id
 
     union all
 

@@ -9,4 +9,7 @@ select
     , program_title
     , program_is_live
     , program_readable_id
+    , program_type
+    , program_is_dedp
+    , program_is_micromasters
 from programs

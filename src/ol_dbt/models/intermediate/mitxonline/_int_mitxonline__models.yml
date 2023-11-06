@@ -1080,6 +1080,17 @@ models:
     tests:
     - unique
     - not_null
+  - name: program_type
+    description: str, type of the program. Value is free text, it could be MicroMasters®,
+      Series, etc
+  - name: program_is_dedp
+    description: boolean, specifying if the program is DEDP from readable_id
+    tests:
+    - not_null
+  - name: program_is_micromasters
+    description: boolean, specifying if the program is MITx MicroMasters® Program
+    tests:
+    - not_null
 
 - name: int__mitxonline__program_requirements
   columns:
@@ -1164,6 +1175,17 @@ models:
     - not_null
   - name: program_readable_id
     description: str, Open edX ID formatted as program-v1:{org}+{program code}
+    tests:
+    - not_null
+  - name: program_type
+    description: str, type of the program. Value is free text, it could be MicroMasters®,
+      Series, etc
+  - name: program_is_dedp
+    description: boolean, specifying if the program is DEDP from readable_id
+    tests:
+    - not_null
+  - name: program_is_micromasters
+    description: boolean, specifying if the program is MITx MicroMasters® Program
     tests:
     - not_null
   - name: user_username
