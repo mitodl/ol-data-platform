@@ -15,7 +15,7 @@ models:
     tests:
     - unique
   - name: micromasters_program_id
-    description: int, primary key representing the program in the MicroMasters database
+    description: int, primary key representing the program in the MicroMasters database.
     tests:
     - unique
   - name: program_description
