@@ -36,6 +36,9 @@ with lines as (
     select * from {{ ref('stg__mitxonline__app__postgres__ecommerce_discount') }}
 )
 
+---- this table doesn't have constraint so apply additional logic here as there should be only one discount
+---- that's actually applied to an order
+
 , discountredemptions as (
     select
         *

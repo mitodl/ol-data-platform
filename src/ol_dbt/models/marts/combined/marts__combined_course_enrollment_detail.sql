@@ -186,11 +186,11 @@ with mitx_enrollments as (
             mitxpro_enrollments.user_id = mitxpro_certificates.user_id
             and mitxpro_enrollments.courserun_id = mitxpro_certificates.courserun_id
     left join mitxpro_completed_orders
-        on mitxpro_enrollments.user_id = mitxpro_completed_orders.order_purchaser_user_id
+        on mitxpro_enrollments.ecommerce_order_id = mitxpro_completed_orders.order_id
     left join mitxpro_lines
         on
-            mitxpro_enrollments.courserun_id = mitxpro_lines.courserun_id
-            and mitxpro_completed_orders.order_id = mitxpro_lines.order_id
+            mitxpro_completed_orders.order_id = mitxpro_lines.order_id
+            and mitxpro_enrollments.courserun_id = mitxpro_lines.courserun_id
 
     union all
 

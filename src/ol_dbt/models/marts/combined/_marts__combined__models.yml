@@ -88,7 +88,10 @@ models:
       row_condition: "platform='edX.org'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id"]
-      row_condition: "platform in ('MITx Online', 'xPro')"
+      row_condition: "platform ='MITx Online'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserunenrollment_id"]
+      row_condition: "platform ='xPro'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id", "order_reference_number"]
       row_condition: "platform='Bootcamps'"
