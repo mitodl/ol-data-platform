@@ -19,6 +19,9 @@ with certificates as (
         , certificates.program_id
         , programs.program_title
         , programs.program_readable_id
+        , programs.program_type
+        , programs.program_is_dedp
+        , programs.program_is_micromasters
         , certificates.programcertificate_is_revoked
         , certificates.programcertificate_created_on
         , certificates.programcertificate_updated_on

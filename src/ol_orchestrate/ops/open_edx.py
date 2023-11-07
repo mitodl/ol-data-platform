@@ -18,6 +18,8 @@ from dagster import (
 )
 from dagster.core.definitions.input import In
 from dagster_shell.utils import execute as run_bash
+from flatten_dict import flatten
+from flatten_dict.reducers import make_reducer
 from pydantic import Field
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
@@ -112,6 +114,16 @@ def list_courses(
     yield Output(course_ids, "edx_course_ids")
 
 
+class CourseStructureConfig(Config):
+    flattened_dict_delimiter: str = Field(
+        default="__",
+        description=(
+            "The string to use for delimiting the nested fields of the dictionary "
+            "representing the course structure."
+        ),
+    )
+
+
 @op(
     name="retrieve_edx_course_structure",
     description=(
@@ -123,7 +135,7 @@ def list_courses(
     out={"course_structures": Out(dagster_type=DagsterPath)},
 )
 def fetch_edx_course_structure_from_api(
-    context: OpExecutionContext, course_ids: list[str]
+    context: OpExecutionContext, config: CourseStructureConfig, course_ids: list[str]
 ) -> DagsterPath:
     """Retrieve the course structure via the REST API of a running Open edX instance.
 
@@ -148,6 +160,10 @@ def fetch_edx_course_structure_from_api(
                 ).hexdigest(),
                 "course_id": course_id,
                 "course_structure": course_structure,
+                "course_structure_flattened": flatten(
+                    course_structure,
+                    reducer=make_reducer(config.flattened_dict_delimiter),
+                ),
                 "retrieved_at": datetime.now(tz=UTC).isoformat(),
             }
             structures.write(json.dumps(table_row))

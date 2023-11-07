@@ -28,14 +28,31 @@ class OpenEdxApiClient(ConfigurableResource):
         default="JWT",
         description="Token type to generate for use with authenticated requests",
     )
+    http_timeout: int = Field(
+        default=60,
+        description=(
+            "Time (in seconds) to allow for requests to complete before timing out."
+        ),
+    )
     _access_token: str = PrivateAttr(default=None)
     _access_token_expires: datetime = PrivateAttr(default=None)
+    _http_client: httpx.Client = PrivateAttr(default=None)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._initialize_client()
 
     @validator("token_type")
     def validate_token_type(cls, token_type):  # noqa: N805
         if token_type.lower() not in ["jwt", "bearer"]:
             raise ValidationError
         return token_type
+
+    def _initialize_client(self) -> None:
+        if self._http_client is not None:
+            return
+        timeout = httpx.Timeout(self.http_timeout, connect=10)
+        self._http_client = httpx.Client(timeout=timeout)
 
     def _fetch_access_token(self) -> str:
         now = datetime.now(tz=UTC)
@@ -46,7 +63,9 @@ class OpenEdxApiClient(ConfigurableResource):
                 "client_secret": self.client_secret,
                 "token_type": self.token_type,
             }
-            response = httpx.post(f"{self.lms_url}/oauth2/access_token", data=payload)
+            response = self._http_client.post(
+                f"{self.lms_url}/oauth2/access_token", data=payload
+            )
             response.raise_for_status()
             self._access_token = response.json()["access_token"]
             self._access_token_expires = now + timedelta(
@@ -56,7 +75,7 @@ class OpenEdxApiClient(ConfigurableResource):
 
     @property
     def _username(self) -> str:
-        response = httpx.get(
+        response = self._http_client.get(
             f"{self.lms_url}/api/user/v1/me",
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
         )
@@ -66,7 +85,7 @@ class OpenEdxApiClient(ConfigurableResource):
     def _fetch_with_auth(
         self, request_url: str, page_size: int = 100
     ) -> dict[Any, Any]:
-        response = httpx.get(
+        response = self._http_client.get(
             request_url,
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
             params={"username": self._username, "page_size": page_size},
@@ -112,7 +131,7 @@ class OpenEdxApiClient(ConfigurableResource):
                   to.
         """
         request_url = f"{self.studio_url}/api/courses/v0/export/"
-        response = httpx.post(
+        response = self._http_client.post(
             request_url,
             json={"courses": course_ids},
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
@@ -124,7 +143,7 @@ class OpenEdxApiClient(ConfigurableResource):
     def check_course_export_status(
         self, course_id: str, task_id: str
     ) -> dict[str, str]:
-        response = httpx.get(
+        response = self._http_client.get(
             f"{self.studio_url}/api/courses/v0/export/{course_id}/?task_id={task_id}",
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
             timeout=60,

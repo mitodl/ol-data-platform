@@ -26,22 +26,6 @@ select
     , mitxonline_programs.program_id as mitxonline_program_id
     , null as program_description
     , mitxonline_programs.program_title
-    , case
-        when
-            mitxonline_programs.program_id in
-            (
-                {{ var("dedp_mitxonline_public_policy_program_id") }}
-                , {{ var("dedp_mitxonline_international_development_program_id") }}
-            ) then true
-        else false
-    end as is_micromasters_program
-    , case
-        when
-            mitxonline_programs.program_id in
-            (
-                {{ var("dedp_mitxonline_public_policy_program_id") }}
-                , {{ var("dedp_mitxonline_international_development_program_id") }}
-            ) then true
-        else false
-    end as is_dedp_program
+    , mitxonline_programs.program_is_micromasters as is_micromasters_program
+    , mitxonline_programs.program_is_dedp as is_dedp_program
 from mitxonline_programs

@@ -7,6 +7,16 @@ sources:
   database: '{{ target.database }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
+  - name: raw__mitxonline__openedx__mysql__bulk_email_optout
+    columns:
+    - name: id
+      description: int, sequential ID tracking a email optout
+    - name: user_id
+      description: int, unique ID for each user on the MITx Online platform
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+        course
+
   - name: raw__mitxonline__app__postgres__ecommerce_basketdiscount
     columns:
     - name: id
@@ -494,13 +504,8 @@ sources:
         MITx Online website
     - name: title
       description: str, title of the course
-    - name: program_id
-      description: id, foreign key to courses_program (deprecating)
     - name: readable_id
       description: str, Open edX ID formatted as course-v1:{org}+{course code}
-    - name: position_in_program
-      description: int, sequential number indicating the course position in a program
-        (deprecating)
     - name: created_on
       description: timestamp, specifying when a course was initially created
     - name: updated_on
@@ -589,6 +594,9 @@ sources:
       description: str, title of the program
     - name: readable_id
       description: str, Open edX ID formatted as program-v1:{org}+{program code}
+    - name: program_type
+      description: str, type of the program. Value is free text, it could be MicroMasters®,
+        Series, etc
     - name: created_on
       description: timestamp, specifying when a program was initially created
     - name: updated_on
