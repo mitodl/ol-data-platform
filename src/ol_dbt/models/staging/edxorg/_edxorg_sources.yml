@@ -582,11 +582,10 @@ sources:
       description: str, IP address of the user who triggered the event. Empty for
         mobile events.
     - name: host
-      description: str, the site visited by the user. e.g. courses.mitxonline.mit.edu
+      description: str, the site visited by the user. e.g. courses.edx.org
     - name: time
-      description: str, time at which the event was emitted. It has inconsistent formats
-        due to log collector switches, YYYY-MM-DD HH:mm:ss.SSSSSS for older records,
-        YYYY-MM-ddTHH:mm:ss.SSSSSS for newer records
+      description: str, time at which the event was emitted in YYYY-MM-dd HH:mm:ss.SSSSSS
+        format
     - name: agent
       description: str, browser agent string of the user who triggered the event.
     - name: accept_language
