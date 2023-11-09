@@ -33,9 +33,9 @@ with micromasters_program_certificates as (
         , micromasters_users.user_mitxonline_username
         , edx_users.user_email
         , programs.micromasters_program_id
-        , programs.program_title
+        , micromasters_program_certificates.program_title
         , programs.mitxonline_program_id
-        , program_completions.user_edxorg_id
+        , micromasters_program_certificates.user_id as user_edxorg_id
         , edx_users.user_gender
         , edx_users.user_country
         , micromasters_users.user_address_city
@@ -50,11 +50,11 @@ with micromasters_program_certificates as (
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from micromasters_program_certificates
     left join edx_users
-        on program_completions.user_edxorg_id = edx_users.user_id
+        on micromasters_program_certificates.user_id = edx_users.user_id
     left join micromasters_users
-        on program_completions.user_edxorg_username = micromasters_users.user_edxorg_username
+        on micromasters_program_certificates.user_username = micromasters_users.user_edxorg_username
     left join programs
-        on program_completions.program_id = programs.micromasters_program_id
+        on micromasters_program_certificates.micromasters_program_id = programs.micromasters_program_id
 )
 
 -- Some users should recieve a certificate even though they don't fulfill the requirements according

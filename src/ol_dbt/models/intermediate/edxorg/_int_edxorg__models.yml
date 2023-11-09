@@ -411,6 +411,8 @@ models:
   - name: program_certificate_awarded_on
     description: timestamp, the date in ISO-8601 format that the learner has passed
       each of the courses in the program and was awarded a program certificate.
+  - name: micromasters_program_id
+    description: int, foreign key to program in the MicroMasters database
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_uuid"]
