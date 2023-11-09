@@ -437,3 +437,78 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id", "program_uuid"]
+
+- name: stg__edxorg__s3__tracking_logs__user_activity
+  description: edX.org event data that are emitted by server, the browser, or the
+    mobile device to capture information about user's interactions with a course.
+    This table filters out events that don't supply user identifiers like username
+    and user_id.
+  columns:
+  - name: user_username
+    description: str, username of a learner on edX.org
+    tests:
+    - not_null
+  - name: user_id
+    description: int, learner's user ID on edX.org. Extracted from context field.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course number}+{run_tag}.
+      Extracted from various fields - context.course_id, context.path, event_type
+      and page. Note that the course ID extracted from context field may not be a
+      valid. This field could be blank for any events that are not for any specific
+      course .e.g. user login/out.
+  - name: org_id
+    description: str, reference name in organizations_organization from open edX.
+      e.g. MITx . Extracted from context field.
+  - name: useractivity_path
+    description: str, URL that generated this event. Extracted from context field
+  - name: useractivity_context_object
+    description: object, it includes member fields that provide contextual information.
+      Common fields apply to all events are course_id, org_id, path, user_id. Other
+      member fields for applicable events are course_user_tags, module.
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The values are - browser, mobile, server, task
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, type of event triggered. Values depend on event_source.
+    tests:
+    - not_null
+  - name: useractivity_event_name
+    description: str, type of event triggered. When this field is present for an event,
+      it supersedes the event_type field.
+  - name: useractivity_event_object
+    description: object,it includes member fields that identify specifics of each
+      triggered event. Different member fields are supplied for different events.
+    tests:
+    - not_null
+  - name: useractivity_page_url
+    description: str, url of the page the user was visiting when the event was emitted.
+  - name: useractivity_session_id
+    description: str, 32-character value to identify the user’s session. All browser
+      events and the server 'enrollment' events include session value. Other server
+      events and mobile events do not include a session value.
+  - name: useractivity_ip
+    description: str, IP address of the user who triggered the event. Empty for mobile
+      events.
+  - name: useractivity_http_host
+    description: str, The site visited by the user. e.g. courses.edx.org
+    tests:
+    - not_null
+  - name: useractivity_http_user_agent
+    description: str, browser agent string of the user who triggered the event.
+  - name: useractivity_http_accept_language
+    description: str, value from the HTTP Accept-Language request-header field
+  - name: useractivity_http_referer
+    description: str, URI from the HTTP Referer request-header field
+  - name: useractivity_timestamp
+    description: timestamp, time at which the event was emitted, formatted as ISO
+      8601 string
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
+        "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
