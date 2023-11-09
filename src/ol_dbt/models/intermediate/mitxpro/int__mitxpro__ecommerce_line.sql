@@ -22,6 +22,7 @@ select
     lines.line_id
     , lines.order_id
     , lines.productversion_id
+    , productversions.productversion_price as product_price
     , lines.line_created_on
     , lines.line_updated_on
     , products.product_id

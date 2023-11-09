@@ -7,7 +7,7 @@ with source as (
 , renamed as (
     select
         id as line_id
-        , price as line_price
+        , cast(price as decimal(38, 2)) as line_price
         , description as line_description
         , order_id
         , bootcamp_run_id as courserun_id

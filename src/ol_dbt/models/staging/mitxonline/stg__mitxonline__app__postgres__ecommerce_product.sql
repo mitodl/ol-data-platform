@@ -8,7 +8,7 @@ with source as (
 
     select
         id as product_id
-        , price as product_price
+        , cast(price as decimal(38, 2)) as product_price
         , is_active as product_is_active
         , object_id as product_object_id
         , description as product_description

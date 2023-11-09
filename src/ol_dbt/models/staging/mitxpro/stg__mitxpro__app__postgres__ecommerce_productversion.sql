@@ -9,7 +9,7 @@ with source as (
     select
         id as productversion_id
         , text_id as productversion_readable_id
-        , price as productversion_price
+        , cast(price as decimal(38, 2)) as productversion_price
         , description as productversion_description
         , product_id
         , requires_enrollment_code as productversion_requires_enrollment_code

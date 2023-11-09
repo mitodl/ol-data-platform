@@ -386,3 +386,68 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('__micromasters__users')
+
+- name: int__micromasters__orders
+  columns:
+  - name: order_id
+    description: int, primary key representing a single  order
+    tests:
+    - unique
+    - not_null
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created
+    tests:
+    - not_null
+  - name: order_state
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded", "partially_refunded"
+    tests:
+    - not_null
+  - name: order_total_price_paid
+    description: number, total order amount
+    tests:
+    - not_null
+  - name: user_id
+    description: int, primary key in users_user for the purchaser
+    tests:
+    - not_null
+  - name: order_reference_number
+    description: string, readable id for the order
+    tests:
+    - unique
+  - name: line_price
+    description: numeric, list price for the order line
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, courserun_readable_id from courses_courserun
+    tests:
+    - not_null
+  - name: courserun_edxorg_readable_id
+    description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
+      to match course in edxorg
+  - name: receipt_transaction_id
+    description: str, transaction identifier from most recent cybersource payment
+      for the order
+  - name: receipt_payment_method
+    description: str, payment method from most recent cybersource payment for the
+      order
+  - name: receipt_authorization_code
+    description: str, authorization code from most recent cybersource payment for
+      the order
+  - name: receipt_bill_to_address_state
+    description: str, address state from most recent cybersource payment for the order
+  - name: receipt_bill_to_address_country
+    description: str, address country from most recent cybersource payment for the
+      order
+  - name: coupon_discount_amount_text
+    description: str, discount amount in readable format. It can be fixed discount
+      which is $<dollar amount> off, fixed-price which is $<dollar amount> or percent-discount
+      which is <percentage> % off
+  - name: coupon_code
+    description: str, coupon code for the redeemed coupon
+  - name: redeemedcoupon_created_on
+    description: timestamp, specifying when the coupon was redeemed for the order
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__micromasters__app__postgres__ecommerce_order')

@@ -8,12 +8,20 @@ with source as (
 
     select
         id as discount_id
-        , amount as discount_amount
+        , cast(amount as decimal(38, 2)) as discount_amount
         , discount_code
         , discount_type
         , max_redemptions as discount_max_redemptions
         , redemption_type as discount_redemption_type
         , payment_type as discount_source
+        , case
+            when discount_type = 'percent-off'
+                then concat(format('%.2f', amount), '% off')
+            when discount_type = 'dollars-off'
+                then concat('$', format('%.2f', amount), ' off')
+            when discount_type = 'fixed-price'
+                then concat('Fixed Price: ', format('%.2f', amount))
+        end as discount_amount_text
         ,{{ cast_timestamp_to_iso8601('created_on') }} as discount_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as discount_updated_on
         ,{{ cast_timestamp_to_iso8601('activation_date') }} as discount_activated_on
