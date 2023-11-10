@@ -477,13 +477,13 @@ pytz = ">2021.1"
 
 [[package]]
 name = "dagster"
-version = "1.5.6"
+version = "1.5.7"
 description = "Dagster is an orchestration platform for the development, production, and observation of data assets."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-1.5.6-py3-none-any.whl", hash = "sha256:662e4d6bfed90251c244ea6fe4a3ce93ffcae7c82c572b9c2eec17ff5547fc3d"},
-    {file = "dagster-1.5.6.tar.gz", hash = "sha256:f8d71f15f177f5421b5595330bd7b2a253588a0fac0c44bdc933b0f15ad5c6f5"},
+    {file = "dagster-1.5.7-py3-none-any.whl", hash = "sha256:b452281abe8613b3611058d0e2a131a93fed4bf9f39e1f90b3a3c8453339f6cb"},
+    {file = "dagster-1.5.7.tar.gz", hash = "sha256:608430759cd211a36c28ee6a55f462f11369e8a828d1b1fdab7ea0da995fd9ad"},
 ]
 
 [package.dependencies]
@@ -491,13 +491,13 @@ alembic = ">=1.2.1,<1.6.3 || >1.6.3,<1.7.0 || >1.7.0,<1.11.0 || >1.11.0"
 click = ">=5.0"
 coloredlogs = ">=6.1,<=14.0"
 croniter = ">=0.3.34"
-dagster-pipes = "1.5.6"
+dagster-pipes = "1.5.7"
 docstring-parser = "*"
 grpcio = ">=1.44.0"
 grpcio-health-checking = ">=1.44.0"
 Jinja2 = "*"
 packaging = ">=20.9"
-pendulum = "*"
+pendulum = "<3"
 protobuf = ">=3.20.0"
 psutil = {version = ">=1.0", markers = "platform_system == \"Windows\""}
 pydantic = ">1.10.0,<1.10.7 || >1.10.7"
@@ -526,37 +526,37 @@ test = ["buildkite-test-collector", "docker", "grpcio-tools (>=1.44.0)", "mock (
 
 [[package]]
 name = "dagster-airbyte"
-version = "0.21.6"
+version = "0.21.7"
 description = "Package for integrating Airbyte with Dagster."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-airbyte-0.21.6.tar.gz", hash = "sha256:0beeace21e8e28c6a9c3fc961acdae088bf049854b863e12d56a5f65bf1a2e25"},
-    {file = "dagster_airbyte-0.21.6-py3-none-any.whl", hash = "sha256:8ce0d3af8a9cd74089a15796c09f59d9c3e136c891ddcd4b17e45a45f54265f9"},
+    {file = "dagster-airbyte-0.21.7.tar.gz", hash = "sha256:3736f58280053ad3079f01a3dea3f4972a1e128b43f463d3e6095a12f5613b75"},
+    {file = "dagster_airbyte-0.21.7-py3-none-any.whl", hash = "sha256:9c8a1b155fd7d747dfce04f2de4cafc0ee17edec167dbbc75da749b3b59e3ed0"},
 ]
 
 [package.dependencies]
-dagster = "1.5.6"
+dagster = "1.5.7"
 requests = "*"
 
 [package.extras]
-managed = ["dagster-managed-elements (==0.21.6)"]
+managed = ["dagster-managed-elements (==0.21.7)"]
 test = ["requests-mock"]
 
 [[package]]
 name = "dagster-aws"
-version = "0.21.6"
+version = "0.21.7"
 description = "Package for AWS-specific Dagster framework solid and resource components."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-aws-0.21.6.tar.gz", hash = "sha256:13513ffa7407c6c3445b72ead491b47c324efb4f37c9571672c8476f327ad655"},
-    {file = "dagster_aws-0.21.6-py3-none-any.whl", hash = "sha256:6d6a824f3a4d65f78a8d9facb890e5de5bbeb05b2cc0c8544da38e57dd6df588"},
+    {file = "dagster-aws-0.21.7.tar.gz", hash = "sha256:b7211fbaaead8dc11d5584dc951a8f2ac5a69e90052b4e6db58b796ac990373c"},
+    {file = "dagster_aws-0.21.7-py3-none-any.whl", hash = "sha256:00186b51df8a9c5fbfb3d71bf7de8478f41c2d986b11bb3555471a107c9b27c3"},
 ]
 
 [package.dependencies]
 boto3 = "*"
-dagster = "1.5.6"
+dagster = "1.5.7"
 packaging = "*"
 requests = "*"
 
@@ -567,18 +567,18 @@ test = ["botocore", "moto[s3,server] (>=2.2.8)", "requests-mock", "xmltodict (==
 
 [[package]]
 name = "dagster-dbt"
-version = "0.21.6"
+version = "0.21.7"
 description = "A Dagster integration for dbt"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-dbt-0.21.6.tar.gz", hash = "sha256:37c50be36b3bc3926940aefb06b98f2d85b8fd959ab166995059fbf8cfd19053"},
-    {file = "dagster_dbt-0.21.6-py3-none-any.whl", hash = "sha256:262d84bb8be54a8b07db040243be35a1b8baf43af27348efbeb6ded09eb9891d"},
+    {file = "dagster-dbt-0.21.7.tar.gz", hash = "sha256:3d763ff1d30ea5ccd9989f0a61c17300ae7b896e151f18a831a925562efcc179"},
+    {file = "dagster_dbt-0.21.7-py3-none-any.whl", hash = "sha256:2cd7e0b065d395fb3db913bfb86829eba13234b9c046732b829bbe197a07d21f"},
 ]
 
 [package.dependencies]
-dagster = "1.5.6"
-dbt-core = "<1.7"
+dagster = "1.5.7"
+dbt-core = "<1.8"
 Jinja2 = "*"
 networkx = "*"
 orjson = "*"
@@ -592,33 +592,33 @@ test = ["dagster-duckdb", "dagster-duckdb-pandas", "dbt-duckdb"]
 
 [[package]]
 name = "dagster-docker"
-version = "0.21.6"
+version = "0.21.7"
 description = "A Dagster integration for docker"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-docker-0.21.6.tar.gz", hash = "sha256:4616bc5746913b6918e0a7d8bfb9bffbb54eb3ec7a63427621df99e2c7df580e"},
-    {file = "dagster_docker-0.21.6-py3-none-any.whl", hash = "sha256:ec31273af658480714f1da6ce460f07c92c9fc6fa3e0da8306f94ce6ff713de4"},
+    {file = "dagster-docker-0.21.7.tar.gz", hash = "sha256:892f564ec28ab6fe77056146b083699a4df3987927f8c5e9b69433d43995ad31"},
+    {file = "dagster_docker-0.21.7-py3-none-any.whl", hash = "sha256:302cb3506e03520135590f551af24cf33aedd0211b829d258765b14eb6113089"},
 ]
 
 [package.dependencies]
-dagster = "1.5.6"
+dagster = "1.5.7"
 docker = "*"
 docker-image-py = "*"
 
 [[package]]
 name = "dagster-duckdb"
-version = "0.21.6"
+version = "0.21.7"
 description = "Package for DuckDB-specific Dagster framework op and resource components."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-duckdb-0.21.6.tar.gz", hash = "sha256:918f3279aa251f8c9978bbcf5705143a8947492e550dcddc0922ba6e212d6032"},
-    {file = "dagster_duckdb-0.21.6-py3-none-any.whl", hash = "sha256:00b1b3161a6eb35121ef5b7def1d72ad0d089b4da512f304b2961ca37ca7ba64"},
+    {file = "dagster-duckdb-0.21.7.tar.gz", hash = "sha256:2d164ed55bbad617b39d4feb33747e495d7ab99a0b36af9872b8167d24a8492c"},
+    {file = "dagster_duckdb-0.21.7-py3-none-any.whl", hash = "sha256:a845a8fd74e2be38883729d2dbfb5da44a0f1ddeaf2cd1715a52bd991adfefb5"},
 ]
 
 [package.dependencies]
-dagster = "1.5.6"
+dagster = "1.5.7"
 duckdb = "*"
 
 [package.extras]
@@ -627,18 +627,18 @@ pyspark = ["pyspark (>=3)"]
 
 [[package]]
 name = "dagster-gcp"
-version = "0.21.6"
+version = "0.21.7"
 description = "Package for GCP-specific Dagster framework op and resource components."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-gcp-0.21.6.tar.gz", hash = "sha256:6e45cbfc64ae6e3511420a0dc1a6ef9780569e8c6e18f766b3d6a1527a2c8949"},
-    {file = "dagster_gcp-0.21.6-py3-none-any.whl", hash = "sha256:cf0dfddc273bc2ca16f33a283710045a54d0f34b22238dbc7b7d80ad40a1518a"},
+    {file = "dagster-gcp-0.21.7.tar.gz", hash = "sha256:961c725adaf0763d65ca19d143ec8447bbb69f3d0e49c2f599adbc9fb0d44289"},
+    {file = "dagster_gcp-0.21.7-py3-none-any.whl", hash = "sha256:b43eda3234eb3ca8f8932f98d88fb71b0ff214aa999fe6b2fc4cf5a2d3fb5f9a"},
 ]
 
 [package.dependencies]
-dagster = "1.5.6"
-dagster-pandas = "0.21.6"
+dagster = "1.5.7"
+dagster-pandas = "0.21.7"
 db-dtypes = "*"
 google-api-python-client = "*"
 google-cloud-bigquery = "*"
@@ -650,17 +650,17 @@ pyarrow = ["pyarrow"]
 
 [[package]]
 name = "dagster-graphql"
-version = "1.5.6"
+version = "1.5.7"
 description = "The GraphQL frontend to python dagster."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-graphql-1.5.6.tar.gz", hash = "sha256:5d77e1ca22c930a9256b36eeb04a418371ab1e609a92b08fcc8853134f2b4b48"},
-    {file = "dagster_graphql-1.5.6-py3-none-any.whl", hash = "sha256:40fbb4d9c87265308524a8e94d1b07ee7448eaab43730259ff7a9585ac4e8b79"},
+    {file = "dagster-graphql-1.5.7.tar.gz", hash = "sha256:67e27db00877d0b6b028780f8b1e122b3ba2dab79e7ee15924802f5f95e3484f"},
+    {file = "dagster_graphql-1.5.7-py3-none-any.whl", hash = "sha256:1784cba11528d41a89b26e76bc5636493a44cccd8eb9af1a0d1ff9311332a6f0"},
 ]
 
 [package.dependencies]
-dagster = "1.5.6"
+dagster = "1.5.7"
 gql = {version = ">=3.0.0", extras = ["requests"]}
 graphene = ">=3"
 requests = "*"
@@ -668,77 +668,77 @@ starlette = "*"
 
 [[package]]
 name = "dagster-pandas"
-version = "0.21.6"
+version = "0.21.7"
 description = "Utilities and examples for working with pandas and dagster, an opinionated framework for expressing data pipelines"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-pandas-0.21.6.tar.gz", hash = "sha256:cc90ff66d33db488c5e154ba500948cd2c1d064372bcef1f03d4a3e7b8b78542"},
-    {file = "dagster_pandas-0.21.6-py3-none-any.whl", hash = "sha256:e4d2a859fd36441c8e4309ccb49d89cac8a4dd624408a196d425a5caf9dcf5d7"},
+    {file = "dagster-pandas-0.21.7.tar.gz", hash = "sha256:d65942c5a10c89b735c272b47b27b57359e2df9200a4a3577becf8413e1b297c"},
+    {file = "dagster_pandas-0.21.7-py3-none-any.whl", hash = "sha256:fc63d95b65890469b62f35517b9bfb682bbd7377eb21f07ddbc2de094b9efc67"},
 ]
 
 [package.dependencies]
-dagster = "1.5.6"
+dagster = "1.5.7"
 pandas = "*"
 
 [[package]]
 name = "dagster-pipes"
-version = "1.5.6"
+version = "1.5.7"
 description = "Toolkit for Dagster integrations with transform logic outside of Dagster"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-pipes-1.5.6.tar.gz", hash = "sha256:eed934bc2e40d2edee173bbfbb4efc04c5b800a7f89ad9cb7bb8511cf8d945ed"},
-    {file = "dagster_pipes-1.5.6-py3-none-any.whl", hash = "sha256:eb33f65f1d3c62d7d56de03977f4eb8996b2ff108cdab77da85ee24701ad70e7"},
+    {file = "dagster-pipes-1.5.7.tar.gz", hash = "sha256:a98eeab5f47d5e6b3a68449f4427ae5c8319d42ea58741426620c5b1a79b410f"},
+    {file = "dagster_pipes-1.5.7-py3-none-any.whl", hash = "sha256:d2efca7498c03757fb403ff4f90ee536b148c19ebaa82c07358ce30b4b031ee1"},
 ]
 
 [[package]]
 name = "dagster-postgres"
-version = "0.21.6"
+version = "0.21.7"
 description = "A Dagster integration for postgres"
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-postgres-0.21.6.tar.gz", hash = "sha256:6e8b7ec52f9ecc68d85699b469f64c1b16e451f2ab55ef2bc352b10bd1bb8ae3"},
-    {file = "dagster_postgres-0.21.6-py3-none-any.whl", hash = "sha256:d7370bd96836bf80085847caaa9dfedf59556f874145639b0ee9264eace8220c"},
+    {file = "dagster-postgres-0.21.7.tar.gz", hash = "sha256:1c42396f8374de3deb1b9feb3c58d26c40ccd850b42e213560dc1d924a89d04d"},
+    {file = "dagster_postgres-0.21.7-py3-none-any.whl", hash = "sha256:90b45cb4e84783b593687cc8910ede9148d0c5a8b43b4a43df550ed865c8daf4"},
 ]
 
 [package.dependencies]
-dagster = "1.5.6"
+dagster = "1.5.7"
 psycopg2-binary = "*"
 
 [[package]]
 name = "dagster-shell"
-version = "0.21.6"
+version = "0.21.7"
 description = "Package for Dagster shell ops."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster-shell-0.21.6.tar.gz", hash = "sha256:8a53b4b69aeacde0c745d3214d94f98e133c7d8cb3a86013dbaa0a128e340fd8"},
-    {file = "dagster_shell-0.21.6-py3-none-any.whl", hash = "sha256:fc7db0721c0c1776841d40bb16905e11161152016ace777f002abfcf37b0b7fa"},
+    {file = "dagster-shell-0.21.7.tar.gz", hash = "sha256:c65b34cd5bc5f1489899d4db0a3d7c9738b741c6ae7b6b39049e22cbdba2f3ca"},
+    {file = "dagster_shell-0.21.7-py3-none-any.whl", hash = "sha256:d1d805d0fb8e260cd84a9bee260e5d49c68ed3e3d731d76b94cea9996b775a0b"},
 ]
 
 [package.dependencies]
-dagster = "1.5.6"
+dagster = "1.5.7"
 
 [package.extras]
 test = ["psutil"]
 
 [[package]]
 name = "dagster-webserver"
-version = "1.5.6"
+version = "1.5.7"
 description = "Web UI for dagster."
 optional = false
 python-versions = "*"
 files = [
-    {file = "dagster_webserver-1.5.6-py3-none-any.whl", hash = "sha256:80af5e3af3059cdd79b0549f63335ffbebb85a5901dfd9c9b97a6756146dbc5f"},
-    {file = "dagster_webserver-1.5.6.tar.gz", hash = "sha256:679dc38fa5a346773ac47db20bd2032fc138b3a379425f240950de1e65d03335"},
+    {file = "dagster_webserver-1.5.7-py3-none-any.whl", hash = "sha256:6cb82b5e4bffe0d510cb1d44b980590ec53af4992eb576fb3e02cc4f6c355f3b"},
+    {file = "dagster_webserver-1.5.7.tar.gz", hash = "sha256:0817a098ee4313c0b75f37cd2b61b2684a618e761c2210eb8b36e5b923fb388f"},
 ]
 
 [package.dependencies]
 click = ">=7.0,<9.0"
-dagster = "1.5.6"
-dagster-graphql = "1.5.6"
+dagster = "1.5.7"
+dagster-graphql = "1.5.7"
 starlette = "*"
 uvicorn = {version = "*", extras = ["standard"]}
 
@@ -765,28 +765,28 @@ pyarrow = ">=3.0.0"
 
 [[package]]
 name = "dbt-core"
-version = "1.6.7"
+version = "1.7.1"
 description = "With dbt, data analysts and engineers can build analytics the way engineers build applications."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "dbt-core-1.6.7.tar.gz", hash = "sha256:09c76b6b9bde3f8e00d24451a18af5b1c8151abfda9884603ce9d5bafc24c556"},
-    {file = "dbt_core-1.6.7-py3-none-any.whl", hash = "sha256:fc76ec2167d336c4a8cdd09c5e0e781a129582dcca38cd8a1f87c8691717543e"},
+    {file = "dbt-core-1.7.1.tar.gz", hash = "sha256:78ac4711f35f7b7b1ad4bb17181b900ff9e15aed424e432e336fe110fec5981e"},
+    {file = "dbt_core-1.7.1-py3-none-any.whl", hash = "sha256:b62246668ea969d20e47c4965022bca3295dd48e58ad6dd6b58036cc912f3728"},
 ]
 
 [package.dependencies]
-agate = ">=1.7.0,<1.8.0"
+agate = ">=1.7.1,<1.8.0"
 cffi = ">=1.9,<2.0.0"
-click = "<9"
+click = ">=8.0.2,<9"
 colorama = ">=0.3.9,<0.5"
-dbt-extractor = ">=0.4.1,<0.5.0"
-dbt-semantic-interfaces = ">=0.2.0,<0.3.0"
-hologram = ">=0.0.16,<0.1.0"
+dbt-extractor = ">=0.5.0,<0.6.0"
+dbt-semantic-interfaces = ">=0.4.0,<0.5.0"
 idna = ">=2.5,<4"
 isodate = ">=0.6,<0.7"
 Jinja2 = ">=3.1.2,<3.2.0"
+jsonschema = ">=3.0"
 logbook = ">=1.5,<1.6"
-mashumaro = {version = ">=3.8.1,<3.9.0", extras = ["msgpack"]}
+mashumaro = {version = ">=3.9,<4.0", extras = ["msgpack"]}
 minimal-snowplow-tracker = ">=0.0.2,<0.1.0"
 networkx = ">=2.3,<4"
 packaging = ">20.9"
@@ -801,17 +801,17 @@ urllib3 = ">=1.0,<2.0"
 
 [[package]]
 name = "dbt-duckdb"
-version = "1.6.2"
+version = "1.7.0"
 description = "The duckdb adapter plugin for dbt (data build tool)"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "dbt-duckdb-1.6.2.tar.gz", hash = "sha256:66afaa1b43b57547c7daed74d8b1b335a02c537f49bb055e613da1f477ac9d5c"},
-    {file = "dbt_duckdb-1.6.2-py3-none-any.whl", hash = "sha256:59e48c53c6183168ba275098ff4043f56891a6499e8881c89191bfd375bdf58c"},
+    {file = "dbt-duckdb-1.7.0.tar.gz", hash = "sha256:e2479f5fdd5177eea37c081d8ea126d80ec51d95e69ea31132ade396538bf0a0"},
+    {file = "dbt_duckdb-1.7.0-py3-none-any.whl", hash = "sha256:8e00d14f9ed6b93a9e6878d7a124c9e37ad44c497efe55e38f5ef98e20684ead"},
 ]
 
 [package.dependencies]
-dbt-core = ">=1.6.0,<1.7.0"
+dbt-core = ">=1.7.0,<1.8.0"
 duckdb = ">=0.7.0"
 
 [package.extras]
@@ -819,38 +819,37 @@ glue = ["boto3", "mypy-boto3-glue"]
 
 [[package]]
 name = "dbt-extractor"
-version = "0.4.1"
+version = "0.5.0"
 description = "A tool to analyze and extract information from Jinja used in dbt projects."
 optional = false
 python-versions = ">=3.6.1"
 files = [
-    {file = "dbt_extractor-0.4.1-cp36-abi3-macosx_10_7_x86_64.whl", hash = "sha256:4dc715bd740e418d8dc1dd418fea508e79208a24cf5ab110b0092a3cbe96bf71"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:bc9e0050e3a2f4ea9fe58e8794bc808e6709a0c688ed710fc7c5b6ef3e5623ec"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:76872cdee659075d6ce2df92dc62e59a74ba571be62acab2e297ca478b49d766"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:81435841610be1b07806d72cd89b1956c6e2a84c360b9ceb3f949c62a546d569"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:7c291f9f483eae4f60dd5859097d7ba51d5cb6c4725f08973ebd18cdea89d758"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:822b1e911db230e1b9701c99896578e711232001027b518c44c32f79a46fa3f9"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:554d27741a54599c39e5c0b7dbcab77400d83f908caba284a3e960db812e5814"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:a805d51a25317f53cbff951c79b9cf75421cf48e4b3e1dfb3e9e8de6d824b76c"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:cad90ddc708cb4182dc16fe2c87b1f088a1679877b93e641af068eb68a25d582"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:34783d788b133f223844e280e37b3f5244f2fb60acc457aa75c2667e418d5442"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:9da211869a1220ea55c5552c1567a3ea5233a6c52fa89ca87a22465481c37bc9"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-musllinux_1_2_i686.whl", hash = "sha256:7d7c47774dc051b8c18690281a55e2e3d3320e823b17e04b06bc3ff81b1874ba"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:037907a7c7ae0391045d81338ca77ddaef899a91d80f09958f09fe374594e19b"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-win32.whl", hash = "sha256:3fe8d8e28a7bd3e0884896147269ca0202ca432d8733113386bdc84c824561bf"},
-    {file = "dbt_extractor-0.4.1-cp36-abi3-win_amd64.whl", hash = "sha256:35265a0ae0a250623b0c2e3308b2738dc8212e40e0aa88407849e9ea090bb312"},
-    {file = "dbt_extractor-0.4.1.tar.gz", hash = "sha256:75b1c665699ec0f1ffce1ba3d776f7dfce802156f22e70a7b9c8f0b4d7e80f42"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-macosx_10_7_x86_64.whl", hash = "sha256:f333af362bdb95fa6e52b88e1df3575755680190b4867344c808d438a98b6e71"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-macosx_10_9_x86_64.macosx_11_0_arm64.macosx_10_9_universal2.whl", hash = "sha256:111e4766736a00f1a4b76d0fe2016d70015b833b791b0bf20c2328e3d27e35f6"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-manylinux_2_12_i686.manylinux2010_i686.whl", hash = "sha256:a980467342e3a9f9f79eb8eab2dd0106f8fd3c13913b7af2f4ad96279ad3df25"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:166bad7ee26487ad22b4d7d3c98f168b0c450004aaaa7babd9ccf3c7e36a48f8"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:3249ce65b6add2c0bef756d8e7fe19a838451c5a63c08e52de7b4a4c5aad40de"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:c1a4dcf3571da55671dc3d96df64ea0ec3649588bf5a58677cad5b207edd9e93"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:856719ad009cf3aa29d8f0abbf72eff0286ba0f2351c58c0c4eb87303aabf476"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:6ca976dd4d73de8be2eddde1285007ee7f2f826218a7975bd00e71830b499eac"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2a56a24cc0b52d004274c9a4eadb342fddc36afae178f59da400da5a214061a4"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:b61a14f273d94b9279510e3cfab0559ca4f8bff83a3e1ea8b367d17a34bccf65"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:01216bd1636a6e0f80a72f1baaefe2a9ec95e16dc86e4c4c9474bf11307c0847"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-musllinux_1_2_i686.whl", hash = "sha256:fcce461dc21e737e3c9788413bb3142dc50bf5c64a35035ffe1f8441bc86d133"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:7199d4fccd21889b59d873fd7b453a59672e9cdf445b938cf280d0fb1d805afc"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-win32.whl", hash = "sha256:4314011c99f91a4041f048c6a4e2b9d24180f5e5935febca68dd28db5ef55177"},
+    {file = "dbt_extractor-0.5.0-cp38-abi3-win_amd64.whl", hash = "sha256:0dc2879068f4b325beb2d866842b923d5df5ad953c122588b17151b32d9cd33b"},
 ]
 
 [[package]]
 name = "dbt-semantic-interfaces"
-version = "0.2.3"
+version = "0.4.1"
 description = "The shared semantic layer definitions that dbt-core and MetricFlow use"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "dbt_semantic_interfaces-0.2.3-py3-none-any.whl", hash = "sha256:69235a6b261c45d1501c29a9b2a9496935b0c764e7fd25a2f83471ef53dae15f"},
-    {file = "dbt_semantic_interfaces-0.2.3.tar.gz", hash = "sha256:628fd65ce01bbfbf9115866d2bb11616d0e1987b65fb4fabfdf9bb807177c2ee"},
+    {file = "dbt_semantic_interfaces-0.4.1-py3-none-any.whl", hash = "sha256:68da17a75591d5557d46ffbe88e919d0f1eb9bd262b48026a9fd9d8334d10f8b"},
+    {file = "dbt_semantic_interfaces-0.4.1.tar.gz", hash = "sha256:d79cb4b5e5103099874530735a117db61f7dcbb1a774f9ce65068c24cb7e874e"},
 ]
 
 [package.dependencies]
@@ -858,7 +857,7 @@ click = ">=7.0,<9.0"
 importlib-metadata = ">=6.0,<7.0"
 jinja2 = ">=3.0,<4.0"
 jsonschema = ">=4.0,<5.0"
-more-itertools = ">=8.0,<9.0"
+more-itertools = ">=8.0,<11.0"
 pydantic = ">=1.10,<2.0"
 python-dateutil = ">=2.0,<3.0"
 pyyaml = ">=6.0,<7.0"
@@ -866,17 +865,17 @@ typing-extensions = ">=4.4,<5.0"
 
 [[package]]
 name = "dbt-trino"
-version = "1.6.2"
+version = "1.7.0"
 description = "The trino adapter plugin for dbt (data build tool)"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "dbt-trino-1.6.2.tar.gz", hash = "sha256:4c296222bb8c800345bceb2730c2224c365386fdcaf76ede106a3276ee39e557"},
-    {file = "dbt_trino-1.6.2-py3-none-any.whl", hash = "sha256:0f66d785f30be2f8f798f3470bca10ace9f0d475694b73070ee0cbcbad227303"},
+    {file = "dbt-trino-1.7.0.tar.gz", hash = "sha256:7d3b7da7d569667ffd7feef333170c2f4d9c4374b9a8b8a8f85ab34d21864f65"},
+    {file = "dbt_trino-1.7.0-py3-none-any.whl", hash = "sha256:53c5ad79df91d9c9832a82a2d0ae2f566b51898eba21d011d96bc7b6e79d45d7"},
 ]
 
 [package.dependencies]
-dbt-core = ">=1.6.0,<1.7.0"
+dbt-core = ">=1.7.0,<1.8.0"
 trino = ">=0.326,<1.0"
 
 [[package]]
@@ -1589,21 +1588,6 @@ files = [
 ]
 
 [[package]]
-name = "hologram"
-version = "0.0.16"
-description = "JSON schema generation from dataclasses"
-optional = false
-python-versions = "*"
-files = [
-    {file = "hologram-0.0.16-py3-none-any.whl", hash = "sha256:4e56bd525336bb64a18916f871977a4125b64be8aaa750233583003333cda361"},
-    {file = "hologram-0.0.16.tar.gz", hash = "sha256:1c2c921b4e575361623ea0e0d0aa5aee377b1a333cc6c6a879e213ed34583e55"},
-]
-
-[package.dependencies]
-jsonschema = ">=3.0"
-python-dateutil = ">=2.8,<2.9"
-
-[[package]]
 name = "httpcore"
 version = "1.0.1"
 description = "A minimal low-level HTTP client."
@@ -2030,13 +2014,13 @@ files = [
 
 [[package]]
 name = "mashumaro"
-version = "3.8.1"
+version = "3.10"
 description = "Fast serialization library on top of dataclasses"
 optional = false
-python-versions = ">=3.7"
+python-versions = ">=3.8"
 files = [
-    {file = "mashumaro-3.8.1-py3-none-any.whl", hash = "sha256:e060469a4bec1c86f8145ea27ecd99027ea3e343075a4efcb5e8a969a45b9fb9"},
-    {file = "mashumaro-3.8.1.tar.gz", hash = "sha256:8bae8b25e2287b75094655b8ba8635f34016c09ca16498188f2f3b198d88b7ef"},
+    {file = "mashumaro-3.10-py3-none-any.whl", hash = "sha256:d2c0fd5e7878987629d41f4986d9b0903d362a92eeb299b7d88b87eb113f4f48"},
+    {file = "mashumaro-3.10.tar.gz", hash = "sha256:0248a5c8574aa6cd20696621502d38a7ea66af3d6d93c5d03f93b33298edc878"},
 ]
 
 [package.dependencies]
