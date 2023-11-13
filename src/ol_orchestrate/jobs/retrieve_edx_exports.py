@@ -1,5 +1,10 @@
 from dagster import graph
 
+from ol_orchestrate.ops.normalize_logs import (
+    load_files_to_table,
+    transform_log_data,
+    write_file_to_s3,
+)
 from ol_orchestrate.ops.retrieve_edx_exports import (
     download_edx_data,
     extract_course_files,
@@ -36,4 +41,9 @@ def retrieve_edx_course_exports():
     },
 )
 def retrieve_edx_tracking_logs():
-    upload_files(download_edx_data())
+    file_list = upload_files(download_edx_data())
+    file_list.map(
+        lambda file_date: write_file_to_s3(
+            transform_log_data(load_files_to_table(file_date))
+        )
+    )

@@ -1,3 +1,4 @@
+import datetime
 import os
 import re
 from functools import partial
@@ -9,7 +10,11 @@ from dagster import (
     SensorDefinition,
 )
 from dagster_aws.s3 import S3Resource
+from dagster_duckdb import DuckDBResource
 
+from ol_orchestrate.definitions.edx.normalize_tracking_logs import (
+    daily_tracking_log_config,
+)
 from ol_orchestrate.jobs.retrieve_edx_exports import (
     retrieve_edx_course_exports,
     retrieve_edx_tracking_logs,
@@ -93,6 +98,13 @@ s3_logs_job_def = retrieve_edx_tracking_logs.to_job(
     name="retrieve_edx_logs",
     config=weekly_edx_logs_config(
         "simeon-mitx-pipeline-main", s3_uploads_bucket(dagster_env)["bucket"], set()
+    ).update(
+        daily_tracking_log_config(
+            "edxorg",
+            "valid",
+            datetime.datetime.now(datetime.UTC),
+            datetime.datetime.now(datetime.UTC),
+        )
     ),
 )
 
@@ -110,6 +122,7 @@ retrieve_edx_exports = Definitions(
         ),
         "s3": S3Resource(),
         "exports_dir": DailyResultsDir.configure_at_launch(),
+        "duckdb": DuckDBResource.configure_at_launch(),
     },
     sensors=[
         SensorDefinition(

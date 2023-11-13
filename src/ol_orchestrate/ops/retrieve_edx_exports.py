@@ -6,6 +6,8 @@ from typing import Optional
 from dagster import (
     AssetMaterialization,
     Config,
+    DynamicOut,
+    DynamicOutput,
     In,
     List,
     MetadataValue,
@@ -168,10 +170,7 @@ def extract_course_files(context: OpExecutionContext, file_list: list[list[str]]
     ins={
         "file_list": In(dagster_type=List[List[String]]),
     },
-    out={
-        "s3_upload_bucket": Out(dagster_type=String),
-        "file_list": Out(dagster_type=List[List[String]]),
-    },
+    out=DynamicOut(),
 )
 def upload_files(
     context: OpExecutionContext, config: UploadConfig, file_list: list[list[str]]
@@ -237,11 +236,7 @@ def upload_files(
                         "file_date": file_date,
                     },
                 )
-    yield Output(
-        f"s3://{config.edx_irx_exports_bucket}/{config.bucket_prefix}/",
-        "s3_upload_bucket",
-    )
-    yield Output(
-        uploaded_files,
-        "file_list",
-    )
+                yield DynamicOutput(
+                    file_date,
+                    mapping_key="file_dates",
+                )
