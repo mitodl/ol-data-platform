@@ -40,7 +40,6 @@ setuptools = "^68.1.0"  # Add this to avoid errors with installing packages that
 flatten-dict = "^0.4.2"
 
 [tool.poetry.group.dev.dependencies]
-black = "*"
 mypy = "*"
 pre-commit = "^3"
 pytest = "^7.1.2"

@@ -52,7 +52,8 @@ class BaseResultsDir(ConfigurableResource):
         self.create_dir()
 
     def teardown_for_execution(
-        self, context: InitResourceContext  # noqa: ARG002
+        self,
+        context: InitResourceContext,  # noqa: ARG002
     ) -> None:
         self.clean_dir()
 
