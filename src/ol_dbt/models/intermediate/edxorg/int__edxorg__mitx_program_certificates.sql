@@ -3,6 +3,11 @@ with completed_program_learners as (
     where user_has_completed_program = true
 )
 
+, micromasters_programs as (
+    select * from {{ ref('int__mitx__programs') }}
+    where is_micromasters_program = true
+)
+
 , completed_program_learners_sorted as (
     select
         *
@@ -11,13 +16,22 @@ with completed_program_learners as (
 )
 
 select
-    program_type
-    , program_uuid
-    , program_title
-    , user_id
-    , user_username
-    , user_full_name
-    , user_has_completed_program
-    , program_certificate_awarded_on
+    completed_program_learners_sorted.program_type
+    , completed_program_learners_sorted.program_uuid
+    , completed_program_learners_sorted.program_title
+    , completed_program_learners_sorted.user_id
+    , completed_program_learners_sorted.user_username
+    , completed_program_learners_sorted.user_full_name
+    , completed_program_learners_sorted.user_has_completed_program
+    , completed_program_learners_sorted.program_certificate_awarded_on
+    , micromasters_programs.micromasters_program_id
 from completed_program_learners_sorted
-where row_num = 1
+left join micromasters_programs
+--- Finance is split into MIT Finance and Finance,
+--- Statistics and Data Science is split into Statistics and Data Science (General track)
+    -- and Statistics and Data Science
+    on (
+        completed_program_learners_sorted.program_title like micromasters_programs.program_title || '%'
+        or completed_program_learners_sorted.program_title like '%' || micromasters_programs.program_title
+    )
+where completed_program_learners_sorted.row_num = 1
