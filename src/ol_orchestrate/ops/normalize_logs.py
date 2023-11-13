@@ -143,9 +143,7 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
             conn.execute(f"ALTER TABLE tracking_logs ALTER {col} TYPE VARCHAR")
             update_stmts.append(f"{col} = json_extract_string({col}, '$')")
         # extract VARCHAR strings from json for every field
-        update_query = (
-            f"UPDATE tracking_logs SET {', '.join(update_stmts)}"  # noqa: S608
-        )
+        update_query = f"UPDATE tracking_logs SET {', '.join(update_stmts)}"  # noqa: S608
         conn.execute(update_query)
         # convert integer timestamps to datetime
         conn.execute(

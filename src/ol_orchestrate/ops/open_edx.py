@@ -6,6 +6,8 @@ from datetime import UTC, datetime, timedelta
 from dagster import (
     AssetMaterialization,
     Config,
+    DynamicOut,
+    DynamicOutput,
     ExpectationResult,
     Failure,
     List,
@@ -26,6 +28,7 @@ from pypika import Table, Tables
 
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.lib.file_rendering import write_csv
+from ol_orchestrate.lib.openedx import un_nest_course_structure
 
 
 class ListCoursesConfig(Config):
@@ -132,7 +135,7 @@ class CourseStructureConfig(Config):
     ),
     required_resource_keys={"openedx", "results_dir"},
     ins={"course_ids": In()},
-    out={"course_structures": Out(dagster_type=DagsterPath)},
+    out=DynamicOut(),
 )
 def fetch_edx_course_structure_from_api(
     context: OpExecutionContext, config: CourseStructureConfig, course_ids: list[str]
@@ -148,7 +151,10 @@ def fetch_edx_course_structure_from_api(
     structures_file = context.resources.results_dir.path.joinpath(
         f"course_structures_{today.strftime('%Y-%m-%d')}.json"
     )
-    with structures_file.open("w") as structures:
+    blocks_file = context.resources.results_dir.path.joinpath(
+        f"course_blocks_{today.strftime('%Y-%m-%d')}.json"
+    )
+    with structures_file.open("w") as structures, blocks_file.open("w") as blocks:
         for course_id in course_ids:
             context.log.info("Retrieving course structure for %s", course_id)
             course_structure = context.resources.openedx.get_course_structure_document(
@@ -168,7 +174,14 @@ def fetch_edx_course_structure_from_api(
             }
             structures.write(json.dumps(table_row))
             structures.write("\n")
-    yield Output(structures_file, "course_structures")
+            blocks.write(
+                "\n".join(
+                    json.dumps(block)
+                    for block in un_nest_course_structure(course_id, course_structure)
+                )
+            )
+    yield DynamicOutput(structures_file, mapping_key="course_structures")
+    yield DynamicOutput(blocks_file, mapping_key="course_blocks")
 
 
 @op(

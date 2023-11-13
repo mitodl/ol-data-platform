@@ -178,6 +178,11 @@ models:
     - not_null
     - accepted_values:
         values: ["MITx Online", "edX.org"]
+  - name: courserunenrollment_id
+    description: int, internal ID and foreign key to courserunenrollments in MITx
+      Online. Null for enrollments on edX.org.
+    tests:
+    - unique
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the run
     tests:

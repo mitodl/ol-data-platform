@@ -8,7 +8,7 @@ with source as (
     select
         id as order_id
         , status as order_state
-        , total_price_paid as order_total_price_paid
+        , cast(total_price_paid as decimal(38, 2)) as order_total_price_paid
         , purchaser_id as order_purchaser_user_id
         , tax_country_code as order_tax_country_code
         , tax_rate as order_tax_rate

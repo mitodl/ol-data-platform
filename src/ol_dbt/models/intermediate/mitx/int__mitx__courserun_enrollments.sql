@@ -18,6 +18,7 @@ with mitxonline_enrollments as (
 , mitx_enrollments as (
     select
         '{{ var("mitxonline") }}' as platform
+        , courserunenrollment_id
         , courserunenrollment_is_active
         , courserunenrollment_created_on
         , courserunenrollment_enrollment_mode
@@ -39,6 +40,7 @@ with mitxonline_enrollments as (
 
     select
         '{{ var("edxorg") }}' as platform
+        , null as courserunenrollment_id
         , courserunenrollment_is_active
         , courserunenrollment_created_on
         , courserunenrollment_enrollment_mode

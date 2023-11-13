@@ -69,4 +69,6 @@ def edx_course_pipeline():
     },
 )
 def extract_open_edx_data_to_ol_data_platform():
-    upload_files_to_s3(fetch_edx_course_structure_from_api(list_courses()))
+    fetch_edx_course_structure_from_api(list_courses()).map(
+        lambda fpath: upload_files_to_s3(fpath)
+    )

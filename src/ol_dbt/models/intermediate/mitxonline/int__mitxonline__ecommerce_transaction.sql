@@ -11,4 +11,9 @@ select
     , transactions.transaction_created_on
     , transactions.transaction_readable_identifier
     , transactions.transaction_type
+    , transaction_status
+    , transaction_authorization_code
+    , transaction_payment_method
+    , transaction_bill_to_address_state
+    , transaction_bill_to_address_country
 from transactions
