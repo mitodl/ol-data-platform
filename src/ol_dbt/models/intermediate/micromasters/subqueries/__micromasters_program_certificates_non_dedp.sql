@@ -1,7 +1,14 @@
 {{ config(materialized='view') }}
 
 with micromasters_program_certificates as (
-    select *
+    --- There are learners who received both 'Statistics and Data Science (General track)' and 'Statistics and Data
+    --  Science' from 2U data, but we only count them once in 'Statistics and Data Science' for MM program certificates
+    --  report.
+    select
+        *
+        , row_number() over (
+            partition by user_id, micromasters_program_id order by program_title
+        ) as row_num
     from {{ ref('int__edxorg__mitx_program_certificates') }}
     where program_type = 'MicroMasters'
 )
@@ -55,6 +62,7 @@ with micromasters_program_certificates as (
         on micromasters_program_certificates.user_username = micromasters_users.user_edxorg_username
     left join programs
         on micromasters_program_certificates.micromasters_program_id = programs.micromasters_program_id
+    where micromasters_program_certificates.row_num = 1
 )
 
 -- Some users should recieve a certificate even though they don't fulfill the requirements according
