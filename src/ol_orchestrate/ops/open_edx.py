@@ -174,12 +174,9 @@ def fetch_edx_course_structure_from_api(
             }
             structures.write(json.dumps(table_row))
             structures.write("\n")
-            blocks.write(
-                "\n".join(
-                    json.dumps(block)
-                    for block in un_nest_course_structure(course_id, course_structure)
-                )
-            )
+            for block in un_nest_course_structure(course_id, course_structure):
+                blocks.write(json.dumps(block))
+                blocks.write("\n")
     yield DynamicOutput(structures_file, mapping_key="course_structures")
     yield DynamicOutput(blocks_file, mapping_key="course_blocks")
 
