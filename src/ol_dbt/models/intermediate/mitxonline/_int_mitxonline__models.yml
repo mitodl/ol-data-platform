@@ -23,7 +23,7 @@ models:
     description: str, name chosen by user
   - name: user_email
     description: str, user email associated with their account
-  
+
 - name: int__mitxonline__ecommerce_basketdiscount
   columns:
   - name: basketdiscount_id
