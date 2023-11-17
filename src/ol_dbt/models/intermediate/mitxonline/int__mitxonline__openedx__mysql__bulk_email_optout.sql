@@ -16,15 +16,16 @@ with email_optout as (
 )
 
 select
-    email_optout.email_optout_id
-    , email_optout.openedx_user_id
-    , email_optout.courserun_readable_id
-    , courserun.courserun_title
+    users.openedx_user_id
     , users.user_full_name
     , users.user_username
     , users.user_email
-from email_optout
-inner join users
-    on email_optout.openedx_user_id = users.openedx_user_id
+    , email_optout.courserun_readable_id
+    , courserun.courserun_title
+    , case when email_optout.email_optout_id is null then 1 else 0 end as email_opted_in
+from users
+left join email_optout
+    on users.openedx_user_id = email_optout.openedx_user_id
 left join courserun
     on email_optout.courserun_readable_id = courserun.courserun_readable_id
+where users.openedx_user_id is not null
