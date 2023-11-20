@@ -2,6 +2,26 @@
 version: 2
 
 models:
+- name: int__mitxonline__bulk_email_optin
+  columns:
+  - name: openedx_user_id
+    description: int, unique ID for each user on the MITx Online open edX platform
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name
+  - name: user_username
+    description: str, name chosen by user and used for login
+  - name: user_email
+    description: str, user email associated with their account
+  - name: courserun_readable_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: courserun_title
+    description: str, title of the course run
+  - name: email_opted_in
+    description: int, if this field is 0 then we've recieved an email optout otherwise
+      it will be 1
+
 - name: int__mitxonline__ecommerce_basketdiscount
   columns:
   - name: basketdiscount_id
