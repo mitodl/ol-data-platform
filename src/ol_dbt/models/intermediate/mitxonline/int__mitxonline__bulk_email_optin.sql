@@ -1,4 +1,4 @@
--- Email optout information for MITx Online openededx
+-- Email optin information for MITx Online openededx
 
 with email_optout as (
     select *
