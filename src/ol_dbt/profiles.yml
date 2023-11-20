@@ -43,7 +43,7 @@ open_learning:
       database: ol_data_lake_production
       port: 443
       schema: ol_warehouse_production{{ "_{}".format(var('schema_suffix')) }}
-      host: mitol-ol-data-lake-production.trino.galaxy.starburst.io
+      host: mitol-ol-data-lake-qa-0.trino.galaxy.starburst.io
       http_scheme: https
       threads: 4
     dev:
