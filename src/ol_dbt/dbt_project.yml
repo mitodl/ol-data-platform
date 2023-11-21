@@ -59,15 +59,33 @@ models:
     +properties:
       format: "'PARQUET'"
     +required_docs: true
+    +grants:
+      select: ['accountadmin', 'business_intelligence', 'read_only_production', 'production_analyst']
+      insert: ['accountadmin', 'production_analyst']
+      update: ['accountadmin', 'production_analyst']
+      delete: ['accountadmin', 'production_analyst']
+      create: ['accountadmin']
+      alter: ['accountadmin']
+      drop: ['accountadmin']
     staging:
       +materialized: table
       +schema: staging
+      +grants:
+        select: ['read_only_production']
+        create: ['production_analyst']
     intermediate:
       +materialized: table
       +schema: intermediate
+      +grants:
+        select: ['read_only_production']
+        create: ['production_analyst']
     marts:
       +materialized: table
       +schema: mart
+      +grants:
+        select: ['read_only_production', 'finance_access', 'reverse_etl']
+        create: ['production_analyst']
+    sample:
 
 
 # Test severity config
