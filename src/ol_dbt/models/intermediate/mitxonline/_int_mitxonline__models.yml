@@ -1367,7 +1367,10 @@ models:
     tests:
     - not_null
   - name: openedx_user_id
-    description: int, reference user id in auth_user from open edX.
+    description: int, open edX user ID extracted from context field. This id doesn't
+      always match with auth_user in open edX table, there can be multiple openedx_user_ids
+      for the same user_username. For those cases, use openedx_user_id from auth_user
+      open edX table.
     tests:
     - not_null
   - name: courserun_readable_id
@@ -1417,7 +1420,10 @@ models:
     tests:
     - not_null
   - name: openedx_user_id
-    description: int, reference user id in auth_user from open edX.
+    description: int, open edX user ID extracted from context field. This id doesn't
+      always match with auth_user in open edX table, there can be multiple openedx_user_ids
+      for the same user_username. For those cases, use openedx_user_id from auth_user
+      open edX table.
     tests:
     - not_null
   - name: courserun_readable_id
@@ -1470,6 +1476,11 @@ models:
     description: str, username of the open edX user who caused the event to be emitted.
     tests:
     - not_null
+  - name: openedx_user_id
+    description: int, either reference openedx_user_id in open edX users table, or
+      from tracking logs if no reference found.
+    tests:
+    - not_null
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
     tests:
@@ -1494,6 +1505,8 @@ models:
     description: int, number of play_video events
   - name: courseactivity_num_unique_play_video
     description: int, number of unique videos played within a course
+  - name: courseactivity_num_chapters_visited
+    description: int, number of unique chapters visited within a course
   - name: courseactivity_last_play_video_timestamp
     description: timestamp, timestamp of user's last play_video event within a course
   - name: courseactivity_last_problem_check_timestamp
@@ -1502,3 +1515,67 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
+
+- name: int__mitxonline__course_structure
+  description: this table contains historical changes to open edX's course content
+    data. It adds coursestructure_chapter_id that identifies chapter each subsection
+    belongs to
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: coursestructure_content_hash
+    description: str, sha256 hashed string of the course content.
+    tests:
+    - not_null
+  - name: coursestructure_block_content_hash
+    description: str, sha256 hashed string of the block content in a course
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, Unique ID for a distinct piece of content in a course, formatted
+      as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+    tests:
+    - not_null
+  - name: coursestructure_parent_block_id
+    description: str, parent block ID, same format as block_id
+  - name: coursestructure_block_index
+    description: int, sequence number giving order in which this block content appears
+      within the course
+    tests:
+    - not_null
+  - name: coursestructure_block_category
+    description: str, category/type of the block, it identifies core structural elements
+      of a course. Value includes but not limited to course, chapter, sequential,
+      vertical, discussion, html, problem, video, etc.
+    tests:
+    - not_null
+  - name: coursestructure_block_title
+    description: str, title of the block extracted from the metadata of the block.
+      This field comes from name field for the section, subsection, or unit on the
+      Studio 'Course Outline' page.
+  - name: coursestructure_block_metadata
+    description: str, json string of the metadata field for the block. It provides
+      additional information about this block, different block type may have different
+      member fields inside metadata.
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course extracted from the metadata of 'course'
+      block
+  - name: courserun_start_on
+    description: timestamp, indicating when the course run starts extracted from the
+      metadata of 'course' block
+  - name: coursestructure_retrieved_at
+    description: timestamp, indicating when this course structure was initially retrieved
+      from REST API.
+    tests:
+    - not_null
+  - name: coursestructure_chapter_id
+    description: str, block id of chapter within which this child block belongs to.
+      Null for the 'course' block as it's the top block that doesn't belong to any
+      chapter.
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__mitxonline__openedx__api__course_structure')
