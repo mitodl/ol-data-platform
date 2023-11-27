@@ -9,19 +9,23 @@ models:
     description: string, defaulted to xPro
     tests:
     - not_null
-  - name: eproduct_id
+  - name: product_id
     description: int, foreign key in ecommerce_product
   - name: product_name
     description: str, title of the course run
-  - name: product_id
+  - name: product_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
       e.g. course-v1:xPRO+MLx1+R0 or unique program run ID formatted as program-v1:{org}+{program
       code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
     tests:
     - not_null
     - unique
+  - name: productversion_readable_id
+    description: string, the readable_id field from the product object
   - name: product_type
     description: string, readable product type
+  - name: department_code
+    description: str, the portion of the readable product id that contains the department code
   - name: list_price
     description: numeric, the product price for this version
   - name: Product_description
@@ -50,3 +54,9 @@ models:
     description: boolean, Public product is purchasable through the bulk form at /ecommerce/bulk
   - name: platform_name
     description: str, name of the platform
+  - name: b2c_price
+    description: numeric, the total product price for Boeing products and the 
+      price discounted by ten percent for non-Boeing products
+  - name: b2b_price
+    description: numeric, the total product price for Boeing products and the 
+      price discounted by fifteen percent for non-Boeing products

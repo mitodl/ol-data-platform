@@ -1159,6 +1159,9 @@ models:
     description: boolean, whether the course is on an external platform
     tests:
     - not_null
+  - name: position_in_program
+    description: int, sequential number indicating the course display order in a program
+      on MITxPro website
   - name: platform_id
     description: int, id of the course platform
   - name: cms_coursepage_description
