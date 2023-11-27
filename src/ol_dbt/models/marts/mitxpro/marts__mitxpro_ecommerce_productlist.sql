@@ -68,7 +68,10 @@ select
     , course_runs.courserun_readable_id as product_readable_id
     , ecommerce_productversion_latest.productversion_readable_id
     , ecommerce_product.product_type
-    , substring(courses.course_readable_id from '\+(.+)x') as department_code
+    , substring(
+        courses.course_readable_id, ((position('+' in courses.course_readable_id)) + 1)
+        , (position('x' in substring(courses.course_readable_id, position('+' in courses.course_readable_id))) - 2)
+    ) as department_code
     , cast(ecommerce_productversion_latest.productversion_price as decimal(38, 2)) as list_price
     , ecommerce_productversion_latest.productversion_description as product_description
     , substring(course_runs.courserun_start_on, 1, 10) as start_date
@@ -86,13 +89,13 @@ select
     , ecommerce_course_to_topics.coursetopic_name as coursetopic_names
     , ecommerce_product.product_is_private
     , courses.platform_name
-    , case
+    , case 
         when course_runs.courserun_title like '%Boeing%' then ecommerce_productversion_latest.productversion_price
-        else ecommerce_productversion_latest.productversion_price * 0.9
+        else ecommerce_productversion_latest.productversion_price * 0.9 
     end as b2c_price
-    , case
+    , case 
         when course_runs.courserun_title like '%Boeing%' then ecommerce_productversion_latest.productversion_price
-        else ecommerce_productversion_latest.productversion_price * 0.85
+        else ecommerce_productversion_latest.productversion_price * 0.85 
     end as b2b_price
 from ecommerce_product
 left join ecommerce_productversion_latest
@@ -116,7 +119,16 @@ select
     , program_runs.programrun_readable_id as product_readable_id
     , ecommerce_productversion_latest.productversion_readable_id
     , 'programrun' as product_type
-    , substring(courses.course_readable_id from '\+(.+)x') as department_code
+    , substring(
+        program_runs.programrun_readable_id, ((position('+' in program_runs.programrun_readable_id)) + 1) 
+        , (
+            position(
+                'x' in substring(
+                    program_runs.programrun_readable_id, position('+' in program_runs.programrun_readable_id)
+                )
+            ) - 2
+        )
+    ) as department_code
     , cast(ecommerce_productversion_latest.productversion_price as decimal(38, 2)) as list_price
     , ecommerce_productversion_latest.productversion_description as product_description
     , substring(program_runs.programrun_start_on, 1, 10) as start_date
@@ -134,13 +146,13 @@ select
     , null as coursetopic_names
     , ecommerce_product.product_is_private
     , programs.platform_name
-    , case
+    , case 
         when program_runs.program_title like '%Boeing%' then ecommerce_productversion_latest.productversion_price
         else ecommerce_productversion_latest.productversion_price * 0.9
     end as b2c_price
-    , case
+    , case 
         when program_runs.program_title like '%Boeing%' then ecommerce_productversion_latest.productversion_price
-        else ecommerce_productversion_latest.productversion_price * 0.85
+        else ecommerce_productversion_latest.productversion_price * 0.85 
     end as b2b_price
 from ecommerce_product
 left join ecommerce_productversion_latest
