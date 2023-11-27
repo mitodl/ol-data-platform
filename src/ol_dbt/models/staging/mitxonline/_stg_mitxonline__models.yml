@@ -1206,9 +1206,8 @@ models:
     - not_null
 
 - name: stg__mitxonline__openedx__tracking_logs__user_activity
-  description: This table is deduped as raw table has duplicate events. It filters
-    out blank username or user_id events since these don't supply user identifiers
-    and also those server "exception" events due to server errors
+  description: This table is cleaned to remove duplicate events, events without user
+    identifiers , and events that represent server errors
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
@@ -1344,9 +1343,8 @@ models:
         "coursestructure_retrieved_at"]
 
 - name: stg__mitxonline__openedx__mysql__courseware_studentmodule
-  description: It holds the most current course state and score for learners on MITx
-    Online, including the most recent problem submission and the unit visited in each
-    subsection of the course content. It has a separate row for every piece of content
+  description: It holds the most current course state and score per course section
+    for learners on MITx Online. There is a separate row for every piece of content
     that a learner accesses.
   columns:
   - name: studentmodule_id
