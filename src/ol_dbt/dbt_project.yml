@@ -60,7 +60,7 @@ models:
       format: "'PARQUET'"
     +required_docs: true
     +grants:
-      select: ['accountadmin', 'business_intelligence', 'read_only_production', 'production_analyst']
+      select: ['accountadmin', 'read_only_production', 'production_analyst']
       insert: ['accountadmin', 'production_analyst']
       update: ['accountadmin', 'production_analyst']
       delete: ['accountadmin', 'production_analyst']
@@ -77,13 +77,13 @@ models:
       +materialized: table
       +schema: intermediate
       +grants:
-        select: ['read_only_production']
+        select: ['read_only_production', 'business_intelligence']
         create: ['production_analyst']
     marts:
       +materialized: table
       +schema: mart
       +grants:
-        select: ['read_only_production', 'finance_access', 'reverse_etl']
+        select: ['read_only_production', 'business_intelligence', 'reverse_etl']
         create: ['production_analyst']
     sample:
 
