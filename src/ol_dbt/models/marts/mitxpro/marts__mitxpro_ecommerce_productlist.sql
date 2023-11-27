@@ -89,13 +89,13 @@ select
     , ecommerce_course_to_topics.coursetopic_name as coursetopic_names
     , ecommerce_product.product_is_private
     , courses.platform_name
-    , case 
+    , case
         when course_runs.courserun_title like '%Boeing%' then ecommerce_productversion_latest.productversion_price
-        else ecommerce_productversion_latest.productversion_price * 0.9 
+        else ecommerce_productversion_latest.productversion_price * 0.9
     end as b2c_price
-    , case 
+    , case
         when course_runs.courserun_title like '%Boeing%' then ecommerce_productversion_latest.productversion_price
-        else ecommerce_productversion_latest.productversion_price * 0.85 
+        else ecommerce_productversion_latest.productversion_price * 0.85
     end as b2b_price
 from ecommerce_product
 left join ecommerce_productversion_latest
@@ -120,7 +120,7 @@ select
     , ecommerce_productversion_latest.productversion_readable_id
     , 'programrun' as product_type
     , substring(
-        program_runs.programrun_readable_id, ((position('+' in program_runs.programrun_readable_id)) + 1) 
+        program_runs.programrun_readable_id, ((position('+' in program_runs.programrun_readable_id)) + 1)
         , (
             position(
                 'x' in substring(
@@ -146,13 +146,13 @@ select
     , null as coursetopic_names
     , ecommerce_product.product_is_private
     , programs.platform_name
-    , case 
+    , case
         when program_runs.program_title like '%Boeing%' then ecommerce_productversion_latest.productversion_price
         else ecommerce_productversion_latest.productversion_price * 0.9
     end as b2c_price
-    , case 
+    , case
         when program_runs.program_title like '%Boeing%' then ecommerce_productversion_latest.productversion_price
-        else ecommerce_productversion_latest.productversion_price * 0.85 
+        else ecommerce_productversion_latest.productversion_price * 0.85
     end as b2b_price
 from ecommerce_product
 left join ecommerce_productversion_latest
