@@ -25,8 +25,7 @@ models:
   - name: product_type
     description: string, readable product type
   - name: department_code
-    description: str, the portion of the readable product id that contains the department
-      code
+    description: str, the portion of the readable product id that contains the department code
   - name: list_price
     description: numeric, the product price for this version
   - name: Product_description
@@ -56,8 +55,8 @@ models:
   - name: platform_name
     description: str, name of the platform
   - name: b2c_price
-    description: numeric, the total product price for Boeing products and the price
-      discounted by ten percent for non-Boeing products
+    description: numeric, the total product price for Boeing products and the 
+      price discounted by ten percent for non-Boeing products
   - name: b2b_price
-    description: numeric, the total product price for Boeing products and the price
-      discounted by fifteen percent for non-Boeing products
+    description: numeric, the total product price for Boeing products and the 
+      price discounted by fifteen percent for non-Boeing products
