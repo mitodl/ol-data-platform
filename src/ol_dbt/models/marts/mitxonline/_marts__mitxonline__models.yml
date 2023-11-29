@@ -4,6 +4,9 @@ version: 2
 models:
 - name: marts__mitxonline_course_certificates
   description: course certificates from MITx Online app
+  config:
+    grants:
+      select: ['mit_irx']
   columns:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
@@ -43,6 +46,9 @@ models:
 
 - name: marts__mitxonline_user_profiles
   description: MITx Online user profiles
+  config:
+    grants:
+      select: ['mit_irx']
   columns:
   - name: user_username
     description: str, username on MITx Online
