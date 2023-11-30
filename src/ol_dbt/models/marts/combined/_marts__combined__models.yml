@@ -5,6 +5,9 @@ models:
 - name: marts__combined_course_enrollment_detail
   description: course enrollment detail with certificates, orders and coupons from
     OL platforms.
+  config:
+    grants:
+      select: ['finance']
   columns:
   - name: platform
     description: string, application where the data is from

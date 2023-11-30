@@ -223,8 +223,10 @@ models:
     description: str, user id in the micromasters database
 
 - name: __micromasters_program_certificates_non_dedp
-  description: Non DEDP program certificate earners. Calculated from joining edxorg
-    course certificate records to the program requirements from the micromasters database
+  description: Non DEDP program certificate earners. Data come from learners report
+    from edX.org with deduplication. If learners have records in both 'Statistics
+    and Data Science (General track)' and 'Statistics and Data Science', they only
+    appear once in this table
   columns:
   - name: user_edxorg_username
     description: str, The username of the learner on the edX platform
@@ -279,6 +281,9 @@ models:
       program
   - name: micromasters_user_id
     description: str, user id in the micromasters database
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_edxorg_username", "micromasters_program_id"]
 
 - name: __micromasters_course_certificates_dedp_from_micromasters
   description: DEDP course certificates from MicroMasters database

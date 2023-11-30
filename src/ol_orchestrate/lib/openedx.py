@@ -4,6 +4,28 @@ import json
 from typing import Any
 
 
+def generate_block_indexes(
+    course_structure: dict[str, Any], root_block_id: str
+) -> dict[str, int]:
+    """Walk the course structure to generate an index for the blocks.
+
+    Traversal is done in a depth first manner to signify the sequenced progression
+    through the course that learners experience.
+    """
+    block_index: dict[str, int] = {}
+    block_stack = [root_block_id]
+    previous_block_id = root_block_id
+    while block_stack:
+        block_id = block_stack.pop()
+        block_index[block_id] = block_index.get(previous_block_id, 0) + 1
+        previous_block_id = block_id
+        # Add new blocks to the end of the list, ensure that the traversal is done in
+        # order of definition by reversing, since we're pulling from the end of the list
+        # for each iteration.
+        block_stack.extend(reversed(course_structure[block_id]["children"]))
+    return block_index
+
+
 def un_nest_course_structure(
     course_id: str, course_structure: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -18,22 +40,27 @@ def un_nest_course_structure(
     # Include children and parent
     # Include full hierarchy as block IDs and block names
     ancestry = {}
+    root_block = ""
     course_title = None
     course_start = None
     retrieved_at = datetime.datetime.now(tz=datetime.UTC).isoformat()
     course_blocks = []
-    # We need to loop through the course structure twice. Once to populate the full
-    # ancestry and a second time to build the record structure so that we can pull the
-    # block parents.
     content_hash = hashlib.sha256(
         json.dumps(course_structure).encode("utf-8")
     ).hexdigest()
+    # We need to loop through the course structure first to populate the full
+    # ancestry and again to build the record structure so that we can pull the
+    # block parents.
     for block_id, block_contents in course_structure.items():
         if block_contents["category"] == "course":
             course_title = block_contents["metadata"].get("display_name")
             course_start = block_contents["metadata"].get("start")
+            root_block = block_id
         for child in block_contents["children"]:
             ancestry[child] = block_id
+
+    block_index = generate_block_indexes(course_structure, root_block)
+    # Loop through the course structure again to build the record structure
     for block_id, block_contents in course_structure.items():
         course_blocks.append(
             {
@@ -43,6 +70,7 @@ def un_nest_course_structure(
                 "block_details": block_contents,
                 "block_due": block_contents["metadata"].get("due"),
                 "block_id": block_id,
+                "block_index": block_index.get(block_id, 0),
                 "block_parent": ancestry.get(block_id),
                 "block_start": block_contents["metadata"].get("start"),
                 "block_title": block_contents["metadata"].get("display_name"),
