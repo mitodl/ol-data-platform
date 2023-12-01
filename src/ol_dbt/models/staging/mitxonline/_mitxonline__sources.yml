@@ -904,3 +904,87 @@ sources:
     - name: modified
       description: timestamp, datetime when this row was last updated. A change in
         this field implies that there was a state change.
+
+  - name: raw__mitxonline__openedx__mysql__grades_persistentsubsectiongrade
+    description: Persistent values for learners' subsection (aka sequential) grades.
+    columns:
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: course_id
+      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: course_version
+      description: str, The version number of the course in the Split Modulestore
+        when the grade was computed. Currently used for debugging purposes only.
+    - name: usage_key
+      description: str, block ID of the subsection (sequential) - foreign key to course_structure
+    - name: user_id
+      description: int, foreign key to auth_user from open edX platform
+    - name: visibleblocks_hash
+      description: str, foreign key to grades_visibleblocks
+    - name: possible_all
+      description: float, the aggregated "total_weighted_possible" score in the subsection,
+        calculated by summing all "weighted_possible" values of all (graded and ungraded)
+        problems in the subsection.
+    - name: possible_graded
+      description: float, The aggregated "total_weighted_possible" score in the subsection,
+        calculated by summing all "weighted_possible" values of all "graded" problems
+        in the subsection.
+    - name: earned_all
+      description: float, The user's aggregated "total_weighted_earned" score in the
+        subsection, calculated by summing all "weighted_earned" values of all (graded
+        and ungraded) problems in the subsection.
+    - name: earned_graded
+      description: float, The user's aggregated "total_weighted_earned" score in the
+        subsection, calculated by summing all "weighted_earned" values of all "graded"
+        problems in the subsection.
+    - name: first_attempted
+      description: timestamp, time of the user's first attempt at a problem in the
+        subsection.
+    - name: created
+      description: timestamp, datetime of the subsection grade was first calculated
+        for this user for this subsection.
+    - name: modified
+      description: timestamp, datetime of the subsection grade was last updated for
+        this user for this subsection.
+
+  - name: raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride
+    description: Stores the most recent override grades for a given subsection
+    columns:
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: grade_id
+      description: int, foreign key to grades_persistentsubsectiongrade
+    - name: possible_all_override
+      description: float, total score of all problems (both graded and ungraded) for
+        the subsection
+    - name: possible_graded_override
+      description: float, total score of all graded problems for the subsection
+    - name: earned_all_override
+      description: float, total earned score (graded and ungraded) to be overridden.
+    - name: earned_graded_override
+      description: float, override to learner's earned_graded score for the subsection
+    - name: first_attempted
+      description: timestamp, time of the user's first attempt at a problem in the
+        subsection.
+    - name: override_reason
+      description: str, instructor provided reason for override
+    - name: system
+      description: str, indicating system where the override was performed. Possible
+        values are grade-import, PROCTORING and GRADEBOOK
+    - name: created
+      description: timestamp, datetime when the override was first created.
+    - name: modified
+      description: timestamp, datetime when the override was last modified.
+
+  - name: raw__mitxonline__openedx__mysql__grades_visibleblocks
+    description: Stores an ordered list of visible blocks within a subsection for
+      a learner at the time of computing the subsection grade.
+    columns:
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: course_id
+      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: hashed
+      description: str, SHA1 hash of the blocks_json value.
+    - name: blocks_json
+      description: str, json object of all visible blocks within a subsection
