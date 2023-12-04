@@ -6,8 +6,8 @@ models:
   description: B2B and regular orders combined into one table
   columns:
   - name: platform
-    description: string, describes which platform the data is from
-      (mitxonline, mitxpro, or bootcamps)
+    description: string, describes which platform the data is from (mitxonline, mitxpro,
+      or bootcamps)
   - name: order_id
     description: int, foreign key for order table
   - name: line_id
