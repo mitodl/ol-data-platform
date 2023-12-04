@@ -2,6 +2,36 @@
 version: 2
 
 models:
+- name: int__mitxpro__ecommerce_allorders
+  description: B2B and regular orders combined into one table
+  columns:
+  - name: platform
+    description: string, describes which platform the data is from
+      (mitxonline, mitxpro, or bootcamps)
+  - name: order_id
+    description: int, foreign key for order table
+  - name: line_id
+    description: int, foreign key for line table
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created. If this
+      is a b2b order it will be the timestamp that order was created otherwise it
+      will be when the regular order was created.
+  - name: order_state
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded"
+  - name: courserun_id
+    description: int, foreign key in courses_courserun
+  - name: order_total_price_paid
+    description: number, total order amount
+  - name: product_id
+    description: int, foreign key for product table
+  - name: product_type
+    description: string, readable product type
+  - name: user_email
+    description: str, user email associated with their account
+  - name: user_id
+    description: int, foreign key to the user table
+
 - name: marts__combined_course_enrollment_detail
   description: course enrollment detail with certificates, orders and coupons from
     OL platforms.
