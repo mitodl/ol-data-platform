@@ -916,11 +916,14 @@ sources:
       description: str, The version number of the course in the Split Modulestore
         when the grade was computed. Currently used for debugging purposes only.
     - name: usage_key
-      description: str, block ID of the subsection (sequential) - foreign key to course_structure
+      description: str, block ID of the subsection (sequential) - foreign key to course_structure.
+        e.g. block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
     - name: user_id
       description: int, foreign key to auth_user from open edX platform
     - name: visibleblocks_hash
-      description: str, foreign key to grades_visibleblocks
+      description: str, SHA1 hash of visible blocks within the subsection - foreign
+        key to grades_visibleblocks. This field might be useful for identifying whether
+        the course content was the same for two grades.
     - name: possible_all
       description: float, the aggregated "total_weighted_possible" score in the subsection,
         calculated by summing all "weighted_possible" values of all (graded and ungraded)
@@ -945,7 +948,8 @@ sources:
         for this user for this subsection.
     - name: modified
       description: timestamp, datetime of the subsection grade was last updated for
-        this user for this subsection.
+        this user for this subsection. It will be updated every time the user attempts
+        the problem.
 
   - name: raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride
     description: Stores the most recent override grades for a given subsection
@@ -963,9 +967,6 @@ sources:
       description: float, total earned score (graded and ungraded) to be overridden.
     - name: earned_graded_override
       description: float, override to learner's earned_graded score for the subsection
-    - name: first_attempted
-      description: timestamp, time of the user's first attempt at a problem in the
-        subsection.
     - name: override_reason
       description: str, instructor provided reason for override
     - name: system

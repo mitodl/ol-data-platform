@@ -19,6 +19,7 @@ with subsection_grades as (
     select
         subsection_grades.courserun_readable_id
         , subsection_grades.coursestructure_block_id
+        , subsection_grades.visibleblocks_hash
         , course_structure.coursestructure_block_title
         , course_structure.coursestructure_chapter_id
         , subsection_grades.openedx_user_id

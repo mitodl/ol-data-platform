@@ -1592,6 +1592,12 @@ models:
     description: str, block ID of the subsection (sequential) - foreign key to course_structure
     tests:
     - not_null
+  - name: visibleblocks_hash
+    description: str, SHA1 hash of visible blocks within the subsection at the time
+      of computing the subsection grade. This field might be useful for identifying
+      whether the course content was the same for two grades.
+    tests:
+    - not_null
   - name: coursestructure_block_title
     description: str, title of the subsection
   - name: coursestructure_chapter_id

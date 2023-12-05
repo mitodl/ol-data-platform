@@ -1409,7 +1409,8 @@ models:
     tests:
     - not_null
   - name: coursestructure_block_id
-    description: str, block ID of the subsection (sequential) - foreign key to course_structure
+    description: str, block ID of the subsection (sequential) - foreign key to course_structure.
+      e.g. block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
     tests:
     - not_null
   - name: openedx_user_id
@@ -1417,8 +1418,9 @@ models:
     tests:
     - not_null
   - name: visibleblocks_hash
-    description: str, foreign key to grades_visibleblocks. This field might be useful
-      for identifying whether the course content was the same for two grades.
+    description: str, SHA1 hash of visible blocks within the subsection - foreign
+      key to grades_visibleblocks. This field might be useful for identifying whether
+      the course content was the same for two grades.
     tests:
     - not_null
   - name: subsectiongrade_total_score
@@ -1454,7 +1456,8 @@ models:
     - not_null
   - name: subsectiongrade_updated_on
     description: timestamp, datetime of the subsection grade was last updated for
-      this user for this subsection.
+      this user for this subsection.It will be updated every time the user attempts
+      the problem.
     tests:
     - not_null
   tests:
