@@ -13,6 +13,55 @@ with bootcamps__ecommerce_order as (
     select * from {{ ref('int__mitxonline__ecommerce_order') }}
 )
 
+, bootcamps__users as (
+    select * from {{ ref('int__bootcamps__users') }}
+)
+
+, mitxpro__b2becommerce_b2border as (
+    select * from {{ ref('int__mitxpro__b2becommerce_b2border') }}
+)
+
+, mitxpro__ecommerce_order as (
+    select * from {{ ref('int__mitxpro__ecommerce_order') }}
+)
+
+, mitxpro_orders as (
+    select 
+        mitxpro__ecommerce_allorders.order_id
+        , mitxpro__ecommerce_allorders.line_id
+        , mitxpro__ecommerce_allorders.order_created_on
+        , mitxpro__ecommerce_allorders.order_state
+        , mitxpro__ecommerce_allorders.product_id
+        , mitxpro__ecommerce_allorders.product_type
+        , mitxpro__ecommerce_allorders.user_email
+        , mitxpro__course_runs.courserun_id
+        , mitxpro__ecommerce_order.order_purchaser_user_id
+        , mitxpro__ecommerce_order.order_total_price_paid
+        , mitxpro__b2becommerce_b2border.b2border_total_price
+    from mitxpro__ecommerce_allorders
+    left join mitxpro__course_runs
+        on mitxpro__ecommerce_allorders.courserun_readable_id = mitxpro__course_runs.courserun_readable_id
+    left join mitxpro__ecommerce_order
+        on mitxpro__ecommerce_allorders.order_id = mitxpro__ecommerce_order.order_id
+    left join mitxpro__b2becommerce_b2border
+        on mitxpro__ecommerce_allorders.b2border_id = mitxpro__b2becommerce_b2border.b2border_id
+)
+
+, bootcamps_orders as (
+    select 
+        bootcamps__ecommerce_order.order_id
+        , bootcamps__ecommerce_order.line_id
+        , bootcamps__ecommerce_order.order_created_on
+        , bootcamps__ecommerce_order.order_state
+        , bootcamps__ecommerce_order.courserun_id
+        , bootcamps__ecommerce_order.order_total_price_paid
+        , bootcamps__ecommerce_order.order_purchaser_user_id
+        , bootcamps__users.user_email
+    from bootcamps__ecommerce_order
+    left join bootcamps__users
+        on bootcamps__ecommerce_order.order_purchaser_user_id = bootcamps__users.user_id
+)
+
 , combined_orders as (
     select
         '{{ var("mitxonline") }}' as platform
@@ -36,13 +85,13 @@ with bootcamps__ecommerce_order as (
         , line_id
         , order_created_on
         , order_state
-        , null as courserun_id
-        , null as order_total_price_paid
+        , courserun_id
+        , coalesce(order_total_price_paid, b2border_total_price) as order_total_price_paid
         , product_id
         , product_type
         , user_email
-        , null as user_id
-    from mitxpro__ecommerce_allorders
+        , order_purchaser_user_id as user_id
+    from mitxpro_orders
 
     union all
 
@@ -56,9 +105,9 @@ with bootcamps__ecommerce_order as (
         , order_total_price_paid
         , null as product_id
         , null as product_type
-        , null as user_email
+        , user_email
         , order_purchaser_user_id as user_id
-    from bootcamps__ecommerce_order
+    from bootcamps_orders
 
 )
 
