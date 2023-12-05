@@ -45,6 +45,8 @@ models:
   - name: duration
     description: str, a short description indicating how long the course or program
       takes to complete (e.g. '4 weeks')
+  - name: courseware_format
+    description: str, format of the program or course (Online, Other)
   - name: time_commitment
     description: str, short description indicating about the time commitments
   - name: coursetopic_names

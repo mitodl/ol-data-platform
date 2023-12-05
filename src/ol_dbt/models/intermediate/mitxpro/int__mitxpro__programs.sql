@@ -23,6 +23,7 @@ select
     , cms_programs.cms_programpage_subhead
     , cms_programs.cms_programpage_catalog_details
     , cms_programs.cms_programpage_duration
+    , cms_programs.cms_programpage_format
     , cms_programs.cms_programpage_time_commitment
 
 from programs

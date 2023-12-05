@@ -12,6 +12,7 @@ select
     , description as cms_coursepage_description
     , course_id
     , duration as cms_coursepage_duration
+    , format as cms_coursepage_format
     , subhead as cms_coursepage_subhead
     , time_commitment as cms_coursepage_time_commitment
     , catalog_details as cms_coursepage_catalog_details
@@ -24,6 +25,7 @@ select
     , externalcoursepage.description as cms_coursepage_description
     , externalcoursepage.course_id
     , externalcoursepage.duration as cms_coursepage_duration
+    , externalcoursepage.format as cms_coursepage_format
     , externalcoursepage.subhead as cms_coursepage_subhead
     , externalcoursepage.time_commitment as cms_coursepage_time_commitment
     , externalcoursepage.catalog_details as cms_coursepage_catalog_details

@@ -1551,6 +1551,12 @@ models:
   - name: cms_coursepage_duration
     description: str, a short description indicating how long the course takes to
       complete (e.g. '4 weeks')
+  - name: cms_coursepage_format
+    description: str, format of the course (Online, Other)
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['Online', 'Other']
   - name: cms_coursepage_subhead
     description: str, short subheading to appear below the title on the course page
     tests:
@@ -1702,6 +1708,12 @@ models:
   - name: cms_programpage_duration
     description: str, a short description indicating how long the program takes to
       complete (e.g. '4 weeks')
+  - name: cms_programpage_format
+    description: str, format of the program (Online, Other)
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['Online', 'Other']
   - name: cms_programpage_subhead
     description: str, short subheading to appear below the title on the program page
     tests:

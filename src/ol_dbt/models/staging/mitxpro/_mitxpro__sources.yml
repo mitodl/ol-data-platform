@@ -1018,6 +1018,8 @@ sources:
     - name: duration
       description: str, a short description indicating how long the course takes to
         complete (e.g. '4 weeks')
+    - name: format
+      description: str, format of the course (Online, Other)
     - name: background_image_id
       description: int, primary key of the background image in wagtailimages_image
     - name: video_url
@@ -1057,6 +1059,8 @@ sources:
     - name: duration
       description: str, a short description indicating how long the course takes to
         complete (e.g. '4 weeks')
+    - name: format
+      description: str, format of the course (Online, Other)
     - name: background_image_id
       description: int, primary key of the backgound image in wagtailimages_image
     - name: video_url
@@ -1211,6 +1215,8 @@ sources:
     - name: duration
       description: str, a short description indicating how long the program takes
         to complete (e.g. '4 weeks')
+    - name: format
+      description: str, format of the program (Online, Other)
     - name: background_image_id
       description: int, primary key of the background image in wagtailimages_image
     - name: video_url
@@ -1250,6 +1256,8 @@ sources:
     - name: duration
       description: str, a short description indicating how long the program takes
         to complete (e.g. '4 weeks')
+    - name: format
+      description: str, format of the program (Online, Other)
     - name: background_image_id
       description: int, primary key of the background image in wagtailimages_image
     - name: video_url

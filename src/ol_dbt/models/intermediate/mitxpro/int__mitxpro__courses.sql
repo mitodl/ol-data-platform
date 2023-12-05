@@ -24,6 +24,7 @@ select
     , cms_courses.cms_coursepage_subhead
     , cms_courses.cms_coursepage_catalog_details
     , cms_courses.cms_coursepage_duration
+    , cms_courses.cms_coursepage_format
     , cms_courses.cms_coursepage_time_commitment
 
 from courses
