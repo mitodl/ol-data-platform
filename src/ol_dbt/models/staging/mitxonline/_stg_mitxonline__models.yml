@@ -1395,3 +1395,138 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
+
+- name: stg__mitxonline__openedx__mysql__grades_subsectiongrade
+  description: Persistent values for learners' subsection (aka sequential) grades.
+  columns:
+  - name: subsectiongrade_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - not_null
+    - unique
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, block ID of the subsection (sequential) - foreign key to course_structure.
+      e.g. block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, foreign key to auth_user from open edX platform
+    tests:
+    - not_null
+  - name: visibleblocks_hash
+    description: str, SHA1 hash of visible blocks within the subsection - foreign
+      key to grades_visibleblocks. This field might be useful for identifying whether
+      the course content was the same for two grades.
+    tests:
+    - not_null
+  - name: subsectiongrade_total_score
+    description: float, the aggregated "total_weighted_possible" score in the subsection,
+      calculated by summing all "weighted_possible" values of all (graded and ungraded)
+      problems in the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_total_graded_score
+    description: float, The aggregated "total_weighted_possible" score in the subsection,
+      calculated by summing all "weighted_possible" values of all "graded" problems
+      in the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_total_earned_score
+    description: float, The user's aggregated "total_weighted_earned" score in the
+      subsection, calculated by summing all "weighted_earned" values of all (graded
+      and ungraded) problems in the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_total_earned_graded_score
+    description: float, The user's aggregated "total_weighted_earned" score in the
+      subsection, calculated by summing all "weighted_earned" values of all "graded"
+      problems in the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_first_attempted_on
+    description: timestamp, time of the user's first attempt at a problem in the subsection.
+  - name: subsectiongrade_created_on
+    description: timestamp, datetime of the subsection grade was first calculated
+      for this user for this subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_updated_on
+    description: timestamp, datetime of the subsection grade was last updated for
+      this user for this subsection.It will be updated every time the user attempts
+      the problem.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
+
+- name: stg__mitxonline__openedx__mysql__grades_subsectiongradeoverride
+  description: Stores the most recent override grades for a given subsection
+  columns:
+  - name: subsectiongradeoverride_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - not_null
+    - unique
+  - name: subsectiongrade_id
+    description: int, foreign key to grades_persistentsubsectiongrade
+    tests:
+    - not_null
+    - unique
+  - name: subsectiongradeoverride_total_score
+    description: float, total score of all problems (both graded and ungraded) for
+      the subsection
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_total_graded_score
+    description: float, total score of all graded problems for the subsection
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_total_earned_score
+    description: float, total earned score (graded and ungraded) to be overridden.
+  - name: subsectiongradeoverride_total_earned_graded_score
+    description: float, override to learner's total_earned_graded score for the subsection
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_reason
+    description: str, instructor provided reason for override
+  - name: subsectiongradeoverride_system
+    description: str, indicating system where the override was performed. Possible
+      values are grade-import, PROCTORING and GRADEBOOK
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_created_on
+    description: timestamp, datetime when the override was first created.
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_updated_on
+    description: timestamp, datetime when the override was last modified.
+    tests:
+    - not_null
+
+- name: stg__mitxonline__openedx__mysql__grades_visibleblocks
+  description: Stores an ordered list of visible blocks within a subsection for a
+    learner at the time of computing the subsection grade.
+  columns:
+  - name: visibleblocks_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - not_null
+    - unique
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: visibleblocks_hash
+    description: str, SHA1 hash of the blocks_json value.
+    tests:
+    - not_null
+    - unique
+  - name: visibleblocks_json
+    description: str, json object of all visible blocks within a subsection
+    tests:
+    - not_null

@@ -1579,3 +1579,60 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__openedx__api__course_structure')
+
+- name: int__mitxonline__courserun_subsection_grades
+  description: Persistent values for learners' subsection (aka sequential) grades
+    combined with override grades
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, block ID of the subsection (sequential) - foreign key to course_structure
+    tests:
+    - not_null
+  - name: visibleblocks_hash
+    description: str, SHA1 hash of visible blocks within the subsection at the time
+      of computing the subsection grade. This field might be useful for identifying
+      whether the course content was the same for two grades.
+    tests:
+    - not_null
+  - name: coursestructure_block_title
+    description: str, title of the subsection
+  - name: coursestructure_chapter_id
+    description: str, block id of chapter within which this subsection belongs to
+  - name: openedx_user_id
+    description: int, foreign key to auth_user from open edX platform
+    tests:
+    - not_null
+  - name: subsectiongrade_total_score
+    description: float, total score of all problems (both graded and ungraded) for
+      the subsection
+    tests:
+    - not_null
+  - name: subsectiongrade_total_earned_score
+    description: float, user's total earned score of all problems (both graded and
+      ungraded) for the subsection
+    tests:
+    - not_null
+  - name: subsectiongrade_total_graded_score
+    description: float, total score of all graded problems for the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_total_earned_graded_score
+    description: float, user's total earned score of all graded problems for the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_is_overridden
+    description: boolean, indicating whether this subsection grades are overridden
+  - name: subsectiongrade_first_attempted_on
+    description: timestamp, time of the user's first attempt at a problem in the subsection.
+  - name: subsectiongrade_created_on
+    description: timestamp, datetime of the subsection grade was first calculated
+      for this user for this subsection.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
