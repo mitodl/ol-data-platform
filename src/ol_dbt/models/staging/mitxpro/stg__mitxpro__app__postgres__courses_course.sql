@@ -11,6 +11,20 @@ with source as (
         , title as course_title
         , program_id
         , readable_id as course_readable_id
+        , case 
+            when   
+                (position('x' in substring(readable_id, position('+' in readable_id)))) = 0
+                then 
+                    substring(
+                        readable_id, ((position('+' in readable_id)) + 1)
+                        , (position('+' in (substring(readable_id, position('+' in readable_id) + 1))) - 1)
+                    )
+            else 
+                substring(
+                    readable_id, ((position('+' in readable_id)) + 1)
+                    , (position('x' in substring(readable_id, position('+' in readable_id))) - 2)
+                )
+        end as program_code
         , position_in_program
         , platform_id
         , replace(replace(readable_id, 'course-v1:', ''), '+', '/') as course_edx_readable_id
