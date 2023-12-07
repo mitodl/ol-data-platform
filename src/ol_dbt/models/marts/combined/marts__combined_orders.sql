@@ -1,5 +1,5 @@
 --- This model combines intermediate orders from different platforms
-{{ config(materialized='view') }}
+--{{ config(materialized='view') }}
 
 with bootcamps__ecommerce_order as (
     select * from {{ ref('int__bootcamps__ecommerce_order') }}
@@ -7,6 +7,10 @@ with bootcamps__ecommerce_order as (
 
 , mitxpro__ecommerce_allorders as (
     select * from {{ ref('int__mitxpro__ecommerce_allorders') }}
+)
+
+, mitxpro__course_runs as (
+    select * from {{ ref('int__mitxpro__course_runs') }}
 )
 
 , mitxonline__ecommerce_order as (
@@ -26,7 +30,7 @@ with bootcamps__ecommerce_order as (
 )
 
 , mitxpro_orders as (
-    select
+    select 
         mitxpro__ecommerce_allorders.order_id
         , mitxpro__ecommerce_allorders.line_id
         , mitxpro__ecommerce_allorders.order_created_on
@@ -48,7 +52,7 @@ with bootcamps__ecommerce_order as (
 )
 
 , bootcamps_orders as (
-    select
+    select 
         bootcamps__ecommerce_order.order_id
         , bootcamps__ecommerce_order.line_id
         , bootcamps__ecommerce_order.order_created_on
