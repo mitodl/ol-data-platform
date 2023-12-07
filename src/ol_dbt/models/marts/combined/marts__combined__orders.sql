@@ -30,7 +30,7 @@ with bootcamps__ecommerce_order as (
 )
 
 , mitxpro_orders as (
-    select 
+    select
         mitxpro__ecommerce_allorders.line_id
         , mitxpro__ecommerce_allorders.order_created_on
         , mitxpro__ecommerce_allorders.order_state
@@ -42,9 +42,9 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_order.order_total_price_paid
         , mitxpro__b2becommerce_b2border.b2border_total_price
         , coalesce(mitxpro__ecommerce_allorders.order_id, mitxpro__ecommerce_allorders.b2border_id) as order_id
-        , case 
-            when mitxpro__ecommerce_allorders.b2border_id is not null 
-                then 'Y' 
+        , case
+            when mitxpro__ecommerce_allorders.b2border_id is not null
+                then 'Y'
         end as b2b_indicator
     from mitxpro__ecommerce_allorders
     left join mitxpro__course_runs
@@ -56,7 +56,7 @@ with bootcamps__ecommerce_order as (
 )
 
 , bootcamps_orders as (
-    select 
+    select
         bootcamps__ecommerce_order.order_id
         , bootcamps__ecommerce_order.line_id
         , bootcamps__ecommerce_order.order_created_on
