@@ -11,15 +11,15 @@ with source as (
         , title as course_title
         , program_id
         , readable_id as course_readable_id
-        , case 
-            when   
+        , case
+            when
                 (position('x' in substring(readable_id, position('+' in readable_id)))) = 0
-                then 
+                then
                     substring(
                         readable_id, ((position('+' in readable_id)) + 1)
                         , (position('+' in (substring(readable_id, position('+' in readable_id) + 1))) - 1)
                     )
-            else 
+            else
                 substring(
                     readable_id, ((position('+' in readable_id)) + 1)
                     , (position('x' in substring(readable_id, position('+' in readable_id))) - 2)
