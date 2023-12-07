@@ -6,8 +6,8 @@ models:
   description: B2B and regular orders combined into one table
   columns:
   - name: platform
-    description: string, describes which platform the data is from (mitxonline, mitxpro,
-      or bootcamps)
+    description: string, describes which platform the data is from
+      (mitxonline, mitxpro, or bootcamps)
   - name: order_id
     description: int, foreign key for order table
   - name: line_id
@@ -31,6 +31,13 @@ models:
     description: str, user email associated with their account
   - name: user_id
     description: int, foreign key to the user table
+  - name: user_id
+    description: int, foreign key to the user table
+  - name: b2b_indicator
+    description: str, indicates whether the record is realted to a b2b order
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["order_id", "line_id", "b2b_indicator", "platform"]
 
 - name: marts__combined_course_enrollment_detail
   description: course enrollment detail with certificates, orders and coupons from
