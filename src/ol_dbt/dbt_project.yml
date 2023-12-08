@@ -60,10 +60,10 @@ models:
       format: "'PARQUET'"
     +required_docs: true
     +grants:
-      select: ['accountadmin', 'read_only_production', 'production_analyst']
-      insert: ['accountadmin', 'production_analyst']
-      update: ['accountadmin', 'production_analyst']
-      delete: ['accountadmin', 'production_analyst']
+      select: ['read_only_production', 'production_analyst']
+      insert: ['production_analyst']
+      update: ['production_analyst']
+      delete: ['production_analyst']
       all privileges: ['accountadmin']
     staging:
       +materialized: table
