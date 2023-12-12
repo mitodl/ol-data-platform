@@ -146,3 +146,45 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
+
+
+- name: marts__mitxonline_weekly_course_engagements
+  description: Weekly time series of MITx Online learners course engagement statistics
+  columns:
+  - name: week_start_date
+    description: date, week starting date for this aggregate statistics. In this report,
+      it starts on every Sunday.
+    tests:
+    - not_null
+  - name: week_end_date
+    description: date, week ending date for this aggregate statistics. In this report,
+      it ends on every Saturday.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: unique_users
+    description: int, number of unique users who engaged in any type of course activity
+  - name: unique_submitted_problem_users
+    description: int, number of unique users who submitted an answer for a problem
+  - name: unique_watched_video_users
+    description: int, number of unique users who watched any course video.
+  - name: unique_participated_discussion_users
+    description: int, number of unique users who created a post, response, or comment
+      to any course discussion.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["week_start_date", "courserun_readable_id"]

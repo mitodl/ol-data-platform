@@ -1383,15 +1383,14 @@ models:
     tests:
     - not_null
   - name: useractivity_event_type
-    description: str, type of video event triggered - play_video - When a user selects
-      the video player’s play control pause_video - When a user selects the video
-      player’s pause control stop_video - When the video player reaches the end of
-      the video file and play automatically stops
+    description: str, type of video event triggered. It can be browser-emitted events
+      like play_video, pause_video, stop_video, complete_video, or mobile-emitted
+      events edx.video.played, edx.video.paused, etc.
     tests:
     - not_null
   - name: useractivity_video_id
-    description: str, hash code for the video being watched. This value is part of
-      the courseware_studentmodule.module_id
+    description: str, hash code for the video being watched. This value is last part
+      of coursestructure_block_id string
     tests:
     - not_null
   - name: useractivity_video_duration
@@ -1399,17 +1398,36 @@ models:
     tests:
     - not_null
   - name: useractivity_video_currenttime
-    description: number, The time in the video when this event was emitted
+    description: number, The time in the video when this event was emitted. Maybe
+      Null for load_video or seek_video events.
+  - name: useractivity_video_old_time
+    description: number, time in the video, in seconds, at which the user chose to
+      go to a different point time for seek_video event
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'seek_video'"
+  - name: useractivity_video_new_time
+    description: number, time in the video, in seconds, that the user selected as
+      the destination point for seek_video event
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'seek_video'"
+  - name: useractivity_video_new_speed
+    description: number, new speed that the user selected for the video to play for
+      speed_change_video event. e.g. 0.75, 1.0, 1.25, 1.50.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'speed_change_video'"
+  - name: useractivity_video_old_speed
+    description: number, old speed at which the video was playing for speed_change_video
+      event.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'speed_change_video'"
   - name: useractivity_timestamp
     description: timestamp, time when this event was emitted
     tests:
     - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
-        "useractivity_video_id", "useractivity_video_currenttime", "useractivity_timestamp"]
 
 - name: int__mitxonline__user_courseactivity_problemcheck
   description: It tracks MITx Online open edX users problem_check activities within
@@ -1468,6 +1486,115 @@ models:
       column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
         "useractivity_timestamp"]
 
+- name: int__mitxonline__user_courseactivity_problemsubmitted
+  description: MITx Online learners problem submission activities within a course
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, open edX user ID extracted from context field. This id doesn't
+      always match with auth_user in open edX table, there can be multiple openedx_user_ids
+      for the same user_username. For those cases, use openedx_user_id from auth_user
+      open edX table.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, edx.grades.problem.submitted - when a problem is submitted and
+      successfully saved
+    tests:
+    - not_null
+  - name: useractivity_problem_id
+    description: str, Unique ID for this problem in a course, formatted as block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}.
+    tests:
+    - not_null
+  - name: useractivity_problem_name
+    description: str, display name of this problem in a course
+  - name: useractivity_problem_weight
+    description: number, the weight of this problem
+  - name: useractivity_problem_earned_score
+    description: str, learner’s weighted score for this problem.
+  - name: useractivity_problem_max_score
+    description: number, weighted maximum possible score for this problem.
+  - name: useractivity_timestamp
+    description: timestamp, time when this event was emitted
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+        "useractivity_timestamp"]
+
+- name: int__mitxonline__user_courseactivity_discussion
+  description: MITx Online learners discussion forum interaction within a course
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, open edX user ID extracted from context field
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The values are either browser or mobile for this event
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, type of discussion forum event triggered. Values can be edx.forum.comment.created,
+      edx.forum.comment.edited, edx.forum.response.created, edx.forum.response.voted,
+      edx.forum.thread.created, edx.forum.thread.viewed, edx.forum.thread.voted, edx.forum.searched,
+      etc.
+    tests:
+    - not_null
+  - name: useractivity_discussion_post_id
+    description: str, unique identifier for the discussion post learner engaged in.
+      Maybe Null for edx.forum.searched event
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type != 'edx.forum.searched'"
+  - name: useractivity_discussion_post_title
+    description: str, title for the specific discussion post. Maybe Null for edx.forum.searched
+      event.
+  - name: useractivity_discussion_block_id
+    description: str, identifier for the specific discussion component. e.g. discussion_ps2A-tab5.
+      Value is the last part of 'coursestructure_block_id' string. Maybe Null for
+      edx.forum.searched event.
+  - name: useractivity_discussion_block_name
+    description: str, display name for the specific discussion component. This value
+      consists of the unit name and 'coursestructure_block_title' of this discussion
+      component.
+  - name: useractivity_discussion_page_url
+    description: str, URL of the page from which the discussion thread can be viewed.
+  - name: useractivity_discussion_search_query
+    description: str, the query text searched by the learner on the course discussion
+      page. Applicable for edx.forum.searched event.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'edx.forum.searched'"
+  - name: useractivity_discussion_roles
+    description: str, identifies a user's roles in the discussion post. e.g. ["Student"],
+      ["Community TA", "Student"].
+  - name: useractivity_timestamp
+    description: timestamp, time when this event was emitted
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
+        "useractivity_discussion_post_id", "useractivity_timestamp"]
+
 - name: int__mitxonline__user_courseactivities
   description: MITx Online open edX user activities aggregated statistics per course
     from tracking logs
@@ -1515,6 +1642,30 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
+
+- name: int__mitxonline__user_courseactivities_daily
+  description: MITx Online open edX user activities aggregated daily for all course
+    activities from tracking logs
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: courseactivity_num_events
+    description: int, number of tracking log events (including all course activities)
+    tests:
+    - not_null
+  - name: courseactivity_date
+    description: date, date that user has any kind of activities in the course
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
 
 - name: int__mitxonline__course_structure
   description: this table contains historical changes to open edX's course content
