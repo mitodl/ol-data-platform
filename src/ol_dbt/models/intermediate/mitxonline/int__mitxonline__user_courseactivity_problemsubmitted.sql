@@ -9,6 +9,7 @@ select
     user_username
     , courserun_readable_id
     , openedx_user_id
+    , useractivity_event_source
     , useractivity_event_type
     , useractivity_path
     , useractivity_timestamp

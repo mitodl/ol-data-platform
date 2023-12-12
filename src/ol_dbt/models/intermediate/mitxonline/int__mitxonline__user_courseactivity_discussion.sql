@@ -11,6 +11,7 @@ select
     , openedx_user_id
     , useractivity_event_source
     , useractivity_event_type
+    , useractivity_path
     , useractivity_timestamp
     , json_query(useractivity_event_object, 'lax $.id' omit quotes) as useractivity_discussion_post_id
     , json_query(useractivity_event_object, 'lax $.title' omit quotes) as useractivity_discussion_post_title

@@ -1388,6 +1388,8 @@ models:
       events edx.video.played, edx.video.paused, etc.
     tests:
     - not_null
+  - name: useractivity_path
+    description: str, URL that generated this event
   - name: useractivity_video_id
     description: str, hash code for the video being watched. This value is last part
       of coursestructure_block_id string
@@ -1430,8 +1432,7 @@ models:
     - not_null
 
 - name: int__mitxonline__user_courseactivity_problemcheck
-  description: It tracks MITx Online open edX users problem_check activities within
-    a course
+  description: MITx Online open edX users problem_check events emitted from server
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
@@ -1452,6 +1453,8 @@ models:
     description: str, problem_check - when a problem is successfully checked.
     tests:
     - not_null
+  - name: useractivity_path
+    description: str, URL that generated this event
   - name: useractivity_problem_id
     description: str, Unique ID for this problem in a course. It's recorded as a URL
       format - block-v1:{org)+{course ID}+type@problem+block@{hash code}
@@ -1504,11 +1507,18 @@ models:
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The value is server for this event.
+    tests:
+    - not_null
   - name: useractivity_event_type
     description: str, edx.grades.problem.submitted - when a problem is submitted and
       successfully saved
     tests:
     - not_null
+  - name: useractivity_path
+    description: str, URL that generated this event
   - name: useractivity_problem_id
     description: str, Unique ID for this problem in a course, formatted as block-v1:{org)+{course
       ID}+type@problem+block@{hash code}.
@@ -1558,6 +1568,8 @@ models:
       etc.
     tests:
     - not_null
+  - name: useractivity_path
+    description: str, URL that generated this event
   - name: useractivity_discussion_post_id
     description: str, unique identifier for the discussion post learner engaged in.
       Maybe Null for edx.forum.searched event
