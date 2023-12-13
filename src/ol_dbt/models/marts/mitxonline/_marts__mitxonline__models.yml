@@ -147,24 +147,25 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
 
-
-- name: marts__mitxonline_weekly_course_engagements
-  description: Weekly time series of MITx Online learners course engagement statistics
+- name: marts__mitxonline_course_engagements_daily
+  description: MITx Online learners daily course engagement statistics
   columns:
-  - name: week_start_date
-    description: date, week starting date for this aggregate statistics. In this report,
-      it starts on every Sunday.
-    tests:
-    - not_null
-  - name: week_end_date
-    description: date, week ending date for this aggregate statistics. In this report,
-      it ends on every Saturday.
+  - name: courseactivity_date
+    description: date, date that user has any interactions within a course
     tests:
     - not_null
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
     tests:
     - not_null
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
       or periods. e.g. 18.03.1x
@@ -176,15 +177,15 @@ models:
     description: timestamp, datetime on when the course begins
   - name: courserun_end_on
     description: timestamp, datetime on when the course ends
-  - name: unique_users
-    description: int, number of unique users who engaged in any type of course activity
-  - name: unique_submitted_problem_users
-    description: int, number of unique users who submitted an answer for a problem
-  - name: unique_watched_video_users
-    description: int, number of unique users who watched any course video.
-  - name: unique_participated_discussion_users
-    description: int, number of unique users who created a post, response, or comment
-      to any course discussion.
+  - name: num_events
+    description: int, number of course activity events for the user
+  - name: num_problem_submitted
+    description: int, number of problem submitted events in a course for the user
+  - name: num_video_played
+    description: int, number of play video events in a course for the user
+  - name: num_discussion_participated
+    description: int, number of adding a post, response, or comment events in a course
+      for the user
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["week_start_date", "courserun_readable_id"]
+      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]

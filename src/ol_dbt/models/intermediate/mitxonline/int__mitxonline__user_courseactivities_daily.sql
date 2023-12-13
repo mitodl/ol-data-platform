@@ -11,9 +11,9 @@ with course_activities as (
         , count(*) as courseactivity_num_events
     from course_activities
     group by
-        course_activities.user_username
-        , course_activities.courserun_readable_id
-        , date(from_iso8601_timestamp(course_activities.useractivity_timestamp))
+        user_username
+        , courserun_readable_id
+        , date(from_iso8601_timestamp(useractivity_timestamp))
 )
 
 select * from daily_activities_stats
