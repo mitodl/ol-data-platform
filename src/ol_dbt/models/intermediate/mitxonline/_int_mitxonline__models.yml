@@ -1584,7 +1584,7 @@ models:
       event.
   - name: useractivity_discussion_block_id
     description: str, identifier for the specific discussion component. e.g. discussion_ps2A-tab5.
-      Value is the last part of 'coursestructure_block_id' string. Maybe Null for
+      Value is the last part of 'coursestructure_block_id' string. May be Null for
       edx.forum.searched event.
   - name: useractivity_discussion_block_name
     description: str, display name for the specific discussion component. This value
