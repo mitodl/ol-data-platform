@@ -1388,11 +1388,11 @@ models:
       events edx.video.played, edx.video.paused, etc.
     tests:
     - not_null
-  - name: useractivity_path
-    description: str, URL that generated this event
+  - name: useractivity_page_url
+    description: str, url of the page the user was visiting when the event was emitted.
   - name: useractivity_video_id
-    description: str, hash code for the video being watched. This value is last part
-      of coursestructure_block_id string
+    description: str, hash code for the video being watched. This value is the last
+      part of coursestructure_block_id string
     tests:
     - not_null
   - name: useractivity_video_duration
@@ -1453,8 +1453,6 @@ models:
     description: str, problem_check - when a problem is successfully checked.
     tests:
     - not_null
-  - name: useractivity_path
-    description: str, URL that generated this event
   - name: useractivity_problem_id
     description: str, Unique ID for this problem in a course. It's recorded as a URL
       format - block-v1:{org)+{course ID}+type@problem+block@{hash code}
@@ -1518,7 +1516,8 @@ models:
     tests:
     - not_null
   - name: useractivity_path
-    description: str, URL that generated this event
+    description: str, relative url path of page that generated the problem submitted
+      event.
   - name: useractivity_problem_id
     description: str, Unique ID for this problem in a course, formatted as block-v1:{org)+{course
       ID}+type@problem+block@{hash code}.
@@ -1568,8 +1567,6 @@ models:
       etc.
     tests:
     - not_null
-  - name: useractivity_path
-    description: str, URL that generated this event
   - name: useractivity_discussion_post_id
     description: str, unique identifier for the discussion post learner engaged in.
       Maybe Null for edx.forum.searched event
