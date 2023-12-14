@@ -1379,13 +1379,16 @@ models:
     - not_null
   - name: useractivity_event_source
     description: str, specifies the source of the interaction that triggered the event.
-      The values are either browser or mobile for this event
+      The value can only be browser for video event as MITx Online doesn't have a
+      mobile app at this time.
     tests:
     - not_null
   - name: useractivity_event_type
-    description: str, type of video event triggered. It can be browser-emitted events
-      like play_video, pause_video, stop_video, complete_video, or mobile-emitted
-      events edx.video.played, edx.video.paused, etc.
+    description: >
+      str, type of video event triggered. e.g. play_video, pause_video, stop_video,
+      complete_video, etc.
+      A list of video events can be found https://edx.readthedocs.io/projects/devdata/en/latest/
+      internal_data_formats/tracking_logs/student_event_types.html#video-interaction-events
     tests:
     - not_null
   - name: useractivity_page_url
@@ -1400,11 +1403,11 @@ models:
     tests:
     - not_null
   - name: useractivity_video_currenttime
-    description: number, The time in the video when this event was emitted. Maybe
+    description: number, The time in the video when this event was emitted. May be
       Null for load_video or seek_video events.
   - name: useractivity_video_old_time
     description: number, time in the video, in seconds, at which the user chose to
-      go to a different point time for seek_video event
+      go to a different point in time for seek_video event
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "useractivity_event_type = 'seek_video'"
@@ -1557,24 +1560,27 @@ models:
     - not_null
   - name: useractivity_event_source
     description: str, specifies the source of the interaction that triggered the event.
-      The values are either browser or mobile for this event
+      The value is server for the discussion events.
     tests:
     - not_null
   - name: useractivity_event_type
-    description: str, type of discussion forum event triggered. Values can be edx.forum.comment.created,
+    description: >
+      str, type of discussion forum event triggered. Values can be edx.forum.comment.created,
       edx.forum.comment.edited, edx.forum.response.created, edx.forum.response.voted,
       edx.forum.thread.created, edx.forum.thread.viewed, edx.forum.thread.voted, edx.forum.searched,
       etc.
+      A list of discussion events can be found https://edx.readthedocs.io/projects/devdata/en/latest/
+      internal_data_formats/tracking_logs/student_event_types.html#discussion-forum-events
     tests:
     - not_null
   - name: useractivity_discussion_post_id
     description: str, unique identifier for the discussion post learner engaged in.
-      Maybe Null for edx.forum.searched event
+      May be Null for edx.forum.searched event
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "useractivity_event_type != 'edx.forum.searched'"
   - name: useractivity_discussion_post_title
-    description: str, title for the specific discussion post. Maybe Null for edx.forum.searched
+    description: str, title for the specific discussion post. May be Null for edx.forum.searched
       event.
   - name: useractivity_discussion_block_id
     description: str, identifier for the specific discussion component. e.g. discussion_ps2A-tab5.
@@ -1593,8 +1599,12 @@ models:
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "useractivity_event_type = 'edx.forum.searched'"
   - name: useractivity_discussion_roles
-    description: str, identifies a user's roles in the discussion post. e.g. ["Student"],
-      ["Community TA", "Student"].
+    description: >
+      array, Identifies a user who doesn't have discussion management privileges
+      as a 'Student', or a user who has discussion management privileges as a course
+      'Community TA', 'Moderator', or 'Administrator'.
+      The value of role refers to name field in django_comment_client_role_users.
+      https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/sql_schema.html#id12
   - name: useractivity_timestamp
     description: timestamp, time when this event was emitted
     tests:
