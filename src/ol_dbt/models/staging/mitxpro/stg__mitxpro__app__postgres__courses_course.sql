@@ -11,19 +11,41 @@ with source as (
         , title as course_title
         , program_id
         , readable_id as course_readable_id
-        , case
-            when
-                (position('x' in substring(readable_id, position('+' in readable_id)))) = 0
-                then
+        , case 
+            when 
+                substring(course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)) like '%x%'
+                then 
                     substring(
-                        readable_id, ((position('+' in readable_id)) + 1)
-                        , (position('+' in (substring(readable_id, position('+' in readable_id) + 1))) - 1)
+                        course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)
+                        , position(
+                            'x' in (
+                                substring(
+                                    course_edx_readable_id
+                                    , (position('/' in course_edx_readable_id) + 1)
+                                )
+                            )
+                        ) - 1
                     )
-            else
+            when 
+                substring(course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)) like '%/%'
+                then 
+                    substring(
+                        course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)
+                        , (
+                            position(
+                                '/' in (
+                                    substring(
+                                        course_edx_readable_id
+                                        , (position('/' in course_edx_readable_id) + 1)
+                                    )
+                                )
+                            ) - 1
+                        )
+                    )
+            else 
                 substring(
-                    readable_id, ((position('+' in readable_id)) + 1)
-                    , (position('x' in substring(readable_id, position('+' in readable_id))) - 2)
-                )
+                    course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)
+                ) 
         end as program_code
         , position_in_program
         , platform_id
