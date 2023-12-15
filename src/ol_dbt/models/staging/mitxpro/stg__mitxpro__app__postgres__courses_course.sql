@@ -11,10 +11,10 @@ with source as (
         , title as course_title
         , program_id
         , readable_id as course_readable_id
-        , case 
-            when 
+        , case
+            when
                 substring(course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)) like '%x%'
-                then 
+                then
                     substring(
                         course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)
                         , position(
@@ -26,9 +26,9 @@ with source as (
                             )
                         ) - 1
                     )
-            when 
+            when
                 substring(course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)) like '%/%'
-                then 
+                then
                     substring(
                         course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)
                         , (
@@ -42,10 +42,10 @@ with source as (
                             ) - 1
                         )
                     )
-            else 
+            else
                 substring(
                     course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)
-                ) 
+                )
         end as program_code
         , position_in_program
         , platform_id
