@@ -1,7 +1,38 @@
 import datetime
 import hashlib
+import io
 import json
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any,Optional
+
+from flatten_dict import flatten
+from flatten_dict.reducers import make_reducer
+
+
+def write_course_structures(
+    course_id: str,
+    course_structure: dict[str, Any],
+    structures_file: io.TextIOWrapper,
+    blocks_file: io.TextIOWrapper,
+    flattened_dict_separator: str = "__",
+) -> None:
+    table_row = {
+        "content_hash": hashlib.sha256(
+            json.dumps(course_structure).encode("utf-8")
+        ).hexdigest(),
+        "course_id": course_id,
+        "course_structure": course_structure,
+        "course_structure_flattened": flatten(
+            course_structure,
+            reducer=make_reducer(flattened_dict_separator),
+        ),
+        "retrieved_at": datetime.now(tz=UTC).isoformat(),
+    }
+    structures_file.write(json.dumps(table_row))
+    structures_file.write("\n")
+    for block in un_nest_course_structure(course_id, course_structure):
+        blocks_file.write(json.dumps(block))
+        blocks_file.write("\n")
 
 
 def generate_block_indexes(
