@@ -146,3 +146,46 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
+
+- name: marts__mitxonline_course_engagements_daily
+  description: MITx Online learners daily course engagement statistics
+  columns:
+  - name: courseactivity_date
+    description: date, date that user has any interactions within a course
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: num_events
+    description: int, number of course activity events for the user
+  - name: num_problem_submitted
+    description: int, number of problem submitted events in a course for the user
+  - name: num_video_played
+    description: int, number of play video events in a course for the user
+  - name: num_discussion_participated
+    description: int, number of adding a post, response, or comment events in a course
+      for the user
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
