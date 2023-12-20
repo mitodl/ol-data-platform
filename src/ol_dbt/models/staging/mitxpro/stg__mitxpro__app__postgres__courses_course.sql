@@ -11,41 +11,55 @@ with source as (
         , title as course_title
         , program_id
         , readable_id as course_readable_id
-        , case
-            when
-                substring(course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)) like '%x%'
-                then
+        , case 
+            when 
+                substring(
+                    (replace(replace(readable_id, 'course-v1:', ''), '+', '/'))
+                    , (position('/' in (replace(replace(readable_id, 'course-v1:', ''), '+', '/'))) + 1)
+                ) like '%x%'
+                then 
                     substring(
-                        course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)
+                        (replace(replace(readable_id, 'course-v1:', ''), '+', '/'))
+                        , (position('/' in (replace(replace(readable_id, 'course-v1:', ''), '+', '/'))) + 1)
                         , position(
                             'x' in (
                                 substring(
-                                    course_edx_readable_id
-                                    , (position('/' in course_edx_readable_id) + 1)
+                                    replace(replace(readable_id, 'course-v1:', ''), '+', '/')
+                                    , (position('/' in eplace(replace(readable_id, 'course-v1:', ''), '+', '/')) + 1)
                                 )
                             )
                         ) - 1
                     )
-            when
-                substring(course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)) like '%/%'
-                then
+            when 
+                substring(
+                    replace(replace(readable_id, 'course-v1:', ''), '+', '/')
+                    , (position('/' in replace(replace(readable_id, 'course-v1:', ''), '+', '/')) + 1)
+                ) like '%/%'
+                then 
                     substring(
-                        course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)
+                        replace(replace(readable_id, 'course-v1:', ''), '+', '/')
+                        , (position('/' in replace(replace(readable_id, 'course-v1:', ''), '+', '/')) + 1)
                         , (
                             position(
                                 '/' in (
                                     substring(
-                                        course_edx_readable_id
-                                        , (position('/' in course_edx_readable_id) + 1)
+                                        replace(replace(readable_id, 'course-v1:', ''), '+', '/')
+                                        , (
+                                            position(
+                                                '/' in 
+                                                replace(replace(readable_id, 'course-v1:', ''), '+', '/')
+                                            ) + 1
+                                        )
                                     )
                                 )
                             ) - 1
                         )
                     )
-            else
+            else 
                 substring(
-                    course_edx_readable_id, (position('/' in course_edx_readable_id) + 1)
-                )
+                    replace(replace(readable_id, 'course-v1:', ''), '+', '/')
+                    , (position('/' in replace(replace(readable_id, 'course-v1:', ''), '+', '/')) + 1)
+                ) 
         end as program_code
         , position_in_program
         , platform_id
