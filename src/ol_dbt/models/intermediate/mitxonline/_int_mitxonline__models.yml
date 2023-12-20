@@ -1746,6 +1746,10 @@ models:
     description: str, block id of chapter within which this child block belongs to.
       Null for the 'course' block as it's the top block that doesn't belong to any
       chapter.
+  - name: coursestructure_chapter_title
+    description: str, title of chapter within which this child block belongs to.
+  - name: coursestructure_is_latest
+    description: boolean, indicating if the course content is the latest version
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__openedx__api__course_structure')
