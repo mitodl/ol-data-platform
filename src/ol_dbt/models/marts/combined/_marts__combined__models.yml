@@ -2,6 +2,47 @@
 version: 2
 
 models:
+- name: marts__combined__orders
+  description: B2B and regular orders combined into one table
+  columns:
+  - name: platform
+    description: string, describes which platform the data is from (mitxonline, mitxpro,
+      or bootcamps)
+  - name: order_id
+    description: int, foreign key for order table
+  - name: line_id
+    description: int, foreign key for line table
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created. If this
+      is a b2b order it will be the timestamp that order was created otherwise it
+      will be when the regular order was created.
+  - name: order_state
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded"
+  - name: courserun_id
+    description: int, foreign key in courses_courserun
+  - name: order_total_price_paid
+    description: number, total order amount
+  - name: product_id
+    description: int, foreign key for product table
+  - name: product_type
+    description: string, readable product type
+  - name: user_email
+    description: str, user email associated with their account
+  - name: user_id
+    description: int, foreign key to the user table
+  - name: user_id
+    description: int, foreign key to the user table
+  - name: b2b_only_indicator
+    description: str, indicates whether the record is only related to a b2b order
+  - name: coupon_id
+    description: int, foreign key referencing ecommerce_coupon or the b2b coupon table
+  - name: coupon_name
+    description: string, human readable name for the coupon payment
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["order_id", "line_id", "b2b_only_indicator", "platform", "coupon_id"]
+
 - name: marts__combined_course_enrollment_detail
   description: course enrollment detail with certificates, orders and coupons from
     OL platforms.
