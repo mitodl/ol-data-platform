@@ -1548,6 +1548,41 @@ models:
       column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
         "useractivity_timestamp"]
 
+- name: int__mitxonline__user_courseactivity_showanswer
+  description: MITx Online learners show answer events within a course
+  columns:
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, open edX user ID extracted from context field. This id doesn't
+      always match with auth_user in open edX table, there can be multiple openedx_user_ids
+      for the same user_username. For those cases, use openedx_user_id from auth_user
+      open edX table.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: useractivity_path
+    description: str, relative url path of page when the answer to a problem is shown
+      event.
+  - name: useractivity_problem_id
+    description: str, Unique ID for this problem in a course, formatted as block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}.
+    tests:
+    - not_null
+  - name: useractivity_timestamp
+    description: timestamp, time for this show answer event
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+        "useractivity_timestamp"]
+
 - name: int__mitxonline__user_courseactivity_discussion
   description: MITx Online learners discussion forum interaction within a course
   columns:

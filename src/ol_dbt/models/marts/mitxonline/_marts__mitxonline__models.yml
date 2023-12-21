@@ -190,7 +190,7 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
 
-- name: marts__mitxonline_problem_engagements
+- name: marts__mitxonline_problem_submissions
   description: MITx Online learners problem submissions
   columns:
   - name: user_username
@@ -259,3 +259,48 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "problem_id", "problem_submission_timestamp"]
+
+- name: marts__mitxonline_problem_summary
+  description: MITx Online learners problem performance summary with a particular
+    problem
+  columns:
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: problem_id
+    description: str, Unique ID for this problem in a course. It's formatted in block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}
+    tests:
+    - not_null
+  - name: num_showanswer
+    description: number, The number of times the user clicked on showanswer for this
+      problem.
+  - name: num_attempts
+    description: number, The number of times the user had attempted this problem.
+      Null if user has never attempted this problem
+  - name: problem_success
+    description: str, indicating if user's most recent attempt to this problem is
+      correct or incorrect. Null if user has never attempted this problem
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "problem_id"]
