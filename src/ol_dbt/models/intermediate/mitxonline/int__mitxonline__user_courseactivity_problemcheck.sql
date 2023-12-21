@@ -13,6 +13,7 @@ select
     , useractivity_timestamp
     , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as useractivity_problem_name
     , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as useractivity_problem_id
+    , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as useractivity_problem_student_answers
     , json_query(useractivity_event_object, 'lax $.attempts' omit quotes) as useractivity_problem_attempts
     , json_query(useractivity_event_object, 'lax $.success' omit quotes) as useractivity_problem_success
     , json_query(useractivity_event_object, 'lax $.grade' omit quotes) as useractivity_problem_current_grade
