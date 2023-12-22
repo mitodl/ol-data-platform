@@ -189,3 +189,64 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
+
+- name: marts__mitxonline_video_engagements
+  description: MITx Online learners video engagements - play, pause, seek or stop
+    video action
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: video_event_type
+    description: str, type of this video event. The value is one of play_video, seek_video,
+      pause_video, stop_video, complete_video.
+    tests:
+    - not_null
+  - name: page_url
+    description: str, url of the page the user was visiting when this video event
+      was emitted.
+  - name: video_id
+    description: str, hash code for the video being watched.
+    tests:
+    - not_null
+  - name: video_title
+    description: str, title of this video.
+  - name: section_title
+    description: str, title of section (aka chapter) this video belongs to.
+  - name: video_duration
+    description: number, The length of the video file, in seconds.
+    tests:
+    - not_null
+  - name: video_currenttime
+    description: number, The time in the video when this event was emitted. May be
+      Null for seek_video
+  - name: video_old_time
+    description: number, time in the video, in seconds, at which the user chose to
+      go to a different point in time for 'seek_video' event
+  - name: video_new_time
+    description: number, time in the video, in seconds, that the user selected as
+      the destination point for 'seek_video' event
+  - name: video_event_timestamp
+    description: timestamp, time of this video event
+    tests:
+    - not_null
