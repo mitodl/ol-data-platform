@@ -51,7 +51,7 @@ jobs:
 
     - name: "Step 06 - Upload pages to artifact"
       id: step-06
-      uses: actions/upload-pages-artifact@v2
+      uses: actions/upload-pages-artifact@v3
       with:
         path: ${{ github.workspace }}/dbt_docs
 
