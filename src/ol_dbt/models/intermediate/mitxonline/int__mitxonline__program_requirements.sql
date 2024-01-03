@@ -114,8 +114,8 @@ with program_requirements as (
 
 select
     combined_requirements.*
-    , core_courses_count.program_num_core_courses
-    + elective_courses_count.program_num_elective_courses as program_num_required_courses
+    , coalesce(core_courses_count.program_num_core_courses, 0)
+    + coalesce(elective_courses_count.program_num_elective_courses, 0) as program_num_required_courses
 from combined_requirements
 left join core_courses_count on combined_requirements.program_id = core_courses_count.program_id
 left join elective_courses_count on combined_requirements.program_id = elective_courses_count.program_id
