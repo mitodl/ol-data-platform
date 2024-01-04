@@ -277,8 +277,8 @@ models:
     tests:
     - not_null
   - name: student_answers
-    description: json, student answers to this problem in problem_id and internal
-      answer pair. For multiple questions, it lists every question and answer.
+    description: json, student answers to this problem in a name/value (problem_id/answer)
+      pair. For multiple questions, it lists every question and answer.
     tests:
     - not_null
   - name: problem_success
@@ -287,10 +287,12 @@ models:
     - not_null
   - name: problem_grade
     description: number, user grade for this problem at the time of this submission.
+      It can range from 0 to the max possible grade for this problem. e.g. if problem_max_grade
+      is 12, problem_grade can be anywhere between 0 to 12.
     tests:
     - not_null
   - name: problem_max_grade
-    description: number, Maximum possible grade value for this problem
+    description: number, Maximum possible grade value for this problem.
     tests:
     - not_null
   - name: problem_submission_timestamp
