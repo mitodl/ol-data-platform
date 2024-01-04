@@ -250,3 +250,120 @@ models:
     description: timestamp, time of this video event
     tests:
     - not_null
+
+- name: marts__mitxonline_problem_submissions
+  description: MITx Online learners problem submissions
+  columns:
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: problem_id
+    description: str, Unique ID for this problem in a course. It's formatted in block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}
+    tests:
+    - not_null
+  - name: problem_name
+    description: str, display name of this problem in a course
+    tests:
+    - not_null
+  - name: num_attempts
+    description: number, The number of times the user had attempted at the time of
+      this submission.
+    tests:
+    - not_null
+  - name: student_answers
+    description: json, student answers to this problem in a name/value (problem_id/answer)
+      pair. For multiple questions, it lists every question and answer.
+    tests:
+    - not_null
+  - name: problem_success
+    description: str, It's either 'correct' or 'incorrect'
+    tests:
+    - not_null
+  - name: problem_grade
+    description: number, user grade for this problem at the time of this submission.
+      It can range from 0 to the max possible grade for this problem. e.g. if problem_max_grade
+      is 12, problem_grade can be anywhere between 0 to 12.
+    tests:
+    - not_null
+  - name: problem_max_grade
+    description: number, Maximum possible grade value for this problem.
+    tests:
+    - not_null
+  - name: problem_submission_timestamp
+    description: timestamp, time for this problem submission
+    tests:
+    - not_null
+  - name: is_most_recent_attempt
+    description: boolean, indicating if this submission is the most recent attempt.
+      Useful to filter out any previous answers
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "problem_id", "problem_submission_timestamp"]
+
+- name: marts__mitxonline_problem_summary
+  description: MITx Online learners problem performance summary with a particular
+    problem
+  columns:
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: problem_id
+    description: str, Unique ID for this problem in a course. It's formatted in block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}
+    tests:
+    - not_null
+  - name: num_showanswer
+    description: number, The number of times the user clicked on showanswer for this
+      problem.
+  - name: num_attempts
+    description: number, The number of times the user had attempted this problem.
+      Null if user has never attempted this problem
+  - name: problem_success
+    description: str, indicating if user's most recent attempt to this problem is
+      correct or incorrect. Null if user has never attempted this problem
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "problem_id"]
