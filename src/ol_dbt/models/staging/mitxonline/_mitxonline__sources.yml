@@ -1100,19 +1100,3 @@ sources:
       description: timestamp, date and time when this grade was initially created
     - name: modified
       description: timestamp, date and time when this grade was most recently updated
-
-  #TODO: CHECK TABLE/ADD TO AIRBYTE
-  - name: raw__mitxonline__openedx__mysql__certificates_generatedcertificate
-    description:
-    columns:
-    - name: id
-      description: int, sequential ID tracking a user course grade on MITx Online
-        open edx platform
-
-  #TODO CHECK TABLE/ADD TO AIRBYTE
-  - name: raw__mitxonline__openedx__mysql__auth_userprofile
-    description:
-    columns:
-    - name: id
-      description: int, sequential ID tracking a user course grade on MITx Online
-        open edx platform
