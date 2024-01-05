@@ -1116,6 +1116,9 @@ models:
     tests:
     - unique
     - not_null
+  - name: program_code
+    description: str, The portion of the Open edX ID that contains the program code
+      e.g. course-v1:xPRO+MLx2's department code would be ML
   - name: course_edx_readable_id
     description: str, The edx course ID of the course in the format as {org}/{course}
     tests:
