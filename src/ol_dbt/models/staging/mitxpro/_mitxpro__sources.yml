@@ -1356,3 +1356,39 @@ sources:
         on the open edX platform
     - name: last_login
       description: timestamp, date and time when user last login on the open edX platform
+
+  - name: raw__xpro__openedx__mysql__grades_persistentcoursegrade
+    description: xPro open edX course grades
+    columns:
+    - name: id
+      description: int, sequential ID tracking a user course grade on xPro open edx
+        platform
+    - name: course_id
+      description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
+        courses) or org/course/run (for old-type courses)
+    - name: user_id
+      description: int, user ID on Residential xPro open edx platform
+    - name: course_version
+      description: str, version number of the course in the Split Modulestore when
+        the grade was computed. Currently used for debugging purposes only.
+    - name: grading_policy_hash
+      description: str, A SHA-1 digest of the course grading policy, used to detect
+        and update grades whenever the policy changes
+    - name: percent_grade
+      description: float, calculated course grade as a decimal percentage, per grading
+        policy. e.g. 0.91 means 91%
+    - name: letter_grade
+      description: str, calculated course grade as a letter value (e.g., A-D, Pass),
+        per grading policy If the learner's grade is Fail or F, this value is empty.
+    - name: passed_timestamp
+      description: timestamp, date and time when the learner first passed the course.
+        If this value is empty, the learner never passed the course. If this value
+        is non-empty but the letter_grade value is empty, the learner transitioned
+        from passing to not passing.
+    - name: course_edited_timestamp
+      description: timestamp, last edited timestamp of the course when the grade was
+        computed. Currently used for debugging purposes only.
+    - name: created
+      description: timestamp, date and time when this grade was initially created
+    - name: modified
+      description: timestamp, date and time when this grade was most recently updated
