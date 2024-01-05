@@ -11,6 +11,10 @@ with source as (
         , title as course_title
         , program_id
         , readable_id as course_readable_id
+        , substring(
+            regexp_extract(readable_id, '\+(.+)x'), 2
+            , length(regexp_extract(readable_id, '\+(.+)x')) - 2
+        ) as program_code
         , position_in_program
         , platform_id
         , replace(replace(readable_id, 'course-v1:', ''), '+', '/') as course_edx_readable_id
