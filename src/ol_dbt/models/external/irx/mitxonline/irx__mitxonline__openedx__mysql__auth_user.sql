@@ -12,7 +12,7 @@ select
     , auth_user.first_name
     , auth_user.last_name
     , auth_user.email
-    , '' as password
+    , '' as pass_word
     , auth_user.is_staff
     , auth_user.is_active
     , auth_user.is_superuser
