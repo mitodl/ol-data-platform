@@ -13,4 +13,4 @@ with departments as (
 
 select department.coursedepartment_name
 from course_to_departments
-inner join department on course_to_departments.coursedepartment_id = departments.coursedepartment_id
+inner join departments on course_to_departments.coursedepartment_id = departments.coursedepartment_id
