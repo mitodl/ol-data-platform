@@ -11,8 +11,8 @@ with departments as (
     from {{ ref('stg__mitxonline__app__postgres__courses_course_to_department') }}
 )
 
-select 
-     departments.coursedepartment_name
-     , course_to_departments.course_id
+select
+    departments.coursedepartment_name
+    , course_to_departments.course_id
 from course_to_departments
-inner join departments on course_to_departments.coursedepartment_id = departments.coursedepartment_id 
+inner join departments on course_to_departments.coursedepartment_id = departments.coursedepartment_id
