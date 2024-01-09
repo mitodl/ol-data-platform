@@ -994,7 +994,7 @@ models:
     description: timestamp, specifying when a course department was most recently
       updated
 
-- name: stg__mitxonline__app__postgres__courses_department
+- name: stg_mitxonline_app_postgres_courses_course_to_department
   columns:
   - name: coursetodepartment_id
     description: int, primary key representing a single MITx Online course tagged
@@ -1008,7 +1008,7 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_coursedepartment')
+        to: ref('stg_mitxonline_app_postgres_courses_department')
         field: coursedepartment_id
   - name: course_id
     description: int, foreign key to courses_course representing a single course
