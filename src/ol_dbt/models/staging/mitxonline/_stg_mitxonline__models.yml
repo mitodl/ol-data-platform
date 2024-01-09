@@ -991,7 +991,8 @@ models:
   - name: coursedepartment_created_on
     description: timestamp, specifying when a course department was initially created
   - name: coursedepartment_updated_on
-    description: timestamp, specifying when a course department was most recently updated
+    description: timestamp, specifying when a course department was most recently
+      updated
 
 - name: stg__mitxonline__app__postgres__courses_course_to_department
   columns:
@@ -1002,8 +1003,8 @@ models:
     - unique
     - not_null
   - name: coursedepartment_id
-    description: int, foreign key to courses_coursedepartment representing a single course
-      department
+    description: int, foreign key to courses_coursedepartment representing a single
+      course department
     tests:
     - not_null
     - relationships:

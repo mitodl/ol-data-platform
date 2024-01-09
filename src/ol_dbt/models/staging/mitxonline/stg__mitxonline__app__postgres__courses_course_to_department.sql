@@ -5,8 +5,7 @@ with source as (
 )
 
 , cleaned as (
-    select
-        id as coursetodepartment_id
+    select id as coursetodepartment_id
     from source
 )
 
