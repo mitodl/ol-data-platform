@@ -856,7 +856,7 @@ models:
     - unique
     - not_null
 
-- name: int_mitxonline_course_to_departments
+- name: int__mitxonline__course_to_departments
   description: Intermediate model for MITxOnline course to department
   columns:
   - name: coursedepartment_name
