@@ -632,27 +632,23 @@ sources:
       description: str, value of the operator for this requirement e.g. if operator
         is all_of, the corresponding operator_value 3 means all of 3 courses
 
-  - name: raw__mitxonline__app__postgres__courses_coursetopic
+  - name: raw__mitxonline__app__postgres__courses_coursedepartment
     columns:
     - name: id
-      description: int, primary key representing a single MITx Online course topic
+      description: int, primary key representing a single MITx Online department
     - name: name
-      description: str, name of a course topic
+      description: str, name of a department
     - name: created_on
-      description: timestamp, specifying when a course topic was initially created
+      description: timestamp, specifying when a department was initially created
     - name: updated_on
-      description: timestamp, specifying when a course topic was most recently updated
+      description: timestamp, specifying when a department was most recently updated
 
-  - name: raw__mitxonline__app__postgres__courses_course_topics
+  - name: raw__mitxonline__app__postgres__courses_department
     columns:
     - name: id
-      description: int, primary key representing a single MITx Online course tagged
-        to a topic
-    - name: course_id
-      description: int, foreign key to courses_course representing a single course
-    - name: coursetopic_id
-      description: int, foreign key to courses_coursetopic representing a single course
-        topic
+      description: int, primary key representing a single MITx Online department
+    - name: name
+      description: str, name of a department
 
   - name: raw__mitxonline__app__postgres__courses_blockedcountry
     columns:
