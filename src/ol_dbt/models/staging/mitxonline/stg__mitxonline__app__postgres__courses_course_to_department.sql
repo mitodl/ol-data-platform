@@ -3,10 +3,10 @@ with source as (
 )
 
 , cleaned as (
-    select 
-          id as coursetodepartment_id
-         , department_id as coursedepartment_id
-          , course_id
+    select
+        id as coursetodepartment_id
+        , department_id as coursedepartment_id
+        , course_id
     from source
 )
 
