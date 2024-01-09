@@ -646,9 +646,11 @@ sources:
   - name: raw__mitxonline__app__postgres__courses_course_departments
     columns:
     - name: id
-      description: int, primary key representing a single MITx Online department
-    - name: name
-      description: str, name of a department
+      description: int, primary key for this table
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: department_id
+      description: int, foreign key to courses_department
 
   - name: raw__mitxonline__app__postgres__courses_blockedcountry
     columns:
