@@ -632,7 +632,7 @@ sources:
       description: str, value of the operator for this requirement e.g. if operator
         is all_of, the corresponding operator_value 3 means all of 3 courses
 
-  - name: raw__mitxonline__app__postgres__courses_coursedepartment
+  - name: raw__mitxonline__app__postgres__courses_department
     columns:
     - name: id
       description: int, primary key representing a single MITx Online department
@@ -643,7 +643,7 @@ sources:
     - name: updated_on
       description: timestamp, specifying when a department was most recently updated
 
-  - name: raw__mitxonline__app__postgres__courses_department
+  - name: raw__mitxonline__app__postgres__courses_course_departments
     columns:
     - name: id
       description: int, primary key representing a single MITx Online department

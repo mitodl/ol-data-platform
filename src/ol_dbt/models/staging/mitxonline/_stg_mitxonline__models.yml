@@ -976,7 +976,7 @@ models:
   - name: courserun_updated_on
     description: timestamp, specifying when a course run was most recently updated
 
-- name: stg__mitxonline__app__postgres__courses_coursedepartment
+- name: stg__mitxonline__app__postgres__courses_department
   columns:
   - name: coursedepartment_id
     description: int, primary key representing a single MITx Online course department
@@ -993,7 +993,7 @@ models:
   - name: coursedepartment_updated_on
     description: timestamp, specifying when a course department was most recently updated
 
-- name: stg__mitxonline__app__postgres__courses_course_to_department
+- name: stg__mitxonline__app__postgres__courses_department
   columns:
   - name: coursetodepartment_id
     description: int, primary key representing a single MITx Online course tagged

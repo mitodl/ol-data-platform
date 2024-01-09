@@ -856,7 +856,7 @@ models:
     - unique
     - not_null
 
-- name: int__mitxonline__course_to_department
+- name: stg__mitxonline__app__postgres__courses_course_to_department
   description: Intermediate model for MITxOnline course to department
   columns:
   - name: coursedepartment_name
