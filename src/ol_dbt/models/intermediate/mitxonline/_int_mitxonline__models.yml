@@ -856,11 +856,11 @@ models:
     - unique
     - not_null
 
-- name: int__mitxonline__course_to_topics
-  description: Intermediate model for MITxOnline course to topics
+- name: int__mitxonline__course_to_departments
+  description: Intermediate model for MITxOnline course to department
   columns:
-  - name: coursetopic_name
-    description: str, name of a course topic
+  - name: coursedepartment_name
+    description: str, name of a course department
     tests:
     - not_null
   - name: course_id
@@ -869,7 +869,7 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursetopic_name", "course_id"]
+      column_list: ["coursedepartment_name", "course_id"]
 
 - name: int__mitxonline__course_blockedcountries
   description: Intermediate model for MITxOnline Course Blocked countries

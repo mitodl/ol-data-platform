@@ -976,39 +976,40 @@ models:
   - name: courserun_updated_on
     description: timestamp, specifying when a course run was most recently updated
 
-- name: stg__mitxonline__app__postgres__courses_coursetopic
+- name: stg__mitxonline__app__postgres__courses_department
   columns:
-  - name: coursetopic_id
-    description: int, primary key representing a single MITx Online course topic
+  - name: coursedepartment_id
+    description: int, primary key representing a single MITx Online course department
     tests:
     - unique
     - not_null
-  - name: coursetopic_name
-    description: str, name of a course topic
+  - name: coursedepartment_name
+    description: str, name of a course department
     tests:
     - unique
     - not_null
-  - name: coursetopic_created_on
-    description: timestamp, specifying when a course topic was initially created
-  - name: coursetopic_updated_on
-    description: timestamp, specifying when a course topic was most recently updated
+  - name: coursedepartment_created_on
+    description: timestamp, specifying when a course department was initially created
+  - name: coursedepartment_updated_on
+    description: timestamp, specifying when a course department was most recently
+      updated
 
-- name: stg__mitxonline__app__postgres__courses_course_to_topic
+- name: stg__mitxonline__app__postgres__courses_course_to_department
   columns:
-  - name: coursetotopic_id
+  - name: coursetodepartment_id
     description: int, primary key representing a single MITx Online course tagged
-      to a topic
+      to a department
     tests:
     - unique
     - not_null
-  - name: coursetopic_id
-    description: int, foreign key to courses_coursetopic representing a single course
-      topic
+  - name: coursedepartment_id
+    description: int, foreign key to courses_coursedepartment representing a single
+      course department
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_coursetopic')
-        field: coursetopic_id
+        to: ref('stg__mitxonline__app__postgres__courses_department')
+        field: coursedepartment_id
   - name: course_id
     description: int, foreign key to courses_course representing a single course
     tests:
@@ -1018,7 +1019,7 @@ models:
         field: course_id
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursetopic_id", "course_id"]
+      column_list: ["coursedepartment_id", "course_id"]
 
 - name: stg__mitxonline__app__postgres__courses_blockedcountry
   columns:
