@@ -7,7 +7,6 @@ with source as (
 , cleaned as (
     select
         id as coursetodepartment_id
-        , course_id
     from source
 )
 
