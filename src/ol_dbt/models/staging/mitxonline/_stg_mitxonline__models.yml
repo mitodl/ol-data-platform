@@ -1371,8 +1371,9 @@ models:
     tests:
     - not_null
   - name: studentmodule_state_data
-    description: json, JSON string indicating the learner's last known state within
-      a course.
+    description: json, JSON object indicating the user’s last known state in the course.
+      It may contain any attributes for different module types - course, chapter,
+      sequential, etc.
     tests:
     - not_null
   - name: studentmodule_problem_grade

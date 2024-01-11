@@ -1832,3 +1832,115 @@ models:
       platform
     tests:
     - not_null
+
+- name: stg__mitxpro__openedx__api__course_structure
+  description: This table contains historical changes to xPro's course content
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:xPRO+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: coursestructure_content_hash
+    description: str, sha256 hashed string of the course content.
+    tests:
+    - not_null
+  - name: coursestructure_block_content_hash
+    description: str, sha256 hashed string of the block content in a course
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, Unique ID for a distinct piece of content in a course, formatted
+      as block-v1:xPRO+{course}+{run}type@{block type}+block@{hash code}
+    tests:
+    - not_null
+  - name: coursestructure_parent_block_id
+    description: str, parent block ID, same format as block_id
+  - name: coursestructure_block_index
+    description: int, sequence number giving order in which this block content appears
+      within the course
+    tests:
+    - not_null
+  - name: coursestructure_block_category
+    description: str, category/type of the block, it identifies core structural elements
+      of a course. Value includes but not limited to course, chapter, sequential,
+      vertical, discussion, html, problem, video, etc.
+    tests:
+    - not_null
+  - name: coursestructure_block_title
+    description: str, title of the block extracted from the metadata of the block.
+      This field comes from name field for the section, subsection, or unit on the
+      Studio 'Course Outline' page.
+  - name: coursestructure_block_metadata
+    description: str, json string of the metadata field for the block. It provides
+      additional information about this block, different block type may have different
+      member fields inside metadata.
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course extracted from the metadata of 'course'
+      block
+  - name: courserun_start_on
+    description: timestamp, indicating when the course run starts extracted from the
+      metadata of 'course' block
+  - name: coursestructure_retrieved_at
+    description: timestamp, indicating when this course structure was initially retrieved
+      from REST API.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
+        "coursestructure_retrieved_at"]
+
+- name: stg__mitxpro__openedx__mysql__courseware_studentmodule
+  description: It holds the most current course state and score per course section
+    for learners on xPro. There is a separate row for every piece of content that
+    a learner accesses.
+  columns:
+  - name: studentmodule_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - not_null
+    - unique
+  - name: openedx_user_id
+    description: int, reference user id in auth_user from open edX
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID in the format course-v1:xPro+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, block ID for a distinct piece of content in a course, referencing
+      course_structure
+    tests:
+    - not_null
+  - name: coursestructure_block_category
+    description: str, category/type of the block, referencing course_structure.
+    tests:
+    - not_null
+  - name: studentmodule_state_data
+    description: json, JSON object indicating the user’s last known state in the course.
+      It may contain any attributes for different module types - course, chapter,
+      sequential, etc.
+  - name: studentmodule_problem_grade
+    description: float, floating point value indicating the total unweighted grade
+      for this problem that the learner has scored. e.g. how many responses they got
+      right within the problem.
+  - name: studentmodule_problem_max_grade
+    description: float, floating point value indicating the total possible unweighted
+      grade for this problem, or basically the number of responses that are in this
+      problem.
+  - name: studentmodule_created_on
+    description: timestamp, datetime when this row was created, which is typically
+      when the learner first accesses this piece of content.
+    tests:
+    - not_null
+  - name: studentmodule_updated_on
+    description: timestamp, datetime when this row was last updated. A change in this
+      field implies that there was a state change.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]

@@ -1523,6 +1523,11 @@ models:
     description: str, username of the open edX user who caused the event to be emitted.
     tests:
     - not_null
+  - name: openedx_user_id
+    description: int, either from openedx_user_id in open edX users table, or from
+      tracking logs if no openedx_user_id based on username match
+    tests:
+    - not_null
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
     tests:
@@ -1552,6 +1557,8 @@ models:
   - name: courseactivity_last_problem_check_timestamp
     description: timestamp, timestamp of user's last problem_check event within a
       course
+  - name: courseactivity_num_chapters_visited
+    description: int, number of unique chapters visited within a course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
