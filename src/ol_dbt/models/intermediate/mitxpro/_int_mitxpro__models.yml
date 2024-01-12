@@ -1256,7 +1256,7 @@ models:
   - name: user_address_country
     description: str, country code for the user's address
   - name: user_vat_id
-    description: str, vat id of the user
+    description: str, Value-Added Tax Identification number of the user
   - name: user_is_active
     description: boolean, indicating if user is active or not
   - name: user_street_address
