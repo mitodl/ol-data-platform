@@ -1916,7 +1916,7 @@ models:
     tests:
     - not_null
   - name: coursestructure_block_category
-    description: str, category/type of the block, referencing course_structure.
+    description: str, category/type of the block, referencing block_category in course_structure.
     tests:
     - not_null
   - name: studentmodule_state_data

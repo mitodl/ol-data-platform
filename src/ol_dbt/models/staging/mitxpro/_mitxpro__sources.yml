@@ -1427,10 +1427,12 @@ sources:
       description: str, block ID for a distinct piece of content in a course, referencing
         course_structure
     - name: module_type
-      description: str, category/type of the block, same column as block_type in course_structure
+      description: str, category/type of the block, referencing block_category in
+        course_structure.
     - name: state
-      description: str, JSON text indicating the learner's last known state within
-        a course.
+      description: str, JSON object indicating the user’s last known state in the
+        course. It may contain any attributes for different module types - course,
+        chapter, sequential, etc.
     - name: done
       description: str, not used. The value is 'na' in every row
     - name: grade
