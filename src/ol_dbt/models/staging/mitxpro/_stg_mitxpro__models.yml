@@ -944,6 +944,8 @@ models:
     description: string, user first name
     tests:
     - not_null
+  - name: user_vat_id
+    description: string, Value-Added Tax Identification number of the user
   - name: user_street_address
     description: string, user street address
     tests:

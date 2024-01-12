@@ -882,6 +882,8 @@ sources:
       description: string, state or territory
     - name: postal_code
       description: string, postal code
+    - name: vat_id
+      description: string, Value-Added Tax Identification number of the user
 
   - name: raw__xpro__app__postgres__users_profile
     columns:
