@@ -763,13 +763,13 @@ urllib3 = ">=1.0,<2.0"
 
 [[package]]
 name = "dbt-duckdb"
-version = "1.7.0"
+version = "1.7.1"
 description = "The duckdb adapter plugin for dbt (data build tool)"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "dbt-duckdb-1.7.0.tar.gz", hash = "sha256:e2479f5fdd5177eea37c081d8ea126d80ec51d95e69ea31132ade396538bf0a0"},
-    {file = "dbt_duckdb-1.7.0-py3-none-any.whl", hash = "sha256:8e00d14f9ed6b93a9e6878d7a124c9e37ad44c497efe55e38f5ef98e20684ead"},
+    {file = "dbt-duckdb-1.7.1.tar.gz", hash = "sha256:e59b3e58d7a461988d000892b75ce95245cdf899c847e3a430eb2e9e10e63bb9"},
+    {file = "dbt_duckdb-1.7.1-py3-none-any.whl", hash = "sha256:bd75b1a72924b942794d0c3293a1159a01f21ab9d82c9f18b22c253dedad101a"},
 ]
 
 [package.dependencies]
