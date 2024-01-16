@@ -22,9 +22,9 @@ notifications = Definitions(
             channel="#data-platform-alerts",
             webserver_base_url=os.getenv("DAGSTER_HOSTNAME", "localhost:3000"),
             monitor_all_repositories=True,
-            slack_token=vault.client.secrets.kv.v2.read_secret(
-                path="slack", mount_point="secret-data"
-            )["data"]["data"]["token"],
+            slack_token=vault.client.secrets.kv.v1.read_secret(
+                path="dagster-slack", mount_point="secret-data"
+            )["data"]["api_token"],
         )
     ]
 )
