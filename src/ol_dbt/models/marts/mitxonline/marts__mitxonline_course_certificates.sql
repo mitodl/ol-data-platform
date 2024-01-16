@@ -18,4 +18,8 @@ select
     , course_certificates.user_full_name
     , users.openedx_user_id
 from course_certificates
-left join users on course_certificates.user_mitxonline_username = users.user_username
+left join users
+    on (
+        course_certificates.user_mitxonline_username = users.user_username
+        or course_certificates.user_email = users.user_email
+    )
