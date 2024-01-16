@@ -1413,3 +1413,41 @@ sources:
     - name: retrieved_at
       description: timestamp, time indicating when this block was initially retrieved
         from REST API.
+
+  - name: raw__xpro__openedx__mysql__courseware_studentmodule
+    description: It holds the most current course state and score per course section
+      for learners on xPro. There is a separate row for every piece of content that
+      a learner accesses.
+    columns:
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: student_id
+      description: int, reference user id in auth_user from open edX database
+    - name: course_id
+      description: str, Open edX Course ID in the format course-v1:xPro+{course code}+{run_tag}
+    - name: module_id
+      description: str, block ID for a distinct piece of content in a course, referencing
+        course_structure
+    - name: module_type
+      description: str, category/type of the block, referencing block_category in
+        course_structure.
+    - name: state
+      description: str, JSON object indicating the user’s last known state in the
+        course. It may contain any attributes for different module types - course,
+        chapter, sequential, etc.
+    - name: done
+      description: str, not used. The value is 'na' in every row
+    - name: grade
+      description: float, floating point value indicating the total unweighted grade
+        for this problem that the learner has scored. e.g. how many responses they
+        got right within the problem.
+    - name: max_grade
+      description: float, floating point value indicating the total possible unweighted
+        grade for this problem, or basically the number of responses that are in this
+        problem.
+    - name: created
+      description: timestamp, datetime when this row was created, which is typically
+        when the learner first accesses this piece of content.
+    - name: modified
+      description: timestamp, datetime when this row was last updated. A change in
+        this field implies that there was a state change.
