@@ -53,6 +53,11 @@ models:
     description: json, cybersource req reference number for a payment
   - name: productversion_readable_id
     description: string, the readable_id field from the product object
+  - name: receipt_authorization_code
+    description: str, authorization code from cybersource payment
+  - name: receipt_transaction_id
+    description: string, unique identifier. Either the transaction_id from cybersource
+      or a unique uuid
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["order_id", "b2border_id", "line_id", "coupon_id"]

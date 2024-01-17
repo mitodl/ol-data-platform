@@ -46,8 +46,8 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_order.order_purchaser_user_id
         , mitxpro__ecommerce_order.order_total_price_paid
         , mitxpro__b2becommerce_b2border.b2border_total_price
-        , mitxpro__ecommerce_order.receipt_authorization_code
-        , mitxpro__ecommerce_order.receipt_transaction_id
+        , mitxpro__ecommerce_allorders.receipt_authorization_code
+        , mitxpro__ecommerce_allorders.receipt_transaction_id
         , coalesce(mitxpro__ecommerce_allorders.coupon_id, mitxpro__ecommerce_allorders.b2bcoupon_id) as coupon_id
         , coalesce(mitxpro__ecommerce_allorders.order_id, mitxpro__ecommerce_allorders.b2border_id) as order_id
         , case
@@ -140,8 +140,8 @@ with bootcamps__ecommerce_order as (
         , null as b2b_only_indicator
         , null as coupon_id
         , null as coupon_name
-        , receipt_authorization_code
-        , receipt_transaction_id
+        , receipt_authorization_code 
+        , receipt_transaction_id 
     from bootcamps_orders
 
 )
