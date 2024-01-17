@@ -142,8 +142,8 @@ with bootcamps__ecommerce_order as (
         , null as b2b_only_indicator
         , null as coupon_id
         , null as coupon_name
-        , receipt_authorization_code 
-        , receipt_transaction_id 
+        , receipt_authorization_code
+        , receipt_transaction_id
     from bootcamps_orders
 
 )
