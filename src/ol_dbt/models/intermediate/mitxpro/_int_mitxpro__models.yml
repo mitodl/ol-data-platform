@@ -54,7 +54,7 @@ models:
   - name: productversion_readable_id
     description: string, the readable_id field from the product object
   - name: receipt_authorization_code
-    description: str, authorization code from cybersource payment
+    description: str, authorization code from cybersource payment.
   - name: receipt_transaction_id
     description: string, unique identifier. Either the transaction_id from cybersource
       or a unique uuid

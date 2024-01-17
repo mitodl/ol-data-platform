@@ -130,8 +130,13 @@ with b2becommerce_b2border as (
         , null as b2bcoupon_id
         , null as b2border_contract_number
         , null as req_reference_number
+<<<<<<< Updated upstream
         , ecommerce_order.receipt_authorization_code
         , ecommerce_order.receipt_transaction_id
+=======
+        , ecommerce_order.receipt_authorization_code 
+        , ecommerce_order.receipt_transaction_id 
+>>>>>>> Stashed changes
         , case when ecommerce_couponredemption.couponredemption_id is not null then true end as redeemed
     from ecommerce_order
     inner join ecommerce_line

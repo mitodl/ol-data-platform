@@ -140,8 +140,13 @@ with bootcamps__ecommerce_order as (
         , null as b2b_only_indicator
         , null as coupon_id
         , null as coupon_name
+<<<<<<< Updated upstream
         , receipt_authorization_code
         , receipt_transaction_id
+=======
+        , receipt_authorization_code 
+        , receipt_transaction_id 
+>>>>>>> Stashed changes
     from bootcamps_orders
 
 )
