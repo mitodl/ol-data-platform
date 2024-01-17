@@ -3,16 +3,15 @@ import os
 from dagster import Definitions
 from dagster_slack import make_slack_on_run_failure_sensor
 
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.secrets.vault import Vault
 
-DAGSTER_ENV = os.environ.get("DAGSTER_ENVIRONMENT", "dev")
-vault_addr = os.getenv("VAULT_ADDR", "localhost:8200")
 if DAGSTER_ENV == "dev":
-    vault = Vault(vault_addr=vault_addr, vault_auth_type="github")
+    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
     vault._auth_github()  # noqa: SLF001
 else:
     vault = Vault(
-        vault_addr=vault_addr, vault_role="dagster-server", aws_auth_mount="aws"
+        vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
     )
     vault._auth_aws_iam()  # noqa: SLF001
 
