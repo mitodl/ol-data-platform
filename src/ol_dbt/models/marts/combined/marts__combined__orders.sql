@@ -144,8 +144,8 @@ with bootcamps__ecommerce_order as (
         , receipt_authorization_code
         , receipt_transaction_id
 =======
-        , receipt_authorization_code 
-        , receipt_transaction_id 
+        , receipt_authorization_code
+        , receipt_transaction_id
 >>>>>>> Stashed changes
     from bootcamps_orders
 

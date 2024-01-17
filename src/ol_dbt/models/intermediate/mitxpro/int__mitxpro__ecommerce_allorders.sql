@@ -134,8 +134,8 @@ with b2becommerce_b2border as (
         , ecommerce_order.receipt_authorization_code
         , ecommerce_order.receipt_transaction_id
 =======
-        , ecommerce_order.receipt_authorization_code 
-        , ecommerce_order.receipt_transaction_id 
+        , ecommerce_order.receipt_authorization_code
+        , ecommerce_order.receipt_transaction_id
 >>>>>>> Stashed changes
         , case when ecommerce_couponredemption.couponredemption_id is not null then true end as redeemed
     from ecommerce_order
