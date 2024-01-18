@@ -1273,9 +1273,8 @@ models:
     - not_null
   - name: openedx_user_id
     description: int, foreign key to open edX users. Not all app users have openedx_user_id
-      due to username mismatch between app and open edX.
-    tests:
-    - unique
+      due to username or email mismatch between app and open edX. Also, there may
+      be multiple mitxonline users matching with same open edx user.
   - name: user_username
     description: string, username
     tests:

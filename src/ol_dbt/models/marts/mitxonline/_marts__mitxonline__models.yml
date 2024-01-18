@@ -29,11 +29,11 @@ models:
     tests:
     - not_null
   - name: user_username
-    description: str, username on MITx Online
+    description: str, username on MITx Online at the time of generating certificate
     tests:
     - not_null
   - name: user_email
-    description: str, user email on MITx Online
+    description: str, user email on MITx Online at the time of generating certificate
     tests:
     - not_null
   - name: user_full_name
@@ -41,8 +41,9 @@ models:
     tests:
     - not_null
   - name: openedx_user_id
-    description: int, foreign key to open edX users. Not all app users have openedx_user_id
-      due to username mismatch between app and open edX.
+    description: int, foreign key to open edX users.
+    tests:
+    - not_null
 
 - name: marts__mitxonline_user_profiles
   description: MITx Online user profiles
