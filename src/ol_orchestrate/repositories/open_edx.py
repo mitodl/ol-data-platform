@@ -1,18 +1,17 @@
-import os
 from typing import Literal
 
 from dagster import Definitions
 from dagster_aws.s3 import S3Resource
-from pydantic import Field
 
 from ol_orchestrate.jobs.open_edx import edx_course_pipeline
-from ol_orchestrate.lib.vault_config_helper import VaultBaseSettings, VaultDBCredentials
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.healthchecks import (
     HealthchecksIO,
 )
 from ol_orchestrate.resources.mysql_db import mysql_db_resource
 from ol_orchestrate.resources.openedx import OpenEdxApiClient
 from ol_orchestrate.resources.outputs import DailyResultsDir
+from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.resources.sqlite_db import sqlite_db_resource
 from ol_orchestrate.schedules.open_edx import (
     mitxonline_edx_daily_schedule,
@@ -20,9 +19,14 @@ from ol_orchestrate.schedules.open_edx import (
     xpro_edx_daily_schedule,
 )
 
-DAGSTER_ENV: Literal["ci", "qa", "production"] = os.environ.get(  # type: ignore[assignment]
-    "DAGSTER_ENVIRONMENT", "ci"
-)
+if DAGSTER_ENV == "dev":
+    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault._auth_github()  # noqa: SLF001
+else:
+    vault = Vault(
+        vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+    )
+    vault._auth_aws_iam()  # noqa: SLF001
 
 
 def open_edx_export_irx_job_config(
@@ -36,69 +40,43 @@ def open_edx_export_irx_job_config(
         "mitxonline": f"mitx-etl-mitxonline-{dagster_env}",
     }
 
-    class OpenEdxMongoCredentialsConfig(VaultBaseSettings):
-        edx_mongodb_username: str = Field(
-            ...,
-            vault_secret_path=f"secret-{deployment}/mongodb-forum",
-            vault_secret_key="username",  # noqa: S106 # pragma: allowlist secret
-        )
-        edx_mongodb_password: str = Field(
-            ...,
-            vault_secret_path=f"secret-{deployment}/mongodb-forum",
-            vault_secret_key="password",  # noqa: S106 # pragma: allowlist secret
-        )
-        edx_mongodb_auth_db: str = "admin"
-        edx_mongodb_forum_database_name: str = "forum"
-        edx_mongodb_uri: str = Field(
-            ...,
-            vault_secret_path=f"secret-{deployment}/mongodb-forum",
-            vault_secret_key="uri",  # noqa: S106 # pragma: allowlist secret
-        )
+    mongo_creds = vault.client.secrets.kv.v1.read_secret(
+        mount_point=f"secret-{deployment}", path="mongodb-forum"
+    )["data"]
+    mongo_config = {
+        "edx_mongodb_username": mongo_creds["username"],
+        "edx_mongodb_password": mongo_creds["password"],
+        "edx_mongodb_auth_db": "admin",
+        "edx_mongodb_forum_database_name": "forum",
+        "edx_mongodb_uri": mongo_creds["uri"],
+    }
 
-    class HealthcheckConfig(VaultBaseSettings):
-        check_id: str = Field(
-            ...,
-            vault_secret_path=f"secret-data/pipelines/edx/{pipeline_path}/healthchecks-io-check-id",
-            vault_secret_key="value",  # noqa: S106 # pragma: allowlist secret
-        )
+    healthcheck_id = vault.client.secrets.kv.v1.read_secret(
+        mount_point="secret-data",
+        path=f"pipelines/edx/{pipeline_path}/healthchecks-io-check-id",
+    )["data"]["value"]
 
-    class OpenEdxResourceRuntimeConfig(VaultBaseSettings):
-        client_id: str = Field(
-            ...,
-            vault_secret_path=f"secret-data/pipelines/edx/{pipeline_path}/edx-oauth-client",
-            vault_secret_key="id",  # noqa: S106 # pragma: allowlist secret
-        )
-        client_secret: str = Field(
-            ...,
-            vault_secret_path=f"secret-data/pipelines/edx/{pipeline_path}/edx-oauth-client",
-            vault_secret_key="secret",  # noqa: S106 # pragma: allowlist secret
-        )
-        lms_url: str = Field(
-            ...,
-            vault_secret_path=f"secret-data/pipelines/edx/{pipeline_path}/edx-oauth-client",
-            vault_secret_key="url",  # noqa: S106 # pragma: allowlist secret
-        )
-        studio_url: str = Field(
-            ...,
-            vault_secret_path=f"secret-data/pipelines/edx/{pipeline_path}/edx-oauth-client",
-            vault_secret_key="studio_url",  # noqa: S106 # pragma: allowlist secret
-        )
-        token_type: str = "JWT"
+    edx_creds = vault.client.secrets.kv.v1.read_secret(
+        mount_point="secret-data",
+        path=f"pipelines/edx/{pipeline_path}/edx-oauth-client",
+    )["data"]
+    edx_resource_config = {
+        "client_id": edx_creds["id"],
+        "client_secret": edx_creds["secret"],
+        "lms_url": edx_creds["url"],
+        "studio_url": edx_creds["studio_url"],
+        "token_type": "JWT",
+    }
 
-    class OpenEdxDatabaseConfig(VaultBaseSettings):
-        mysql_db_name: str = "edxapp"
-        mysql_hostname: str = f"edxapp-db{'-replica' if dagster_env == 'production' else ''}.service.{deployment}-{dagster_env}.consul"  # noqa: E501
-        mysql_credentials: VaultDBCredentials = Field(
-            ..., vault_secret_path=f"mariadb-{deployment}/creds/readonly"
-        )
-
-        def dict(self):  # noqa: A003
-            return {
-                "mysql_db_name": self.mysql_db_name,
-                "mysql_hostname": self.mysql_hostname,
-                "mysql_username": self.mysql_credentials.username,
-                "mysql_password": self.mysql_credentials.password.get_secret_value(),
-            }
+    db_creds = vault.client.secrets.database.generate_credentials(
+        mount_point=f"mariadb-{deployment}", name="readonly"
+    )["data"]
+    edx_db_config = {
+        "mysql_db_name": "edxapp",
+        "mysql_hostname": f"edxapp-db{'-replica' if dagster_env == 'production' else ''}.service.{deployment}-{dagster_env}.consul",  # noqa: E501
+        "mysql_username": db_creds["username"],
+        "mysql_password": db_creds["password"],
+    }
 
     return {
         "ops": {
@@ -111,16 +89,16 @@ def open_edx_export_irx_job_config(
                 "config": {"edx_etl_results_bucket": etl_bucket_map[deployment]}
             },
             "export_edx_forum_database": {
-                "config": OpenEdxMongoCredentialsConfig().dict()
+                "config": mongo_config,
             },
         },
         "resources": {
-            "openedx": {"config": OpenEdxResourceRuntimeConfig().dict()},
-            "healthchecks": {"config": HealthcheckConfig().dict()},
+            "openedx": {"config": edx_resource_config},
+            "healthchecks": {"config": {"check_id": healthcheck_id}},
             "results_dir": {
                 "config": {"date_format": "%Y%m%d", "dir_prefix": deployment}
             },
-            "sqldb": {"config": OpenEdxDatabaseConfig().dict()},
+            "sqldb": {"config": edx_db_config},
         },
     }
 
@@ -145,19 +123,19 @@ production_resources = {
 residential_edx_job = edx_course_pipeline.to_job(
     name="residential_edx_course_pipeline",
     resource_defs=production_resources,
-    config=open_edx_export_irx_job_config("mitx", DAGSTER_ENV),  # type: ignore[arg-type]
+    config=open_edx_export_irx_job_config("mitx", DAGSTER_ENV),
 )
 
 xpro_edx_job = edx_course_pipeline.to_job(
     name="xpro_edx_course_pipeline",
     resource_defs=production_resources,
-    config=open_edx_export_irx_job_config("xpro", DAGSTER_ENV),  # type: ignore[arg-type]
+    config=open_edx_export_irx_job_config("xpro", DAGSTER_ENV),
 )
 
 mitxonline_edx_job = edx_course_pipeline.to_job(
     name="mitxonline_edx_course_pipeline",
     resource_defs=production_resources,
-    config=open_edx_export_irx_job_config("mitxonline", DAGSTER_ENV),  # type: ignore[arg-type]
+    config=open_edx_export_irx_job_config("mitxonline", DAGSTER_ENV),
 )
 
 open_edx_irx_extracts = Definitions(

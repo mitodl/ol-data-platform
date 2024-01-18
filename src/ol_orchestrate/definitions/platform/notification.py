@@ -1,6 +1,6 @@
 import os
 
-from dagster import Definitions
+from dagster import DefaultSensorStatus, Definitions
 from dagster_slack import make_slack_on_run_failure_sensor
 
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
@@ -24,6 +24,7 @@ notifications = Definitions(
             slack_token=vault.client.secrets.kv.v1.read_secret(
                 path="dagster/slack", mount_point="secret-data"
             )["data"]["token"],
+            default_status=DefaultSensorStatus.RUNNING,
         )
     ]
 )
