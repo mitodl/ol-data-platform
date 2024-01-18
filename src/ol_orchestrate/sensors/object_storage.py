@@ -73,8 +73,10 @@ def check_new_s3_assets_sensor(  # noqa: PLR0913
 
     :yields: RunRequest or SkipReason if there are no new files to operate on
     """
-    pages = s3.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket_name, Prefix=bucket_prefix
+    pages = (
+        s3.get_client()
+        .get_paginator("list_objects_v2")
+        .paginate(Bucket=bucket_name, Prefix=bucket_prefix)
     )
     bucket_files = set()
     for page in pages:
