@@ -60,7 +60,6 @@ The overall flow of data is as follows:
             - Upload XML files to a /courses prefix in S3
 """
 
-import os
 import re
 from functools import partial
 from typing import Any, Literal
@@ -76,14 +75,20 @@ from ol_orchestrate.jobs.retrieve_edx_exports import (
     retrieve_edx_course_exports,
     retrieve_edx_tracking_logs,
 )
-from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.outputs import DailyResultsDir
-from ol_orchestrate.sensors.object_storage import check_new_gcs_assets_sensor
+from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.sensors.object_storage import gcs_multi_file_sensor
 
-dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: PGH003
-    "DAGSTER_ENVIRONMENT", "dev"
-)
+if DAGSTER_ENV == "dev":
+    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault._auth_github()  # noqa: SLF001
+else:
+    vault = Vault(
+        vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+    )
+    vault._auth_aws_iam()  # noqa: SLF001
 
 
 def s3_uploads_bucket(
@@ -115,7 +120,7 @@ def edxorg_data_archive_config(
             "upload_edx_data_exports": {
                 "config": {
                     "edx_irx_exports_bucket": ol_edxorg_raw_data_bucket,
-                    "bucket_prefix": s3_uploads_bucket(dagster_env)["prefix"],
+                    "bucket_prefix": s3_uploads_bucket(DAGSTER_ENV)["prefix"],
                 }
             },
         }
@@ -137,7 +142,7 @@ def edxorg_tracking_logs_config(
             "upload_edx_data_exports": {
                 "config": {
                     "edx_irx_exports_bucket": ol_edxorg_raw_data_bucket,
-                    "bucket_prefix": s3_uploads_bucket(dagster_env)["prefix"],
+                    "bucket_prefix": s3_uploads_bucket(DAGSTER_ENV)["prefix"],
                 }
             },
         }
@@ -147,14 +152,14 @@ def edxorg_tracking_logs_config(
 s3_courses_job_def = retrieve_edx_course_exports.to_job(
     name="retrieve_edx_course_exports",
     config=edxorg_data_archive_config(
-        "simeon-mitx-pipeline-main", s3_uploads_bucket(dagster_env)["bucket"], set()
+        "simeon-mitx-pipeline-main", s3_uploads_bucket(DAGSTER_ENV)["bucket"], set()
     ),
 )
 
 s3_logs_job_def = retrieve_edx_tracking_logs.to_job(
     name="retrieve_edx_logs",
     config=edxorg_tracking_logs_config(
-        "simeon-mitx-pipeline-main", s3_uploads_bucket(dagster_env)["bucket"], set()
+        "simeon-mitx-pipeline-main", s3_uploads_bucket(DAGSTER_ENV)["bucket"], set()
     ),
 )
 
@@ -166,9 +171,9 @@ file_regex = {
 retrieve_edx_exports = Definitions(
     resources={
         "gcp_gcs": GCSConnection(
-            **load_yaml_config("/etc/dagster/edxorg_gcp.yaml")["resources"]["gcp_gcs"][
-                "config"
-            ]
+            **vault.client.secrets.kv.v1.read_secret(
+                mount_point="secret-data", path="pipelines/edx/org/gcp-oauth-client"
+            )["data"]
         ),
         "s3": S3Resource(),
         "exports_dir": DailyResultsDir.configure_at_launch(),
@@ -177,7 +182,7 @@ retrieve_edx_exports = Definitions(
         SensorDefinition(
             name="courses_sensor",
             evaluation_fn=partial(
-                check_new_gcs_assets_sensor,
+                gcs_multi_file_sensor,
                 "simeon-mitx-pipeline-main",
                 bucket_prefix="COLD/",
                 object_filter_fn=lambda object_key: re.match(
@@ -185,7 +190,7 @@ retrieve_edx_exports = Definitions(
                 ),
                 run_config_fn=lambda new_keys: edxorg_data_archive_config(
                     "simeon-mitx-pipeline-main",
-                    s3_uploads_bucket(dagster_env)["bucket"],
+                    s3_uploads_bucket(DAGSTER_ENV)["bucket"],
                     new_keys,
                 ),
             ),
@@ -196,7 +201,7 @@ retrieve_edx_exports = Definitions(
         SensorDefinition(
             name="logs_sensor",
             evaluation_fn=partial(
-                check_new_gcs_assets_sensor,
+                gcs_multi_file_sensor,
                 "simeon-mitx-pipeline-main",
                 bucket_prefix="COLD/",
                 object_filter_fn=lambda object_key: re.match(
@@ -204,7 +209,7 @@ retrieve_edx_exports = Definitions(
                 ),
                 run_config_fn=lambda new_keys: edxorg_tracking_logs_config(
                     "simeon-mitx-pipeline-main",
-                    s3_uploads_bucket(dagster_env)["bucket"],
+                    s3_uploads_bucket(DAGSTER_ENV)["bucket"],
                     new_keys,
                 ),
             ),
