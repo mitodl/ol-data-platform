@@ -81,6 +81,7 @@ select
     , payments.transaction_readable_identifier as payment_transaction_id
     , payments.transaction_bill_to_address_state as payment_bill_to_address_state
     , payments.transaction_bill_to_address_country as payment_bill_to_address_country
+    , json_extract_scalar(payments.transaction_data, '$.req_reference_number') as req_reference_number
 from lines
 inner join orders on lines.order_id = orders.order_id
 inner join users on orders.order_purchaser_user_id = users.user_id

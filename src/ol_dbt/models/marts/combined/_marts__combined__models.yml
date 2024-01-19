@@ -44,6 +44,8 @@ models:
   - name: receipt_transaction_id
     description: string, unique identifier. Either the transaction_id from cybersource
       or a unique uuid
+  - name: req_reference_number
+    description: str, cybersource req reference number for a payment
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["order_id", "line_id", "b2b_only_indicator", "platform", "coupon_id"]
