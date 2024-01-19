@@ -102,7 +102,7 @@ with bootcamps__ecommerce_order as (
         , null as coupon_name
         , payment_authorization_code as receipt_authorization_code
         , payment_transaction_id as receipt_transaction_id
-        , req_reference_number
+        , order_reference_number as req_reference_number
     from mitxonline__ecommerce_order
 
     union all
