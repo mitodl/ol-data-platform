@@ -37,7 +37,7 @@ class GCSConnection(ConfigurableResource):
         default="https://www.googleapis.com/oauth2/v1/certs",
         description="URL for the x509 cert used by the auth provider",
     )
-    type: str = Field(  # noqa: A003
+    type: str = Field(
         default="service_account",
         description="Credential type",
     )
