@@ -36,7 +36,10 @@ with source as (
         , certificate_verify_uuid as courseruncertificate_verify_uuid
         , certificate_name as courseruncertificate_name
         , certificate_status as courseruncertificate_status
-        ,{{ transform_gender_value('profile_gender') }} as user_gender
+        --- trino doesn't have function to convert first letter to upper case
+        , regexp_replace(
+            {{ transform_gender_value('profile_gender') }}, '(^[a-z])(.)', x -> upper(x[1]) || x[2] -- noqa
+        ) as user_gender
         ,{{ transform_education_value('profile_level_of_education') }} as user_highest_education
         ,{{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
         ,{{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
