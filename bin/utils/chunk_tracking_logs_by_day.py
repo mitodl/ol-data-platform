@@ -1,4 +1,4 @@
-#!/usr/bin/env python  # noqa: INP001
+#!/usr/bin/env python
 """
 Our tracking logs have gone through a few iterations of methods for loading them to S3.
 This is largely due to different agents being used for shipping the logs.  As a result,
