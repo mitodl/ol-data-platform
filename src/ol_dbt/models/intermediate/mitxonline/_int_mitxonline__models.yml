@@ -1370,7 +1370,7 @@ models:
     description: int, open edX user ID extracted from context field. This id doesn't
       always match with auth_user in open edX table, there can be multiple openedx_user_ids
       for the same user_username. For those cases, use openedx_user_id from auth_user
-      open edX table.
+      open edX table for that user_username.
     tests:
     - not_null
   - name: courserun_readable_id
@@ -1613,6 +1613,10 @@ models:
       internal_data_formats/tracking_logs/student_event_types.html#discussion-forum-events
     tests:
     - not_null
+  - name: useractivity_path
+    description: str, relative url path of page that generated this discussion event.
+      e.g. for edx.forum.response.voted events, it indicates if this event is unvote
+      or upvote
   - name: useractivity_discussion_post_id
     description: str, unique identifier for the discussion post learner engaged in.
       May be Null for edx.forum.searched event

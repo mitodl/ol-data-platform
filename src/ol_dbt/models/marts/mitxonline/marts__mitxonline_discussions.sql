@@ -14,6 +14,7 @@ select
     discussions.user_username
     , discussions.courserun_readable_id
     , discussions.useractivity_discussion_page_url as page_url
+    , discussions.useractivity_path as discussion_event_path
     , discussions.useractivity_event_type as discussion_event_type
     , discussions.useractivity_timestamp as discussion_event_timestamp
     , discussions.useractivity_discussion_block_id as discussion_id

@@ -406,6 +406,10 @@ models:
     - not_null
   - name: page_url
     description: str, url of the page the user was visiting
+  - name: discussion_event_path
+    description: str, relative url path of page that generated this discussion event.
+      e.g. for edx.forum.response.voted events, it indicates if this event is unvote
+      or upvote
   - name: post_id
     description: str, unique identifier for the discussion post learner engaged in.
       May be Null for edx.forum.searched event
@@ -428,4 +432,4 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "discussion_event_type",
-        "post_id", "discussion_event_timestamp"]
+        "post_id", "discussion_event_path", "discussion_event_timestamp"]
