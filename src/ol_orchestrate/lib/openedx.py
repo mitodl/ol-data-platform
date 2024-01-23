@@ -120,8 +120,9 @@ def parse_video_xml(video_file: str) -> dict[str, Any]:
         video_block_id = video_root.attrib.get("url_name", None)
         edx_video_id = video_root.attrib.get("edx_video_id", None)
         video_asset = video_root.find("video_asset", None)
+        duration = None
         if video_asset:
-            duration = video_asset.attrib.get("duration", None)
+            duration = video_asset.attrib.get("duration")
 
     return {
         "video_block_id": video_block_id,
