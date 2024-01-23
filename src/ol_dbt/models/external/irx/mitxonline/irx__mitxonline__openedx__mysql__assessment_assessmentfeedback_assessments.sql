@@ -19,7 +19,7 @@ with afa as (
 )
 
 select
-    afa.assessment
+    afa.assessment_id
     , afa.assessmentfeedback_id
     , afa.id
 from afa

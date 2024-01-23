@@ -1,9 +1,9 @@
 with auth_user as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__mysql__auth_user') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__mysql__auth_user') }}
 )
 
 , student_courseenrollment as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__mysql__student_courseenrollment') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__mysql__student_courseenrollment') }}
 )
 
 select
@@ -19,11 +19,11 @@ select
     , auth_user.last_login
     , auth_user.date_joined
     , '' as status
-    , '' as email_key
+    , NULL as email_key
     , '' as avatar_type
     , '' as country
     , 0 as show_country
-    , '' as date_of_birth
+    , NULL as date_of_birth
     , '' as interesting_tags
     , '' as ignored_tags
     , 0 as email_tag_filter_strategy

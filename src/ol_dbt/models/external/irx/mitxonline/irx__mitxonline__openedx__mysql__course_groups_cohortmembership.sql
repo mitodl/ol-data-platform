@@ -14,4 +14,3 @@ select
     , cug.name
 from cm
 inner join cug on cm.course_user_group_id = cug.id
-order by ce.username
