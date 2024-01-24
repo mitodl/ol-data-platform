@@ -7,7 +7,7 @@ with course_certificates as (
     from {{ ref('int__micromasters__course_grades') }}
 )
 
-select         
+select
     course_certificates.program_title
     , course_certificates.mitxonline_program_id
     , course_certificates.micromasters_program_id
@@ -26,15 +26,14 @@ select
     , grades.is_passing
 from course_certificates
 left join grades
-    on 
+    on
         (
             course_certificates.user_edxorg_username = grades.user_edxorg_username
             or course_certificates.user_mitxonline_username = grades.user_mitxonline_username
         )
         and course_certificates.courserun_readable_id = grades.courserun_readable_id
-        and 
+        and
         (
             course_certificates.mitxonline_program_id = grades.mitxonline_program_id
             or course_certificates.micromasters_program_id = grades.micromasters_program_id
         )
-
