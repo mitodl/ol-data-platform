@@ -11,7 +11,7 @@ select
     , openedx_user_id
     , useractivity_event_source
     , useractivity_event_type
-    , useractivity_path
+    , useractivity_page_url
     , useractivity_timestamp
     , json_query(useractivity_event_object, 'lax $.id' omit quotes) as useractivity_video_id
     , json_query(useractivity_event_object, 'lax $.duration' omit quotes) as useractivity_video_duration

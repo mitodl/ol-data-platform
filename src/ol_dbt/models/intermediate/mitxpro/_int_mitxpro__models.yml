@@ -1895,3 +1895,115 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
         "useractivity_discussion_post_id", "useractivity_path", "useractivity_timestamp"]
+
+- name: int__mitxpro__user_courseactivity_problemsubmitted
+  description: MIT xPro learners problem submission activities within a course
+  columns:
+  - name: useractivity_event_id
+    description: str, The unique identifier for tracing this problem submitted event
+    tests:
+    - not_null
+    - unique
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, open edX user ID extracted from context field. This id doesn't
+      always match with auth_user in open edX table, there can be multiple openedx_user_ids
+      for the same user_username. For those cases, use openedx_user_id from auth_user
+      open edX table.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:xPro+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The value is server for this event.
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, edx.grades.problem.submitted - when a problem is submitted and
+      successfully saved
+    tests:
+    - not_null
+  - name: useractivity_path
+    description: str, relative url path of page that generated the problem submitted
+      event.
+  - name: useractivity_problem_id
+    description: str, Unique ID for this problem in a course, formatted as block-v1:xPro+{course
+      ID}+type@problem+block@{hash code}.
+    tests:
+    - not_null
+  - name: useractivity_problem_name
+    description: str, display name of this problem in a course
+  - name: useractivity_problem_weight
+    description: number, the weight of this problem
+  - name: useractivity_problem_earned_score
+    description: str, learner’s weighted score for this problem.
+  - name: useractivity_problem_max_score
+    description: number, weighted maximum possible score for this problem.
+  - name: useractivity_timestamp
+    description: timestamp, time when this event was emitted
+    tests:
+    - not_null
+
+- name: int__mitxpro__user_courseactivity_showanswer
+  description: MIT xPro learners show answer events within a course
+  columns:
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, open edX user ID extracted from context field. This id doesn't
+      always match with auth_user in open edX table, there can be multiple openedx_user_ids
+      for the same user_username. For those cases, use openedx_user_id from auth_user
+      open edX table.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:xPro+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: useractivity_path
+    description: str, relative url path of page when the answer to a problem is shown
+      event.
+  - name: useractivity_problem_id
+    description: str, Unique ID for this problem in a course, formatted as block-v1:xPro+{course
+      ID}+type@problem+block@{hash code}.
+    tests:
+    - not_null
+  - name: useractivity_timestamp
+    description: timestamp, time for this show answer event
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+        "useractivity_timestamp"]
+
+- name: int__mitxpro__user_courseactivities_daily
+  description: MIT xPro daily aggregate learner activities within a course
+  columns:
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:xPro+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: courseactivity_num_events
+    description: int, number of tracking log events (including all course activities)
+    tests:
+    - not_null
+  - name: courseactivity_date
+    description: date, date that user has any kind of activities in the course
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]

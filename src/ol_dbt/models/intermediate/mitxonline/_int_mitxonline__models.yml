@@ -1498,6 +1498,11 @@ models:
 - name: int__mitxonline__user_courseactivity_problemsubmitted
   description: MITx Online learners problem submission activities within a course
   columns:
+  - name: useractivity_event_id
+    description: str, The unique identifier for tracing this problem submitted event
+    tests:
+    - not_null
+    - unique
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
     tests:
@@ -1543,10 +1548,6 @@ models:
     description: timestamp, time when this event was emitted
     tests:
     - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
-        "useractivity_timestamp"]
 
 - name: int__mitxonline__user_courseactivity_showanswer
   description: MITx Online learners show answer events within a course
@@ -1707,8 +1708,7 @@ models:
       column_list: ["user_username", "courserun_readable_id"]
 
 - name: int__mitxonline__user_courseactivities_daily
-  description: MITx Online open edX user activities aggregated daily for all course
-    activities from tracking logs
+  description: MITx Online daily aggregate learner activities within a course
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
