@@ -2,7 +2,7 @@
 version: 2
 
 models:
-- name: marts__micromasters__course_certificates
+- name: marts__micromasters_course_certificates
   description: course certificates earned for MicroMasters programs. This include
     certificates are downloadable and not revoked from MITx Online, MicroMaster and
     edX.org. Certificates earned for courses that satisfy the requirements for multiple
