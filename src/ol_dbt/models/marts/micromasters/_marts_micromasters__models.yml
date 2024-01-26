@@ -2,6 +2,53 @@
 version: 2
 
 models:
+- name: marts__micromasters_exam_grades
+  description: DEDP proctor exam grades stored in MicroMasters database
+  columns:
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+  - name: micromasters_program_id
+    description: int, id of the program in the micromasters database
+  - name: mitxonline_program_id
+    description: int, id of the program in the mitxonline database
+  - name: course_title
+    description: str, title of the course
+  - name: course_number
+    description: str, edX course number
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
+  - name: user_full_name
+    description: str, user full name on edX.org or MITxOnline. Very small number of
+      edX.org users have blank full name, their name couldn't be populated from other
+      sources if they don't have their accounts linked on MicroMasters.
+  - name: user_address_country
+    description: str, country code provided by the user from MITx Online or edX.org
+  - name: user_email
+    description: str, current user email on edX.org or MITxOnline. For edx.org, learners
+      can update their emails, so this is not necessary the same email as when learner
+      enrolled for the course
+  - name: proctoredexamgrade_score
+    description: float, user score for the course, range between 0 to 100
+  - name: proctoredexamgrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course
+  - name: proctoredexamgrade_passing_score
+    description: float, passing score for the course, range between 0 to 100
+  - name: proctoredexamgrade_percentage_grade
+    description: float, user percentage grade for the course, range between 0 to 1
+  - name: proctoredexamgrade_exam_on
+    description: timestamp, date and time for the exam
+  - name: proctoredexamgrade_created_on
+    description: timestamp, date and time when this grade was initially created
+  - name: proctoredexamgrade_updated_on
+    description: timestamp, date and time when this grade was most recently updated
+  - name: proctoredexamgrade_id
+    description: int, sequential ID representing a DEDP proctor exam grade
+
 - name: marts__micromasters_course_certificates
   description: course certificates earned for MicroMasters programs. This include
     certificates are downloadable and not revoked from MITx Online, MicroMaster and
