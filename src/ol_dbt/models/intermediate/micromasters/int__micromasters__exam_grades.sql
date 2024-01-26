@@ -24,7 +24,7 @@ select
     , mm_users.user_edxorg_username
     , mm_users.user_mitxonline_username
     , mm_users.user_full_name
-    , mm_users.user_address_country 
+    , mm_users.user_address_country
     , mm_users.user_email
     , exam_grades.proctoredexamgrade_score
     , exam_grades.proctoredexamgrade_is_passing
