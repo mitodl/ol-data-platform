@@ -30,23 +30,23 @@ with mitxonline_program_certificates as (
 select
     micromasters_users.user_edxorg_username as user_edxorg_username
     , mitxonline_users.user_username as user_mitxonline_username
-    , micromasters_users.user_email
+    , mitxonline_users.user_email
     , mitx_programs.micromasters_program_id
     , mitx_programs.program_title
     , mitx_programs.mitxonline_program_id
     , edx_users.user_id as user_edxorg_id
-    , edx_users.user_gender
+    , mitxonline_users.user_gender as user_gender
     , micromasters_users.user_address_city
-    , micromasters_users.user_first_name
-    , micromasters_users.user_last_name
+    , mitxonline_users.user_first_name as user_first_name
+    , mitxonline_users.user_last_name as user_last_name
     , micromasters_users.user_address_postal_code
     , micromasters_users.user_street_address
-    , micromasters_users.user_address_state_or_territory
+    , mitxonline_users.user_address_state as user_address_state_or_territory
     , mitxonline_program_certificates.programcertificate_created_on as program_completion_timestamp
     , micromasters_users.user_id as micromasters_user_id
-    , coalesce(edx_users.user_country, mitxonline_users.user_address_country) as user_country
-    , coalesce(edx_users.user_full_name, mitxonline_users.user_full_name) as user_full_name
-    , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
+    , mitxonline_users.user_address_country as user_country
+    , mitxonline_users.user_full_name as user_full_name
+    , cast(mitxonline_users.user_birth_year as varchar) as user_year_of_birth
 from mitxonline_program_certificates
 left join mitxonline_users on mitxonline_program_certificates.user_id = mitxonline_users.user_id
 left join micromasters_users on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
