@@ -216,7 +216,7 @@ models:
     description: str,  state or territory where user lives in from user's profile
       on MITx Online
   - name: user_full_name
-    description: str, The full name from user's profile on MITx Online or MicroMasters
+    description: str, The full name from user's profile on MITx Online
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program
