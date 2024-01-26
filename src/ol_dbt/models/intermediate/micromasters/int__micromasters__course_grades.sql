@@ -13,9 +13,11 @@ with course_grades_dedp_from_micromasters as (
     from {{ ref('__micromasters_course_grades_non_dedp_from_edxorg') }}
 )
 
--- DEDP course certificates come from MicroMasters and MITxOnline. We've migrated some learners data from
+-- DEDP course grades come from MicroMasters and MITxOnline. We've migrated some learners data from
 -- MicroMasters to MITxOnline around Oct 2022, but only for those users who have MITxOnline account.
--- To avoid data overlapping, we use the cut-off date 2022-10-01 and their linked MITxOnline account to dedup
+-- To avoid data overlapping, we dedup based on their social auth account linked on MicroMasters.
+-- for old DEDP courses on edx.org, then we use the grade from MicroMasters
+-- for new DEDP course on MITx Online, then we use the grade from MITx Online
 
 , dedp_course_grades_combined as (
     select
@@ -35,7 +37,7 @@ with course_grades_dedp_from_micromasters as (
         , true as is_passing
         , coursegrade_created_on as created_on
     from course_grades_dedp_from_micromasters
-    where coursegrade_created_on < '2022-10-01'
+    where courserun_platform = '{{ var("edxorg") }}'
 
     union all
 
@@ -56,7 +58,7 @@ with course_grades_dedp_from_micromasters as (
         , courserungrade_is_passing as is_passing
         , courserungrade_created_on as created_on
     from course_grades_dedp_from_mitxonline
-    where courserungrade_created_on >= '2022-10-01'
+    where courserun_platform = '{{ var("mitxonline") }}'
 
 )
 
