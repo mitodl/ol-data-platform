@@ -55,11 +55,11 @@ models:
     - not_null
   - name: grade
     description: float, course grade for the corresponding certificate range from
-      0 to 1. Small amount of certificates generated on 2016 and 2017 don't have grades.
-      e.g. MITx/6.041x_3/2T2016
+      0 to 1. Blank for small amount of certificates for MITx/6.041x_3/2T2016.
   - name: is_passing
     description: boolean, indicating whether the user has passed the passing score
-      set for this course on edX.org or MITxOnline
+      set for this course on edX.org or MITxOnline. Blank for small amount of certificates
+      for MITx/6.041x_3/2T2016.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
