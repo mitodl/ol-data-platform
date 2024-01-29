@@ -29,3 +29,8 @@ left join grades
     on
         course_certificates.user_email = grades.user_email
         and course_certificates.courserun_readable_id = grades.courserun_readable_id
+        and
+        (
+            course_certificates.mitxonline_program_id = grades.mitxonline_program_id
+            or course_certificates.micromasters_program_id = grades.micromasters_program_id
+        )

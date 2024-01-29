@@ -6,6 +6,10 @@ with dedp_course_grades as (
     select * from {{ ref('stg__micromasters__app__postgres__grades_combinedcoursegrade') }}
 )
 
+, dedp_course_certificates as (
+    select * from {{ ref('stg__micromasters__app__postgres__grades_coursecertificate') }}
+)
+
 , courserun_grades as (
     select * from {{ ref('stg__micromasters__app__postgres__grades_courserungrade') }}
     where courserungrade_is_passing = true
@@ -27,11 +31,15 @@ with dedp_course_grades as (
         ) as row_num
     from courserun_grades
     inner join courseruns on courserun_grades.courserun_id = courseruns.courserun_id
+    inner join dedp_course_certificates
+        on
+            courserun_grades.user_id = dedp_course_certificates.user_id
+            and courseruns.course_id = dedp_course_certificates.course_id
+            and courseruns.courserun_start_on < dedp_course_certificates.coursecertificate_created_on
     inner join dedp_course_grades
         on
-            courserun_grades.user_id = dedp_course_grades.user_id
-            and courseruns.course_id = dedp_course_grades.course_id
-            and courseruns.courserun_start_on < dedp_course_grades.coursegrade_created_on
+            dedp_course_certificates.user_id = dedp_course_grades.user_id
+            and dedp_course_certificates.course_id = dedp_course_grades.course_id
 )
 
 , highest_courserun_grades as (
