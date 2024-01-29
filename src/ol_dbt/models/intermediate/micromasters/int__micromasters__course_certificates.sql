@@ -15,8 +15,9 @@ with course_certificates_dedp_from_micromasters as (
 
 -- DEDP course certificates come from MicroMasters and MITxOnline. We've migrated some learners data from
 -- MicroMasters to MITxOnline around Oct 2022, but only for those users who have MITxOnline account.
--- To avoid data overlapping, we use the cut-off date 2022-10-01 to reduce duplication, but there are still
--- a small number dups so need to apply additional logic to dedup based on their linked MITxOnline account
+-- To avoid data overlapping, we deduplicate based on their social auth account linked on MicroMasters.
+-- for old DEDP courses on edx.org, then we use certificates from MicroMasters
+-- for new DEDP course on MITx Online, then we use certificates from MITx Online
 
 
 , dedp_course_certificates_combined as (
@@ -36,7 +37,7 @@ with course_certificates_dedp_from_micromasters as (
         , coursecertificate_url as courseruncertificate_url
         , coursecertificate_created_on as courseruncertificate_created_on
     from course_certificates_dedp_from_micromasters
-    where coursecertificate_created_on < '2022-10-01'
+    where courserun_platform = '{{ var("edxorg") }}'
 
     union all
 
@@ -56,7 +57,7 @@ with course_certificates_dedp_from_micromasters as (
         , courseruncertificate_url
         , courseruncertificate_created_on
     from course_certificates_dedp_from_mitxonline
-    where courseruncertificate_created_on >= '2022-10-01'
+    where courserun_platform = '{{ var("mitxonline") }}'
 
 )
 

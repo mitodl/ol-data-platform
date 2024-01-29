@@ -27,10 +27,7 @@ select
 from course_certificates
 left join grades
     on
-        (
-            course_certificates.user_edxorg_username = grades.user_edxorg_username
-            or course_certificates.user_mitxonline_username = grades.user_mitxonline_username
-        )
+        course_certificates.user_email = grades.user_email
         and course_certificates.courserun_readable_id = grades.courserun_readable_id
         and
         (
