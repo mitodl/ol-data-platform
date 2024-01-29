@@ -15,7 +15,7 @@ with course_certificates_dedp_from_micromasters as (
 
 -- DEDP course certificates come from MicroMasters and MITxOnline. We've migrated some learners data from
 -- MicroMasters to MITxOnline around Oct 2022, but only for those users who have MITxOnline account.
--- To avoid data overlapping, we dedup based on their social auth account linked on MicroMasters.
+-- To avoid data overlapping, we deduplicate based on their social auth account linked on MicroMasters.
 -- for old DEDP courses on edx.org, then we use certificates from MicroMasters
 -- for new DEDP course on MITx Online, then we use certificates from MITx Online
 
