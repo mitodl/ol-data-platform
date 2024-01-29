@@ -19,7 +19,7 @@ select
     , auth_user.last_login
     , auth_user.date_joined
     , '' as status
-    , NULL as email_key
+    , '' as email_key
     , '' as avatar_type
     , '' as country
     , 0 as show_country

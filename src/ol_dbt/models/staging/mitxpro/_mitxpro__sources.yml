@@ -1982,6 +1982,16 @@ sources:
     - name: user_id
       description: int, unique ID for each user on the MITx Pro platform
 
+  - name: raw__xpro__openedx__mysql__django_comment_client_role
+    description: MITx Pro open edX comment client role data
+    columns:
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: course_id
+      description: string, unique ID representing a single course run
+    - name: name
+      description: string, the name of the role
+
   - name: raw__xpro__openedx__mysql__assessment_trainingexample_options_selected
     description: MITx Pro open edX assessment selected training example options
     columns:

@@ -1,4 +1,8 @@
-with co as (
+with c as (
+    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__mysql__assessment_criterion') }}
+)
+
+, co as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__mysql__assessment_criterionoption') }}
 )
 
