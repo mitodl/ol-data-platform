@@ -856,11 +856,11 @@ models:
     - unique
     - not_null
 
-- name: int__mitxonline__course_to_topics
-  description: Intermediate model for MITxOnline course to topics
+- name: int__mitxonline__course_to_departments
+  description: Intermediate model for MITxOnline course to department
   columns:
-  - name: coursetopic_name
-    description: str, name of a course topic
+  - name: coursedepartment_name
+    description: str, name of a course department
     tests:
     - not_null
   - name: course_id
@@ -869,7 +869,7 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursetopic_name", "course_id"]
+      column_list: ["coursedepartment_name", "course_id"]
 
 - name: int__mitxonline__course_blockedcountries
   description: Intermediate model for MITxOnline Course Blocked countries
@@ -1273,9 +1273,8 @@ models:
     - not_null
   - name: openedx_user_id
     description: int, foreign key to open edX users. Not all app users have openedx_user_id
-      due to username mismatch between app and open edX.
-    tests:
-    - unique
+      due to username or email mismatch between app and open edX. Also, there may
+      be multiple mitxonline users matching with same open edx user.
   - name: user_username
     description: string, username
     tests:
@@ -1370,7 +1369,7 @@ models:
     description: int, open edX user ID extracted from context field. This id doesn't
       always match with auth_user in open edX table, there can be multiple openedx_user_ids
       for the same user_username. For those cases, use openedx_user_id from auth_user
-      open edX table.
+      open edX table for that user_username.
     tests:
     - not_null
   - name: courserun_readable_id
@@ -1498,6 +1497,11 @@ models:
 - name: int__mitxonline__user_courseactivity_problemsubmitted
   description: MITx Online learners problem submission activities within a course
   columns:
+  - name: useractivity_event_id
+    description: str, The unique identifier for tracing this problem submitted event
+    tests:
+    - not_null
+    - unique
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
     tests:
@@ -1543,10 +1547,6 @@ models:
     description: timestamp, time when this event was emitted
     tests:
     - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
-        "useractivity_timestamp"]
 
 - name: int__mitxonline__user_courseactivity_showanswer
   description: MITx Online learners show answer events within a course
@@ -1613,6 +1613,10 @@ models:
       internal_data_formats/tracking_logs/student_event_types.html#discussion-forum-events
     tests:
     - not_null
+  - name: useractivity_path
+    description: str, relative url path of page that generated this discussion event.
+      e.g. for edx.forum.response.voted events, it indicates if this event is unvote
+      or upvote
   - name: useractivity_discussion_post_id
     description: str, unique identifier for the discussion post learner engaged in.
       May be Null for edx.forum.searched event
@@ -1703,8 +1707,7 @@ models:
       column_list: ["user_username", "courserun_readable_id"]
 
 - name: int__mitxonline__user_courseactivities_daily
-  description: MITx Online open edX user activities aggregated daily for all course
-    activities from tracking logs
+  description: MITx Online daily aggregate learner activities within a course
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.

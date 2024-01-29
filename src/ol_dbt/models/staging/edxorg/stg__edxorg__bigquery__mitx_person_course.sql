@@ -49,7 +49,10 @@ with source as (
         , certified as courseruncertificate_is_earned
         , cert_status as courseruncertificate_status
         , coalesce(is_active = 1, false) as courserunenrollment_is_active
-        ,{{ transform_gender_value('gender') }} as user_gender
+        --- trino doesn't have function to convert first letter to upper case
+        , regexp_replace(
+            {{ transform_gender_value('gender') }}, '(^[a-z])(.)', x -> upper(x[1]) || x[2] -- noqa
+        ) as user_gender
         ,{{ transform_education_value('loe') }} as user_highest_education
         ,{{ cast_timestamp_to_iso8601('start_time') }} as courserunenrollment_created_on
         ,{{ cast_timestamp_to_iso8601('verified_enroll_time') }} as courserunenrollment_enrolled_on

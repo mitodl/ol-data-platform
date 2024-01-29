@@ -28,3 +28,4 @@ load_from:
     host: openedx-ol-data-exports
     port: 4000
     location_name: openedx-ol-data-exports
+- python_module: ol_orchestrate.definitions.platform.notification

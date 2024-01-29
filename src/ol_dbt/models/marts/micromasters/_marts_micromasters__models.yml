@@ -2,6 +2,62 @@
 version: 2
 
 models:
+- name: marts__micromasters_course_certificates
+  description: course certificates earned for MicroMasters programs. This include
+    certificates are downloadable and not revoked from MITx Online, MicroMaster and
+    edX.org. Certificates earned for courses that satisfy the requirements for multiple
+    programs appear in multiple rows for each program
+  columns:
+  - name: program_title
+    description: str, title of the program the course is part of
+    tests:
+    - not_null
+  - name: micromasters_program_id
+    description: int, id of the program the course is part of in the micromasters
+      database
+  - name: mitxonline_program_id
+    description: int, id of the program the course is part of in the mitxonline database
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course run ID on edX.org or MITxOnline
+    tests:
+    - not_null
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg.
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+  - name: user_email
+    description: str, user email on edX.org or MITxOnline
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on edX.org or MITxOnline
+  - name: user_country
+    description: str, user country on edX.org or MITxOnline
+  - name: courseruncertificate_url
+    description: str, the full URL to this DEDP course certificate on MITx Online
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when this course certificate was initially
+      created
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
+        "mitxonline_program_id"]
+
 - name: marts__micromasters_summary_timeseries
   description: Time series of MicroMasters aggregate statistics.
   columns:

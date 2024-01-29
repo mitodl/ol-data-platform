@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 
 with course_activities as (
-    select * from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
+    select * from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where courserun_readable_id is not null
 )
 

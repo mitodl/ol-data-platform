@@ -1,44 +1,39 @@
-import os
 from typing import Literal
 
 from dagster import Definitions, ScheduleDefinition
 from dagster_aws.s3 import S3Resource
-from pydantic import Field
 
 from ol_orchestrate.jobs.open_edx import extract_open_edx_data_to_ol_data_platform
-from ol_orchestrate.lib.vault_config_helper import VaultBaseSettings
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.openedx import OpenEdxApiClient
 from ol_orchestrate.resources.outputs import DailyResultsDir
+from ol_orchestrate.resources.secrets.vault import Vault
 
-dagster_env = os.environ.get("DAGSTER_ENVIRONMENT", "dev")
+if DAGSTER_ENV == "dev":
+    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault._auth_github()  # noqa: SLF001
+else:
+    vault = Vault(
+        vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+    )
+    vault._auth_aws_iam()  # noqa: SLF001
 
 
 def open_edx_extract_job_config(
     open_edx_deployment: Literal["residential", "mitxonline", "xpro"],
     dagster_env: Literal["qa", "production"],
 ):
-    class OpenEdxResourceRuntimeConfig(VaultBaseSettings):
-        client_id: str = Field(
-            ...,
-            vault_secret_path=f"secret-data/pipelines/edx/{open_edx_deployment}/edx-oauth-client",
-            vault_secret_key="id",  # noqa: S106 # pragma: allowlist secret
-        )
-        client_secret: str = Field(
-            ...,
-            vault_secret_path=f"secret-data/pipelines/edx/{open_edx_deployment}/edx-oauth-client",
-            vault_secret_key="secret",  # noqa: S106 # pragma: allowlist secret
-        )
-        lms_url: str = Field(
-            ...,
-            vault_secret_path=f"secret-data/pipelines/edx/{open_edx_deployment}/edx-oauth-client",
-            vault_secret_key="url",  # noqa: S106 # pragma: allowlist secret
-        )
-        studio_url: str = Field(
-            ...,
-            vault_secret_path=f"secret-data/pipelines/edx/{open_edx_deployment}/edx-oauth-client",
-            vault_secret_key="studio_url",  # noqa: S106 # pragma: allowlist secret
-        )
-        token_type: str = "JWT"
+    client = vault.client.secrets.kv.v1.read_secret(
+        mount_point="secret-data",
+        path=f"pipelines/edx/{open_edx_deployment}/edx-oauth-client",
+    )["data"]
+    client_config = {
+        "client_id": client["id"],
+        "client_secret": client["secret"],
+        "lms_url": client["url"],
+        "studio_url": client["studio_url"],
+        "token_type": "JWT",
+    }
 
     return {
         "ops": {
@@ -50,7 +45,7 @@ def open_edx_extract_job_config(
             },
         },
         "resources": {
-            "openedx": {"config": OpenEdxResourceRuntimeConfig().dict()},
+            "openedx": {"config": client_config},
         },
     }
 
@@ -64,7 +59,7 @@ ol_extract_jobs = [
             "openedx": OpenEdxApiClient.configure_at_launch(),
         },
         name=f"extract_{deployment}_open_edx_data_to_data_platform",
-        config=open_edx_extract_job_config(deployment, dagster_env),  # type: ignore[arg-type]
+        config=open_edx_extract_job_config(deployment, DAGSTER_ENV),  # type: ignore[arg-type]
     )
     for deployment in ("residential", "xpro", "mitxonline")
 ]
