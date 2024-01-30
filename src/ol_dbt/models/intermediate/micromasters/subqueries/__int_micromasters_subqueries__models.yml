@@ -189,14 +189,14 @@ models:
   - name: user_edxorg_id
     description: int, Numerical user ID of a learner on the edX platform
   - name: user_gender
-    description: str, user's gender from user's profile on MITx Online. blank means
-      user did not specify a gender. Null means this student signed up before this
-      information was collected
+    description: str, user's gender from user's profile on MITx Online or MicroMasters.
+      blank means user did not specify a gender. Null means this student signed up
+      before this information was collected
     tests:
     - accepted_values:
         values: '{{ var("gender_values") }}'
   - name: user_country
-    description: str, Country from user's profile on MITx Online.
+    description: str, Country from user's profile on MITx Online or MicroMasters.
   - name: user_address_city
     description: str, city where user lives in from user's profile on MicroMasters.
       Note that this data isn't available on MITx Online.
@@ -205,7 +205,7 @@ models:
   - name: user_last_name
     description: str, last name from user's profile on MITx Online.
   - name: user_year_of_birth
-    description: str, user's birth year from user's profile on MITx Online.
+    description: str, user's birth year from user's profile on MITx Online or MicroMasters.
   - name: user_address_postal_code
     description: str, postal code where user lives in from user's profile on MicroMasters.
       Note that this data isn't available on MITx Online.
@@ -214,7 +214,7 @@ models:
       Note that this data isn't available on MITx Online.
   - name: user_address_state_or_territory
     description: str,  state or territory where user lives in from user's profile
-      on MITx Online
+      on MITx Online or MicroMasters.
   - name: user_full_name
     description: str, The full name from user's profile on MITx Online
   - name: program_completion_timestamp
