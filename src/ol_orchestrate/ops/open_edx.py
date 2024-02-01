@@ -3,6 +3,7 @@ import json
 import time
 from datetime import UTC, datetime, timedelta
 
+import jsonlines
 from dagster import (
     AssetMaterialization,
     Config,
@@ -154,7 +155,9 @@ def fetch_edx_course_structure_from_api(
     blocks_file = context.resources.results_dir.path.joinpath(
         f"course_blocks_{today.strftime('%Y-%m-%d')}.json"
     )
-    with structures_file.open("w") as structures, blocks_file.open("w") as blocks:
+    with jsonlines.open(structures_file, mode="w") as structures, jsonlines.open(
+        blocks_file, mode="w"
+    ) as blocks:
         for course_id in course_ids:
             context.log.info("Retrieving course structure for %s", course_id)
             course_structure = context.resources.openedx.get_course_structure_document(
@@ -172,11 +175,9 @@ def fetch_edx_course_structure_from_api(
                 ),
                 "retrieved_at": datetime.now(tz=UTC).isoformat(),
             }
-            structures.write(json.dumps(table_row))
-            structures.write("\n")
+            structures.write(table_row)
             for block in un_nest_course_structure(course_id, course_structure):
-                blocks.write(json.dumps(block))
-                blocks.write("\n")
+                blocks.write(block)
     yield DynamicOutput(structures_file, mapping_key="course_structures")
     yield DynamicOutput(blocks_file, mapping_key="course_blocks")
 
