@@ -22,9 +22,11 @@ with enrollments as (
         , enrollments.courserunenrollment_enrollment_status
         , runs.courserun_readable_id
         , runs.courserun_title
+        , runs.courserun_start_on
         , users.user_username
         , users.user_email
         , users.user_full_name
+        , users.user_address_country
     from enrollments
     inner join runs on enrollments.courserun_id = runs.courserun_id
     inner join users on enrollments.user_id = users.user_id

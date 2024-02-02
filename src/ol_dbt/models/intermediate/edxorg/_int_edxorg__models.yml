@@ -129,6 +129,8 @@ models:
       that use new format
     tests:
     - not_null
+  - name: courserun_start_on
+    description: timestamp, date and time when the course starts
   - name: user_username
     description: str, username of a learner on the edX platform
     tests:

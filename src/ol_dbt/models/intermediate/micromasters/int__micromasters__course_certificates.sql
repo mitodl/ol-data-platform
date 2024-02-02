@@ -34,6 +34,7 @@ with course_certificates_dedp_from_micromasters as (
         , user_full_name
         , user_country
         , user_email
+        , coursecertificate_hash as courseruncertificate_uuid
         , coursecertificate_url as courseruncertificate_url
         , coursecertificate_created_on as courseruncertificate_created_on
     from course_certificates_dedp_from_micromasters
@@ -54,6 +55,7 @@ with course_certificates_dedp_from_micromasters as (
         , user_full_name
         , user_country
         , user_email
+        , courseruncertificate_uuid
         , courseruncertificate_url
         , courseruncertificate_created_on
     from course_certificates_dedp_from_mitxonline
@@ -75,6 +77,7 @@ with course_certificates_dedp_from_micromasters as (
         , user_full_name
         , user_country
         , user_email
+        , courseruncertificate_uuid
         , courseruncertificate_url
         , courseruncertificate_created_on
         , case
@@ -113,6 +116,7 @@ with course_certificates_dedp_from_micromasters as (
         , user_full_name
         , user_country
         , user_email
+        , courseruncertificate_uuid
         , courseruncertificate_url
         , courseruncertificate_created_on
     from dedp_course_certificates
@@ -132,6 +136,7 @@ with course_certificates_dedp_from_micromasters as (
         , user_full_name
         , user_country
         , user_email
+        , courseruncertificate_download_uuid as courseruncertificate_uuid
         , courseruncertificate_download_url as courseruncertificate_url
         , courseruncertificate_created_on
     from course_certificates_non_dedp_program

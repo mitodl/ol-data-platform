@@ -436,6 +436,8 @@ models:
       May be blank for no payment required or refund.
   - name: transaction_authorization_code
     description: str, authorization code from cybersource payment
+  - name: receipt_reference_number
+    description: str, req_reference_number from cybersource payment
   - name: transaction_bill_to_address_state
     description: str, address state from cybersource payment
   - name: transaction_bill_to_address_country
@@ -532,6 +534,8 @@ models:
   - name: payment_method
     description: str, payment method from most recent cybersource payment. Value could
       be 'paypal' or 'card'.
+  - name: payment_req_reference_number
+    description: str, req_reference_number from cybersource payment
   - name: payment_bill_to_address_state
     description: str, address state from most recent cybersource payment
   - name: payment_bill_to_address_country
@@ -647,6 +651,8 @@ models:
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
+  - name: courserun_start_on
+    description: timestamp, date and time when the course starts
   - name: user_username
     description: str, name chosen by user
     tests:

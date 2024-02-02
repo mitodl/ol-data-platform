@@ -23,10 +23,12 @@ with mitxonline_enrollments as (
         , courserunenrollment_created_on
         , courserunenrollment_enrollment_mode
         , courserunenrollment_enrollment_status
+        , courserunenrollment_is_edx_enrolled
         , courserun_id
         , courserun_title
         , courserun_readable_id
         , course_number
+        , courserun_start_on
         , user_id
         , user_email
         , user_full_name
@@ -45,10 +47,12 @@ with mitxonline_enrollments as (
         , courserunenrollment_created_on
         , courserunenrollment_enrollment_mode
         , null as courserunenrollment_enrollment_status
+        , true as courserunenrollment_is_edx_enrolled
         , null as courserun_id
         , courserun_title
         , courserun_readable_id
         , course_number
+        , courserun_start_on
         , user_id
         , user_email
         , user_full_name

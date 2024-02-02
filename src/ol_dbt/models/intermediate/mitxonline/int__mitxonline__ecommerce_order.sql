@@ -79,6 +79,7 @@ select
     , payments.transaction_authorization_code as payment_authorization_code
     , payments.transaction_payment_method as payment_method
     , payments.transaction_readable_identifier as payment_transaction_id
+    , payments.transaction_reference_number as payment_req_reference_number
     , payments.transaction_bill_to_address_state as payment_bill_to_address_state
     , payments.transaction_bill_to_address_country as payment_bill_to_address_country
 from lines

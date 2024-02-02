@@ -51,7 +51,7 @@ models:
     tests:
     - not_null
   - name: receipt_reference_number
-    description: str, transaction reference number from user's cybersource payment
+    description: str, req_reference_number from user's cybersource payment
     tests:
     - not_null
   - name: receipt_transaction_status
@@ -194,6 +194,8 @@ models:
   - name: courserun_readable_id
     description: str, unique string to identify a bootcamp course run (could be blank
       for older runs)
+  - name: courserun_start_on
+    description: timestamp, date and time when the course starts
   - name: user_username
     description: str, name chosen by user
     tests:
@@ -204,6 +206,8 @@ models:
     - not_null
   - name: user_full_name
     description: string, full name on user's profile
+  - name: user_address_country
+    description: str, country code for the user's address
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__courserunenrollment')

@@ -32,6 +32,7 @@ select
     , lines.line_price
     , lines.courserun_readable_id
     , lines.courserun_edxorg_readable_id
+    , receipts.receipt_reference_number
     , receipts.receipt_transaction_id
     , receipts.receipt_payment_method
     , receipts.receipt_authorization_code
