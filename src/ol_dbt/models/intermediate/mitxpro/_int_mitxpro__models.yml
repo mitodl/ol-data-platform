@@ -781,6 +781,10 @@ models:
   - name: couponpaymentversion_coupon_type
     description: string, one of 'single-use' or 'promo'. Promo coupon codes can be
       used multiple times
+  - name: couponpaymentversion_discount_type
+    description: one of percent-off or dollars-off
+  - name: couponpaymentversion_discount_amount
+    description: number, either dollar amount or percentage (between 0 and 1) discount
   - name: couponpaymentversion_discount_amount_text
     description: string, discount amount in readable format. It can be percent-off
       which is <dollar amount * 100>% off, dollars-off which is $<dollar amount> off
@@ -867,6 +871,12 @@ models:
     description: int, primary key representing a single xPro course run
   - name: program_id
     description: int, primary key representing a single xPro program
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      e.g. course-v1:xPRO+MLx1+R0
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code} e.g.
+      program-v1:xPRO+MLx
   - name: product_type
     description: string, readable product type
     tests:
@@ -936,8 +946,14 @@ models:
     - not_null
   - name: courserun_id
     description: int, primary key representing a single xPro course run
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      e.g. course-v1:xPRO+MLx1+R0
   - name: program_id
     description: int, primary key representing a single xPro program
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code} e.g.
+      program-v1:xPRO+MLx
   - name: product_type
     description: string, readable product type
     tests:

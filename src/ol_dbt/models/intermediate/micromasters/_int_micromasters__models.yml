@@ -451,6 +451,12 @@ models:
     description: str, discount amount in readable format. It can be fixed discount
       which is $<dollar amount> off, fixed-price which is $<dollar amount> or percent-discount
       which is <percentage> % off
+  - name: discount_amount
+    description: numeric, actual discount dollar amount. For percent-discount coupon,
+      this is calculated as line_price * percentage off
+  - name: coupon_type
+    description: str, type of the coupon which describes what circumstances the coupon
+      can be redeemed. Possible values are "standard" or "discounted-previous-course".
   - name: coupon_code
     description: str, coupon code for the redeemed coupon
   - name: redeemedcoupon_created_on

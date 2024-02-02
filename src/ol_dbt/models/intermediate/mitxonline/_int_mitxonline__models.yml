@@ -517,10 +517,19 @@ models:
     description: int, primary key representing a single MITx Online course run
   - name: programrun_id
     description: int, primary key representing a single MITx Online program run
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code}
   - name: discount_amount_text
     description: str, discount amount in readable format from the most recent coupon
       redemption for the order. It can be percent-off which is <dollar amount>% off,
       dollars-off which is $<dollar amount> off or fixed-price
+  - name: discount_amount
+    description: numeric, actual discount dollar amount. For percent off discount,
+      this is calculated as product price * percentage off
+  - name: discount_redemption_type
+    description: str, one of  "one-time",  "one-time-per-user" and "unlimited"
   - name: discount_code
     description: str, discount code from the most recent coupon redemption for the
       order
@@ -568,6 +577,10 @@ models:
     description: int, primary key representing a single MITx Online course run
   - name: programrun_id
     description: int, primary key representing a single MITx Online program run
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code}
   - name: product_created_on
     description: timestamp, the timestamp the product was created
   - name: product_type

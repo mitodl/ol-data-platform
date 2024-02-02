@@ -18,6 +18,10 @@ with products as (
     from {{ ref('stg__mitxonline__app__postgres__courses_programrun') }}
 )
 
+, programs as (
+    select * from {{ ref('stg__mitxonline__app__postgres__courses_program') }}
+)
+
 , product_subquery as (
     select
         products.product_id
@@ -43,6 +47,9 @@ select
     product_subquery.*
     , courseruns.course_id
     , programruns.program_id
+    , courseruns.courserun_readable_id
+    , programs.program_readable_id
 from product_subquery
 left join courseruns on product_subquery.courserun_id = courseruns.courserun_id
 left join programruns on product_subquery.programrun_id = programruns.programrun_id
+left join programs on programruns.program_id = programs.program_id

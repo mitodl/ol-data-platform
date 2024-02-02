@@ -69,6 +69,7 @@ with mitx_enrollments as (
         , mitx_enrollments.courserunenrollment_created_on
         , mitx_enrollments.courserunenrollment_enrollment_mode
         , mitx_enrollments.courserunenrollment_enrollment_status
+        , mitx_enrollments.courserunenrollment_is_edx_enrolled
         , mitx_enrollments.user_id
         , mitx_enrollments.courserun_id
         , mitx_enrollments.courserun_title
@@ -85,9 +86,9 @@ with mitx_enrollments as (
         , mitxonline_completed_orders.order_state
         , mitxonline_completed_orders.order_reference_number
         , mitxonline_completed_orders.order_created_on
+        , mitxonline_completed_orders.discount_redemption_type as coupon_type
         , mitxonline_completed_orders.discount_code as coupon_code
         , mitxonline_completed_orders.discountredemption_timestamp as coupon_redeemed_on
-        , mitxonline_completed_orders.discount_amount_text as coupon_discount_amount
         , mitxonline_completed_orders.payment_transaction_id
         , mitxonline_completed_orders.payment_authorization_code
         , mitxonline_completed_orders.payment_method
@@ -101,6 +102,10 @@ with mitx_enrollments as (
         , mitxonline_completed_orders.order_total_price_paid
         , null as order_tax_amount
         , mitxonline_completed_orders.order_total_price_paid as order_total_price_paid_plus_tax
+        , mitxonline_completed_orders.product_id
+        , mitxonline_completed_orders.program_readable_id as product_program_readable_id
+        , mitxonline_completed_orders.discount_amount_text as discount
+        , mitxonline_completed_orders.discount_amount
     from mitx_enrollments
     left join mitx_certificates
         on
@@ -139,9 +144,9 @@ with mitx_enrollments as (
         , micromasters_completed_orders.order_state
         , micromasters_completed_orders.order_reference_number
         , micromasters_completed_orders.order_created_on
+        , micromasters_completed_orders.coupon_type
         , micromasters_completed_orders.coupon_code
         , micromasters_completed_orders.redeemedcoupon_created_on as coupon_redeemed_on
-        , micromasters_completed_orders.coupon_discount_amount_text as coupon_discount_amount
         , micromasters_completed_orders.receipt_transaction_id as payment_transaction_id
         , micromasters_completed_orders.receipt_authorization_code as payment_authorization_code
         , micromasters_completed_orders.receipt_payment_method as payment_method
@@ -155,6 +160,10 @@ with mitx_enrollments as (
         , micromasters_completed_orders.order_total_price_paid
         , null as order_tax_amount
         , micromasters_completed_orders.order_total_price_paid as order_total_price_paid_plus_tax
+        , null as product_id
+        , null as product_program_readable_id
+        , micromasters_completed_orders.coupon_discount_amount_text as discount
+        , micromasters_completed_orders.coupon_amount as discount_amount
     from mitx_enrollments
     left join mitx_certificates
         on
@@ -196,9 +205,9 @@ with mitx_enrollments as (
         , mitxpro_completed_orders.order_state
         , mitxpro_completed_orders.receipt_reference_number as order_reference_number
         , mitxpro_completed_orders.order_created_on
+        , mitxpro_completed_orders.couponpaymentversion_coupon_type as coupon_type
         , mitxpro_completed_orders.coupon_code
         , mitxpro_completed_orders.couponredemption_created_on as coupon_redeemed_on
-        , mitxpro_completed_orders.couponpaymentversion_discount_amount_text as coupon_discount_amount
         , mitxpro_completed_orders.receipt_transaction_id as payment_transaction_id
         , mitxpro_completed_orders.receipt_authorization_code as payment_authorization_code
         , mitxpro_completed_orders.receipt_payment_method as payment_method
@@ -212,6 +221,14 @@ with mitx_enrollments as (
         , mitxpro_completed_orders.order_total_price_paid
         , mitxpro_completed_orders.order_tax_amount
         , mitxpro_completed_orders.order_total_price_paid_plus_tax
+        , mitxpro_lines.product_id
+        , mitxpro_lines.program_readable_id as product_program_readable_id
+        , mitxpro_completed_orders.couponpaymentversion_discount_amount_text as discount
+        , case
+            when mitxpro_completed_orders.couponpaymentversion_discount_type = 'percent-off'
+                then mitxpro_lines.product_price * (mitxpro_completed_orders.couponpaymentversion_discount_amount / 100)
+            else mitxpro_completed_orders.couponpaymentversion_discount_amount
+        end as discount_amount
     from mitxpro_enrollments
     left join mitxpro_certificates
         on
@@ -248,9 +265,9 @@ with mitx_enrollments as (
         , bootcamps_completed_orders.order_state
         , bootcamps_completed_orders.order_reference_number
         , bootcamps_completed_orders.order_created_on
+        , null as coupon_type
         , null as coupon_code
         , null as coupon_redeemed_on
-        , null as coupon_discount_amount
         , bootcamps_completed_orders.receipt_transaction_id as payment_transaction_id
         , bootcamps_completed_orders.receipt_authorization_code as payment_authorization_code
         , bootcamps_completed_orders.receipt_payment_method as payment_method
@@ -264,6 +281,10 @@ with mitx_enrollments as (
         , bootcamps_completed_orders.order_total_price_paid
         , null as order_tax_amount
         , bootcamps_completed_orders.order_total_price_paid as order_total_price_paid_plus_tax
+        , null as product_id
+        , null as product_program_readable_id
+        , null as discount
+        , null as discount_amount
     from bootcamps_enrollments
     left join bootcamps_certificates
         on

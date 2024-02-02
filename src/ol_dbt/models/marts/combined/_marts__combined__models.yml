@@ -133,9 +133,14 @@ models:
     description: number, total order amount for the order
   - name: unit_price
     description: numeric, price for the order line item before discount
-  - name: coupon_discount_amount
-    description: str, discount amount in readable format. e.g. $100 off, 30% off,
-      etc
+  - name: discount
+    description: str, discount in readable format. e.g. $100 off, 30% off, etc
+  - name: discount_amount
+    description: numeric, actual discount dollar amount. For percent-discount coupon,
+      this is calculated as line_price * percentage off
+  - name: coupon_type
+    description: str, type of the coupon which describes what circumstances the coupon
+      can be redeemed.
   - name: coupon_code
     description: str, discount code for the redeemed coupon if applicable
   - name: coupon_redeemed_on
@@ -162,6 +167,12 @@ models:
     description: numeric, total order amount plus the amount of tax paid. For xPro,
       this is calculated order_total_price_paid+order_tax_amount. For other platform,
       this is the same as order_total_price_paid
+  - name: product_id
+    description: int, unique identifier/foreign key to ecommerce products on MITx
+      Online or xPro.
+  - name: product_program_readable_id
+    description: str, open edX program readable ID associated to ecommerce products
+      on MITx Online or xPro. Blank means that the product is course run.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
@@ -170,7 +181,7 @@ models:
       column_list: ["courserunenrollment_id"]
       row_condition: "platform ='MITx Online'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id"]
+      column_list: ["courserunenrollment_id", "product_id"]
       row_condition: "platform ='xPro'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id", "order_reference_number"]
