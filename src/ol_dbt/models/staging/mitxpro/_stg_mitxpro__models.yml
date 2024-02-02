@@ -902,6 +902,10 @@ models:
     description: numeric, the tax rate to apply
   - name: order_tax_rate_name
     description: string, name of the tax rate assessed
+  - name: order_tax_amount
+    description: numeric, the amount of tax paid
+  - name: order_total_price_paid_plus_tax
+    description: numeric, total order amount plus the amount of tax paid
   - name: order_updated_on
     description: timestamp, specifying when the order was most recently updated
     tests:

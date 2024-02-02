@@ -13,6 +13,11 @@ with source as (
         , tax_country_code as order_tax_country_code
         , cast(tax_rate as decimal(38, 2)) as order_tax_rate
         , tax_rate_name as order_tax_rate_name
+        , cast((total_price_paid * (tax_rate / 100)) as decimal(38, 2)) as order_tax_amount
+        , cast(
+            (total_price_paid * (tax_rate / 100)) + total_price_paid
+            as decimal(38, 2)
+        ) as order_total_price_paid_plus_tax
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as order_updated_on
         ,{{ cast_timestamp_to_iso8601('created_on') }} as order_created_on
     from source

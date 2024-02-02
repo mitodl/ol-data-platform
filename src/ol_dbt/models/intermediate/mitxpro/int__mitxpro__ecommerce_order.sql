@@ -54,11 +54,8 @@ select
     , receipts.receipt_transaction_id
     , receipts.receipt_bill_to_address_state
     , receipts.receipt_bill_to_address_country
-    , cast((orders.order_total_price_paid * (orders.order_tax_rate / 100)) as decimal(38, 2)) as order_tax_amount
-    , cast(
-        (orders.order_total_price_paid * (orders.order_tax_rate / 100))
-        + orders.order_total_price_paid as decimal(38, 2)
-    ) as order_total_price_paid_plus_tax
+    , orders.order_tax_amount
+    , orders.order_total_price_paid_plus_tax
 from orders
 left join couponredemption on orders.order_id = couponredemption.order_id
 left join couponversion on couponredemption.couponversion_id = couponversion.couponversion_id
