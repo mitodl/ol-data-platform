@@ -3,8 +3,8 @@ version: 2
 
 models:
 - name: int__micromasters__dedp_proctored_exam_grades
-  description: DEDP proctor exam grades stored in MicroMasters database. 
-    We haven't had any new data for this table since 2022-09.
+  description: DEDP proctor exam grades stored in MicroMasters database. We haven't
+    had any new data for this table since 2022-09.
   columns:
   - name: program_title
     description: str, title of the program
@@ -15,7 +15,8 @@ models:
   - name: mitxonline_program_id
     description: int, id of the program in the mitxonline database
   - name: course_title
-    description: str, title of the course for example Foundations of Modern Finance I
+    description: str, title of the course for example Foundations of Modern Finance
+      I
   - name: course_number
     description: str, edX course number for example 14.73x or JPAL102x
   - name: user_edxorg_username
