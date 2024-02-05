@@ -23,7 +23,7 @@ select
     , '' as avatar_type
     , '' as country
     , 0 as show_country
-    , NULL as date_of_birth
+    , '' as date_of_birth
     , '' as interesting_tags
     , '' as ignored_tags
     , 0 as email_tag_filter_strategy
