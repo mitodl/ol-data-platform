@@ -2,7 +2,7 @@
 version: 2
 
 models:
-- name: marts__micromasters_exam_grades_old_data
+- name: marts__micromasters_dedp_exam_grades
   description: DEDP proctor exam grades stored in MicroMasters database. We haven't
     had any new data for this table since 2022-09.
   columns:
