@@ -22,6 +22,7 @@ with mitx__users as (
         , user_edxorg_username
         , null as user_mitxpro_username
         , null as user_bootcamps_username
+<<<<<<< HEAD
         , case
             when is_mitxonline_user = false
                 then user_edxorg_email
@@ -37,16 +38,42 @@ with mitx__users as (
             else user_joined_on_mitxonline
         end as user_joined_on
         , case
+=======
+        , case 
+            when is_mitxonline_user = false 
+                then user_edxorg_email
+            when user_edxorg_email = false
+                then user_mitxonline_email
+            when user_joined_on_mitxonline > user_joined_on_edxorg 
+                then user_mitxonline_email
+            else coalesce(user_edxorg_email, user_mitxonline_email)
+        end as user_email
+        , case 
+            when user_joined_on_mitxonline > user_joined_on_edxorg 
+                then user_joined_on_edxorg
+            else user_joined_on_mitxonline
+        end as user_joined_on
+        , case 
+>>>>>>> bb525da (update)
             when user_last_login_on_mitxonline > user_last_login_on_edxorg
                 then user_last_login_on_mitxonline
             else user_last_login_on_edxorg
         end as user_last_login
+<<<<<<< HEAD
         , case
             when is_mitxonline_user = true and is_edxorg_user = true
                 then 'mitxonline and edxorg'
             when is_mitxonline_user = true
                 then 'mitxonline'
             when is_edxorg_user = true
+=======
+        , case 
+            when is_mitxonline_user = true and is_edxorg_user = true
+                then 'mitxonline and edxorg'
+            when is_mitxonline_user = true 
+                then 'mitxonline'
+            when is_edxorg_user = true 
+>>>>>>> bb525da (update)
                 then 'edxorg'
         end as platforms
         , user_full_name
@@ -70,7 +97,11 @@ with mitx__users as (
         , null as user_edxorg_username
         , user_username as user_mitxpro_username
         , null as user_bootcamps_username
+<<<<<<< HEAD
         , user_email
+=======
+        , user_email 
+>>>>>>> bb525da (update)
         , user_joined_on
         , user_last_login
         , 'mitxpro' as platforms
@@ -110,7 +141,11 @@ with mitx__users as (
     from bootcamps_users
 )
 
+<<<<<<< HEAD
 select
+=======
+select 
+>>>>>>> bb525da (update)
     user_email
     , user_joined_on
     , user_last_login
