@@ -147,12 +147,12 @@ with mitx_enrollments as (
         , micromasters_completed_orders.coupon_type
         , micromasters_completed_orders.coupon_code
         , micromasters_completed_orders.redeemedcoupon_created_on as coupon_redeemed_on
-        , micromasters_completed_orders.receipt_transaction_id as payment_transaction_id
-        , micromasters_completed_orders.receipt_authorization_code as payment_authorization_code
-        , micromasters_completed_orders.receipt_payment_method as payment_method
-        , micromasters_completed_orders.receipt_reference_number as payment_req_reference_number
-        , micromasters_completed_orders.receipt_bill_to_address_state as payment_bill_to_address_state
-        , micromasters_completed_orders.receipt_bill_to_address_country as payment_bill_to_address_country
+        , micromasters_completed_orders.receipt_transaction_id
+        , micromasters_completed_orders.receipt_authorization_code
+        , micromasters_completed_orders.receipt_payment_method
+        , micromasters_completed_orders.receipt_reference_number as receipt_req_reference_number
+        , micromasters_completed_orders.receipt_bill_to_address_state
+        , micromasters_completed_orders.receipt_bill_to_address_country
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name
@@ -208,12 +208,12 @@ with mitx_enrollments as (
         , mitxpro_completed_orders.couponpaymentversion_coupon_type as coupon_type
         , mitxpro_completed_orders.coupon_code
         , mitxpro_completed_orders.couponredemption_created_on as coupon_redeemed_on
-        , mitxpro_completed_orders.receipt_transaction_id as payment_transaction_id
-        , mitxpro_completed_orders.receipt_authorization_code as payment_authorization_code
-        , mitxpro_completed_orders.receipt_payment_method as payment_method
-        , mitxpro_completed_orders.receipt_reference_number as payment_req_reference_number
-        , mitxpro_completed_orders.receipt_bill_to_address_state as payment_bill_to_address_state
-        , mitxpro_completed_orders.receipt_bill_to_address_country as payment_bill_to_address_country
+        , mitxpro_completed_orders.receipt_transaction_id
+        , mitxpro_completed_orders.receipt_authorization_code
+        , mitxpro_completed_orders.receipt_payment_method
+        , mitxpro_completed_orders.receipt_reference_number as receipt_req_reference_number
+        , mitxpro_completed_orders.receipt_bill_to_address_state
+        , mitxpro_completed_orders.receipt_bill_to_address_country
         , mitxpro_completed_orders.order_tax_country_code
         , mitxpro_completed_orders.order_tax_rate
         , mitxpro_completed_orders.order_tax_rate_name
@@ -268,12 +268,12 @@ with mitx_enrollments as (
         , null as coupon_type
         , null as coupon_code
         , null as coupon_redeemed_on
-        , bootcamps_completed_orders.receipt_transaction_id as payment_transaction_id
-        , bootcamps_completed_orders.receipt_authorization_code as payment_authorization_code
-        , bootcamps_completed_orders.receipt_payment_method as payment_method
-        , bootcamps_completed_orders.receipt_reference_number as payment_req_reference_number
-        , bootcamps_completed_orders.receipt_bill_to_address_state as payment_bill_to_address_state
-        , bootcamps_completed_orders.receipt_bill_to_address_country as payment_bill_to_address_country
+        , bootcamps_completed_orders.receipt_transaction_id
+        , bootcamps_completed_orders.receipt_authorization_code
+        , bootcamps_completed_orders.receipt_payment_method
+        , bootcamps_completed_orders.receipt_reference_number as receipt_req_reference_number
+        , bootcamps_completed_orders.receipt_bill_to_address_state
+        , bootcamps_completed_orders.receipt_bill_to_address_country
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name

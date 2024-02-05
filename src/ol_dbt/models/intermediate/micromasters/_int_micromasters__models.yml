@@ -227,8 +227,8 @@ models:
     description: str, unique identifier for the certificate on MITx Online, MicroMasters
       or edX.org
   - name: courseruncertificate_url
-    description: str, the full URL to this DEDP course certificate on MITx Online,
-      MicroMasters or edX.org
+    description: str, the full URL to the course certificate on mitxonline.mit.edu,
+      micromasters.mit.edu (legacy) or edX.org
   - name: courseruncertificate_created_on
     description: timestamp, date and time when this course certificate was initially
       created
