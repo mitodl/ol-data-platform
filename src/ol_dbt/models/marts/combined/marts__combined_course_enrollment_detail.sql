@@ -86,6 +86,7 @@ with mitx_enrollments as (
         , mitxonline_completed_orders.order_state
         , mitxonline_completed_orders.order_reference_number
         , mitxonline_completed_orders.order_created_on
+        , mitxonline_completed_orders.discount_source as payment_type
         , mitxonline_completed_orders.discount_redemption_type as coupon_type
         , mitxonline_completed_orders.discount_code as coupon_code
         , mitxonline_completed_orders.discountredemption_timestamp as coupon_redeemed_on
@@ -144,6 +145,7 @@ with mitx_enrollments as (
         , micromasters_completed_orders.order_state
         , micromasters_completed_orders.order_reference_number
         , micromasters_completed_orders.order_created_on
+        , null as payment_type
         , micromasters_completed_orders.coupon_type
         , micromasters_completed_orders.coupon_code
         , micromasters_completed_orders.redeemedcoupon_created_on as coupon_redeemed_on
@@ -205,6 +207,7 @@ with mitx_enrollments as (
         , mitxpro_completed_orders.order_state
         , mitxpro_completed_orders.receipt_reference_number as order_reference_number
         , mitxpro_completed_orders.order_created_on
+        , mitxpro_completed_orders.couponpaymentversion_discount_source as payment_type
         , mitxpro_completed_orders.couponpaymentversion_coupon_type as coupon_type
         , mitxpro_completed_orders.coupon_code
         , mitxpro_completed_orders.couponredemption_created_on as coupon_redeemed_on
@@ -265,6 +268,7 @@ with mitx_enrollments as (
         , bootcamps_completed_orders.order_state
         , bootcamps_completed_orders.order_reference_number
         , bootcamps_completed_orders.order_created_on
+        , null as payment_type
         , null as coupon_type
         , null as coupon_code
         , null as coupon_redeemed_on

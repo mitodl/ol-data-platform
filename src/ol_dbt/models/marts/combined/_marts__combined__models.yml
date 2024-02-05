@@ -139,6 +139,11 @@ models:
   - name: discount_amount
     description: numeric, actual discount dollar amount. For percent-discount coupon,
       this is calculated as line_price * percentage off
+  - name: payment_type
+    description: str, for xPro, the possible values are "staff", "marketing", "credit_card",
+      "purchase_order", "sales". For MITx Online, it's one of "marketing", "sales",
+      "financial-assistance", "customer-support", "staff", "legacy". Null for Bootcamps
+      or MicroMasters orders.
   - name: coupon_type
     description: str, type of the coupon which describes what circumstances the coupon
       can be redeemed.

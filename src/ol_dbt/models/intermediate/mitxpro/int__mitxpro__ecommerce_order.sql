@@ -44,6 +44,7 @@ select
     , coupon.coupon_code
     , couponpaymentversion.couponpaymentversion_payment_transaction
     , couponpaymentversion.couponpaymentversion_coupon_type
+    , couponpaymentversion.couponpaymentversion_discount_source
     , couponpaymentversion.couponpaymentversion_discount_amount_text
     , couponpaymentversion.couponpaymentversion_discount_type
     , couponpaymentversion.couponpaymentversion_discount_amount

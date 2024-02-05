@@ -75,6 +75,7 @@ select
     , intermediate_products_view.programrun_id
     , intermediate_products_view.courserun_readable_id
     , intermediate_products_view.program_readable_id
+    , discounts.discount_source
     , discounts.discount_redemption_type
     , discounts.discount_code
     , discounts.discount_amount_text
