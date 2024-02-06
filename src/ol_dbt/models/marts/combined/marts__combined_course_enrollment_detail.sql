@@ -229,7 +229,7 @@ with mitx_enrollments as (
         , mitxpro_completed_orders.couponpaymentversion_discount_amount_text as discount
         , case
             when mitxpro_completed_orders.couponpaymentversion_discount_type = 'percent-off'
-                then mitxpro_lines.product_price * (mitxpro_completed_orders.couponpaymentversion_discount_amount / 100)
+                then mitxpro_lines.product_price * mitxpro_completed_orders.couponpaymentversion_discount_amount
             else mitxpro_completed_orders.couponpaymentversion_discount_amount
         end as discount_amount
     from mitxpro_enrollments
