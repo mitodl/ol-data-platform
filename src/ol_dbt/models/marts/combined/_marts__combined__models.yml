@@ -52,7 +52,7 @@ models:
 
 - name: marts__combined_course_enrollment_detail
   description: course enrollment detail with certificates, orders and coupons from
-    OL platforms.
+    OL platforms. No order data for edX.org course purchase.
   config:
     grants:
       select: ['finance']
@@ -121,7 +121,8 @@ models:
       created
   - name: order_id
     description: int, unique identifier/foreign key to ecommerce orders from the corresponding
-      platform
+      platform. Note that this doesn't include orders from edX.org, which we don't
+      have data for them
   - name: order_state
     description: string, order state from the corresponding platform. It doesn't include
       'created' order state
