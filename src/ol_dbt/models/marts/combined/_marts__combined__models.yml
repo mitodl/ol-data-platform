@@ -6,11 +6,17 @@ models:
   description: Mart model for users from different platforms
   columns:
   - name: user_email
-    description: string, user email on the corresponding platform
+    description: string, user email on the corresponding platform including xpro, 
+      bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx Online
+      then the email will be chosen from the last platform they joined.
   - name: user_joined_on
-    description: timestamp, user join timestamp
+    description: timestamp, user join timestamp on the corresponding platform including xpro, 
+      bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx Online
+      then the timsestamp will be chosen from the latest platform they joined.
   - name: user_last_login
-    description: timestamp, user last login
+    description: timestamp, user last login on the corresponding platform including xpro, 
+      bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx Online
+      then the timsestamp will be chosen from the latest login. 
   - name: platforms
     description: string, application where the data is from
   - name: user_full_name

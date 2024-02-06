@@ -23,18 +23,14 @@ with mitx__users as (
         , null as user_mitxpro_username
         , null as user_bootcamps_username
         , case
-            when is_mitxonline_user = false
-                then user_edxorg_email
-            when is_edxorg_user = false
-                then user_mitxonline_email
             when user_joined_on_mitxonline > user_joined_on_edxorg
                 then user_mitxonline_email
             else coalesce(user_edxorg_email, user_mitxonline_email)
         end as user_email
         , case
             when user_joined_on_mitxonline > user_joined_on_edxorg
-                then user_joined_on_edxorg
-            else user_joined_on_mitxonline
+                then user_joined_on_mitxonline
+            else user_joined_on_edxorg
         end as user_joined_on
         , case
             when user_last_login_on_mitxonline > user_last_login_on_edxorg
