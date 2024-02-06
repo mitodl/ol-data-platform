@@ -9,12 +9,7 @@ with enrollments as (
 )
 
 , users as (
-    select
-        user_id
-        , user_username
-        , user_email
-        , user_full_name
-    from {{ ref('stg__mitxpro__app__postgres__users_user') }}
+    select * from {{ ref('int__mitxpro__users') }}
 )
 
 , mitxpro_enrollments as (
@@ -28,9 +23,11 @@ with enrollments as (
         , enrollments.courserunenrollment_is_edx_enrolled
         , runs.courserun_readable_id
         , runs.courserun_title
+        , runs.courserun_start_on
         , users.user_username
         , users.user_email
         , users.user_full_name
+        , users.user_address_country
         , enrollments.ecommerce_company_id
         , enrollments.ecommerce_order_id
     from enrollments
