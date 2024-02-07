@@ -30,12 +30,12 @@ with mitx__users as (
         , case
             when user_joined_on_mitxonline > user_joined_on_edxorg
                 then user_joined_on_mitxonline
-            else user_joined_on_edxorg
+            else coalesce(user_joined_on_edxorg, user_joined_on_mitxonline)
         end as user_joined_on
         , case
             when user_last_login_on_mitxonline > user_last_login_on_edxorg
                 then user_last_login_on_mitxonline
-            else user_last_login_on_edxorg
+            else coalesce(user_last_login_on_edxorg, user_last_login_on_mitxonline)
         end as user_last_login
         , case
             when is_mitxonline_user = true and is_edxorg_user = true
