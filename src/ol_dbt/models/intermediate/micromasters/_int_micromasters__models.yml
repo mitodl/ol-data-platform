@@ -223,8 +223,12 @@ models:
     description: str, user full name on edX.org or MITxOnline
   - name: user_country
     description: str, user country on edX.org or MITxOnline
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on MITx Online, MicroMasters
+      or edX.org
   - name: courseruncertificate_url
-    description: str, the full URL to this DEDP course certificate on MITx Online
+    description: str, the full URL to the course certificate on mitxonline.mit.edu,
+      micromasters.mit.edu (legacy) or edX.org
   - name: courseruncertificate_created_on
     description: timestamp, date and time when this course certificate was initially
       created
@@ -436,6 +440,8 @@ models:
   - name: receipt_authorization_code
     description: str, authorization code from most recent cybersource payment for
       the order
+  - name: receipt_reference_number
+    description: str, req_reference_number from cybersource payment
   - name: receipt_bill_to_address_state
     description: str, address state from most recent cybersource payment for the order
   - name: receipt_bill_to_address_country
@@ -445,6 +451,12 @@ models:
     description: str, discount amount in readable format. It can be fixed discount
       which is $<dollar amount> off, fixed-price which is $<dollar amount> or percent-discount
       which is <percentage> % off
+  - name: discount_amount
+    description: numeric, actual discount dollar amount. For percent-discount coupon,
+      this is calculated as line_price * percentage off
+  - name: coupon_type
+    description: str, type of the coupon which describes what circumstances the coupon
+      can be redeemed. Possible values are "standard" or "discounted-previous-course".
   - name: coupon_code
     description: str, coupon code for the redeemed coupon
   - name: redeemedcoupon_created_on

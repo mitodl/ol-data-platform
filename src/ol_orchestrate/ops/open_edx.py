@@ -155,6 +155,7 @@ def fetch_edx_course_structure_from_api(
     blocks_file = context.resources.results_dir.path.joinpath(
         f"course_blocks_{today.strftime('%Y-%m-%d')}.json"
     )
+    data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
     with jsonlines.open(structures_file, mode="w") as structures, jsonlines.open(
         blocks_file, mode="w"
     ) as blocks:
@@ -173,10 +174,12 @@ def fetch_edx_course_structure_from_api(
                     course_structure,
                     reducer=make_reducer(config.flattened_dict_delimiter),
                 ),
-                "retrieved_at": datetime.now(tz=UTC).isoformat(),
+                "retrieved_at": data_retrieval_timestamp,
             }
             structures.write(table_row)
-            for block in un_nest_course_structure(course_id, course_structure):
+            for block in un_nest_course_structure(
+                course_id, course_structure, data_retrieval_timestamp
+            ):
                 blocks.write(block)
     yield DynamicOutput(structures_file, mapping_key="course_structures")
     yield DynamicOutput(blocks_file, mapping_key="course_blocks")

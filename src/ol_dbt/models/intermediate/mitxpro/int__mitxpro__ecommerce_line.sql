@@ -29,6 +29,8 @@ select
     , products.courserun_id
     , products.program_id
     , products.product_type
+    , products.courserun_readable_id
+    , products.program_readable_id
     , programrunlines.programrun_id
 from lines
 inner join productversions on lines.productversion_id = productversions.productversion_id

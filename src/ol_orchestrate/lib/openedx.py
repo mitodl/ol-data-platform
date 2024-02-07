@@ -1,7 +1,7 @@
 import datetime
 import hashlib
 import json
-from typing import Any
+from typing import Any, Optional
 
 
 def generate_block_indexes(
@@ -27,7 +27,7 @@ def generate_block_indexes(
 
 
 def un_nest_course_structure(
-    course_id: str, course_structure: dict[str, Any]
+    course_id: str, course_structure: dict[str, Any], retrieval_time: Optional[str]
 ) -> list[dict[str, Any]]:
     """
     Recursively unnest the course structure
@@ -43,7 +43,7 @@ def un_nest_course_structure(
     root_block = ""
     course_title = None
     course_start = None
-    retrieved_at = datetime.datetime.now(tz=datetime.UTC).isoformat()
+    retrieved_at = retrieval_time or datetime.datetime.now(tz=datetime.UTC).isoformat()
     course_blocks = []
     content_hash = hashlib.sha256(
         json.dumps(course_structure).encode("utf-8")

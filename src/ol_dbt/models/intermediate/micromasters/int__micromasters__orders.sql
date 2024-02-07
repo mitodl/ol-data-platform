@@ -32,14 +32,21 @@ select
     , lines.line_price
     , lines.courserun_readable_id
     , lines.courserun_edxorg_readable_id
+    , receipts.receipt_reference_number
     , receipts.receipt_transaction_id
     , receipts.receipt_payment_method
     , receipts.receipt_authorization_code
     , receipts.receipt_bill_to_address_state
     , receipts.receipt_bill_to_address_country
+    , coupons.coupon_type
     , coupons.coupon_code
     , coupons.coupon_discount_amount_text
     , redeemedcoupons.redeemedcoupon_created_on
+    , case
+        when coupons.coupon_amount_type = 'percent-discount'
+            then cast(lines.line_price * coupons.coupon_amount as decimal(38, 2))
+        else cast(coupons.coupon_amount as decimal(38, 2))
+    end as coupon_amount
 from orders
 inner join lines on orders.order_id = lines.order_id
 left join redeemedcoupons on orders.order_id = redeemedcoupons.order_id

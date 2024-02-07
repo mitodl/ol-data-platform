@@ -2,6 +2,22 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__courseware_studentmodule') }}
 )
 
+--- guard against duplications by airbyte Incremental Sync - Append
+, source_sorted as (
+    select
+        *
+        , row_number() over (
+            partition by id order by _airbyte_emitted_at desc
+        ) as row_num
+    from source
+)
+
+, most_recent_source as (
+    select *
+    from source_sorted
+    where row_num = 1
+)
+
 , cleaned as (
 
     select
@@ -15,7 +31,7 @@ with source as (
         , max_grade as studentmodule_problem_max_grade
         , to_iso8601(from_iso8601_timestamp_nanos(created)) as studentmodule_created_on
         , to_iso8601(from_iso8601_timestamp_nanos(modified)) as studentmodule_updated_on
-    from source
+    from most_recent_source
 )
 
 select * from cleaned

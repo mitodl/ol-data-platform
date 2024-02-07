@@ -40,10 +40,7 @@ with person_courses as (
 )
 
 , edxorg_runs as (
-    select
-        courserun_readable_id
-        , course_number
-        , courserun_title
+    select *
     from {{ ref('stg__edxorg__bigquery__mitx_courserun') }}
 )
 
@@ -101,6 +98,7 @@ with person_courses as (
         , edxorg_users.user_username
         , micromasters_users.user_mitxonline_username
         , edxorg_runs.courserun_title
+        , edxorg_runs.courserun_start_date as courserun_start_on
         , edxorg_users.user_country as user_address_country
         , coalesce(edxorg_users.user_full_name, micromasters_users.user_full_name) as user_full_name
         , case

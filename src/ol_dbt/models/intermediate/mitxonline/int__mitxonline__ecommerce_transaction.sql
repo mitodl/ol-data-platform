@@ -14,6 +14,7 @@ select
     , transaction_status
     , transaction_authorization_code
     , transaction_payment_method
+    , transaction_reference_number
     , transaction_bill_to_address_state
     , transaction_bill_to_address_country
 from transactions
