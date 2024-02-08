@@ -2,6 +2,75 @@
 version: 2
 
 models:
+- name: int__mitxonline__flexiblepricing_flexiblepriceapplication
+  description: An application for an income based discount.
+  columns:
+  - name: flexiblepriceapplication_id
+    description: int, primary key representing a flexible pricing application
+    tests:
+    - not_null
+    - unique
+  - name: flexiblepriceapplication_created_on
+    description: timestamp, specifying when the table row was created
+    tests:
+    - not_null
+  - name: flexiblepriceapplication_updated_on
+    description: timestamp, specifying when the table row was updated
+    tests:
+    - not_null
+  - name: flexiblepriceapplication_status
+    description: string, status of the application. One of "approved", "auto-approved",
+      "created", "pending-manual-approval", "denied", "reset"
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["approved", "auto-approved", "created", "pending-manual-approval",
+          "denied", "reset"]
+  - name: flexiblepriceapplication_income_usd
+    description: numeric, user income in usd
+  - name: flexiblepriceapplication_original_income
+    description: numeric, user income in it's original currency
+  - name: flexiblepriceapplication_original_currency
+    description: string, currency code of orginal income
+  - name: flexiblepriceapplication_country_of_income
+    description: string, country code for user country of income
+  - name: flexiblepriceapplication_exchange_rate_timestamp
+    description: timestamp, timestamp of exchange rate used to convert the original
+      income to usd
+  - name: flexiblepriceapplication_date_documents_sent
+    description: date, date that the user sent documents that prove their income
+  - name: flexiblepriceapplication_justification
+    description: string, explanation for flexible pricing application approval or
+      rejection
+  - name: flexiblepriceapplication_country_of_residence
+    description: string, country code for user country of residece
+    tests:
+    - not_null
+  - name: user_id
+    description: int, primary key in the users_user table of the user  requesting
+      flexible pricing
+    tests:
+    - not_null
+  - name: flexiblepriceapplication_cms_submission_id
+    description: int, primary key of the cms submission stored in the flexiblepricing_flexiblepricingrequestsubmission
+      table
+  - name: contenttype_id
+    description: int, primary key in django_contenttype of either courses_course or
+      courses_program
+    tests:
+    - not_null
+  - name: courseware_object_id
+    description: int, primary key in either the courses_course or courses_program
+      table of the courseware the user applied for flexible pricing for
+    tests:
+    - not_null
+  - name: flexiblepricetier_id
+    description: int, primary key in flexiblepricing_flexiblepricetier of the price
+      tier the user applied for
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courseware_object_id", "contenttype_id", "user_id"]
+
 - name: int__mitxonline__bulk_email_optin
   columns:
   - name: openedx_user_id
@@ -436,8 +505,6 @@ models:
       May be blank for no payment required or refund.
   - name: transaction_authorization_code
     description: str, authorization code from cybersource payment
-  - name: receipt_reference_number
-    description: str, req_reference_number from cybersource payment
   - name: transaction_bill_to_address_state
     description: str, address state from cybersource payment
   - name: transaction_bill_to_address_country
@@ -517,22 +584,10 @@ models:
     description: int, primary key representing a single MITx Online course run
   - name: programrun_id
     description: int, primary key representing a single MITx Online program run
-  - name: courserun_readable_id
-    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-  - name: program_readable_id
-    description: str, Open edX ID formatted as program-v1:{org}+{program code}
-  - name: discount_source
-    description: str, type of discount coupon. Possible options are "marketing", "sales",
-      "financial-assistance", "customer-support", "staff", "legacy"
   - name: discount_amount_text
     description: str, discount amount in readable format from the most recent coupon
       redemption for the order. It can be percent-off which is <dollar amount>% off,
       dollars-off which is $<dollar amount> off or fixed-price
-  - name: discount_amount
-    description: numeric, actual discount dollar amount. For percent off discount,
-      this is calculated as product price * percentage off
-  - name: discount_redemption_type
-    description: str, one of  "one-time",  "one-time-per-user" and "unlimited"
   - name: discount_code
     description: str, discount code from the most recent coupon redemption for the
       order
@@ -546,8 +601,6 @@ models:
   - name: payment_method
     description: str, payment method from most recent cybersource payment. Value could
       be 'paypal' or 'card'.
-  - name: payment_req_reference_number
-    description: str, req_reference_number from cybersource payment
   - name: payment_bill_to_address_state
     description: str, address state from most recent cybersource payment
   - name: payment_bill_to_address_country
@@ -580,10 +633,6 @@ models:
     description: int, primary key representing a single MITx Online course run
   - name: programrun_id
     description: int, primary key representing a single MITx Online program run
-  - name: courserun_readable_id
-    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-  - name: program_readable_id
-    description: str, Open edX ID formatted as program-v1:{org}+{program code}
   - name: product_created_on
     description: timestamp, the timestamp the product was created
   - name: product_type
@@ -667,8 +716,6 @@ models:
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
-  - name: courserun_start_on
-    description: timestamp, date and time when the course starts
   - name: user_username
     description: str, name chosen by user
     tests:
