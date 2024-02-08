@@ -947,7 +947,8 @@ models:
     - not_null
   - name: courserun_platform
     description: str, indicating whether this course runs on MITx Online or edX.org.
-      Some of edx.org data were migrated from MicroMasters
+      edx.org courses were migrated from MicroMasters. e.g. edx.org course IDs - MITx/14_73x/1T2014,
+      course-v1:MITx+14.100x+1T2017
     tests:
     - not_null
     - accepted_values:
