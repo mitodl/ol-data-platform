@@ -134,3 +134,39 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["platform", "user_username", "courserun_readable_id"]
+
+- name: int__combined__user_course_roles
+  description: lists the users who have a privileged role or roles for working in
+    a course on MITx Online, MIT xPro and Residential MITx platforms
+  columns:
+  - name: platform
+    description: str, the open edX platform where the data is from
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the open edX Course ID formatted as course-v1:{org}+{course
+      number}+{run_tag}
+    tests:
+    - not_null
+  - name: user_username
+    description: str, unique username on the open edX platform
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user's email on the open edX platform
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, full name from user's profile on MITx Online or xPro application.
+      For Residential, this is from the open edX users table.
+  - name: organization
+    description: str, organization that lists the course. e.g. MITx, MITxT
+  - name: courseaccess_role
+    description: str, the privilege level assigned to the user for working in this
+      course. Currently the assigned roles are instructor, staff, limited_staff, beta_testers
+      and data_researcher on the open edX platform.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "courseaccess_role"]

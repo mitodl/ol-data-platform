@@ -1,14 +1,14 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__mitx__openedx__mysql__student_courseaccessrole') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__mysql__student_courseaccessrole') }}
 )
 
 , cleaned as (
     select
         id as courseaccessrole_id
         , course_id as courserun_readable_id
-        , user_id
+        , user_id as openedx_user_id
         , role as courseaccess_role
-        , if(lower(org) = 'mitx', 'MITx', org) as organization
+        , org as organization
     from source
 )
 
