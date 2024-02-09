@@ -3,10 +3,11 @@ import hashlib
 import io
 import json
 from datetime import UTC, datetime
-from typing import Any,Optional
+from typing import Any, Literal, Optional
 
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
+from pydantic import BaseModel
 
 
 def write_course_structures(
@@ -114,3 +115,58 @@ def un_nest_course_structure(
             }
         )
     return course_blocks
+
+
+class EdxAssetKey(BaseModel):
+    source_system: str
+    course_id: str
+    asset_type: Literal["course_xml", "course_structure", "forum_mongo", "db_table"]
+    table_object: Optional[str]
+
+
+edxorg_table_objects = [
+    "assessment_assessment",
+    "assessment_assessmentfeedback",
+    "assessment_assessmentfeedback_assessments",
+    "assessment_assessmentfeedback_options",
+    "assessment_assessmentfeedbackoption",
+    "assessment_assessmentpart",
+    "assessment_criterion",
+    "assessment_criterionoption",
+    "assessment_peerworkflow",
+    "assessment_peerworkflowitem",
+    "assessment_rubric",
+    "assessment_studenttrainingworkflow",
+    "assessment_studenttrainingworkflowitem",
+    "assessment_trainingexample",
+    "assessment_trainingexample_options_selected",
+    "auth_user",
+    "auth_userprofile",
+    "certificates_generatedcertificate",
+    "course",
+    "course_groups_cohortmembership",
+    "course_structure",
+    "courseware_studentmodule",
+    "credit_crediteligibility",
+    "django_comment_client_role_users",
+    "examples",
+    "grades_persistentcoursegrade",
+    "grades_persistentsubsectiongrade",
+    "student_anonymoususerid",
+    "student_courseaccessrole",
+    "student_courseenrollment",
+    "student_languageproficiency",
+    "submissions_score",
+    "submissions_scoresummary",
+    "submissions_studentitem",
+    "submissions_submission",
+    "teams",
+    "teams_membership",
+    "user_api_usercoursetag",
+    "user_id_map",
+    "validate",
+    "wiki_article",
+    "wiki_articlerevision",
+    "workflow_assessmentworkflow",
+    "workflow_assessmentworkflowstep",
+]

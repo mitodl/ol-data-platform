@@ -60,22 +60,31 @@ The overall flow of data is as follows:
             - Upload XML files to a /courses prefix in S3
 """
 
+import re
+from functools import partial
 from typing import Any, Literal
 
 from dagster import (
+    AssetSelection,
+    DefaultSensorStatus,
     Definitions,
+    SensorDefinition,
+    define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
 
-from ol_orchestrate.assets.edxorg_archive import gcs_edxorg_archive_sensor
+from ol_orchestrate.assets.edxorg_archive import (
+    gcs_edxorg_archive_sensor,
+    process_edxorg_archive_bundle,
+)
 from ol_orchestrate.jobs.retrieve_edx_exports import (
-    retrieve_edx_course_exports,
     retrieve_edx_tracking_logs,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.outputs import DailyResultsDir
 from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.sensors.object_storage import gcs_multi_file_sensor
 
 if DAGSTER_ENV == "dev":
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
@@ -145,11 +154,9 @@ def edxorg_tracking_logs_config(
     }
 
 
-s3_courses_job_def = retrieve_edx_course_exports.to_job(
-    name="retrieve_edx_course_exports",
-    config=edxorg_data_archive_config(
-        "simeon-mitx-pipeline-main", s3_uploads_bucket(DAGSTER_ENV)["bucket"], set()
-    ),
+s3_course_assets_job = define_asset_job(
+    name="edxorg_raw_course_data",
+    selection=AssetSelection.key_prefixes("edxorg", "raw_data"),
 )
 
 s3_logs_job_def = retrieve_edx_tracking_logs.to_job(
@@ -176,44 +183,26 @@ retrieve_edx_exports = Definitions(
     },
     sensors=[
         gcs_edxorg_archive_sensor,
-        # SensorDefinition(
-        #     name="courses_sensor",
-        #     evaluation_fn=partial(
-        #         gcs_multi_file_sensor,
-        #         "simeon-mitx-pipeline-main",
-        #         bucket_prefix="COLD/",
-        #         object_filter_fn=lambda object_key: re.match(
-        #             file_regex["courses"], object_key
-        #         ),
-        #         run_config_fn=lambda new_keys: edxorg_data_archive_config(
-        #             "simeon-mitx-pipeline-main",
-        #             s3_uploads_bucket(DAGSTER_ENV)["bucket"],
-        #             new_keys,
-        #         ),
-        #     ),
-        #     minimum_interval_seconds=86400,
-        #     job=s3_courses_job_def,
-        #     default_status=DefaultSensorStatus.RUNNING,
-        # ),
-        # SensorDefinition(
-        #     name="logs_sensor",
-        #     evaluation_fn=partial(
-        #         gcs_multi_file_sensor,
-        #         "simeon-mitx-pipeline-main",
-        #         bucket_prefix="COLD/",
-        #         object_filter_fn=lambda object_key: re.match(
-        #             file_regex["logs"], object_key
-        #         ),
-        #         run_config_fn=lambda new_keys: edxorg_tracking_logs_config(
-        #             "simeon-mitx-pipeline-main",
-        #             s3_uploads_bucket(DAGSTER_ENV)["bucket"],
-        #             new_keys,
-        #         ),
-        #     ),
-        #     minimum_interval_seconds=86400,
-        #     job=s3_logs_job_def,
-        #     default_status=DefaultSensorStatus.RUNNING,
-        # ),
+        SensorDefinition(
+            name="logs_sensor",
+            evaluation_fn=partial(
+                gcs_multi_file_sensor,
+                "simeon-mitx-pipeline-main",
+                bucket_prefix="COLD/",
+                object_filter_fn=lambda object_key: re.match(
+                    file_regex["logs"], object_key
+                ),
+                run_config_fn=lambda new_keys: edxorg_tracking_logs_config(
+                    "simeon-mitx-pipeline-main",
+                    s3_uploads_bucket(DAGSTER_ENV)["bucket"],
+                    new_keys,
+                ),
+            ),
+            minimum_interval_seconds=86400,
+            job=s3_logs_job_def,
+            default_status=DefaultSensorStatus.RUNNING,
+        ),
     ],
-    jobs=[s3_courses_job_def, s3_logs_job_def],
+    jobs=[s3_course_assets_job, s3_logs_job_def],
+    assets=[process_edxorg_archive_bundle],
 )

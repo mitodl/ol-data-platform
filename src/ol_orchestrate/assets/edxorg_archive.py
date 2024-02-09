@@ -1,20 +1,34 @@
+# - Process the raw_data_archive to extract the per-course assets
+# - Model the different asset objects according to their type
+
+import hashlib
 import re
+import tarfile
 from datetime import UTC, datetime
+from pathlib import Path
 
 from dagster import (
     AssetExecutionContext,
     AssetKey,
     AssetMaterialization,
+    AssetOut,
+    DagsterEventType,
     DefaultSensorStatus,
     DynamicPartitionsDefinition,
+    EventRecordsFilter,
     MetadataValue,
+    Output,
     SensorEvaluationContext,
     SensorResult,
-    asset,
+    multi_asset,
     sensor,
 )
+from google.cloud import storage
+
+from ol_orchestrate.lib.edxorg import categorize_archive_element, parse_archive_path
 
 edxorg_archive_partitions = DynamicPartitionsDefinition(name="edxorg_archive")
+course_and_source_partitions = DynamicPartitionsDefinition(name="course_and_source")
 
 
 @sensor(
@@ -37,6 +51,7 @@ def gcs_edxorg_archive_sensor(context: SensorEvaluationContext):
     }
 
     assets = []
+    partition_keys = []
     for file_ in bucket_files:
         context.log.debug(f"Processing file {file_.name}")
         assets.append(
@@ -59,23 +74,251 @@ def gcs_edxorg_archive_sensor(context: SensorEvaluationContext):
                 },
             )
         )
-        edxorg_archive_partitions.build_add_request(
-            partition_keys=[file_.name.removeprefix("COLD/")]
-        )
+        partition_keys.append(file_.name.removeprefix("COLD/"))
 
-    return SensorResult(asset_events=assets)
+    return SensorResult(
+        asset_events=assets,
+        dynamic_partitions_requests=[
+            edxorg_archive_partitions.build_add_request(partition_keys=partition_keys)
+        ],
+    )
 
 
-@asset(
+@multi_asset(
     required_resource_keys={"gcp_gcs"},
-    key_prefix="edxorg",
+    group_name="edxorg",
+    # ins={"raw_data_archive": AssetIn(
+    #     key=AssetKey(("edxorg", "raw_data_archive")),
+    #     dagster_type=DagsterPath,
+    # )},
     deps=[AssetKey(("edxorg", "raw_data_archive"))],
+    partitions_def=edxorg_archive_partitions,
+    # partitions_def=course_and_source_partitions,
+    outs={
+        "course_structure": AssetOut(
+            key_prefix=["edxorg", "raw_data"], is_required=False
+        ),
+        "course_xml": AssetOut(key_prefix=["edxorg", "raw_data"], is_required=False),
+        "forum_mongo": AssetOut(key_prefix=["edxorg", "raw_data"], is_required=False),
+        "assessment_assessment": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_assessmentfeedback": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_assessmentfeedback_assessments": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_assessmentfeedback_options": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_assessmentfeedbackoption": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_assessmentpart": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_criterion": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_criterionoption": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_peerworkflow": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_peerworkflowitem": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_rubric": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_studenttrainingworkflow": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_studenttrainingworkflowitem": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_trainingexample": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "assessment_trainingexample_options_selected": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "auth_user": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "auth_userprofile": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "certificates_generatedcertificate": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "course": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "course_groups_cohortmembership": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "course_structure": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "courseware_studentmodule": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "credit_crediteligibility": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "django_comment_client_role_users": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "examples": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "grades_persistentcoursegrade": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "grades_persistentsubsectiongrade": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "student_anonymoususerid": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "student_courseaccessrole": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "student_courseenrollment": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "student_languageproficiency": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "submissions_score": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "submissions_scoresummary": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "submissions_studentitem": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "submissions_submission": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "teams": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "teams_membership": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "user_api_usercoursetag": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "user_id_map": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "validate": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "wiki_article": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "wiki_articlerevision": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "workflow_assessmentworkflow": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+        "workflow_assessmentworkflowstep": AssetOut(
+            key_prefix=["edxorg", "raw_data", "db_table"],
+            is_required=False,
+        ),
+    },
 )
 def process_edxorg_archive_bundle(context: AssetExecutionContext):
-    context.resources.gcp_gcs.client.get_bucket()
-    dep: AssetKey = context.job_def.asset_layer.asset_deps.values()[0]
-    context.asset
+    dagster_instance = context.instance
+    asset_dep = context.instance.get_event_records(
+        event_records_filter=EventRecordsFilter(
+            asset_key=AssetKey(("edxorg", "raw_data_archive")),
+            event_type=DagsterEventType.ASSET_MATERIALIZATION,
+            asset_partitions=[context.partition_key],
+        ),
+        limit=1,
+    )[0]
+    gcp: storage.Client = context.resources.gcp_gcs.client
+    asset_path = asset_dep.asset_materialization.metadata["path"].value
+    archive_path = Path(asset_path.split("/")[-1])
+    with archive_path.open("wb") as archive_file:
+        gcp.download_blob_to_file(asset_path, archive_file)
 
-
-def edxorg_archive_course_snapshot():
-    ...
+    archive = tarfile.open(archive_path)
+    while tinfo := archive.next():
+        if not tinfo.isdir():
+            asset_info = parse_archive_path(tinfo.name)
+            if not asset_info:
+                continue
+            normalized_source_system = (
+                "edge" if "edge" in asset_info["source_system"] else "prod"
+            )
+            # dagster_instance.add_dynamic_partitions(
+            #     course_and_source_partitions.name,
+            #     partition_keys=[normalized_source_system, asset_info["course_id"]],
+            # )
+            output_key = asset_info.get("table_name") or categorize_archive_element(
+                tinfo.name
+            )
+            archive_file = Path(tinfo.name.split("/")[-1]).write_bytes(
+                archive.extractfile(tinfo).read()
+            )
+            data_version = hashlib.file_digest(
+                archive_file.open("rb"), "sha256"
+            ).hexdigest()
+            yield Output(
+                archive_file,
+                output_name=output_key,
+                data_version=data_version,
+            )
+            archive_file.unlink()
