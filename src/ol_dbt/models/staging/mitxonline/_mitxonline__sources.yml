@@ -1575,18 +1575,24 @@ sources:
       description: int, the foreign key referencing the criterion option
 
   - name: raw__mitxonline__openedx__mysql__student_courseaccessrole
-    description: MITx Online open edX student course access roles
+    description: MITx Online open edX student course access roles that lists the users
+      who have a privileged role or roles for working in a course on MITx Online open
+      edX platform
     columns:
     - name: course_id
-      description: string, unique ID representing a single MITx Online course run
+      description: string, open edX Course ID formatted as course-v1:{org}+{course
+        code}+{run_tag}
     - name: org
-      description: string, the organization the course belongs to
+      description: string, the organization the course belongs to. e.g. MITxT
     - name: id
       description: int, the auto-incremented ID for this table
     - name: role
-      description: string, the course access student role
+      description: string, the privilege level assigned to the user for working in
+        this course. Currently the assigned roles are instructor, staff, beta_testers
+        and data_researcher on MITx Online open edX platform.
     - name: user_id
-      description: int, unique ID for each user on the MITx Online platform
+      description: int, unique ID for each user on the MITx Online platform. Note
+        that this is different from user_id from MITx Online app
 
   - name: raw__mitxonline__openedx__mysql__assessment_criterion
     description: MITx Online open edX assessment criteria

@@ -24,6 +24,8 @@ models:
     description: str, user's last name
     tests:
     - not_null
+  - name: user_full_name
+    description: str, user's full name on Residential open edx platform if applicable
   - name: user_email
     description: str, user's email associated with their account
     tests:
@@ -50,7 +52,8 @@ models:
     description: timestamp, date and time when user last login
 
 - name: stg__mitxresidential__openedx__user_courseaccessrole
-  description: Residential MITx user course-level roles
+  description: This table lists the users who have a privileged role or roles for
+    working in a course on Residential MITx Platform
   columns:
   - name: courseaccessrole_id
     description: int, sequential ID for a single user course role on Residential MITx
@@ -67,15 +70,12 @@ models:
     description: int, user ID on Residential MITx open edx platform
     tests:
     - not_null
-    - relationships:
-        to: ref('stg__mitxresidential__openedx__auth_user')
-        field: user_id
-  - name: courserun_org
-    description: str, course organization e.g. MITx
-  - name: courseaccessrole_role
-    description: str, user role, possible values are staff, data_researcher, instructor,
-      beta_testers, finance_admin, sales_admin, library_user, org_course_creator_group,
-      course_creator_group, support
+  - name: organization
+    description: str, organization that lists the course. e.g. MITx
+  - name: courseaccess_role
+    description: str, the privilege level assigned to the user for working in this
+      course. Currently the assigned roles are instructor, staff, beta_testers and
+      data_researcher on the Residential MITx platform.
     tests:
     - not_null
     - accepted_values:
@@ -84,7 +84,7 @@ models:
           'support']
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "user_id", "courseaccessrole_role"]
+      column_list: ["courserun_readable_id", "user_id", "courseaccess_role"]
 
 - name: stg__mitxresidential__openedx__courserun
   description: Residential MITx open edX courses

@@ -35,6 +35,7 @@ vars:
     mitxpro: 'xPro'
     micromasters: 'MicroMasters'
     mitxonline: 'MITx Online'
+    residential: 'Residential MITx'
     dedp_micromasters_program_id: 2
     dedp_mitxonline_international_development_program_id: 1
     dedp_mitxonline_public_policy_program_id: 2

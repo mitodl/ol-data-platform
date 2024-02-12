@@ -1533,3 +1533,37 @@ models:
     description: str, json object of all visible blocks within a subsection
     tests:
     - not_null
+
+- name: stg__mitxonline__openedx__mysql__user_courseaccessrole
+  description: lists the users who have a privileged role or roles for working in
+    a course on MITx Online open edX platform
+  columns:
+  - name: courseaccessrole_id
+    description: int, primary key tracking a course access role assigned in this table
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, user ID on MITx Online open edX platform. Note that this is
+      different from user_id from MITx Online app
+    tests:
+    - not_null
+  - name: organization
+    description: str, organization that lists the course. e.g. MITxT
+  - name: courseaccess_role
+    description: str, the privilege level assigned to the user for working in this
+      course. Currently the assigned roles are instructor, staff, beta_testers and
+      data_researcher on MITx Online open edX platform.
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
+          'sales_admin', 'beta_testers', 'library_user', 'org_course_creator_group',
+          'course_creator_group', 'support']
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "openedx_user_id", "courseaccess_role"]

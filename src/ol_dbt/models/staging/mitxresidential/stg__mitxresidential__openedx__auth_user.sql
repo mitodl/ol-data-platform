@@ -12,8 +12,9 @@ with source as (
         , is_active as user_is_active
         , is_staff as user_is_staff
         , is_superuser as user_is_superuser
-        ,{{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
-        ,{{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
+        , concat_ws(' ', first_name, last_name) as user_full_name
+        , to_iso8601(from_iso8601_timestamp_nanos(date_joined)) as user_joined_on
+        , to_iso8601(from_iso8601_timestamp_nanos(last_login)) as user_last_login
     from source
 )
 
