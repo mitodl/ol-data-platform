@@ -1,5 +1,5 @@
 with email_opt_in as (
-    select * from {{ source('ol_warehouse_raw_data','raw__irx__edxorg__bigquery__email_opt_in') }}
+    select * from {{ ref('int__mitxonline__bulk_email_optin') }}
 )
 
 select
