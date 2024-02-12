@@ -2005,18 +2005,24 @@ sources:
       description: int, the foreign key referencing the criterion option
 
   - name: raw__xpro__openedx__mysql__student_courseaccessrole
-    description: MITx Pro open edX student course access roles
+    description: MITx Pro open edX student course access roles that list the users
+      who have a privileged role or roles for working in a course on MIT xPro open
+      edX platform
     columns:
     - name: course_id
-      description: string, unique ID representing a single MITx Pro course run
+      description: string, Open edX Course ID formatted as course-v1:{org}+{course
+        code}+{run_tag}
     - name: org
-      description: string, the organization the course belongs to
+      description: string, the organization the course belongs to. e.g. xPro
     - name: id
       description: int, the auto-incremented ID for this table
     - name: role
-      description: string, the course access student role
+      description: string, the course access student role. Currently the assigned
+        roles are instructor, staff, limited_staff, beta_testers and data_researcher
+        on MIT xPro open edX platform.
     - name: user_id
-      description: int, unique ID for each user on the MITx Pro platform
+      description: int, unique ID for each user on the MITx Pro platform. Note that
+        this is different from user_id on MIT xPro app
 
   - name: raw__xpro__openedx__mysql__assessment_criterion
     description: MITx Pro open edX assessment criteria
@@ -2214,22 +2220,3 @@ sources:
     - name: modified
       description: timestamp, datetime when this row was last updated. A change in
         this field implies that there was a state change.
-
-  - name: raw__xpro__openedx__mysql__student_courseaccessrole
-    description: lists the users who have a privileged role or roles for working in
-      a course on MIT xPro open edX platform
-    columns:
-    - name: id
-      description: int, primary key tracking a course access role assigned in this
-        table
-    - name: courserun_readable_id
-      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-    - name: openedx_user_id
-      description: int, user ID on the open edX platform. Note that this is different
-        from user_id on MITx Online app
-    - name: organization
-      description: str, organization that lists the course. e.g. MITxT
-    - name: courseaccess_role
-      description: str, the privilege level assigned to the user for working in this
-        course. Currently the assigned roles are instructor, staff, limited_staff,
-        beta_testers and data_researcher on MIT xPro open edX platform.
