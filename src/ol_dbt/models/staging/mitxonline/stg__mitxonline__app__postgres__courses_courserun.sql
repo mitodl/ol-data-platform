@@ -15,8 +15,9 @@ with source as (
         , run_tag as courserun_tag
         , is_self_paced as courserun_is_self_paced
         , case
-            when courseware_id like 'course-v1:MITxT+%' then '{{ var("mitxonline") }}'
-            else '{{ var("edxorg") }}'
+            when courseware_id like 'MITx/%' or courseware_id like 'course-v1:MITx+%'
+                then '{{ var("edxorg") }}'
+            else '{{ var("mitxonline") }}'
         end as courserun_platform
         , replace(replace(courseware_id, 'course-v1:', ''), '+', '/') as courserun_edx_readable_id
         ,{{ cast_timestamp_to_iso8601('start_date') }} as courserun_start_on
