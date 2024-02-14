@@ -65,19 +65,20 @@ from functools import partial
 from typing import Any, Literal
 
 from dagster import (
-    AssetSelection,
     DefaultSensorStatus,
     Definitions,
     SensorDefinition,
-    define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
 
 from ol_orchestrate.assets.edxorg_archive import (
+    edxorg_archive_partitions,
     gcs_edxorg_archive_sensor,
-    process_edxorg_archive_bundle,
 )
+from ol_orchestrate.io_managers.filepath import FileObjectIOManager
+from ol_orchestrate.io_managers.gcs import GCSFileIOManager
 from ol_orchestrate.jobs.retrieve_edx_exports import (
+    retrieve_edx_course_exports,
     retrieve_edx_tracking_logs,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
@@ -87,13 +88,27 @@ from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.sensors.object_storage import gcs_multi_file_sensor
 
 if DAGSTER_ENV == "dev":
-    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault_config = {
+        "vault_addr": VAULT_ADDRESS,
+        "vault_auth_type": "github",
+    }
+    vault = Vault(**vault_config)
     vault._auth_github()  # noqa: SLF001
 else:
-    vault = Vault(
-        vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
-    )
+    vault_config = {
+        "vault_addr": VAULT_ADDRESS,
+        "vault_role": "dagster-server",
+        "vault_auth_type": "aws-iam",
+        "aws_auth_mount": "aws",
+    }
+    vault = Vault(**vault_config)
     vault._auth_aws_iam()  # noqa: SLF001
+
+gcs_connection = GCSConnection(
+    **vault.client.secrets.kv.v1.read_secret(
+        mount_point="secret-data", path="pipelines/edx/org/gcp-oauth-client"
+    )["data"]
+)
 
 
 def s3_uploads_bucket(
@@ -115,17 +130,10 @@ def edxorg_data_archive_config(
 ):
     return {
         "ops": {
-            "download_edx_data_exports": {
+            "process_edxorg_archive_bundle": {
                 "config": {
-                    "irx_edxorg_gcs_bucket": irx_edxorg_gcs_bucket,
-                    "export_type": "courses",
-                    "files_to_sync": list(new_files_to_sync),
-                }
-            },
-            "upload_edx_data_exports": {
-                "config": {
-                    "edx_irx_exports_bucket": ol_edxorg_raw_data_bucket,
-                    "bucket_prefix": s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+                    "s3_bucket": ol_edxorg_raw_data_bucket,
+                    "s3_prefix": s3_uploads_bucket(DAGSTER_ENV)["prefix"],
                 }
             },
         }
@@ -154,9 +162,12 @@ def edxorg_tracking_logs_config(
     }
 
 
-s3_course_assets_job = define_asset_job(
-    name="edxorg_raw_course_data",
-    selection=AssetSelection.key_prefixes("edxorg", "raw_data"),
+edxorg_course_data_job = retrieve_edx_course_exports.to_job(
+    name="retrieve_edx_course_exports",
+    config=edxorg_data_archive_config(
+        "simeon-mitx-pipeline-main", s3_uploads_bucket(DAGSTER_ENV)["bucket"], set()
+    ),
+    partitions_def=edxorg_archive_partitions,
 )
 
 s3_logs_job_def = retrieve_edx_tracking_logs.to_job(
@@ -173,16 +184,18 @@ file_regex = {
 
 retrieve_edx_exports = Definitions(
     resources={
-        "gcp_gcs": GCSConnection(
-            **vault.client.secrets.kv.v1.read_secret(
-                mount_point="secret-data", path="pipelines/edx/org/gcp-oauth-client"
-            )["data"]
-        ),
+        "gcp_gcs": gcs_connection,
         "s3": S3Resource(),
         "exports_dir": DailyResultsDir.configure_at_launch(),
+        "io_manager": FileObjectIOManager(
+            vault=Vault(**vault_config),
+            vault_gcs_token_path="secret-data/pipelines/edx/org/gcp-oauth-client",  # noqa: S106
+        ),
+        "gcs_input": GCSFileIOManager(gcs=gcs_connection),
+        "vault": vault,
     },
     sensors=[
-        gcs_edxorg_archive_sensor,
+        gcs_edxorg_archive_sensor.with_updated_job(edxorg_course_data_job),
         SensorDefinition(
             name="logs_sensor",
             evaluation_fn=partial(
@@ -203,6 +216,5 @@ retrieve_edx_exports = Definitions(
             default_status=DefaultSensorStatus.RUNNING,
         ),
     ],
-    jobs=[s3_course_assets_job, s3_logs_job_def],
-    assets=[process_edxorg_archive_bundle],
+    jobs=[edxorg_course_data_job, s3_logs_job_def],
 )

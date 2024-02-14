@@ -1,4 +1,5 @@
 import re
+from collections.abc import Sequence
 
 COURSE_ID_REGEX = re.compile(
     r"^(?P<course_id>(?P<organization>[a-zA-Z0-9._]+)-(?P<course_number>[a-zA-Z0-9._-]+?)-(?P<course_run>[a-zA-Z0-9._]+)(?>-ccx-)?(?P<ccx_id>\d+)?)"
@@ -54,6 +55,28 @@ def parse_archive_path(archive_path: str) -> dict[str, str]:
         archive_path.split("/")[-1],
     )
     if components:
-        return components.groupdict()
+        asset_info = components.groupdict()
+        asset_info["data_category"] = categorize_archive_element(archive_path)
+        return asset_info
     else:
         return {}
+
+
+def build_mapping_key(
+    asset_info: dict[str, str], is_asset_key: bool = False
+) -> Sequence[str]:
+    """Generate the hierarchical mapping of the asset.
+
+    This is to be used either for generating the asset key,orthe mapping while using an
+    op-based approach.
+    """
+    key_sequence = ["edxorg", "raw_data"]
+    data_category = asset_info["data_category"]
+    key_sequence.append(data_category)
+    if data_category == "db_table":
+        key_sequence.append(asset_info["table_name"])
+    if is_asset_key:
+        return key_sequence
+
+    key_sequence.append(asset_info["source_system"])
+    key_sequence.append(asset_info["course_id"])

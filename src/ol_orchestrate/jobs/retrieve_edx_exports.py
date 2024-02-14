@@ -1,8 +1,10 @@
 from dagster import graph
 
+from ol_orchestrate.assets.edxorg_archive import (
+    process_edxorg_archive_bundle,
+)
 from ol_orchestrate.ops.retrieve_edx_exports import (
     download_edx_data,
-    extract_course_files,
     upload_files,
 )
 
@@ -20,7 +22,7 @@ from ol_orchestrate.ops.retrieve_edx_exports import (
     },
 )
 def retrieve_edx_course_exports():
-    upload_files(extract_course_files(download_edx_data()))
+    process_edxorg_archive_bundle()
 
 
 @graph(
