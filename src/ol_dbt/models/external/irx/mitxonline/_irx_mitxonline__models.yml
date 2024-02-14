@@ -211,7 +211,7 @@ models:
     description: int, consecutive_days_visit_count
 
 - name: irx__mitxonline__openedx__bigquery__email_opt_in
-  description: Stores data on unique user and course team relationships.
+  description: Stores data on the email preferences of unique users.
   config:
     grants:
       select: ['mit_irx']
