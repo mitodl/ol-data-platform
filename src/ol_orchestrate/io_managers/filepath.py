@@ -1,7 +1,7 @@
+from pathlib import Path
 from typing import Optional
 
 from dagster import (
-    AssetKey,
     ConfigurableIOManager,
     DagsterEventType,
     EventRecordsFilter,
@@ -15,7 +15,6 @@ from pydantic import PrivateAttr
 from s3fs import S3FileSystem
 from upath import UPath
 
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.resources.secrets.vault import Vault
 
 
@@ -28,11 +27,11 @@ class FileObjectIOManager(ConfigurableIOManager):
     _s3_fs: S3FileSystem = PrivateAttr(default=None)
 
     def _load_input(self, context: InputContext) -> UPath:
-        context.log.info(f"Context info: {context.__dict__}")
-        context.log.info(f"Input metadata: {context.metadata}")
+        context.log.debug("Context info: %s", context.__dict__)
+        context.log.info("Input metadata: %s", context.metadata)
         asset_dep = context.instance.get_event_records(
             event_records_filter=EventRecordsFilter(
-                asset_key=AssetKey(("edxorg", "raw_data_archive")),
+                asset_key=context.asset_key,
                 event_type=DagsterEventType.ASSET_MATERIALIZATION,
                 asset_partitions=[context.partition_key],
             ),
@@ -40,22 +39,31 @@ class FileObjectIOManager(ConfigurableIOManager):
         )[0]
 
         asset_path = UPath(asset_dep.asset_materialization.metadata["path"].value)
-        asset_path = UPath(
-            asset_dep.asset_materialization.metadata["path"].value,
-            storage_options=self.configure_path_fs(asset_path.protocol).storage_options,
+        return UPath(
+            asset_path,
+            **self.configure_path_fs(asset_path.protocol).storage_options,
         )
-        return asset_path
 
     def load_input(self, context: InputContext) -> UPath:
         return self._load_input(context)
 
-    def handle_output(self, context: OutputContext, obj: DagsterPath) -> Nothing:
-        output_metadata = context.get_logged_metadata()
-        output_path = UPath(output_metadata["path"].value)
-        output_path.storage_options = self.configure_path_fs(
-            output_path.protocol
-        ).storage_options
-        output_path.write_bytes(obj.read_bytes())
+    def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
+        context.log.debug(
+            "Output metadata from step context: %s",
+            context.step_context._output_metadata,
+        )
+        context.log.debug("Context info: %s", context.__dict__)
+        context.log.info("Input metadata: %s", context.metadata)
+        output_metadata = context.step_context.get_output_metadata(
+            context.name, context.mapping_key
+        )
+        context.log.debug("Output metadata: %s", output_metadata)
+        output_path = UPath(obj[1])
+        output_path = UPath(
+            obj[1], **self.configure_path_fs(output_path.protocol).storage_options
+        )
+        output_path.write_bytes(obj[0].read_bytes())
+        obj[0].unlink()
 
     def configure_path_fs(
         self, path_protocol

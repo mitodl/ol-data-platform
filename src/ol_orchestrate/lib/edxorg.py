@@ -27,9 +27,10 @@ def categorize_archive_element(archive_element: str) -> str:
         "xml.tar.gz": "course_xml",
         "sql": "db_table",
     }
-    extension = re.search(FILE_TYPE_REGEX, archive_element)
-    if extension:
-        extension = extension.group(1)
+    extension_match = re.search(FILE_TYPE_REGEX, archive_element)
+    extension = None
+    if extension_match:
+        extension = extension_match.group(1)
     return element_map.get(extension, "unhandled")
 
 
@@ -63,7 +64,8 @@ def parse_archive_path(archive_path: str) -> dict[str, str]:
 
 
 def build_mapping_key(
-    asset_info: dict[str, str], is_asset_key: bool = False
+    asset_info: dict[str, str],
+    is_asset_key: bool = False,  # noqa: FBT001, FBT002
 ) -> Sequence[str]:
     """Generate the hierarchical mapping of the asset.
 
@@ -77,6 +79,9 @@ def build_mapping_key(
         key_sequence.append(asset_info["table_name"])
     if is_asset_key:
         return key_sequence
-
-    key_sequence.append(asset_info["source_system"])
+    normalized_source_system = (
+        "edge" if "edge" in asset_info["source_system"] else "prod"
+    )
+    key_sequence.append(normalized_source_system)
     key_sequence.append(asset_info["course_id"])
+    return key_sequence

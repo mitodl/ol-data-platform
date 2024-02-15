@@ -34,14 +34,13 @@ dagster-webserver = "^1.4"
 dbt-duckdb = "^1.6.0"
 dbt-trino = "^1.6.0"
 flatten-dict = "^0.4.2"
-gcsfs = "^2024.2.0"
+fsspec = {extras = ["gcs", "s3"], version = "^2024.2.0"}
 httpx = "^0.26.0"
 hvac = "^2.1.0"
 jsonlines = "^4.0.0"
 pyarrow = "^15.0.0"
 pydantic = "^2.5.3"
 pymysql = "^1.0.0"
-s3fs = "^2024.2.0"
 setuptools = "^69.0.0"  # Add this to avoid errors with installing packages that depend on it for building"
 
 [tool.poetry.group.dev.dependencies]
