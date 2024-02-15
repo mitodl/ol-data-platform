@@ -39,10 +39,10 @@ select
 from tos
 where tos.trainingexample_id in (
     select distinct te.id from te
-    left join ate on te.id = ate.trainingexample_id
-    left join tw on ate.aitrainingworkflow_id = tw.id
+    inner join ate on te.id = ate.trainingexample_id
+    inner join tw on ate.aitrainingworkflow_id = tw.id
     union distinct
     select distinct te.id from te
-    left join stwi on te.id = stwi.training_example_id
-    left join stw on stwi.workflow_id = stw.id
+    inner join stwi on te.id = stwi.training_example_id
+    inner join stw on stwi.workflow_id = stw.id
 )

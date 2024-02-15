@@ -39,17 +39,17 @@ with rub as (
 )
 
 select distinct rub.* from rub
-left join a on rub.id = a.rubric_id
-left join s on a.submission_uuid = s.uuid
-left join si on s.student_item_id = si.id
+inner join a on rub.id = a.rubric_id
+inner join s on a.submission_uuid = s.uuid
+inner join si on s.student_item_id = si.id
 union distinct
 select distinct rub.* from rub
-left join te on rub.id = te.rubric_id
-left join ate on te.id = ate.trainingexample_id
-left join tw on ate.aitrainingworkflow_id = tw.id
+inner join te on rub.id = te.rubric_id
+inner join ate on te.id = ate.trainingexample_id
+inner join tw on ate.aitrainingworkflow_id = tw.id
 union distinct
 select distinct rub.* from rub
-left join aigw on rub.id = aigw.rubric_id
+inner join aigw on rub.id = aigw.rubric_id
 union distinct
 select distinct rub.* from rub
-left join acs on rub.id = acs.rubric_id
+inner join acs on rub.id = acs.rubric_id
