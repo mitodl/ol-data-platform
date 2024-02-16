@@ -26,9 +26,7 @@ class FileObjectIOManager(ConfigurableIOManager):
     _gcs_fs: GCSFileSystem = PrivateAttr(default=None)
     _s3_fs: S3FileSystem = PrivateAttr(default=None)
 
-    def _load_input(self, context: InputContext) -> UPath:
-        context.log.debug("Context info: %s", context.__dict__)
-        context.log.info("Input metadata: %s", context.metadata)
+    def load_input(self, context: InputContext) -> UPath:
         asset_dep = context.instance.get_event_records(
             event_records_filter=EventRecordsFilter(
                 asset_key=context.asset_key,
@@ -44,20 +42,8 @@ class FileObjectIOManager(ConfigurableIOManager):
             **self.configure_path_fs(asset_path.protocol).storage_options,
         )
 
-    def load_input(self, context: InputContext) -> UPath:
-        return self._load_input(context)
-
     def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
-        context.log.debug(
-            "Output metadata from step context: %s",
-            context.step_context._output_metadata,
-        )
-        context.log.debug("Context info: %s", context.__dict__)
-        context.log.info("Input metadata: %s", context.metadata)
-        output_metadata = context.step_context.get_output_metadata(
-            context.name, context.mapping_key
-        )
-        context.log.debug("Output metadata: %s", output_metadata)
+        context.log.info("Writing contents of %s to %s", *obj)
         output_path = UPath(obj[1])
         output_path = UPath(
             obj[1], **self.configure_path_fs(output_path.protocol).storage_options
@@ -92,18 +78,18 @@ class FileObjectIOManager(ConfigurableIOManager):
 
     def vault_read_token(self) -> str:
         kv_version = 1
-        vault_mount, vault_path = self.vault_gcs_token_path.split("/", 1)
-        mount_config = self.vault.client.sys.read_mount_configuration(vault_mount)[
+        vault_mount, vault_path = self.vault_gcs_token_path.split("/", 1)  # type: ignore[union-attr]
+        mount_config = self.vault.client.sys.read_mount_configuration(vault_mount)[  # type: ignore[union-attr]
             "data"
         ]
         if mount_version := mount_config.get("options", {}).get("version", None):
             kv_version = int(mount_version)
-        self.vault.client.secrets.kv.default_kv_version = kv_version
+        self.vault.client.secrets.kv.default_kv_version = kv_version  # type: ignore[union-attr]
         if kv_version == 1:
-            return self.vault.client.secrets.kv.v1.read_secret(
+            return self.vault.client.secrets.kv.v1.read_secret(  # type: ignore[union-attr]
                 mount_point=vault_mount, path=vault_path
             )["data"]
         else:
-            return self.vault.client.secrets.kv.v2.read_secret(
+            return self.vault.client.secrets.kv.v2.read_secret(  # type: ignore[union-attr]
                 mount_point=vault_mount, path=vault_path
             )["data"]["data"]
