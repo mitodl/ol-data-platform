@@ -70,9 +70,11 @@ from dagster import (
 from dagster_aws.s3 import S3Resource
 
 from ol_orchestrate.assets.edxorg_archive import (
+    dummy_edxorg_course_structure,
     edxorg_archive_partitions,
     edxorg_raw_data_archive,
     edxorg_raw_tracking_logs,
+    flatten_edxorg_course_structure,
     gcs_edxorg_archive_sensor,
     gcs_edxorg_tracking_log_sensor,
     normalize_edxorg_tracking_log,
@@ -196,5 +198,7 @@ retrieve_edx_exports = Definitions(
         edxorg_raw_data_archive.to_source_asset(),
         edxorg_raw_tracking_logs.to_source_asset(),
         normalize_edxorg_tracking_log,
+        dummy_edxorg_course_structure,
+        flatten_edxorg_course_structure,
     ],
 )

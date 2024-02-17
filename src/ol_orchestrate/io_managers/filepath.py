@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from dagster import (
     ConfigurableIOManager,
@@ -16,6 +16,7 @@ from pydantic import PrivateAttr
 from s3fs import S3FileSystem
 from upath import UPath
 
+from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.resources.secrets.vault import Vault
 
 
@@ -107,3 +108,13 @@ class S3FileObjectIOManager(FileObjectIOManager):
             obj = (obj[0], dest_path)
 
         return super().handle_output(context, obj)
+
+
+class DummyIOManager(ConfigurableIOManager):
+    input_file_path: Optional[str]
+
+    def load_input(self, context: InputContext) -> DagsterPath:  # noqa: ARG002
+        return DagsterPath(self.input_file_path)
+
+    def handle_output(self, context: "OutputContext", obj: Any) -> None:
+        ...

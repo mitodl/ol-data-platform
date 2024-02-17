@@ -2,16 +2,19 @@
 # - Model the different asset objects according to their type
 
 import hashlib
+import json
 import re
 import tarfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+import jsonlines
 from dagster import (
     AssetExecutionContext,
     AssetIn,
     AssetKey,
     AssetMaterialization,
+    AssetOut,
     AutoMaterializePolicy,
     Config,
     DagsterEventType,
@@ -29,13 +32,17 @@ from dagster import (
     SensorEvaluationContext,
     SensorResult,
     asset,
+    multi_asset,
     op,
     sensor,
 )
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from dagster_duckdb import DuckDBResource
+from flatten_dict import flatten
+from flatten_dict.reducers import make_reducer
 from google.cloud import storage
 from pydantic import Field
+from upath import UPath
 
 from ol_orchestrate.lib.dagster_helpers import sanitize_mapping_key
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
@@ -44,6 +51,7 @@ from ol_orchestrate.lib.edxorg import (
     categorize_archive_element,
     parse_archive_path,
 )
+from ol_orchestrate.lib.openedx import un_nest_course_structure
 
 edxorg_archive_partitions = DynamicPartitionsDefinition(name="edxorg_archive")
 edxorg_tracking_log_partitions = DynamicPartitionsDefinition(name="edxorg_tracking_log")
@@ -61,7 +69,7 @@ def gcs_edxorg_archive_sensor(context: SensorEvaluationContext):
     storage_client = context.resources.gcp_gcs.client
     bucket_name = "simeon-mitx-pipeline-main"
     bucket_prefix = "COLD"
-    bucket_files: set[storage.Blob] = {
+    bucket_files: list[storage.Blob] = [
         file_
         for file_ in storage_client.list_blobs(bucket_name, prefix=bucket_prefix)
         if re.match(r"COLD/mitx-\d{4}-\d{2}-\d{2}.tar.gz$", file_.name)
@@ -69,11 +77,11 @@ def gcs_edxorg_archive_sensor(context: SensorEvaluationContext):
         not in edxorg_archive_partitions.get_partition_keys(
             dynamic_partitions_store=dagster_instance
         )
-    }
+    ]
 
     assets = []
     partition_keys = []
-    for file_ in bucket_files:
+    for file_ in sorted(bucket_files, key=lambda f: f.name):
         context.log.debug("Processing file %s", file_.name)
         partition_key = file_.name.removeprefix("COLD/")
         assets.append(
@@ -287,6 +295,118 @@ def process_edxorg_archive_bundle(
                 },
             )
             yield materialization
+    # Clean up the downloaded archive file so that it doesn't consume the local disk
+    edxorg_raw_data_archive.unlink()
+
+
+@asset(
+    key=AssetKey(("edxorg", "raw_data", "course_structure")),
+    partitions_def=course_and_source_partitions,
+    group_name="edxorg",
+)
+def dummy_edxorg_course_structure():
+    ...
+
+
+@multi_asset(
+    outs={
+        "flattened_course_structure": AssetOut(
+            key=AssetKey(("edxorg", "processed_data", "flattened_course_structure")),
+            io_manager_key="s3file_io_manager",
+            description=(
+                "A flattened representation of the structure information "
+                "for a given course, with one row per course."
+            ),
+            auto_materialize_policy=AutoMaterializePolicy.eager(
+                max_materializations_per_minute=None
+            ),
+        ),
+        "course_blocks": AssetOut(
+            key=AssetKey(("edxorg", "processed_data", "course_blocks")),
+            io_manager_key="s3file_io_manager",
+            description=(
+                "A hierarchical representation of the structure information "
+                "for a given course, with one row per course block."
+            ),
+            auto_materialize_policy=AutoMaterializePolicy.eager(
+                max_materializations_per_minute=None
+            ),
+        ),
+    },
+    ins={
+        "course_structure": AssetIn(
+            key=AssetKey(("edxorg", "raw_data", "course_structure"))
+        )
+    },
+    partitions_def=course_and_source_partitions,
+    group_name="edxorg",
+)
+def flatten_edxorg_course_structure(
+    context: AssetExecutionContext, course_structure: UPath
+):
+    dagster_instance = context.instance
+    input_asset_materialization_event = dagster_instance.get_event_records(
+        event_records_filter=EventRecordsFilter(
+            asset_key=context.asset_key_for_input("course_structure"),
+            event_type=DagsterEventType.ASSET_MATERIALIZATION,
+            asset_partitions=[context.partition_key],
+        ),
+        limit=1,
+    )[0]
+    course_id = input_asset_materialization_event.asset_materialization.metadata[
+        "course_id"
+    ]
+    course_structure_document = json.load(course_structure.open())
+    data_version = (
+        hashlib.sha256(
+            json.dumps(course_structure_document).encode("utf-8")
+        ).hexdigest(),
+    )
+    structures_file = f"course_structures_{data_version}.json"
+    blocks_file = f"course_blocks_{data_version}.json"
+    data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
+    with jsonlines.open(structures_file, mode="w") as structures, jsonlines.open(
+        blocks_file, mode="w"
+    ) as blocks:
+        table_row = {
+            "content_hash": hashlib.sha256(
+                json.dumps(course_structure_document).encode("utf-8")
+            ).hexdigest(),
+            "course_id": context.partition_key,
+            "course_structure": course_structure_document,
+            "course_structure_flattened": flatten(
+                course_structure,
+                reducer=make_reducer("__"),
+            ),
+            "retrieved_at": data_retrieval_timestamp,
+        }
+        structures.write(table_row)
+        for block in un_nest_course_structure(
+            course_id, course_structure, data_retrieval_timestamp
+        ):
+            blocks.write(block)
+    flattened_structure_object_key = f"edxorg/processed_data/flattened_course_structure/{context.partition_key}/{data_version}.json"  # noqa: E501
+    blocks_object_key = f"edxorg/processed_data/course_blocks/{context.partition_key}/{data_version}.json"  # noqa: E501
+    yield Output(
+        (structures_file, flattened_structure_object_key),
+        output_name="flattened_course_structure",
+        data_version=DataVersion(data_version),
+        metadata={"course_id": course_id, "object_key": flattened_structure_object_key},
+    )
+    yield Output(
+        (blocks_file, blocks_object_key),
+        output_name="course_blocks",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": course_id,
+            "object_key": blocks_object_key,
+        },
+    )
+
+
+#####################################
+# Manage Tracking Logs From edx.org #
+#####################################
 
 
 @sensor(
@@ -298,7 +418,7 @@ def gcs_edxorg_tracking_log_sensor(context: SensorEvaluationContext):
     storage_client = context.resources.gcp_gcs.client
     bucket_name = "simeon-mitx-pipeline-main"
     bucket_prefix = "COLD"
-    bucket_files: set[storage.Blob] = {
+    bucket_files: list[storage.Blob] = [
         file_
         for file_ in storage_client.list_blobs(bucket_name, prefix=bucket_prefix)
         if re.match(r"COLD/mitx-edx-events-\d{4}-\d{2}-\d{2}.log.gz$", file_.name)
@@ -306,11 +426,11 @@ def gcs_edxorg_tracking_log_sensor(context: SensorEvaluationContext):
         not in edxorg_tracking_log_partitions.get_partition_keys(
             dynamic_partitions_store=dagster_instance
         )
-    }
+    ]
 
     assets = []
     partition_keys = []
-    for file_ in bucket_files:
+    for file_ in sorted(bucket_files, key=lambda f: f.name):
         context.log.debug("Processing file %s", file_.name)
         partition_key = file_.name.removeprefix("COLD/")
         assets.append(
@@ -369,7 +489,9 @@ def edxorg_raw_tracking_logs():
             key=raw_tracking_log_asset_key,
         )
     },
-    auto_materialize_policy=AutoMaterializePolicy.eager(),
+    auto_materialize_policy=AutoMaterializePolicy.eager(
+        max_materializations_per_minute=None
+    ),
 )
 def normalize_edxorg_tracking_log(
     context: AssetExecutionContext, edxorg_raw_tracking_log: DagsterPath
@@ -429,3 +551,5 @@ def normalize_edxorg_tracking_log(
                 "source": "edxorg",
             },
         )
+    # Clean up the processed tracking log so it doesn't use up the local disk
+    edxorg_raw_tracking_log.unlink()

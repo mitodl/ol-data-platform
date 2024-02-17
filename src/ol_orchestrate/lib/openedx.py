@@ -1,39 +1,7 @@
-import datetime
 import hashlib
-import io
 import json
 from datetime import UTC, datetime
-from typing import Any, Literal, Optional
-
-from flatten_dict import flatten
-from flatten_dict.reducers import make_reducer
-from pydantic import BaseModel
-
-
-def write_course_structures(
-    course_id: str,
-    course_structure: dict[str, Any],
-    structures_file: io.TextIOWrapper,
-    blocks_file: io.TextIOWrapper,
-    flattened_dict_separator: str = "__",
-) -> None:
-    table_row = {
-        "content_hash": hashlib.sha256(
-            json.dumps(course_structure).encode("utf-8")
-        ).hexdigest(),
-        "course_id": course_id,
-        "course_structure": course_structure,
-        "course_structure_flattened": flatten(
-            course_structure,
-            reducer=make_reducer(flattened_dict_separator),
-        ),
-        "retrieved_at": datetime.now(tz=UTC).isoformat(),
-    }
-    structures_file.write(json.dumps(table_row))
-    structures_file.write("\n")
-    for block in un_nest_course_structure(course_id, course_structure):
-        blocks_file.write(json.dumps(block))
-        blocks_file.write("\n")
+from typing import Any, Optional
 
 
 def generate_block_indexes(
@@ -75,7 +43,7 @@ def un_nest_course_structure(
     root_block = ""
     course_title = None
     course_start = None
-    retrieved_at = retrieval_time or datetime.datetime.now(tz=datetime.UTC).isoformat()
+    retrieved_at = retrieval_time or datetime.now(tz=UTC).isoformat()
     course_blocks = []
     content_hash = hashlib.sha256(
         json.dumps(course_structure).encode("utf-8")
@@ -115,58 +83,3 @@ def un_nest_course_structure(
             }
         )
     return course_blocks
-
-
-class EdxAssetKey(BaseModel):
-    source_system: str
-    course_id: str
-    asset_type: Literal["course_xml", "course_structure", "forum_mongo", "db_table"]
-    table_object: Optional[str]
-
-
-edxorg_table_objects = [
-    "assessment_assessment",
-    "assessment_assessmentfeedback",
-    "assessment_assessmentfeedback_assessments",
-    "assessment_assessmentfeedback_options",
-    "assessment_assessmentfeedbackoption",
-    "assessment_assessmentpart",
-    "assessment_criterion",
-    "assessment_criterionoption",
-    "assessment_peerworkflow",
-    "assessment_peerworkflowitem",
-    "assessment_rubric",
-    "assessment_studenttrainingworkflow",
-    "assessment_studenttrainingworkflowitem",
-    "assessment_trainingexample",
-    "assessment_trainingexample_options_selected",
-    "auth_user",
-    "auth_userprofile",
-    "certificates_generatedcertificate",
-    "course",
-    "course_groups_cohortmembership",
-    "course_structure",
-    "courseware_studentmodule",
-    "credit_crediteligibility",
-    "django_comment_client_role_users",
-    "examples",
-    "grades_persistentcoursegrade",
-    "grades_persistentsubsectiongrade",
-    "student_anonymoususerid",
-    "student_courseaccessrole",
-    "student_courseenrollment",
-    "student_languageproficiency",
-    "submissions_score",
-    "submissions_scoresummary",
-    "submissions_studentitem",
-    "submissions_submission",
-    "teams",
-    "teams_membership",
-    "user_api_usercoursetag",
-    "user_id_map",
-    "validate",
-    "wiki_article",
-    "wiki_articlerevision",
-    "workflow_assessmentworkflow",
-    "workflow_assessmentworkflowstep",
-]
