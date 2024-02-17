@@ -1,5 +1,4 @@
 import re
-import tarfile
 from pathlib import Path
 from typing import Optional
 
@@ -13,7 +12,6 @@ from dagster import (
     Out,
     Output,
     String,
-    multi_asset,
     op,
 )
 from pydantic import Field
@@ -43,17 +41,11 @@ class UploadConfig(Config):
     )
 
 
-@multi_asset()
-def foo():
-    ...
-
-
 @op(
     name="download_edx_data_exports",
     description="Download tar archive files from GCS",
     required_resource_keys={"gcp_gcs", "exports_dir"},
     out={"file_list": Out(dagster_type=List[List[String]])},
-    # out=DynamicOut(),
 )
 def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
     """Download copies of edx.org data from IRx cold storage.
@@ -103,74 +95,6 @@ def download_edx_data(context: OpExecutionContext, config: DownloadConfig):
     context.log.info("Downloaded archives: %s", downloaded_files)
     yield Output(
         downloaded_files,
-        "file_list",
-    )
-
-
-# TODO TMM 2023-12-15: Turn this into a generator that emits members that need to be
-# uploaded. This is a good option for dynamic outputs that get mapped to appropriate ops
-# to manage the appropriate file type. That will avoid having to decompress and
-# unarchive the entire tarball all at once.
-@op(
-    name="extract_edx_data_archive",
-    description="Extract the contents of the downloaded tar files for edx.org data.",
-    required_resource_keys={"exports_dir"},
-    ins={
-        "file_list": In(dagster_type=List[List[String]]),
-    },
-    out={
-        "file_list": Out(dagster_type=List[List[String]]),
-        # "archive_file": In(dagster_type=DagsterPath),
-    },
-    # out=DynamicOut(),
-)
-def extract_course_files(context: OpExecutionContext, file_list: list[list[str]]):
-    # def extract_course_files(context: OpExecutionContext, archive_file: DagsterPath):
-    """Extract the contents of the downloaded zip files for course data.
-
-    Extract course archives containing multiple files and subfolders so that
-    different file types can be uploaded to their respective S3 buckets.
-
-    :param context: Dagster execution context for propagating configuration data.
-    :type context: OpExecutionContext
-
-    :param file_list: A nested list of files that were downloaded in the previous op.
-    For each file, we are passing the export_type, exports_path, file_name,
-        and file_date.
-    :type List[List[String]])
-
-    :yield: file_list: The list of files that were successfully decompressed.
-    Includes export_type, exports_path, file_name, and file_date.
-    :type List[List[String]])
-    """
-    extracted_files = []
-    bad_archives = []
-    for export_type, exports_path, file_name, file_date in file_list:
-        context.log.info("exports_path: %s", exports_path)
-        context.log.info("file_name: %s", file_name)
-        if export_type == "courses":
-            try:
-                with tarfile.open(f"{exports_path}/{file_name}", "r") as tar_archive:
-                    tar_archive.extractall(path=f"{exports_path}")
-                    # Append the extracted archive's root to the exports_path
-                    (relative_path,) = Path(tar_archive).iterdir()
-                    extracted_files.append(
-                        [
-                            export_type,
-                            f"{exports_path}/{relative_path.name}",
-                            file_name,
-                            file_date,
-                        ]
-                    )
-            except tarfile.ExtractError:
-                context.log.exception(
-                    "Tar file extraction error: %s is not a zip file", file_name
-                )
-                bad_archives.append([export_type, exports_path, file_name, file_date])
-            context.log.info("Bad Zip Files: %s", bad_archives)
-            context.log.info("Decompressed archives: %s", extracted_files)
-    yield Output(
-        extracted_files,
         "file_list",
     )
 

@@ -60,32 +60,35 @@ The overall flow of data is as follows:
             - Upload XML files to a /courses prefix in S3
 """
 
-import re
-from functools import partial
 from typing import Any, Literal
 
 from dagster import (
-    DefaultSensorStatus,
+    AssetSelection,
     Definitions,
-    SensorDefinition,
+    define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
 
 from ol_orchestrate.assets.edxorg_archive import (
     edxorg_archive_partitions,
+    edxorg_raw_data_archive,
+    edxorg_raw_tracking_logs,
     gcs_edxorg_archive_sensor,
+    gcs_edxorg_tracking_log_sensor,
+    normalize_edxorg_tracking_log,
 )
-from ol_orchestrate.io_managers.filepath import FileObjectIOManager
+from ol_orchestrate.io_managers.filepath import (
+    FileObjectIOManager,
+    S3FileObjectIOManager,
+)
 from ol_orchestrate.io_managers.gcs import GCSFileIOManager
 from ol_orchestrate.jobs.retrieve_edx_exports import (
     retrieve_edx_course_exports,
-    retrieve_edx_tracking_logs,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.outputs import DailyResultsDir
 from ol_orchestrate.resources.secrets.vault import Vault
-from ol_orchestrate.sensors.object_storage import gcs_multi_file_sensor
 
 if DAGSTER_ENV == "dev":
     vault_config = {
@@ -125,37 +128,26 @@ def s3_uploads_bucket(
     return bucket_map[dagster_env]
 
 
-def edxorg_data_archive_config(
-    irx_edxorg_gcs_bucket, ol_edxorg_raw_data_bucket, new_files_to_sync
-):
+def edxorg_data_archive_config(dagster_env):
     return {
         "ops": {
             "process_edxorg_archive_bundle": {
                 "config": {
-                    "s3_bucket": ol_edxorg_raw_data_bucket,
-                    "s3_prefix": s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+                    "s3_bucket": s3_uploads_bucket(dagster_env)["bucket"],
+                    "s3_prefix": s3_uploads_bucket(dagster_env)["prefix"],
                 }
             },
         }
     }
 
 
-def edxorg_tracking_logs_config(
-    irx_edxorg_gcs_bucket, ol_edxorg_raw_data_bucket, new_files_to_sync
-):
+def edxorg_tracking_logs_config(dagster_env):
     return {
         "ops": {
-            "download_edx_data_exports": {
+            "edxorg__raw_data__tracking_logs": {
                 "config": {
-                    "irx_edxorg_gcs_bucket": irx_edxorg_gcs_bucket,
-                    "export_type": "logs",
-                    "files_to_sync": list(new_files_to_sync),
-                }
-            },
-            "upload_edx_data_exports": {
-                "config": {
-                    "edx_irx_exports_bucket": ol_edxorg_raw_data_bucket,
-                    "bucket_prefix": s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+                    "s3_bucket": s3_uploads_bucket(dagster_env)["bucket"],
+                    "bucket_prefix": s3_uploads_bucket(dagster_env)["prefix"],
                 }
             },
         }
@@ -164,17 +156,14 @@ def edxorg_tracking_logs_config(
 
 edxorg_course_data_job = retrieve_edx_course_exports.to_job(
     name="retrieve_edx_course_exports",
-    config=edxorg_data_archive_config(
-        "simeon-mitx-pipeline-main", s3_uploads_bucket(DAGSTER_ENV)["bucket"], set()
-    ),
+    config=edxorg_data_archive_config(DAGSTER_ENV),
     partitions_def=edxorg_archive_partitions,
 )
 
-s3_logs_job_def = retrieve_edx_tracking_logs.to_job(
-    name="retrieve_edx_logs",
-    config=edxorg_tracking_logs_config(
-        "simeon-mitx-pipeline-main", s3_uploads_bucket(DAGSTER_ENV)["bucket"], set()
-    ),
+edxorg_tracking_logs_job = define_asset_job(
+    name="process_raw_edxorg_tracking_logs",
+    selection=AssetSelection.assets(normalize_edxorg_tracking_log),
+    config=edxorg_tracking_logs_config(DAGSTER_ENV),
 )
 
 file_regex = {
@@ -191,30 +180,21 @@ retrieve_edx_exports = Definitions(
             vault=Vault(**vault_config),
             vault_gcs_token_path="secret-data/pipelines/edx/org/gcp-oauth-client",  # noqa: S106
         ),
+        "s3file_io_manager": S3FileObjectIOManager(
+            bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
+            path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+        ),
         "gcs_input": GCSFileIOManager(gcs=gcs_connection),
         "vault": vault,
     },
     sensors=[
         gcs_edxorg_archive_sensor.with_updated_job(edxorg_course_data_job),
-        SensorDefinition(
-            name="logs_sensor",
-            evaluation_fn=partial(
-                gcs_multi_file_sensor,
-                "simeon-mitx-pipeline-main",
-                bucket_prefix="COLD/",
-                object_filter_fn=lambda object_key: re.match(
-                    file_regex["logs"], object_key
-                ),
-                run_config_fn=lambda new_keys: edxorg_tracking_logs_config(
-                    "simeon-mitx-pipeline-main",
-                    s3_uploads_bucket(DAGSTER_ENV)["bucket"],
-                    new_keys,
-                ),
-            ),
-            minimum_interval_seconds=86400,
-            job=s3_logs_job_def,
-            default_status=DefaultSensorStatus.RUNNING,
-        ),
+        gcs_edxorg_tracking_log_sensor,
     ],
-    jobs=[edxorg_course_data_job, s3_logs_job_def],
+    jobs=[edxorg_course_data_job, edxorg_tracking_logs_job],
+    assets=[
+        edxorg_raw_data_archive.to_source_asset(),
+        edxorg_raw_tracking_logs.to_source_asset(),
+        normalize_edxorg_tracking_log,
+    ],
 )

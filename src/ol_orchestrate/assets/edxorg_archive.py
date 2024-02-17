@@ -8,8 +8,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from dagster import (
+    AssetExecutionContext,
+    AssetIn,
     AssetKey,
     AssetMaterialization,
+    AutoMaterializePolicy,
     Config,
     DagsterEventType,
     DataVersion,
@@ -21,6 +24,7 @@ from dagster import (
     MetadataValue,
     MultiPartitionKey,
     OpExecutionContext,
+    Output,
     RunRequest,
     SensorEvaluationContext,
     SensorResult,
@@ -29,6 +33,7 @@ from dagster import (
     sensor,
 )
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
+from dagster_duckdb import DuckDBResource
 from google.cloud import storage
 from pydantic import Field
 
@@ -41,8 +46,10 @@ from ol_orchestrate.lib.edxorg import (
 )
 
 edxorg_archive_partitions = DynamicPartitionsDefinition(name="edxorg_archive")
+edxorg_tracking_log_partitions = DynamicPartitionsDefinition(name="edxorg_tracking_log")
 course_and_source_partitions = DynamicPartitionsDefinition(name="course_and_source")
 raw_archive_asset_key = AssetKey(("edxorg", "raw_data_archive"))
+raw_tracking_log_asset_key = AssetKey(("edxorg", "raw_tracking_logs"))
 
 
 @sensor(
@@ -81,7 +88,7 @@ def gcs_edxorg_archive_sensor(context: SensorEvaluationContext):
                     "source": "edxorg",
                     "path": MetadataValue.path(f"gs://{bucket_name}/{file_.name}"),
                     "creation_date": datetime.strptime(
-                        re.search(r"(\d{4}-\d{2}-\d{2})", file_.name).groups()[0],
+                        re.search(r"(\d{4}-\d{2}-\d{2})", file_.name).groups()[0],  # type: ignore[union-attr]
                         "%Y-%m-%d",
                     )
                     .replace(tzinfo=UTC)
@@ -232,7 +239,7 @@ def process_edxorg_archive_bundle(
             else:
                 output_key = categorize_archive_element(tinfo.name)
             archive_file = Path(tinfo.name.split("/")[-1])
-            archive_file.write_bytes(archive.extractfile(tinfo).read())
+            archive_file.write_bytes(archive.extractfile(tinfo).read())  # type: ignore[union-attr]
             data_version = hashlib.file_digest(
                 archive_file.open("rb"), "sha256"
             ).hexdigest()
@@ -246,7 +253,7 @@ def process_edxorg_archive_bundle(
                 "path": MetadataValue.path(
                     f"s3://{config.s3_bucket}/{config.s3_prefix}/{'/'.join(mapping_key)}/{data_version}.{normalized_extension}"
                 ),
-                "object_key": f"{'/'.join(mapping_key)}/{data_version}.{normalized_extension}",
+                "object_key": f"{'/'.join(mapping_key)}/{data_version}.{normalized_extension}",  # noqa: E501
                 "source": "edxorg",
                 "source_system": normalized_source_system,
                 "course_id": asset_info["course_id"],
@@ -274,9 +281,151 @@ def process_edxorg_archive_bundle(
                     "dagster/input_event_pointer/edxorg/raw_data_archive": str(
                         input_asset_materialization_event.storage_id
                     ),
-                    "dagster/input_data_version/edxorg/raw_data_archive": input_asset_materialization_event.asset_materialization.tags.get(
+                    "dagster/input_data_version/edxorg/raw_data_archive": input_asset_materialization_event.asset_materialization.tags.get(  # noqa: E501
                         DATA_VERSION_TAG
                     ),
                 },
             )
             yield materialization
+
+
+@sensor(
+    default_status=DefaultSensorStatus.RUNNING,
+    required_resource_keys={"gcp_gcs"},
+)
+def gcs_edxorg_tracking_log_sensor(context: SensorEvaluationContext):
+    dagster_instance = context.instance
+    storage_client = context.resources.gcp_gcs.client
+    bucket_name = "simeon-mitx-pipeline-main"
+    bucket_prefix = "COLD"
+    bucket_files: set[storage.Blob] = {
+        file_
+        for file_ in storage_client.list_blobs(bucket_name, prefix=bucket_prefix)
+        if re.match(r"COLD/mitx-edx-events-\d{4}-\d{2}-\d{2}.log.gz$", file_.name)
+        and file_.name.removeprefix("COLD/")
+        not in edxorg_tracking_log_partitions.get_partition_keys(
+            dynamic_partitions_store=dagster_instance
+        )
+    }
+
+    assets = []
+    partition_keys = []
+    for file_ in bucket_files:
+        context.log.debug("Processing file %s", file_.name)
+        partition_key = file_.name.removeprefix("COLD/")
+        assets.append(
+            AssetMaterialization(
+                asset_key=raw_tracking_log_asset_key,
+                partition=partition_key,
+                description=(
+                    "User interaction event logs generated from courses hosted on "
+                    "edx.org"
+                ),
+                metadata={
+                    "source": "edxorg",
+                    "path": MetadataValue.path(f"gs://{bucket_name}/{file_.name}"),
+                    "creation_date": datetime.strptime(
+                        re.search(r"(\d{4}-\d{2}-\d{2})", file_.name).groups()[0],  # type: ignore[union-attr]
+                        "%Y-%m-%d",
+                    )
+                    .replace(tzinfo=UTC)
+                    .strftime("%Y-%m-%d"),
+                    "size (bytes)": file_.size,
+                    "materialization_time": datetime.now(tz=UTC).isoformat(),
+                },
+                tags={DATA_VERSION_TAG: DataVersion(file_.etag).value},
+            )
+        )
+        partition_keys.append(partition_key)
+
+    return SensorResult(
+        asset_events=assets,
+        dynamic_partitions_requests=[
+            edxorg_tracking_log_partitions.build_add_request(
+                partition_keys=partition_keys
+            )
+        ],
+    )
+
+
+@asset(
+    partitions_def=edxorg_tracking_log_partitions,
+    io_manager_key="gcs_input",
+    key=raw_tracking_log_asset_key,
+    group_name="edxorg",
+)
+def edxorg_raw_tracking_logs():
+    ...
+
+
+@asset(
+    partitions_def=edxorg_tracking_log_partitions,
+    key=AssetKey(("edxorg", "raw_data", "tracking_logs")),
+    group_name="edxorg",
+    resource_defs={"duckdb": DuckDBResource(database="edxorg_tracking_logs.db")},
+    io_manager_key="s3file_io_manager",
+    ins={
+        "edxorg_raw_tracking_log": AssetIn(
+            key=raw_tracking_log_asset_key,
+        )
+    },
+    auto_materialize_policy=AutoMaterializePolicy.eager(),
+)
+def normalize_edxorg_tracking_log(
+    context: AssetExecutionContext, edxorg_raw_tracking_log: DagsterPath
+):
+    db: DuckDBResource = context.resources.duckdb
+    transformed_logs = Path(f"normalized_{context.partition_key}")
+    with db.get_connection() as conn:
+        conn.execute("DROP TABLE IF EXISTS tracking_logs")
+        conn.execute("INSTALL json;")
+        conn.execute(
+            f"""
+            CREATE TABLE tracking_logs AS
+            SELECT * FROM read_ndjson_auto('{edxorg_raw_tracking_log}',
+            FILENAME=1, union_by_name=1, maximum_depth=1);
+            """  # noqa: S608
+        )
+        col_names = conn.execute(
+            """SELECT column_name FROM temp.information_schema.columns
+            WHERE table_name = 'tracking_logs'
+            """
+        ).fetchall()
+        # exclude filename, which is already a VARCHAR
+        columns = [i[0] for i in col_names]
+        columns.remove("filename")
+        update_stmts = []
+        for col in columns:
+            conn.execute(f"ALTER TABLE tracking_logs ALTER {col} TYPE VARCHAR")
+            update_stmts.append(f"{col} = json_extract_string({col}, '$')")
+        # extract VARCHAR strings from json for every field
+        update_query = f"UPDATE tracking_logs SET {', '.join(update_stmts)}"  # noqa: S608
+        conn.execute(update_query)
+        # convert integer timestamps to datetime
+        conn.execute(
+            """UPDATE tracking_logs
+            SET time = to_timestamp(CAST(time AS BIGINT))
+            WHERE TRY_CAST(time AS BIGINT) IS NOT NULL
+            """
+        )
+        # convert all timestamps to iso8601 format
+        conn.execute(
+            """
+            UPDATE tracking_logs
+            SET time = strftime(TRY_CAST(time AS TIMESTAMP), '%Y-%m-%d %H:%M:%S.%f')
+            """
+        )
+        conn.execute(
+            f"""COPY (SELECT {', '.join(columns)} FROM tracking_logs)
+            TO '{transformed_logs}' (FORMAT JSON)
+            """  # noqa: S608
+        )
+        s3_object_key = f"edxorg/raw_data/tracking_logs/{transformed_logs}"
+
+        yield Output(
+            (transformed_logs, s3_object_key),
+            metadata={
+                "object_key": s3_object_key,
+                "source": "edxorg",
+            },
+        )

@@ -6,6 +6,7 @@ from dagster import (
     DagsterEventType,
     EventRecordsFilter,
     InputContext,
+    MetadataValue,
     Nothing,
     OutputContext,
 )
@@ -19,6 +20,7 @@ from ol_orchestrate.resources.secrets.vault import Vault
 
 
 class FileObjectIOManager(ConfigurableIOManager):
+    path_prefix: Optional[str] = None
     gcs_credentials: Optional[str] = None
     gcs_project_id: Optional[str] = None
     vault: Optional[Vault] = None
@@ -49,6 +51,7 @@ class FileObjectIOManager(ConfigurableIOManager):
             obj[1], **self.configure_path_fs(output_path.protocol).storage_options
         )
         output_path.write_bytes(obj[0].read_bytes())
+        context.add_output_metadata({"path": MetadataValue.path(output_path)})
         obj[0].unlink()
 
     def configure_path_fs(
@@ -93,3 +96,14 @@ class FileObjectIOManager(ConfigurableIOManager):
             return self.vault.client.secrets.kv.v2.read_secret(  # type: ignore[union-attr]
                 mount_point=vault_mount, path=vault_path
             )["data"]["data"]
+
+
+class S3FileObjectIOManager(FileObjectIOManager):
+    bucket: Optional[str] = None
+
+    def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
+        if self.bucket:
+            dest_path = f"s3://{self.bucket}/{self.path_prefix or ''}/{obj[1]}"
+            obj = (obj[0], dest_path)
+
+        return super().handle_output(context, obj)
