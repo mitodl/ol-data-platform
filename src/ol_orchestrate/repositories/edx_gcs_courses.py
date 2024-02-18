@@ -5,17 +5,37 @@ from dagster import DefaultSensorStatus, Definitions, SensorDefinition
 from dagster_aws.s3.resources import s3_resource
 
 from ol_orchestrate.jobs.edx_gcs_courses import sync_gcs_to_s3
-from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.outputs import DailyResultsDir
+from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.sensors.object_storage import gcs_multi_file_sensor
 
+if DAGSTER_ENV == "dev":
+    vault_config = {
+        "vault_addr": VAULT_ADDRESS,
+        "vault_auth_type": "github",
+    }
+    vault = Vault(**vault_config)
+    vault._auth_github()  # noqa: SLF001
+else:
+    vault_config = {
+        "vault_addr": VAULT_ADDRESS,
+        "vault_role": "dagster-server",
+        "vault_auth_type": "aws-iam",
+        "aws_auth_mount": "aws",
+    }
+    vault = Vault(**vault_config)
+    vault._auth_aws_iam()  # noqa: SLF001
+
+gcs_connection = GCSConnection(
+    **vault.client.secrets.kv.v1.read_secret(
+        mount_point="secret-data", path="pipelines/edx/org/gcp-oauth-client"
+    )["data"]
+)
+
 resources = {
-    "gcp_gcs": GCSConnection(
-        **load_yaml_config("/etc/dagster/edxorg_gcp.yaml")["resources"]["gcp_gcs"][
-            "config"
-        ]
-    ),
+    "gcp_gcs": gcs_connection,
     "s3": s3_resource,
     "results_dir": DailyResultsDir.configure_at_launch(),
 }
