@@ -1,28 +1,10 @@
 ---
 load_from:
-- grpc_server:
-    host: edx-pipeline
-    port: 4000
-    location_name: 'edx-pipeline'
-- grpc_server:
-    host: edx-gcs-courses-pipeline
-    port: 4000
-    location_name: 'edx-gcs-courses-pipeline'
-- grpc_server:
-    host: lakehouse-assets-graph
-    port: 4000
-    location_name: lakehouse-assets-graph
-- grpc_server:
-    host: tracking-log-reprocessing
-    port: 4000
-    location_name: tracking-log-reprocessing
-- grpc_server:
-    host: edxorg-program-credentials
-    port: 4000
-    location_name: edxorg-program-credentials
+- python_module: ol_orchestrate.definitions.edx.normalize_tracking_logs
+- python_module: ol_orchestrate.definitions.edx.openedx_data_extract
 - python_module: ol_orchestrate.definitions.edx.retrieve_edxorg_raw_data
-- grpc_server:
-    host: openedx-ol-data-exports
-    port: 4000
-    location_name: openedx-ol-data-exports
+- python_module: ol_orchestrate.definitions.edx.sync_program_credential_reports
+- python_module: ol_orchestrate.definitions.lakehouse.elt
 - python_module: ol_orchestrate.definitions.platform.notification
+- python_module: ol_orchestrate.repositories.edx_gcs_courses
+- python_module: ol_orchestrate.repositories.open_edx
