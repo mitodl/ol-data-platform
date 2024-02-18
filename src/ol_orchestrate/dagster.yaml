@@ -32,6 +32,8 @@ run_launcher:
   module: dagster_docker
   class: DockerRunLauncher
   config:
+    image:
+      env: DAGSTER_EXECUTION_IMAGE
     env_vars:
     - DAGSTER_PG_USERNAME
     - DAGSTER_PG_PASSWORD
