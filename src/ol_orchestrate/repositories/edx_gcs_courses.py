@@ -8,7 +8,7 @@ from ol_orchestrate.jobs.edx_gcs_courses import sync_gcs_to_s3
 from ol_orchestrate.lib.yaml_config_helper import load_yaml_config
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.outputs import DailyResultsDir
-from ol_orchestrate.sensors.object_storage import check_new_gcs_assets_sensor
+from ol_orchestrate.sensors.object_storage import gcs_multi_file_sensor
 
 resources = {
     "gcp_gcs": GCSConnection(
@@ -43,9 +43,7 @@ gcs_sync_job = sync_gcs_to_s3.to_job(
 edx_gcs_courses = Definitions(
     sensors=[
         SensorDefinition(
-            evaluation_fn=partial(
-                check_new_gcs_assets_sensor, "simeon-mitx-course-tarballs"
-            ),
+            evaluation_fn=partial(gcs_multi_file_sensor, "simeon-mitx-course-tarballs"),
             name="edxorg_course_bundle_sensor",
             minimum_interval_seconds=86400,
             job=gcs_sync_job,

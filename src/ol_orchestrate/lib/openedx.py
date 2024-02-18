@@ -1,6 +1,6 @@
-import datetime
 import hashlib
 import json
+from datetime import UTC, datetime
 from typing import Any, Optional
 
 
@@ -43,7 +43,7 @@ def un_nest_course_structure(
     root_block = ""
     course_title = None
     course_start = None
-    retrieved_at = retrieval_time or datetime.datetime.now(tz=datetime.UTC).isoformat()
+    retrieved_at = retrieval_time or datetime.now(tz=UTC).isoformat()
     course_blocks = []
     content_hash = hashlib.sha256(
         json.dumps(course_structure).encode("utf-8")

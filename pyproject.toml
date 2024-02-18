@@ -34,6 +34,7 @@ dagster-webserver = "^1.4"
 dbt-duckdb = "^1.6.0"
 dbt-trino = "^1.6.0"
 flatten-dict = "^0.4.2"
+fsspec = {extras = ["gcs", "s3"], version = "^2024.2.0"}
 httpx = "^0.26.0"
 hvac = "^2.1.0"
 jsonlines = "^4.0.0"
