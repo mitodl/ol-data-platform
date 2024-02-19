@@ -484,7 +484,7 @@ def edxorg_raw_tracking_logs():
     partitions_def=edxorg_tracking_log_partitions,
     key=AssetKey(("edxorg", "raw_data", "tracking_logs")),
     group_name="edxorg",
-    resource_defs={"duckdb": DuckDBResource(database="edxorg_tracking_logs.db")},
+    resource_defs={"duckdb": DuckDBResource()},
     io_manager_key="s3file_io_manager",
     ins={
         "edxorg_raw_tracking_log": AssetIn(
@@ -499,6 +499,7 @@ def normalize_edxorg_tracking_log(
     context: AssetExecutionContext, edxorg_raw_tracking_log: DagsterPath
 ):
     db: DuckDBResource = context.resources.duckdb
+    db.database = f"{context.run_id}_edxorg_tracking_logs.db"
     transformed_logs = Path(f"normalized_{context.partition_key}")
     with db.get_connection() as conn:
         conn.execute("DROP TABLE IF EXISTS tracking_logs")
@@ -555,3 +556,4 @@ def normalize_edxorg_tracking_log(
         )
     # Clean up the processed tracking log so it doesn't use up the local disk
     edxorg_raw_tracking_log.unlink()
+    Path(db.database).unlink()
