@@ -28,19 +28,6 @@ run_storage:
 run_coordinator:
   module: dagster.core.run_coordinator
   class: QueuedRunCoordinator
-run_launcher:
-  module: dagster_docker
-  class: DockerRunLauncher
-  config:
-    env_vars:
-    - DAGSTER_PG_USERNAME
-    - DAGSTER_PG_PASSWORD
-    - DAGSTER_PG_DB_NAME
-    - DAGSTER_PG_HOST
-    - DAGSTER_BUCKET_NAME
-    container_kwargs:
-      volumes:
-      - /etc/aws/:/etc/aws/:ro
 event_log_storage:
   module: dagster_postgres.event_log
   class: PostgresEventLogStorage

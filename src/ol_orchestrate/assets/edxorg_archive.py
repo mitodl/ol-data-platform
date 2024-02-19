@@ -5,6 +5,7 @@ import hashlib
 import json
 import re
 import tarfile
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -219,6 +220,7 @@ def process_edxorg_archive_bundle(
         limit=1,
     )[0]
 
+    tmpdir = tempfile.TemporaryDirectory()
     while tinfo := archive.next():
         if not tinfo.isdir():
             context.log.debug("Processing archive path %s", tinfo.name)
@@ -246,7 +248,7 @@ def process_edxorg_archive_bundle(
                 output_key = f"db_table__{table_name}"
             else:
                 output_key = categorize_archive_element(tinfo.name)
-            archive_file = Path(tinfo.name.split("/")[-1])
+            archive_file = Path(tmpdir.name).joinpath(tinfo.name.split("/")[-1])
             archive_file.write_bytes(archive.extractfile(tinfo).read())  # type: ignore[union-attr]
             data_version = hashlib.file_digest(
                 archive_file.open("rb"), "sha256"
