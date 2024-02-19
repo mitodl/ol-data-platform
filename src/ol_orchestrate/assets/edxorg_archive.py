@@ -9,6 +9,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
+import duckdb
 import jsonlines
 from dagster import (
     AssetExecutionContext,
@@ -38,7 +39,6 @@ from dagster import (
     sensor,
 )
 from dagster._core.definitions.data_version import DATA_VERSION_TAG
-from dagster_duckdb import DuckDBResource
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from google.cloud import storage
@@ -64,6 +64,7 @@ raw_tracking_log_asset_key = AssetKey(("edxorg", "raw_tracking_logs"))
 @sensor(
     default_status=DefaultSensorStatus.STOPPED,
     required_resource_keys={"gcp_gcs"},
+    minimum_interval_seconds=60 * 60,  # Set the tick frequency to hourly
 )
 def gcs_edxorg_archive_sensor(context: SensorEvaluationContext):
     dagster_instance = context.instance
@@ -414,6 +415,7 @@ def flatten_edxorg_course_structure(
 @sensor(
     default_status=DefaultSensorStatus.STOPPED,
     required_resource_keys={"gcp_gcs"},
+    minimum_interval_seconds=60 * 60,  # Set the tick frequency to hourly
 )
 def gcs_edxorg_tracking_log_sensor(context: SensorEvaluationContext):
     dagster_instance = context.instance
@@ -484,7 +486,6 @@ def edxorg_raw_tracking_logs():
     partitions_def=edxorg_tracking_log_partitions,
     key=AssetKey(("edxorg", "raw_data", "tracking_logs")),
     group_name="edxorg",
-    resource_defs={"duckdb": DuckDBResource()},
     io_manager_key="s3file_io_manager",
     ins={
         "edxorg_raw_tracking_log": AssetIn(
@@ -498,10 +499,9 @@ def edxorg_raw_tracking_logs():
 def normalize_edxorg_tracking_log(
     context: AssetExecutionContext, edxorg_raw_tracking_log: DagsterPath
 ):
-    db: DuckDBResource = context.resources.duckdb
-    db.database = f"{context.run_id}_edxorg_tracking_logs.db"
+    database_path = f"{context.run_id}_edxorg_tracking_logs.db"
     transformed_logs = Path(f"normalized_{context.partition_key}")
-    with db.get_connection() as conn:
+    with duckdb.connect(database=database_path) as conn:
         conn.execute("DROP TABLE IF EXISTS tracking_logs")
         conn.execute("INSTALL json;")
         conn.execute(
@@ -556,4 +556,4 @@ def normalize_edxorg_tracking_log(
         )
     # Clean up the processed tracking log so it doesn't use up the local disk
     edxorg_raw_tracking_log.unlink()
-    Path(db.database).unlink()
+    Path(database_path).unlink()
