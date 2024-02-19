@@ -62,7 +62,7 @@ raw_tracking_log_asset_key = AssetKey(("edxorg", "raw_tracking_logs"))
 
 
 @sensor(
-    default_status=DefaultSensorStatus.RUNNING,
+    default_status=DefaultSensorStatus.STOPPED,
     required_resource_keys={"gcp_gcs"},
 )
 def gcs_edxorg_archive_sensor(context: SensorEvaluationContext):
@@ -412,7 +412,7 @@ def flatten_edxorg_course_structure(
 
 
 @sensor(
-    default_status=DefaultSensorStatus.RUNNING,
+    default_status=DefaultSensorStatus.STOPPED,
     required_resource_keys={"gcp_gcs"},
 )
 def gcs_edxorg_tracking_log_sensor(context: SensorEvaluationContext):
