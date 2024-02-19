@@ -1,14 +1,10 @@
 import re
 from collections.abc import Sequence
 
-COURSE_ID_REGEX = re.compile(
-    r"^(?P<course_id>(?P<organization>[a-zA-Z0-9._]+)-(?P<course_number>[a-zA-Z0-9._-]+?)-(?P<course_run>[a-zA-Z0-9._]+)(?>-ccx-)?(?P<ccx_id>\d+)?)"
-)
-FILE_TYPE_REGEX = re.compile(r"\.(?P<extension>mongo|json|xml\.tar\.gz|sql)$")
-DATA_ATTRIBUTE_REGEX = re.compile(r"(-(?P<table_name>[a-zA-Z_]+)-)?")
-SYSTEM_OF_ORIGIN_REGEX = re.compile(
-    r"-?(?P<source_system>((prod)?-?(edge)?))(-analytics)?"
-)
+COURSE_ID_REGEX = r"^(?P<course_id>(?P<organization>[a-zA-Z0-9._]+)-(?P<course_number>[a-zA-Z0-9._-]+?)-(?P<course_run>[a-zA-Z0-9._]+)(?>-ccx-)?(?P<ccx_id>\d+)?)"  # noqa: E501
+FILE_TYPE_REGEX = r"\.(?P<extension>mongo|json|xml\.tar\.gz|sql)$"
+DATA_ATTRIBUTE_REGEX = r"(-(?P<table_name>[a-zA-Z_]+)-)?"
+SYSTEM_OF_ORIGIN_REGEX = r"-?(?P<source_system>((prod)?-?(edge)?))(-analytics)?"
 
 # source_system, archive_date, course_id, data_category, data_content
 # Categories:
@@ -28,7 +24,7 @@ def categorize_archive_element(archive_element: str) -> str:
         "sql": "db_table",
     }
     extension_match = re.search(FILE_TYPE_REGEX, archive_element)
-    extension = None
+    extension = ""
     if extension_match:
         extension = extension_match.group(1)
     return element_map.get(extension, "unhandled")
@@ -48,11 +44,13 @@ def parse_archive_path(archive_path: str) -> dict[str, str]:
 
 
     """
+    pattern_pieces = [COURSE_ID_REGEX]
+    if categorize_archive_element(archive_path) == "db_table":
+        pattern_pieces.append(DATA_ATTRIBUTE_REGEX)
+    pattern_pieces.extend([SYSTEM_OF_ORIGIN_REGEX, FILE_TYPE_REGEX])
+    regexes = "".join(pattern_pieces)
     components = re.fullmatch(
-        COURSE_ID_REGEX.pattern
-        + DATA_ATTRIBUTE_REGEX.pattern
-        + SYSTEM_OF_ORIGIN_REGEX.pattern
-        + FILE_TYPE_REGEX.pattern,
+        regexes,
         archive_path.split("/")[-1],
     )
     if components:
