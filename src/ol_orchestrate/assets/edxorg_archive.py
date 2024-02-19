@@ -377,14 +377,14 @@ def flatten_edxorg_course_structure(
             "course_id": context.partition_key,
             "course_structure": course_structure_document,
             "course_structure_flattened": flatten(
-                course_structure,
+                course_structure_document,
                 reducer=make_reducer("__"),
             ),
             "retrieved_at": data_retrieval_timestamp,
         }
         structures.write(table_row)
         for block in un_nest_course_structure(
-            course_id, course_structure, data_retrieval_timestamp
+            course_id, course_structure_document, data_retrieval_timestamp
         ):
             blocks.write(block)
     flattened_structure_object_key = f"edxorg/processed_data/flattened_course_structure/{context.partition_key}/{data_version}.json"  # noqa: E501
