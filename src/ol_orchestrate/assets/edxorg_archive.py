@@ -363,8 +363,8 @@ def flatten_edxorg_course_structure(
     data_version = hashlib.sha256(
         json.dumps(course_structure_document).encode("utf-8")
     ).hexdigest()
-    structures_file = f"course_structures_{data_version}.json"
-    blocks_file = f"course_blocks_{data_version}.json"
+    structures_file = Path(f"course_structures_{data_version}.json")
+    blocks_file = Path(f"course_blocks_{data_version}.json")
     data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
     with jsonlines.open(structures_file, mode="w") as structures, jsonlines.open(
         blocks_file, mode="w"
