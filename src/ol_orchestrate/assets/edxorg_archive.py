@@ -360,11 +360,9 @@ def flatten_edxorg_course_structure(
         "course_id"
     ]
     course_structure_document = json.load(course_structure.open())
-    data_version = (
-        hashlib.sha256(
-            json.dumps(course_structure_document).encode("utf-8")
-        ).hexdigest(),
-    )
+    data_version = hashlib.sha256(
+        json.dumps(course_structure_document).encode("utf-8")
+    ).hexdigest()
     structures_file = f"course_structures_{data_version}.json"
     blocks_file = f"course_blocks_{data_version}.json"
     data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
