@@ -148,6 +148,11 @@ models:
     description: timestamp, user last log in on MITx Online
   - name: user_last_login_on_edxorg
     description: timestamp, user last log in on edX.org
+  - name: user_is_active_on_mitxonline
+    description: boolean, indicating if user's account is active on MITx Online
+  - name: user_is_active_on_edxorg
+    description: boolean, indicating if user's account is active on edx.org. A user
+      is inactive when their username or email is hashed.
   - name: user_full_name
     description: str, user full name on edX.org or MITxOnline. Very small number of
       edX.org users have blank full name, their name couldn't be populated from other

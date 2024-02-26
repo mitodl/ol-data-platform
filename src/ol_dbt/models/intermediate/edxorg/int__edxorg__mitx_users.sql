@@ -70,6 +70,7 @@ with user_info_combo as (
         , user_joined_on
         , user_gender
         , user_last_login
+        , if(user_email like 'retired__user%' or user_username like 'retired__user%', false, true) as user_is_active
     from combined_user_info
     where row_num = 1
 )

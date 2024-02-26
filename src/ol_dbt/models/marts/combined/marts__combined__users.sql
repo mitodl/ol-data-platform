@@ -23,27 +23,32 @@ with mitx__users as (
         , null as user_mitxpro_username
         , null as user_bootcamps_username
         , case
-            when user_joined_on_mitxonline > user_joined_on_edxorg
+            when user_is_active_on_mitxonline and user_joined_on_mitxonline > user_joined_on_edxorg
                 then user_mitxonline_email
             else coalesce(user_edxorg_email, user_mitxonline_email)
         end as user_email
         , case
-            when user_joined_on_mitxonline > user_joined_on_edxorg
+            when user_is_active_on_mitxonline and user_joined_on_mitxonline > user_joined_on_edxorg
                 then user_joined_on_mitxonline
             else coalesce(user_joined_on_edxorg, user_joined_on_mitxonline)
         end as user_joined_on
         , case
-            when user_last_login_on_mitxonline > user_last_login_on_edxorg
+            when user_is_active_on_mitxonline and user_last_login_on_mitxonline > user_last_login_on_edxorg
                 then user_last_login_on_mitxonline
             else coalesce(user_last_login_on_edxorg, user_last_login_on_mitxonline)
         end as user_last_login
         , case
+            when user_is_active_on_mitxonline
+                then user_is_active_on_mitxonline
+            else user_is_active_on_edxorg
+        end as user_is_active
+        , case
             when is_mitxonline_user = true and is_edxorg_user = true
-                then 'mitxonline and edxorg'
+                then concat('{{ var("mitxonline") }}', ' and ', '{{ var("edxorg") }}')
             when is_mitxonline_user = true
-                then 'mitxonline'
+                then '{{ var("mitxonline") }}'
             when is_edxorg_user = true
-                then 'edxorg'
+                then '{{ var("edxorg") }}'
         end as platforms
         , user_full_name
         , user_address_country
@@ -69,7 +74,8 @@ with mitx__users as (
         , user_email
         , user_joined_on
         , user_last_login
-        , 'mitxpro' as platforms
+        , user_is_active
+        , '{{ var("mitxpro") }}' as platforms
         , user_full_name
         , user_address_country
         , user_highest_education
@@ -94,7 +100,8 @@ with mitx__users as (
         , user_email
         , user_joined_on
         , user_last_login
-        , 'bootcamps' as platforms
+        , user_is_active
+        , '{{ var("bootcamps") }}' as platforms
         , user_full_name
         , user_address_country
         , user_highest_education
@@ -110,6 +117,7 @@ select
     user_email
     , user_joined_on
     , user_last_login
+    , user_is_active
     , platforms
     , user_full_name
     , user_address_country

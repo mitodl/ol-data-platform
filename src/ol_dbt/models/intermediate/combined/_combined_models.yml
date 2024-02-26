@@ -42,6 +42,11 @@ models:
     description: timestamp, user join timestamp
   - name: user_last_login
     description: timestamp, user last login
+  - name: user_is_active
+    description: boolean, indicating if user's account is active on xPro, Bootcamps,
+      edX.org, or MITx Online. Note that we do export compliance checks for all users
+      in xPro and Bootcamps, so users didn't pass export compliance will remain user_is_active=false
+      in xPro and Bootcamps. That doesn't apply for edx.org and MITx Online.
 
 - name: int__combined__courserun_enrollments
   description: Intermediate model for user course enrollments from different platforms
