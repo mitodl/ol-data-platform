@@ -1,5 +1,3 @@
-import os
-
 from dagster import DefaultSensorStatus, Definitions
 from dagster_slack import make_slack_on_run_failure_sensor
 
@@ -25,7 +23,7 @@ notifications = Definitions(
     sensors=[
         make_slack_on_run_failure_sensor(
             channel="#data-platform-alerts",
-            webserver_base_url=os.getenv("DAGSTER_HOSTNAME", dagster_url),
+            webserver_base_url=dagster_url,
             monitor_all_repositories=True,
             slack_token=vault.client.secrets.kv.v1.read_secret(
                 path="dagster/slack", mount_point="secret-data"
