@@ -8,15 +8,23 @@ models:
   - name: user_email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx Online
-      then the email will be chosen from the last platform they joined.
+      then the email will be chosen from the last platform they joined if their account
+      is active
   - name: user_joined_on
     description: timestamp, user join timestamp on the corresponding platform including
       xpro, bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx
-      Online then the timsestamp will be chosen from the latest platform they joined.
+      Online then the timestamp will be chosen from the latest platform they joined
+      if their account is active
   - name: user_last_login
     description: timestamp, user last login on the corresponding platform including
       xpro, bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx
-      Online then the timsestamp will be chosen from the latest login.
+      Online then the timestamp will be chosen from the latest login if their account
+      is active
+  - name: user_is_active
+    description: boolean, indicating if user's account is active on the corresponding
+      platform including xpro, bootcamps, edX.org, or MITx Online. If the user is
+      on edX.org and MITx Online then it will be true if their MITx Online account
+      is active, otherwise it will default to their edX.org account active status.
   - name: platforms
     description: string, application where the data is from
   - name: user_full_name

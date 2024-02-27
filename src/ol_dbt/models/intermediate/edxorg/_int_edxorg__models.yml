@@ -226,6 +226,9 @@ models:
   - name: user_mitxonline_username
     description: str, username on MITx Online if user's account is linked on MicroMasters
       portal
+  - name: user_is_active
+    description: boolean, indicating if user's account is active on edx.org. A user
+      is inactive when their username or email is hashed.
 
 - name: int__edxorg__mitx_courserun_grades
   description: Intermediate model for course run grades from edx.org
