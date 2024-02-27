@@ -83,7 +83,7 @@ models:
         select: ['read_only_production', 'business_intelligence', 'reverse_etl']
     external:
       +materialized: table
-      +schema: mart
+      +schema: external
       +grants:
         select: ['read_only_production', 'business_intelligence', 'reverse_etl', 'mit_irx']
     sample:
