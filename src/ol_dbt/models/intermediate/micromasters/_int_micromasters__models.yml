@@ -18,7 +18,7 @@ models:
     description: str, title of the course for example Foundations of Modern Finance
       I
   - name: course_number
-    description: str, edX course number for example 14.73x or JPAL102x
+    description: str, course number, for example 14.73x or JPAL102x
   - name: user_edxorg_username
     description: str, username on edX.org
   - name: user_mitxonline_username
