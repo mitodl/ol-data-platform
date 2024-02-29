@@ -25,10 +25,12 @@ models:
     description: str, username on MITx Online
   - name: user_full_name
     description: str, user full name on micromasters
-  - name: user_email
+  - name: user_micromasters_email
     description: str, current user email on micromasters
     tests:
     - not_null
+  - name: user_mitxonline_email
+    description: str, current user email on mitxonline
   - name: proctoredexamgrade_score
     description: float, user score for the course, range between 0 to 100
   - name: proctoredexamgrade_is_passing
@@ -39,7 +41,7 @@ models:
   - name: proctoredexamgrade_percentage_grade
     description: float, user percentage grade for the course, range between 0 to 1
   - name: proctoredexamgrade_exam_on
-    description: timestamp, date and time for the exam
+    description: timestamp, date and time the learner took the exam
   - name: proctoredexamgrade_created_on
     description: timestamp, date and time when this grade was initially created
   - name: proctoredexamgrade_updated_on

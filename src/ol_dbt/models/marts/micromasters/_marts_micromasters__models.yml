@@ -17,7 +17,7 @@ models:
   - name: course_title
     description: str, title of the course
   - name: course_number
-    description: str, edX course number
+    description: str, course number, for example, 14.73x or JPAL102x
   - name: user_edxorg_username
     description: str, username on edX.org
   - name: user_mitxonline_username
@@ -26,10 +26,12 @@ models:
     description: str, user full name on MicroMasters
   - name: user_address_country
     description: str, country code provided by the user from MicroMasters
-  - name: user_email
+  - name: user_micromasters_email
     description: str, current user email on MicroMasters
     tests:
     - not_null
+  - name: user_mitxonline_email
+    description: str, current user email on mitxonline
   - name: proctoredexamgrade_score
     description: float, user score for the course, range between 0 to 100
   - name: proctoredexamgrade_is_passing
@@ -40,7 +42,7 @@ models:
   - name: proctoredexamgrade_percentage_grade
     description: float, user percentage grade for the course, range between 0 to 1
   - name: proctoredexamgrade_exam_on
-    description: timestamp, date and time for the exam
+    description: timestamp, date and time the learner took the exam
   - name: proctoredexamgrade_created_on
     description: timestamp, date and time when this grade was initially created
   - name: proctoredexamgrade_updated_on
