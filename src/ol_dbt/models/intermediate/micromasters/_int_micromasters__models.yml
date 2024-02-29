@@ -3,7 +3,7 @@ version: 2
 
 models:
 - name: int__micromasters__dedp_proctored_exam_grades
-  description: DEDP proctor exam grades stored in MicroMasters database. We haven't
+  description: DEDP proctored exam grades stored in MicroMasters database. We haven't
     had any new data for this table since 2022-09.
   columns:
   - name: program_title
