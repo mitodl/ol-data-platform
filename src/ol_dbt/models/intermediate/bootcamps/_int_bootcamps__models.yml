@@ -385,3 +385,62 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__bootcamps__app__postgres__courses_courseruncertificate')
+
+- name: int__bootcamps__applications
+  description: tracks bootcamp application status as well as personal price and payment
+    data
+  columns:
+  - name: application_id
+    description: int, primary key representing a single bootcamp application
+    tests:
+    - unique
+    - not_null
+  - name: courserun_id
+    description: int, foreign key representing a single bootcamp course run
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, unique string to identify a bootcamp course run. e.g. bootcamp-v1:public+advanced-program-f2flng+R1
+  - name: courserun_start_on
+    description: timestamp, date and time when the bootcamp course starts
+  - name: courserun_end_on
+    description: timestamp, date and time when the bootcamp course ends
+  - name: user_id
+    description: str, foreign key to auth_user representing a single user
+    tests:
+    - not_null
+  - name: application_state
+    description: str, current state of the bootcamp application. Possible values are
+      awaiting_profile_completion, awaiting_resume, awaiting_user_submissions, awaiting_submission_review,
+      awaiting_payment, complete, rejected, refunded
+    tests:
+    - not_null
+  - name: application_linkedin_url
+    description: str, linkedIn profile url for the user in a bootcamp application
+  - name: application_resume_file
+    description: str, the resume file path for the user in a bootcamp application
+  - name: application_resume_uploaded_on
+    description: timestamp, specifying when the resume was uploaded to our system
+  - name: application_created_on
+    description: timestamp, specifying when the application was initially created
+    tests:
+    - not_null
+  - name: application_updated_on
+    description: timestamp, specifying when the application was most recently updated
+    tests:
+    - not_null
+  - name: personal_price
+    description: float, user's personal price for this bootcamp run
+  - name: list_price
+    description: float, the list price for the bootcamp run sourced from installment
+  - name: total_paid
+    description: float, total price paid for the bootcamp run from fulfilled order
+  - name: admitted_date
+    description: timestamp, specifying when the application review step is approved.
+  tests:
+  - dbt_expectations.expect_table_row_count_to_equal_other_table:
+      compare_model: ref('stg__bootcamps__app__postgres__applications_courserun_application')
