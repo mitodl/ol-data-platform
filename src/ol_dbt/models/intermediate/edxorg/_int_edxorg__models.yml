@@ -377,9 +377,6 @@ models:
 - name: int__edxorg__mitx_program_certificates
   description: learners who completed MicroMasters and XSeries programs on edX.org.
     program_certificate_awarded_on might be null for some programs such as SCM
-  config:
-    grants:
-      select: ['mit_irx']
   columns:
   - name: program_type
     description: str, the type of the program. The value are 'MicroMasters' and 'XSeries'
