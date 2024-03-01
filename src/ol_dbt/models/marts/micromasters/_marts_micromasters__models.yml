@@ -110,6 +110,7 @@ models:
       use  differnt email addresses for their edxorg and mitxonline logins
   - name: program_certificates
     description: int, count of program certificates earned for the the program
+
 - name: marts__micromasters_summary
   description: MicroMasters aggregate statistics
   columns:
@@ -157,8 +158,12 @@ models:
     - not_null
   - name: program_certificates
     description: int, count of program certificates earned for the the program
+
 - name: marts__micromasters_program_certificates
   description: MicroMasters program certificate earners
+  config:
+    grants:
+      select: ['mit_irx']
   columns:
   - name: user_edxorg_username
     description: str, The username of the learner on the edX platform. For users who
