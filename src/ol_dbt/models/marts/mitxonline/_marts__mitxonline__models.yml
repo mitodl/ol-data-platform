@@ -81,6 +81,12 @@ models:
     tests:
     - accepted_values:
         values: '{{ var("highest_education_values") }}'
+  - name: latest_income_usd
+    description: numeric, latest user income in usd
+  - name: latest_original_income
+    description: numeric, latest user income in it's original currency
+  - name: latest_original_currency
+    description: string, latest currency code of orginal income
 
 - name: marts__mitxonline_course_enrollments
   description: learners MITx Online course enrollments and demographics
