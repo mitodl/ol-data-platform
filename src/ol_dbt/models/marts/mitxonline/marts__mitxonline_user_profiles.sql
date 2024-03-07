@@ -3,12 +3,12 @@ with users as (
 )
 
 , user_income as (
-    select 
+    select
         user_id
         , flexiblepriceapplication_income_usd
         , flexiblepriceapplication_original_income
         , flexiblepriceapplication_original_currency
-        , rank() over (partition by user_id order by flexiblepriceapplication_updated_on desc) as rnk  
+        , rank() over (partition by user_id order by flexiblepriceapplication_updated_on desc) as rnk
     from int__mitxonline__flexiblepricing_flexiblepriceapplication
 )
 
@@ -27,6 +27,6 @@ select
     , user_income.flexiblepriceapplication_original_currency as latest_original_currency
 from users
 left join user_income
-    on 
+    on
         users.user_id = users.user_id
         and user_income.rnk = 1
