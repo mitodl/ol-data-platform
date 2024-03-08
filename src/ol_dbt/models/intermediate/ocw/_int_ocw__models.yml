@@ -1,0 +1,156 @@
+---
+version: 2
+
+models:
+- name: int__ocw__courses
+  description: OCW courses metadata on production environment
+  columns:
+  - name: course_uuid
+    description: str, auto-generated unique identifier string to identify the OCW
+      course
+    tests:
+    - not_null
+    - unique
+  - name: course_name
+    description: str, unique name of the OCW course. It appears as part of course
+      url
+    tests:
+    - not_null
+    - unique
+  - name: course_readable_id
+    description: str, short unique identifier for the OCW course, formatted as {course_num}-{semester}-{year}.
+      e.g. 18.05-spring-2022
+    tests:
+    - not_null
+    - unique
+  - name: course_title
+    description: str, title of the OCW course
+    tests:
+    - not_null
+  - name: course_source
+    description: str, indicating which courses were imported and which ones were authored
+      in the app. Possible values are 'studio', 'ocw-import', or blank
+  - name: course_live_url
+    description: str, url for the course on OCW production.
+  - name: course_is_live
+    description: boolean, indicating if the course website is currently published
+      on OCW production.
+    tests:
+    - not_null
+  - name: course_is_unpublished
+    description: boolean, indicating if the course website is currently unpublished
+      on OCW production.
+    tests:
+    - not_null
+  - name: course_has_never_published
+    description: boolean, indicating if the course website has never been published
+      on OCW production.
+    tests:
+    - not_null
+  - name: course_first_published_on
+    description: timestamp, date and time when the course website was first published
+      to OCW production
+  - name: course_publish_date_updated_on
+    description: timestamp, date and time when the publish date was most recently
+      updated on OCW production. The publish date is updated by the webhook to Concourse
+      pipeline (it rebuilds every site) whenever we do a release in ocw repos.
+  - name: course_created_on
+    description: timestamp, date and time when the course record was created
+    tests:
+    - not_null
+  - name: course_updated_on
+    description: timestamp, date and time when the course record was last updated
+    tests:
+    - not_null
+  - name: course_description
+    description: str, course description on OCW website
+  - name: course_term
+    description: str, course term e.g. Spring
+    tests:
+    - not_null
+  - name: course_year
+    description: int, course year
+    tests:
+    - not_null
+  - name: course_level
+    description: json, course level e.g. ["Undergraduate","Graduate"]
+  - name: course_primary_course_number
+    description: str, the primary course number e.g. 21A.850J
+    tests:
+    - not_null
+  - name: course_extra_course_numbers
+    description: str, the extra course number e.g. STS.484J
+  - name: course_topics
+    description: json, course topics (topic, subtopic, speciality) in json format.
+      The unnested version of this data is available in int__ocw__course_topics. e.g.
+      [["Mathematics","Discrete Mathematics"],["Mathematics","Probability and Statistics"]]
+  - name: course_learning_resource_types
+    description: json, course learning resource types or features. e.g. ["Lecture
+      Notes", "Problem Sets with Solutions", ..]
+
+- name: int__ocw__course_topics
+  description: supporting table containing tubular course topic data for OCW courses
+  columns:
+  - name: course_uuid
+    description: str, foreign key to ocw_courses
+    tests:
+    - not_null
+  - name: course_topic
+    description: str, course topic name e.g. Fine Arts
+    tests:
+    - not_null
+  - name: course_subtopic
+    description: str, course subtopic e.g. Architecture
+  - name: course_speciality
+    description: str, course_speciality. e.g. Architectural Engineering
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_uuid", "course_topic", "course_subtopic", "course_speciality"]
+
+- name: int__ocw__course_instructors
+  description: supporting table containing tubular instructor profile data for OCW
+    courses
+  columns:
+  - name: course_instructor_uuid
+    description: str, uuid string to identify the instructor
+    tests:
+    - not_null
+  - name: course_uuid
+    description: str, foreign key to ocw_courses
+    tests:
+    - not_null
+  - name: course_instructor_title
+    description: str, instructor title on the OCW website
+    tests:
+    - not_null
+  - name: course_instructor_first_name
+    description: str, instructor's first name
+  - name: course_instructor_last_name
+    description: str, instructor's last name
+  - name: course_instructor_middle_initial
+    description: str, instructor's middle name
+  - name: course_instructor_salutation
+    description: str, instructor's salutation e.g. Dr.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_uuid", "course_instructor_uuid"]
+
+- name: int__ocw__course_departments
+  description: supporting table containing tubular department number and name for
+    OCW courses
+  columns:
+  - name: course_uuid
+    description: str, foreign key to ocw_courses
+    tests:
+    - not_null
+  - name: course_department_number
+    description: str, number or short code to represent a department. e.g. 5, HST
+    tests:
+    - not_null
+  - name: course_department_name
+    description: str, display name for the department on OCW course website
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_uuid", "course_department_number"]

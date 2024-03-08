@@ -1,0 +1,217 @@
+---
+version: 2
+
+models:
+- name: stg__ocw__studio__postgres__websites_website
+  description: OCW websites metadata on production environment. A website can refers
+    to OCW courses, OCW website configuration, etc.
+  columns:
+  - name: website_uuid
+    description: str, auto-generated unique identifier string to identify the OCW
+      website
+    tests:
+    - not_null
+    - unique
+  - name: website_name
+    description: str, unique name of the website. It appears as part of website url
+    tests:
+    - not_null
+    - unique
+  - name: website_short_id
+    description: str, short unique identifier for the OCW website
+    tests:
+    - not_null
+    - unique
+  - name: website_title
+    description: str, title of the OCW website
+    tests:
+    - not_null
+  - name: website_owner_user_id
+    description: int, foreign key to users_user, indicating who created the OCW website
+  - name: websitestarter_id
+    description: int, foreign key to websites_websitestarter, indicating a starter
+      project that contains config/templates/etc for the desired static site. The
+      OCW courses reference to ocw-course in websites_websitestarter.
+  - name: website_source
+    description: str, indicating which sites were imported and which ones were authored
+      in the app. Possible values are 'studio', 'ocw-import', or blank
+    tests:
+    - accepted_values:
+        values: ["studio", "ocw-import"]
+  - name: website_live_url
+    description: str, webiste url on OCW production.
+  - name: website_is_live
+    description: boolean, indicating if the website is currently published on OCW
+      production.
+    tests:
+    - not_null
+  - name: website_is_unpublished
+    description: boolean, indicating if the website is currently unpublished on OCW
+      production.
+    tests:
+    - not_null
+  - name: website_has_never_published
+    description: boolean, indicating if the website has never been published on OCW
+      production.
+    tests:
+    - not_null
+  - name: website_metadata
+    description: json, the json object that contains website's metadata such as description,
+      course number, topics, etc.
+  - name: website_last_published_by_user_id
+    description: int, foreign key to users_user, indicating who most recently published
+      the website to OCW production
+  - name: website_last_unpublished_by_user_id
+    description: int, foreign key to users_user, indicating who most recently unpublished
+      the website on OCW production
+  - name: website_publish_status
+    description: str, indicating the website's publish status on OCW production. Possible
+      values are succeeded, pending, started, errored, aborted and not-started
+  - name: website_unpublish_status
+    description: str, indicating the status when website is unpublished on OCW production.
+      Possible values are succeeded, pending, started, errored, aborted and not-started
+  - name: website_first_published_on
+    description: timestamp, date and time when the website was first published to
+      OCW production
+  - name: website_publish_date_updated_on
+    description: timestamp, date and time when the publish date was most recently
+      updated on OCW production. The publish date is updated by the webhook to Concourse
+      pipeline (it rebuilds every site) whenever we do a release in ocw repos.
+  - name: website_created_on
+    description: timestamp, date and time when the website record was created
+    tests:
+    - not_null
+  - name: website_updated_on
+    description: timestamp, date and time when the website record was last updated
+    tests:
+    - not_null
+
+- name: stg__ocw__studio__postgres__websites_websitecontent
+  description: OCW website content components such as page, resource, sitemetadata,
+    etc.
+  columns:
+  - name: websitecontent_id
+    description: int, primary key for this OCW website content component
+    tests:
+    - not_null
+    - unique
+  - name: website_uuid
+    description: str, foreign key to websites_website
+    tests:
+    - not_null
+  - name: websitecontent_text_id
+    description: str, uuid string for the page content or sitemetadata
+    tests:
+    - not_null
+  - name: websitecontent_title
+    description: str, title of this content component
+  - name: websitecontent_type
+    description: str, type of this content component. e.g. page, sitemetadata, resource,
+      etc.
+    tests:
+    - not_null
+  - name: websitecontent_is_page
+    description: boolean, indicating that this content represents a navigable page,
+      as opposed to site metadata, configuration, etc.
+  - name: websitecontent_metadata
+    description: json, the json object that contains the metadata of this content
+      component
+  - name: websitecontent_filename
+    description: str, filename of the page content without the file extension.
+    tests:
+    - not_null
+  - name: websitecontent_dirpath
+    description: str, the directory path for the page content. e.g. content/resources
+    tests:
+    - not_null
+  - name: websitecontent_file
+    description: str, url path for the page content.
+  - name: websitecontent_parent_id
+    description: int, foreign key to websites_websitecontent, indicating the parent
+      of this content
+  - name: websitecontent_owner_user_id
+    description: int, foreign key to users_user, indicating who created this content
+      component
+  - name: websitecontent_updated_by_user_id
+    description: int, foreign key to users_user, indicating who last updated this
+      content component
+  - name: course_description
+    description: str, course description extracted from sitemetadata
+  - name: course_term
+    description: str, course term extracted from sitemetadata. e.g. Spring
+  - name: course_year
+    description: int, course year extracted from sitemetadata.
+  - name: course_level
+    description: json, course level extracted from sitemetadata. e.g. ["Graduate"]
+  - name: course_topics
+    description: json, course topics (topic, subtopic, speciality) from sitemetadata.
+      e.g. [["Mathematics","Discrete Mathematics"],["Mathematics","Probability and
+      Statistics"]]
+  - name: course_instructor_uuids
+    description: json, course instructor's uuid extracted from sitemetadata
+  - name: course_learning_resource_types
+    description: json, course learning resource types or features extracted from sitemetadata
+      e.g. ["Lecture Notes", "Problem Sets with Solutions", ..]
+  - name: course_department_numbers
+    description: json, course department numbers extracted from sitemetadata. e.g.
+      ["18",..]
+  - name: course_primary_course_number
+    description: str, the primary course number extracted from sitemetadata. e.g.
+      21A.850J
+  - name: course_extra_course_numbers
+    description: str, the extra course number extracted from sitemetadata. e.g. STS.484J
+  - name: websitecontent_deleted_on
+    description: timestamp, date and time for the soft delete
+  - name: websitecontent_created_on
+    description: timestamp, date and time when this website content component was
+      created
+    tests:
+    - not_null
+  - name: websitecontent_updated_on
+    description: timestamp, date and time when this website content component was
+      last updated
+    tests:
+    - not_null
+
+- name: stg__ocw__studio__postgres__websites_websitestarter
+  description: OCW starter projects that containing site configurations
+  columns:
+  - name: websitestarter_id
+    description: int, primary key for the starter project
+    tests:
+    - not_null
+    - unique
+  - name: websitestarter_name
+    description: str, name of the starter project.
+    tests:
+    - not_null
+  - name: websitestarter_slug
+    description: str, short string to identify this starter. e.g. ocw-course-v2
+    tests:
+    - not_null
+    - unique
+  - name: websitestarter_source
+    description: str, it's either github or local
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["github", "local"]
+  - name: websitestarter_path
+    description: str, the github repo url or local file path of the starter project.
+  - name: websitestarter_status
+    description: str, status of the starter project. Possible values are default,
+      active and inactive. Starters with Active and Default status will be shown while
+      creating a new site.
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["default", "active", "inactive"]
+  - name: websitestarter_created_on
+    description: timestamp, date and time when the starter project record was created
+    tests:
+    - not_null
+  - name: websitestarter_updated_on
+    description: timestamp, date and time when the starter project record was last
+      updated
+    tests:
+    - not_null
