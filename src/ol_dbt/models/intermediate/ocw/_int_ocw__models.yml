@@ -125,8 +125,12 @@ models:
     - not_null
   - name: course_instructor_first_name
     description: str, instructor's first name
+    tests:
+    - not_null
   - name: course_instructor_last_name
     description: str, instructor's last name
+    tests:
+    - not_null
   - name: course_instructor_middle_initial
     description: str, instructor's middle name
   - name: course_instructor_salutation
