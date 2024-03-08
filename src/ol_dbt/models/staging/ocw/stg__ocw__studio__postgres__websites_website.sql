@@ -25,7 +25,7 @@ with source as (
         , if(publish_date is null, true, false) as website_has_never_published
         , if(
             publish_date is not null and unpublish_status is null
-            , concat('{{ var("owc_production_url") }}', url_path), null
+            , concat('{{ var("ocw_production_url") }}', url_path), null
         ) as website_live_url
         ,{{ cast_timestamp_to_iso8601('first_published_to_production') }} as website_first_published_on
         ,{{ cast_timestamp_to_iso8601('publish_date') }} as website_publish_date_updated_on
