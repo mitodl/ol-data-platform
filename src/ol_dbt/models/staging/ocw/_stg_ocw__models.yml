@@ -38,6 +38,8 @@ models:
     tests:
     - accepted_values:
         values: ["studio", "ocw-import"]
+  - name: website_url_path
+    description: str, unique url relative path to the OCW website. e.g. courses/my-site-fall-2020
   - name: website_live_url
     description: str, webiste url on OCW production.
   - name: website_is_live

@@ -19,6 +19,7 @@ select
     , websites.website_is_live as course_is_live
     , websites.website_is_unpublished as course_is_unpublished
     , websites.website_has_never_published as course_has_never_published
+    , websites.website_path_url as course_path_url
     , websites.website_live_url as course_live_url
     , websites.website_first_published_on as course_first_published_on
     , websites.website_publish_date_updated_on as course_publish_date_updated_on
