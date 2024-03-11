@@ -548,7 +548,7 @@ sources:
       description: str, the start date of the course run in the format 'YYYY-MM-DD
         HH:mm:ss Z' in UTC
 
-  - name: raw__irx__edxorg__s3__tracking_logs
+  - name: raw__edxorg__s3__tracking_logs
     description: edX.org event data that are emitted by server, the browser, or the
       mobile device to capture information about user's interactions with a course
     columns:
