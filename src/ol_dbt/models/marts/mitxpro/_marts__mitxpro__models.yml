@@ -24,9 +24,9 @@ models:
     description: string, the readable_id field from the product object
   - name: product_type
     description: string, readable product type
-  - name: department_code
-    description: str, the portion of the readable product id that contains the department
-      code
+  - name: short_program_code
+    description: str, a short portion of the readable course or product id that contains the program
+      code. Examples include ML, QCF, AIPS, and DSBD.
   - name: list_price
     description: numeric, the product price for this version
   - name: Product_description
@@ -55,9 +55,3 @@ models:
     description: boolean, Public product is purchasable through the bulk form at /ecommerce/bulk
   - name: platform_name
     description: str, name of the platform
-  - name: b2c_price
-    description: numeric, the total product price for Boeing products and the price
-      discounted by ten percent for non-Boeing products
-  - name: b2b_price
-    description: numeric, the total product price for Boeing products and the price
-      discounted by fifteen percent for non-Boeing products
