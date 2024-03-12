@@ -35,6 +35,7 @@ vars:
     mitxpro: 'xPro'
     micromasters: 'MicroMasters'
     mitxonline: 'MITx Online'
+    residential: 'Residential MITx'
     dedp_micromasters_program_id: 2
     dedp_mitxonline_international_development_program_id: 1
     dedp_mitxonline_public_policy_program_id: 2
@@ -59,15 +60,33 @@ models:
     +properties:
       format: "'PARQUET'"
     +required_docs: true
+    +grants:
+      select: ['read_only_production', 'production_analyst']
+      insert: ['production_analyst']
+      update: ['production_analyst']
+      delete: ['production_analyst']
+      all privileges: ['accountadmin']
     staging:
       +materialized: table
       +schema: staging
+      +grants:
+        select: ['read_only_production']
     intermediate:
       +materialized: table
       +schema: intermediate
+      +grants:
+        select: ['read_only_production', 'business_intelligence']
     marts:
       +materialized: table
       +schema: mart
+      +grants:
+        select: ['read_only_production', 'business_intelligence', 'reverse_etl']
+    external:
+      +materialized: table
+      +schema: external
+      +grants:
+        select: ['read_only_production', 'business_intelligence', 'reverse_etl', 'mit_irx']
+    sample:
 
 
 # Test severity config

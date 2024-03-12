@@ -7,11 +7,8 @@ with source as (
         id as courseaccessrole_id
         , course_id as courserun_readable_id
         , user_id
-        , role as courseaccessrole_role
-        , case
-            when lower(org) = 'mitx' then 'MITx'
-            else org
-        end as courserun_org
+        , role as courseaccess_role
+        , if(lower(org) = 'mitx', 'MITx', org) as organization
     from source
 )
 

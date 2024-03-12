@@ -2,6 +2,58 @@
 version: 2
 
 models:
+- name: int__micromasters__dedp_proctored_exam_grades
+  description: DEDP proctored exam grades stored in MicroMasters database. We haven't
+    had any new data for this table since 2022-09.
+  columns:
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+  - name: micromasters_program_id
+    description: int, id of the program in the micromasters database
+  - name: mitxonline_program_id
+    description: int, id of the program in the mitxonline database
+  - name: course_title
+    description: str, title of the course for example Foundations of Modern Finance
+      I
+  - name: course_number
+    description: str, course number, for example 14.73x or JPAL102x
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
+  - name: user_full_name
+    description: str, user full name on micromasters
+  - name: user_micromasters_email
+    description: str, current user email on micromasters
+    tests:
+    - not_null
+  - name: user_mitxonline_email
+    description: str, current user email on mitxonline
+  - name: proctoredexamgrade_score
+    description: float, user score for the course, range between 0 to 100
+  - name: proctoredexamgrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course
+  - name: proctoredexamgrade_passing_score
+    description: float, passing score for the course, range between 0 to 100
+  - name: proctoredexamgrade_percentage_grade
+    description: float, user percentage grade for the course, range between 0 to 1
+  - name: proctoredexamgrade_exam_on
+    description: timestamp, date and time the learner took the exam
+  - name: proctoredexamgrade_created_on
+    description: timestamp, date and time when this grade was initially created
+  - name: proctoredexamgrade_updated_on
+    description: timestamp, date and time when this grade was most recently updated
+    tests:
+    - not_null
+  - name: proctoredexamgrade_id
+    description: int, sequential ID representing a DEDP proctor exam grade
+    tests:
+    - not_null
+    - unique
+
 - name: int__micromasters__course_enrollments
   description: MicroMasters enrollments. Enrollments in courses that satisfy the requirements
     for multiple programs appear in multiple rows.
@@ -147,36 +199,37 @@ models:
     description: timestamp, timestamp of the course certificate that completed the
       program
   - name: user_gender
-    description: str, user's gender from edxorg - blank means user did not specify
-      a gender. Null means this student signed up before this information was collected
+    description: str, user's gender from user's profile on MITx Online or edX.org.
+      blank means user did not specify a gender. Null means this student signed up
+      before this information was collected
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+        values: '{{ var("gender_values") }}'
   - name: user_address_city
-    description: str, city where user lives in, collected from the micromasters database
+    description: str, city where user lives in from user's profile on MicroMasters.
+      Note that this data isn't available on MITx Online.
   - name: user_first_name
-    description: str, first from the micromasters profile
+    description: str, first name from user's profile on MITx Online or MicroMasters.
   - name: user_last_name
-    description: str, last name from the micromasters profile
+    description: str, last name from user's profile on MITx Online or MicroMasters.
   - name: user_full_name
-    description: str, The full name of the user. Taken from either the edX database
-      or the mitxonline database
+    description: str, The full name from user's profile on MITx Online or MicroMasters.
   - name: user_year_of_birth
-    description: str, user's birth year from the profile in the micromasters database
+    description: str, user's birth year from user's profile on MITx Online or MicroMasters.
   - name: user_country
-    description: str, Country provided by the user either on the edX platform or the
-      mitxonline platform
+    description: str, Country from user's profile on MITx Online or MicroMasters
   - name: user_address_postal_code
-    description: str, postal code where user lives in from the profile in micromasters
+    description: str, postal code where user lives in from the profile on MicroMasters.
+      Note that this data isn't available on MITx Online.
   - name: user_street_address
-    description: str, street address where user lives in from the profile in the micromasters
-      database
+    description: str, street address where user lives in from user's profile on MicroMasters.
+      Note that this data isn't available on MITx Online.
   - name: user_address_state_or_territory
-    description: str,  state or territory where user lives in from the profile in
-      the micromasters database
+    description: str,  state or territory where user lives in from user's profile
+      on MITx Online or MicroMasters.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "micromasters_program_id"]
+      column_list: ["user_email", "micromasters_program_id", "mitxonline_program_id"]
 
 - name: int__micromasters__course_certificates
   description: course certificates earned for MicroMasters programs. This include
@@ -222,8 +275,12 @@ models:
     description: str, user full name on edX.org or MITxOnline
   - name: user_country
     description: str, user country on edX.org or MITxOnline
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on MITx Online, MicroMasters
+      or edX.org
   - name: courseruncertificate_url
-    description: str, the full URL to this DEDP course certificate on MITx Online
+    description: str, the full URL to the course certificate on mitxonline.mit.edu,
+      micromasters.mit.edu (legacy) or edX.org
   - name: courseruncertificate_created_on
     description: timestamp, date and time when this course certificate was initially
       created
@@ -435,6 +492,8 @@ models:
   - name: receipt_authorization_code
     description: str, authorization code from most recent cybersource payment for
       the order
+  - name: receipt_reference_number
+    description: str, req_reference_number from cybersource payment
   - name: receipt_bill_to_address_state
     description: str, address state from most recent cybersource payment for the order
   - name: receipt_bill_to_address_country
@@ -444,6 +503,12 @@ models:
     description: str, discount amount in readable format. It can be fixed discount
       which is $<dollar amount> off, fixed-price which is $<dollar amount> or percent-discount
       which is <percentage> % off
+  - name: discount_amount
+    description: numeric, actual discount dollar amount. For percent-discount coupon,
+      this is calculated as line_price * percentage off
+  - name: coupon_type
+    description: str, type of the coupon which describes what circumstances the coupon
+      can be redeemed. Possible values are "standard" or "discounted-previous-course".
   - name: coupon_code
     description: str, coupon code for the redeemed coupon
   - name: redeemedcoupon_created_on

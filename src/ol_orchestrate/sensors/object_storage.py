@@ -16,7 +16,7 @@ def dummy_run_config_fn(object_keys: set[str]) -> dict[Any, Any]:  # noqa: ARG00
     return {}
 
 
-def check_new_gcs_assets_sensor(  # noqa: PLR0913
+def gcs_multi_file_sensor(  # noqa: PLR0913
     bucket_name: str,
     context: SensorEvaluationContext,
     gcp_gcs: GCSConnection,
@@ -53,7 +53,7 @@ def check_new_gcs_assets_sensor(  # noqa: PLR0913
         yield SkipReason("No new files in GCS bucket")
 
 
-def check_new_s3_assets_sensor(  # noqa: PLR0913
+def s3_multi_file_sensor(  # noqa: PLR0913
     bucket_name: str,
     context: SensorEvaluationContext,
     s3: S3Resource,
@@ -73,8 +73,10 @@ def check_new_s3_assets_sensor(  # noqa: PLR0913
 
     :yields: RunRequest or SkipReason if there are no new files to operate on
     """
-    pages = s3.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket_name, Prefix=bucket_prefix
+    pages = (
+        s3.get_client()
+        .get_paginator("list_objects_v2")
+        .paginate(Bucket=bucket_name, Prefix=bucket_prefix)
     )
     bucket_files = set()
     for page in pages:

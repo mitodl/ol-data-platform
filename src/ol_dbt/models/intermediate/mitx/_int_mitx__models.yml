@@ -148,6 +148,11 @@ models:
     description: timestamp, user last log in on MITx Online
   - name: user_last_login_on_edxorg
     description: timestamp, user last log in on edX.org
+  - name: user_is_active_on_mitxonline
+    description: boolean, indicating if user's account is active on MITx Online
+  - name: user_is_active_on_edxorg
+    description: boolean, indicating if user's account is active on edx.org. A user
+      is inactive when their username or email is hashed.
   - name: user_full_name
     description: str, user full name on edX.org or MITxOnline. Very small number of
       edX.org users have blank full name, their name couldn't be populated from other
@@ -206,6 +211,11 @@ models:
     tests:
     - accepted_values:
         values: ['deferred', 'transferred', 'refunded', 'unenrolled']
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, indicating whether the user is enrolled on edX platform.
+      For edx.org course enrollment, it would always be true.
+    tests:
+    - not_null
   - name: user_id
     description: int, user ID on the corresponding platform - MITx Online or edX.org
     tests:
@@ -219,6 +229,8 @@ models:
     - not_null
   - name: courserun_title
     description: str, title of the course run, maybe blank for some edX.org runs
+  - name: courserun_start_on
+    description: timestamp, date and time when the course starts
   - name: user_email
     description: str, current user email on edX.org or MITxOnline. For edx.org, learners
       can update their emails, so this is not necessary the same email as when learner
@@ -362,6 +374,9 @@ models:
       earned certificate for the course
     tests:
     - not_null
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on MITx Online, MicroMasters
+      or edX.org
   - name: courseruncertificate_url
     description: str, URL to the course certificate
     tests:

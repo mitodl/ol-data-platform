@@ -67,7 +67,7 @@ models:
       means this student signed up before this information was collected
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+        values: '{{ var("gender_values") }}'
   - name: user_highest_education
     description: str, user's Level of education- blank means User did not specify
       level of education. Null means this student signed up before this information
@@ -201,7 +201,7 @@ models:
     description: str, Gender selected by the user on their profile
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+        values: '{{ var("gender_values") }}'
   - name: user_country
     description: str, Country selected by the learner on their profile
   - name: user_city

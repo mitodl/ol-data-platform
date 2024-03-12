@@ -9,6 +9,7 @@ with source as (
     select
         id as coupon_id
         , coupon_code
+        , coupon_type
         , object_id as coupon_object_id
         , amount_type as coupon_amount_type
         , cast(amount as decimal(38, 2)) as coupon_amount

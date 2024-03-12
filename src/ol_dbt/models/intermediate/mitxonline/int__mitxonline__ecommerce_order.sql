@@ -73,14 +73,24 @@ select
     , intermediate_products_view.product_id
     , intermediate_products_view.courserun_id
     , intermediate_products_view.programrun_id
+    , intermediate_products_view.courserun_readable_id
+    , intermediate_products_view.program_readable_id
+    , discounts.discount_source
+    , discounts.discount_redemption_type
     , discounts.discount_code
     , discounts.discount_amount_text
     , discountredemptions.discountredemption_timestamp
     , payments.transaction_authorization_code as payment_authorization_code
     , payments.transaction_payment_method as payment_method
     , payments.transaction_readable_identifier as payment_transaction_id
+    , payments.transaction_reference_number as payment_req_reference_number
     , payments.transaction_bill_to_address_state as payment_bill_to_address_state
     , payments.transaction_bill_to_address_country as payment_bill_to_address_country
+    , case
+        when discounts.discount_type = 'percent-off'
+            then cast(intermediate_products_view.product_price * (discounts.discount_amount / 100) as decimal(38, 2))
+        else cast(discounts.discount_amount as decimal(38, 2))
+    end as discount_amount
 from lines
 inner join orders on lines.order_id = orders.order_id
 inner join users on orders.order_purchaser_user_id = users.user_id

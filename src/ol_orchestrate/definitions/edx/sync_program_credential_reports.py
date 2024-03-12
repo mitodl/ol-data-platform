@@ -11,7 +11,7 @@ from ol_orchestrate.ops.object_storage import (
     upload_files_to_s3,
 )
 from ol_orchestrate.resources.outputs import SimpleResultsDir
-from ol_orchestrate.sensors.object_storage import check_new_s3_assets_sensor
+from ol_orchestrate.sensors.object_storage import s3_multi_file_sensor
 
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
 download_config = S3DownloadConfig(
@@ -49,7 +49,7 @@ edxorg_program_reports = Definitions(
         SensorDefinition(
             name="edxorg_program_reports_sensor",
             evaluation_fn=partial(
-                check_new_s3_assets_sensor,
+                s3_multi_file_sensor,
                 "edx-program-reports",
                 bucket_prefix="reports_v2/MITx/",
                 run_config_fn=lambda new_keys: {

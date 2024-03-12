@@ -11,7 +11,7 @@ with source as (
         , company_id
         , num_coupon_codes as couponpaymentversion_num_coupon_codes
         , coupon_type as couponpaymentversion_coupon_type
-        , amount as couponpaymentversion_discount_amount
+        , cast(amount as decimal(38, 2)) as couponpaymentversion_discount_amount
         , max_redemptions_per_user as couponpaymentversion_max_redemptions_per_user
         , payment_id as couponpayment_id
         , automatic as couponpaymentversion_is_automatic

@@ -947,7 +947,8 @@ models:
     - not_null
   - name: courserun_platform
     description: str, indicating whether this course runs on MITx Online or edX.org.
-      Some of edx.org data were migrated from MicroMasters
+      edx.org courses were migrated from MicroMasters. e.g. edx.org course IDs - MITx/14_73x/1T2014,
+      course-v1:MITx+14.100x+1T2017
     tests:
     - not_null
     - accepted_values:
@@ -976,39 +977,40 @@ models:
   - name: courserun_updated_on
     description: timestamp, specifying when a course run was most recently updated
 
-- name: stg__mitxonline__app__postgres__courses_coursetopic
+- name: stg__mitxonline__app__postgres__courses_department
   columns:
-  - name: coursetopic_id
-    description: int, primary key representing a single MITx Online course topic
+  - name: coursedepartment_id
+    description: int, primary key representing a single MITx Online course department
     tests:
     - unique
     - not_null
-  - name: coursetopic_name
-    description: str, name of a course topic
+  - name: coursedepartment_name
+    description: str, name of a course department
     tests:
     - unique
     - not_null
-  - name: coursetopic_created_on
-    description: timestamp, specifying when a course topic was initially created
-  - name: coursetopic_updated_on
-    description: timestamp, specifying when a course topic was most recently updated
+  - name: coursedepartment_created_on
+    description: timestamp, specifying when a course department was initially created
+  - name: coursedepartment_updated_on
+    description: timestamp, specifying when a course department was most recently
+      updated
 
-- name: stg__mitxonline__app__postgres__courses_course_to_topic
+- name: stg__mitxonline__app__postgres__courses_course_to_department
   columns:
-  - name: coursetotopic_id
+  - name: coursetodepartment_id
     description: int, primary key representing a single MITx Online course tagged
-      to a topic
+      to a department
     tests:
     - unique
     - not_null
-  - name: coursetopic_id
-    description: int, foreign key to courses_coursetopic representing a single course
-      topic
+  - name: coursedepartment_id
+    description: int, foreign key to courses_coursedepartment representing a single
+      course department
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_coursetopic')
-        field: coursetopic_id
+        to: ref('stg__mitxonline__app__postgres__courses_department')
+        field: coursedepartment_id
   - name: course_id
     description: int, foreign key to courses_course representing a single course
     tests:
@@ -1018,7 +1020,7 @@ models:
         field: course_id
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursetopic_id", "course_id"]
+      column_list: ["coursedepartment_id", "course_id"]
 
 - name: stg__mitxonline__app__postgres__courses_blockedcountry
   columns:
@@ -1206,17 +1208,18 @@ models:
     - not_null
 
 - name: stg__mitxonline__openedx__tracking_logs__user_activity
-  description: This table is deduped as raw table has duplicate events. It filters
-    out blank username events since these don't supply user identifiers and also those
-    server "exception" events due to server errors
+  description: This table is cleaned to remove duplicate events, events without user
+    identifiers , and events that represent server errors
   columns:
   - name: user_username
     description: str, username of the open edX user who caused the event to be emitted.
     tests:
     - not_null
   - name: openedx_user_id
-    description: int, reference user id in auth_user from open edX. Extracted from
-      context field.
+    description: int, open edX user ID extracted from context field. This id doesn't
+      always match with auth_user in open edX table, there can be multiple openedx_user_ids
+      for the same user_username. For those cases, use openedx_user_id from auth_user
+      open edX table.
     tests:
     - not_null
   - name: courserun_readable_id
@@ -1340,3 +1343,227 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
         "coursestructure_retrieved_at"]
+
+- name: stg__mitxonline__openedx__mysql__courseware_studentmodule
+  description: It holds the most current course state and score per course section
+    for learners on MITx Online. There is a separate row for every piece of content
+    that a learner accesses.
+  columns:
+  - name: studentmodule_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - not_null
+    - unique
+  - name: openedx_user_id
+    description: int, reference user id in auth_user from open edX
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, block ID for a distinct piece of content in a course, referencing
+      course_structure
+    tests:
+    - not_null
+  - name: coursestructure_block_category
+    description: str, category/type of the block, referencing course_structure.
+    tests:
+    - not_null
+  - name: studentmodule_state_data
+    description: json, JSON object indicating the user’s last known state in the course.
+      It may contain any attributes for different module types - course, chapter,
+      sequential, etc.
+    tests:
+    - not_null
+  - name: studentmodule_problem_grade
+    description: float, floating point value indicating the total unweighted grade
+      for this problem that the learner has scored. e.g. how many responses they got
+      right within the problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_problem_max_grade
+    description: float, floating point value indicating the total possible unweighted
+      grade for this problem, or basically the number of responses that are in this
+      problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_created_on
+    description: timestamp, datetime when this row was created, which is typically
+      when the learner first accesses this piece of content.
+    tests:
+    - not_null
+  - name: studentmodule_updated_on
+    description: timestamp, datetime when this row was last updated. A change in this
+      field implies that there was a state change.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
+
+- name: stg__mitxonline__openedx__mysql__grades_subsectiongrade
+  description: Persistent values for learners' subsection (aka sequential) grades.
+  columns:
+  - name: subsectiongrade_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - not_null
+    - unique
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, block ID of the subsection (sequential) - foreign key to course_structure.
+      e.g. block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, foreign key to auth_user from open edX platform
+    tests:
+    - not_null
+  - name: visibleblocks_hash
+    description: str, SHA1 hash of visible blocks within the subsection - foreign
+      key to grades_visibleblocks. This field might be useful for identifying whether
+      the course content was the same for two grades.
+    tests:
+    - not_null
+  - name: subsectiongrade_total_score
+    description: float, the aggregated "total_weighted_possible" score in the subsection,
+      calculated by summing all "weighted_possible" values of all (graded and ungraded)
+      problems in the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_total_graded_score
+    description: float, The aggregated "total_weighted_possible" score in the subsection,
+      calculated by summing all "weighted_possible" values of all "graded" problems
+      in the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_total_earned_score
+    description: float, The user's aggregated "total_weighted_earned" score in the
+      subsection, calculated by summing all "weighted_earned" values of all (graded
+      and ungraded) problems in the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_total_earned_graded_score
+    description: float, The user's aggregated "total_weighted_earned" score in the
+      subsection, calculated by summing all "weighted_earned" values of all "graded"
+      problems in the subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_first_attempted_on
+    description: timestamp, time of the user's first attempt at a problem in the subsection.
+  - name: subsectiongrade_created_on
+    description: timestamp, datetime of the subsection grade was first calculated
+      for this user for this subsection.
+    tests:
+    - not_null
+  - name: subsectiongrade_updated_on
+    description: timestamp, datetime of the subsection grade was last updated for
+      this user for this subsection.It will be updated every time the user attempts
+      the problem.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
+
+- name: stg__mitxonline__openedx__mysql__grades_subsectiongradeoverride
+  description: Stores the most recent override grades for a given subsection
+  columns:
+  - name: subsectiongradeoverride_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - not_null
+    - unique
+  - name: subsectiongrade_id
+    description: int, foreign key to grades_persistentsubsectiongrade
+    tests:
+    - not_null
+    - unique
+  - name: subsectiongradeoverride_total_score
+    description: float, total score of all problems (both graded and ungraded) for
+      the subsection
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_total_graded_score
+    description: float, total score of all graded problems for the subsection
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_total_earned_score
+    description: float, total earned score (graded and ungraded) to be overridden.
+  - name: subsectiongradeoverride_total_earned_graded_score
+    description: float, override to learner's total_earned_graded score for the subsection
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_reason
+    description: str, instructor provided reason for override
+  - name: subsectiongradeoverride_system
+    description: str, indicating system where the override was performed. Possible
+      values are grade-import, PROCTORING and GRADEBOOK
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_created_on
+    description: timestamp, datetime when the override was first created.
+    tests:
+    - not_null
+  - name: subsectiongradeoverride_updated_on
+    description: timestamp, datetime when the override was last modified.
+    tests:
+    - not_null
+
+- name: stg__mitxonline__openedx__mysql__grades_visibleblocks
+  description: Stores an ordered list of visible blocks within a subsection for a
+    learner at the time of computing the subsection grade.
+  columns:
+  - name: visibleblocks_id
+    description: int, the auto-incremented ID for this table
+    tests:
+    - not_null
+    - unique
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: visibleblocks_hash
+    description: str, SHA1 hash of the blocks_json value.
+    tests:
+    - not_null
+    - unique
+  - name: visibleblocks_json
+    description: str, json object of all visible blocks within a subsection
+    tests:
+    - not_null
+
+- name: stg__mitxonline__openedx__mysql__user_courseaccessrole
+  description: lists the users who have a privileged role or roles for working in
+    a course on MITx Online open edX platform
+  columns:
+  - name: courseaccessrole_id
+    description: int, primary key tracking a course access role assigned in this table
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, user ID on MITx Online open edX platform. Note that this is
+      different from user_id from MITx Online app
+    tests:
+    - not_null
+  - name: organization
+    description: str, organization that lists the course. e.g. MITxT
+  - name: courseaccess_role
+    description: str, the privilege level assigned to the user for working in this
+      course. Currently the assigned roles are instructor, staff, beta_testers and
+      data_researcher on MITx Online open edX platform.
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
+          'sales_admin', 'beta_testers', 'library_user', 'org_course_creator_group',
+          'course_creator_group', 'support']
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "openedx_user_id", "courseaccess_role"]

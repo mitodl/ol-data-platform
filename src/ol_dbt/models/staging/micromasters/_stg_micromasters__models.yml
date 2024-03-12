@@ -190,6 +190,13 @@ models:
     - not_null
   - name: coupon_code
     description: string, coupon code
+  - name: coupon_type
+    description: str, type of the coupon which describes what circumstances the coupon
+      can be redeemed
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['standard', 'discounted-previous-course']
   - name: coupon_object_id
     description: int, id in either coures_course or courses_program for the course
       entity for which the coupon can be redeemed

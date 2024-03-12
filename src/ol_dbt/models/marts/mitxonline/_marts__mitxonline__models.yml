@@ -4,6 +4,9 @@ version: 2
 models:
 - name: marts__mitxonline_course_certificates
   description: course certificates from MITx Online app
+  config:
+    grants:
+      select: ['mit_irx']
   columns:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
@@ -26,11 +29,11 @@ models:
     tests:
     - not_null
   - name: user_username
-    description: str, username on MITx Online
+    description: str, username on MITx Online at the time of generating certificate
     tests:
     - not_null
   - name: user_email
-    description: str, user email on MITx Online
+    description: str, user email on MITx Online at the time of generating certificate
     tests:
     - not_null
   - name: user_full_name
@@ -38,11 +41,15 @@ models:
     tests:
     - not_null
   - name: openedx_user_id
-    description: int, foreign key to open edX users. Not all app users have openedx_user_id
-      due to username mismatch between app and open edX.
+    description: int, foreign key to open edX users.
+    tests:
+    - not_null
 
 - name: marts__mitxonline_user_profiles
   description: MITx Online user profiles
+  config:
+    grants:
+      select: ['mit_irx']
   columns:
   - name: user_username
     description: str, username on MITx Online
@@ -140,3 +147,290 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
+
+- name: marts__mitxonline_course_engagements_daily
+  description: MITx Online learners daily course engagement statistics
+  columns:
+  - name: courseactivity_date
+    description: date, date that user has any interactions within a course
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: num_events
+    description: int, number of course activity events for the user
+  - name: num_problem_submitted
+    description: int, number of problem submitted events in a course for the user
+  - name: num_video_played
+    description: int, number of play video events in a course for the user
+  - name: num_discussion_participated
+    description: int, number of adding a post, response, or comment events in a course
+      for the user
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
+
+- name: marts__mitxonline_video_engagements
+  description: MITx Online learners video engagements - play, pause, seek or stop
+    video action
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: video_event_type
+    description: str, type of this video event. The value is one of play_video, seek_video,
+      pause_video, stop_video, complete_video.
+    tests:
+    - not_null
+  - name: page_url
+    description: str, url of the page the user was visiting when this video event
+      was emitted.
+  - name: video_id
+    description: str, hash code for the video being watched.
+    tests:
+    - not_null
+  - name: video_title
+    description: str, title of this video.
+  - name: section_title
+    description: str, title of section (aka chapter) this video belongs to.
+  - name: video_duration
+    description: number, The length of the video file, in seconds.
+    tests:
+    - not_null
+  - name: video_currenttime
+    description: number, The time in the video when this event was emitted. May be
+      Null for seek_video
+  - name: video_old_time
+    description: number, time in the video, in seconds, at which the user chose to
+      go to a different point in time for 'seek_video' event
+  - name: video_new_time
+    description: number, time in the video, in seconds, that the user selected as
+      the destination point for 'seek_video' event
+  - name: video_event_timestamp
+    description: timestamp, time of this video event
+    tests:
+    - not_null
+
+- name: marts__mitxonline_problem_submissions
+  description: MITx Online learners problem submissions
+  columns:
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: problem_id
+    description: str, Unique ID for this problem in a course. It's formatted in block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}
+    tests:
+    - not_null
+  - name: problem_name
+    description: str, display name of this problem in a course
+    tests:
+    - not_null
+  - name: num_attempts
+    description: number, The number of times the user had attempted at the time of
+      this submission.
+    tests:
+    - not_null
+  - name: student_answers
+    description: json, student answers to this problem in a name/value (problem_id/answer)
+      pair. For multiple questions, it lists every question and answer.
+    tests:
+    - not_null
+  - name: problem_success
+    description: str, It's either 'correct' or 'incorrect'
+    tests:
+    - not_null
+  - name: problem_grade
+    description: number, user grade for this problem at the time of this submission.
+      It can range from 0 to the max possible grade for this problem. e.g. if problem_max_grade
+      is 12, problem_grade can be anywhere between 0 to 12.
+    tests:
+    - not_null
+  - name: problem_max_grade
+    description: number, Maximum possible grade value for this problem.
+    tests:
+    - not_null
+  - name: problem_submission_timestamp
+    description: timestamp, time for this problem submission
+    tests:
+    - not_null
+  - name: is_most_recent_attempt
+    description: boolean, indicating if this submission is the most recent attempt.
+      Useful to filter out any previous answers
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "problem_id", "problem_submission_timestamp"]
+
+- name: marts__mitxonline_problem_summary
+  description: MITx Online learners problem performance summary with a particular
+    problem
+  columns:
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: problem_id
+    description: str, Unique ID for this problem in a course. It's formatted in block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}
+    tests:
+    - not_null
+  - name: num_showanswer
+    description: number, The number of times the user clicked on showanswer for this
+      problem.
+  - name: num_attempts
+    description: number, The number of times the user had attempted this problem.
+      Null if user has never attempted this problem
+  - name: problem_success
+    description: str, indicating if user's most recent attempt to this problem is
+      correct or incorrect. Null if user has never attempted this problem
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "problem_id"]
+
+- name: marts__mitxonline_discussions
+  description: MITx Online learners discussion engagements - created, viewed, responded
+    to any thread or post, etc.
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the open edX user
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email on MITx Online
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 18.03.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: discussion_event_type
+    description: >
+      str, type of discussion forum event triggered. Values can be
+      edx.forum.comment.created/edited/deleted/reported/unreported,
+      edx.forum.response.created/edited/deleted/voted/reported/unreported/unmark,
+      edx.forum.thread.created/viewed/edited/deleted/voted/reported/unreported/followed/unfollowed/locked,
+      edx.forum.searched, etc.
+    tests:
+    - not_null
+  - name: page_url
+    description: str, url of the page the user was visiting
+  - name: discussion_event_path
+    description: str, relative url path of page that generated this discussion event.
+      e.g. for edx.forum.response.voted events, it indicates if this event is unvote
+      or upvote
+  - name: post_id
+    description: str, unique identifier for the discussion post learner engaged in.
+      May be Null for edx.forum.searched event
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "discussion_event_type != 'edx.forum.searched'"
+  - name: post_title
+    description: str, title for the specific discussion post. May be Null for edx.forum.searched
+      event.
+  - name: discussion_id
+    description: str, identifier for the specific discussion component. e.g. discussion_ps2A-tab5.
+      Value is the last part of 'coursestructure_block_id' string. May be Null for
+      edx.forum.searched event.
+  - name: discussion_name
+    description: str, display name for the specific discussion component.
+  - name: discussion_event_timestamp
+    description: timestamp, time of this discussion event
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "discussion_event_type",
+        "post_id", "discussion_event_path", "discussion_event_timestamp"]

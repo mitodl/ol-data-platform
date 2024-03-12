@@ -12,6 +12,7 @@ select
     , description as cms_programpage_description
     , program_id
     , duration as cms_programpage_duration
+    , format as cms_programpage_format
     , subhead as cms_programpage_subhead
     , time_commitment as cms_programpage_time_commitment
     , catalog_details as cms_programpage_catalog_details
@@ -26,6 +27,7 @@ select
     , externalprogrampage.description as cms_cprogrampage_description
     , externalprogrampage.program_id
     , externalprogrampage.duration as cms_programpage_duration
+    , externalprogrampage.format as cms_programpage_format
     , externalprogrampage.subhead as cms_programpage_subhead
     , externalprogrampage.time_commitment as cms_programpage_time_commitment
     , externalprogrampage.catalog_details as cms_programpage_catalog_details

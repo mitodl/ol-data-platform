@@ -77,7 +77,9 @@ with b2becommerce_b2border as (
         , b2becommerce_b2border.b2border_email as user_email
         , b2becommerce_b2border.b2border_contract_number
         , productversion.productversion_readable_id
-        , json_extract_scalar(b2becommerce_b2breceipt.b2breceipt_data, '$.req_reference_number') as req_reference_number
+        , b2becommerce_b2breceipt.b2breceipt_reference_number as req_reference_number
+        , b2becommerce_b2breceipt.b2breceipt_authorization_code as receipt_authorization_code
+        , b2becommerce_b2breceipt.b2breceipt_transaction_id as receipt_transaction_id
         , case when b2becommerce_b2bcouponredemption.b2bcouponredemption_id is not null then true end as redeemed
     from b2becommerce_b2border
     left join ecommerce_couponpaymentversion
@@ -127,7 +129,9 @@ with b2becommerce_b2border as (
         , productversion.productversion_readable_id
         , null as b2bcoupon_id
         , null as b2border_contract_number
-        , null as req_reference_number
+        , ecommerce_order.receipt_reference_number as req_reference_number
+        , ecommerce_order.receipt_authorization_code
+        , ecommerce_order.receipt_transaction_id
         , case when ecommerce_couponredemption.couponredemption_id is not null then true end as redeemed
     from ecommerce_order
     inner join ecommerce_line
@@ -169,6 +173,8 @@ select
     , b2border_contract_number
     , req_reference_number
     , productversion_readable_id
+    , receipt_authorization_code
+    , receipt_transaction_id
 from reg_order_fields
 
 union distinct
@@ -193,4 +199,6 @@ select
     , b2border_contract_number
     , req_reference_number
     , productversion_readable_id
+    , receipt_authorization_code
+    , receipt_transaction_id
 from b2b_order_fields

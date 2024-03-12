@@ -32,6 +32,7 @@ select
     , users_legaladdress.user_address_city
     , users_legaladdress.user_street_address
     , users_legaladdress.user_address_postal_code
+    , users_legaladdress.user_vat_id
     , users_profile.user_birth_year
     , users_profile.user_company
     , users_profile.user_job_title

@@ -2,6 +2,122 @@
 version: 2
 
 models:
+- name: marts__micromasters_dedp_exam_grades
+  description: DEDP proctor exam grades stored in MicroMasters database. We haven't
+    had any new data for this table since 2022-09.
+  columns:
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+  - name: micromasters_program_id
+    description: int, id of the program in the micromasters database
+  - name: mitxonline_program_id
+    description: int, id of the program in the mitxonline database
+  - name: course_title
+    description: str, title of the course
+  - name: course_number
+    description: str, course number, for example, 14.73x or JPAL102x
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
+  - name: user_full_name
+    description: str, user full name on MicroMasters
+  - name: user_address_country
+    description: str, country code provided by the user from MicroMasters
+  - name: user_micromasters_email
+    description: str, current user email on MicroMasters
+    tests:
+    - not_null
+  - name: user_mitxonline_email
+    description: str, current user email on mitxonline
+  - name: proctoredexamgrade_score
+    description: float, user score for the course, range between 0 to 100
+  - name: proctoredexamgrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course
+  - name: proctoredexamgrade_passing_score
+    description: float, passing score for the course, range between 0 to 100
+  - name: proctoredexamgrade_percentage_grade
+    description: float, user percentage grade for the course, range between 0 to 1
+  - name: proctoredexamgrade_exam_on
+    description: timestamp, date and time the learner took the exam
+  - name: proctoredexamgrade_created_on
+    description: timestamp, date and time when this grade was initially created
+  - name: proctoredexamgrade_updated_on
+    description: timestamp, date and time when this grade was most recently updated
+    tests:
+    - not_null
+  - name: proctoredexamgrade_id
+    description: int, sequential ID representing a DEDP proctor exam grade
+    tests:
+    - not_null
+    - unique
+
+- name: marts__micromasters_course_certificates
+  description: course certificates earned for MicroMasters programs. This include
+    certificates are downloadable and not revoked from MITx Online, MicroMaster and
+    edX.org. Certificates earned for courses that satisfy the requirements for multiple
+    programs appear in multiple rows for each program
+  columns:
+  - name: program_title
+    description: str, title of the program the course is part of
+    tests:
+    - not_null
+  - name: micromasters_program_id
+    description: int, id of the program the course is part of in the micromasters
+      database
+  - name: mitxonline_program_id
+    description: int, id of the program the course is part of in the mitxonline database
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course run ID on edX.org or MITxOnline
+    tests:
+    - not_null
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg.
+    tests:
+    - not_null
+  - name: course_number
+    description: str, unique string for the course e.g. 14.009x
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITxOnline
+  - name: user_email
+    description: str, user email on edX.org or MITxOnline
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on edX.org or MITxOnline
+  - name: user_country
+    description: str, user country on edX.org or MITxOnline
+  - name: courseruncertificate_url
+    description: str, the full URL to this DEDP course certificate on MITx Online
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when this course certificate was initially
+      created
+    tests:
+    - not_null
+  - name: grade
+    description: float, course grade for the corresponding certificate range from
+      0 to 1. Blank for small amount of certificates for MITx/6.041x_3/2T2016.
+  - name: is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on edX.org or MITxOnline. Blank for small amount of certificates
+      for MITx/6.041x_3/2T2016.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
+        "mitxonline_program_id"]
+
 - name: marts__micromasters_summary_timeseries
   description: Time series of MicroMasters aggregate statistics.
   columns:
@@ -47,6 +163,7 @@ models:
       use  differnt email addresses for their edxorg and mitxonline logins
   - name: program_certificates
     description: int, count of program certificates earned for the the program
+
 - name: marts__micromasters_summary
   description: MicroMasters aggregate statistics
   columns:
@@ -94,8 +211,12 @@ models:
     - not_null
   - name: program_certificates
     description: int, count of program certificates earned for the the program
+
 - name: marts__micromasters_program_certificates
   description: MicroMasters program certificate earners
+  config:
+    grants:
+      select: ['mit_irx']
   columns:
   - name: user_edxorg_username
     description: str, The username of the learner on the edX platform. For users who
@@ -115,33 +236,34 @@ models:
     description: timestamp, timestamp of the course certificate that completed the
       program
   - name: user_gender
-    description: str, user's gender from edxorg - blank means user did not specify
-      a gender. Null means this student signed up before this information was collected
+    description: str, user's gender from user's profile on MITx Online or MicroMasters.
+      blank means user did not specify a gender. Null means this student signed up
+      before this information was collected
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say', '', null]
+        values: '{{ var("gender_values") }}'
   - name: user_address_city
-    description: str, city where user lives in, collected from the micromasters database
+    description: str,  city where user lives in from user's profile on MicroMasters.
+      Note that this data isn't available on MITx Online.
   - name: user_first_name
-    description: str, first from the micromasters profile
+    description: str, first name from user's profile on MITx Online or MicroMasters
   - name: user_last_name
-    description: str, last name from the micromasters profile
+    description: str, last name from user's profile on MITx Online or MicroMasters
   - name: user_full_name
-    description: str, The full name of the user. Taken from either the edX database
-      or the mitxonline database
+    description: str, The full name from user's profile on MITx Online or MicroMasters
   - name: user_year_of_birth
-    description: str, user's birth year from the profile in the micromasters database
+    description: str, user's birth year from user's profile on MITx Online or MicroMasters
   - name: user_country
-    description: str, Country provided by the user either on the edX platform or the
-      mitxonline platform
+    description: str, Country from user's profile on MITx Online or MicroMasters
   - name: user_address_postal_code
-    description: str, postal code where user lives in from the profile in micromasters
+    description: str, postal code where user lives in from the profile on MicroMasters.
+      Note that this data isn't available on MITx Online.
   - name: user_street_address
-    description: str, street address where user lives in from the profile in the micromasters
-      database
+    description: str, street address where user lives in from user's profile on MicroMasters.
+      Note that this data isn't available on MITx Online.
   - name: user_address_state_or_territory
-    description: str,  state or territory where user lives in from the profile in
-      the micromasters database
+    description: str,  state or territory where user lives in from user's profile
+      on MITx Online or MicroMasters.
   - name: micromasters_program_id
     description: int, id of the program in the micromasters database
   - name: mitxonline_program_id

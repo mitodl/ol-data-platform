@@ -15,6 +15,7 @@ with source as (
         , city as user_address_city
         , state_or_territory as user_address_state_or_territory
         , postal_code as user_address_postal_code
+        , vat_id as user_vat_id
         , concat_ws(
             chr(10)
             , nullif(street_address_1, '')

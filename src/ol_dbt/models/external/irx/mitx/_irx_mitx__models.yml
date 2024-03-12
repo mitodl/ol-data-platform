@@ -1,0 +1,211 @@
+---
+version: 2
+
+models:
+- name: irx__mitx__openedx__mysql__user_id_map
+  description: Mapping of users to to anonymous ID
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: hash_id
+    description: str, persistent anonymous_user_id of the learner from the student_anonymoususerid
+      cache table
+  - name: user_id
+    description: int, id of the learner from the auth_user table
+  - name: username
+    description: str, username of the learner from the auth_user table
+
+- name: irx__mitx__openedx__mysql__teams
+  description: Stores unique course teams
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: team_size
+    description: int, the number of users in a team
+  - name: description
+    description: string, the description of the team
+  - name: team_id
+    description: string, the unique id of the team
+  - name: name
+    description: string, the name of the team
+  - name: topic_id
+    description: int, foreign key to courses_coursetopic representing a single course
+      topic
+  - name: organization_protected
+    description: boolean, whether or not the team is a protected organization
+  - name: language
+    description: string, the language the team uses
+  - name: last_activity_at
+    description: timestamp, the last time the team was active
+  - name: discussion_topic_id
+    description: int, foreign key to courses_discussiontopic representing a single
+      discussion
+  - name: course_id
+    description: string, unique ID representing a single MITx course run
+  - name: id
+    description: int, the auto-incremented ID for this table
+  - name: country
+    description: string, the country that the team is based in
+  - name: date_created
+    description: timestamp, the date the team was created
+
+- name: irx__mitx__openedx__mysql__teams_membership
+  description: Stores data on unique user and course team relationships.
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: id
+    description: int, the auto-incremented ID for this table
+  - name: user_id
+    description: int, foreign key to the users_user table
+  - name: team_id
+    description: string, the unique id of the team
+  - name: last_activity_at
+    description: timestamp, the last time the course team was active
+  - name: date_joined
+    description: timestamp, the date the user joined the course team
+
+- name: irx__mitx__openedx__mysql__student_courseenrollment
+  description: Stores the mapping of students to the courses they are enrolled in.
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: course_id
+    description: string, unique ID representing a single MITx course run
+  - name: mode
+    description: string, the mode in which the user took the course (eg. audit)
+  - name: id
+    description: int, the auto-incremented ID for this table
+  - name: is_active
+    description: boolean, whether the user has been active in a course
+  - name: created
+    description: timestamp, specifying when the user first enrolled in the course
+  - name: user_id
+    description: int, the foreign key to the users_user table
+
+- name: irx__mitx__openedx__mysql__grades_persistentcoursegrade
+  description: MITx open edX course grades
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: course_id
+    description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
+      courses) or org/course/run (for old-type courses)
+  - name: user_id
+    description: int, user ID on Residential xPro open edx platform
+  - name: grading_policy_hash
+    description: str, A SHA-1 digest of the course grading policy, used to detect
+      and update grades whenever the policy changes
+  - name: percent_grade
+    description: float, calculated course grade as a decimal percentage, per grading
+      policy. e.g. 0.91 means 91%
+  - name: letter_grade
+    description: str, calculated course grade as a letter value (e.g., A-D, Pass),
+      per grading policy If the learner's grade is Fail or F, this value is empty.
+  - name: passed_timestamp
+    description: timestamp, date and time when the learner first passed the course.
+      If this value is empty, the learner never passed the course. If this value is
+      non-empty but the letter_grade value is empty, the learner transitioned from
+      passing to not passing.
+  - name: created
+    description: timestamp, date and time when this grade was initially created
+  - name: modified
+    description: timestamp, date and time when this grade was most recently updated
+
+- name: irx__mitx__openedx__mysql__grades_persistentsubsectiongrade
+  description: Stores data on unique user and course team relationships.
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: course_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+  - name: user_id
+    description: int, foreign key to auth_user from open edX platform
+  - name: usage_key
+    description: str, block ID of the subsection (sequential) - foreign key to course_structure.
+      e.g. block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+  - name: earned_all
+    description: float, The user's aggregated "total_weighted_earned" score in the
+      subsection, calculated by summing all "weighted_earned" values of all (graded
+      and ungraded) problems in the subsection.
+  - name: possible_all
+    description: float, the aggregated "total_weighted_possible" score in the subsection,
+      calculated by summing all "weighted_possible" values of all (graded and ungraded)
+      problems in the subsection.
+  - name: earned_graded
+    description: float, The user's aggregated "total_weighted_earned" score in the
+      subsection, calculated by summing all "weighted_earned" values of all "graded"
+      problems in the subsection.
+  - name: possible_graded
+    description: float, The aggregated "total_weighted_possible" score in the subsection,
+      calculated by summing all "weighted_possible" values of all "graded" problems
+      in the subsection.
+  - name: first_attempted
+    description: timestamp, time of the user's first attempt at a problem in the subsection.
+  - name: created
+    description: timestamp, datetime of the subsection grade was first calculated
+      for this user for this subsection.
+  - name: modified
+    description: timestamp, datetime of the subsection grade was last updated for
+      this user for this subsection. It will be updated every time the user attempts
+      the problem.
+
+- name: irx__mitx__openedx__mysql__auth_user
+  description: Stores data on unique user and course team relationships.
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: id
+    description: int, sequential ID representing a user on MITx open edX platform
+  - name: username
+    description: str, unique username on the open edX platform
+  - name: first_name
+    description: str, user's first name. This field is not populated on production.
+  - name: last_name
+    description: str, user's last name. This field is not populated on production.
+  - name: email
+    description: str, user's email associated with their account
+  - name: password
+    description: str, hashed password
+  - name: is_staff
+    description: boolean, indicating whether user can log into admin site
+  - name: is_active
+    description: boolean, used to soft delete users
+  - name: is_superuser
+    description: boolean, indicating whether user has all permissions on open edx
+      platform
+  - name: last_login
+    description: timestamp, date and time when user last login on the open edX platform
+  - name: date_joined
+    description: timestamp, date and time when a user account was initially created
+      on the open edX platform
+      # TODO: update the descriptions, check email_key type
+  - name: status
+    description: string, status
+  - name: email_key
+    description: string, email_key
+  - name: avatar_type
+    description: string, avatar_type
+  - name: country
+    description: string, country
+  - name: show_country
+    description: int, show_country
+  - name: date_of_birth
+    description: timestamp, date_of_birth
+  - name: interesting_tags
+    description: string, interesting_tags
+  - name: ignored_tags
+    description: string, ignored_tags
+  - name: email_tag_filter_strategy
+    description: int, email_tag_filter_strategy
+  - name: display_tag_filter_strategy
+    description: int, display_tag_filter_strategy
+  - name: consecutive_days_visit_count
+    description: int, consecutive_days_visit_count
