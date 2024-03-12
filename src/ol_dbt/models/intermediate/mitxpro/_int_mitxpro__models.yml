@@ -1175,8 +1175,8 @@ models:
   - name: programrun_end_on
     description: timestamp, specifying when the program run ends
   - name: short_program_code
-    description: str, a short portion of the readable program id that contains the program
-      code. Examples include ML, QCF, AIPS, and DSBD.
+    description: str, a short portion of the readable program id that contains the
+      program code. Examples include ML, QCF, AIPS, and DSBD.
   - name: programrun_readable_id
     description: str, unique program run ID formatted as program-v1:{org}+{program
       code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
@@ -1215,8 +1215,8 @@ models:
     tests:
     - not_null
   - name: short_program_code
-    description: str, a short portion of the readable course id that contains the program
-      code. Examples include ML, QCF, AIPS, and DSBD.
+    description: str, a short portion of the readable course id that contains the
+      program code. Examples include ML, QCF, AIPS, and DSBD.
   - name: platform_id
     description: int, id of the course platform
   - name: cms_coursepage_description

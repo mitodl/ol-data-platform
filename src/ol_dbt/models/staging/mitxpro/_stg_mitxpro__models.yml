@@ -1081,8 +1081,8 @@ models:
     - unique
     - not_null
   - name: short_program_code
-    description: str, a short portion of the readable program id that contains the program
-      code. Examples include ML, QCF, AIPS, and DSBD.
+    description: str, a short portion of the readable program id that contains the
+      program code. Examples include ML, QCF, AIPS, and DSBD.
   - name: program_created_on
     description: timestamp, specifying when a program was initially created
   - name: program_updated_on
@@ -1153,8 +1153,8 @@ models:
     - unique
     - not_null
   - name: short_program_code
-    description: str, a short portion of the readable course id that contains the program
-      code. Examples include ML, QCF, AIPS, and DSBD.
+    description: str, a short portion of the readable course id that contains the
+      program code. Examples include ML, QCF, AIPS, and DSBD.
   - name: position_in_program
     description: int, sequential number indicating the course display order in a program
       on MITxPro website

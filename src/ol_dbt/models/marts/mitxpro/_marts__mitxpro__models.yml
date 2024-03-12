@@ -28,8 +28,8 @@ models:
   - name: product_type
     description: string, readable product type
   - name: short_program_code
-    description: str, a short portion of the readable course or product id that contains the program
-      code. Examples include ML, QCF, AIPS, and DSBD.
+    description: str, a short portion of the readable course or product id that contains
+      the program code. Examples include ML, QCF, AIPS, and DSBD.
   - name: list_price
     description: numeric, the product price for this version
   - name: Product_description
