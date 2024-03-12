@@ -19,7 +19,7 @@ with source as (
         , live_publish_status as website_publish_status
         , live_last_published_by_id as website_last_published_by_user_id
         , last_unpublished_by_id as website_last_unpublished_by_user_id
-        , url_path as website_path_url
+        , url_path as website_url_path
         , if(publish_date is not null and unpublish_status is null, true, false) as website_is_live
         , if(publish_date is not null and unpublish_status = 'succeeded', true, false) as website_is_unpublished
         , if(publish_date is null, true, false) as website_has_never_published

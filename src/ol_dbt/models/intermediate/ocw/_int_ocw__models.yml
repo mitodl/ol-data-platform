@@ -76,7 +76,7 @@ models:
     tests:
     - not_null
   - name: course_level
-    description: json, course level e.g. ["Undergraduate","Graduate"]
+    description: str, course level in comma-separated list.  e.g. Undergraduate, Graduate
   - name: course_primary_course_number
     description: str, the primary course number e.g. 21A.850J
     tests:
@@ -88,8 +88,8 @@ models:
       The unnested version of this data is available in int__ocw__course_topics. e.g.
       [["Mathematics","Discrete Mathematics"],["Mathematics","Probability and Statistics"]]
   - name: course_learning_resource_types
-    description: json, course learning resource types or features. e.g. ["Lecture
-      Notes", "Problem Sets with Solutions", ..]
+    description: str, course learning resource types or features in comma-separated
+      list. e.g. Lecture Notes, Problem Sets with Solutions,...
 
 - name: int__ocw__course_topics
   description: supporting table containing tubular course topic data for OCW courses

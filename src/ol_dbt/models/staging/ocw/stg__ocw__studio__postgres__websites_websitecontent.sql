@@ -24,12 +24,17 @@ with source as (
         , json_query(metadata, 'lax $.course_description' omit quotes) as course_description
         , json_query(metadata, 'lax $.term' omit quotes) as course_term
         , json_query(metadata, 'lax $.year' omit quotes) as course_year
-        , json_query(metadata, 'lax $.level' omit quotes) as course_level
+        -- convert to comma-separate list to be consistent with extra_course_numbers
+        , array_join(
+            cast(json_parse(json_query(metadata, 'lax $.level')) as array (varchar)), ', ' --noqa
+        ) as course_level
+        , array_join(
+            cast(json_parse(json_query(metadata, 'lax $.learning_resource_types')) as array (varchar)), ', ' --noqa
+        ) as course_learning_resource_types
         , json_query(metadata, 'lax $.primary_course_number' omit quotes) as course_primary_course_number
         , json_query(metadata, 'lax $.extra_course_numbers' omit quotes) as course_extra_course_numbers
         , json_query(metadata, 'lax $.instructors.content') as course_instructor_uuids
         , json_query(metadata, 'lax $.topics') as course_topics
-        , json_query(metadata, 'lax $.learning_resource_types') as course_learning_resource_types
         , json_query(metadata, 'lax $.department_numbers') as course_department_numbers
         , {{ cast_timestamp_to_iso8601('deleted') }} as websitecontent_deleted_on
         , {{ cast_timestamp_to_iso8601('created_on') }} as websitecontent_created_on
