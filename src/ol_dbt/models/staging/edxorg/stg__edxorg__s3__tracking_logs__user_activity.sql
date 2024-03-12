@@ -8,7 +8,7 @@
 }}
 
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__irx__edxorg__s3__tracking_logs') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__tracking_logs') }}
     where
         username != ''
         and json_query(context, 'lax $.user_id' omit quotes) is not null
@@ -49,7 +49,7 @@ with source as (
         , name as useractivity_event_name
         , event_type as useractivity_event_type
         , {{ extract_course_id_from_tracking_log() }} as courserun_readable_id
-        , json_query(context, 'lax $.user_id' omit quotes) as user_id
+        , cast(json_query(context, 'lax $.user_id' omit quotes) as integer) as user_id
         , json_query(context, 'lax $.org_id' omit quotes) as org_id
         , json_query(context, 'lax $.path' omit quotes) as useractivity_path
         --- use regex here to preserve the nanoseconds as date_parse truncates the fraction of second to milliseconds
