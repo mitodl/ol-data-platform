@@ -1166,12 +1166,6 @@ models:
     description: str, title of the program
     tests:
     - not_null
-  - name: programrun_readable_id
-    description: str, unique program run ID formatted as program-v1:{org}+{program
-      code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
-    tests:
-    - unique
-    - not_null
   - name: programrun_tag
     description: str, string that identifies a single run in a program e.g. R0
     tests:
@@ -1180,6 +1174,15 @@ models:
     description: timestamp, specifying when the program run begins
   - name: programrun_end_on
     description: timestamp, specifying when the program run ends
+  - name: short_program_code
+    description: str, a short portion of the readable program id that contains the
+      program code. Examples include ML, QCF, AIPS, and DSBD.
+  - name: programrun_readable_id
+    description: str, unique program run ID formatted as program-v1:{org}+{program
+      code}+{run_tag} e.g. program-v1:xPRO+MLx+R1
+    tests:
+    - unique
+    - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__courses_programrun')
@@ -1211,6 +1214,9 @@ models:
     description: boolean, whether the course is on an external platform
     tests:
     - not_null
+  - name: short_program_code
+    description: str, a short portion of the readable course id that contains the
+      program code. Examples include ML, QCF, AIPS, and DSBD.
   - name: platform_id
     description: int, id of the course platform
   - name: cms_coursepage_description
