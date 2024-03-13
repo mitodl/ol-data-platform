@@ -73,7 +73,7 @@ with b2becommerce_b2border as (
         , b2becommerce_b2border.b2bcoupon_id
         , b2becommerce_b2border.b2border_created_on as order_created_on
         , b2becommerce_b2border.b2border_status as order_state
-        , b2becommerce_b2border.product_type as product_type
+        , b2becommerce_b2border.product_type
         , b2becommerce_b2border.b2border_email as user_email
         , b2becommerce_b2border.b2border_contract_number
         , productversion.productversion_readable_id

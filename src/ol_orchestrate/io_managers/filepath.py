@@ -116,5 +116,4 @@ class DummyIOManager(ConfigurableIOManager):
     def load_input(self, context: InputContext) -> DagsterPath:  # noqa: ARG002
         return DagsterPath(self.input_file_path)
 
-    def handle_output(self, context: "OutputContext", obj: Any) -> None:
-        ...
+    def handle_output(self, context: "OutputContext", obj: Any) -> None: ...

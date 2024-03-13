@@ -22,7 +22,7 @@ with mm_program_certificates as (
 )
 
 select
-    micromasters_users.user_edxorg_username as user_edxorg_username
+    micromasters_users.user_edxorg_username
     , micromasters_users.user_mitxonline_username
     , micromasters_users.user_email
     , programs.micromasters_program_id

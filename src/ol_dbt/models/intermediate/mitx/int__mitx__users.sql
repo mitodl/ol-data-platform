@@ -75,9 +75,9 @@ with mitxonline_users as (
         , coalesce(edxorg_users_view.is_edxorg_user is not null, false) as is_edxorg_user
         , coalesce(mitxonline_users_view.user_full_name, edxorg_users_view.user_full_name) as user_full_name
         , coalesce(mitxonline_users_view.user_address_country, edxorg_users_view.user_address_country)
-            as user_address_country
+        as user_address_country
         , coalesce(mitxonline_users_view.user_highest_education, edxorg_users_view.user_highest_education)
-            as user_highest_education
+        as user_highest_education
         , coalesce(mitxonline_users_view.user_gender, edxorg_users_view.user_gender) as user_gender
         , coalesce(mitxonline_users_view.user_birth_year, edxorg_users_view.user_birth_year) as user_birth_year
         , coalesce(mitxonline_users_view.user_company, edxorg_users_view.user_company_name) as user_company

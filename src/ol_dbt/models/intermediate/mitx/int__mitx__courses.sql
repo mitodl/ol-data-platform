@@ -4,7 +4,7 @@ with mitxonline_courses as (
         , course_title
         , course_is_live
         , course_readable_id
-        , course_number as course_number
+        , course_number
     from {{ ref('int__mitxonline__courses') }}
 )
 

@@ -17,11 +17,12 @@ with programpages as (
 
 , unnestedfacultymemberspage as (
     select
-        facultymemberspage.wagtail_page_id as wagtail_page_id
+        facultymemberspage.wagtail_page_id
         , json_format(cms_facultymemberspage_facultymember) as cms_facultymemberspage_facultymember -- noqa
 
     from facultymemberspage
-    cross join unnest(cast(json_parse(cms_facultymemberspage_faculty) as array (json)))
+    cross join
+        unnest(cast(json_parse(cms_facultymemberspage_faculty) as array (json)))
         as t(cms_facultymemberspage_facultymember) -- noqa
 
 )
@@ -39,9 +40,9 @@ with programpages as (
 select
     programspageswithpath.program_id
     , json_query(unnestedfacultymemberspage.cms_facultymemberspage_facultymember, 'lax $.value.name')
-        as cms_facultymemberspage_facultymember_name
+    as cms_facultymemberspage_facultymember_name
     , json_query(unnestedfacultymemberspage.cms_facultymemberspage_facultymember, 'lax $.value.description')
-        as cms_facultymemberspage_facultymember_description
+    as cms_facultymemberspage_facultymember_description
 
 
 from unnestedfacultymemberspage

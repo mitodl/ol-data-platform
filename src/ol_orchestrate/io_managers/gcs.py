@@ -40,5 +40,4 @@ class GCSFileIOManager(ConfigurableIOManager):
         gcs_blob.download_to_filename(context.partition_key)
         return DagsterPath(context.partition_key)
 
-    def handle_output(self, context: OutputContext, obj: DagsterPath) -> None:
-        ...
+    def handle_output(self, context: OutputContext, obj: DagsterPath) -> None: ...

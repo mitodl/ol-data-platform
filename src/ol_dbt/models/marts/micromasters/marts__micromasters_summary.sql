@@ -23,7 +23,7 @@ with enrollments as (
         , count(distinct user_address_country) as unique_countries
         , count_if(courserunenrollment_enrollment_mode = 'verified') as verified_enrollments
         , count(distinct case when courserunenrollment_enrollment_mode = 'verified' then user_email end)
-            as unique_verified_users
+        as unique_verified_users
     from enrollments
     group by micromasters_program_id, mitxonline_program_id
 )
@@ -38,7 +38,7 @@ with enrollments as (
         , count(distinct user_address_country) as unique_countries
         , count_if(courserunenrollment_enrollment_mode = 'verified') as verified_enrollments
         , count(distinct case when courserunenrollment_enrollment_mode = 'verified' then user_email end)
-            as unique_verified_users
+        as unique_verified_users
     from enrollments
 )
 
@@ -81,7 +81,7 @@ with enrollments as (
         0 as micromasters_program_id
         , 0 as mitxonline_program_id
         , count(distinct concat_ws(',', courserun_readable_id, user_edxorg_username, user_mitxonline_username))
-            as course_certificates
+        as course_certificates
         , count(distinct user_email) as unique_course_certificate_earners
     from course_certificates
 )

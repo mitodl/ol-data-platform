@@ -156,9 +156,10 @@ def fetch_edx_course_structure_from_api(
         f"course_blocks_{today.strftime('%Y-%m-%d')}.json"
     )
     data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
-    with jsonlines.open(structures_file, mode="w") as structures, jsonlines.open(
-        blocks_file, mode="w"
-    ) as blocks:
+    with (
+        jsonlines.open(structures_file, mode="w") as structures,
+        jsonlines.open(blocks_file, mode="w") as blocks,
+    ):
         for course_id in course_ids:
             context.log.info("Retrieving course structure for %s", course_id)
             course_structure = context.resources.openedx.get_course_structure_document(
