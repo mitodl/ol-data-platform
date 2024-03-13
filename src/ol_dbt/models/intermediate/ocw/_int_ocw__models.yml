@@ -6,20 +6,18 @@ models:
   description: OCW courses metadata on production environment
   columns:
   - name: course_uuid
-    description: str, auto-generated unique identifier string to identify the OCW
-      course
+    description: str, unique identifier for the OCW course
     tests:
     - not_null
     - unique
   - name: course_name
-    description: str, unique name of the OCW course. It appears as part of course
-      url
+    description: str, unique name of the OCW course. It appears as part of OCW Studio
+      urls
     tests:
     - not_null
     - unique
   - name: course_readable_id
-    description: str, short unique identifier for the OCW course, formatted as {course_num}-{semester}-{year}.
-      e.g. 18.05-spring-2022
+    description: str, short unique identifier for the OCW course. e.g. 18.05-spring-2022
     tests:
     - not_null
     - unique
@@ -68,31 +66,34 @@ models:
   - name: course_description
     description: str, course description on OCW website
   - name: course_term
-    description: str, course term e.g. Spring
-    tests:
-    - not_null
+    description: str, course term. Possible values are Spring, Summer, Fall, January
+      IAP, or blank
   - name: course_year
     description: int, course year
-    tests:
-    - not_null
   - name: course_level
-    description: str, course level in comma-separated list.  e.g. Undergraduate, Graduate
+    description: str, course level in comma-separated list. Possible values are Undergraduate
+      , Graduate, Non-Credit, High School, or blank
   - name: course_primary_course_number
     description: str, the primary course number e.g. 21A.850J
     tests:
     - not_null
   - name: course_extra_course_numbers
     description: str, the extra course number e.g. STS.484J
+  - name: course_department_numbers
+    description: str, course department numbers in comma-separate list. e.g. STS,
+      8.. The department name is available in int__ocw__course_departments.
   - name: course_topics
-    description: json, course topics (topic, subtopic, speciality) in json format.
-      The unnested version of this data is available in int__ocw__course_topics. e.g.
-      [["Mathematics","Discrete Mathematics"],["Mathematics","Probability and Statistics"]]
+    description: json, hierarchical course topics (topic, subtopic, speciality) in
+      json format. The unnested version of this data is available in int__ocw__course_topics.
+      e.g. [["Mathematics","Discrete Mathematics"],["Mathematics","Probability and
+      Statistics"]]
   - name: course_learning_resource_types
     description: str, course learning resource types or features in comma-separated
-      list. e.g. Lecture Notes, Problem Sets with Solutions,...
+      list. e.g. Lecture Notes, Problem Sets with Solutions,... Full list https://github.com/mitodl/ocw-hugo-projects/blob/049c85e6544a36ba69a89602e5014f6085ef8831/
+      ocw-course-v2/ocw-studio.yaml#L163-L207
 
 - name: int__ocw__course_topics
-  description: supporting table containing tubular course topic data for OCW courses
+  description: supporting table containing tabular course topic data for OCW courses
   columns:
   - name: course_uuid
     description: str, foreign key to ocw_courses
@@ -111,7 +112,7 @@ models:
       column_list: ["course_uuid", "course_topic", "course_subtopic", "course_speciality"]
 
 - name: int__ocw__course_instructors
-  description: supporting table containing tubular instructor profile data for OCW
+  description: supporting table containing tabular instructor profile data for OCW
     courses
   columns:
   - name: course_instructor_uuid
@@ -143,8 +144,9 @@ models:
       column_list: ["course_uuid", "course_instructor_uuid"]
 
 - name: int__ocw__course_departments
-  description: supporting table containing tubular department number and name for
-    OCW courses
+  description: supporting table containing tabular department number and name for
+    OCW courses. The mapping is available in https://github.com/mitodl/ocw-hugo-themes
+    /blob/main/base-theme/data/departments.json
   columns:
   - name: course_uuid
     description: str, foreign key to ocw_courses
