@@ -108,7 +108,7 @@ warn_required_dynamic_aliases = true
 [tool.ruff]
 target-version = "py311"
 line-length = 88
-select = [
+lint.select = [
     "A",  # flake8-builtins
     # "AIR",  # Airflow
     # "ANN",  # flake8-annotations
@@ -167,7 +167,7 @@ select = [
     "W",  # Pycodestyle Warning
     "YTT",  # flake8-2020
 ]
-ignore = [
+lint.ignore = [
     "B008",
     "B905",
     "D104",
@@ -186,14 +186,14 @@ ignore = [
     "RET508",
     "UP007"
 ]
-typing-modules = ["colour.hints"]
+lint.typing-modules = ["colour.hints"]
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.pydocstyle]
 convention = "pep257"
 
-[tool.ruff.flake8-quotes]
+[tool.ruff.lint.flake8-quotes]
 inline-quotes = "double"
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "test_*.py" = ["S101"]

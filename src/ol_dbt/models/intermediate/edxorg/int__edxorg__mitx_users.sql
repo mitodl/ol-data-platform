@@ -48,7 +48,8 @@ with user_info_combo as (
         , coalesce(user_info_combo.user_username, most_recent_user_info.user_username) as user_username
         , row_number()
             over (partition by user_info_combo.user_id order by user_info_combo.user_last_login desc
-            ) as row_num
+            )
+        as row_num
     from user_info_combo
     left join most_recent_user_info
         on user_info_combo.user_id = most_recent_user_info.user_id

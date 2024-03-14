@@ -12,7 +12,7 @@ with source as (
         , amount as transaction_amount
         , order_id
         , transaction_id as transaction_readable_identifier
-        , transaction_type as transaction_type
+        , transaction_type
         , json_query(data, 'lax $.decision' omit quotes) as transaction_status
         , json_query(data, 'lax $.auth_code' omit quotes) as transaction_authorization_code
         , json_query(data, 'lax $.req_payment_method' omit quotes) as transaction_payment_method

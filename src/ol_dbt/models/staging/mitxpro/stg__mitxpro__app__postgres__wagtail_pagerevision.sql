@@ -8,7 +8,7 @@ with source as (
         , {{ cast_timestamp_to_iso8601('created_at') }} as wagtail_pagerevision_created_on
         , content_json as wagtail_pagerevision_content_json
         , page_id as wagtail_page_id
-        , user_id as user_id
+        , user_id
 
     from source
 )

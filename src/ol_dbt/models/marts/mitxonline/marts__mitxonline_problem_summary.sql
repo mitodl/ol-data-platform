@@ -46,9 +46,9 @@ with showanswers as (
         , most_recent_attempts.useractivity_problem_success as problem_success
         , coalesce(showanswers_stats.user_username, most_recent_attempts.user_username) as user_username
         , coalesce(showanswers_stats.courserun_readable_id, most_recent_attempts.courserun_readable_id)
-            as courserun_readable_id
+        as courserun_readable_id
         , coalesce(showanswers_stats.useractivity_problem_id, most_recent_attempts.useractivity_problem_id)
-            as useractivity_problem_id
+        as useractivity_problem_id
     from showanswers_stats
     full outer join most_recent_attempts
         on

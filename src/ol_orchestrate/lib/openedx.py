@@ -91,7 +91,7 @@ def un_nest_course_structure(
 def process_video_xml(archive_path: Path) -> dict[str, Any]:
     json_data = {}
     with tarfile.open(archive_path, "r") as tf:
-        tf.extractall()
+        tf.extractall(filter="data")
         for member in tf.getmembers():
             course_id = parse_course_id("course/course.xml")
             if not member.isdir() and member.path.startswith("course/video/"):

@@ -133,8 +133,7 @@ def gcs_edxorg_archive_sensor(context: SensorEvaluationContext):
     key=raw_archive_asset_key,
     group_name="edxorg",
 )
-def edxorg_raw_data_archive():
-    ...
+def edxorg_raw_data_archive(): ...
 
 
 class EdxorgArchiveProcessConfig(Config):
@@ -307,8 +306,7 @@ def process_edxorg_archive_bundle(
     partitions_def=course_and_source_partitions,
     group_name="edxorg",
 )
-def dummy_edxorg_course_structure():
-    ...
+def dummy_edxorg_course_structure(): ...
 
 
 @multi_asset(
@@ -366,9 +364,10 @@ def flatten_edxorg_course_structure(
     structures_file = Path(f"course_structures_{data_version}.json")
     blocks_file = Path(f"course_blocks_{data_version}.json")
     data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
-    with jsonlines.open(structures_file, mode="w") as structures, jsonlines.open(
-        blocks_file, mode="w"
-    ) as blocks:
+    with (
+        jsonlines.open(structures_file, mode="w") as structures,
+        jsonlines.open(blocks_file, mode="w") as blocks,
+    ):
         table_row = {
             "content_hash": hashlib.sha256(
                 json.dumps(course_structure_document).encode("utf-8")
@@ -476,8 +475,7 @@ def gcs_edxorg_tracking_log_sensor(context: SensorEvaluationContext):
     key=raw_tracking_log_asset_key,
     group_name="edxorg",
 )
-def edxorg_raw_tracking_logs():
-    ...
+def edxorg_raw_tracking_logs(): ...
 
 
 @asset(
