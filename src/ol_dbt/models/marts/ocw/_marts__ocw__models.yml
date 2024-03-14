@@ -68,6 +68,8 @@ models:
   - name: course_instructors
     description: str, course instructors in comma-separate list.
   - name: course_learning_resource_types
-    description: str, course learning resource types or features in comma-separated
-      list. e.g. Lecture Notes, Problem Sets with Solutions.... Full list https://github.com/mitodl/ocw-hugo-projects/blob/049c85e6544a36ba69a89602e5014f6085ef8831/
-      ocw-course-v2/ocw-studio.yaml#L163-L207
+    description: |
+      str, course learning resource types or features in comma-separated
+      list. e.g. Lecture Notes, Problem Sets with Solutions...
+      Full list can be found at
+      https://github.com/mitodl/ocw-hugo-projects/blob/049c85e6544a36ba69a89602e5014f6085ef8831/ocw-course-v2/ocw-studio.yaml#L163-L207
