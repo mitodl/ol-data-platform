@@ -24,7 +24,7 @@ sources:
         project that contains config/templates/etc for the desired static site
     - name: short_id
       description: str, short unique identifier for the OCW website. e.g. 18.05-spring-2022
-        It is used for naming repos and folders on Google drive.
+        It is used for naming repos on github.mit.edu and folders on Google drive.
     - name: source
       description: str, indicating which sites were imported and which ones were authored
         in the app. Possible values are 'studio', 'ocw-import', or blank
