@@ -1,0 +1,172 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__ocw__studio__postgres__websites_website
+    columns:
+    - name: uuid
+      description: str, unique identifier for the OCW website
+    - name: name
+      description: str, unique name of the website. It appears as part of OCW Studio
+        urls
+    - name: title
+      description: str, title of the website on OCW website
+    - name: owner_id
+      description: int, foreign key to users_user, indicating who created the OCW
+        website
+    - name: starter_id
+      description: int, foreign key to websites_websitestarter, indicating a starter
+        project that contains config/templates/etc for the desired static site
+    - name: short_id
+      description: str, short unique identifier for the OCW website. e.g. 18.05-spring-2022
+        It is used for naming repos on github.mit.edu and folders on Google drive.
+    - name: source
+      description: str, indicating which sites were imported and which ones were authored
+        in the app. Possible values are 'studio', 'ocw-import', or blank
+    - name: url_path
+      description: str, unique url relative path to the OCW website. e.g. courses/my-site-fall-2020
+    - name: metadata
+      description: json, the json object that contains website's metadata such as
+        description, course number, topics, department_numbers, instructors, etc.
+        Full list of metadata field can be found https://github.com/mitodl/ocw-hugo-projects/blob/main/ocw-course-v2/ocw-studio.yaml
+    - name: has_unpublished_live
+      description: boolean, indicating if website has set as unpublished on OCW production
+        website. It defaults to true. True doesn't indicate the website is currently
+        unpublished on OCW production.
+    - name: has_unpublished_draft
+      description: boolean, indicating if website has set as unpublished on OCW staging.
+        It defaults to true.
+    - name: latest_build_id_live
+      description: int, the latest build id from Concourse pipeline when the website
+        published to OCW production environment
+    - name: latest_build_id_draft
+      description: int, the latest build id from Concourse pipeline when the website
+        published as draft to OCW staging environment
+    - name: live_last_published_by_id
+      description: int, foreign key to users_user, indicating who most recently published
+        the website to OCW production environment
+    - name: draft_last_published_by_id
+      description: int, foreign key to users_user, indicating who most recently published
+        as draft to OCW staging environment
+    - name: last_unpublished_by
+      description: int, foreign key to users_user, indicating who most recently unpublished
+        the website on OCW production environment
+    - name: live_publish_status
+      description: str, indicating the website's publish status on OCW production.
+        Possible values are succeeded, pending, started, errored, aborted and not-started
+    - name: draft_publish_status
+      description: str, indicating the website's publish status on OCW staging. Possible
+        values are succeeded, pending, started, errored, aborted and not-started
+    - name: unpublish_status
+      description: str, indicating the status when the website is unpublished on OCW
+        production. Possible values are succeeded, pending, started, errored, aborted
+        and not-started
+    - name: gdrive_folder
+      description: str, the Google Drive folder ID used for video uploads
+    - name: sync_status
+      description: str, tracking the sync status with Google Drive for video uploads
+    - name: synced_on
+      description: timestamp, date and time when Google Drive sync task was completed
+        on
+    - name: sync_errors
+      description: json, tracking the error for Google Drive sync task if any
+    - name: live_publish_status_updated_on
+      description: timestamp, date and time when live_publish_status was most recently
+        updated
+    - name: draft_publish_status_updated_on
+      description: timestamp, date and time when draft_publish_status was most recently
+        updated
+    - name: unpublish_status_updated_on
+      description: timestamp, date and time when unpublish_status was most recently
+        updated
+    - name: first_published_to_production
+      description: timestamp, date and time when the website was first published to
+        OCW production website.
+    - name: publish_date
+      description: timestamp, date and time when the publish date was most recently
+        updated on OCW production. The publish date is updated by the webhook to Concourse
+        pipeline (it rebuilds every site) whenever we do a release in ocw repos.
+    - name: draft_publish_date
+      description: timestamp, date and time when the website was most recently published
+        to OCW draft website.
+    - name: created_on
+      description: timestamp, date and time when the website record was created
+    - name: updated_on
+      description: timestamp, date and time when the website record was last updated
+
+  - name: raw__ocw__studio__postgres__websites_websitecontent
+    columns:
+    - name: id
+      description: int, primary key for this OCW website content component
+    - name: website_id
+      description: int, foreign key to websites_website
+    - name: title
+      description: str, title of this content component
+    - name: type
+      description: str, type of this content component. e.g. page, sitemetadata, resource,
+        etc.
+    - name: is_page_content
+      description: boolean, indicating that this content represents a navigable page,
+        as opposed to site metadata, configuration, etc.
+    - name: text_id
+      description: str, uuid string for the page content
+    - name: markdown
+      description: str, the markdown text for the page content
+    - name: filename
+      description: str, filename of the page content without the file extension.
+    - name: dirpath
+      description: str, the directory path for the page content. e.g. content/resources
+    - name: file
+      description: str, url path for the page content.
+    - name: parent_id
+      description: int, foreign key to websites_websitecontent, indicating the parent
+        of this content
+    - name: metadata
+      description: json, the json object that contains the metadata of this content
+        component
+    - name: owner_id
+      description: int, foreign key to users_user, indicating who created this content
+        component
+    - name: updated_by_id
+      description: int, foreign key to users_user, indicating who last updated this
+        content component
+    - name: deleted
+      description: timestamp, date and time for the soft delete
+    - name: deleted_by_cascade
+      description: boolean, indicating if the delete is cascade
+    - name: created_on
+      description: timestamp, date and time when this content component was created
+    - name: updated_on
+      description: timestamp, date and time when this content component was last updated
+
+  - name: raw__ocw__studio__postgres__websites_websitestarter
+    columns:
+    - name: id
+      description: int, primary key for the starter project
+    - name: name
+      description: str, name of the starter project.
+    - name: slug
+      description: str, short string to identify this starter. e.g. ocw-course-v2
+    - name: source
+      description: str, it's either github or local
+    - name: path
+      description: str, the github repo url or local file path of the starter project.
+    - name: commit
+      description: str, the commit hash for the repo if it's a Github starter repo
+    - name: status
+      description: str, status of the starter project. Possible values are Default,
+        Active and Inactive. Starters with Active and Default status will be shown
+        while creating a new site.
+    - name: config
+      description: json, json object contains the site config such as content types,
+        widgets, etc.
+    - name: created_on
+      description: timestamp, date and time when the starter project record was created
+    - name: updated_on
+      description: timestamp, date and time when the starter project record was last
+        updated
