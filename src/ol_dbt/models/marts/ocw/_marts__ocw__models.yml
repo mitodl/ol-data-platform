@@ -1,0 +1,73 @@
+---
+version: 2
+
+models:
+- name: marts__ocw_courses
+  description: OpenCourseWare courses metadata
+  columns:
+  - name: course_readable_id
+    description: str, short unique identifier for the OCW course. e.g. 18.05-spring-2022
+      The source of this field is short ID of the website.
+    tests:
+    - not_null
+    - unique
+  - name: course_name
+    description: str, unique name of the OCW course. It appears as part of OCW Studio
+      urls
+    tests:
+    - not_null
+    - unique
+  - name: course_title
+    description: str, title of the OCW course
+    tests:
+    - not_null
+  - name: course_live_url
+    description: str, url to the OCW course on production.
+  - name: course_is_live
+    description: boolean, indicating if the course website is currently published
+      on OCW production.
+    tests:
+    - not_null
+  - name: course_is_unpublished
+    description: boolean, indicating if the course website is currently unpublished
+      on OCW production.
+    tests:
+    - not_null
+  - name: course_has_never_published
+    description: boolean, indicating if the course website has never been published
+      on OCW production.
+    tests:
+    - not_null
+  - name: course_first_published_on
+    description: timestamp, date and time when the course website was first published
+      to OCW production
+  - name: course_publish_date_updated_on
+    description: timestamp, date and time when the publish date was most recently
+      updated on OCW production. The publish date is updated by the webhook to Concourse
+      pipeline (it rebuilds every site) whenever we do a release in ocw repos.
+  - name: course_term
+    description: str, course term. Possible values are Spring, Summer, Fall, January
+      IAP, or blank
+  - name: course_year
+    description: int, course year
+  - name: course_level
+    description: str, course level in comma-separated list. Possible values are Undergraduate
+      , Graduate, Non-Credit, High School, or blank
+  - name: course_primary_course_number
+    description: str, the primary course number e.g. 21A.850J
+    tests:
+    - not_null
+  - name: course_extra_course_numbers
+    description: str, the extra course number e.g. STS.484J
+  - name: course_department_numbers
+    description: str, course department numbers in comma-separate list. e.g. STS,
+      8
+  - name: course_topics
+    description: json, hierarchical course topics (topic, subtopic, speciality) in
+      json format
+  - name: course_instructors
+    description: str, course instructors in comma-separate list.
+  - name: course_learning_resource_types
+    description: str, course learning resource types or features in comma-separated
+      list. e.g. Lecture Notes, Problem Sets with Solutions.... Full list https://github.com/mitodl/ocw-hugo-projects/blob/049c85e6544a36ba69a89602e5014f6085ef8831/
+      ocw-course-v2/ocw-studio.yaml#L163-L207
