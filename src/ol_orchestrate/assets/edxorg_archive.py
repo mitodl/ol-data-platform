@@ -11,6 +11,7 @@ from pathlib import Path
 
 import duckdb
 import jsonlines
+import polars as pl
 from dagster import (
     AssetExecutionContext,
     AssetIn,
@@ -250,6 +251,24 @@ def process_edxorg_archive_bundle(
                 output_key = categorize_archive_element(tinfo.name)
             archive_file = Path(tmpdir.name).joinpath(tinfo.name.split("/")[-1])
             archive_file.write_bytes(archive.extractfile(tinfo).read())  # type: ignore[union-attr]
+
+            # Avoid processing CSV files that consist of only a header row. These files
+            # cause Airbyte to throw errors when attempting to infer the schema.
+            # (TMM 2024-03-14)
+            if (
+                table_name
+                and pl.read_csv(
+                    archive_file,
+                    has_header=True,
+                    n_rows=1,
+                    separator="\t",
+                ).is_empty()
+            ):
+                context.log.debug(
+                    "Skipping further processing of empty CSV file %s", tinfo.name
+                )
+                archive_file.unlink()
+                continue
             data_version = hashlib.file_digest(
                 archive_file.open("rb"), "sha256"
             ).hexdigest()
