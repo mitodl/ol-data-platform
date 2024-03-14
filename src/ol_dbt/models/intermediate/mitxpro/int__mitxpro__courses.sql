@@ -19,6 +19,7 @@ select
     , courses.course_is_live
     , courses.course_readable_id
     , courses.course_is_external
+    , courses.short_program_code
     , platform.platform_name
     , cms_courses.cms_coursepage_description
     , cms_courses.cms_coursepage_subhead
