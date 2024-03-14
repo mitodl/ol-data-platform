@@ -59,7 +59,8 @@ models:
     - not_null
   - name: website_metadata
     description: json, the json object that contains website's metadata such as description,
-      course number, topics, department_numbers, instructors, etc.
+      course number, topics, department_numbers, instructors, etc. Full list of metadata
+      field can be found https://github.com/mitodl/ocw-hugo-projects/blob/main/ocw-course-v2/ocw-studio.yaml
   - name: website_last_published_by_user_id
     description: int, foreign key to users_user, indicating who most recently published
       the website to OCW production

@@ -18,6 +18,7 @@ models:
     - unique
   - name: course_readable_id
     description: str, short unique identifier for the OCW course. e.g. 18.05-spring-2022
+      The source of this field is short ID of the website.
     tests:
     - not_null
     - unique
