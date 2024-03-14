@@ -11,7 +11,7 @@ with courses as (
 )
 
 select
-    courses.course_readable_id
+    courses.course_readable_id as course_short_id
     , courses.course_name
     , courses.course_title
     , courses.course_term

@@ -5,9 +5,8 @@ models:
 - name: marts__ocw_courses
   description: OpenCourseWare courses metadata
   columns:
-  - name: course_readable_id
+  - name: course_short_id
     description: str, short unique identifier for the OCW course. e.g. 18.05-spring-2022
-      The source of this field is short ID of the website.
     tests:
     - not_null
     - unique
