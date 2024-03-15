@@ -3,7 +3,7 @@ version: 2
 
 models:
 - name: marts__ocw_courses
-  description: OpenCourseWare courses metadata
+  description: OCW courses managed in OCW Studio
   columns:
   - name: course_short_id
     description: str, short unique identifier for the OCW course. e.g. 18.05-spring-2022
