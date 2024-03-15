@@ -260,8 +260,9 @@ def process_edxorg_archive_bundle(
                 and pl.read_csv(
                     archive_file,
                     has_header=True,
-                    n_rows=1,
+                    n_rows=2,
                     separator="\t",
+                    ignore_errors=True,
                 ).is_empty()
             ):
                 context.log.debug(
