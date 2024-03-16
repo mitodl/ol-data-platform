@@ -263,6 +263,7 @@ def process_edxorg_archive_bundle(
                     n_rows=2,
                     separator="\t",
                     ignore_errors=True,
+                    truncate_ragged_lines=True,
                 ).is_empty()
             ):
                 context.log.debug(
