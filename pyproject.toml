@@ -49,7 +49,7 @@ mypy = "*"
 pre-commit = "^3"
 pytest = "^8.0.0"
 ruff = "*"
-sqlfluff = "^2.0.0"
+sqlfluff = "^3.0.0"
 typer = {extras = ["all"], version = "^0.9.0"}
 
 [tool.black]
