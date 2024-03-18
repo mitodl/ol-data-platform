@@ -31,8 +31,8 @@ with mitxpro__programenrollments as (
 )
 
 , combined_programs as (
-    select
-        mitxpro__programs.platform_name
+    select 
+        mitxpro__programs.platform_name 
         , mitxpro__programs.program_id
         , mitxpro__programs.program_title
         , mitxpro__programs.program_is_live
@@ -46,18 +46,18 @@ with mitxpro__programenrollments as (
         , mitxpro__program_certificates.programcertificate_created_on
         , mitxpro__program_certificates.programcertificate_is_revoked
         , mitxpro__program_certificates.programcertificate_uuid
-    from mitxpro__programenrollments
-    inner join mitxpro__programs
+    from mitxpro__programenrollments   
+    inner join mitxpro__programs 
         on mitxpro__programenrollments.program_id = mitxpro__programs.program_id
     left join mitxpro__program_certificates
-        on
+        on 
             mitxpro__programenrollments.program_id = mitxpro__program_certificates.program_id
             and mitxpro__programenrollments.user_id = mitxpro__program_certificates.user_id
-
+ 
     union all
 
-    select
-        'mitxonline' as platform_name
+    select 
+        'mitxonline' as platform_name 
         , mitxonline__programs.program_id
         , mitxonline__programs.program_title
         , mitxonline__programs.program_is_live
@@ -72,17 +72,17 @@ with mitxpro__programenrollments as (
         , mitxonline__program_certificates.programcertificate_is_revoked
         , mitxonline__program_certificates.programcertificate_uuid
     from mitxonline__programenrollments
-    inner join mitxonline__programs
+    inner join mitxonline__programs 
         on mitxonline__programenrollments.program_id = mitxonline__programs.program_id
     left join mitxonline__program_certificates
-        on
+        on 
             mitxonline__programenrollments.user_id = mitxonline__program_certificates.user_id
             and mitxonline__programenrollments.program_id = mitxonline__program_certificates.program_id
 
     union all
 
-    select
-        'edxorg' as platform_name
+    select 
+        'edxorg' as platform_name 
         , edx_program_certificates.micromasters_program_id as program_id
         , edx_program_certificates.program_title
         , null as program_is_live
@@ -97,8 +97,8 @@ with mitxpro__programenrollments as (
         , null as programcertificate_is_revoked
         , edx_program_certificates.program_uuid as programcertificate_uuid
     from edx_program_certificates
-    left join users
-        on edx_program_certificates.user_username = users.user_edxorg_username
+    left join users 
+        on edx_program_certificates.user_username = users.user_edxorg_username    
 )
 
 select * from combined_programs
