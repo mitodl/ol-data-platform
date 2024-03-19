@@ -40,6 +40,7 @@ select
     , mitxonline_users.user_last_name
     , micromasters_users.user_address_postal_code
     , micromasters_users.user_street_address
+    , mitxonline_program_certificates.programcertificate_uuid as program_certificate_hashed_id
     , mitxonline_program_certificates.programcertificate_created_on as program_completion_timestamp
     , micromasters_users.user_id as micromasters_user_id
     , mitxonline_users.user_full_name

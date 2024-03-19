@@ -1,5 +1,10 @@
 with completed_program_learners as (
-    select * from {{ ref('stg__edxorg__s3__program_learner_report') }}
+    select
+        *
+        , lower(
+           to_hex(md5(cast(cast(user_id as varchar) as varbinary) || cast(program_uuid as varbinary))) --noqa
+        ) as program_certificate_hashed_id
+    from {{ ref('stg__edxorg__s3__program_learner_report') }}
     where user_has_completed_program = true
 )
 
@@ -16,7 +21,8 @@ with completed_program_learners as (
 )
 
 select
-    completed_program_learners_sorted.program_type
+    completed_program_learners_sorted.program_certificate_hashed_id
+    , completed_program_learners_sorted.program_type
     , completed_program_learners_sorted.program_uuid
     , completed_program_learners_sorted.program_title
     , completed_program_learners_sorted.user_id
