@@ -195,6 +195,11 @@ models:
     description: int, sequential ID representing a program in the mitxonline database
   - name: user_edxorg_id
     description: int, Numerical user ID of a learner on the edX platform
+  - name: program_certificate_hashed_id
+    description: str, unique hash value used to identify the program certificate
+    tests:
+    - unique
+    - not_null
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program

@@ -157,6 +157,11 @@ models:
       the micromasters database
   - name: user_full_name
     description: str, The full name of the user on the edX platform
+  - name: program_certificate_hashed_id
+    description: str, unique hash used to identify the program certificate
+    tests:
+    - not_null
+    - unique
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program
@@ -217,6 +222,11 @@ models:
       on MITx Online or MicroMasters.
   - name: user_full_name
     description: str, The full name from user's profile on MITx Online
+  - name: program_certificate_hashed_id
+    description: str, unique hash used to identify the program certificate
+    tests:
+    - unique
+    - not_null
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program
@@ -279,6 +289,11 @@ models:
       the micromasters database
   - name: user_full_name
     description: str, The full name of the user on the edX platform
+  - name: program_certificate_hashed_id
+    description: str, unique hash used to identify the program certificate
+    tests:
+    - unique
+    - not_null
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program

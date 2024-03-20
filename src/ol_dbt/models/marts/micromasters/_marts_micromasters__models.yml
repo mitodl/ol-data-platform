@@ -218,6 +218,11 @@ models:
     grants:
       select: ['mit_irx']
   columns:
+  - name: program_certificate_hashed_id
+    description: str, unique hash value used to identify the program certificate
+    tests:
+    - unique
+    - not_null
   - name: user_edxorg_username
     description: str, The username of the learner on the edX platform. For users who
       got DEDP certificates on MITx Online, this could be blank if they don't have

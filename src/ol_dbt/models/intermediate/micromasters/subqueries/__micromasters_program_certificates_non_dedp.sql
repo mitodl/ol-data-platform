@@ -52,6 +52,7 @@ with micromasters_program_certificates as (
         , micromasters_users.user_street_address
         , micromasters_users.user_address_state_or_territory
         , edx_users.user_full_name
+        , micromasters_program_certificates.program_certificate_hashed_id
         , micromasters_program_certificates.program_certificate_awarded_on as program_completion_timestamp
         , micromasters_users.user_id as micromasters_user_id
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
@@ -88,6 +89,7 @@ with micromasters_program_certificates as (
         , micromasters_users.user_street_address
         , micromasters_users.user_address_state_or_territory
         , edx_users.user_full_name
+        , program_certificates_override_list.program_certificate_hashed_id
         , null as program_completion_timestamp
         , micromasters_users.user_id as micromasters_user_id
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
