@@ -38,7 +38,7 @@ select
     , micromasters_users.user_street_address
     , micromasters_users.user_address_state_or_territory
     , edx_users.user_full_name
-    , mm_program_certificates.programcertificate_hash as program_certificate_hashed_id
+    , {{ generate_hash_id('mm_program_certificates.programcertificate_hash') }} as program_certificate_hashed_id
     , mm_program_certificates.programcertificate_created_on as program_completion_timestamp
     , micromasters_users.user_id as micromasters_user_id
     , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth

@@ -1,9 +1,7 @@
 with completed_program_learners as (
     select
         *
-        , lower(
-           to_hex(md5(cast(cast(user_id as varchar) as varbinary) || cast(program_uuid as varbinary))) --noqa
-        ) as program_certificate_hashed_id
+        , {{ generate_hash_id('cast(user_id as varchar) || program_uuid') }} as program_certificate_hashed_id
     from {{ ref('stg__edxorg__s3__program_learner_report') }}
     where user_has_completed_program = true
 )
