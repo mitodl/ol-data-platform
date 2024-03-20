@@ -1466,7 +1466,7 @@ models:
         to: ref('int__mitxpro__users')
         field: user_id
   - name: courseruncertificate_url
-    description: str, the full URL to the certificate on MIT xPro if it's not invoked
+    description: str, the full URL to the certificate on MIT xPro if it's not revoked
     tests:
     - unique
   - name: courseruncertificate_is_revoked
