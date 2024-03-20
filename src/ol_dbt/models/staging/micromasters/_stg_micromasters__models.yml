@@ -252,6 +252,8 @@ models:
     meet all the program certificate requirements. This list has the user_id on user_edxorg
     and the program_id on micromasters production for those users
   columns:
+  - name: program_certificate_hashed_id
+    description: str, unique hash used to identify the program certificate
   - name: user_edxorg_id
     description: int, edxorg id for a user
     tests:
