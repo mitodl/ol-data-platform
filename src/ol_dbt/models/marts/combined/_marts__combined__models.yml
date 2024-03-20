@@ -250,6 +250,14 @@ models:
   - name: product_program_readable_id
     description: str, open edX program readable ID associated to ecommerce products
       on MITx Online or xPro. Blank means that the product is course run.
+  - name: courserungrade_grade
+    description: float, course grade on edX.org or MITxOnline or xPro range from 0
+      to 1
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on edX.org or MITxOnline or xPro
+  - name: course_title
+    description: str, title of the course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]

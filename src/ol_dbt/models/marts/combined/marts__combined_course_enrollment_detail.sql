@@ -22,6 +22,34 @@ with mitx_enrollments as (
     select * from {{ ref('int__bootcamps__courserun_certificates') }}
 )
 
+, mitx_grades as (
+    select * from {{ ref('int__mitx__courserun_grades') }}
+)
+
+, mitxpro_grades as (
+    select * from {{ ref('int__mitxpro__courserun_grades') }}
+)
+
+, bootcamps_courses as (
+    select * from {{ ref('int__bootcamps__courses') }}
+)
+
+, bootcamps_courseruns as (
+    select * from {{ ref('int__bootcamps__course_runs') }}
+)
+
+, mitx_courses as (
+    select * from {{ ref('int__mitx__courses') }}
+)
+
+, mitxpro_courseruns as (
+    select * from {{ ref('int__mitxpro__course_runs') }}
+)
+
+, mitxpro_courses as (
+    select * from {{ ref('int__mitxpro__courses') }}
+)
+
 , mitxonline_completed_orders as (
     select
         *
@@ -107,6 +135,9 @@ with mitx_enrollments as (
         , mitxonline_completed_orders.program_readable_id as product_program_readable_id
         , mitxonline_completed_orders.discount_amount_text as discount
         , mitxonline_completed_orders.discount_amount
+        , mitx_grades.courserungrade_grade
+        , mitx_grades.courserungrade_is_passing
+        , mitx_courses.course_title
     from mitx_enrollments
     left join mitx_certificates
         on
@@ -117,6 +148,12 @@ with mitx_enrollments as (
             mitx_enrollments.user_id = mitxonline_completed_orders.user_id
             and mitx_enrollments.courserun_id = mitxonline_completed_orders.courserun_id
             and mitxonline_completed_orders.row_num = 1
+    left join mitx_grades
+        on
+            mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
+            and mitx_enrollments.user_mitxonline_username = mitx_grades.user_mitxonline_username
+    left join mitx_courses
+        on mitx_enrollments.course_number = mitx_courses.course_number
     where mitx_enrollments.platform = '{{ var("mitxonline") }}'
 
     union all
@@ -166,6 +203,9 @@ with mitx_enrollments as (
         , null as product_program_readable_id
         , micromasters_completed_orders.coupon_discount_amount_text as discount
         , micromasters_completed_orders.coupon_amount as discount_amount
+        , mitx_grades.courserungrade_grade
+        , mitx_grades.courserungrade_is_passing
+        , mitx_courses.course_title
     from mitx_enrollments
     left join mitx_certificates
         on
@@ -177,6 +217,12 @@ with mitx_enrollments as (
             micromasters_users.user_id = micromasters_completed_orders.user_id
             and mitx_enrollments.courserun_readable_id = micromasters_completed_orders.courserun_edxorg_readable_id
             and micromasters_completed_orders.row_num = 1
+    left join mitx_grades
+        on
+            mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
+            and mitx_enrollments.user_edxorg_username = mitx_grades.user_edxorg_username
+    left join mitx_courses
+        on mitx_enrollments.course_number = mitx_courses.course_number
     where mitx_enrollments.platform = '{{ var("edxorg") }}'
 
 
@@ -232,6 +278,9 @@ with mitx_enrollments as (
                 then mitxpro_lines.product_price * mitxpro_completed_orders.couponpaymentversion_discount_amount
             else mitxpro_completed_orders.couponpaymentversion_discount_amount
         end as discount_amount
+        , mitxpro_grades.courserungrade_grade
+        , mitxpro_grades.courserungrade_is_passing
+        , mitxpro_courses.course_title
     from mitxpro_enrollments
     left join mitxpro_certificates
         on
@@ -241,6 +290,15 @@ with mitx_enrollments as (
         on mitxpro_enrollments.ecommerce_order_id = mitxpro_completed_orders.order_id
     left join mitxpro_lines
         on mitxpro_completed_orders.order_id = mitxpro_lines.order_id
+    left join mitxpro_grades
+        on
+            mitxpro_enrollments.courserun_readable_id = mitxpro_grades.courserun_readable_id
+            and mitxpro_enrollments.user_username = mitxpro_grades.user_username
+    left join mitxpro_courseruns
+        on mitxpro_enrollments.courserun_readable_id = mitxpro_courseruns.courserun_readable_id
+    left join mitxpro_courses
+        on mitxpro_courseruns.course_id = mitxpro_courses.course_id
+
 
     union all
 
@@ -289,6 +347,9 @@ with mitx_enrollments as (
         , null as product_program_readable_id
         , null as discount
         , null as discount_amount
+        , null as courserungrade_grade
+        , null as courserungrade_is_passing
+        , bootcamps_courses.course_title
     from bootcamps_enrollments
     left join bootcamps_certificates
         on
@@ -298,6 +359,10 @@ with mitx_enrollments as (
         on
             bootcamps_enrollments.user_id = bootcamps_completed_orders.order_purchaser_user_id
             and bootcamps_enrollments.courserun_id = bootcamps_completed_orders.courserun_id
+    left join bootcamps_courseruns
+        on bootcamps_enrollments.courserun_id = bootcamps_courseruns.courserun_id
+    left join bootcamps_courses
+        on bootcamps_courseruns.course_id = bootcamps_courses.course_id
 )
 
 select * from combined_enrollment_detail
