@@ -42,6 +42,10 @@ with mitx_enrollments as (
     select * from {{ ref('int__mitx__courses') }}
 )
 
+, mitxpro_courseruns as (
+    select * from {{ ref('int__mitxpro__course_runs') }}
+)
+
 , mitxpro_courses as (
     select * from {{ ref('int__mitxpro__courses') }}
 )
@@ -145,7 +149,7 @@ with mitx_enrollments as (
             and mitx_enrollments.courserun_id = mitxonline_completed_orders.courserun_id
             and mitxonline_completed_orders.row_num = 1
     left join mitx_grades
-        on
+        on 
             mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
             and mitx_enrollments.user_mitxonline_username = mitx_grades.user_mitxonline_username
     left join mitx_courses
@@ -214,7 +218,7 @@ with mitx_enrollments as (
             and mitx_enrollments.courserun_readable_id = micromasters_completed_orders.courserun_edxorg_readable_id
             and micromasters_completed_orders.row_num = 1
     left join mitx_grades
-        on
+        on 
             mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
             and mitx_enrollments.user_edxorg_username = mitx_grades.user_edxorg_username
     left join mitx_courses
@@ -287,11 +291,13 @@ with mitx_enrollments as (
     left join mitxpro_lines
         on mitxpro_completed_orders.order_id = mitxpro_lines.order_id
     left join mitxpro_grades
-        on
+        on 
             mitxpro_enrollments.courserun_readable_id = mitxpro_grades.courserun_readable_id
             and mitxpro_enrollments.user_username = mitxpro_grades.user_username
+    left join mitxpro_courseruns
+        on mitxpro_enrollments.courserun_readable_id = mitxpro_courseruns.courserun_readable_id
     left join mitxpro_courses
-        on mitxpro_enrollments.course_readable_id = mitxpro_courses.course_readable_id
+        on mitxpro_courseruns.course_id = mitxpro_courses.course_id
 
 
     union all
