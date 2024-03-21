@@ -2,7 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__xpro__openedx__mysql__courseware_studentmodule') }}
 )
 
-{{ deduplicate_data('source', 'most_recent_source') }}
+{{ deduplicate_query('source', 'most_recent_source') }}
 
 , cleaned as (
 

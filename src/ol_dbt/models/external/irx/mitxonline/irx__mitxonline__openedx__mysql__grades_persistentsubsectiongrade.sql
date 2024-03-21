@@ -3,7 +3,7 @@ with grades_persistentsubsectiongrade as (
     from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__mysql__grades_persistentsubsectiongrade') }}
 )
 
-{{ deduplicate_data('grades_persistentsubsectiongrade', 'most_recent_source') }}
+{{ deduplicate_query('grades_persistentsubsectiongrade', 'most_recent_source') }}
 
 select
     course_id

@@ -4,7 +4,7 @@ with source as (
 )
 
 
-{{ deduplicate_data('source', 'most_recent_source') }}
+{{ deduplicate_query('source', 'most_recent_source') }}
 
 , cleaned as (
 
