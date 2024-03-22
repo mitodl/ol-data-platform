@@ -3,6 +3,9 @@ with source as (
     from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__grades_persistentsubsectiongrade') }}
 )
 
+
+{{ deduplicate_query('source', 'most_recent_source') }}
+
 , cleaned as (
 
     select
@@ -18,7 +21,7 @@ with source as (
         , to_iso8601(from_iso8601_timestamp_nanos(first_attempted)) as subsectiongrade_first_attempted_on
         , to_iso8601(from_iso8601_timestamp_nanos(created)) as subsectiongrade_created_on
         , to_iso8601(from_iso8601_timestamp_nanos(modified)) as subsectiongrade_updated_on
-    from source
+    from most_recent_source
 )
 
 select * from cleaned
