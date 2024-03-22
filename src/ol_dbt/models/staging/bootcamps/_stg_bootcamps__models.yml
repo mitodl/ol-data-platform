@@ -409,7 +409,7 @@ models:
         to: ref('stg__bootcamps__app__postgres__auth_user')
         field: user_id
   - name: courseruncertificate_url
-    description: str, the full URL to the certificate on Bootcamps if it's not invoked
+    description: str, the full URL to the certificate on Bootcamps if it's not revoked
     tests:
     - unique
   - name: courseruncertificate_created_on

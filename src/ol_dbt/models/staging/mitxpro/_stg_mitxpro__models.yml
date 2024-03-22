@@ -1316,7 +1316,7 @@ models:
         to: ref('stg__mitxpro__app__postgres__users_user')
         field: user_id
   - name: courseruncertificate_url
-    description: str, the full URL to the certificate on xPro if it's not invoked
+    description: str, the full URL to the certificate on xPro if it's not revoked
     tests:
     - unique
   - name: certificate_page_revision_id

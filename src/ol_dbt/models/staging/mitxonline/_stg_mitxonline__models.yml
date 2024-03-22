@@ -1064,7 +1064,7 @@ models:
     - unique
     - not_null
   - name: courseruncertificate_url
-    description: str, the full URL to the certificate on MITx Online if it's not invoked
+    description: str, the full URL to the certificate on MITx Online if it's not revoked
     tests:
     - unique
   - name: courserun_id
