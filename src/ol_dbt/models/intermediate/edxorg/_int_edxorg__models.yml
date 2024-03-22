@@ -378,6 +378,11 @@ models:
   description: learners who completed MicroMasters and XSeries programs on edX.org.
     program_certificate_awarded_on might be null for some programs such as SCM
   columns:
+  - name: program_certificate_hashed_id
+    description: str, unique hash value used to identify the program certificate
+    tests:
+    - not_null
+    - unique
   - name: program_type
     description: str, the type of the program. The value are 'MicroMasters' and 'XSeries'
       for MITx programs on edX.org
@@ -463,3 +468,4 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_uuid"]
+
