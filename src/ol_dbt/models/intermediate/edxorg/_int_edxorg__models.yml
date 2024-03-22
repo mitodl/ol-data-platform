@@ -378,11 +378,6 @@ models:
   description: learners who completed MicroMasters and XSeries programs on edX.org.
     program_certificate_awarded_on might be null for some programs such as SCM
   columns:
-  - name: program_certificate_hashed_id
-    description: str, unique hash value used to identify the program certificate
-    tests:
-    - not_null
-    - unique
   - name: program_type
     description: str, the type of the program. The value are 'MicroMasters' and 'XSeries'
       for MITx programs on edX.org
@@ -426,3 +421,46 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_uuid"]
+
+- name: int__edxorg__mitx_program_enrollments
+  description: learners who enrolled in MicroMasters and XSeries programs on edX.org
+  columns:
+  - name: program_type
+    description: str, the type of the program. The value are 'MicroMasters' and 'XSeries'
+      for MITx programs on edX.org
+    tests:
+    - not_null
+  - name: program_uuid
+    description: str, the UUID of the program on edX.org. 'MIT Finance' and 'Finance'
+      are two different UUIDs, as they have different required courses. 'Statistics
+      and Data Science' is split into 'Statistics and Data Science' and 'Statistics
+      and Data Science (General track)', which are also two different program UUIDs.
+    tests:
+    - not_null
+  - name: program_title
+    description: str, title of the program on edX.org.
+    tests:
+    - not_null
+  - name: user_id
+    description: int, the edX learner ID in the LMS in a user's course run enrollment
+      record.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the user on edX.org
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, the full name of an edX learner in the LMS in a user's user
+      profile record. Retired users will have no full name available.
+    tests:
+    - not_null
+  - name: user_has_completed_program
+    description: boolean, whether the learner has passed each of the courses in the
+      program with a grade that qualifies them for a verified certificate.
+  - name: micromasters_program_id
+    description: int, foreign key to program in the MicroMasters database
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "program_uuid"]
+
