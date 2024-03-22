@@ -23,7 +23,7 @@ left join micromasters_programs
         program_learners.program_title like micromasters_programs.program_title || '%'
         or program_learners.program_title like '%' || micromasters_programs.program_title
     )
-group by 
+group by
     program_learners.program_type
     , program_learners.program_uuid
     , program_learners.program_title
