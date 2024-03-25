@@ -278,7 +278,7 @@ models:
     description: str, title of the program
   - name: program_is_live
     description: boolean, indicating whether the program is available to users on
-      the MITOnline website or MITxPro website
+      the MITxOnline website or MITxPro website
   - name: program_readable_id
     description: str, readable ID from xpro or mitxonline formatted as program-v1:{org}+{program
       code} e.g.program-v1:xPRO+MLx
@@ -302,5 +302,4 @@ models:
     description: str, unique identifier for the program certificate
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform_name", "program_id", "user_id", "programcertificate_created_on",
-        "programenrollment_created_on", "programcertificate_uuid"]
+      column_list: ["platform_name", "program_title", "user_username", "programenrollment_created_on"]

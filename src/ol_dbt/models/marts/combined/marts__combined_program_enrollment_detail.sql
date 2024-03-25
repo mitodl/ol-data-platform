@@ -26,7 +26,11 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__edxorg__mitx_program_certificates') }}
 )
 
-, users as (
+, edx_program_enrollments as (
+    select * from {{ ref('int__edxorg__mitx_program_enrollments') }}
+)
+
+, mitx__users as (
     select * from {{ ref('int__mitx__users') }}
 )
 
@@ -81,24 +85,28 @@ with mitxpro__programenrollments as (
 
     union all
 
-    select
+    select 
         'edxorg' as platform_name
-        , edx_program_certificates.micromasters_program_id as program_id
-        , edx_program_certificates.program_title
+        , edx_program_enrollments.micromasters_program_id as program_id
+        , edx_program_enrollments.program_title
         , null as program_is_live
         , null as program_readable_id
-        , edx_program_certificates.user_id
-        , users.user_edxorg_email as user_email
-        , edx_program_certificates.user_username
+        , edx_program_enrollments.user_id
+        , mitx__users.user_email
+        , edx_program_enrollments.user_username
         , null as programenrollment_is_active
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
         , edx_program_certificates.program_certificate_awarded_on as programcertificate_created_on
         , null as programcertificate_is_revoked
-        , edx_program_certificates.program_uuid as programcertificate_uuid
-    from edx_program_certificates
-    left join users
-        on edx_program_certificates.user_username = users.user_edxorg_username
+        , null as programcertificate_uuid
+    from edx_program_enrollments
+    left join mitx__users
+        on edx_program_enrollments.user_id = mitx__users.user_id
+    left join edx_program_certificates
+        on 
+            edx_program_enrollments.program_uuid = edx_program_certificates.program_uuid 
+            and edx_program_enrollments.user_id = edx_program_certificates.user_id
 )
 
 select * from combined_programs
