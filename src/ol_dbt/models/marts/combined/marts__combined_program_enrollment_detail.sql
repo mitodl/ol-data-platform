@@ -31,7 +31,7 @@ with mitxpro__programenrollments as (
 )
 
 , mitx__users as (
-    select * from {{ ref('int__mitx__users') }}
+    select * from {{ ref('int__edxorg__mitx_users') }}
 )
 
 , combined_programs as (
@@ -85,7 +85,7 @@ with mitxpro__programenrollments as (
 
     union all
 
-    select
+    select 
         'edxorg' as platform_name
         , edx_program_enrollments.micromasters_program_id as program_id
         , edx_program_enrollments.program_title
@@ -104,8 +104,8 @@ with mitxpro__programenrollments as (
     left join mitx__users
         on edx_program_enrollments.user_id = mitx__users.user_id
     left join edx_program_certificates
-        on
-            edx_program_enrollments.program_uuid = edx_program_certificates.program_uuid
+        on 
+            edx_program_enrollments.program_uuid = edx_program_certificates.program_uuid 
             and edx_program_enrollments.user_id = edx_program_certificates.user_id
 )
 
