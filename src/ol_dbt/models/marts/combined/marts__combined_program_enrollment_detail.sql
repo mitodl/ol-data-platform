@@ -85,7 +85,7 @@ with mitxpro__programenrollments as (
 
     union all
 
-    select
+    select 
         'edxorg' as platform_name
         , edx_program_enrollments.micromasters_program_id as program_id
         , edx_program_enrollments.program_title
@@ -99,13 +99,13 @@ with mitxpro__programenrollments as (
         , null as programenrollment_enrollment_status
         , edx_program_certificates.program_certificate_awarded_on as programcertificate_created_on
         , null as programcertificate_is_revoked
-        , null as programcertificate_uuid
+        , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
     from edx_program_enrollments
     left join mitx__users
         on edx_program_enrollments.user_id = mitx__users.user_id
     left join edx_program_certificates
-        on
-            edx_program_enrollments.program_uuid = edx_program_certificates.program_uuid
+        on 
+            edx_program_enrollments.program_uuid = edx_program_certificates.program_uuid 
             and edx_program_enrollments.user_id = edx_program_certificates.user_id
 )
 

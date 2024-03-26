@@ -310,4 +310,4 @@ models:
     description: str, unique identifier for the program certificate
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform_name", "program_title", "user_username", "programenrollment_created_on"]
+      column_list: ["program_title", "user_username", "programenrollment_created_on"]
