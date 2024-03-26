@@ -271,3 +271,43 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id", "order_reference_number"]
       row_condition: "platform='Bootcamps'"
+
+- name: marts__combined_program_enrollment_detail
+  description: Mart model for program enrollments and certificates from different
+    platforms
+  columns:
+  - name: platform_name
+    description: str, name of the platform
+    tests:
+    - not_null
+  - name: program_id
+    description: int, id representing a single program on a particular platform
+  - name: program_title
+    description: str, title of the program
+  - name: program_is_live
+    description: boolean, indicating whether the program is available to users on
+      the MITxOnline website or MITxPro website
+  - name: program_readable_id
+    description: str, readable ID from xpro or mitxonline formatted as program-v1:{org}+{program
+      code} e.g.program-v1:xPRO+MLx
+  - name: user_id
+    description: int, unique id assigned to the user
+  - name: user_email
+    description: string, email
+  - name: user_username
+    description: string, username
+  - name: programenrollment_is_active
+    description: boolean, indicating whether the user is still enrolled in the program
+  - name: programenrollment_created_on
+    description: timestamp, specifying when an enrollment was initially created
+  - name: programenrollment_enrollment_status
+    description: str, enrollment status for users whose enrollment changed
+  - name: programcertificate_created_on
+    description: timestamp, specifying when a certificate was initially created
+  - name: programcertificate_is_revoked
+    description: boolean, indicating whether the certificate is revoked and invalid
+  - name: programcertificate_uuid
+    description: str, unique identifier for the program certificate
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["program_title", "user_username", "programenrollment_created_on"]
