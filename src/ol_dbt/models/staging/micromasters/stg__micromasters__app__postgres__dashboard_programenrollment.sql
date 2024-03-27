@@ -7,6 +7,7 @@ with source as (
         id as programenrollment_id
         , user_id
         , program_id
+        , share_hash
     from source
 )
 

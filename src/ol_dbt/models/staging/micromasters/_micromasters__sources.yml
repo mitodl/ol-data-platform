@@ -568,3 +568,6 @@ sources:
       description: int, foreign key for users_user
     - name: program_id
       description: int, foreign key to courses_program
+    - name: share_hash
+      description: str, share hash for the program enrollment 
+        example:72ff85f6-b88d-4636-830a-69cf59f896f5
