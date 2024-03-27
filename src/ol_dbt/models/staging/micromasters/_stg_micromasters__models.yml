@@ -868,3 +868,16 @@ models:
     - not_null
   - name: user_end_date
     description: date, end date for this employment
+
+- name: stg__micromasters__app__postgres__dashboard_programenrollment
+  columns:
+  - name: programenrollment_id
+    description: int, primary key representing a users program enrollment
+    tests:
+    - not_null
+  - name: user_id
+    description: int, foreign key for users_user
+  - name: program_id
+    description: int, foreign key to courses_program
+  - name: share_hash
+    description: str, share hash for the program enrollment
