@@ -559,3 +559,12 @@ sources:
       description: date, start date for this employment
     - name: end_date
       description: date, end date for this employment
+
+  - name: raw__micromasters__app__postgres__dashboard_programenrollment
+    columns:
+    - name: id
+      description: int, primary key representing a users program enrollment
+    - name: user_id
+      description: int, foreign key for users_user
+    - name: program_id
+      description: int, foreign key to courses_program
