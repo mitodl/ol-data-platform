@@ -23,6 +23,6 @@ select
     , afa.assessmentfeedback_id
     , afa.id
 from afa
-left join a on afa.assessment_id = a.id
-left join s on a.submission_uuid = s.uuid
-left join si on s.student_item_id = si.id
+inner join a on afa.assessment_id = a.id
+inner join s on a.submission_uuid = s.uuid
+inner join si on s.student_item_id = si.id
