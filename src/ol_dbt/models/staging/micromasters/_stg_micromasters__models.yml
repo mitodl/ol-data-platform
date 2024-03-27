@@ -880,4 +880,4 @@ models:
   - name: program_id
     description: int, foreign key to courses_program
   - name: share_hash
-    description: str, share hash for the program enrollment 
+    description: str, share hash for the program enrollment
