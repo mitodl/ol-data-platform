@@ -17,6 +17,10 @@ models:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
       or periods. e.g. 6.002.1x
+  - name: course_readable_id
+    description: str, Open edX ID for the course formatted as {org}/{course}
+    tests:
+    - not_null
   - name: courserun_semester
     description: str, The semester during which the course was launched e.g Fall 2020
   - name: courserun_enrollment_start_date

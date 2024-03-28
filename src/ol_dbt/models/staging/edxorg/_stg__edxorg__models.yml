@@ -38,6 +38,10 @@ models:
       MITProfessionalX, MITx, MITxPRO
   - name: courserun_instructors
     description: str, List of instructors associated with the course
+  - name: course_readable_id
+    description: str, Open edX ID for the course formatted as {org}/{course}
+    tests:
+    - not_null
 
 - name: stg__edxorg__bigquery__mitx_person_course
   description: It contains user activities from edX.org, MITxOnline/xPro open edx

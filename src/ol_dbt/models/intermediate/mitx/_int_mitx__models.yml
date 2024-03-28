@@ -38,6 +38,11 @@ models:
     tests:
     - unique
     - not_null
+  - name: course_readable_id
+    description: str, Open edX ID for the course formatted as course-v1:{org}+{course
+      code} for MITx Online and {org}/{course} for edX.org
+    tests:
+    - not_null
   - name: course_title
     description: str, title of the course
     tests:

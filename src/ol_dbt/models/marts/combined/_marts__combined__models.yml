@@ -257,7 +257,17 @@ models:
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline or xPro
   - name: course_title
-    description: str, title of the course
+    description: str, title of the course. May be null for some old edX.org runs.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'edX.org'"
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online and xPro courses, and {org}/{course} for edX.org courses. May be null
+      for some old edX.org runs and Bootcamps courses.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]

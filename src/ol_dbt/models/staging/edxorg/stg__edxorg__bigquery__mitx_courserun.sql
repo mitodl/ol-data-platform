@@ -32,7 +32,8 @@ with source as (
             else institution
         end as courserun_institution
         , course_id as courserun_readable_id
-        ,{{ translate_course_id_to_platform('course_id') }} as courserun_platform
+        , concat(element_at(split(course_id, '/'), 1), '/', element_at(split(course_id, '/'), 2)) as course_readable_id
+        , {{ translate_course_id_to_platform('course_id') }} as courserun_platform
         , coalesce(self_paced = 1, false) as courserun_is_self_paced
     from source
 
