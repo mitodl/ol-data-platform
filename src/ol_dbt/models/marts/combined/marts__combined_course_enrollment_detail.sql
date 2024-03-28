@@ -138,6 +138,7 @@ with mitx_enrollments as (
         , mitx_grades.courserungrade_grade
         , mitx_grades.courserungrade_is_passing
         , mitx_courses.course_title
+        , mitx_courses.course_readable_id
     from mitx_enrollments
     left join mitx_certificates
         on
@@ -206,6 +207,7 @@ with mitx_enrollments as (
         , mitx_grades.courserungrade_grade
         , mitx_grades.courserungrade_is_passing
         , mitx_courses.course_title
+        , mitx_courses.course_readable_id
     from mitx_enrollments
     left join mitx_certificates
         on
@@ -281,6 +283,7 @@ with mitx_enrollments as (
         , mitxpro_grades.courserungrade_grade
         , mitxpro_grades.courserungrade_is_passing
         , mitxpro_courses.course_title
+        , mitxpro_courses.course_readable_id
     from mitxpro_enrollments
     left join mitxpro_certificates
         on
@@ -350,6 +353,7 @@ with mitx_enrollments as (
         , null as courserungrade_grade
         , null as courserungrade_is_passing
         , bootcamps_courses.course_title
+        , null as course_readable_id  --- to be populated after we add to bootcamp app
     from bootcamps_enrollments
     left join bootcamps_certificates
         on

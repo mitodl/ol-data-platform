@@ -23,6 +23,7 @@ with runs as (
 select
     runs.courserun_readable_id
     , runs.course_number
+    , runs.course_readable_id
     , runs.courserun_title
     , runs.courserun_semester
     , runs.courserun_url
