@@ -2966,22 +2966,23 @@ testing = ["pytest", "pytest-benchmark"]
 
 [[package]]
 name = "polars"
-version = "0.20.16"
+version = "0.20.17"
 description = "Blazingly fast DataFrame library"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "polars-0.20.16-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:7530148621b541221b8a36cfad27cc576d77c0739e82d8383ee3a699935a5f63"},
-    {file = "polars-0.20.16-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:92241d9aeb29de7c503d3b4f9191181f0831dd546ee6770e5c6fae3cead98edb"},
-    {file = "polars-0.20.16-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2b48593c44a20f09f1eb1449ea43e2e5a4adf3c82faf1fba797fb7364cfa2ca4"},
-    {file = "polars-0.20.16-cp38-abi3-manylinux_2_24_aarch64.whl", hash = "sha256:0c504cfdc88f3e4262d5ecf637c10ae154565b94250ee4263a9f5f346397cf98"},
-    {file = "polars-0.20.16-cp38-abi3-win_amd64.whl", hash = "sha256:a1fa24ea374ff05766e43fe2f079d62edd682ade19e3e2d68526e9c7a3e23ddf"},
-    {file = "polars-0.20.16.tar.gz", hash = "sha256:7a9ebb85bfc9dd964490612b6fee2afbde91eee6bfaa590b731c7868d225210b"},
+    {file = "polars-0.20.17-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:931e22000806209466568c9aadd011087507a841e36543ee593e0eb6aead1198"},
+    {file = "polars-0.20.17-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:097101954dc4a02401cb323379816c37641908f7e15c01682c0477ff87de3b52"},
+    {file = "polars-0.20.17-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7034594f05c29504410eb4f3da004668813911824217d4ddea8f95798b66f31b"},
+    {file = "polars-0.20.17-cp38-abi3-manylinux_2_24_aarch64.whl", hash = "sha256:a9dd52800b1379393ad179ffd9407b02d418bac3f26727ba59c9f20977a3726a"},
+    {file = "polars-0.20.17-cp38-abi3-win_amd64.whl", hash = "sha256:22d21d57b235d6a2dc117776e50a9decaac93f01785e767ccbce49141bf889b8"},
+    {file = "polars-0.20.17.tar.gz", hash = "sha256:ad9050c4dd594e66312f4e240479c6fa2893ea970ce09eb9d47043d48330138f"},
 ]
 
 [package.extras]
 adbc = ["adbc-driver-manager", "adbc-driver-sqlite"]
-all = ["polars[adbc,cloudpickle,connectorx,deltalake,fastexcel,fsspec,gevent,numpy,pandas,plot,pyarrow,pydantic,pyiceberg,sqlalchemy,timezone,xlsx2csv,xlsxwriter]"]
+all = ["polars[adbc,async,cloudpickle,connectorx,deltalake,fastexcel,fsspec,gevent,numpy,pandas,plot,pyarrow,pydantic,pyiceberg,sqlalchemy,timezone,xlsx2csv,xlsxwriter]"]
+async = ["nest-asyncio"]
 cloudpickle = ["cloudpickle"]
 connectorx = ["connectorx (>=0.3.2)"]
 deltalake = ["deltalake (>=0.14.0)"]
