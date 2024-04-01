@@ -107,6 +107,7 @@ with mitx_enrollments as (
         , mitx_enrollments.user_email
         , mitx_enrollments.user_full_name
         , mitx_enrollments.user_address_country as user_country_code
+        , if(mitx_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
         , mitx_certificates.courseruncertificate_created_on
         , mitx_certificates.courseruncertificate_url
         , mitx_certificates.courseruncertificate_uuid
@@ -176,6 +177,7 @@ with mitx_enrollments as (
         , mitx_enrollments.user_email
         , mitx_enrollments.user_full_name
         , mitx_enrollments.user_address_country as user_country_code
+        , if(mitx_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
         , mitx_certificates.courseruncertificate_created_on
         , mitx_certificates.courseruncertificate_url
         , mitx_certificates.courseruncertificate_uuid
@@ -248,6 +250,7 @@ with mitx_enrollments as (
         , mitxpro_enrollments.user_email
         , mitxpro_enrollments.user_full_name
         , mitxpro_enrollments.user_address_country as user_country_code
+        , if(mitxpro_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
         , mitxpro_certificates.courseruncertificate_created_on
         , mitxpro_certificates.courseruncertificate_url
         , mitxpro_certificates.courseruncertificate_uuid
@@ -322,6 +325,7 @@ with mitx_enrollments as (
         , bootcamps_enrollments.user_email
         , bootcamps_enrollments.user_full_name
         , bootcamps_enrollments.user_address_country as user_country_code
+        , if(bootcamps_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
         , bootcamps_certificates.courseruncertificate_created_on
         , bootcamps_certificates.courseruncertificate_url
         , bootcamps_certificates.courseruncertificate_uuid
