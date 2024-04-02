@@ -50,6 +50,10 @@ with mitx_enrollments as (
     select * from {{ ref('int__mitxpro__courses') }}
 )
 
+, combined_users as (
+    select * from {{ ref('int__combined__users') }}
+)
+
 , mitxonline_completed_orders as (
     select
         *
@@ -106,7 +110,9 @@ with mitx_enrollments as (
         , mitx_enrollments.user_username
         , mitx_enrollments.user_email
         , mitx_enrollments.user_full_name
-        , mitx_enrollments.user_address_country as user_country_code
+        , combined_users.user_address_country as user_country_code
+        , combined_users.user_highest_education
+        , combined_users.user_company
         , if(mitx_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
         , mitx_certificates.courseruncertificate_created_on
         , mitx_certificates.courseruncertificate_url
@@ -141,6 +147,10 @@ with mitx_enrollments as (
         , mitx_courses.course_title
         , mitx_courses.course_readable_id
     from mitx_enrollments
+    left join combined_users
+        on
+            mitx_enrollments.user_mitxonline_username = combined_users.user_username
+            and mitx_enrollments.platform = combined_users.platform
     left join mitx_certificates
         on
             mitx_enrollments.user_mitxonline_username = mitx_certificates.user_mitxonline_username
@@ -176,7 +186,9 @@ with mitx_enrollments as (
         , mitx_enrollments.user_username
         , mitx_enrollments.user_email
         , mitx_enrollments.user_full_name
-        , mitx_enrollments.user_address_country as user_country_code
+        , combined_users.user_address_country as user_country_code
+        , combined_users.user_highest_education
+        , combined_users.user_company
         , if(mitx_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
         , mitx_certificates.courseruncertificate_created_on
         , mitx_certificates.courseruncertificate_url
@@ -211,6 +223,10 @@ with mitx_enrollments as (
         , mitx_courses.course_title
         , mitx_courses.course_readable_id
     from mitx_enrollments
+    left join combined_users
+        on
+            mitx_enrollments.user_edxorg_username = combined_users.user_username
+            and mitx_enrollments.platform = combined_users.platform
     left join mitx_certificates
         on
             mitx_enrollments.user_edxorg_username = mitx_certificates.user_edxorg_username
@@ -249,7 +265,9 @@ with mitx_enrollments as (
         , mitxpro_enrollments.user_username
         , mitxpro_enrollments.user_email
         , mitxpro_enrollments.user_full_name
-        , mitxpro_enrollments.user_address_country as user_country_code
+        , combined_users.user_address_country as user_country_code
+        , combined_users.user_highest_education
+        , combined_users.user_company
         , if(mitxpro_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
         , mitxpro_certificates.courseruncertificate_created_on
         , mitxpro_certificates.courseruncertificate_url
@@ -288,6 +306,10 @@ with mitx_enrollments as (
         , mitxpro_courses.course_title
         , mitxpro_courses.course_readable_id
     from mitxpro_enrollments
+    left join combined_users
+        on
+            mitxpro_enrollments.user_username = combined_users.user_username
+            and combined_users.platform = '{{ var("mitxpro") }}'
     left join mitxpro_certificates
         on
             mitxpro_enrollments.user_id = mitxpro_certificates.user_id
@@ -324,7 +346,9 @@ with mitx_enrollments as (
         , bootcamps_enrollments.user_username
         , bootcamps_enrollments.user_email
         , bootcamps_enrollments.user_full_name
-        , bootcamps_enrollments.user_address_country as user_country_code
+        , combined_users.user_address_country as user_country_code
+        , combined_users.user_highest_education
+        , combined_users.user_company
         , if(bootcamps_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
         , bootcamps_certificates.courseruncertificate_created_on
         , bootcamps_certificates.courseruncertificate_url
@@ -359,6 +383,10 @@ with mitx_enrollments as (
         , bootcamps_courses.course_title
         , null as course_readable_id  --- to be populated after we add to bootcamp app
     from bootcamps_enrollments
+    left join combined_users
+        on
+            bootcamps_enrollments.user_username = combined_users.user_username
+            and combined_users.platform = '{{ var("bootcamps") }}'
     left join bootcamps_certificates
         on
             bootcamps_enrollments.user_id = bootcamps_certificates.user_id

@@ -9,6 +9,7 @@ with source as (
         id as user_profile_id
         , user_id
         , country as user_address_country
+        , birth_country as user_birth_country
         , city as user_address_city
         , state_or_territory as user_address_state_or_territory
         , postal_code as user_address_postal_code
