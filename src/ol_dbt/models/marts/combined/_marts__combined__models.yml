@@ -175,6 +175,11 @@ models:
     description: str, user full name from user's profile on the corresponding platform
   - name: user_country_code
     description: str, country code from the user's address on the corresponding platform
+  - name: courseruncertificate_is_earned
+    description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
+      micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
+    tests:
+    - not_null
   - name: courseruncertificate_uuid
     description: str, unique identifier for the certificate on the corresponding platform
   - name: courseruncertificate_url
