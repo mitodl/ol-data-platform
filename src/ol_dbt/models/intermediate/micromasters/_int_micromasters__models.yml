@@ -406,8 +406,10 @@ models:
     description: str, user's Nickname / Preferred name
   - name: user_nationality
     description: str, user's nationality (stored as country code)
+  - name: user_birth_country
+    description: str, country code where user was born pulling from MicroMasters profile.
   - name: user_address_country
-    description: str, country where user lives in
+    description: str, country code where user lives in
   - name: user_address_city
     description: str, city where user lives in
   - name: user_address_state_or_territory

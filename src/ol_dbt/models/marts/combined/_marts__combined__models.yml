@@ -172,9 +172,15 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: str, user full name from user's profile on the corresponding platform
+    description: str, user full name on the platform user enrolled
   - name: user_country_code
-    description: str, country code from the user's address on the corresponding platform
+    description: str, country code on the platform user enrolled. May be blank.
+  - name: user_highest_education
+    description: str, user's highest education on the platform user enrolled. May
+      be blank.
+  - name: user_company
+    description: str, user's company pulled on the platform user enrolled. May be
+      blank.
   - name: courseruncertificate_is_earned
     description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
       micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
