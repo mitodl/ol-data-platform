@@ -503,9 +503,10 @@ models:
   - name: user_birth_date
     description: timestamp, user's date of birth
   - name: user_birth_country
-    description: str, country where user was born, pulling from MicroMasters profile.
+    description: str, country code where user was born, pulling from MicroMasters
+      profile.
   - name: user_address_country
-    description: str, country where user lives in
+    description: str, country code where user lives in
   - name: user_address_city
     description: str, city where user lives in
   - name: user_address_state_or_territory
