@@ -175,3 +175,39 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "courseaccess_role"]
+
+- name: int__combined__course_runs
+  description: Intermediate combined model for courses and runs from different platforms
+  columns:
+  - name: platform
+    description: string, application where the data is from
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
+  - name: courserun_readable_id
+    description: str, unique string to identify a course run on the corresponding
+      platform. Maybe null for Bootcamps runs.
+    tests:
+    - unique
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'Bootcamps'"
+  - name: courserun_url
+    description: str, url for the course run in MITx Online, xPro or edX.org. Null
+      for Bootcamps.
+  - name: course_readable_id
+    description: int, readable ID to identify a course on the corresponding platform.
+      May be null for Bootcamps.
+  - name: courserun_title
+    description: str, title of the course run on the corresponding platform. May be
+      null for small amounts of courses from edX.org
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'edX.org'"
+  - name: courserun_start_on
+    description: timestamp, specifying when the course run begins
+  - name: courserun_end_on
+    description: timestamp, specifying when the course run ends
+  - name: courserun_is_live
+    description: boolean, indicating whether the course run is available to users
+      on MITx Online and xPro. Null for Bootcamps and edx.org.
