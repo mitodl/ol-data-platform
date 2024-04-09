@@ -30,24 +30,8 @@ with mitx_enrollments as (
     select * from {{ ref('int__mitxpro__courserun_grades') }}
 )
 
-, bootcamps_courses as (
-    select * from {{ ref('int__bootcamps__courses') }}
-)
-
-, bootcamps_courseruns as (
-    select * from {{ ref('int__bootcamps__course_runs') }}
-)
-
-, mitx_courses as (
-    select * from {{ ref('int__mitx__courses') }}
-)
-
-, mitxpro_courseruns as (
-    select * from {{ ref('int__mitxpro__course_runs') }}
-)
-
-, mitxpro_courses as (
-    select * from {{ ref('int__mitxpro__courses') }}
+, combined_courseruns as (
+    select * from {{ ref('int__combined__course_runs') }}
 )
 
 , combined_users as (
@@ -144,8 +128,8 @@ with mitx_enrollments as (
         , mitxonline_completed_orders.discount_amount
         , mitx_grades.courserungrade_grade
         , mitx_grades.courserungrade_is_passing
-        , mitx_courses.course_title
-        , mitx_courses.course_readable_id
+        , combined_courseruns.course_title
+        , combined_courseruns.course_readable_id
     from mitx_enrollments
     left join combined_users
         on
@@ -164,8 +148,8 @@ with mitx_enrollments as (
         on
             mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
             and mitx_enrollments.user_mitxonline_username = mitx_grades.user_mitxonline_username
-    left join mitx_courses
-        on mitx_enrollments.course_number = mitx_courses.course_number
+    left join combined_courseruns
+        on mitx_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
     where mitx_enrollments.platform = '{{ var("mitxonline") }}'
 
     union all
@@ -220,8 +204,8 @@ with mitx_enrollments as (
         , micromasters_completed_orders.coupon_amount as discount_amount
         , mitx_grades.courserungrade_grade
         , mitx_grades.courserungrade_is_passing
-        , mitx_courses.course_title
-        , mitx_courses.course_readable_id
+        , combined_courseruns.course_title
+        , combined_courseruns.course_readable_id
     from mitx_enrollments
     left join combined_users
         on
@@ -241,8 +225,8 @@ with mitx_enrollments as (
         on
             mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
             and mitx_enrollments.user_edxorg_username = mitx_grades.user_edxorg_username
-    left join mitx_courses
-        on mitx_enrollments.course_number = mitx_courses.course_number
+    left join combined_courseruns
+        on mitx_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
     where mitx_enrollments.platform = '{{ var("edxorg") }}'
 
 
@@ -303,8 +287,8 @@ with mitx_enrollments as (
         end as discount_amount
         , mitxpro_grades.courserungrade_grade
         , mitxpro_grades.courserungrade_is_passing
-        , mitxpro_courses.course_title
-        , mitxpro_courses.course_readable_id
+        , combined_courseruns.course_title
+        , combined_courseruns.course_readable_id
     from mitxpro_enrollments
     left join combined_users
         on
@@ -322,10 +306,8 @@ with mitx_enrollments as (
         on
             mitxpro_enrollments.courserun_readable_id = mitxpro_grades.courserun_readable_id
             and mitxpro_enrollments.user_username = mitxpro_grades.user_username
-    left join mitxpro_courseruns
-        on mitxpro_enrollments.courserun_readable_id = mitxpro_courseruns.courserun_readable_id
-    left join mitxpro_courses
-        on mitxpro_courseruns.course_id = mitxpro_courses.course_id
+    left join combined_courseruns
+        on mitxpro_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
 
 
     union all
@@ -380,8 +362,8 @@ with mitx_enrollments as (
         , null as discount_amount
         , null as courserungrade_grade
         , null as courserungrade_is_passing
-        , bootcamps_courses.course_title
-        , null as course_readable_id  --- to be populated after we add to bootcamp app
+        , combined_courseruns.course_title
+        , combined_courseruns.course_readable_id
     from bootcamps_enrollments
     left join combined_users
         on
@@ -395,10 +377,8 @@ with mitx_enrollments as (
         on
             bootcamps_enrollments.user_id = bootcamps_completed_orders.order_purchaser_user_id
             and bootcamps_enrollments.courserun_id = bootcamps_completed_orders.courserun_id
-    left join bootcamps_courseruns
-        on bootcamps_enrollments.courserun_id = bootcamps_courseruns.courserun_id
-    left join bootcamps_courses
-        on bootcamps_courseruns.course_id = bootcamps_courses.course_id
+    left join combined_courseruns
+        on bootcamps_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
 )
 
 select * from combined_enrollment_detail
