@@ -354,6 +354,10 @@ models:
     - not_null
   - name: course_title
     description: str, title of the bootcamp course
+  - name: course_readable_id
+    description: str, readable ID formatted as bootcamp-v1:{type}+{topic}-{format}.
+      type is either 'public' or 'private', format is either ol (online) or f2f (face
+      to face). May be null until data is populated in bootcamps application database.
 
 - name: stg__bootcamps__app__postgres__courses_courserun
   description: staging model for Bootcamps course runs

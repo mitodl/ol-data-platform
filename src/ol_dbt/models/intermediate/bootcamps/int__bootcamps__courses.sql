@@ -8,4 +8,5 @@ with courses as (
 select
     course_id
     , course_title
+    , course_readable_id
 from courses

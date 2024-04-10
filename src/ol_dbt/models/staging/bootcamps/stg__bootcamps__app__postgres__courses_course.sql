@@ -8,6 +8,7 @@ with source as (
     select
         id as course_id
         , title as course_title
+        , '' as course_readable_id --- placeholder to add course_readable_id from bootcamps application
     from source
 )
 
