@@ -164,7 +164,7 @@ models:
   - name: program_certificates
     description: int, count of program certificates earned for the the program
 
-- name: marts__micromasters_summary
+- name: marts__micromasters__summary
   description: MicroMasters aggregate statistics
   columns:
   - name: program_title
