@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from dagster import (
+    AssetExecutionContext,
     AssetSelection,
     AutoMaterializePolicy,
     DefaultScheduleStatus,
@@ -13,8 +14,8 @@ from dagster import (
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
 from dagster_dbt import (
-    dbt_cli_resource,
-    load_assets_from_dbt_manifest,
+    DbtCliResource,
+    dbt_assets,
 )
 
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "dev")
@@ -42,7 +43,7 @@ dbt_config = {
     "profiles_dir": str(dbt_repo_dir),
     "target": dagster_deployment,
 }
-configured_dbt_cli = dbt_cli_resource.configured(dbt_config)
+configured_dbt_cli = DbtCliResource(dbt_config)
 
 airbyte_assets = load_assets_from_airbyte_instance(
     configured_airbyte_resource,
@@ -71,11 +72,16 @@ airbyte_update_schedule = ScheduleDefinition(
     default_status=DefaultScheduleStatus.RUNNING,
 )
 
-dbt_assets = load_assets_from_dbt_manifest(
+
+@dbt_assets(
     manifest=json.loads(
         dbt_repo_dir.joinpath("target", "manifest.json").read_text(),
     ),
 )
+def dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
+    """A special asset that will load all dbt assets."""
+    yield from dbt.cli(["build"], context=context).stream()
+
 
 elt = Definitions(
     assets=load_assets_from_current_module(

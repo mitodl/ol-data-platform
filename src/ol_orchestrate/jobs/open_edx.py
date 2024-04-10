@@ -13,7 +13,9 @@ from ol_orchestrate.ops.open_edx import (
     export_edx_forum_database,
     fetch_edx_course_structure_from_api,
     list_courses,
+    push_dbt_metadata,
     student_submissions,
+    sync_superset_data,
     upload_extracted_data,
     user_roles,
     write_course_list_csv,
@@ -53,6 +55,9 @@ def edx_course_pipeline():
             notify_healthchecks_io_on_failure,
         }
     )(course_list, extracts_upload)
+    # TODO pass a list of dbt tables and superset tables
+    sync_superset_data(dbt_tables_marts, superset_tables)
+    push_dbt_metadata()
 
 
 @graph(
