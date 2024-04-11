@@ -13,11 +13,6 @@ with course_certificates_dedp_from_micromasters as (
     from {{ ref('__micromasters_course_certificates_non_dedp_from_edxorg') }}
 )
 
-, mitxonline_course_certificates as (
-    select *
-    from {{ ref('int__mitxonline__courserun_certificates') }}
-)
-
 -- DEDP course certificates come from MicroMasters and MITxOnline. We've migrated some learners data from
 -- MicroMasters to MITxOnline around Oct 2022, but only for those users who have MITxOnline account.
 -- To avoid data overlapping, we deduplicate based on their social auth account linked on MicroMasters.
@@ -145,17 +140,9 @@ with course_certificates_dedp_from_micromasters as (
         , courseruncertificate_download_uuid as courseruncertificate_uuid
         , courseruncertificate_download_url as courseruncertificate_url
         , courseruncertificate_created_on
-        , if(mitxonline_program_id in (1, 2, 3), true, false) as program_is_dedp
+        , false as program_is_dedp
     from course_certificates_non_dedp_program
 )
 
-select course_certificates.*
+select *
 from course_certificates
-left join mitxonline_course_certificates
-    on
-        course_certificates.courserun_readable_id
-        = mitxonline_course_certificates.courserun_readable_id
-        and course_certificates.user_mitxonline_username = mitxonline_course_certificates.user_username
-where
-    mitxonline_course_certificates.courseruncertificate_is_revoked = false
-    or mitxonline_course_certificates.courseruncertificate_is_revoked is null
