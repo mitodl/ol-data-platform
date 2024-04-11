@@ -131,6 +131,10 @@ sources:
     - name: legacy
       description: boolean, used to distinguish the older bootcamp courses from the
         newer ones
+    - name: readable_id
+      description: str, readable ID formatted as bootcamp-v1:{type}+{topic}-{format}.
+        type is either 'public' or 'private', format is either ol (online) or f2f
+        (face to face).
 
   - name: raw__bootcamps__app__postgres__klasses_bootcamprun
     columns:
