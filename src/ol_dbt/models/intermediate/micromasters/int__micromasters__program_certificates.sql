@@ -122,11 +122,11 @@ select
     , if(report.mitxonline_program_id in (1, 2, 3), true, false) as program_is_dedp
 from report
 left join mitxonline_program_certificates
-    on 
+    on
         report.mitxonline_program_id = mitxonline_program_certificates.program_id
-        and report.user_mitxonline_username 
+        and report.user_mitxonline_username
         = mitxonline_program_certificates.user_username
-where 
-    mitxonline_program_certificates.programcertificate_is_revoked = false 
+where
+    mitxonline_program_certificates.programcertificate_is_revoked = false
     or mitxonline_program_certificates.programcertificate_is_revoked is null
 order by report.program_completion_timestamp desc

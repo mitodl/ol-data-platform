@@ -152,10 +152,10 @@ with course_certificates_dedp_from_micromasters as (
 select course_certificates.*
 from course_certificates
 left join mitxonline_course_certificates
-    on 
-        course_certificates.courserun_readable_id 
+    on
+        course_certificates.courserun_readable_id
         = mitxonline_course_certificates.courserun_readable_id
         and course_certificates.user_mitxonline_username = mitxonline_course_certificates.user_username
-where 
-    mitxonline_course_certificates.courseruncertificate_is_revoked = false 
+where
+    mitxonline_course_certificates.courseruncertificate_is_revoked = false
     or mitxonline_course_certificates.courseruncertificate_is_revoked is null
