@@ -39,6 +39,17 @@ with mitx_courses as (
         , mitxonline_runs.courserun_start_on
         , mitxonline_runs.courserun_end_on
         , mitxonline_runs.courserun_is_live
+        , case
+            when
+                mitxonline_runs.courserun_end_on is null
+                and from_iso8601_timestamp(mitxonline_runs.courserun_start_on) <= current_date
+                then true
+            when
+                from_iso8601_timestamp(mitxonline_runs.courserun_start_on) <= current_date
+                and from_iso8601_timestamp(mitxonline_runs.courserun_end_on) > current_date
+                then true
+            else false
+        end as courserun_is_current
     from mitxonline_runs
     left join mitx_courses on mitxonline_runs.course_number = mitx_courses.course_number
     where mitxonline_runs.courserun_platform = '{{ var("mitxonline") }}'
@@ -55,6 +66,17 @@ with mitx_courses as (
         , edxorg_runs.courserun_start_date as courserun_start_on
         , edxorg_runs.courserun_end_date as courserun_end_on
         , null as courserun_is_live
+        , case
+            when
+                edxorg_runs.courserun_end_date is null
+                and from_iso8601_timestamp(edxorg_runs.courserun_start_date) <= current_date
+                then true
+            when
+                from_iso8601_timestamp(edxorg_runs.courserun_start_date) <= current_date
+                and from_iso8601_timestamp(edxorg_runs.courserun_end_date) > current_date
+                then true
+            else false
+        end as courserun_is_current
     from edxorg_runs
     left join mitx_courses on edxorg_runs.course_number = mitx_courses.course_number
 
@@ -70,6 +92,17 @@ with mitx_courses as (
         , mitxpro_runs.courserun_start_on
         , mitxpro_runs.courserun_end_on
         , mitxpro_runs.courserun_is_live
+        , case
+            when
+                mitxpro_runs.courserun_end_on is null
+                and from_iso8601_timestamp(mitxpro_runs.courserun_start_on) <= current_date
+                then true
+            when
+                from_iso8601_timestamp(mitxpro_runs.courserun_start_on) <= current_date
+                and from_iso8601_timestamp(mitxpro_runs.courserun_end_on) > current_date
+                then true
+            else false
+        end as courserun_is_current
     from mitxpro_runs
     left join mitxpro_courses on mitxpro_runs.course_id = mitxpro_courses.course_id
 
@@ -85,6 +118,17 @@ with mitx_courses as (
         , bootcamps_runs.courserun_start_on
         , bootcamps_runs.courserun_end_on
         , null as courserun_is_live
+        , case
+            when
+                bootcamps_runs.courserun_end_on is null
+                and from_iso8601_timestamp(bootcamps_runs.courserun_start_on) <= current_date
+                then true
+            when
+                from_iso8601_timestamp(bootcamps_runs.courserun_start_on) <= current_date
+                and from_iso8601_timestamp(bootcamps_runs.courserun_end_on) > current_date
+                then true
+            else false
+        end as courserun_is_current
     from bootcamps_runs
     left join bootcamps_courses on bootcamps_runs.course_id = bootcamps_courses.course_id
 
