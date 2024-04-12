@@ -90,7 +90,9 @@ with mitx_enrollments as (
         , mitx_enrollments.courserun_id
         , mitx_enrollments.courserun_title
         , mitx_enrollments.courserun_readable_id
-        , mitx_enrollments.courserun_start_on
+        , combined_courseruns.courserun_start_on
+        , combined_courseruns.courserun_end_on
+        , combined_courseruns.courserun_is_current
         , mitx_enrollments.user_username
         , mitx_enrollments.user_email
         , mitx_enrollments.user_full_name
@@ -166,7 +168,9 @@ with mitx_enrollments as (
         , mitx_enrollments.courserun_id
         , mitx_enrollments.courserun_title
         , mitx_enrollments.courserun_readable_id
-        , mitx_enrollments.courserun_start_on
+        , combined_courseruns.courserun_start_on
+        , combined_courseruns.courserun_end_on
+        , combined_courseruns.courserun_is_current
         , mitx_enrollments.user_username
         , mitx_enrollments.user_email
         , mitx_enrollments.user_full_name
@@ -245,7 +249,9 @@ with mitx_enrollments as (
         , mitxpro_enrollments.courserun_id
         , mitxpro_enrollments.courserun_title
         , mitxpro_enrollments.courserun_readable_id
-        , mitxpro_enrollments.courserun_start_on
+        , combined_courseruns.courserun_start_on
+        , combined_courseruns.courserun_end_on
+        , combined_courseruns.courserun_is_current
         , mitxpro_enrollments.user_username
         , mitxpro_enrollments.user_email
         , mitxpro_enrollments.user_full_name
@@ -324,7 +330,9 @@ with mitx_enrollments as (
         , bootcamps_enrollments.courserun_id
         , bootcamps_enrollments.courserun_title
         , bootcamps_enrollments.courserun_readable_id
-        , bootcamps_enrollments.courserun_start_on
+        , combined_courseruns.courserun_start_on
+        , combined_courseruns.courserun_end_on
+        , combined_courseruns.courserun_is_current
         , bootcamps_enrollments.user_username
         , bootcamps_enrollments.user_email
         , bootcamps_enrollments.user_full_name

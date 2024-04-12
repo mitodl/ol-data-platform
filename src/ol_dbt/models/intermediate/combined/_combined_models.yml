@@ -211,3 +211,9 @@ models:
   - name: courserun_is_live
     description: boolean, indicating whether the course run is available to users
       on MITx Online and xPro. Null for Bootcamps and edx.org.
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+    tests:
+    - not_null

@@ -162,7 +162,13 @@ models:
     description: str, unique string to identify a course run on the corresponding
       platform
   - name: courserun_start_on
-    description: timestamp, date and time when the course starts
+    description: timestamp, date and time when the course run starts
+  - name: courserun_end_on
+    description: timestamp, date and time when the course run ends
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
   - name: user_username
     description: string, username to identify a user on the corresponding platform
     tests:
