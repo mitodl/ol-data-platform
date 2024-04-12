@@ -19,33 +19,33 @@ with micromasters_enrollments as (
 )
 
 , enrollments as (
-    select    
-        case when 
-            micromasters_enrollments.program_is_dedp = true then 'Data, Economics, and Design of Policy' 
+    select
+        case when
+            micromasters_enrollments.program_is_dedp = true then 'Data, Economics, and Design of Policy'
         else micromasters_enrollments.program_title end as program_title
         , count(distinct micromasters_enrollments.courserun_readable_id || user_email) as total_enrollments
         , count(distinct micromasters_enrollments.user_email) as unique_users
         , count(distinct micromasters_enrollments.user_address_country) as unique_countries
-        , count(distinct case 
+        , count(distinct case
             when micromasters_enrollments.courserunenrollment_enrollment_mode = 'verified'
-                then (micromasters_enrollments.courserun_readable_id || micromasters_enrollments.user_email) 
+                then (micromasters_enrollments.courserun_readable_id || micromasters_enrollments.user_email)
         end) as verified_enrollments
-        , count(distinct case 
-            when micromasters_enrollments.courserunenrollment_enrollment_mode = 'verified' 
-                then micromasters_enrollments.user_email 
+        , count(distinct case
+            when micromasters_enrollments.courserunenrollment_enrollment_mode = 'verified'
+                then micromasters_enrollments.user_email
         end) as unique_verified_users
     from micromasters_enrollments
-    group by 1    
+    group by 1
 )
 
-, course_certs as (    
+, course_certs as (
     select
-        case when 
-            micromasters_course_certificates.program_is_dedp = true then 'Data, Economics, and Design of Policy' 
+        case when
+            micromasters_course_certificates.program_is_dedp = true then 'Data, Economics, and Design of Policy'
         else micromasters_course_certificates.program_title end as program_title
         , count(
             distinct
-            micromasters_course_certificates.courserun_readable_id 
+            micromasters_course_certificates.courserun_readable_id
             || micromasters_course_certificates.user_email
         ) as course_certificates
         , count(distinct micromasters_course_certificates.user_email) as unique_course_certificate_earners
@@ -58,8 +58,8 @@ with micromasters_enrollments as (
         mitx_programs.program_title
         , count(distinct micromasters_program_certificates.user_email) as program_certificates
     from micromasters_program_certificates
-    inner join mitx_programs 
-        on 
+    inner join mitx_programs
+        on
             micromasters_program_certificates.micromasters_program_id = mitx_programs.micromasters_program_id
             or micromasters_program_certificates.mitxonline_program_id = mitx_programs.mitxonline_program_id
     group by 1
