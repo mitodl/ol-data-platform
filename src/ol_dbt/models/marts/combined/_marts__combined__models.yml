@@ -169,6 +169,8 @@ models:
     description: boolean, indicating if the course run is currently running. True
       if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
       is in the past and courserun_end_on is in the future.
+    tests:
+    - not_null
   - name: user_username
     description: string, username to identify a user on the corresponding platform
     tests:
