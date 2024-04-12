@@ -62,12 +62,14 @@ left join micromasters_users
     on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
 left join edx_users on micromasters_users.user_edxorg_username = edx_users.user_username
 left join mitxonline_program_certificates
-    on 
-        enrollments_with_program.mitxonline_program_id 
+    on
+        enrollments_with_program.mitxonline_program_id
         = mitxonline_program_certificates.program_id
-        and mitxonline_users.user_mitxonline_username 
+        and mitxonline_users.user_mitxonline_username
         = mitxonline_program_certificates.user_username
-where 
-    (mitxonline_program_certificates.programcertificate_is_revoked = false 
-    or mitxonline_program_certificates.programcertificate_is_revoked is null)
+where
+    (
+        mitxonline_program_certificates.programcertificate_is_revoked = false
+        or mitxonline_program_certificates.programcertificate_is_revoked is null
+    )
     and enrollments_with_program.is_dedp_program = true
