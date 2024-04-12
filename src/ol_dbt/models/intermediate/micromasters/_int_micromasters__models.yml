@@ -112,8 +112,7 @@ models:
     tests:
     - not_null
   - name: program_is_dedp
-    description: boolean, specifying if the program is DEDP from the mixonline program
-      id
+    description: boolean, specifying if the program is DEDP from the mixonline program id
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "platform", "courserun_readable_id", "micromasters_program_id",
@@ -236,8 +235,7 @@ models:
     description: str,  state or territory where user lives in from user's profile
       on MITx Online or MicroMasters.
   - name: program_is_dedp
-    description: boolean, specifying if the program is DEDP from the mixonline program
-      id
+    description: boolean, specifying if the program is DEDP from the mixonline program id
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "micromasters_program_id", "mitxonline_program_id"]
@@ -298,8 +296,7 @@ models:
     tests:
     - not_null
   - name: program_is_dedp
-    description: boolean, specifying if the program is DEDP from the mixonline program
-      id
+    description: boolean, specifying if the program is DEDP from the mixonline program id
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
