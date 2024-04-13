@@ -575,7 +575,7 @@ grpcio = ">=1.44.0"
 grpcio-health-checking = ">=1.44.0"
 Jinja2 = "*"
 packaging = ">=20.9"
-pendulum = {version = ">=0.7.0,<4", markers = "python_version >= \"3.9\" and python_version < \"3.12\""}
+pendulum = {version = ">=3,<4", markers = "python_version >= \"3.12\""}
 protobuf = {version = ">=4,<5", markers = "python_version >= \"3.11\""}
 psutil = {version = ">=1.0", markers = "platform_system == \"Windows\""}
 pydantic = ">1.10.0,<1.10.7 || >1.10.7,<3"
@@ -594,7 +594,7 @@ tomli = "<3"
 toposort = ">=1.0"
 tqdm = "<5"
 typing-extensions = ">=4.4.0,<5"
-universal-pathlib = {version = "*", markers = "python_version < \"3.12\""}
+universal-pathlib = {version = ">=0.2.0", markers = "python_version >= \"3.12\""}
 watchdog = ">=0.8.3"
 
 [package.extras]
@@ -2774,7 +2774,7 @@ files = [
 ]
 
 [package.dependencies]
-numpy = {version = ">=1.23.2", markers = "python_version == \"3.11\""}
+numpy = {version = ">=1.26.0", markers = "python_version >= \"3.12\""}
 python-dateutil = ">=2.8.2"
 pytz = ">=2020.1"
 tzdata = ">=2022.7"
@@ -4890,5 +4890,5 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 
 [metadata]
 lock-version = "2.0"
-python-versions = "3.11.*"
-content-hash = "267166d355c946f50403d9a3fb422d2bf83ae1192a531adc2e8990271d7d6413"
+python-versions = "3.12.*"
+content-hash = "91e976a08a9b9e87f979c2b3a86600821f1dfbe9de581fb720df2b833f7c26db"
