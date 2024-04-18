@@ -24,6 +24,7 @@ select
     , mitx_enrollments.courserunenrollment_is_active
     , mitx_enrollments.courserun_title
     , mitx_enrollments.courserunenrollment_enrollment_mode
+    , if(mitx_enrollments.mitxonline_program_id in (1, 2, 3), true, false) as program_is_dedp
 from mitx_enrollments
 inner join programs
     on

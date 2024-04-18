@@ -57,4 +57,6 @@ left join mitxonline_users on mitxonline_program_certificates.user_id = mitxonli
 left join micromasters_users on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
 left join edx_users on micromasters_users.user_edxorg_username = edx_users.user_username
 left join mitx_programs on mitxonline_program_certificates.program_id = mitx_programs.mitxonline_program_id
-where mitx_programs.is_dedp_program = true
+where
+    mitx_programs.is_dedp_program = true
+    and mitxonline_program_certificates.programcertificate_is_revoked = false

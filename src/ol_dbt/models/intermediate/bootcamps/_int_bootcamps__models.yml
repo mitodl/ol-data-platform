@@ -228,6 +228,8 @@ models:
     description: str, readable ID formatted as bootcamp-v1:{type}+{topic}-{format}.
       type is either 'public' or 'private', format is either ol (online) or f2f (face
       to face). May be null until data is populated in bootcamps application database.
+    tests:
+    - unique
 
 - name: int__bootcamps__course_runs
   description: Intermediate model for Bootcamps course runs
