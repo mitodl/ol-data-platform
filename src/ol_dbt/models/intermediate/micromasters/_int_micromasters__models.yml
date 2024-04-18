@@ -297,9 +297,6 @@ models:
       created
     tests:
     - not_null
-  - name: program_is_dedp
-    description: boolean, specifying if the program is DEDP from the mixonline program
-      id
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
