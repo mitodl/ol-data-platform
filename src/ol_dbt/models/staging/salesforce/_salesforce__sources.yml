@@ -1,0 +1,242 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__thirdparty__salesforce__Opportunity
+    description: Salesforce opportunity, which is a sale or pending deal
+    columns:
+    - name: id
+      description: string, globally unique string that identifies an opportunity
+    - name: name
+      description: string, name for the opportunity
+    - name: type
+      description: string, opportunity type - Existing Business, Expansion Business,
+        New Business
+    - name: description
+      description: string, text description of the opportunity
+    - name: business_type__c
+      description: string, indicating business type - B2C (Business to Consumer),
+        B2B (Business to Business) or B2X (Business-to-Exchange). B2X is inactive.
+    - name: self_pay__c
+      description: boolean, indicating that learner intends to or has paid for their
+        enrollment code(s) with a credit card. It's based on Agreement Type dropdown
+        choice
+    - name: agreement_type__c
+      description: string, type of Agreement. Possible values - 3rd Party Hosted,
+        Additional MSA Order Form, Affiliate Direct, Affiliate via Intermediary, Bulk
+        Sales, Content Licensing, Master Service Agreement, Membership, Private Course
+        (SPOC), Reseller, Self-Pay Opp, Subscription, Training Broker, Underwriting,
+        Workshop
+    - name: desired_implementation_date__c
+      description: date, desired implementation date
+    - name: revenue_share_or_commission_contract__c
+      description: boolean, indicating if MIT will have to pay a fee or commission
+        to another party because of this opportunity
+    - name: revenue_share_or_commission_amount__c
+      description: decimal, actual $ amount of revenue share/commission once it has
+        been calculated for this opportunity
+    - name: mit_is_sales_lead__c
+      description: boolean, indicating if MIT is the lead (or unsupported sales) in
+        opportunity for 3rd party hosted sales
+    - name: stagename
+      description: string, current stage of the opportunity. Some examples - Closed
+        Won, Closed Won, Enrollment List, Contracting, Demo, Order, Prospecting, Connecting,
+        etc
+    - name: xpro_bulk_code_payment_link__c
+      description: string, xPRO Bulk Code Payment Link for customers who want to pay
+        with credit cards for enrollment codes
+    - name: enrollment_codes_redeemed__c
+      description: int, sum of enrollment codes redeemed
+    - name: hasopenactivity
+      description: boolean, indicating if this opportunity has open activity
+    - name: requires_icc_review__c
+      description: boolean, indicating if this opportunity requires ICC review (legacy)
+    - name: icc_reviewed__c
+      description: boolean, indicating if this opportunity is ICC reviewed
+    - name: leadsource
+      description: string, Source of the opportunity, such as Advertisement, Partner,
+        or Web
+    - name: hasopportunitylineitem
+      description: boolean, indicating if the opportunity has product line item
+    - name: amount
+      description: decimal, estimated total sale amount in US dollar
+    - name: probability
+      description: int, percentage of the likelihood that opportunity will close -
+        0 to 100 0 means Closed/Lost, 100 means Closed/Won
+    - name: expectedrevenue
+      description: decimal, calculated revenue based on the Amount and Probability
+        fields
+    - name: iswon
+      description: boolean, indicating if the opportunity is a closed-Won sale
+    - name: isclosed
+      description: boolean, indicating if the opportunity is a closed sale, which
+        can be Closed-Lost or Closed-Won
+    - name: issplit
+      description: boolean, indicating if the opportunity is split between team members
+    - name: closedate
+      description: date, close date for the opportunity
+    - name: mm_dedp_opportunity__c
+      description: boolean, indicating if it's MicroMasters DEDP Opportunity. Check
+        this box for OL to perform invoice and collections tasks. If unchecked assumed
+        that learner will pay edX.
+    - name: of_seats_assigned_by_company__c
+      description: int, number of Seats Assigned by Company
+    - name: of_seats_outstanding_for_company__c
+      description: int, number of Seats Outstanding for Company
+    - name: of_seats_purchased__c
+      description: int, number of Seats purchased
+    - name: price_per_seat__c
+      description: int, price per seat, it's calculated Amount / of_Seats_Purchased__c
+        in US dollar
+    - name: forecastcategory
+      description: string, category that determines the column in which an opportunity
+        is totaled in a forecast - Forecast, Closed, Pipeline, Omitted, BestCase,
+        MostLikely
+    - name: forecastcategoryname
+      description: string, The category within the sales cycle that an opportunity
+        is assigned to based on its opportunity stage. The standard forecast categories
+        are Pipeline, Best Case, Commit, Omitted, and Closed
+    - name: data_quality_score__c
+      description: int, data quality score between 0 to 100
+    - name: data_quality_description__c
+      description: string, description for data quality score
+    - name: horizon_enterprise_opp__c
+      description: boolean, indicating if Opp is for Enterprise subscription
+    - name: nextstep
+      description: string, next step noted for this opportunity
+    - name: hasoverduetask
+      description: boolean, indicating if the opportunity has OverDue task
+    - name: opportunity_product_total__c
+      description: int, Sum of quantity of all Opportunity Products on this opportunity
+    - name: pricebook2id
+      description: string, ID of the associated Pricebook2. Pricebook2 contains the
+        standard or custom price book for product
+    - name: problems__c
+      description: string, text field noted for problems
+    - name: topic__c
+      description: topics for this opportunity
+    - name: business_impact__c
+      description: string, text field noted for business impact
+    - name: createddate
+      description: timestamp, date and time when this record was created by a user
+    - name: createdbyid
+      description: string, ID of the User who created this opportunity
+    - name: lastmodifiedbyid
+      description: string, ID of the User who last updated this opportunity
+    - name: lastmodifieddate
+      description: timestamp, Date and time when this record was last updated by a
+        user
+    - name: laststagechangedate
+      description: timestamp, date and time when the Stage was last changed
+    - name: systemmodstamp
+      description: timestamp, date and time when a user or automated process last
+        modified this record
+    - name: lastvieweddate
+      description: timestamp, date and time when the current user last viewed this
+        record
+    - name: lastreferenceddate
+      description: timestamp, date and time when the current user last accessed this
+        record
+    - name: lastamountchangedhistoryid
+      description: string, ID of the OpportunityHistory record that contains information
+        about when the opportunity Amount field was last updated
+    - name: lastclosedatechangedhistoryid
+      description: string, ID of the OpportunityHistory record that contains information
+        about when the closed date field was last updated
+    - name: lastactivitydate
+      description: date, It's either the date of the most recent event or the most
+        recently closed task associated with the opportunity record
+    - name: fiscalquarter
+      description: int, fiscal quarter for the opportunity (auto-calculated by salesforce)
+    - name: fiscalyear
+      description: int, fiscal year of the opportunity (auto-calculated by salesforce)
+    - name: fiscal
+      description: string, combining fiscal year + fiscal quarter (auto-calculated
+        by salesforce)
+    - name: contactid
+      description: string, ID of the primary contact associated with this opportunity
+    - name: recordtypeid
+      description: string, ID of the RecordType assigned to this opportunity
+    - name: campaignid
+      description: string, ID of associated Campaign
+    - name: syncedquoteid
+      description: string, ID of the Quote synced to the opportunity
+    - name: accountid
+      description: string, account ID that the opportunity is linked to
+    - name: ownerid
+      description: string, owner ID for this opportunity
+    - name: isdeleted
+      description: boolean, indicating whether the record has been deleted
+    - name: _airbyte_ab_id
+      description: string, uuid assigned to each row of the data by Airbyte connector
+    - name: _airbyte_emitted_at
+      description: string, unix time string when the record was emitted and recorded
+        by Airbyte connector. This field should be used internally to deduplicate
+        records.
+
+  - name: raw__thirdparty__salesforce__OpportunityLineItem
+    description: Salesforce opportunity product line items
+    columns:
+    - name: id
+      description: string, unique string that identifies this opportunity product
+        line item
+    - name: name
+      description: string, product name of the line item
+    - name: description
+      description: string, text description of the line item
+    - name: productcode
+      description: string, product code for the line item. e.g. program-v1:xPRO+SysEngx+R18
+    - name: listprice
+      description: decimal, list price for the line item in US dollar
+    - name: unitprice
+      description: decimal, sales price for the line item in US dollar
+    - name: discount
+      description: decimal, discount for the product as a percentage
+    - name: quantity
+      description: int, number of product
+    - name: totalprice
+      description: decimal, total price of the opportunity line item in US dollar
+    - name: opportunityid
+      description: string, ID of the associated Opportunity
+    - name: product2id
+      description: string, ID of the associated Product2 (some are imported from xPro
+        app), which represents a product
+    - name: pricebookentryid
+      description: string, ID of the associated PricebookEntry (association between
+        Pricebook2 and Product2). PricebookEntry defines the sales price for a product
+    - name: sortorder
+      description: int, sort order selected by the user - currently all blank
+    - name: createddate
+      description: timestamp, date and time when this record was created by a user
+    - name: createdbyid
+      description: string, ID of the User who created this line item
+    - name: servicedate
+      description: date, date when the product revenue will be recognized and the
+        product quantity will be shipped
+    - name: lastmodifiedbyid
+      description: string, ID of the User who last updated this line item
+    - name: lastmodifieddate
+      description: timestamp, date and time when this line item was last updated by
+        a user
+    - name: lastreferenceddate
+      description: timestamp, date and time for when the current user last viewed
+        this record
+    - name: lastvieweddate
+      description: timestamp, date and time when the current user last viewed this
+        record
+    - name: systemmodstamp
+      description: timestamp, date and time when a user or automated process last
+        modified this line item
+    - name: isdeleted
+      description: boolean, indicating whether the record has been deleted
+    - name: _airbyte_ab_id
+      description: string, uuid assigned to each row of the data by Airbyte connector
+    - name: _airbyte_emitted_at
+      description: string, unix time string when the record was emitted and recorded
+        by Airbyte connector. This field should be used internally to deduplicate
+        records.
