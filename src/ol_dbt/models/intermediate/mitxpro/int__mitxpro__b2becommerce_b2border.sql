@@ -15,7 +15,7 @@ with b2borders as (
 
 /*  salesforce_opportunity = int__salesforce__opportunity
 
-, couponpaymentversion = int__mitxpro__ecommerce_couponpaymentversion 
+, couponpaymentversion = int__mitxpro__ecommerce_couponpaymentversion
 
 , salesforce_b2border as (
     select
