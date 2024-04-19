@@ -13,14 +13,9 @@ with b2borders as (
     from {{ ref('int__mitxpro__ecommerce_product') }}
 )
 
-/* , salesforce_opportunity as (
-    select * from {{ ref('int__salesforce__opportunity') }}
-)
+/*  salesforce_opportunity = int__salesforce__opportunity
 
-, couponpaymentversion as (
-    select *
-    from {{ ref('int__mitxpro__ecommerce_couponpaymentversion') }}
-)
+, couponpaymentversion = int__mitxpro__ecommerce_couponpaymentversion 
 
 , salesforce_b2border as (
     select
