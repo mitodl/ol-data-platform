@@ -13,7 +13,7 @@ with b2borders as (
     from {{ ref('int__mitxpro__ecommerce_product') }}
 )
 
-, salesforce_opportunity as (
+/* , salesforce_opportunity as (
     select * from {{ ref('int__salesforce__opportunity') }}
 )
 
@@ -31,7 +31,7 @@ with b2borders as (
         on b2borders.couponpaymentversion_id = couponpaymentversion.couponpaymentversion_id
     inner join salesforce_opportunity
         on b2borders.b2border_contract_number like '%' || salesforce_opportunity.opportunity_id
-)
+)*/
 
 
 select
@@ -54,8 +54,8 @@ select
     , products.courserun_id
     , products.program_id
     , products.product_type
-    , salesforce_b2border.opportunity_id as salesforce_opportunity_id
+/*    , salesforce_b2border.opportunity_id as salesforce_opportunity_id*/
 from b2borders
 inner join productversions on b2borders.productversion_id = productversions.productversion_id
 inner join products on productversions.product_id = products.product_id
-left join salesforce_b2border on b2borders.b2border_id = salesforce_b2border.b2border_id
+/*left join salesforce_b2border on b2borders.b2border_id = salesforce_b2border.b2border_id*/
