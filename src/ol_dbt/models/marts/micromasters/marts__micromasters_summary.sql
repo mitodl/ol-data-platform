@@ -24,7 +24,7 @@ with micromasters_enrollments as (
             mitx_programs.is_dedp_program = true then 'Data, Economics, and Design of Policy'
         else micromasters_enrollments.program_title end as program_title
         , count(
-            distinct micromasters_enrollments.courserun_readable_id 
+            distinct micromasters_enrollments.courserun_readable_id
             || micromasters_enrollments.user_email
         ) as total_enrollments
         , count(distinct micromasters_enrollments.user_email) as unique_users
@@ -39,7 +39,7 @@ with micromasters_enrollments as (
         end) as unique_verified_users
     from micromasters_enrollments
     inner join mitx_programs
-        on 
+        on
             micromasters_enrollments.micromasters_program_id = mitx_programs.micromasters_program_id
             or micromasters_enrollments.mitxonline_program_id = mitx_programs.mitxonline_program_id
     group by 1
@@ -58,7 +58,7 @@ with micromasters_enrollments as (
         , count(distinct micromasters_course_certificates.user_email) as unique_course_certificate_earners
     from micromasters_course_certificates
     inner join mitx_programs
-        on 
+        on
             micromasters_course_certificates.micromasters_program_id = mitx_programs.micromasters_program_id
             or micromasters_course_certificates.mitxonline_program_id = mitx_programs.mitxonline_program_id
     group by 1
