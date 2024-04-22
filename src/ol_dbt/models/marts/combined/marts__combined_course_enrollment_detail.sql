@@ -170,7 +170,8 @@ with mitx_enrollments as (
         , mitx_enrollments.courserun_readable_id
         , combined_courseruns.courserun_start_on
         , combined_courseruns.courserun_end_on
-        , combined_courseruns.courserun_is_current
+        , if(combined_courseruns.courserun_is_current is null, false, combined_courseruns.courserun_is_current)
+        as courserun_is_current
         , mitx_enrollments.user_username
         , mitx_enrollments.user_email
         , mitx_enrollments.user_full_name
