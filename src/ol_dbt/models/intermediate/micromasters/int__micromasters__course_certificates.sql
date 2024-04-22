@@ -119,7 +119,6 @@ with course_certificates_dedp_from_micromasters as (
         , courseruncertificate_uuid
         , courseruncertificate_url
         , courseruncertificate_created_on
-        , if(mitxonline_program_id in (1, 2, 3), true, false) as program_is_dedp
     from dedp_course_certificates
 
     union all
@@ -140,7 +139,6 @@ with course_certificates_dedp_from_micromasters as (
         , courseruncertificate_download_uuid as courseruncertificate_uuid
         , courseruncertificate_download_url as courseruncertificate_url
         , courseruncertificate_created_on
-        , false as program_is_dedp
     from course_certificates_non_dedp_program
 )
 
