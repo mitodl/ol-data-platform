@@ -99,8 +99,8 @@ models:
     description: str, user's Nickname / Preferred name
   - name: user_profile_id
     description: int, foreign key to profiles_profile
-    tests:
-    - not_null
+#    tests: #some users don't have info on the profile table
+#    - not_null
   - name: user_profile_is_filled_out
     description: boolean, whether user filled out the profile
   - name: user_profile_parental_consent_is_required
