@@ -109,7 +109,7 @@ where programs.is_dedp_program = true
 union distinct 
 
 select 
-    edx_users.user_username as user_edxorg_username
+    micromasters_program_enrollments.user_username as user_edxorg_username
     , micromasters_users.user_mitxonline_username
     , edx_users.user_email
     , programs.micromasters_program_id
@@ -124,7 +124,7 @@ select
     , micromasters_users.user_address_postal_code
     , micromasters_users.user_street_address
     , micromasters_users.user_address_state_or_territory
-    , edx_users.user_full_name
+    , micromasters_program_enrollments.user_full_name
     , micromasters_users.user_id as micromasters_user_id
     , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
 from micromasters_program_enrollments
