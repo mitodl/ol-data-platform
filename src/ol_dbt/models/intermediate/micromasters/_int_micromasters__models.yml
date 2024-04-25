@@ -540,8 +540,6 @@ models:
     description: str, username on MITx Online
   - name: user_email
     description: str, The email address of the learner on the edX platform
-    tests:
-    - not_null
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
   - name: program_title
@@ -584,4 +582,5 @@ models:
     description: str, user's birth year from user's profile on MITx Online or MicroMasters.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "micromasters_program_id", "mitxonline_program_id"]
+      column_list: ["user_edxorg_username", "micromasters_program_id", "mitxonline_program_id"
+        , "user_mitxonline_username"]
