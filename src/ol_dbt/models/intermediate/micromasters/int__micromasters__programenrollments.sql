@@ -114,7 +114,7 @@ with micromasters_program_enrollments as (
         and mitxonline_dedp_records.user_mitxonline_username is null
 )
 
-, non_dedp_records (
+, non_dedp_records as (
     select 
         micromasters_program_enrollments.user_username as user_edxorg_username
         , micromasters_users.user_mitxonline_username
