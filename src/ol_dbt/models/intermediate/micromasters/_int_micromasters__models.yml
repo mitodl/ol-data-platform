@@ -582,5 +582,5 @@ models:
     description: str, user's birth year from user's profile on MITx Online or MicroMasters.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_edxorg_username", "micromasters_program_id", "mitxonline_program_id"
-        , "user_mitxonline_username", "micromasters_user_id"]
+      column_list: ["user_edxorg_username", "micromasters_program_id", "mitxonline_program_id",
+        "user_mitxonline_username", "micromasters_user_id"]
