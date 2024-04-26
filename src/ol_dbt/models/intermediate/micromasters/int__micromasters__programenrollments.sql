@@ -42,7 +42,43 @@ with micromasters_program_enrollments as (
     from {{ ref('int__edxorg__mitx_users') }}
 )
 
-, report as (
+, mitxonline_dedp_records as (
+    select
+        micromasters_users.user_edxorg_username
+        , mitxonline_programenrollments.user_username as user_mitxonline_username
+        , mitxonline_users.user_email
+        , programs.micromasters_program_id
+        , programs.program_title
+        , mitxonline_programenrollments.program_id as mitxonline_program_id
+        , edx_users.user_id as user_edxorg_id
+        , micromasters_users.user_address_city
+        , mitxonline_users.user_first_name
+        , mitxonline_users.user_last_name
+        , micromasters_users.user_address_postal_code
+        , micromasters_users.user_street_address
+        , mitxonline_users.user_full_name
+        , micromasters_users.user_id as micromasters_user_id
+        , coalesce(
+            cast(mitxonline_users.user_birth_year as varchar)
+            , substring(micromasters_users.user_birth_date, 1, 4)
+        ) as user_year_of_birth
+        , coalesce(mitxonline_users.user_gender, micromasters_users.user_gender) as user_gender
+        , coalesce(mitxonline_users.user_address_country, micromasters_users.user_address_country) as user_country
+        , coalesce(mitxonline_users.user_address_state, micromasters_users.user_address_state_or_territory)
+        as user_address_state_or_territory
+    from mitxonline_programenrollments
+    left join mitxonline_users 
+        on mitxonline_programenrollments.user_id = mitxonline_users.user_id
+    left join micromasters_users 
+        on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
+    left join edx_users 
+        on micromasters_users.user_edxorg_username = edx_users.user_username
+    inner join programs 
+        on mitxonline_programenrollments.program_id = programs.mitxonline_program_id
+    where programs.is_dedp_program = true
+)
+
+, mm_dedp_records as (
     select
         micromasters_users.user_edxorg_username
         , micromasters_users.user_mitxonline_username
@@ -69,46 +105,16 @@ with micromasters_program_enrollments as (
         on mm_program_enrollments.program_id = programs.micromasters_program_id
     left join edx_users 
         on micromasters_users.user_edxorg_username = edx_users.user_username
-    where programs.is_dedp_program = true
+    left join mitxonline_dedp_records
+        on 
+            micromasters_users.user_mitxonline_username = mitxonline_dedp_records.user_mitxonline_username
+            and programs.mitxonline_program_id = mitxonline_dedp_records.mitxonline_program_id
+    where 
+        programs.is_dedp_program = true
+        and mitxonline_dedp_records.user_mitxonline_username is null
+)
 
-    union distinct
-
-    select
-        micromasters_users.user_edxorg_username
-        , mitxonline_users.user_username as user_mitxonline_username
-        , mitxonline_users.user_email
-        , programs.micromasters_program_id
-        , programs.program_title
-        , programs.mitxonline_program_id
-        , edx_users.user_id as user_edxorg_id
-        , coalesce(mitxonline_users.user_gender, micromasters_users.user_gender) as user_gender
-        , coalesce(mitxonline_users.user_address_country, micromasters_users.user_address_country) as user_country
-        , micromasters_users.user_address_city
-        , mitxonline_users.user_first_name
-        , mitxonline_users.user_last_name
-        , micromasters_users.user_address_postal_code
-        , micromasters_users.user_street_address
-        , coalesce(mitxonline_users.user_address_state, micromasters_users.user_address_state_or_territory)
-        as user_address_state_or_territory
-        , mitxonline_users.user_full_name
-        , micromasters_users.user_id as micromasters_user_id
-        , coalesce(
-            cast(mitxonline_users.user_birth_year as varchar)
-            , substring(micromasters_users.user_birth_date, 1, 4)
-        ) as user_year_of_birth
-    from mitxonline_programenrollments
-    left join mitxonline_users 
-        on mitxonline_programenrollments.user_id = mitxonline_users.user_id
-    left join micromasters_users 
-        on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
-    left join edx_users 
-        on micromasters_users.user_edxorg_username = edx_users.user_username
-    inner join programs 
-        on mitxonline_programenrollments.program_id = programs.mitxonline_program_id
-    where programs.is_dedp_program = true
-
-    union distinct 
-
+, non_dedp_records (
     select 
         micromasters_program_enrollments.user_username as user_edxorg_username
         , micromasters_users.user_mitxonline_username
@@ -159,8 +165,11 @@ select
     , user_full_name
     , micromasters_user_id
     , user_year_of_birth
-from report
-group by 
+from mitxonline_dedp_records
+
+union distinct 
+
+select 
     user_edxorg_username
     , user_mitxonline_username
     , user_email
@@ -179,3 +188,29 @@ group by
     , user_full_name
     , micromasters_user_id
     , user_year_of_birth
+from mm_dedp_records
+
+union distinct 
+
+select 
+    user_edxorg_username
+    , user_mitxonline_username
+    , user_email
+    , micromasters_program_id
+    , program_title
+    , mitxonline_program_id
+    , user_edxorg_id
+    , user_gender
+    , user_country
+    , user_address_city
+    , user_first_name
+    , user_last_name
+    , user_address_postal_code
+    , user_street_address
+    , user_address_state_or_territory
+    , user_full_name
+    , micromasters_user_id
+    , user_year_of_birth
+from non_dedp_records
+
+
