@@ -140,7 +140,7 @@ with micromasters_program_enrollments as (
         and programs.is_dedp_program = false
 )
 
-select distinct 
+select 
     user_edxorg_username
     , user_mitxonline_username
     , user_email
@@ -160,3 +160,22 @@ select distinct
     , micromasters_user_id
     , user_year_of_birth
 from report
+group by 
+    user_edxorg_username
+    , user_mitxonline_username
+    , user_email
+    , micromasters_program_id
+    , program_title
+    , mitxonline_program_id
+    , user_edxorg_id
+    , user_gender
+    , user_country
+    , user_address_city
+    , user_first_name
+    , user_last_name
+    , user_address_postal_code
+    , user_street_address
+    , user_address_state_or_territory
+    , user_full_name
+    , micromasters_user_id
+    , user_year_of_birth
