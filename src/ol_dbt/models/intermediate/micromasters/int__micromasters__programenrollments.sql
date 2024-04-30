@@ -67,7 +67,7 @@ with micromasters_program_enrollments as (
         , coalesce(mitxonline_users.user_address_state, micromasters_users.user_address_state_or_territory)
         as user_address_state_or_territory
     from mitxonline_programenrollments
-    left join mitxonline_users
+    inner join mitxonline_users
         on mitxonline_programenrollments.user_id = mitxonline_users.user_id
     left join micromasters_users
         on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
