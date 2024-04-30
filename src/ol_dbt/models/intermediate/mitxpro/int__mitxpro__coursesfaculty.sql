@@ -4,7 +4,9 @@ with coursepages as (
 )
 
 , facultymemberspage as (
-    select *
+    select
+        *
+        , cast(json_parse(cms_facultymemberspage_faculty) as array (json)) as cms_facultymemberspage_faculty_array
     from {{ ref('stg__mitxpro__app__postgres__cms_facultymemberspage') }}
 )
 
@@ -22,7 +24,7 @@ with coursepages as (
 
     from facultymemberspage
     cross join
-        unnest(cast(json_parse(cms_facultymemberspage_faculty) as array (json)))
+        unnest(facultymemberspage.cms_facultymemberspage_faculty_array)
         as t(cms_facultymemberspage_facultymember) -- noqa
 )
 
