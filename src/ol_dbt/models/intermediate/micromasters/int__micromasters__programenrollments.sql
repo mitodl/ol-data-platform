@@ -135,7 +135,7 @@ with micromasters_program_enrollments as (
         , micromasters_users.user_id as micromasters_user_id
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from micromasters_program_enrollments
-    left join edx_users
+    inner join edx_users
         on micromasters_program_enrollments.user_id = edx_users.user_id
     left join micromasters_users
         on micromasters_program_enrollments.user_username = micromasters_users.user_edxorg_username
