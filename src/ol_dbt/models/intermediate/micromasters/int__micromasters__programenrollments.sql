@@ -10,7 +10,7 @@ with micromasters_program_enrollments as (
             partition by user_id, micromasters_program_id order by program_title
         ) as row_num
     from {{ ref('int__edxorg__mitx_program_enrollments') }}
-    where program_type = 'MicroMasters'
+    where micromasters_program_id is not null
 )
 
 , mm_program_enrollments as (
