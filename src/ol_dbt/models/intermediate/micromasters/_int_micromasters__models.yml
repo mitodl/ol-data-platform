@@ -529,7 +529,7 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__ecommerce_order')
-- name: int__micromasters__programenrollments
+- name: int__micromasters__program_enrollments
   description: MicroMasters program enrolled users
   columns:
   - name: user_edxorg_username
@@ -539,7 +539,8 @@ models:
   - name: user_mitxonline_username
     description: str, username on MITx Online
   - name: user_email
-    description: str, The email address of the learner on the edX platform
+    description: str, The email address of the learner in MITxOnline if we have them 
+      there for DEDP programs. Otherwise we pull the email address from MicroMasters/edx.org.
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
   - name: program_title
@@ -551,7 +552,8 @@ models:
   - name: user_edxorg_id
     description: int, Numerical user ID of a learner on the edX platform
   - name: user_gender
-    description: str, user's gender from user's profile on MITx Online or edX.org.
+    description: str, The users gender from their profile in MITxOnline if we have them 
+      there for DEDP programs. Otherwise we pull the gender from MicroMasters/edx.org.
       blank means user did not specify a gender. Null means this student signed up
       before this information was collected
     tests:
