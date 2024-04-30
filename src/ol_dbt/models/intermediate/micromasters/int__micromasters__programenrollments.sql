@@ -120,7 +120,7 @@ with micromasters_program_enrollments as (
         , micromasters_users.user_mitxonline_username
         , edx_users.user_email
         , programs.micromasters_program_id
-        , micromasters_program_enrollments.program_title
+        , programs.program_title
         , programs.mitxonline_program_id
         , micromasters_program_enrollments.user_id as user_edxorg_id
         , edx_users.user_gender
