@@ -99,7 +99,7 @@ with micromasters_program_enrollments as (
         , micromasters_users.user_id as micromasters_user_id
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from mm_program_enrollments
-    left join micromasters_users
+    inner join micromasters_users
         on mm_program_enrollments.user_id = micromasters_users.user_id
     inner join programs
         on mm_program_enrollments.program_id = programs.micromasters_program_id
