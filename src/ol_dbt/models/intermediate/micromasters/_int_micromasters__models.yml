@@ -529,3 +529,60 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__ecommerce_order')
+- name: int__micromasters__program_enrollments
+  description: MicroMasters program enrolled users
+  columns:
+  - name: user_edxorg_username
+    description: str, The username of the learner on the edX platform. For users who
+      got DEDP certificates on MITx Online, this could be blank if they don't have
+      their edxorg account linked on MicroMasters.
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
+  - name: user_email
+    description: str, The email address of the learner in MITxOnline if we have them
+      there for DEDP programs. Otherwise we pull the email address from MicroMasters/edx.org.
+  - name: micromasters_program_id
+    description: int, sequential ID representing a program in MicroMasters
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+  - name: mitxonline_program_id
+    description: int, sequential ID representing a program in the mitxonline database
+  - name: user_edxorg_id
+    description: int, Numerical user ID of a learner on the edX platform
+  - name: user_gender
+    description: str, The users gender from their profile in MITxOnline if we have
+      them there for DEDP programs. Otherwise we pull the gender from MicroMasters/edx.org.
+      blank means user did not specify a gender. Null means this student signed up
+      before this information was collected
+    tests:
+    - accepted_values:
+        values: '{{ var("gender_values") }}'
+  - name: user_country
+    description: str, Country from user's profile on MITx Online or MicroMasters
+  - name: user_address_city
+    description: str, city where user lives in from user's profile on MicroMasters.
+      Note that this data isn't available on MITx Online.
+  - name: user_first_name
+    description: str, first name from user's profile on MITx Online or MicroMasters.
+  - name: user_last_name
+    description: str, last name from user's profile on MITx Online or MicroMasters.
+  - name: user_address_postal_code
+    description: str, postal code where user lives in from the profile on MicroMasters.
+  - name: user_street_address
+    description: str, street address where user lives in from user's profile on MicroMasters.
+      Note that this data isn't available on MITx Online.
+  - name: user_address_state_or_territory
+    description: str,  state or territory where user lives in from user's profile
+      on MITx Online or MicroMasters.
+  - name: user_full_name
+    description: str, The full name from user's profile on MITx Online or MicroMasters.
+  - name: micromasters_user_id
+    description: int, sequential ID representing a user in MicroMasters
+  - name: user_year_of_birth
+    description: str, user's birth year from user's profile on MITx Online or MicroMasters.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_edxorg_username", "micromasters_program_id", "mitxonline_program_id",
+        "user_mitxonline_username", "micromasters_user_id"]
