@@ -11,7 +11,11 @@ from dagster import (
     define_asset_job,
     load_assets_from_current_module,
 )
-from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
+from dagster_airbyte import (
+    AirbyteConnectionMetadata,
+    airbyte_resource,
+    load_assets_from_airbyte_instance,
+)
 from dagster_dbt import (
     dbt_cli_resource,
     load_assets_from_dbt_manifest,
@@ -44,13 +48,22 @@ dbt_config = {
 }
 configured_dbt_cli = dbt_cli_resource.configured(dbt_config)
 
+
+def filter_active_connections(connection_metadata: AirbyteConnectionMetadata) -> bool:
+    if "S3 Glue Data Lake" in connection_metadata.name:
+        pass
+    # Confirm the existence of this field in AirbyteConnectionMetadata
+    return connection_metadata.status == "active"
+
+
 airbyte_assets = load_assets_from_airbyte_instance(
     configured_airbyte_resource,
     # This key_prefix is how Dagster knows to map the Airbyte outputs to the dbt
     # sources, since they are defined as ol_warehouse_raw_data in the
     # sources.yml files. (TMM 2023-01-18)
     key_prefix="ol_warehouse_raw_data",
-    connection_filter=lambda conn: "S3 Glue Data Lake" in conn.name,
+    # connections that should be excluded from the output assets
+    connection_filter=filter_active_connections,
     connection_to_group_fn=(
         lambda conn_name: "ol_warehouse_raw"
         if "S3 Glue Data Lake" in conn_name
