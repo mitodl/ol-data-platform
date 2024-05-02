@@ -516,3 +516,79 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
         "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
+
+- name: stg__edxorg__s3__courserun_enrollment
+  description: edX.org course run enrollments
+  columns:
+  - name: courserunenrollment_id
+    description: int, primary key for course enrollment
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course Key formatted as course-v1:org+course_number+run.
+    tests:
+    - not_null
+  - name: user_id
+    description: int, user ID on edX.org
+    tests:
+    - not_null
+  - name: courserunenrollment_mode
+    description: str, indicating what kind of enrollment it is. Possible values are
+      honor, audit, credit, verified, unpaid-executive-education, professional, no-id-professional.
+    tests:
+    - not_null
+  - name: courserunenrollment_is_active
+    description: str, indicating whether this enrollment is active
+    tests:
+    - not_null
+  - name: courserunenrollment_created_on
+    description: timestamp, time when this enrollment was created
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id"]
+
+- name: stg__edxorg__s3__courserun_grade
+  description: edx.org course grades ingested from CSV files on OL S3 bucket
+  columns:
+  - name: courserun_readable_id
+    description: str, open edX Course Key formatted as course-v1:org+course_number+run.
+    tests:
+    - not_null
+  - name: user_id
+    description: int, user ID on edX.org
+    tests:
+    - not_null
+  - name: courserungrade_grading_policy_hash
+    description: str, a SHA-1 digest of the course grading policy, used to detect
+      and update grades whenever the policy changes
+    tests:
+    - not_null
+  - name: courserungrade_grade
+    description: float, calculated course grade as a decimal percentage, per grading
+      policy. e.g. 0.91 means 91%
+    tests:
+    - not_null
+  - name: courserungrade_letter_grade
+    description: str, calculated course grade as a letter value (e.g., A-D, Pass),
+      per grading policy If the learner's grade is Fail or F, this value is empty.
+  - name: courserungrade_first_passed_on
+    description: timestamp, date and time when the learner first passed the course.
+      If this value is empty, the learner never passed the course. If this value is
+      non-empty but the letter_grade value is empty, the learner transitioned from
+      passing to not passing.
+  - name: courserungrade_created_on
+    description: timestamp, time when the course grade was first calculated for this
+      user for this course run.
+    tests:
+    - not_null
+  - name: courserungrade_updated_on
+    description: timestamp, time when the course grade was was last updated for this
+      user for this course run
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id"]

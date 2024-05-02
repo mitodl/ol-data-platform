@@ -82,8 +82,8 @@ sources:
       description: str
 
   - name: raw__irx__edxorg__bigquery__mitx_person_course
-    description: source table contains user activities from edX.org, MITxOnline/xPro
-      open edx and certain enrollment/certificate fields from edx.org
+    description: IRx source table contains user activities from edX.org, MITxOnline/xPro
+      open edx and certain enrollment/certificate fields
     columns:
     - name: course_id
       description: str, The canonical ID of the course in the format as {org}/{course
@@ -430,9 +430,9 @@ sources:
         handle
 
   - name: raw__irx__edxorg__bigquery__email_opt_in
-    description: It contains email opt-in preferences for edX.org courses. If users
-      enroll in multiple courses, the email and username in this table are expected
-      to be the most recent data.
+    description: It contains email opt-in preferences for edX.org courses provided
+      by IRx. If users enroll in multiple courses, the email and username in this
+      table are expected to be the most recent data.
     columns:
     - name: course_id
       description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
@@ -596,3 +596,49 @@ sources:
       description: str, internal used field for log file location
     - name: _ab_source_file_url
       description: str, url path for the raw log file
+
+  - name: raw__edxorg__s3__tables__student_courseenrollment
+    description: edX.org course enrollments ingested from CSV files on OL S3 bucket
+    columns:
+    - name: id
+      description: str, primary key for course run enrollment
+    - name: course_id
+      description: str, open edX Course Key formatted as course-v1:org+course_number+run.
+    - name: user_id
+      description: str, user ID on edX.org
+    - name: mode
+      description: str, indicating what kind of enrollment it is. Possible values
+        are honor, audit, credit, verified, unpaid-executive-education, professional,
+        no-id-professional.
+    - name: is_active
+      description: str, indicating whether this enrollment is active
+    - name: created
+      description: str, time when this enrollment was created
+
+  - name: raw__edxorg__s3__tables__grades_persistentcoursegrade
+    description: edx.org course grades ingested from CSV files on OL S3 bucket
+    columns:
+    - name: course_id
+      description: str, open edX Course Key formatted as course-v1:org+course_number+run.
+    - name: user_id
+      description: str, user ID on edX.org
+    - name: grading_policy_hash
+      description: str, a SHA-1 digest of the course grading policy, used to detect
+        and update grades whenever the policy changes
+    - name: percent_grade
+      description: str, calculated course grade as a decimal percentage, per grading
+        policy. e.g. 0.91 means 91%
+    - name: letter_grade
+      description: str, calculated course grade as a letter value (e.g., A-D, Pass),
+        per grading policy If the learner's grade is Fail or F, this value is empty.
+    - name: passed_timestamp
+      description: timestamp, date and time when the learner first passed the course.
+        If this value is empty, the learner never passed the course. If this value
+        is non-empty but the letter_grade value is empty, the learner transitioned
+        from passing to not passing.
+    - name: created
+      description: str, time when the course grade was first calculated for this user
+        for this course run.
+    - name: modified
+      description: str, time when the course grade was was last updated for this user
+        for this course run
