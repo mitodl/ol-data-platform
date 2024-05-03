@@ -539,11 +539,11 @@ models:
     tests:
     - not_null
   - name: courserunenrollment_is_active
-    description: str, indicating whether this enrollment is active
+    description: boolean, indicating whether this enrollment is active
     tests:
     - not_null
   - name: courserunenrollment_created_on
-    description: timestamp, time when this enrollment was created
+    description: timestamp, date and time when this enrollment was created
     tests:
     - not_null
   tests:
@@ -580,13 +580,13 @@ models:
       non-empty but the letter_grade value is empty, the learner transitioned from
       passing to not passing.
   - name: courserungrade_created_on
-    description: timestamp, time when the course grade was first calculated for this
-      user for this course run.
+    description: timestamp, date and time when the course grade was first calculated
+      for this user for this course run.
     tests:
     - not_null
   - name: courserungrade_updated_on
-    description: timestamp, time when the course grade was was last updated for this
-      user for this course run
+    description: timestamp, date and time when the course grade was was last updated
+      for this user for this course run
     tests:
     - not_null
   tests:
