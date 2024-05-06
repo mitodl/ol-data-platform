@@ -642,3 +642,41 @@ sources:
     - name: modified
       description: str, time when the course grade was was last updated for this user
         for this course run
+
+  - name: raw__edxorg__s3__course_structure__course_blocks
+    columns:
+    - name: block_id
+      description: str, Unique ID for a distinct piece of content in a course, formatted
+        as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+    - name: block_index
+      description: int, sequence number giving order in which this block content appears
+        within the course
+    - name: block_parent
+      description: str, parent block ID, same format as block_id field
+    - name: block_type
+      description: str, category/type of the block, it identifies core structural
+        elements of a course. Value includes but not limited to course, chapter, sequential,
+        vertical, discussion, html, problem, video, etc.
+    - name: block_title
+      description: str, title of the block extracted from the metadata field of the
+        block. This field comes from name field for the section, subsection, or unit
+        on the Studio 'Course Outline' page
+    - name: block_details
+      description: str, json string of the block. It contains the attribute fields
+        like category, children and metadata. Different block type may have different
+        member fields inside metadata.
+    - name: course_id
+      description: array, course ID in array with one element e.g. [MITx-7.05x-1T2024]
+    - name: course_title
+      description: str, title of the course extracted from the metadata field of 'course'
+        block
+    - name: course_content_hash
+      description: str, sha256 hashed string of the course content.
+    - name: block_content_hash
+      description: str, sha256 hashed string of the block content in a course
+    - name: course_start
+      description: str, date indicating when the course starts, extracted from metadata
+        of the 'course' block
+    - name: retrieved_at
+      description: timestamp, time indicating when this block was initially retrieved
+        from S3
