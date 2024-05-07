@@ -48,7 +48,7 @@ configured_dbt_cli = dbt_cli_resource.configured(dbt_config)
 def filter_active_connections(connection) -> bool:
     if "S3 Glue Data Lake" in connection.name:
         pass
-    return connection.get("status") == "active"
+    return connection.status == "active"
 
 
 airbyte_assets = load_assets_from_airbyte_instance(
