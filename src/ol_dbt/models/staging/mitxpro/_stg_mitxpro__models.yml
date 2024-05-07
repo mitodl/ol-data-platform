@@ -2027,6 +2027,8 @@ models:
       are audit or no-id-professional
     tests:
     - not_null
+    - accepted_values:
+        values: ['audit', 'no-id-professional']
   - name: courserunenrollment_is_active
     description: boolean, indicating whether this enrollment is active on xPro open
       edx platform.
