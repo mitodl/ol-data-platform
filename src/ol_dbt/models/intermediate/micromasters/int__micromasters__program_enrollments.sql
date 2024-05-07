@@ -46,7 +46,7 @@ with micromasters_program_enrollments as (
     select
         micromasters_users.user_edxorg_username
         , mitxonline_programenrollments.user_username as user_mitxonline_username
-        , mitxonline_users.user_email
+        , micromasters_users.user_email
         , programs.micromasters_program_id
         , programs.program_title
         , mitxonline_programenrollments.program_id as mitxonline_program_id
