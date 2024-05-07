@@ -40,7 +40,7 @@ with mitx_enrollments as (
         '{{ var("mitxpro") }}' as platform
         , courserunenrollment_is_active
         , courserunenrollment_created_on
-        , null as courserunenrollment_enrollment_mode
+        , courserunenrollment_enrollment_mode
         , courserunenrollment_enrollment_status
         , user_id
         , courserun_id

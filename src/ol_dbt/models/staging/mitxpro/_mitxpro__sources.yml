@@ -1422,17 +1422,20 @@ sources:
     description: Stores the mapping of students to the courses they are enrolled in.
     columns:
     - name: course_id
-      description: string, unique ID representing a single MITx Pro course run
+      description: string, Open edX Course ID in the format course-v1:xPro+{course
+        code}+{run_tag}
     - name: mode
-      description: string, the mode in which the user took the course (eg. audit)
+      description: string, indicating what kind of enrollment this is. Possible values
+        are audit or no-id-professional
     - name: id
       description: int, the auto-incremented ID for this table
     - name: is_active
       description: boolean, whether the user has been active in a course
     - name: created
-      description: timestamp, specifying when the user first enrolled in the course
+      description: timestamp, date and time when this enrollment was initially created
+        on xPro open edx platform.
     - name: user_id
-      description: int, the foreign key to the users_user table
+      description: int, user ID on xPro open edx platform
 
   - name: raw__xpro__openedx__mysql__teams_courseteam
     description: Stores unique course teams
