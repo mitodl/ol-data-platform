@@ -11,11 +11,8 @@ from dagster import (
     define_asset_job,
     load_assets_from_current_module,
 )
-from dagster_airbyte import (
-    AirbyteConnectionMetadata,
-    airbyte_resource,
-    load_assets_from_airbyte_instance,
-)
+from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
+from dagster_airbyte.asset_defs import AirbyteConnectionMetadata
 from dagster_dbt import (
     dbt_cli_resource,
     load_assets_from_dbt_manifest,
