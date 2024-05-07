@@ -999,6 +999,11 @@ models:
     - accepted_values:
         values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
           '', null]
+  - name: courserunenrollment_enrollment_mode
+    description: str, indicating what kind of enrollment this is. Possible values
+      are audit or no-id-professional.
+    tests:
+    - not_null
   - name: courserunenrollment_is_edx_enrolled
     description: boolean, indicating whether the user is enrolled on edx
     tests:

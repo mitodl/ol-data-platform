@@ -243,7 +243,7 @@ with mitx_enrollments as (
         , mitxpro_enrollments.courserunenrollment_id
         , mitxpro_enrollments.courserunenrollment_is_active
         , mitxpro_enrollments.courserunenrollment_created_on
-        , null as courserunenrollment_enrollment_mode
+        , mitxpro_enrollments.courserunenrollment_enrollment_mode
         , mitxpro_enrollments.courserunenrollment_enrollment_status
         , mitxpro_enrollments.courserunenrollment_is_edx_enrolled
         , mitxpro_enrollments.user_id

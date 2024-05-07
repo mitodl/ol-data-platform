@@ -4,6 +4,10 @@ with enrollments as (
     select * from {{ ref('stg__mitxpro__app__postgres__courses_courserunenrollment') }}
 )
 
+, openedx_enrollments as (
+    select * from {{ ref('stg__mitxpro__openedx__mysql__courserun_enrollment') }}
+)
+
 , runs as (
     select * from {{ ref('stg__mitxpro__app__postgres__courses_courserun') }}
 )
@@ -30,9 +34,17 @@ with enrollments as (
         , users.user_address_country
         , enrollments.ecommerce_company_id
         , enrollments.ecommerce_order_id
+        , case
+            when enrollments.ecommerce_order_id is not null then 'no-id-professional'
+            else openedx_enrollments.courserunenrollment_enrollment_mode
+        end as courserunenrollment_enrollment_mode
     from enrollments
     left join runs on enrollments.courserun_id = runs.courserun_id
     left join users on enrollments.user_id = users.user_id
+    left join openedx_enrollments
+        on
+            runs.courserun_readable_id = openedx_enrollments.courserun_readable_id
+            and users.openedx_user_id = openedx_enrollments.openedx_user_id
 )
 
 select * from mitxpro_enrollments

@@ -2010,3 +2010,33 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "openedx_user_id", "courseaccess_role"]
+
+- name: stg__mitxpro__openedx__mysql__courserun_enrollment
+  description: course run enrollments from xPro open edx platform
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course ID in the format course-v1:xPro+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, user ID on xPro open edx platform
+    tests:
+    - not_null
+  - name: courserunenrollment_enrollment_mode
+    description: str, indicating what kind of enrollment this is. Possible values
+      are audit or no-id-professional
+    tests:
+    - not_null
+  - name: courserunenrollment_is_active
+    description: boolean, indicating whether this enrollment is active on xPro open
+      edx platform.
+    tests:
+    - not_null
+  - name: courserunenrollment_created_on
+    description: timestamp, date and time when this enrollment was initially created
+      on xPro open edx platform.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "openedx_user_id"]
