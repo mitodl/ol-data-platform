@@ -34,6 +34,14 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__edxorg__mitx_users') }}
 )
 
+, micromasters__program_enrollments as (
+    select * from {{ ref('int__micromasters__program_enrollments') }}
+)
+
+, micromasters__users as (
+    select * from {{ ref('stg__micromasters__app__postgres__auth_user') }}
+)
+
 , combined_programs as (
     select
         mitxpro__programs.platform_name
@@ -109,4 +117,67 @@ with mitxpro__programenrollments as (
             and edx_program_enrollments.user_id = edx_program_certificates.user_id
 )
 
-select * from combined_programs
+, mm_no_dups as (
+    select 
+        micromasters__program_enrollments.platform_name
+        , micromasters__program_enrollments.micromasters_program_id as program_id
+        , micromasters__program_enrollments.program_title
+        , null as program_is_live
+        , null as program_readable_id
+        , micromasters__users.user_id
+        , micromasters__program_enrollments.user_email
+        , micromasters__users.user_username
+        , null as programenrollment_is_active
+        , null as programenrollment_created_on
+        , null as programenrollment_enrollment_status
+        , null as programcertificate_created_on
+        , null as programcertificate_is_revoked
+        , null as programcertificate_uuid
+    from micromasters__program_enrollments
+    inner join micromasters__users
+        on micromasters__program_enrollments.micromasters_user_id = micromasters__users.user_id
+    left join combined_programs
+        on 
+            micromasters__program_enrollments.user_email = combined_programs.user_email
+            and micromasters__program_enrollments.program_title = combined_programs.program_title
+    where 
+        combined_programs.user_email is null
+        and combined_programs.program_title is null
+        and micromasters__program_enrollments.platform_name = 'micromasters'
+)
+
+select 
+    combined_programs.platform_name
+    , combined_programs.program_id
+    , combined_programs.program_title
+    , combined_programs.program_is_live
+    , combined_programs.program_readable_id
+    , combined_programs.user_id
+    , combined_programs.user_email
+    , combined_programs.user_username
+    , combined_programs.programenrollment_is_active
+    , combined_programs.programenrollment_created_on
+    , combined_programs.programenrollment_enrollment_status
+    , combined_programs.programcertificate_created_on
+    , combined_programs.programcertificate_is_revoked
+    , combined_programs.programcertificate_uuid
+from combined_programs
+
+union all
+
+select 
+    mm_no_dups.platform_name
+    , mm_no_dups.program_id
+    , mm_no_dups.program_title
+    , mm_no_dups.program_is_live
+    , mm_no_dups.program_readable_id
+    , mm_no_dups.user_id
+    , mm_no_dups.user_email
+    , mm_no_dups.user_username
+    , mm_no_dups.programenrollment_is_active
+    , mm_no_dups.programenrollment_created_on
+    , mm_no_dups.programenrollment_enrollment_status
+    , mm_no_dups.programcertificate_created_on
+    , mm_no_dups.programcertificate_is_revoked
+    , mm_no_dups.programcertificate_uuid
+from mm_no_dups
