@@ -12,7 +12,6 @@ from dagster import (
     load_assets_from_current_module,
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
-from dagster_airbyte.asset_defs import AirbyteConnectionMetadata
 from dagster_dbt import (
     dbt_cli_resource,
     load_assets_from_dbt_manifest,
@@ -46,11 +45,10 @@ dbt_config = {
 configured_dbt_cli = dbt_cli_resource.configured(dbt_config)
 
 
-def filter_active_connections(connection_metadata: AirbyteConnectionMetadata) -> bool:
-    if "S3 Glue Data Lake" in connection_metadata.name:
+def filter_active_connections(connection) -> bool:
+    if "S3 Glue Data Lake" in connection.name:
         pass
-    # Confirm the existence of this field in AirbyteConnectionMetadata
-    return connection_metadata.status == "active"
+    return connection.get("status") == "active"
 
 
 airbyte_assets = load_assets_from_airbyte_instance(
