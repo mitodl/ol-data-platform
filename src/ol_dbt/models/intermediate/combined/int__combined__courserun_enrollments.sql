@@ -1,7 +1,3 @@
---- This model combines intermediate enrollments from different platform,
--- it's built as view with no additional data is stored
-{{ config(materialized='view') }}
-
 with mitx_enrollments as (
     select * from {{ ref('int__mitx__courserun_enrollments') }}
 )
@@ -25,6 +21,11 @@ with mitx_enrollments as (
 , combined_certificates as (
     select * from {{ ref('int__combined__courserun_certificates') }}
 )
+
+, combined_courseruns as (
+    select * from {{ ref('int__combined__course_runs') }}
+)
+
 
 , combined_enrollments as (
     select
@@ -96,8 +97,12 @@ with mitx_enrollments as (
 
 select
     combined_enrollments.*
+    , combined_courseruns.course_title
+    , combined_courseruns.course_readable_id
     , if(combined_certificates.platform is not null, true, false) as user_has_certificate
 from combined_enrollments
+left join combined_courseruns
+    on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
 left join combined_certificates
     on
         combined_enrollments.platform = combined_certificates.platform

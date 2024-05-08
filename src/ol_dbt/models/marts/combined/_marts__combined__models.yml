@@ -76,7 +76,7 @@ models:
       platforms
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "user_edxorg_id", "user_mitxpro_id", "user_bootcamps_id",
+      column_list: ["user_mitxonline_id", "user_edxorg_id", "user_mitxpro_id", "user_bootcamps_id",
         "platforms"]
 
 - name: marts__combined__orders

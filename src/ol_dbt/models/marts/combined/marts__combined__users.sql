@@ -16,24 +16,18 @@ with mitx__users as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
-, combined_courseruns as (
-    select * from {{ ref('int__combined__course_runs') }}
-)
-
 , course_stats as (
     select
-        combined_enrollments.user_email
-        , count(distinct combined_courseruns.course_title) as num_of_course_enrolled
+        user_email
+        , count(distinct course_title) as num_of_course_enrolled
         , count(
             distinct
             case
-                when combined_enrollments.courserungrade_is_passing = true then combined_courseruns.course_title
+                when courserungrade_is_passing = true then course_title
             end
         ) as num_of_course_passed
     from combined_enrollments
-    inner join combined_courseruns
-        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    group by combined_enrollments.user_email
+    group by user_email
 )
 
 , combined_users as (
