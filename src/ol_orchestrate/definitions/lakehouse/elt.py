@@ -66,7 +66,9 @@ dbt_assets = load_assets_from_dbt_manifest(
 
 airbyte_asset_job = define_asset_job(
     name="airbyte_asset_sync",
-    selection=AssetSelection.assets(*dbt_assets).upstream(),
+    selection=AssetSelection.assets(*dbt_assets)
+    .upstream()
+    .required_multi_asset_neighbors(),
 )
 
 airbyte_update_schedule = ScheduleDefinition(
