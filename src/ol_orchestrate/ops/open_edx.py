@@ -79,6 +79,15 @@ class UploadExtractedDataConfig(Config):
         description="S3 bucket to use for uploading results of pipeline execution.",
     )
 
+class SyncSupersetDataConfig(Config):
+    tables_to_sync: list[str] = Field(
+        default=["marts",],
+        description="Set of tables to sync in Superset.",
+    )
+
+class PushDbtMetadataConfig(Config):
+    pass
+
 
 @op(
     name="list_edx_courses",
@@ -737,3 +746,42 @@ def upload_extracted_data(
         f"{results_bucket}/{context.resources.results_dir.path.name}",
         "edx_daily_extracts_directory",
     )
+
+@op(
+    name="sync_superset_dbt_datasets",
+    description="Adds new reporting tables to corresponding schemas,"
+                "drops superset tables that are no longer present in dbt,"
+                "automates column refresh of physical datasets to keep them updated.",
+    required_resource_keys={"s3",},
+    ins={},
+    out={},
+)
+def sync_superset_data(
+    context: OpExecutionContext,
+    config: SyncSupersetDataConfig,
+    dbt_tables_marts: list[str],
+    superset_tables: list[str],
+):
+# Parsing as sets
+dbt_tables_marts=set(dbt_tables_marts)
+superset_tables=set(superset_tables)
+
+# Add missing tables
+add_to_superset=list(dbt_tables_marts.difference(superset_tables))
+len(add_to_superset)
+
+# Remove extra tables
+remove_from_superset=list(superset_tables.difference(dbt_tables_marts))
+len(remove_from_superset)
+
+@op(
+    name="push_dbt_metadata_to_superset",
+    description="Pushes all dbt documentation including column and table descriptionns to superset",  # noqa: E501
+    required_resource_keys={},
+    ins={},
+    out={},
+)
+def push_dbt_metadata(
+    context: OpExecutionContext,
+    config: PushDbtMetadataConfig,
+):
