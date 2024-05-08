@@ -27,7 +27,7 @@ with coursesinprogram as (
 
     from coursesinprogram
     cross join
-        UNNEST(cms_coursesinprogrampage_coursepage_wagtail_page_ids)
+        unnest(coursesinprogram.cms_coursesinprogrampage_coursepage_wagtail_page_ids)
         as t(coursepage_wagtail_page_id) --noqa
 )
 

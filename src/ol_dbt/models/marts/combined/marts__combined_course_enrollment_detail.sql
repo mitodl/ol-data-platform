@@ -170,7 +170,8 @@ with mitx_enrollments as (
         , mitx_enrollments.courserun_readable_id
         , combined_courseruns.courserun_start_on
         , combined_courseruns.courserun_end_on
-        , combined_courseruns.courserun_is_current
+        , if(combined_courseruns.courserun_is_current is null, false, combined_courseruns.courserun_is_current)
+        as courserun_is_current
         , mitx_enrollments.user_username
         , mitx_enrollments.user_email
         , mitx_enrollments.user_full_name
@@ -242,7 +243,7 @@ with mitx_enrollments as (
         , mitxpro_enrollments.courserunenrollment_id
         , mitxpro_enrollments.courserunenrollment_is_active
         , mitxpro_enrollments.courserunenrollment_created_on
-        , null as courserunenrollment_enrollment_mode
+        , mitxpro_enrollments.courserunenrollment_enrollment_mode
         , mitxpro_enrollments.courserunenrollment_enrollment_status
         , mitxpro_enrollments.courserunenrollment_is_edx_enrolled
         , mitxpro_enrollments.user_id

@@ -309,12 +309,8 @@ models:
     description: string, readable product type
     tests:
     - not_null
-  - name: salesforce_opportunity_id
-    description: string, ID of Salesforce Opportunity
-    tests:
-    - relationships:
-        to: ref('int__salesforce__opportunity')
-        field: opportunity_id
+#  - name: salesforce_opportunity_id
+#    description: string, ID of Salesforce Opportunity
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__b2becommerce_b2border')
@@ -1003,6 +999,15 @@ models:
     - accepted_values:
         values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
           '', null]
+  - name: courserunenrollment_enrollment_mode
+    description: str, indicating what kind of enrollment this is. Possible values
+      are audit or no-id-professional. For 'audit' enrollments on edx platform, they
+      are populated as no-id-professional if there are orders associated with the
+      enrollments.
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['audit', 'no-id-professional']
   - name: courserunenrollment_is_edx_enrolled
     description: boolean, indicating whether the user is enrolled on edx
     tests:

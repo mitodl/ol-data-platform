@@ -8,27 +8,29 @@ with program_learners as (
     where is_micromasters_program = true
 )
 
+, program_learners_sorted as (
+    select
+        *
+        , row_number() over (
+            partition by user_id, program_uuid
+            order by program_certificate_awarded_on desc, courserunenrollment_created_on desc
+        ) as row_num
+    from program_learners
+)
+
 select
-    program_learners.program_type
-    , program_learners.program_uuid
-    , program_learners.program_title
-    , program_learners.user_id
-    , program_learners.user_username
-    , program_learners.user_full_name
-    , program_learners.user_has_completed_program
+    program_learners_sorted.program_type
+    , program_learners_sorted.program_uuid
+    , program_learners_sorted.program_title
+    , program_learners_sorted.user_id
+    , program_learners_sorted.user_username
+    , program_learners_sorted.user_full_name
+    , program_learners_sorted.user_has_completed_program
     , micromasters_programs.micromasters_program_id
-from program_learners
+from program_learners_sorted
 left join micromasters_programs
     on (
-        program_learners.program_title like micromasters_programs.program_title || '%'
-        or program_learners.program_title like '%' || micromasters_programs.program_title
+        program_learners_sorted.program_title like micromasters_programs.program_title || '%'
+        or program_learners_sorted.program_title like '%' || micromasters_programs.program_title
     )
-group by
-    program_learners.program_type
-    , program_learners.program_uuid
-    , program_learners.program_title
-    , program_learners.user_id
-    , program_learners.user_username
-    , program_learners.user_full_name
-    , program_learners.user_has_completed_program
-    , micromasters_programs.micromasters_program_id
+where program_learners_sorted.row_num = 1
