@@ -12,7 +12,31 @@ with mitx__users as (
     select * from {{ ref('int__bootcamps__users') }}
 )
 
-, combined__users as (
+, combined_enrollments as (
+    select * from {{ ref('int__combined__courserun_enrollments') }}
+)
+
+, combined_courseruns as (
+    select * from {{ ref('int__combined__course_runs') }}
+)
+
+, course_stats as (
+    select
+        combined_enrollments.user_email
+        , count(distinct combined_courseruns.course_title) as num_of_course_enrolled
+        , count(
+            distinct
+            case
+                when combined_enrollments.courserungrade_is_passing = true then combined_courseruns.course_title
+            end
+        ) as num_of_course_passed
+    from combined_enrollments
+    inner join combined_courseruns
+        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    group by combined_enrollments.user_email
+)
+
+, combined_users as (
     select
         user_mitxonline_id
         , user_edxorg_id
@@ -114,25 +138,28 @@ with mitx__users as (
 )
 
 select
-    user_email
-    , user_joined_on
-    , user_last_login
-    , user_is_active
-    , platforms
-    , user_full_name
-    , user_address_country
-    , user_highest_education
-    , user_gender
-    , user_birth_year
-    , user_company
-    , user_job_title
-    , user_industry
-    , user_mitxonline_id
-    , user_edxorg_id
-    , user_mitxpro_id
-    , user_bootcamps_id
-    , user_mitxonline_username
-    , user_edxorg_username
-    , user_mitxpro_username
-    , user_bootcamps_username
-from combined__users
+    combined_users.platforms
+    , combined_users.user_email
+    , combined_users.user_joined_on
+    , combined_users.user_last_login
+    , combined_users.user_is_active
+    , combined_users.user_full_name
+    , combined_users.user_address_country
+    , combined_users.user_highest_education
+    , combined_users.user_gender
+    , combined_users.user_birth_year
+    , combined_users.user_company
+    , combined_users.user_job_title
+    , combined_users.user_industry
+    , combined_users.user_mitxonline_id
+    , combined_users.user_edxorg_id
+    , combined_users.user_mitxpro_id
+    , combined_users.user_bootcamps_id
+    , combined_users.user_mitxonline_username
+    , combined_users.user_edxorg_username
+    , combined_users.user_mitxpro_username
+    , combined_users.user_bootcamps_username
+    , course_stats.num_of_course_enrolled
+    , course_stats.num_of_course_passed
+from combined_users
+left join course_stats on combined_users.user_email = course_stats.user_email

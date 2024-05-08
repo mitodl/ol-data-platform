@@ -10,6 +10,8 @@ models:
       bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx Online
       then the email will be chosen from the last platform they joined if their account
       is active
+    tests:
+    - not_null
   - name: user_joined_on
     description: timestamp, user join timestamp on the corresponding platform including
       xpro, bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx
@@ -27,6 +29,8 @@ models:
       is active, otherwise it will default to their edX.org account active status.
   - name: platforms
     description: string, application where the data is from
+    tests:
+    - not_null
   - name: user_full_name
     description: str, user full name. Very small number of edX.org users have blank
       full name, their name couldn't be populated from other sources if they don't
@@ -62,9 +66,17 @@ models:
     description: string, username on MITxPRO
   - name: user_bootcamps_username
     description: string, username on bootcamps
+  - name: num_of_course_enrolled
+    description: number, the number of courses learner enrolled based on their emails
+      so this counts as same person if they use the email to register on different
+      platforms
+  - name: num_of_course_passed
+    description: number, the number of courses learner passed based on their emails
+      so this counts as same person if they use the email to register on different
+      platforms
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_id", "user_edxorg_id", "user_mitxpro_id", "user_bootcamps_id",
+      column_list: ["user_email", "user_edxorg_id", "user_mitxpro_id", "user_bootcamps_id",
         "platforms"]
 
 - name: marts__combined__orders
