@@ -66,9 +66,15 @@ airbyte_assets = load_assets_from_airbyte_instance(
     ),
 )
 
+dbt_assets = load_assets_from_dbt_manifest(
+    manifest=json.loads(
+        dbt_repo_dir.joinpath("target", "manifest.json").read_text(),
+    ),
+)
+
 airbyte_asset_job = define_asset_job(
     name="airbyte_asset_sync",
-    selection=AssetSelection.groups("ol_warehouse_raw").downstream(),
+    selection=AssetSelection.assets(*dbt_assets).upstream(),
 )
 
 airbyte_update_schedule = ScheduleDefinition(
@@ -77,12 +83,6 @@ airbyte_update_schedule = ScheduleDefinition(
     job=airbyte_asset_job,
     execution_timezone="UTC",
     default_status=DefaultScheduleStatus.RUNNING,
-)
-
-dbt_assets = load_assets_from_dbt_manifest(
-    manifest=json.loads(
-        dbt_repo_dir.joinpath("target", "manifest.json").read_text(),
-    ),
 )
 
 elt = Definitions(
