@@ -100,6 +100,18 @@ models:
       on the corresponding platform.
     tests:
     - not_null
+  - name: courserungrade_grade
+    description: float, course grade on edX.org or MITxOnline or xPro range from 0
+      to 1. Null for bootcamps
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on edX.org or MITxOnline or xPro. Null for bootcamps
+  - name: course_title
+    description: str, title of the course. May be null for some old edX.org runs.
+  - name: course_readable_id
+    description: str, open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online and xPro courses, and {org}/{course} for edX.org courses. May be null
+      for some old edX.org runs and Bootcamps courses.
 
 - name: int__combined__courserun_certificates
   description: course certificates model combined from different platforms. It excludes
