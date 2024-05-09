@@ -1,3 +1,7 @@
+--- This model combines intermediate enrollments from different platform,
+-- it's built as view with no additional data is stored
+{{ config(materialized='view') }}
+
 with mitx_enrollments as (
     select * from {{ ref('int__mitx__courserun_enrollments') }}
 )
@@ -47,10 +51,32 @@ with mitx_enrollments as (
     left join mitx_grades
         on
             mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
-            and (
-                mitx_enrollments.user_mitxonline_username = mitx_grades.user_mitxonline_username
-                or mitx_enrollments.user_edxorg_username = mitx_grades.user_edxorg_username
-            )
+            and mitx_enrollments.user_mitxonline_username = mitx_grades.user_mitxonline_username
+    where mitx_enrollments.platform = '{{ var("mitxonline") }}'
+
+    union all
+
+    select
+        mitx_enrollments.platform
+        , mitx_enrollments.courserunenrollment_is_active
+        , mitx_enrollments.courserunenrollment_created_on
+        , mitx_enrollments.courserunenrollment_enrollment_mode
+        , mitx_enrollments.courserunenrollment_enrollment_status
+        , mitx_enrollments.user_id
+        , mitx_enrollments.courserun_id
+        , mitx_enrollments.courserun_title
+        , mitx_enrollments.courserun_readable_id
+        , mitx_enrollments.user_username
+        , mitx_enrollments.user_email
+        , mitx_enrollments.user_full_name
+        , mitx_grades.courserungrade_grade
+        , mitx_grades.courserungrade_is_passing
+    from mitx_enrollments
+    left join mitx_grades
+        on
+            mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
+            and mitx_enrollments.user_edxorg_username = mitx_grades.user_edxorg_username
+    where mitx_enrollments.platform = '{{ var("edxorg") }}'
 
     union all
 
