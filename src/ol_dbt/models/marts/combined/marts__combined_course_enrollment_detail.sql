@@ -1,33 +1,9 @@
-with mitx_enrollments as (
-    select * from {{ ref('int__mitx__courserun_enrollments') }}
+with combined_enrollments as (
+    select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
 , mitxpro_enrollments as (
     select * from {{ ref('int__mitxpro__courserunenrollments') }}
-)
-
-, bootcamps_enrollments as (
-    select * from {{ ref('int__bootcamps__courserunenrollments') }}
-)
-
-, mitx_certificates as (
-    select * from {{ ref('int__mitx__courserun_certificates') }}
-)
-
-, mitxpro_certificates as (
-    select * from {{ ref('int__mitxpro__courserun_certificates') }}
-)
-
-, bootcamps_certificates as (
-    select * from {{ ref('int__bootcamps__courserun_certificates') }}
-)
-
-, mitx_grades as (
-    select * from {{ ref('int__mitx__courserun_grades') }}
-)
-
-, mitxpro_grades as (
-    select * from {{ ref('int__mitxpro__courserun_grades') }}
 )
 
 , combined_courseruns as (
@@ -79,30 +55,30 @@ with mitx_enrollments as (
 
 , combined_enrollment_detail as (
     select
-        mitx_enrollments.platform
-        , mitx_enrollments.courserunenrollment_id
-        , mitx_enrollments.courserunenrollment_is_active
-        , mitx_enrollments.courserunenrollment_created_on
-        , mitx_enrollments.courserunenrollment_enrollment_mode
-        , mitx_enrollments.courserunenrollment_enrollment_status
-        , mitx_enrollments.courserunenrollment_is_edx_enrolled
-        , mitx_enrollments.user_id
-        , mitx_enrollments.courserun_id
-        , mitx_enrollments.courserun_title
-        , mitx_enrollments.courserun_readable_id
+        combined_enrollments.platform
+        , combined_enrollments.courserunenrollment_id
+        , combined_enrollments.courserunenrollment_is_active
+        , combined_enrollments.courserunenrollment_created_on
+        , combined_enrollments.courserunenrollment_enrollment_mode
+        , combined_enrollments.courserunenrollment_enrollment_status
+        , combined_enrollments.courserunenrollment_is_edx_enrolled
+        , combined_enrollments.user_id
+        , combined_enrollments.courserun_id
+        , combined_enrollments.courserun_title
+        , combined_enrollments.courserun_readable_id
         , combined_courseruns.courserun_start_on
         , combined_courseruns.courserun_end_on
         , combined_courseruns.courserun_is_current
-        , mitx_enrollments.user_username
-        , mitx_enrollments.user_email
-        , mitx_enrollments.user_full_name
+        , combined_enrollments.user_username
+        , combined_enrollments.user_email
+        , combined_enrollments.user_full_name
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
-        , if(mitx_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
-        , mitx_certificates.courseruncertificate_created_on
-        , mitx_certificates.courseruncertificate_url
-        , mitx_certificates.courseruncertificate_uuid
+        , combined_enrollments.courseruncertificate_is_earned
+        , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_url
+        , combined_enrollments.courseruncertificate_uuid
         , mitxonline_completed_orders.order_id
         , mitxonline_completed_orders.order_state
         , mitxonline_completed_orders.order_reference_number
@@ -128,60 +104,52 @@ with mitx_enrollments as (
         , mitxonline_completed_orders.program_readable_id as product_program_readable_id
         , mitxonline_completed_orders.discount_amount_text as discount
         , mitxonline_completed_orders.discount_amount
-        , mitx_grades.courserungrade_grade
-        , mitx_grades.courserungrade_is_passing
+        , combined_enrollments.courserungrade_grade
+        , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
-    from mitx_enrollments
+    from combined_enrollments
     left join combined_users
         on
-            mitx_enrollments.user_mitxonline_username = combined_users.user_username
-            and mitx_enrollments.platform = combined_users.platform
-    left join mitx_certificates
-        on
-            mitx_enrollments.user_mitxonline_username = mitx_certificates.user_mitxonline_username
-            and mitx_enrollments.courserun_readable_id = mitx_certificates.courserun_readable_id
+            combined_enrollments.user_username = combined_users.user_username
+            and combined_enrollments.platform = combined_users.platform
     left join mitxonline_completed_orders
         on
-            mitx_enrollments.user_id = mitxonline_completed_orders.user_id
-            and mitx_enrollments.courserun_id = mitxonline_completed_orders.courserun_id
+            combined_enrollments.user_id = mitxonline_completed_orders.user_id
+            and combined_enrollments.courserun_id = mitxonline_completed_orders.courserun_id
             and mitxonline_completed_orders.row_num = 1
-    left join mitx_grades
-        on
-            mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
-            and mitx_enrollments.user_mitxonline_username = mitx_grades.user_mitxonline_username
     left join combined_courseruns
-        on mitx_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    where mitx_enrollments.platform = '{{ var("mitxonline") }}'
+        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    where combined_enrollments.platform = '{{ var("mitxonline") }}'
 
     union all
 
     select
-        mitx_enrollments.platform
-        , mitx_enrollments.courserunenrollment_id
-        , mitx_enrollments.courserunenrollment_is_active
-        , mitx_enrollments.courserunenrollment_created_on
-        , mitx_enrollments.courserunenrollment_enrollment_mode
-        , mitx_enrollments.courserunenrollment_enrollment_status
-        , mitx_enrollments.courserunenrollment_is_edx_enrolled
-        , mitx_enrollments.user_id
-        , mitx_enrollments.courserun_id
-        , mitx_enrollments.courserun_title
-        , mitx_enrollments.courserun_readable_id
+        combined_enrollments.platform
+        , combined_enrollments.courserunenrollment_id
+        , combined_enrollments.courserunenrollment_is_active
+        , combined_enrollments.courserunenrollment_created_on
+        , combined_enrollments.courserunenrollment_enrollment_mode
+        , combined_enrollments.courserunenrollment_enrollment_status
+        , combined_enrollments.courserunenrollment_is_edx_enrolled
+        , combined_enrollments.user_id
+        , combined_enrollments.courserun_id
+        , combined_enrollments.courserun_title
+        , combined_enrollments.courserun_readable_id
         , combined_courseruns.courserun_start_on
         , combined_courseruns.courserun_end_on
         , if(combined_courseruns.courserun_is_current is null, false, combined_courseruns.courserun_is_current)
         as courserun_is_current
-        , mitx_enrollments.user_username
-        , mitx_enrollments.user_email
-        , mitx_enrollments.user_full_name
+        , combined_enrollments.user_username
+        , combined_enrollments.user_email
+        , combined_enrollments.user_full_name
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
-        , if(mitx_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
-        , mitx_certificates.courseruncertificate_created_on
-        , mitx_certificates.courseruncertificate_url
-        , mitx_certificates.courseruncertificate_uuid
+        , combined_enrollment.scourseruncertificate_is_earned
+        , combined_enrollment.courseruncertificate_created_on
+        , combined_enrollment.courseruncertificate_url
+        , combined_enrollment.courseruncertificate_uuid
         , micromasters_completed_orders.order_id
         , micromasters_completed_orders.order_state
         , micromasters_completed_orders.order_reference_number
@@ -207,32 +175,24 @@ with mitx_enrollments as (
         , null as product_program_readable_id
         , micromasters_completed_orders.coupon_discount_amount_text as discount
         , micromasters_completed_orders.coupon_amount as discount_amount
-        , mitx_grades.courserungrade_grade
-        , mitx_grades.courserungrade_is_passing
+        , combined_enrollments.courserungrade_grade
+        , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
-    from mitx_enrollments
+    from combined_enrollments
     left join combined_users
         on
-            mitx_enrollments.user_edxorg_username = combined_users.user_username
-            and mitx_enrollments.platform = combined_users.platform
-    left join mitx_certificates
-        on
-            mitx_enrollments.user_edxorg_username = mitx_certificates.user_edxorg_username
-            and mitx_enrollments.courserun_readable_id = mitx_certificates.courserun_readable_id
-    left join micromasters_users on mitx_enrollments.user_edxorg_username = micromasters_users.user_edxorg_username
+            combined_enrollments.user_username = combined_users.user_username
+            and combined_enrollments.platform = combined_users.platform
+    left join micromasters_users on combined_enrollments.user_username = micromasters_users.user_edxorg_username
     left join micromasters_completed_orders
         on
             micromasters_users.user_id = micromasters_completed_orders.user_id
-            and mitx_enrollments.courserun_readable_id = micromasters_completed_orders.courserun_edxorg_readable_id
+            and combined_enrollments.courserun_readable_id = micromasters_completed_orders.courserun_edxorg_readable_id
             and micromasters_completed_orders.row_num = 1
-    left join mitx_grades
-        on
-            mitx_enrollments.courserun_readable_id = mitx_grades.courserun_readable_id
-            and mitx_enrollments.user_edxorg_username = mitx_grades.user_edxorg_username
     left join combined_courseruns
-        on mitx_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    where mitx_enrollments.platform = '{{ var("edxorg") }}'
+        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    where combined_enrollments.platform = '{{ var("edxorg") }}'
 
 
     union all
@@ -240,29 +200,29 @@ with mitx_enrollments as (
 
     select
         '{{ var("mitxpro") }}' as platform
-        , mitxpro_enrollments.courserunenrollment_id
-        , mitxpro_enrollments.courserunenrollment_is_active
-        , mitxpro_enrollments.courserunenrollment_created_on
-        , mitxpro_enrollments.courserunenrollment_enrollment_mode
-        , mitxpro_enrollments.courserunenrollment_enrollment_status
-        , mitxpro_enrollments.courserunenrollment_is_edx_enrolled
-        , mitxpro_enrollments.user_id
-        , mitxpro_enrollments.courserun_id
-        , mitxpro_enrollments.courserun_title
-        , mitxpro_enrollments.courserun_readable_id
+        , combined_enrollments.courserunenrollment_id
+        , combined_enrollments.courserunenrollment_is_active
+        , combined_enrollments.courserunenrollment_created_on
+        , combined_enrollments.courserunenrollment_enrollment_mode
+        , combined_enrollments.courserunenrollment_enrollment_status
+        , combined_enrollments.courserunenrollment_is_edx_enrolled
+        , combined_enrollments.user_id
+        , combined_enrollments.courserun_id
+        , combined_enrollments.courserun_title
+        , combined_enrollments.courserun_readable_id
         , combined_courseruns.courserun_start_on
         , combined_courseruns.courserun_end_on
         , combined_courseruns.courserun_is_current
-        , mitxpro_enrollments.user_username
-        , mitxpro_enrollments.user_email
-        , mitxpro_enrollments.user_full_name
+        , combined_enrollments.user_username
+        , combined_enrollments.user_email
+        , combined_enrollments.user_full_name
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
-        , if(mitxpro_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
-        , mitxpro_certificates.courseruncertificate_created_on
-        , mitxpro_certificates.courseruncertificate_url
-        , mitxpro_certificates.courseruncertificate_uuid
+        , combined_enrollment.courseruncertificate_is_earned
+        , combined_enrollment.courseruncertificate_created_on
+        , combined_enrollment.courseruncertificate_url
+        , combined_enrollment.courseruncertificate_uuid
         , mitxpro_completed_orders.order_id
         , mitxpro_completed_orders.order_state
         , mitxpro_completed_orders.receipt_reference_number as order_reference_number
@@ -292,58 +252,55 @@ with mitx_enrollments as (
                 then mitxpro_lines.product_price * mitxpro_completed_orders.couponpaymentversion_discount_amount
             else mitxpro_completed_orders.couponpaymentversion_discount_amount
         end as discount_amount
-        , mitxpro_grades.courserungrade_grade
-        , mitxpro_grades.courserungrade_is_passing
+        , combined_enrollments.courserungrade_grade
+        , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
     from mitxpro_enrollments
+    inner join combined_enrollments
+        on
+            mitxpro_enrollments.user_id = combined_enrollments.user_id
+            and mitxpro_enrollments.courserun_readable_id = combined_enrollments.courserun_readable_id
     left join combined_users
         on
             mitxpro_enrollments.user_username = combined_users.user_username
             and combined_users.platform = '{{ var("mitxpro") }}'
-    left join mitxpro_certificates
-        on
-            mitxpro_enrollments.user_id = mitxpro_certificates.user_id
-            and mitxpro_enrollments.courserun_id = mitxpro_certificates.courserun_id
     left join mitxpro_completed_orders
         on mitxpro_enrollments.ecommerce_order_id = mitxpro_completed_orders.order_id
     left join mitxpro_lines
         on mitxpro_completed_orders.order_id = mitxpro_lines.order_id
-    left join mitxpro_grades
-        on
-            mitxpro_enrollments.courserun_readable_id = mitxpro_grades.courserun_readable_id
-            and mitxpro_enrollments.user_username = mitxpro_grades.user_username
     left join combined_courseruns
         on mitxpro_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    where combined_enrollments.platform = '{{ var("mitxpro") }}'
 
 
     union all
 
     select
         '{{ var("bootcamps") }}' as platform
-        , bootcamps_enrollments.courserunenrollment_id
-        , bootcamps_enrollments.courserunenrollment_is_active
-        , bootcamps_enrollments.courserunenrollment_created_on
-        , null as courserunenrollment_enrollment_mode
-        , bootcamps_enrollments.courserunenrollment_enrollment_status
-        , null as courserunenrollment_is_edx_enrolled
-        , bootcamps_enrollments.user_id
-        , bootcamps_enrollments.courserun_id
-        , bootcamps_enrollments.courserun_title
-        , bootcamps_enrollments.courserun_readable_id
+        , combined_enrollments.courserunenrollment_id
+        , combined_enrollments.courserunenrollment_is_active
+        , combined_enrollments.courserunenrollment_created_on
+        , combined_enrollments.courserunenrollment_enrollment_mode
+        , combined_enrollments.courserunenrollment_enrollment_status
+        , combined_enrollments.courserunenrollment_is_edx_enrolled
+        , combined_enrollments.user_id
+        , combined_enrollments.courserun_id
+        , combined_enrollments.courserun_title
+        , combined_enrollments.courserun_readable_id
         , combined_courseruns.courserun_start_on
         , combined_courseruns.courserun_end_on
         , combined_courseruns.courserun_is_current
-        , bootcamps_enrollments.user_username
-        , bootcamps_enrollments.user_email
-        , bootcamps_enrollments.user_full_name
+        , combined_enrollments.user_username
+        , combined_enrollments.user_email
+        , combined_enrollments.user_full_name
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
-        , if(bootcamps_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
-        , bootcamps_certificates.courseruncertificate_created_on
-        , bootcamps_certificates.courseruncertificate_url
-        , bootcamps_certificates.courseruncertificate_uuid
+        , combined_enrollment.courseruncertificate_is_earned
+        , combined_enrollment.courseruncertificate_created_on
+        , combined_enrollment.courseruncertificate_url
+        , combined_enrollment.courseruncertificate_uuid
         , bootcamps_completed_orders.order_id
         , bootcamps_completed_orders.order_state
         , bootcamps_completed_orders.order_reference_number
@@ -369,25 +326,22 @@ with mitx_enrollments as (
         , null as product_program_readable_id
         , null as discount
         , null as discount_amount
-        , null as courserungrade_grade
-        , null as courserungrade_is_passing
+        , combined_enrollments.courserungrade_grade
+        , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
-    from bootcamps_enrollments
+    from combined_enrollments
     left join combined_users
         on
-            bootcamps_enrollments.user_username = combined_users.user_username
-            and combined_users.platform = '{{ var("bootcamps") }}'
-    left join bootcamps_certificates
-        on
-            bootcamps_enrollments.user_id = bootcamps_certificates.user_id
-            and bootcamps_enrollments.courserun_id = bootcamps_certificates.courserun_id
+            combined_enrollments.user_username = combined_users.user_username
+            and combined_enrollments.platform = combined_users.platform
     left join bootcamps_completed_orders
         on
-            bootcamps_enrollments.user_id = bootcamps_completed_orders.order_purchaser_user_id
-            and bootcamps_enrollments.courserun_id = bootcamps_completed_orders.courserun_id
+            combined_enrollments.user_id = bootcamps_completed_orders.order_purchaser_user_id
+            and combined_enrollments.courserun_id = bootcamps_completed_orders.courserun_id
     left join combined_courseruns
-        on bootcamps_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    where combined_enrollments.platform = '{{ var("mitxpro") }}'
 )
 
 select * from combined_enrollment_detail
