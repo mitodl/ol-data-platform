@@ -58,7 +58,7 @@ with micromasters_program_enrollments as (
         , micromasters_users.user_street_address
         , mitxonline_users.user_full_name
         , micromasters_users.user_id as micromasters_user_id
-        , 'mitxonline' as platform_name
+        , '{{ var("mitxonline") }}' as platform_name
         , coalesce(
             cast(mitxonline_users.user_birth_year as varchar)
             , substring(micromasters_users.user_birth_date, 1, 4)
@@ -98,7 +98,7 @@ with micromasters_program_enrollments as (
         , micromasters_users.user_address_state_or_territory
         , edx_users.user_full_name
         , micromasters_users.user_id as micromasters_user_id
-        , 'edxorg' as platform_name
+        , '{{ var("edxorg") }}' as platform_name
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from mm_program_enrollments
     inner join micromasters_users
@@ -135,7 +135,7 @@ with micromasters_program_enrollments as (
         , micromasters_users.user_address_state_or_territory
         , micromasters_program_enrollments.user_full_name
         , micromasters_users.user_id as micromasters_user_id
-        , 'edxorg' as platform_name
+        , '{{ var("edxorg") }}' as platform_name
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from micromasters_program_enrollments
     inner join edx_users

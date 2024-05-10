@@ -42,6 +42,10 @@ with mitxpro__programenrollments as (
     select * from {{ ref('__micromasters__users') }}
 )
 
+, micromasters__certs as (
+    select * from {{ ref('int__micromasters__program_certificates') }}
+)
+
 , combined_programs as (
     select
         mitxpro__programs.platform_name
@@ -69,7 +73,7 @@ with mitxpro__programenrollments as (
     union all
 
     select
-        'mitxonline' as platform_name
+        '{{ var("mitxonline") }}' as platform_name
         , mitxonline__programs.program_id
         , mitxonline__programs.program_title
         , mitxonline__programs.program_is_live
@@ -94,7 +98,7 @@ with mitxpro__programenrollments as (
     union all
 
     select
-        'edxorg' as platform_name
+        '{{ var("edxorg") }}' as platform_name
         , edx_program_enrollments.micromasters_program_id as program_id
         , edx_program_enrollments.program_title
         , null as program_is_live
@@ -118,7 +122,7 @@ with mitxpro__programenrollments as (
 )
 
 , mm_no_dups as (
-    select
+    select 
         micromasters__program_enrollments.platform_name
         , micromasters__program_enrollments.micromasters_program_id as program_id
         , micromasters__program_enrollments.program_title
@@ -130,23 +134,28 @@ with mitxpro__programenrollments as (
         , null as programenrollment_is_active
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
-        , null as programcertificate_created_on
+        , micromasters__certs.program_completion_timestamp as programcertificate_created_on
         , null as programcertificate_is_revoked
-        , null as programcertificate_uuid
+        , micromasters__certs.program_certificate_hashed_id as programcertificate_uuid
     from micromasters__program_enrollments
     inner join micromasters__users
         on micromasters__program_enrollments.micromasters_user_id = micromasters__users.user_id
+    left join micromasters__certs
+        on 
+            micromasters__program_enrollments.micromasters_program_id 
+            = micromasters__certs.micromasters_program_id
+            and micromasters__program_enrollments.user_email = micromasters__certs.user_email
     left join combined_programs
-        on
+        on 
             micromasters__program_enrollments.user_email = combined_programs.user_email
             and micromasters__program_enrollments.program_title = combined_programs.program_title
-    where
+    where 
         combined_programs.user_email is null
         and combined_programs.program_title is null
         and micromasters__program_enrollments.platform_name = 'micromasters'
 )
 
-select
+select 
     combined_programs.platform_name
     , combined_programs.program_id
     , combined_programs.program_title
@@ -165,7 +174,7 @@ from combined_programs
 
 union all
 
-select
+select 
     mm_no_dups.platform_name
     , mm_no_dups.program_id
     , mm_no_dups.program_title
