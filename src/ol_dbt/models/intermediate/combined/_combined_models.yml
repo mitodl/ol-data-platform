@@ -59,7 +59,7 @@ models:
         values: '{{ var("platforms") }}'
   - name: courserunenrollment_id
     description: int, enrollment ID on the corresponding platform. Null for enrollments
-      on edX.org.
+      from edX.org for now
   - name: courserunenrollment_is_active
     description: boolean, indicating whether enrollment is active on the corresponding
       platform
@@ -154,6 +154,10 @@ models:
     description: str, user full name on user's profile on the corresponding platform
   - name: courseruncertificate_url
     description: str, the full URL to the certificate on the corresponding platform
+    tests:
+    - not_null
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on the corresponding platform
     tests:
     - not_null
   - name: courseruncertificate_created_on

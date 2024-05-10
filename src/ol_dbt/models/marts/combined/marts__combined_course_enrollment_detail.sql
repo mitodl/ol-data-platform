@@ -146,10 +146,10 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
-        , combined_enrollment.scourseruncertificate_is_earned
-        , combined_enrollment.courseruncertificate_created_on
-        , combined_enrollment.courseruncertificate_url
-        , combined_enrollment.courseruncertificate_uuid
+        , combined_enrollments.courseruncertificate_is_earned
+        , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_url
+        , combined_enrollments.courseruncertificate_uuid
         , micromasters_completed_orders.order_id
         , micromasters_completed_orders.order_state
         , micromasters_completed_orders.order_reference_number
@@ -219,10 +219,10 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
-        , combined_enrollment.courseruncertificate_is_earned
-        , combined_enrollment.courseruncertificate_created_on
-        , combined_enrollment.courseruncertificate_url
-        , combined_enrollment.courseruncertificate_uuid
+        , combined_enrollments.courseruncertificate_is_earned
+        , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_url
+        , combined_enrollments.courseruncertificate_uuid
         , mitxpro_completed_orders.order_id
         , mitxpro_completed_orders.order_state
         , mitxpro_completed_orders.receipt_reference_number as order_reference_number
@@ -264,7 +264,7 @@ with combined_enrollments as (
     left join combined_users
         on
             mitxpro_enrollments.user_username = combined_users.user_username
-            and combined_users.platform = '{{ var("mitxpro") }}'
+            and combined_enrollments.platform = combined_users.platform
     left join mitxpro_completed_orders
         on mitxpro_enrollments.ecommerce_order_id = mitxpro_completed_orders.order_id
     left join mitxpro_lines
@@ -297,10 +297,10 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
-        , combined_enrollment.courseruncertificate_is_earned
-        , combined_enrollment.courseruncertificate_created_on
-        , combined_enrollment.courseruncertificate_url
-        , combined_enrollment.courseruncertificate_uuid
+        , combined_enrollments.courseruncertificate_is_earned
+        , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_url
+        , combined_enrollments.courseruncertificate_uuid
         , bootcamps_completed_orders.order_id
         , bootcamps_completed_orders.order_state
         , bootcamps_completed_orders.order_reference_number
