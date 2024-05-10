@@ -122,15 +122,15 @@ with mitxpro__programenrollments as (
 )
 
 , mm_no_dups as (
-    select
+    select 
         micromasters__program_enrollments.platform_name
         , micromasters__program_enrollments.micromasters_program_id as program_id
         , micromasters__program_enrollments.program_title
         , null as program_is_live
         , null as program_readable_id
-        , micromasters__users.user_id
+        , micromasters__program_enrollments.user_edxorg_id as user_id
         , micromasters__program_enrollments.user_email
-        , micromasters__users.user_username
+        , micromasters__program_enrollments.user_edxorg_username as user_username
         , null as programenrollment_is_active
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
@@ -141,21 +141,21 @@ with mitxpro__programenrollments as (
     inner join micromasters__users
         on micromasters__program_enrollments.micromasters_user_id = micromasters__users.user_id
     left join micromasters__certs
-        on
-            micromasters__program_enrollments.micromasters_program_id
+        on 
+            micromasters__program_enrollments.micromasters_program_id 
             = micromasters__certs.micromasters_program_id
             and micromasters__program_enrollments.user_email = micromasters__certs.user_email
     left join combined_programs
-        on
+        on 
             micromasters__program_enrollments.user_email = combined_programs.user_email
             and micromasters__program_enrollments.program_title = combined_programs.program_title
-    where
+    where 
         combined_programs.user_email is null
         and combined_programs.program_title is null
-        and micromasters__program_enrollments.platform_name = 'micromasters'
+        and micromasters__program_enrollments.platform_name = '{{ var("edxorg") }}'
 )
 
-select
+select 
     combined_programs.platform_name
     , combined_programs.program_id
     , combined_programs.program_title
@@ -174,7 +174,7 @@ from combined_programs
 
 union all
 
-select
+select 
     mm_no_dups.platform_name
     , mm_no_dups.program_id
     , mm_no_dups.program_title
