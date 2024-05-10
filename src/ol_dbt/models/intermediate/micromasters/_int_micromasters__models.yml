@@ -583,8 +583,7 @@ models:
   - name: user_year_of_birth
     description: str, user's birth year from user's profile on MITx Online or MicroMasters.
   - name: platform_name
-    description: str, a field indicating if the data is pulled from MITx Online or
-      edx.org.
+    description: str, a field indicating if the data is pulled from MITx Online or edx.org.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_edxorg_username", "program_title", "user_email"]
