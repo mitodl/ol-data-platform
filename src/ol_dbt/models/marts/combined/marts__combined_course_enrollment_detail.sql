@@ -55,7 +55,7 @@ with combined_enrollments as (
 
 , combined_enrollment_detail as (
     select
-        combined_enrollments.platform
+        '{{ var("mitxonline") }}' as platform
         , combined_enrollments.courserunenrollment_id
         , combined_enrollments.courserunenrollment_is_active
         , combined_enrollments.courserunenrollment_created_on
@@ -125,7 +125,7 @@ with combined_enrollments as (
     union all
 
     select
-        combined_enrollments.platform
+        '{{ var("edxorg") }}' as platform
         , combined_enrollments.courserunenrollment_id
         , combined_enrollments.courserunenrollment_is_active
         , combined_enrollments.courserunenrollment_created_on
@@ -341,7 +341,7 @@ with combined_enrollments as (
             and combined_enrollments.courserun_id = bootcamps_completed_orders.courserun_id
     left join combined_courseruns
         on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    where combined_enrollments.platform = '{{ var("mitxpro") }}'
+    where combined_enrollments.platform = '{{ var("bootcamps") }}'
 )
 
 select * from combined_enrollment_detail
