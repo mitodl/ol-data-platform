@@ -98,7 +98,7 @@ with micromasters_program_enrollments as (
         , micromasters_users.user_address_state_or_territory
         , edx_users.user_full_name
         , micromasters_users.user_id as micromasters_user_id
-        , 'micromasters' as platform_name
+        , 'edxorg' as platform_name
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from mm_program_enrollments
     inner join micromasters_users
