@@ -126,22 +126,22 @@ with mitxpro__programenrollments as (
 )
 
 , mm_no_dups as (
-    select 
+    select
         micromasters__program_enrollments.platform_name
         , micromasters__program_enrollments.micromasters_program_id as program_id
         , micromasters__program_enrollments.program_title
         , null as program_is_live
         , null as program_readable_id
-        , case 
+        , case
             when micromasters__program_enrollments.platform_name = '{{ var("mitxonline") }}'
                 then mitxonline__users.user_id
-            else micromasters__program_enrollments.user_edxorg_id 
+            else micromasters__program_enrollments.user_edxorg_id
         end as user_id
         , micromasters__program_enrollments.user_email
-        , case 
-            when micromasters__program_enrollments.platform_name = '{{ var("mitxonline") }}' 
-                then micromasters__program_enrollments.user_mitxonline_username 
-            else micromasters__program_enrollments.user_edxorg_username 
+        , case
+            when micromasters__program_enrollments.platform_name = '{{ var("mitxonline") }}'
+                then micromasters__program_enrollments.user_mitxonline_username
+            else micromasters__program_enrollments.user_edxorg_username
         end as user_username
         , null as programenrollment_is_active
         , null as programenrollment_created_on
@@ -153,24 +153,24 @@ with mitxpro__programenrollments as (
     inner join micromasters__users
         on micromasters__program_enrollments.micromasters_user_id = micromasters__users.user_id
     left join micromasters__certs
-        on 
-            micromasters__program_enrollments.micromasters_program_id 
+        on
+            micromasters__program_enrollments.micromasters_program_id
             = micromasters__certs.micromasters_program_id
             and micromasters__program_enrollments.user_email = micromasters__certs.user_email
     left join combined_programs
-        on 
+        on
             micromasters__program_enrollments.user_email = combined_programs.user_email
             and micromasters__program_enrollments.program_title = combined_programs.program_title
     left join mitxonline__users
-        on 
-            micromasters__program_enrollments.user_mitxonline_username 
+        on
+            micromasters__program_enrollments.user_mitxonline_username
             = mitxonline__users.user_username
-    where 
+    where
         combined_programs.user_email is null
         and combined_programs.program_title is null
 )
 
-select 
+select
     combined_programs.platform_name
     , combined_programs.program_id
     , combined_programs.program_title
@@ -189,7 +189,7 @@ from combined_programs
 
 union all
 
-select 
+select
     mm_no_dups.platform_name
     , mm_no_dups.program_id
     , mm_no_dups.program_title

@@ -98,10 +98,10 @@ with micromasters_program_enrollments as (
         , micromasters_users.user_address_state_or_territory
         , edx_users.user_full_name
         , micromasters_users.user_id as micromasters_user_id
-        , case 
-            when micromasters_users.user_mitxonline_username is not null 
-                then '{{ var("mitxonline") }}' 
-            else '{{ var("edxorg") }}' 
+        , case
+            when micromasters_users.user_mitxonline_username is not null
+                then '{{ var("mitxonline") }}'
+            else '{{ var("edxorg") }}'
         end as platform_name
         , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from mm_program_enrollments
@@ -119,7 +119,7 @@ with micromasters_program_enrollments as (
         programs.is_dedp_program = true
         and mitxonline_dedp_records.user_email is null
         and (
-            micromasters_users.user_mitxonline_username is not null 
+            micromasters_users.user_mitxonline_username is not null
             or micromasters_users.user_edxorg_username is not null
         )
 )
