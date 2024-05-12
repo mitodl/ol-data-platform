@@ -34,6 +34,22 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__edxorg__mitx_users') }}
 )
 
+, micromasters__program_enrollments as (
+    select * from {{ ref('int__micromasters__program_enrollments') }}
+)
+
+, micromasters__users as (
+    select * from {{ ref('__micromasters__users') }}
+)
+
+, micromasters__certs as (
+    select * from {{ ref('int__micromasters__program_certificates') }}
+)
+
+, mitxonline__users as (
+    select * from {{ ref('int__mitxonline__users') }}
+)
+
 , combined_programs as (
     select
         mitxpro__programs.platform_name
@@ -61,7 +77,7 @@ with mitxpro__programenrollments as (
     union all
 
     select
-        'mitxonline' as platform_name
+        '{{ var("mitxonline") }}' as platform_name
         , mitxonline__programs.program_id
         , mitxonline__programs.program_title
         , mitxonline__programs.program_is_live
@@ -86,7 +102,7 @@ with mitxpro__programenrollments as (
     union all
 
     select
-        'edxorg' as platform_name
+        '{{ var("edxorg") }}' as platform_name
         , edx_program_enrollments.micromasters_program_id as program_id
         , edx_program_enrollments.program_title
         , null as program_is_live
@@ -109,4 +125,83 @@ with mitxpro__programenrollments as (
             and edx_program_enrollments.user_id = edx_program_certificates.user_id
 )
 
-select * from combined_programs
+, mm_no_dups as (
+    select
+        micromasters__program_enrollments.platform_name
+        , micromasters__program_enrollments.micromasters_program_id as program_id
+        , micromasters__program_enrollments.program_title
+        , null as program_is_live
+        , null as program_readable_id
+        , case
+            when micromasters__program_enrollments.platform_name = '{{ var("mitxonline") }}'
+                then mitxonline__users.user_id
+            else micromasters__program_enrollments.user_edxorg_id
+        end as user_id
+        , micromasters__program_enrollments.user_email
+        , case
+            when micromasters__program_enrollments.platform_name = '{{ var("mitxonline") }}'
+                then micromasters__program_enrollments.user_mitxonline_username
+            else micromasters__program_enrollments.user_edxorg_username
+        end as user_username
+        , null as programenrollment_is_active
+        , null as programenrollment_created_on
+        , null as programenrollment_enrollment_status
+        , micromasters__certs.program_completion_timestamp as programcertificate_created_on
+        , null as programcertificate_is_revoked
+        , micromasters__certs.program_certificate_hashed_id as programcertificate_uuid
+    from micromasters__program_enrollments
+    inner join micromasters__users
+        on micromasters__program_enrollments.micromasters_user_id = micromasters__users.user_id
+    left join micromasters__certs
+        on
+            micromasters__program_enrollments.micromasters_program_id
+            = micromasters__certs.micromasters_program_id
+            and micromasters__program_enrollments.user_email = micromasters__certs.user_email
+    left join combined_programs
+        on
+            micromasters__program_enrollments.user_email = combined_programs.user_email
+            and micromasters__program_enrollments.program_title = combined_programs.program_title
+    left join mitxonline__users
+        on
+            micromasters__program_enrollments.user_mitxonline_username
+            = mitxonline__users.user_username
+    where
+        combined_programs.user_email is null
+        and combined_programs.program_title is null
+)
+
+select
+    combined_programs.platform_name
+    , combined_programs.program_id
+    , combined_programs.program_title
+    , combined_programs.program_is_live
+    , combined_programs.program_readable_id
+    , combined_programs.user_id
+    , combined_programs.user_email
+    , combined_programs.user_username
+    , combined_programs.programenrollment_is_active
+    , combined_programs.programenrollment_created_on
+    , combined_programs.programenrollment_enrollment_status
+    , combined_programs.programcertificate_created_on
+    , combined_programs.programcertificate_is_revoked
+    , combined_programs.programcertificate_uuid
+from combined_programs
+
+union all
+
+select
+    mm_no_dups.platform_name
+    , mm_no_dups.program_id
+    , mm_no_dups.program_title
+    , mm_no_dups.program_is_live
+    , mm_no_dups.program_readable_id
+    , mm_no_dups.user_id
+    , mm_no_dups.user_email
+    , mm_no_dups.user_username
+    , mm_no_dups.programenrollment_is_active
+    , mm_no_dups.programenrollment_created_on
+    , mm_no_dups.programenrollment_enrollment_status
+    , mm_no_dups.programcertificate_created_on
+    , mm_no_dups.programcertificate_is_revoked
+    , mm_no_dups.programcertificate_uuid
+from mm_no_dups
