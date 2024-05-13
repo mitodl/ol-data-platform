@@ -258,9 +258,7 @@ with combined_enrollments as (
         , combined_courseruns.course_readable_id
     from mitxpro_enrollments
     inner join combined_enrollments
-        on
-            mitxpro_enrollments.user_id = combined_enrollments.user_id
-            and mitxpro_enrollments.courserun_readable_id = combined_enrollments.courserun_readable_id
+        on mitxpro_enrollments.courserunenrollment_id = combined_enrollments.courserunenrollment_id
     left join combined_users
         on
             mitxpro_enrollments.user_username = combined_users.user_username
