@@ -57,6 +57,9 @@ models:
     - not_null
     - accepted_values:
         values: '{{ var("platforms") }}'
+  - name: courserunenrollment_id
+    description: int, enrollment ID on the corresponding platform. Null for enrollments
+      from edX.org for now
   - name: courserunenrollment_is_active
     description: boolean, indicating whether enrollment is active on the corresponding
       platform
@@ -79,6 +82,10 @@ models:
   - name: courserunenrollment_enrollment_status
     description: string, enrollment status for users whose enrollment changed on the
       corresponding platform
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, indicating whether the user is enrolled on edX platform.
+      For edx.org course enrollment, it would always be true. Null for Bootcamps as
+      it doesn't apply.
   - name: courserun_title
     description: string, title of the course run on the corresponding platform. Maybe
       blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
@@ -95,11 +102,17 @@ models:
     - not_null
   - name: user_full_name
     description: str, user full name on user's profile on the corresponding platform
-  - name: user_has_certificate
-    description: boolean, indicating if user has earned certificate for enrolled course-run
-      on the corresponding platform.
+  - name: courseruncertificate_is_earned
+    description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
+      micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
     tests:
     - not_null
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on the corresponding platform
+  - name: courseruncertificate_url
+    description: str, URL to the course certificate for users who earned the certificate
+      on mitxonline.mit.edu, micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
+      It doesn't include the revoked certificates.
   - name: courserungrade_grade
     description: float, course grade on edX.org or MITxOnline or xPro range from 0
       to 1. Null for bootcamps
@@ -141,6 +154,10 @@ models:
     description: str, user full name on user's profile on the corresponding platform
   - name: courseruncertificate_url
     description: str, the full URL to the certificate on the corresponding platform
+    tests:
+    - not_null
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on the corresponding platform
     tests:
     - not_null
   - name: courseruncertificate_created_on

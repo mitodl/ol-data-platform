@@ -17,6 +17,7 @@ with mitx_certificates as (
 
 select
     platform
+    , courseruncertificate_uuid
     , courseruncertificate_url
     , courseruncertificate_created_on
     , courserun_title
@@ -30,6 +31,7 @@ union all
 
 select
     '{{ var("mitxpro") }}' as platform
+    , courseruncertificate_uuid
     , courseruncertificate_url
     , courseruncertificate_created_on
     , courserun_title
@@ -43,6 +45,7 @@ union all
 
 select
     '{{ var("bootcamps") }}' as platform
+    , courseruncertificate_uuid
     , courseruncertificate_url
     , courseruncertificate_created_on
     , courserun_title

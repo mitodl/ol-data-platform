@@ -34,10 +34,12 @@ with mitx_enrollments as (
 , combined_enrollments as (
     select
         mitx_enrollments.platform
+        , mitx_enrollments.courserunenrollment_id
         , mitx_enrollments.courserunenrollment_is_active
         , mitx_enrollments.courserunenrollment_created_on
         , mitx_enrollments.courserunenrollment_enrollment_mode
         , mitx_enrollments.courserunenrollment_enrollment_status
+        , mitx_enrollments.courserunenrollment_is_edx_enrolled
         , mitx_enrollments.user_id
         , mitx_enrollments.courserun_id
         , mitx_enrollments.courserun_title
@@ -58,10 +60,12 @@ with mitx_enrollments as (
 
     select
         mitx_enrollments.platform
+        , mitx_enrollments.courserunenrollment_id
         , mitx_enrollments.courserunenrollment_is_active
         , mitx_enrollments.courserunenrollment_created_on
         , mitx_enrollments.courserunenrollment_enrollment_mode
         , mitx_enrollments.courserunenrollment_enrollment_status
+        , mitx_enrollments.courserunenrollment_is_edx_enrolled
         , mitx_enrollments.user_id
         , mitx_enrollments.courserun_id
         , mitx_enrollments.courserun_title
@@ -82,10 +86,12 @@ with mitx_enrollments as (
 
     select
         '{{ var("mitxpro") }}' as platform
+        , mitxpro_enrollments.courserunenrollment_id
         , mitxpro_enrollments.courserunenrollment_is_active
         , mitxpro_enrollments.courserunenrollment_created_on
         , mitxpro_enrollments.courserunenrollment_enrollment_mode
         , mitxpro_enrollments.courserunenrollment_enrollment_status
+        , mitxpro_enrollments.courserunenrollment_is_edx_enrolled
         , mitxpro_enrollments.user_id
         , mitxpro_enrollments.courserun_id
         , mitxpro_enrollments.courserun_title
@@ -105,10 +111,12 @@ with mitx_enrollments as (
 
     select
         '{{ var("bootcamps") }}' as platform
+        , courserunenrollment_id
         , courserunenrollment_is_active
         , courserunenrollment_created_on
         , null as courserunenrollment_enrollment_mode
         , courserunenrollment_enrollment_status
+        , null as courserunenrollment_is_edx_enrolled
         , user_id
         , courserun_id
         , courserun_title
@@ -125,7 +133,10 @@ select
     combined_enrollments.*
     , combined_courseruns.course_title
     , combined_courseruns.course_readable_id
-    , if(combined_certificates.platform is not null, true, false) as user_has_certificate
+    , combined_certificates.courseruncertificate_created_on
+    , combined_certificates.courseruncertificate_url
+    , combined_certificates.courseruncertificate_uuid
+    , if(combined_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
 from combined_enrollments
 left join combined_courseruns
     on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
