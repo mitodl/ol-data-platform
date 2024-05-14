@@ -18,8 +18,8 @@ with source as (
         , verify_uuid as courseruncertificate_verify_uuid
         , status as courseruncertificate_status
         , try_cast(grade as decimal(38, 2)) as courseruncertificate_grade
-        , to_iso8601(date_parse(created_date, '%Y-%m-%d %H:%i:%s')) as courserunenrollment_created_on
-        , to_iso8601(date_parse(modified_date, '%Y-%m-%d %H:%i:%s')) as courserunenrollment_updated_on
+        , to_iso8601(date_parse(created_date, '%Y-%m-%d %H:%i:%s')) as courseruncertificate_created_on
+        , to_iso8601(date_parse(modified_date, '%Y-%m-%d %H:%i:%s')) as courseruncertificate_updated_on
     from most_recent_source
 )
 

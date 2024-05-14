@@ -780,12 +780,12 @@ models:
       was generated.
   - name: courseruncertificate_key
     description: str, used internally only.
-  - name: courserunenrollment_created_on
+  - name: courseruncertificate_created_on
     description: timestamp, date and time string indicating when the certificate was
       created
     tests:
     - not_null
-  - name: courserunenrollment_updated_on
+  - name: courseruncertificate_updated_on
     description: timestamp, date and time string indicating when the certificate was
       last modified
     tests:
