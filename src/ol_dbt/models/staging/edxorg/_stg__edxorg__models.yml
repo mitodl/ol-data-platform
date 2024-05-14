@@ -697,12 +697,12 @@ models:
   description: edx.org user profile data
   columns:
   - name: user_profile_id
-    description: str, primary key for user profile table
+    description: int, primary key for user profile table
     tests:
     - unique
     - not_null
   - name: user_id
-    description: str, foreign key to auth_user.id
+    description: int, foreign key to auth_user.id
     tests:
     - unique
     - not_null
@@ -737,7 +737,7 @@ models:
   description: edx.org course runs certificate data
   columns:
   - name: courseruncertificate_id
-    description: str, primary key for certificates_generatedcertificate table
+    description: int, primary key for certificates_generatedcertificate table
     tests:
     - unique
     - not_null
