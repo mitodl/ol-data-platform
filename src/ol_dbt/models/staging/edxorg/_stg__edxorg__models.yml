@@ -744,7 +744,9 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, open edX Course Key formatted as {org}/{course code}/{run_tag}
+    description: str, open edX Course ID formatted as {org}/{course number}/{run}
+      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+      runs.
     tests:
     - not_null
   - name: courseruncertificate_status
@@ -789,3 +791,32 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "user_id"]
+
+- name: stg__edxorg__s3__user_courseaccessrole
+  description: edX.org student course access roles that lists the users who have a
+    privileged role or roles for working in a course
+  columns:
+  - name: user_id
+    description: int, foreign key to auth_user.id
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as {org}/{course number}/{run}
+      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+      runs.
+    tests:
+    - not_null
+  - name: organization
+    description: str, the organization the course belongs to. e.g. MITx
+  - name: courseaccess_role
+    description: str, the privilege level assigned to the user for working in this
+      course. Possible values are instructor, staff, beta_testers, data_researcher,
+      ccx_coach, limited_staff, sales_admin, beta_testers, finance_admin
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
+          'sales_admin', 'beta_testers', 'ccx_coach']
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "user_id", "courseaccess_role"]

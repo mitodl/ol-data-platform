@@ -831,7 +831,9 @@ sources:
     - name: user_id
       description: str, foreign key to auth_user.id
     - name: course_id
-      description: str, open edX Course Key formatted as {org}/{course code}/{run_tag}
+      description: str, open edX Course ID formatted as {org}/{course number}/{run}
+        for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+        runs.
     - name: download_url
       description: str, url location for the generated certificate. Used internally
         only.
@@ -866,3 +868,20 @@ sources:
     - name: modified_date
       description: str, date and time string indicating when the certificate was last
         modified
+
+  - name: raw__edxorg__s3__tables__student_courseaccessrole
+    description: edX.org student course access roles that lists the users who have
+      a privileged role or roles for working in a course
+    columns:
+    - name: course_id
+      description: str, open edX Course ID formatted as {org}/{course number}/{run}
+        for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+        runs.
+    - name: org
+      description: str, the organization the course belongs to. e.g. MITx
+    - name: role
+      description: str, the privilege level assigned to the user for working in this
+        course. Possible values are instructor, staff, beta_testers, data_researcher,
+        ccx_coach, limited_staff, sales_admin, beta_testers, finance_admin
+    - name: user_id
+      description: str, foreign key to auth_user.id
