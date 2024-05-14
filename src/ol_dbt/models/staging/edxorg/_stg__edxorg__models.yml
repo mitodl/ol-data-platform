@@ -690,6 +690,8 @@ models:
   - name: user_joined_on
     description: timestamp, date and time indicating when the account was created.
       This is not the date that the user activated the account.
+    tests:
+    - not_null
 
 - name: stg__edxorg__s3__user_profile
   description: edx.org user profile data
