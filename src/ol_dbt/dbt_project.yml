@@ -46,9 +46,10 @@ vars:
     highest_education_values: ['Doctorate', "Master''s or professional degree", "Bachelor''s\
         \ degree", 'Associate degree', 'Secondary/high school', 'Junior secondary/junior
         high/middle school', 'Elementary/primary school', 'No formal education', 'Other
-        education', '']
+        education', "Doctorate in science or engineering", "Doctorate in another field",
+      '']
     gender_values: ['Male', 'Female', 'Transgender', 'Non-binary/non-conforming',
-      'Other/Prefer Not to Say', '']
+      'Binary', 'Other/Prefer Not to Say', '']
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models

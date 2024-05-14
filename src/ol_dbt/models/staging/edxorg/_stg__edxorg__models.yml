@@ -648,3 +648,144 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
         "coursestructure_retrieved_at"]
+
+- name: stg__edxorg__s3__user
+  description: edx.org user data
+  columns:
+  - name: user_id
+    description: int, primary key for this user table
+    tests:
+    - unique
+    - not_null
+  - name: user_username
+    description: str, the unique username for a user on edX.org.
+    tests:
+    - unique
+    - not_null
+  - name: user_email
+    description: str, the user’s email address, which is the primary mechanism users
+      use to log in.
+    tests:
+    - not_null
+  - name: user_is_staff
+    description: boolean, set to true if the user is a staff member of edx, who have
+      Admin privileges in the LMS
+    tests:
+    - not_null
+  - name: user_is_active
+    description: boolean, set to true if the user has clicked on the activation link
+      that was sent to them when they created their account, and false if user hasn't
+      activated the account or the account is soft deleted
+    tests:
+    - not_null
+  - name: user_is_superuser
+    description: boolean, controls access to django_admin views. Set to true only
+      for site admins. false for almost everybody.
+    tests:
+    - not_null
+  - name: user_last_login
+    description: timestamp, date and time of the user’s last login. Should not be
+      used as a proxy for activity, since people can use the site all the time and
+      go days between logging in and out.
+  - name: user_joined_on
+    description: timestamp, date and time indicating when the account was created.
+      This is not the date that the user activated the account.
+
+- name: stg__edxorg__s3__user_profile
+  description: edx.org user profile data
+  columns:
+  - name: user_profile_id
+    description: str, primary key for user profile table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: str, foreign key to auth_user.id
+    tests:
+    - unique
+    - not_null
+  - name: user_full_name
+    description: str, a user’s full name. Name changes are logged in the meta field.
+  - name: user_gender
+    description: str, learner's gender in readable text
+    tests:
+    - accepted_values:
+        values: '{{ var("gender_values") }}'
+  - name: user_highest_education
+    description: str, learner's Level of education in readable text.
+    tests:
+    - accepted_values:
+        values: '{{ var("highest_education_values") }}'
+  - name: user_year_of_birth
+    description: int, learner's birth year.
+  - name: user_address_country
+    description: str, two digit country code. Null for user profiles created before
+      18 Sep 2014.
+  - name: user_profile_metadata
+    description: text, freeform text field that stores arbitrary JSON metadata e.g.
+      old_names, old_emails for the user
+  - name: user_goals
+    description: text, collected during registration to answer question "Tell us why
+      you’re interested in edX"
+  - name: user_bio
+    description: text, one or more paragraphs of biographical information that the
+      learner enters as profile information. Added 22 Apr 2015.
+
+- name: stg__edxorg__s3__courserun_certificate
+  description: edx.org course runs certificate data
+  columns:
+  - name: courseruncertificate_id
+    description: str, primary key for certificates_generatedcertificate table
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to auth_user.id
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course Key formatted as {org}/{course code}/{run_tag}
+    tests:
+    - not_null
+  - name: courseruncertificate_status
+    description: str, after certificates have been issued, the status will be one
+      of the possible values- audit_notpassing, audit_passing, deleted, deleting,
+      downloadable, error, generating, notpassing, restricted , unavailable, unverified
+    tests:
+    - accepted_values:
+        values: ["audit_notpassing", "audit_passing", "deleted", "deleting", "downloadable",
+          "error", "generating", "notpassing", "restricted", "unavailable", "unverified"]
+  - name: courseruncertificate_download_url
+    description: str, url location for the generated certificate. Used internally
+      only.
+  - name: courseruncertificate_download_uuid
+    description: str, the unique identifier for the generated certificate. Used internally
+      only.
+  - name: courseruncertificate_verify_uuid
+    description: str, a hash code that verifies the validity of a certificate. Included
+      on the certificate itself as part of a URL.
+  - name: courseruncertificate_grade
+    description: float, the grade ranged from '0' to '1' computed the at the time
+      of certificate generation. It is suggested that the grades_persistentcoursegrade
+      table be used instead of this grade.
+  - name: courseruncertificate_mode
+    description: str, contains the value in student_courseenrollment.mode field at
+      the time the certificate was generated
+  - name: courseruncertificate_user_full_name
+    description: str, the name of the learner that was set at the time the certificate
+      was generated.
+  - name: courseruncertificate_key
+    description: str, used internally only.
+  - name: courserunenrollment_created_on
+    description: timestamp, date and time string indicating when the certificate was
+      created
+    tests:
+    - not_null
+  - name: courserunenrollment_updated_on
+    description: timestamp, date and time string indicating when the certificate was
+      last modified
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "user_id"]
