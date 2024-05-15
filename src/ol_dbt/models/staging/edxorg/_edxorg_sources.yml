@@ -680,3 +680,208 @@ sources:
     - name: retrieved_at
       description: timestamp, time indicating when this block was initially retrieved
         from S3
+
+  - name: raw__edxorg__s3__tables__auth_user
+    description: edx.org user data
+    columns:
+    - name: id
+      description: str, primary key for this user table
+    - name: username
+      description: str, the unique username for a user on edX.org.
+    - name: first_name
+      description: str, not used; a user’s full name is stored in auth_userprofile.name
+        instead.
+    - name: last_name
+      description: str, not used; a user’s full name is stored in auth_userprofile.name
+        instead.
+    - name: email
+      description: str, the user’s email address, which is the primary mechanism users
+        use to log in.
+    - name: password
+      description: str, the hashed version of the user’s password
+    - name: is_staff
+      description: str, set to '1' if the user is a staff member of edx, who have
+        Admin privileges in the LMS
+    - name: is_active
+      description: str, set to '1' if the user has clicked on the activation link
+        that was sent to them when they created their account, and false if user hasn't
+        activated the account or the account is soft deleted
+    - name: is_superuser
+      description: str, controls access to django_admin views. Set to '1' only for
+        site admins. '0' for almost everybody.
+    - name: last_login
+      description: str, date and time string of the user’s last login. Should not
+        be used as a proxy for activity, since people can use the site all the time
+        and go days between logging in and out.
+    - name: date_joined
+      description: str, date and time string indicating when the account was created.
+        This is not the date that the user activated the account.
+    - name: status
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: email_key
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: avatar_type
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: country
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: show_country
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: date_of_birth
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: interesting_tags
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: ignored_tags
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: email_tag_filter_strategy
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: display_tag_filter_strategy
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: consecutive_days_visit_count
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+
+  - name: raw__edxorg__s3__tables__auth_userprofile
+    description: edx.org user profile data
+    columns:
+    - name: id
+      description: str, primary key for user profile table
+    - name: user_id
+      description: str, foreign key to auth_user.id
+    - name: name
+      description: str, a user’s full name. Name changes are logged in the meta field.
+    - name: meta
+      description: str, freeform text field that stores arbitrary JSON metadata e.g.
+        old_names, old_emails for the user
+    - name: gender
+      description: str, possible values are m, f, o, t, b, blank, or NULL
+    - name: level_of_education
+      description: str, learner's Level of education in one or two letters.
+    - name: year_of_birth
+      description: str, learner's birth year.
+    - name: goals
+      description: text, collected during registration to answer question "Tell us
+        why you’re interested in edX"
+    - name: country
+      description: str, two digit country code. Null for user profiles created before
+        18 Sep 2014.
+    - name: bio
+      description: text, one or more paragraphs of biographical information that the
+        learner enters as profile information. Added 22 Apr 2015.
+    - name: profile_image_uploaded_at
+      description: str, the date and time when a learner uploaded a profile image
+        to show with profile information. Added 22 Apr 2015.
+    - name: city
+      description: str, not currently used. NULL for all user profiles except a few
+        rows that may have incomplete or bad data
+    - name: language
+      description: str, no longer used. User’s preferred language, asked during the
+        sign up process for the 6.002x prototype course given in Spring 2012. EdX
+        stopped collecting this data after MITx transitioned to edX
+    - name: location
+      description: str, no longer used. User’s location, asked during the sign up
+        process for the 6.002x prototype course given in Spring 2012. Like language,
+        edX stopped collecting this column after MITx transitioned to edX, so it is
+        only available for the first batch of learners.
+    - name: courseware
+      description: str, no longer used. This column was added for use with an A/B
+        testing feature, but it has not been used for anything meaningful since the
+        prototype course concluded in Spring 2012.
+    - name: mailing_address
+      description: str, no longer used. This column contains NULL for learners who
+        register after 17 May 2016 as well as for learners who registered accounts
+        for the prototype course.
+
+  - name: raw__edxorg__s3__tables__certificates_generatedcertificate
+    description: edx.org course runs certificate data
+    columns:
+    - name: id
+      description: str, primary key for certificates_generatedcertificate table
+    - name: user_id
+      description: str, foreign key to auth_user.id
+    - name: course_id
+      description: str, open edX Course ID formatted as {org}/{course number}/{run}
+        for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+        runs.
+    - name: download_url
+      description: str, url location for the generated certificate. Used internally
+        only.
+    - name: download_uuid
+      description: str, the unique identifier for the generated certificate. Used
+        internally only.
+    - name: verify_uuid
+      description: str, a hash code that verifies the validity of a certificate. Included
+        on the certificate itself as part of a URL.
+    - name: grade
+      description: str, the grade ranged from '0' to '1' computed the at the time
+        of certificate generation. It is suggested that the grades_persistentcoursegrade
+        table be used instead of this grade.
+    - name: mode
+      description: str, contains the value in student_courseenrollment.mode field
+        at the time the certificate was generated
+    - name: status
+      description: str, after certificates have been issued, the status will be one
+        of the possible values- audit_notpassing, audit_passing, deleted, deleting,
+        downloadable, error, generating, notpassing, restricted , unavailable, unverified
+    - name: error_reason
+      description: st, used internally only
+    - name: distinction
+      description: str, not used. currently all '0'
+    - name: name
+      description: str, the name of the learner that was set at the time the certificate
+        was generated.
+    - name: key
+      description: str, used internally only.
+    - name: created_date
+      description: str, date and time string indicating when the certificate was created
+    - name: modified_date
+      description: str, date and time string indicating when the certificate was last
+        modified
+
+  - name: raw__edxorg__s3__tables__student_courseaccessrole
+    description: edX.org student course access roles that lists the users who have
+      a privileged role or roles for working in a course
+    columns:
+    - name: course_id
+      description: str, open edX Course ID formatted as {org}/{course number}/{run}
+        for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+        runs.
+    - name: org
+      description: str, the organization the course belongs to. e.g. MITx
+    - name: role
+      description: str, the privilege level assigned to the user for working in this
+        course. Possible values are instructor, staff, beta_testers, data_researcher,
+        ccx_coach, limited_staff, sales_admin, beta_testers, finance_admin
+    - name: user_id
+      description: str, foreign key to auth_user.id

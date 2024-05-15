@@ -3,9 +3,10 @@
             when {{ column_name }} = 'm' then 'Male'
             when {{ column_name }} = 'f' then 'Female'
             when {{ column_name }} = 't' then 'Transgender'
+            when {{ column_name }} = 'b' then 'Binary'
             when {{ column_name }} = 'nb' then 'Non-binary/non-conforming'
             when {{ column_name }} = 'o' then 'Other/Prefer Not to Say'
-            else {{ column_name }}
+            else null
         end
 {% endmacro %}
 
@@ -23,7 +24,7 @@
         --- the following two are no longer used, but there are still users' profiles with these values
         when {{ column_name }} = 'p_se' then 'Doctorate in science or engineering'
         when {{ column_name }} = 'p_oth' then 'Doctorate in another field'
-        else {{ column_name }}
+        else null
     end
 {% endmacro %}
 
