@@ -37,7 +37,7 @@ models:
       in the app. Possible values are 'studio', 'ocw-import', or blank
     tests:
     - accepted_values:
-        values: [studio, ocw-import]
+        values: ["studio", "ocw-import"]
   - name: website_url_path
     description: str, unique url relative path to the OCW website. e.g. courses/my-site-fall-2020
   - name: website_live_url
@@ -145,7 +145,7 @@ models:
       Spring, Summer, Fall, January IAP, or blank
     tests:
     - accepted_values:
-        values: [Spring, Summer, Fall, January IAP]
+        values: ["Spring", "Summer", "Fall", "January IAP"]
   - name: course_year
     description: int, course year extracted from sitemetadata.
   - name: course_level
@@ -205,7 +205,7 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: [github, local]
+        values: ["github", "local"]
   - name: websitestarter_path
     description: str, the github repo url or local file path of the starter project.
   - name: websitestarter_status
@@ -215,7 +215,7 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: [default, active, inactive]
+        values: ["default", "active", "inactive"]
   - name: websitestarter_created_on
     description: timestamp, date and time when the starter project record was created
     tests:
