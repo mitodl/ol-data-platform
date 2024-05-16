@@ -24,7 +24,7 @@ with source as (
         , json_query(metadata, 'lax $.course_description' omit quotes) as course_description
         , nullif(json_query(metadata, 'lax $.term' omit quotes), '') as course_term
         , nullif(json_query(metadata, 'lax $.year' omit quotes), '') as course_year
-        -- convert to comma-separate list to be consistent with extra_course_numbers
+        -- convert to comma-separated list to be consistent with extra_course_numbers
         , array_join(
             cast(json_parse(json_query(metadata, 'lax $.level')) as array (varchar)), ', ' --noqa
         ) as course_level
