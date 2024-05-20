@@ -253,17 +253,17 @@ files = [
 
 [[package]]
 name = "boto3"
-version = "1.34.105"
+version = "1.34.108"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "boto3-1.34.105-py3-none-any.whl", hash = "sha256:b633e8fbf7145bdb995ce68a27d096bb89fd393185b0e773418d81cd78db5a03"},
-    {file = "boto3-1.34.105.tar.gz", hash = "sha256:f2c11635be0de7b7c06eb606ece1add125e02d6ed521592294a0a21af09af135"},
+    {file = "boto3-1.34.108-py3-none-any.whl", hash = "sha256:3601267d76cac17f1d4595c3d8d968dc15be074b79bfa3985187a02b328a0a5f"},
+    {file = "boto3-1.34.108.tar.gz", hash = "sha256:677723295151d29ff9b363598a20c1997c4e2af7e50669d9e428b757fe586a10"},
 ]
 
 [package.dependencies]
-botocore = ">=1.34.105,<1.35.0"
+botocore = ">=1.34.108,<1.35.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.10.0,<0.11.0"
 
@@ -272,13 +272,13 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.34.105"
+version = "1.34.108"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "botocore-1.34.105-py3-none-any.whl", hash = "sha256:a459d060b541beecb50681e6e8a39313cca981e146a59ba7c5229d62f631a016"},
-    {file = "botocore-1.34.105.tar.gz", hash = "sha256:727d5d3e800ac8b705fca6e19b6fefa1e728a81d62a712df9bd32ed0117c740b"},
+    {file = "botocore-1.34.108-py3-none-any.whl", hash = "sha256:b1b9d00804267669c5fcc36489269f7e9c43580c30f0885fbf669cf73cec720b"},
+    {file = "botocore-1.34.108.tar.gz", hash = "sha256:384c9408c447631475dc41fdc9bf2e0f30c29c420d96bfe8b468bdc2bace3e13"},
 ]
 
 [package.dependencies]
@@ -555,13 +555,13 @@ pytz = ">2021.1"
 
 [[package]]
 name = "dagster"
-version = "1.7.4"
+version = "1.7.6"
 description = "Dagster is an orchestration platform for the development, production, and observation of data assets."
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-1.7.4-py3-none-any.whl", hash = "sha256:75c8da8fa4658fa98c7085dc1adf1eefc23f75faa20864864300a4457ac8e66b"},
-    {file = "dagster-1.7.4.tar.gz", hash = "sha256:3d45e791d23ebade69f68b9fa02bf3e01100e817d7262dfe527118e5c7ed3006"},
+    {file = "dagster-1.7.6-py3-none-any.whl", hash = "sha256:051d37ccdf4e98b33691d80ec88e1ad71e1c0e1486215c82ce67d4ab9e4cfd2d"},
+    {file = "dagster-1.7.6.tar.gz", hash = "sha256:1de28afd0e2e3908ff111a0a14b2fb9423e1c9700c3acc865728c5fcce86ee7e"},
 ]
 
 [package.dependencies]
@@ -569,7 +569,7 @@ alembic = ">=1.2.1,<1.6.3 || >1.6.3,<1.7.0 || >1.7.0,<1.11.0 || >1.11.0"
 click = ">=5.0"
 coloredlogs = ">=6.1,<=14.0"
 croniter = ">=0.3.34"
-dagster-pipes = "1.7.4"
+dagster-pipes = "1.7.6"
 docstring-parser = "*"
 filelock = "*"
 grpcio = ">=1.44.0"
@@ -603,41 +603,41 @@ docker = ["docker"]
 mypy = ["mypy (==1.8.0)"]
 pyright = ["pandas-stubs", "pyright (==1.1.356)", "types-PyYAML", "types-backports", "types-certifi", "types-chardet", "types-croniter", "types-cryptography", "types-mock", "types-paramiko", "types-pkg-resources", "types-pyOpenSSL", "types-python-dateutil", "types-pytz", "types-requests", "types-simplejson", "types-six", "types-sqlalchemy (==1.4.53.34)", "types-tabulate", "types-toml", "types-tzlocal"]
 ruff = ["ruff (==0.3.4)"]
-test = ["buildkite-test-collector", "docker", "grpcio-tools (>=1.44.0)", "mock (==3.0.5)", "morefs[asynclocal]", "mypy-protobuf", "objgraph", "pytest (>=7.0.1)", "pytest-cov (==2.10.1)", "pytest-mock (==3.3.1)", "pytest-rerunfailures (==10.0)", "pytest-xdist (==3.5.0)", "rapidfuzz", "responses (<=0.23.1)", "syrupy (>=4.0.0)", "tox (==3.25.0)"]
+test = ["buildkite-test-collector", "docker", "fsspec (<2024.5.0)", "grpcio-tools (>=1.44.0)", "mock (==3.0.5)", "morefs[asynclocal]", "mypy-protobuf", "objgraph", "pytest (>=7.0.1)", "pytest-cov (==2.10.1)", "pytest-mock (==3.3.1)", "pytest-rerunfailures (==10.0)", "pytest-xdist (==3.5.0)", "rapidfuzz", "responses (<=0.23.1)", "syrupy (>=4.0.0)", "tox (==3.25.0)"]
 
 [[package]]
 name = "dagster-airbyte"
-version = "0.23.4"
+version = "0.23.6"
 description = "Package for integrating Airbyte with Dagster."
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-airbyte-0.23.4.tar.gz", hash = "sha256:bcbce02614705ab25198c5ca3ac1b821feb14d781237585656ffb903adacd204"},
-    {file = "dagster_airbyte-0.23.4-py3-none-any.whl", hash = "sha256:95bb448e2de937be0f07b141972cc27fa84ac3d72264bb72c9f540b08cf56fae"},
+    {file = "dagster-airbyte-0.23.6.tar.gz", hash = "sha256:46fd545ddeb0e09dd1f2e4b597c023577f5fc486c0929f03be733c9df65eca28"},
+    {file = "dagster_airbyte-0.23.6-py3-none-any.whl", hash = "sha256:f77fd8dee245929d05864b091db0d9ae3f36401392f6e82a7fffc2c724e8ad26"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
+dagster = "1.7.6"
 requests = "*"
 
 [package.extras]
-managed = ["dagster-managed-elements (==0.23.4)"]
+managed = ["dagster-managed-elements (==0.23.6)"]
 test = ["requests-mock"]
 
 [[package]]
 name = "dagster-aws"
-version = "0.23.4"
+version = "0.23.6"
 description = "Package for AWS-specific Dagster framework solid and resource components."
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-aws-0.23.4.tar.gz", hash = "sha256:f77756ef753e668c227ed5a5898b75e30e9decd9d21d335f080912bb5deeafc4"},
-    {file = "dagster_aws-0.23.4-py3-none-any.whl", hash = "sha256:83f036205861af05bae5d275d5edacd2e9b5e87fd5b7f06abf25c5b0007adee4"},
+    {file = "dagster-aws-0.23.6.tar.gz", hash = "sha256:4a3f5fc1839cf7ed5a38a7dd7c7e837092f0e1b2730c65555fcb7927b823b97f"},
+    {file = "dagster_aws-0.23.6-py3-none-any.whl", hash = "sha256:8e075afcef7f588fd01f55b85a1994ff20cc90ee1cc3c39082c530f6963cec85"},
 ]
 
 [package.dependencies]
 boto3 = "*"
-dagster = "1.7.4"
+dagster = "1.7.6"
 packaging = "*"
 requests = "*"
 
@@ -648,18 +648,18 @@ test = ["botocore (!=1.32.1)", "moto[s3,server] (>=2.2.8,<5.0)", "requests-mock"
 
 [[package]]
 name = "dagster-dbt"
-version = "0.23.4"
+version = "0.23.6"
 description = "A Dagster integration for dbt"
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-dbt-0.23.4.tar.gz", hash = "sha256:90b110741f8bd402c910a1474e918c3f7bb7e1d1c15d4826a31388a07387b38d"},
-    {file = "dagster_dbt-0.23.4-py3-none-any.whl", hash = "sha256:5bff387bfb238c51d0a5139db3bb203e19442fad153f971b8e0170c842ac0231"},
+    {file = "dagster-dbt-0.23.6.tar.gz", hash = "sha256:daadedaa06b61111c05cfd36a2d70b24c4dabed95e8c8cf2edab6ddbff4c6378"},
+    {file = "dagster_dbt-0.23.6-py3-none-any.whl", hash = "sha256:669a09346d117010e3d62181d9a2f05cfbe84d7b142903fe6032526fa99af5fd"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
-dbt-core = ">=1.5,<1.8"
+dagster = "1.7.6"
+dbt-core = ">=1.6,<1.8"
 Jinja2 = "*"
 networkx = "*"
 orjson = "*"
@@ -674,53 +674,53 @@ test = ["dagster-duckdb", "dagster-duckdb-pandas", "dbt-duckdb"]
 
 [[package]]
 name = "dagster-docker"
-version = "0.23.4"
+version = "0.23.6"
 description = "A Dagster integration for docker"
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-docker-0.23.4.tar.gz", hash = "sha256:b1c45dfd14aa64b9ffa30f1faec12e85c76bf1baa6dc772e8a69d507db9961b7"},
-    {file = "dagster_docker-0.23.4-py3-none-any.whl", hash = "sha256:1414f293f1ebeda564147d396c1ad8eb3e19d2e92b47b2bea5f0f23d27d044f7"},
+    {file = "dagster-docker-0.23.6.tar.gz", hash = "sha256:89472c78d1421302b298101c0241dc16a7f6ae443495644ce822f7a898f07867"},
+    {file = "dagster_docker-0.23.6-py3-none-any.whl", hash = "sha256:27253fd549dc3ffee26aafdcbb358d83638f11889d224e6359959088180097ea"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
+dagster = "1.7.6"
 docker = "*"
 docker-image-py = "*"
 
 [[package]]
 name = "dagster-duckdb"
-version = "0.23.4"
+version = "0.23.6"
 description = "Package for DuckDB-specific Dagster framework op and resource components."
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-duckdb-0.23.4.tar.gz", hash = "sha256:9555f4944dc1fe3c5d0b3b9fb43db5705c306742bc521afeaae42fca3efd5aa1"},
-    {file = "dagster_duckdb-0.23.4-py3-none-any.whl", hash = "sha256:d0463b68597fd8fa05062a3a92593167d9d758e1b7fa5bdda502d120cccac895"},
+    {file = "dagster-duckdb-0.23.6.tar.gz", hash = "sha256:08565600c59e2ad6077463d8f00a4a5c2bda18b7236701740479395335ad1a2f"},
+    {file = "dagster_duckdb-0.23.6-py3-none-any.whl", hash = "sha256:045b11f1290e28d6d548f2f4b7ab07a96fd6424078f4fbdae2f864ef78223139"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
+dagster = "1.7.6"
 duckdb = "*"
 
 [package.extras]
-pandas = ["pandas (<2.1)"]
+pandas = ["pandas"]
 pyspark = ["pyspark (>=3)"]
 
 [[package]]
 name = "dagster-gcp"
-version = "0.23.4"
+version = "0.23.6"
 description = "Package for GCP-specific Dagster framework op and resource components."
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-gcp-0.23.4.tar.gz", hash = "sha256:7e3ecf0a4c51ac64c7e5d85bcb4038649cd67c0ab59ed2e1419ced521a1438e1"},
-    {file = "dagster_gcp-0.23.4-py3-none-any.whl", hash = "sha256:1517c85b1af7a2e7527d237f93e250e8447a60acca58c3ee5777f4015d935fe6"},
+    {file = "dagster-gcp-0.23.6.tar.gz", hash = "sha256:c62181c38292ada341fd68909a8a6a1992f320e8592a8930ec8b539e35cb5253"},
+    {file = "dagster_gcp-0.23.6-py3-none-any.whl", hash = "sha256:22588b8a52953f048faf9992968808c64f852dbba05b35dc4d78bae0c444346e"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
-dagster-pandas = "0.23.4"
+dagster = "1.7.6"
+dagster-pandas = "0.23.6"
 db-dtypes = "*"
 google-api-python-client = "*"
 google-cloud-bigquery = "*"
@@ -732,17 +732,17 @@ pyarrow = ["pyarrow"]
 
 [[package]]
 name = "dagster-graphql"
-version = "1.7.4"
+version = "1.7.6"
 description = "The GraphQL frontend to python dagster."
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-graphql-1.7.4.tar.gz", hash = "sha256:35c0c8398cb3224d3512643015a97068408ff88a4b7cce2d3b5b9d9a9aa59cea"},
-    {file = "dagster_graphql-1.7.4-py3-none-any.whl", hash = "sha256:10162b32405d9251086170e1885e3c402f1200b443babb0b5b539f38e76e8159"},
+    {file = "dagster-graphql-1.7.6.tar.gz", hash = "sha256:e2d17dffa4baf3216ef2e66a92c5c52dd64eeac1f34bbb38277dbe54fee0eb51"},
+    {file = "dagster_graphql-1.7.6-py3-none-any.whl", hash = "sha256:874398d5e26a3406df121613ae644026d84ff30a4a9f2fb980c34cd7fbb1d961"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
+dagster = "1.7.6"
 gql = {version = ">=3,<4", extras = ["requests"]}
 graphene = ">=3,<4"
 requests = "*"
@@ -750,92 +750,92 @@ starlette = "*"
 
 [[package]]
 name = "dagster-pandas"
-version = "0.23.4"
+version = "0.23.6"
 description = "Utilities and examples for working with pandas and dagster, an opinionated framework for expressing data pipelines"
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-pandas-0.23.4.tar.gz", hash = "sha256:b5fa80a971a0ad4b719c0c1758cd7920e5725c3371e9168b03941d1ff06f503f"},
-    {file = "dagster_pandas-0.23.4-py3-none-any.whl", hash = "sha256:271e7f6bd3dd8891d8cd35b4819351b24cdabf1735d1a6fc76ba870a0ac5d22c"},
+    {file = "dagster-pandas-0.23.6.tar.gz", hash = "sha256:8385073e9d26a1858c965765ee722615291ee6bed1fe98ececf212af962c4158"},
+    {file = "dagster_pandas-0.23.6-py3-none-any.whl", hash = "sha256:4ee6ad1133d3cbd812acdb0e97b1ab56ed321c7024f4a6bcc320e150d563da45"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
+dagster = "1.7.6"
 pandas = "*"
 
 [[package]]
 name = "dagster-pipes"
-version = "1.7.4"
+version = "1.7.6"
 description = "Toolkit for Dagster integrations with transform logic outside of Dagster"
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-pipes-1.7.4.tar.gz", hash = "sha256:44571bae1baf37e64186bd4a497a187f4029ce605bdec8b1058b4fe7993c624f"},
-    {file = "dagster_pipes-1.7.4-py3-none-any.whl", hash = "sha256:82cae7947b722a176767c93a35e1a8c16541aea7ff9c581fbd7f83b68978b28b"},
+    {file = "dagster-pipes-1.7.6.tar.gz", hash = "sha256:25d05d95a6f6e79c0a932ce180c5891faf453f7299b4ff411e589b461dd3c315"},
+    {file = "dagster_pipes-1.7.6-py3-none-any.whl", hash = "sha256:32bbff40d83727239727b98286ba989e3df1a478d571037c99f1f8e6683a039f"},
 ]
 
 [[package]]
 name = "dagster-postgres"
-version = "0.23.4"
+version = "0.23.6"
 description = "A Dagster integration for postgres"
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-postgres-0.23.4.tar.gz", hash = "sha256:52f63558dd679c58bb2f1c084464bc455d2170dfcd1eef6d31c535208fae902a"},
-    {file = "dagster_postgres-0.23.4-py3-none-any.whl", hash = "sha256:4c7b0c70fa50317726c8fe23539b5d4217c95825950e9472c3498545d7b98b21"},
+    {file = "dagster-postgres-0.23.6.tar.gz", hash = "sha256:c4d9a6fb764a8802955920554b630340d97ed33229f9d90e9185e6ddbe50355a"},
+    {file = "dagster_postgres-0.23.6-py3-none-any.whl", hash = "sha256:94bab6247eee10ce3f6084e2a2928db48739c10c37cfeb3accba0ab18c15080b"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
+dagster = "1.7.6"
 psycopg2-binary = "*"
 
 [[package]]
 name = "dagster-shell"
-version = "0.23.4"
+version = "0.23.6"
 description = "Package for Dagster shell ops."
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-shell-0.23.4.tar.gz", hash = "sha256:d520b720c5ba64a730f92a89c97691f48f24337fd0f52ca427049557513f30b5"},
-    {file = "dagster_shell-0.23.4-py3-none-any.whl", hash = "sha256:3010f0f3439c5fd1e422b4201d50bab886726a6994365bc4de4a0d4fab2329ac"},
+    {file = "dagster-shell-0.23.6.tar.gz", hash = "sha256:1c5647a9ddf9273a34469fbfe87b5389bdd7c3eff51e148deed081c0770eaf77"},
+    {file = "dagster_shell-0.23.6-py3-none-any.whl", hash = "sha256:792f8bcda6bea663818a43414d2d0551a27aa7dde0da695cae0e2e25d45abc7f"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
+dagster = "1.7.6"
 
 [package.extras]
 test = ["psutil"]
 
 [[package]]
 name = "dagster-slack"
-version = "0.23.4"
+version = "0.23.6"
 description = "A Slack client resource for posting to Slack"
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-slack-0.23.4.tar.gz", hash = "sha256:437b7a50eedc081dd1df1c7ddb2f8c012b1a9d24ef0f8a23f6805fd67777242f"},
-    {file = "dagster_slack-0.23.4-py3-none-any.whl", hash = "sha256:7c6d560502c7ae1f75e422c2a6ed5dadcc0c0ee68a3f8a3a51b6d0f85441132b"},
+    {file = "dagster-slack-0.23.6.tar.gz", hash = "sha256:e91e2cdc41685950410ae9000a3a0ae83e74f8d3521d8faa8f6e6dfa9ba5c749"},
+    {file = "dagster_slack-0.23.6-py3-none-any.whl", hash = "sha256:dc945b7182e881748757a5b3653ef72d23b01e5cbdbb8f776f506783d25d43c1"},
 ]
 
 [package.dependencies]
-dagster = "1.7.4"
+dagster = "1.7.6"
 slack-sdk = "*"
 
 [[package]]
 name = "dagster-webserver"
-version = "1.7.4"
+version = "1.7.6"
 description = "Web UI for dagster."
 optional = false
 python-versions = "<3.13,>=3.8"
 files = [
-    {file = "dagster-webserver-1.7.4.tar.gz", hash = "sha256:ca862294e0fe637ba16644cff9d769bc0ff7256d3b9183faf3919d783968cbfc"},
-    {file = "dagster_webserver-1.7.4-py3-none-any.whl", hash = "sha256:00553fdb0f0f5bb3403a479301d7e9018ec7d0184101b3c9b6d5dd5f9ecf7dc3"},
+    {file = "dagster-webserver-1.7.6.tar.gz", hash = "sha256:dcbfe2a955d2ece9bbc2e62cd9aa271a028df465b36dac41354a6211deb207af"},
+    {file = "dagster_webserver-1.7.6-py3-none-any.whl", hash = "sha256:7f44a39ad34308928b25b0ac5c4d98590ba21a8ae49dab4c0b8156f475e9b955"},
 ]
 
 [package.dependencies]
 click = ">=7.0,<9.0"
-dagster = "1.7.4"
-dagster-graphql = "1.7.4"
+dagster = "1.7.6"
+dagster-graphql = "1.7.6"
 starlette = "!=0.36.0"
 uvicorn = {version = "*", extras = ["standard"]}
 
@@ -1281,23 +1281,23 @@ tqdm = ["tqdm"]
 
 [[package]]
 name = "gcsfs"
-version = "0.8.0"
+version = "2024.5.0"
 description = "Convenient Filesystem interface over GCS"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.8"
 files = [
-    {file = "gcsfs-0.8.0-py2.py3-none-any.whl", hash = "sha256:9fc5a9efe7e244a44a880c97c663ad986bb36f1e65e725d272fad9de0c0a1580"},
-    {file = "gcsfs-0.8.0.tar.gz", hash = "sha256:6ffb81a93dc4075b056dacb5e8a661b75e79dd2e220538afae94768a6b7be3c6"},
+    {file = "gcsfs-2024.5.0-py2.py3-none-any.whl", hash = "sha256:49978e7eb68800c2d074bb07b39050f8ae990899855abcdae6ef478a94528451"},
+    {file = "gcsfs-2024.5.0.tar.gz", hash = "sha256:e54eaaffb82aaa369aea9b985e5db19a8446a325f796481303abe71a4e3427d6"},
 ]
 
 [package.dependencies]
-aiohttp = "*"
-decorator = "*"
-fsspec = ">=0.8.0"
+aiohttp = "<4.0.0a0 || >4.0.0a0,<4.0.0a1 || >4.0.0a1"
+decorator = ">4.1.2"
+fsspec = "2024.5.0"
 google-auth = ">=1.2"
 google-auth-oauthlib = "*"
+google-cloud-storage = "*"
 requests = "*"
-ujson = "*"
 
 [package.extras]
 crc = ["crcmod"]
@@ -1404,13 +1404,13 @@ tool = ["click (>=6.0.0)"]
 
 [[package]]
 name = "google-cloud-bigquery"
-version = "3.22.0"
+version = "3.23.0"
 description = "Google BigQuery API client library"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "google-cloud-bigquery-3.22.0.tar.gz", hash = "sha256:957591e6f948d7cb4aa0f7a8e4e47b4617cd7f0269e28a71c37953c39b6e8a4c"},
-    {file = "google_cloud_bigquery-3.22.0-py2.py3-none-any.whl", hash = "sha256:80c8e31a23b68b7d3ae5d138c9a9edff69d100ee812db73a5e63c79a13a5063d"},
+    {file = "google-cloud-bigquery-3.23.0.tar.gz", hash = "sha256:7ecdb207727d513b1bce1f213dbb926ed2e1d4f0122778de00f0e56d19d47a01"},
+    {file = "google_cloud_bigquery-3.23.0-py2.py3-none-any.whl", hash = "sha256:dc0a4a47ab541a34aa1dc1f48539d88c091adc0637da7744d7fab6f3bc8886d5"},
 ]
 
 [package.dependencies]
@@ -3975,17 +3975,17 @@ files = [
 
 [[package]]
 name = "slack-sdk"
-version = "3.27.1"
+version = "3.27.2"
 description = "The Slack API Platform SDK for Python"
 optional = false
 python-versions = ">=3.6"
 files = [
-    {file = "slack_sdk-3.27.1-py2.py3-none-any.whl", hash = "sha256:c108e509160cf1324c5c8b1f47ca52fb5e287021b8caf9f4ec78ad737ab7b1d9"},
-    {file = "slack_sdk-3.27.1.tar.gz", hash = "sha256:85d86b34d807c26c8bb33c1569ec0985876f06ae4a2692afba765b7a5490d28c"},
+    {file = "slack_sdk-3.27.2-py2.py3-none-any.whl", hash = "sha256:af97158e6ac7f667e158e8036e63dc1f79db9bd36216a33c10fcc49be7c2f30c"},
+    {file = "slack_sdk-3.27.2.tar.gz", hash = "sha256:bb145bf2bd93b60a17cd55c05cb15868c9a07d845b6fb608c798b50bce21cb99"},
 ]
 
 [package.extras]
-optional = ["SQLAlchemy (>=1.4,<3)", "aiodns (>1.0)", "aiohttp (>=3.7.3,<4)", "boto3 (<=2)", "websocket-client (>=1,<2)", "websockets (>=10,<11)", "websockets (>=9.1,<10)"]
+optional = ["SQLAlchemy (>=1.4,<3)", "aiodns (>1.0)", "aiohttp (>=3.7.3,<4)", "boto3 (<=2)", "websocket-client (>=1,<2)", "websockets (>=9.1,<13)"]
 
 [[package]]
 name = "sniffio"
@@ -4113,13 +4113,13 @@ typing-extensions = "*"
 
 [[package]]
 name = "sqlglot"
-version = "23.15.8"
+version = "23.17.0"
 description = "An easily customizable SQL parser and transpiler"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "sqlglot-23.15.8-py3-none-any.whl", hash = "sha256:e1123f7dda94e1b9b2ab200fb52c12e9ea80d18aac8339e8e73959e7f5b49663"},
-    {file = "sqlglot-23.15.8.tar.gz", hash = "sha256:4ca32ece6fd21bb6b42b09927f1fe38da832c6418d7202835313d7abc5d07620"},
+    {file = "sqlglot-23.17.0-py3-none-any.whl", hash = "sha256:ecd860f4a8278600c537755bcbd60b1a63ef6a0dc33dfb16170ea428422749de"},
+    {file = "sqlglot-23.17.0.tar.gz", hash = "sha256:8e5786f26b0b337921cabc32d1222238c9e56f34560e1ac65a9b36178f9bb9e4"},
 ]
 
 [package.dependencies]
@@ -4405,93 +4405,6 @@ tzdata = {version = "*", markers = "platform_system == \"Windows\""}
 
 [package.extras]
 devenv = ["check-manifest", "pytest (>=4.3)", "pytest-cov", "pytest-mock (>=3.3)", "zest.releaser"]
-
-[[package]]
-name = "ujson"
-version = "5.10.0"
-description = "Ultra fast JSON encoder and decoder for Python"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "ujson-5.10.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:2601aa9ecdbee1118a1c2065323bda35e2c5a2cf0797ef4522d485f9d3ef65bd"},
-    {file = "ujson-5.10.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:348898dd702fc1c4f1051bc3aacbf894caa0927fe2c53e68679c073375f732cf"},
-    {file = "ujson-5.10.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:22cffecf73391e8abd65ef5f4e4dd523162a3399d5e84faa6aebbf9583df86d6"},
-    {file = "ujson-5.10.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:26b0e2d2366543c1bb4fbd457446f00b0187a2bddf93148ac2da07a53fe51569"},
-    {file = "ujson-5.10.0-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:caf270c6dba1be7a41125cd1e4fc7ba384bf564650beef0df2dd21a00b7f5770"},
-    {file = "ujson-5.10.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:a245d59f2ffe750446292b0094244df163c3dc96b3ce152a2c837a44e7cda9d1"},
-    {file = "ujson-5.10.0-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:94a87f6e151c5f483d7d54ceef83b45d3a9cca7a9cb453dbdbb3f5a6f64033f5"},
-    {file = "ujson-5.10.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:29b443c4c0a113bcbb792c88bea67b675c7ca3ca80c3474784e08bba01c18d51"},
-    {file = "ujson-5.10.0-cp310-cp310-win32.whl", hash = "sha256:c18610b9ccd2874950faf474692deee4223a994251bc0a083c114671b64e6518"},
-    {file = "ujson-5.10.0-cp310-cp310-win_amd64.whl", hash = "sha256:924f7318c31874d6bb44d9ee1900167ca32aa9b69389b98ecbde34c1698a250f"},
-    {file = "ujson-5.10.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:a5b366812c90e69d0f379a53648be10a5db38f9d4ad212b60af00bd4048d0f00"},
-    {file = "ujson-5.10.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:502bf475781e8167f0f9d0e41cd32879d120a524b22358e7f205294224c71126"},
-    {file = "ujson-5.10.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5b91b5d0d9d283e085e821651184a647699430705b15bf274c7896f23fe9c9d8"},
-    {file = "ujson-5.10.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:129e39af3a6d85b9c26d5577169c21d53821d8cf68e079060602e861c6e5da1b"},
-    {file = "ujson-5.10.0-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:f77b74475c462cb8b88680471193064d3e715c7c6074b1c8c412cb526466efe9"},
-    {file = "ujson-5.10.0-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:7ec0ca8c415e81aa4123501fee7f761abf4b7f386aad348501a26940beb1860f"},
-    {file = "ujson-5.10.0-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:ab13a2a9e0b2865a6c6db9271f4b46af1c7476bfd51af1f64585e919b7c07fd4"},
-    {file = "ujson-5.10.0-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:57aaf98b92d72fc70886b5a0e1a1ca52c2320377360341715dd3933a18e827b1"},
-    {file = "ujson-5.10.0-cp311-cp311-win32.whl", hash = "sha256:2987713a490ceb27edff77fb184ed09acdc565db700ee852823c3dc3cffe455f"},
-    {file = "ujson-5.10.0-cp311-cp311-win_amd64.whl", hash = "sha256:f00ea7e00447918ee0eff2422c4add4c5752b1b60e88fcb3c067d4a21049a720"},
-    {file = "ujson-5.10.0-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:98ba15d8cbc481ce55695beee9f063189dce91a4b08bc1d03e7f0152cd4bbdd5"},
-    {file = "ujson-5.10.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:a9d2edbf1556e4f56e50fab7d8ff993dbad7f54bac68eacdd27a8f55f433578e"},
-    {file = "ujson-5.10.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:6627029ae4f52d0e1a2451768c2c37c0c814ffc04f796eb36244cf16b8e57043"},
-    {file = "ujson-5.10.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f8ccb77b3e40b151e20519c6ae6d89bfe3f4c14e8e210d910287f778368bb3d1"},
-    {file = "ujson-5.10.0-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:f3caf9cd64abfeb11a3b661329085c5e167abbe15256b3b68cb5d914ba7396f3"},
-    {file = "ujson-5.10.0-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:6e32abdce572e3a8c3d02c886c704a38a1b015a1fb858004e03d20ca7cecbb21"},
-    {file = "ujson-5.10.0-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:a65b6af4d903103ee7b6f4f5b85f1bfd0c90ba4eeac6421aae436c9988aa64a2"},
-    {file = "ujson-5.10.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:604a046d966457b6cdcacc5aa2ec5314f0e8c42bae52842c1e6fa02ea4bda42e"},
-    {file = "ujson-5.10.0-cp312-cp312-win32.whl", hash = "sha256:6dea1c8b4fc921bf78a8ff00bbd2bfe166345f5536c510671bccececb187c80e"},
-    {file = "ujson-5.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:38665e7d8290188b1e0d57d584eb8110951a9591363316dd41cf8686ab1d0abc"},
-    {file = "ujson-5.10.0-cp313-cp313-macosx_10_9_x86_64.whl", hash = "sha256:618efd84dc1acbd6bff8eaa736bb6c074bfa8b8a98f55b61c38d4ca2c1f7f287"},
-    {file = "ujson-5.10.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:38d5d36b4aedfe81dfe251f76c0467399d575d1395a1755de391e58985ab1c2e"},
-    {file = "ujson-5.10.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:67079b1f9fb29ed9a2914acf4ef6c02844b3153913eb735d4bf287ee1db6e557"},
-    {file = "ujson-5.10.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d7d0e0ceeb8fe2468c70ec0c37b439dd554e2aa539a8a56365fd761edb418988"},
-    {file = "ujson-5.10.0-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:59e02cd37bc7c44d587a0ba45347cc815fb7a5fe48de16bf05caa5f7d0d2e816"},
-    {file = "ujson-5.10.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:2a890b706b64e0065f02577bf6d8ca3b66c11a5e81fb75d757233a38c07a1f20"},
-    {file = "ujson-5.10.0-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:621e34b4632c740ecb491efc7f1fcb4f74b48ddb55e65221995e74e2d00bbff0"},
-    {file = "ujson-5.10.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:b9500e61fce0cfc86168b248104e954fead61f9be213087153d272e817ec7b4f"},
-    {file = "ujson-5.10.0-cp313-cp313-win32.whl", hash = "sha256:4c4fc16f11ac1612f05b6f5781b384716719547e142cfd67b65d035bd85af165"},
-    {file = "ujson-5.10.0-cp313-cp313-win_amd64.whl", hash = "sha256:4573fd1695932d4f619928fd09d5d03d917274381649ade4328091ceca175539"},
-    {file = "ujson-5.10.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:a984a3131da7f07563057db1c3020b1350a3e27a8ec46ccbfbf21e5928a43050"},
-    {file = "ujson-5.10.0-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:73814cd1b9db6fc3270e9d8fe3b19f9f89e78ee9d71e8bd6c9a626aeaeaf16bd"},
-    {file = "ujson-5.10.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:61e1591ed9376e5eddda202ec229eddc56c612b61ac6ad07f96b91460bb6c2fb"},
-    {file = "ujson-5.10.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d2c75269f8205b2690db4572a4a36fe47cd1338e4368bc73a7a0e48789e2e35a"},
-    {file = "ujson-5.10.0-cp38-cp38-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:7223f41e5bf1f919cd8d073e35b229295aa8e0f7b5de07ed1c8fddac63a6bc5d"},
-    {file = "ujson-5.10.0-cp38-cp38-musllinux_1_2_aarch64.whl", hash = "sha256:d4dc2fd6b3067c0782e7002ac3b38cf48608ee6366ff176bbd02cf969c9c20fe"},
-    {file = "ujson-5.10.0-cp38-cp38-musllinux_1_2_i686.whl", hash = "sha256:232cc85f8ee3c454c115455195a205074a56ff42608fd6b942aa4c378ac14dd7"},
-    {file = "ujson-5.10.0-cp38-cp38-musllinux_1_2_x86_64.whl", hash = "sha256:cc6139531f13148055d691e442e4bc6601f6dba1e6d521b1585d4788ab0bfad4"},
-    {file = "ujson-5.10.0-cp38-cp38-win32.whl", hash = "sha256:e7ce306a42b6b93ca47ac4a3b96683ca554f6d35dd8adc5acfcd55096c8dfcb8"},
-    {file = "ujson-5.10.0-cp38-cp38-win_amd64.whl", hash = "sha256:e82d4bb2138ab05e18f089a83b6564fee28048771eb63cdecf4b9b549de8a2cc"},
-    {file = "ujson-5.10.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:dfef2814c6b3291c3c5f10065f745a1307d86019dbd7ea50e83504950136ed5b"},
-    {file = "ujson-5.10.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:4734ee0745d5928d0ba3a213647f1c4a74a2a28edc6d27b2d6d5bd9fa4319e27"},
-    {file = "ujson-5.10.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d47ebb01bd865fdea43da56254a3930a413f0c5590372a1241514abae8aa7c76"},
-    {file = "ujson-5.10.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:dee5e97c2496874acbf1d3e37b521dd1f307349ed955e62d1d2f05382bc36dd5"},
-    {file = "ujson-5.10.0-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:7490655a2272a2d0b072ef16b0b58ee462f4973a8f6bbe64917ce5e0a256f9c0"},
-    {file = "ujson-5.10.0-cp39-cp39-musllinux_1_2_aarch64.whl", hash = "sha256:ba17799fcddaddf5c1f75a4ba3fd6441f6a4f1e9173f8a786b42450851bd74f1"},
-    {file = "ujson-5.10.0-cp39-cp39-musllinux_1_2_i686.whl", hash = "sha256:2aff2985cef314f21d0fecc56027505804bc78802c0121343874741650a4d3d1"},
-    {file = "ujson-5.10.0-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:ad88ac75c432674d05b61184178635d44901eb749786c8eb08c102330e6e8996"},
-    {file = "ujson-5.10.0-cp39-cp39-win32.whl", hash = "sha256:2544912a71da4ff8c4f7ab5606f947d7299971bdd25a45e008e467ca638d13c9"},
-    {file = "ujson-5.10.0-cp39-cp39-win_amd64.whl", hash = "sha256:3ff201d62b1b177a46f113bb43ad300b424b7847f9c5d38b1b4ad8f75d4a282a"},
-    {file = "ujson-5.10.0-pp310-pypy310_pp73-macosx_10_9_x86_64.whl", hash = "sha256:5b6fee72fa77dc172a28f21693f64d93166534c263adb3f96c413ccc85ef6e64"},
-    {file = "ujson-5.10.0-pp310-pypy310_pp73-macosx_11_0_arm64.whl", hash = "sha256:61d0af13a9af01d9f26d2331ce49bb5ac1fb9c814964018ac8df605b5422dcb3"},
-    {file = "ujson-5.10.0-pp310-pypy310_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ecb24f0bdd899d368b715c9e6664166cf694d1e57be73f17759573a6986dd95a"},
-    {file = "ujson-5.10.0-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fbd8fd427f57a03cff3ad6574b5e299131585d9727c8c366da4624a9069ed746"},
-    {file = "ujson-5.10.0-pp310-pypy310_pp73-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:beeaf1c48e32f07d8820c705ff8e645f8afa690cca1544adba4ebfa067efdc88"},
-    {file = "ujson-5.10.0-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:baed37ea46d756aca2955e99525cc02d9181de67f25515c468856c38d52b5f3b"},
-    {file = "ujson-5.10.0-pp38-pypy38_pp73-macosx_10_9_x86_64.whl", hash = "sha256:7663960f08cd5a2bb152f5ee3992e1af7690a64c0e26d31ba7b3ff5b2ee66337"},
-    {file = "ujson-5.10.0-pp38-pypy38_pp73-macosx_11_0_arm64.whl", hash = "sha256:d8640fb4072d36b08e95a3a380ba65779d356b2fee8696afeb7794cf0902d0a1"},
-    {file = "ujson-5.10.0-pp38-pypy38_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:78778a3aa7aafb11e7ddca4e29f46bc5139131037ad628cc10936764282d6753"},
-    {file = "ujson-5.10.0-pp38-pypy38_pp73-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:b0111b27f2d5c820e7f2dbad7d48e3338c824e7ac4d2a12da3dc6061cc39c8e6"},
-    {file = "ujson-5.10.0-pp38-pypy38_pp73-win_amd64.whl", hash = "sha256:c66962ca7565605b355a9ed478292da628b8f18c0f2793021ca4425abf8b01e5"},
-    {file = "ujson-5.10.0-pp39-pypy39_pp73-macosx_10_9_x86_64.whl", hash = "sha256:ba43cc34cce49cf2d4bc76401a754a81202d8aa926d0e2b79f0ee258cb15d3a4"},
-    {file = "ujson-5.10.0-pp39-pypy39_pp73-macosx_11_0_arm64.whl", hash = "sha256:ac56eb983edce27e7f51d05bc8dd820586c6e6be1c5216a6809b0c668bb312b8"},
-    {file = "ujson-5.10.0-pp39-pypy39_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f44bd4b23a0e723bf8b10628288c2c7c335161d6840013d4d5de20e48551773b"},
-    {file = "ujson-5.10.0-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7c10f4654e5326ec14a46bcdeb2b685d4ada6911050aa8baaf3501e57024b804"},
-    {file = "ujson-5.10.0-pp39-pypy39_pp73-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:0de4971a89a762398006e844ae394bd46991f7c385d7a6a3b93ba229e6dac17e"},
-    {file = "ujson-5.10.0-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:e1402f0564a97d2a52310ae10a64d25bcef94f8dd643fcf5d310219d915484f7"},
-    {file = "ujson-5.10.0.tar.gz", hash = "sha256:b3cd8f3c5d8c7738257f1018880444f7b7d9b66232c64649f562d7ba86ad4bc1"},
-]
 
 [[package]]
 name = "universal-pathlib"
@@ -4941,18 +4854,18 @@ multidict = ">=4.0"
 
 [[package]]
 name = "zipp"
-version = "3.18.1"
+version = "3.18.2"
 description = "Backport of pathlib-compatible object wrapper for zip files"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "zipp-3.18.1-py3-none-any.whl", hash = "sha256:206f5a15f2af3dbaee80769fb7dc6f249695e940acca08dfb2a4769fe61e538b"},
-    {file = "zipp-3.18.1.tar.gz", hash = "sha256:2884ed22e7d8961de1c9a05142eb69a247f120291bc0206a00a7642f09b5b715"},
+    {file = "zipp-3.18.2-py3-none-any.whl", hash = "sha256:dce197b859eb796242b0622af1b8beb0a722d52aa2f57133ead08edd5bf5374e"},
+    {file = "zipp-3.18.2.tar.gz", hash = "sha256:6278d9ddbcfb1f1089a88fde84481528b07b0e10474e09dcfe53dad4069fa059"},
 ]
 
 [package.extras]
 docs = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
-testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-ignore-flaky", "pytest-mypy", "pytest-ruff (>=0.2.1)"]
+testing = ["big-O", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more-itertools", "pytest (>=6,!=8.1.*)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-ignore-flaky", "pytest-mypy", "pytest-ruff (>=0.2.1)"]
 
 [metadata]
 lock-version = "2.0"
