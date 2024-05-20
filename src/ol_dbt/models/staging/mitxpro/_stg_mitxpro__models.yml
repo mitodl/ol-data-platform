@@ -994,11 +994,10 @@ models:
     - unique
     - not_null
   - name: user_gender
-    description: str, user gender
+    description: str, user gender. May be null if user didn't specify.
     tests:
     - accepted_values:
         values: ['Male', 'Female', 'Other/Prefer Not to Say', '']
-    - not_null
   - name: user_birth_year
     description: int, user birth year
   - name: user_company

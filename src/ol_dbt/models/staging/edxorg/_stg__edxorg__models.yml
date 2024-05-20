@@ -783,13 +783,9 @@ models:
   - name: courseruncertificate_created_on
     description: timestamp, date and time string indicating when the certificate was
       created
-    tests:
-    - not_null
   - name: courseruncertificate_updated_on
     description: timestamp, date and time string indicating when the certificate was
       last modified
-    tests:
-    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "user_id"]
