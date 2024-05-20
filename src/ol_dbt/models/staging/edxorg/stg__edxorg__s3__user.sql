@@ -17,7 +17,7 @@ with source as (
             regexp_replace(date_joined, '(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)', '$1T$2$3')
         )) as user_joined_on
         , case
-            when lower(last_login) = 'null' then null
+            when lower(last_login) = 'null' or lower(last_login) = 'none' then null
             else to_iso8601(from_iso8601_timestamp_nanos(
                 regexp_replace(last_login, '(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2})(.*?)', '$1T$2$3')
             ))
