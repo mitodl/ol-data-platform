@@ -30,6 +30,18 @@ with mitxonline_courseroles as (
     select * from {{ ref('stg__mitxresidential__openedx__auth_user') }}
 )
 
+, edxorg_courseroles as (
+    select * from {{ ref('stg__edxorg__s3__user_courseaccessrole') }}
+)
+
+, edxorg_users as (
+    select * from {{ ref('stg__edxorg__s3__user') }}
+)
+
+, edxorg_profiles as (
+    select * from {{ ref('stg__edxorg__s3__user_profile') }}
+)
+
 , combined_courseroles as (
     select
         '{{ var("mitxonline") }}' as platform
@@ -46,6 +58,22 @@ with mitxonline_courseroles as (
         on
             mitxonline_openedx_users.user_username = mitxonline_app_users.user_username
             or mitxonline_openedx_users.user_email = mitxonline_app_users.user_email
+
+    union all
+
+    select
+        '{{ var("edxorg") }}' as platform
+        , edxorg_users.user_username
+        , edxorg_users.user_email
+        , edxorg_profiles.user_full_name
+        , edxorg_courseroles.courserun_readable_id
+        , edxorg_courseroles.organization
+        , edxorg_courseroles.courseaccess_role
+    from edxorg_courseroles
+    inner join edxorg_users
+        on edxorg_courseroles.user_id = edxorg_users.user_id
+    left join edxorg_profiles
+        on edxorg_courseroles.user_id = edxorg_profiles.user_id
 
     union all
 
