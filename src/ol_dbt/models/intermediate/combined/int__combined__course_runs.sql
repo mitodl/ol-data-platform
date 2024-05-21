@@ -1,5 +1,3 @@
-{{ config(materialized='view') }}
-
 with mitx_courses as (
     select * from {{ ref('int__mitx__courses') }}
 )
