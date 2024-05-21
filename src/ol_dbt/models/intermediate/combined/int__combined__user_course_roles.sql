@@ -66,7 +66,7 @@ with mitxonline_courseroles as (
         , edxorg_users.user_username
         , edxorg_users.user_email
         , edxorg_profiles.user_full_name
-        , edxorg_courseroles.courserun_readable_id
+        , edxorg_courseroles.courserun_edx_readable_id as courserun_readable_id
         , edxorg_courseroles.organization
         , edxorg_courseroles.courseaccess_role
     from edxorg_courseroles

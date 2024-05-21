@@ -179,7 +179,9 @@ models:
     - not_null
   - name: courserun_readable_id
     description: str, the open edX Course ID formatted as course-v1:{org}+{course
-      number}+{run_tag}
+      number}+{run_tag} for MITx Online, xPro and Residential MITx. For edx.org platform,
+      it is formatted as {org}/{course number}/{run_tag} so it can be used to match
+      with other edx.org datasets.
     tests:
     - not_null
   - name: user_username
@@ -203,7 +205,7 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "user_username", "courserun_readable_id", "courseaccess_role"]
+      column_list: ["platform", "user_email", "courserun_readable_id", "courseaccess_role"]
 
 - name: int__combined__course_runs
   description: Intermediate combined model for courses and runs from different platforms

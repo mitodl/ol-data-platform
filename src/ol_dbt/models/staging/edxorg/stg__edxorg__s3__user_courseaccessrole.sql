@@ -14,6 +14,7 @@ with source as (
         course_id as courserun_readable_id
         , cast(user_id as integer) as user_id
         , role as courseaccess_role
+        , replace(replace(course_id, 'course-v1:', ''), '+', '/') as courserun_edx_readable_id
         , if(lower(org) = 'mitxt', 'MITxT', org) as organization
     from most_recent_source
 )

@@ -804,6 +804,11 @@ models:
       runs.
     tests:
     - not_null
+  - name: courserun_edx_readable_id
+    description: str, open edX Course ID formatted as {org}/{course number}/{run}
+      for all runs.
+    tests:
+    - not_null
   - name: organization
     description: str, the organization the course belongs to. e.g. MITx
   - name: courseaccess_role
