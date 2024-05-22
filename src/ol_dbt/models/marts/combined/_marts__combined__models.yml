@@ -89,6 +89,14 @@ models:
     description: int, foreign key for order table
   - name: line_id
     description: int, foreign key for line table
+  - name: b2b_only_indicator
+    description: str, indicates whether the record is only related to a b2b order
+  - name: coupon_id
+    description: int, foreign key referencing ecommerce_coupon or the b2b coupon table
+  - name: coupon_name
+    description: string, human readable name for the coupon payment
+  - name: courserun_id
+    description: int, foreign key in courses_courserun
   - name: order_created_on
     description: timestamp, specifying when the order was initially created. If this
       is a b2b order it will be the timestamp that order was created otherwise it
@@ -96,33 +104,8 @@ models:
   - name: order_state
     description: string, order state. Options are "fulfilled", "failed", "created"
       "refunded"
-  - name: courserun_id
-    description: int, foreign key in courses_courserun
-  - name: order_total_price_paid
-    description: number, total order amount
-  - name: product_id
-    description: int, foreign key for product table
-  - name: product_type
-    description: string, readable product type
-  - name: user_email
-    description: str, user email associated with their account
-  - name: user_id
-    description: int, foreign key to the user table
-  - name: user_id
-    description: int, foreign key to the user table
-  - name: b2b_only_indicator
-    description: str, indicates whether the record is only related to a b2b order
-  - name: coupon_id
-    description: int, foreign key referencing ecommerce_coupon or the b2b coupon table
-  - name: coupon_name
-    description: string, human readable name for the coupon payment
-  - name: receipt_authorization_code
-    description: str, authorization code from cybersource payment
-  - name: receipt_transaction_id
-    description: string, unique identifier. Either the transaction_id from cybersource
-      or a unique uuid
-  - name: req_reference_number
-    description: str, cybersource req reference number for a payment
+  - name: order_tax_amount
+    description: numeric, the amount of tax paid. Only applicable for xPro for now.
   - name: order_tax_country_code
     description: str, the country code where the tax was applied. Only applicable
       for xPro for now.
@@ -131,12 +114,27 @@ models:
   - name: order_tax_rate_name
     description: string, name of the tax rate assessed. Only applicable for xPro for
       now.
-  - name: order_tax_amount
-    description: numeric, the amount of tax paid. Only applicable for xPro for now.
   - name: order_total_price_paid_plus_tax
     description: numeric, total order amount plus the amount of tax paid. For xPro,
       this is calculated order_total_price_paid+order_tax_amount. For other platform,
       this is the same as order_total_price_paid
+  - name: order_total_price_paid
+    description: number, total order amount
+  - name: product_id
+    description: int, foreign key for product table
+  - name: product_type
+    description: string, readable product type
+  - name: receipt_authorization_code
+    description: str, authorization code from cybersource payment
+  - name: receipt_transaction_id
+    description: string, unique identifier. Either the transaction_id from cybersource
+      or a unique uuid
+  - name: req_reference_number
+    description: str, cybersource req reference number for a payment
+  - name: user_email
+    description: str, user email associated with their account
+  - name: user_id
+    description: int, foreign key to the user table
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["order_id", "line_id", "b2b_only_indicator", "platform", "coupon_id"]

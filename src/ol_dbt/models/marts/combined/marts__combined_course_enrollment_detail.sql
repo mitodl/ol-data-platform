@@ -342,8 +342,10 @@ with combined_enrollments as (
     where combined_enrollments.platform = '{{ var("bootcamps") }}'
 )
 
-select
-    coupon_code
+select 
+    platform
+    , courserunenrollment_id
+    , coupon_code
     , coupon_redeemed_on
     , coupon_type
     , course_readable_id
@@ -361,7 +363,6 @@ select
     , courserunenrollment_created_on
     , courserunenrollment_enrollment_mode
     , courserunenrollment_enrollment_status
-    , courserunenrollment_id
     , courserunenrollment_is_active
     , courserunenrollment_is_edx_enrolled
     , courserungrade_grade
@@ -375,7 +376,6 @@ select
     , payment_method
     , payment_transaction_id
     , payment_type
-    , platform
     , product_id
     , product_program_readable_id
     , unit_price

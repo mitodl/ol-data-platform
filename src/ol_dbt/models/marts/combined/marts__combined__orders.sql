@@ -112,7 +112,7 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_rate
         , null as order_tax_rate_name
         , null as order_tax_amount
-        , null as order_total_price_paid_plus_tax
+        , order_total_price_paid as order_total_price_paid_plus_tax
     from mitxonline__ecommerce_order
 
     union all
@@ -166,9 +166,32 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_rate
         , null as order_tax_rate_name
         , null as order_tax_amount
-        , null as order_total_price_paid_plus_tax
+        , order_total_price_paid as order_total_price_paid_plus_tax
     from bootcamps_orders
 
 )
 
-select * from combined_orders
+select 
+    platform
+    , order_id
+    , line_id
+    , b2b_only_indicator
+    , coupon_id
+    , coupon_name
+    , courserun_id
+    , order_created_on
+    , order_state
+    , order_tax_amount
+    , order_tax_country_code
+    , order_tax_rate
+    , order_tax_rate_name
+    , order_total_price_paid_plus_tax
+    , order_total_price_paid
+    , product_id
+    , product_type
+    , receipt_authorization_code
+    , receipt_transaction_id
+    , req_reference_number
+    , user_email
+    , user_id
+from combined_orders
