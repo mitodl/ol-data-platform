@@ -171,7 +171,7 @@ with bootcamps__ecommerce_order as (
 
 )
 
-select 
+select
     platform
     , order_id
     , line_id
