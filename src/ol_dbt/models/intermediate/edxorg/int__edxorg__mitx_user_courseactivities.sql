@@ -1,49 +1,77 @@
-with person_courses as (
-    select *
-    from {{ ref('stg__edxorg__bigquery__mitx_person_course') }}
-    where courserun_platform = '{{ var("edxorg") }}'
-)
-
-, runs as (
-    select * from {{ ref('stg__edxorg__bigquery__mitx_courserun') }}
+with course_activities as (
+    select * from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
+    where courserun_readable_id is not null
 )
 
 , users as (
     select * from {{ ref('int__edxorg__mitx_users') }}
 )
 
-, user_activities as (
-    select
-        person_courses.courserun_readable_id
-        , person_courses.courseactivitiy_visited_once
-        , person_courses.courseactivitiy_viewed_half
-        , person_courses.courseactivitiy_num_events
-        , person_courses.courseactivitiy_num_activity_days
-        , person_courses.courseactivitiy_num_progress_check
-        , person_courses.courseactivitiy_num_problem_check
-        , person_courses.courseactivitiy_num_show_answer
-        , person_courses.courseactivitiy_num_show_transcript
-        , person_courses.courseactivitiy_num_seq_goto
-        , person_courses.courseactivitiy_num_play_video
-        , person_courses.courseactivitiy_num_seek_video
-        , person_courses.courseactivitiy_num_pause_video
-        , person_courses.courseactivitiy_num_video_interactions
-        , person_courses.courseactivitiy_num_unique_videos_viewed
-        , person_courses.courseactivitiy_percentage_total_videos_watched
-        , person_courses.courseactivitiy_average_time_diff_in_sec
-        , person_courses.courseactivitiy_standard_deviation_in_sec
-        , person_courses.courseactivitiy_max_diff_in_sec
-        , person_courses.courseactivitiy_num_consecutive_events_used
-        , person_courses.courseactivitiy_total_elapsed_time_in_sec
-        , person_courses.courseactivitiy_first_event_timestamp
-        , person_courses.courseactivitiy_last_event_timestamp
-        , users.user_id
-        , users.user_email
-        , users.user_username
-        , runs.courserun_title
-    from person_courses
-    inner join users on person_courses.user_id = users.user_id
-    left join runs on person_courses.courserun_readable_id = runs.courserun_readable_id
+, course_activities_video as (
+    select * from {{ ref('int__edxorg__user_courseactivity_video') }}
 )
 
-select * from user_activities
+, problem_check as (
+    select * from {{ ref('int__edxorg__user_courseactivity_problemcheck') }}
+)
+
+, problem_check_stats as (
+    select
+        user_username
+        , courserun_readable_id
+        , max(useractivity_timestamp) as courseactivity_last_problem_check_timestamp
+    from problem_check
+    group by user_username, courserun_readable_id
+)
+
+, play_video_stats as (
+    select
+        user_username
+        , courserun_readable_id
+        , count(distinct useractivity_video_id) as courseactivity_num_unique_play_video
+        , count(*) as courseactivity_num_play_video
+        , max(useractivity_timestamp) as courseactivity_last_play_video_timestamp
+    from course_activities_video
+    where useractivity_event_type = 'play_video'
+    group by user_username, courserun_readable_id
+)
+
+, all_course_activities_stats as (
+    select
+        course_activities.user_username
+        , course_activities.courserun_readable_id
+        , coalesce(users.openedx_user_id, course_activities.openedx_user_id) as openedx_user_id
+        , count(distinct date(from_iso8601_timestamp(course_activities.useractivity_timestamp)))
+        as courseactivity_num_days_activity
+        , count(*) as courseactivity_num_events
+        , min(course_activities.useractivity_timestamp) as courseactivity_first_event_timestamp
+        , max(course_activities.useractivity_timestamp) as courseactivity_last_event_timestamp
+    from course_activities
+    left join users on course_activities.user_username = users.user_username
+    group by
+        course_activities.user_username
+        , coalesce(users.openedx_user_id, course_activities.openedx_user_id)
+        , course_activities.courserun_readable_id
+)
+
+select
+    all_course_activities_stats.openedx_user_id
+    , all_course_activities_stats.user_username
+    , all_course_activities_stats.courserun_readable_id
+    , all_course_activities_stats.courseactivity_num_days_activity
+    , all_course_activities_stats.courseactivity_num_events
+    , play_video_stats.courseactivity_num_unique_play_video
+    , play_video_stats.courseactivity_num_play_video
+    , play_video_stats.courseactivity_last_play_video_timestamp
+    , problem_check_stats.courseactivity_last_problem_check_timestamp
+    , all_course_activities_stats.courseactivity_first_event_timestamp
+    , all_course_activities_stats.courseactivity_last_event_timestamp
+from all_course_activities_stats
+left join play_video_stats
+    on
+        all_course_activities_stats.user_username = play_video_stats.user_username
+        and all_course_activities_stats.courserun_readable_id = play_video_stats.courserun_readable_id
+left join problem_check_stats
+    on
+        all_course_activities_stats.user_username = problem_check_stats.user_username
+        and all_course_activities_stats.courserun_readable_id = problem_check_stats.courserun_readable_id
