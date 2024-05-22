@@ -49,6 +49,11 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_allorders.receipt_authorization_code
         , mitxpro__ecommerce_allorders.receipt_transaction_id
         , mitxpro__ecommerce_allorders.req_reference_number
+        , mitxpro__ecommerce_order.order_tax_country_code
+        , mitxpro__ecommerce_order.order_tax_rate
+        , mitxpro__ecommerce_order.order_tax_rate_name
+        , mitxpro__ecommerce_order.order_tax_amount
+        , mitxpro__ecommerce_order.order_total_price_paid_plus_tax
         , coalesce(mitxpro__ecommerce_allorders.coupon_id, mitxpro__ecommerce_allorders.b2bcoupon_id) as coupon_id
         , coalesce(mitxpro__ecommerce_allorders.order_id, mitxpro__ecommerce_allorders.b2border_id) as order_id
         , case
@@ -103,6 +108,11 @@ with bootcamps__ecommerce_order as (
         , payment_authorization_code as receipt_authorization_code
         , payment_transaction_id as receipt_transaction_id
         , order_reference_number as req_reference_number
+        , null as order_tax_country_code
+        , null as order_tax_rate
+        , null as order_tax_rate_name
+        , null as order_tax_amount
+        , null as order_total_price_paid_plus_tax
     from mitxonline__ecommerce_order
 
     union all
@@ -125,6 +135,11 @@ with bootcamps__ecommerce_order as (
         , receipt_authorization_code
         , receipt_transaction_id
         , req_reference_number
+        , order_tax_country_code
+        , order_tax_rate
+        , order_tax_rate_name
+        , order_tax_amount
+        , order_total_price_paid_plus_tax
     from mitxpro_orders
 
     union all
@@ -147,6 +162,11 @@ with bootcamps__ecommerce_order as (
         , receipt_authorization_code
         , receipt_transaction_id
         , req_reference_number
+        , null as order_tax_country_code
+        , null as order_tax_rate
+        , null as order_tax_rate_name
+        , null as order_tax_amount
+        , null as order_total_price_paid_plus_tax
     from bootcamps_orders
 
 )
