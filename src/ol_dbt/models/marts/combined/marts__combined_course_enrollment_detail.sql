@@ -342,7 +342,7 @@ with combined_enrollments as (
     where combined_enrollments.platform = '{{ var("bootcamps") }}'
 )
 
-select 
+select
     coupon_code
     , coupon_redeemed_on
     , coupon_type
