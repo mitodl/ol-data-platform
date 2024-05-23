@@ -304,9 +304,8 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, open edX Course ID formatted as {org}/{course number}/{run}
-      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
-      runs.
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
     tests:
     - not_null
   - name: courseactivity_num_events
@@ -433,80 +432,6 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_uuid"]
 
-- name: int__edxorg__mitx_user_courseactivity_video
-  description: users' video activities within a course on edX.org
-  columns:
-  - name: user_username
-    description: str, username of the edX.org user
-    tests:
-    - not_null
-  - name: user_id
-    description: int, the edX user ID extracted from context field. This id doesn't
-      always match with the id in auth_user. There could be multiple user_ids for
-      the same user_username. For those cases, use user_id from source table auth_user
-      for that user_username.
-    tests:
-    - not_null
-  - name: courserun_readable_id
-    description: str, open edX Course ID formatted as {org}/{course number}/{run}
-      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
-      runs.
-    tests:
-    - not_null
-  - name: useractivity_event_source
-    description: str, specifies the source of the interaction that triggered the event.
-      e.g. browser, mobile, server
-    tests:
-    - not_null
-  - name: useractivity_event_type
-    description: >
-      str, type of video event triggered. e.g. play_video, pause_video, stop_video,
-      complete_video, etc.
-      A list of video events can be found https://edx.readthedocs.io/projects/devdata/en/latest/
-      internal_data_formats/tracking_logs/student_event_types.html#video-interaction-events
-    tests:
-    - not_null
-  - name: useractivity_page_url
-    description: str, url of the page the user was visiting when the event was emitted.
-  - name: useractivity_video_id
-    description: str, hash code for the video being watched. This value is the last
-      part of coursestructure_block_id string
-    tests:
-    - not_null
-  - name: useractivity_video_duration
-    description: number, The length of the video file, in seconds. May be null for
-      video activity from mobile
-  - name: useractivity_video_currenttime
-    description: number, The time in the video when this event was emitted. May be
-      Null for load_video or seek_video events.
-  - name: useractivity_video_old_time
-    description: number, time in the video, in seconds, at which the user chose to
-      go to a different point in time for seek_video event
-    tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'seek_video'"
-  - name: useractivity_video_new_time
-    description: number, time in the video, in seconds, that the user selected as
-      the destination point for seek_video event
-    tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'seek_video'"
-  - name: useractivity_video_new_speed
-    description: number, new speed that the user selected for the video to play for
-      speed_change_video event. e.g. 0.75, 1.0, 1.25, 1.50.
-    tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'speed_change_video'"
-  - name: useractivity_video_old_speed
-    description: number, old speed at which the video was playing for speed_change_video
-      event.
-    tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'speed_change_video'"
-  - name: useractivity_timestamp
-    description: timestamp, time when this event was emitted
-    tests:
-    - not_null
 
 - name: int__edxorg__mitx_user_courseactivity_problemcheck
   description: users' problem_check activities within a course on edX.org
@@ -523,9 +448,8 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, open edX Course ID formatted as {org}/{course number}/{run}
-      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
-      runs.
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
     tests:
     - not_null
   - name: useractivity_event_type
@@ -591,9 +515,8 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, open edX Course ID formatted as {org}/{course number}/{run}
-      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
-      runs.
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
     tests:
     - not_null
   - name: useractivity_event_source
@@ -642,9 +565,8 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, open edX Course ID formatted as {org}/{course number}/{run}
-      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
-      runs.
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
     tests:
     - not_null
   - name: useractivity_event_source
@@ -712,7 +634,7 @@ models:
   description: users' discussion forum activities within a course on edX.org
   columns:
   - name: user_username
-    description: str, username of the open edX user who caused the event to be emitted.
+    description: str, username of the edX.org user
     tests:
     - not_null
   - name: user_id
@@ -723,9 +645,8 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, open edX Course ID formatted as {org}/{course number}/{run}
-      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
-      runs.
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
     tests:
     - not_null
   - name: useractivity_event_source
@@ -751,8 +672,6 @@ models:
     - not_null
   - name: useractivity_video_duration
     description: number, The length of the video file, in seconds.
-    tests:
-    - not_null
   - name: useractivity_video_currenttime
     description: number, The time in the video when this event was emitted. May be
       Null for load_video or seek_video events.

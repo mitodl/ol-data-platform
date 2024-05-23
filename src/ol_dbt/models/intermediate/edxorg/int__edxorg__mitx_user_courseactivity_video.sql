@@ -21,4 +21,10 @@ select
     , json_query(useractivity_event_object, 'lax $.new_speed' omit quotes) as useractivity_video_new_speed
     , json_query(useractivity_event_object, 'lax $.old_speed' omit quotes) as useractivity_video_old_speed
 from course_activities
-where regexp_like('edx-useractivity_event_type', '(^[\w]+)_video') = true or useractivity_event_type like 'edx.video.%'
+--- Some events have url as useractivity_event_type that should be filtered as we want video events listed in
+--- https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/tracking_logs/student_event_types.html
+-- #video-interaction-events
+where
+    regexp_like(useractivity_event_type, '(^[\w]+)_video') = true
+    or regexp_like(useractivity_event_type, '(^[\w]+)_transcript') = true
+    or useractivity_event_type like 'edx.video.%'

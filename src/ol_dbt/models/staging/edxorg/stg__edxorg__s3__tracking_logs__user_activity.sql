@@ -48,7 +48,7 @@ with source as (
         , referer as useractivity_http_referer
         , name as useractivity_event_name
         , event_type as useractivity_event_type
-        , {{ extract_course_id_from_tracking_log() }} as courserun_readable_id
+        , {{ extract_course_id_from_tracking_log(course_id_has_old_format=true) }} as courserun_readable_id
         , cast(json_query(context, 'lax $.user_id' omit quotes) as integer) as user_id
         , json_query(context, 'lax $.org_id' omit quotes) as org_id
         , json_query(context, 'lax $.path' omit quotes) as useractivity_path
