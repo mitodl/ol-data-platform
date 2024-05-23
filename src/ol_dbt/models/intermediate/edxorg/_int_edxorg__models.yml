@@ -299,10 +299,6 @@ models:
     description: str, username of the edX.org user
     tests:
     - not_null
-  - name: user_id
-    description: int, the edX user ID
-    tests:
-    - not_null
   - name: courserun_readable_id
     description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
       for course runs since Fall 2014, {org}/{course number}/{run} for older runs
@@ -703,3 +699,27 @@ models:
     description: timestamp, time when this event was emitted
     tests:
     - not_null
+
+- name: int__edxorg__mitx_user_courseactivities_daily
+  description: users' activities aggregated per course and per daily on edX.org
+  columns:
+  - name: user_username
+    description: str, username of the edX.org user
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
+    tests:
+    - not_null
+  - name: courseactivity_num_events
+    description: int, number of tracking log events (including all course activities)
+    tests:
+    - not_null
+  - name: courseactivity_date
+    description: date, date that user has any kind of activities in the course
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]

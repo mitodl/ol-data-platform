@@ -3,10 +3,6 @@ with course_activities as (
     where courserun_readable_id is not null
 )
 
-, users as (
-    select * from {{ ref('int__edxorg__mitx_users') }}
-)
-
 , course_activities_video as (
     select * from {{ ref('int__edxorg__mitx_user_courseactivity_video') }}
 )
@@ -40,23 +36,19 @@ with course_activities as (
     select
         course_activities.user_username
         , course_activities.courserun_readable_id
-        , coalesce(users.openedx_user_id, course_activities.openedx_user_id) as openedx_user_id
         , count(distinct date(from_iso8601_timestamp(course_activities.useractivity_timestamp)))
         as courseactivity_num_days_activity
         , count(*) as courseactivity_num_events
         , min(course_activities.useractivity_timestamp) as courseactivity_first_event_timestamp
         , max(course_activities.useractivity_timestamp) as courseactivity_last_event_timestamp
     from course_activities
-    left join users on course_activities.user_username = users.user_username
     group by
         course_activities.user_username
-        , coalesce(users.openedx_user_id, course_activities.openedx_user_id)
         , course_activities.courserun_readable_id
 )
 
 select
-    all_course_activities_stats.openedx_user_id
-    , all_course_activities_stats.user_username
+    all_course_activities_stats.user_username
     , all_course_activities_stats.courserun_readable_id
     , all_course_activities_stats.courseactivity_num_days_activity
     , all_course_activities_stats.courseactivity_num_events
