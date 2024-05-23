@@ -158,12 +158,12 @@ with combined_enrollments as (
         , micromasters_completed_orders.coupon_type
         , micromasters_completed_orders.coupon_code
         , micromasters_completed_orders.redeemedcoupon_created_on as coupon_redeemed_on
-        , micromasters_completed_orders.receipt_transaction_id
-        , micromasters_completed_orders.receipt_authorization_code
-        , micromasters_completed_orders.receipt_payment_method
-        , micromasters_completed_orders.receipt_reference_number as receipt_req_reference_number
-        , micromasters_completed_orders.receipt_bill_to_address_state
-        , micromasters_completed_orders.receipt_bill_to_address_country
+        , micromasters_completed_orders.receipt_transaction_id as payment_transaction_id
+        , micromasters_completed_orders.receipt_authorization_code as payment_authorization_code
+        , micromasters_completed_orders.receipt_payment_method as payment_method
+        , micromasters_completed_orders.receipt_reference_number as payment_req_reference_number
+        , micromasters_completed_orders.receipt_bill_to_address_state as payment_bill_to_address_state
+        , micromasters_completed_orders.receipt_bill_to_address_country as payment_bill_to_address_country
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name
@@ -231,12 +231,12 @@ with combined_enrollments as (
         , mitxpro_completed_orders.couponpaymentversion_coupon_type as coupon_type
         , mitxpro_completed_orders.coupon_code
         , mitxpro_completed_orders.couponredemption_created_on as coupon_redeemed_on
-        , mitxpro_completed_orders.receipt_transaction_id
-        , mitxpro_completed_orders.receipt_authorization_code
-        , mitxpro_completed_orders.receipt_payment_method
-        , mitxpro_completed_orders.receipt_reference_number as receipt_req_reference_number
-        , mitxpro_completed_orders.receipt_bill_to_address_state
-        , mitxpro_completed_orders.receipt_bill_to_address_country
+        , mitxpro_completed_orders.receipt_transaction_id as payment_transaction_id
+        , mitxpro_completed_orders.receipt_authorization_code as payment_authorization_code
+        , mitxpro_completed_orders.receipt_payment_method as payment_method
+        , mitxpro_completed_orders.receipt_reference_number as payment_req_reference_number
+        , mitxpro_completed_orders.receipt_bill_to_address_state as payment_bill_to_address_state
+        , mitxpro_completed_orders.receipt_bill_to_address_country as payment_bill_to_address_country
         , mitxpro_completed_orders.order_tax_country_code
         , mitxpro_completed_orders.order_tax_rate
         , mitxpro_completed_orders.order_tax_rate_name
@@ -307,12 +307,12 @@ with combined_enrollments as (
         , null as coupon_type
         , null as coupon_code
         , null as coupon_redeemed_on
-        , bootcamps_completed_orders.receipt_transaction_id
-        , bootcamps_completed_orders.receipt_authorization_code
-        , bootcamps_completed_orders.receipt_payment_method
-        , bootcamps_completed_orders.receipt_reference_number as receipt_req_reference_number
-        , bootcamps_completed_orders.receipt_bill_to_address_state
-        , bootcamps_completed_orders.receipt_bill_to_address_country
+        , bootcamps_completed_orders.receipt_transaction_id as payment_transaction_id
+        , bootcamps_completed_orders.receipt_authorization_code as payment_authorization_code
+        , bootcamps_completed_orders.receipt_payment_method as payment_method
+        , bootcamps_completed_orders.receipt_reference_number as payment_req_reference_number
+        , bootcamps_completed_orders.receipt_bill_to_address_state as payment_bill_to_address_state
+        , bootcamps_completed_orders.receipt_bill_to_address_country as payment_bill_to_address_country
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name
@@ -342,4 +342,48 @@ with combined_enrollments as (
     where combined_enrollments.platform = '{{ var("bootcamps") }}'
 )
 
-select * from combined_enrollment_detail
+select
+    platform
+    , courserunenrollment_id
+    , coupon_code
+    , coupon_redeemed_on
+    , coupon_type
+    , course_readable_id
+    , course_title
+    , courserun_end_on
+    , courserun_id
+    , courserun_is_current
+    , courserun_readable_id
+    , courserun_start_on
+    , courserun_title
+    , courseruncertificate_created_on
+    , courseruncertificate_is_earned
+    , courseruncertificate_url
+    , courseruncertificate_uuid
+    , courserunenrollment_created_on
+    , courserunenrollment_enrollment_mode
+    , courserunenrollment_enrollment_status
+    , courserunenrollment_is_active
+    , courserunenrollment_is_edx_enrolled
+    , courserungrade_grade
+    , courserungrade_is_passing
+    , discount
+    , discount_amount
+    , order_id
+    , order_reference_number
+    , payment_bill_to_address_country
+    , payment_bill_to_address_state
+    , payment_method
+    , payment_transaction_id
+    , payment_type
+    , product_id
+    , product_program_readable_id
+    , unit_price
+    , user_company
+    , user_country_code
+    , user_email
+    , user_full_name
+    , user_highest_education
+    , user_id
+    , user_username
+from combined_enrollment_detail
