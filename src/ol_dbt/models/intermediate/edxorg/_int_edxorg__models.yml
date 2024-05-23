@@ -293,90 +293,50 @@ models:
 
 
 - name: int__edxorg__mitx_user_courseactivities
-  description: Intermediate model that contains edx user activities within a course
-    from tracking events
+  description: users' activities aggregated per course on edX.org
   columns:
-  - name: user_id
-    description: int, Numerical user ID of a learner on edx.org
-    tests:
-    - not_null
-    - relationships:
-        to: ref('int__edxorg__mitx_users')
-        field: user_id
-  - name: courserun_readable_id
-    description: str, The canonical ID of the course run in the format as {org}/{course}/{run}.
-    tests:
-    - not_null
   - name: user_username
-    description: str, The username of the learner on edx.org
+    description: str, username of the edX.org user
     tests:
     - not_null
-  - name: user_email
-    description: str, The current email address of the learner on edx.org. Learners
-      can update their emails on edx.org, so this is not necessary the same email
-      as when learner enrolled for the course.
+  - name: user_id
+    description: int, the edX user ID
     tests:
     - not_null
-  - name: courseactivitiy_visited_once
-    description: boolean, indicating that the user visited the course at least once
-  - name: courseactivitiy_viewed_half
-    description: boolean, indicating that the user viewed at least half of the chapters
-      of the course
-  - name: courseactivitiy_num_events
-    description: int, Number of tracking log events
-  - name: courseactivitiy_num_activity_days
-    description: int, Number of days with activity from tracking logs
-  - name: courseactivitiy_num_progress_check
-    description: int, Number of progress check events from tracking logs
-  - name: courseactivitiy_num_problem_check
-    description: int, Number of problem_check interaction events from tracking logs
-  - name: courseactivitiy_num_show_answer
-    description: int, Number of show_answer events from tracking logs
-  - name: courseactivitiy_num_show_transcript
-    description: int, Number of show_transcript video interaction events from tracking
-      logs
-  - name: courseactivitiy_num_seq_goto
-    description: int, Number of sequence_goto navigational events from tracking logs
-  - name: courseactivitiy_num_play_video
-    description: int, Number of play_video video interaction events from tracking
-      logs
-  - name: courseactivitiy_num_seek_video
-    description: int, Number of seek_video video interaction events from tracking
-      logs
-  - name: courseactivitiy_num_pause_video
-    description: int, Number of pause_video video interaction events from tracking
-      logs
-  - name: courseactivitiy_num_video_interactions
-    description: int, Number of all the video interaction events from tracking log
-  - name: courseactivitiy_num_unique_videos_viewed
-    description: int, Number of Unique Videos viewed per user within a course
-  - name: courseactivitiy_percentage_total_videos_watched
-    description: int, Total number of all videos watched per user within a course
-  - name: courseactivitiy_average_time_diff_in_sec
-    description: float, Average time difference in seconds between consecutive events
-      from tracking logs
-  - name: courseactivitiy_standard_deviation_in_sec
-    description: float, Standard deviation of difference in seconds between consecutive
-      events from tracking logs
-  - name: courseactivitiy_max_diff_in_sec
-    description: float, Maximum difference in seconds between consecutive events from
-      tracking logs
-  - name: courseactivitiy_num_consecutive_events_used
-    description: int, Number of consecutive events used in time difference computations,
-      from tracking logs
-  - name: courseactivitiy_total_elapsed_time_in_sec
-    description: int, Total elapsed time (in seconds) spent by user on this course,
-      based on time difference of consecutive events, with 5 min max cutoff, from
-      tracking logs
-  - name: courseactivitiy_first_event_timestamp
-    description: timestamp, timestamp of first event of user from tracking logs
-  - name: courseactivitiy_last_event_timestamp
-    description: timestamp, timestamp of last event of user from tracking logs
-  - name: courserun_title
-    description: str, The title of the course run
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as {org}/{course number}/{run}
+      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+      runs.
+    tests:
+    - not_null
+  - name: courseactivity_num_events
+    description: int, number of tracking log events
+    tests:
+    - not_null
+  - name: courseactivity_num_days_activity
+    description: int, number of days with activity
+    tests:
+    - not_null
+  - name: courseactivity_first_event_timestamp
+    description: timestamp, timestamp of user's first event within a course
+    tests:
+    - not_null
+  - name: courseactivity_last_event_timestamp
+    description: timestamp, timestamp of user's last event within a course
+    tests:
+    - not_null
+  - name: courseactivity_num_play_video
+    description: int, number of play_video events
+  - name: courseactivity_num_unique_play_video
+    description: int, number of unique videos played within a course
+  - name: courseactivity_last_play_video_timestamp
+    description: timestamp, timestamp of user's last play_video event within a course
+  - name: courseactivity_last_problem_check_timestamp
+    description: timestamp, timestamp of user's last problem_check event within a
+      course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id"]
+      column_list: ["user_username", "courserun_readable_id"]
 
 - name: int__edxorg__mitx_program_certificates
   description: learners who completed MicroMasters and XSeries programs on edX.org.
@@ -473,7 +433,7 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_uuid"]
 
-- name: int__edxorg__user_courseactivity_video
+- name: int__edxorg__mitx_user_courseactivity_video
   description: users' video activities within a course on edX.org
   columns:
   - name: user_username
@@ -548,7 +508,7 @@ models:
     tests:
     - not_null
 
-- name: int__edxorg__user_courseactivity_problemcheck
+- name: int__edxorg__mitx_user_courseactivity_problemcheck
   description: users' problem_check activities within a course on edX.org
   columns:
   - name: user_username
@@ -611,7 +571,7 @@ models:
       column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
         "useractivity_timestamp"]
 
-- name: int__edxorg__user_courseactivity_problemsubmitted
+- name: int__edxorg__mitx_user_courseactivity_problemsubmitted
   description: users' problem submission activities within a course on edX.org
   columns:
   - name: useractivity_event_id
@@ -667,7 +627,7 @@ models:
     tests:
     - not_null
 
-- name: int__edxorg__user_courseactivity_discussion
+- name: int__edxorg__mitx_user_courseactivity_discussion
   description: users' discussion forum activities within a course on edX.org
   columns:
   - name: user_username
@@ -748,7 +708,7 @@ models:
         "useractivity_discussion_post_id", "useractivity_timestamp"]
 
 
-- name: int__edxorg__user_courseactivity_video
+- name: int__edxorg__mitx_user_courseactivity_video
   description: users' discussion forum activities within a course on edX.org
   columns:
   - name: user_username
@@ -763,7 +723,9 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    description: str, open edX Course ID formatted as {org}/{course number}/{run}
+      for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+      runs.
     tests:
     - not_null
   - name: useractivity_event_source

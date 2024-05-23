@@ -8,11 +8,11 @@ with course_activities as (
 )
 
 , course_activities_video as (
-    select * from {{ ref('int__edxorg__user_courseactivity_video') }}
+    select * from {{ ref('int__edxorg__mitx_user_courseactivity_video') }}
 )
 
 , problem_check as (
-    select * from {{ ref('int__edxorg__user_courseactivity_problemcheck') }}
+    select * from {{ ref('int__edxorg__mitx_user_courseactivity_problemcheck') }}
 )
 
 , problem_check_stats as (
