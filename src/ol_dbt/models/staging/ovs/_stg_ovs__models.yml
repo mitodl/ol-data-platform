@@ -41,7 +41,7 @@ models:
     description: str, Youtube, Cloudfront or Null.
     tests:
     - accepted_values:
-        values: ["Youtube", "ocw-Cloudfront"]
+        values: ["Youtube", "Cloudfront"]
   - name: courserun_readable_id
     description: str, the open edX course ID that the video collection associated
       with. May be blank.
@@ -134,7 +134,7 @@ models:
     description: str, json string for the transcoder message.
     tests:
     - not_null
-  - name: encodejob_status
+  - name: encodejob_state
     description: str, possible values are Submitted, Progressing, Error, Warning ,
       and Complete.
     tests:

@@ -13,13 +13,13 @@ with source as (
         , replace(message, '''', '"') as encodejob_message
         , json_query(replace(message, '''', '"'), 'lax $.Output.Duration' omit quotes) as video_duration
         , case
-            when status = 0 then 'Submitted'
-            when status = 1 then 'Progressing'
-            when status = 2 then 'Error'
-            when status = 3 then 'Warning'
-            when status = 4 then 'Complete'
-        end as encodejob_status
-        ,{{ cast_timestamp_to_iso8601('created_on') }} as encodejob_created_on
+            when state = 0 then 'Submitted'
+            when state = 1 then 'Progressing'
+            when state = 2 then 'Error'
+            when state = 3 then 'Warning'
+            when state = 4 then 'Complete'
+        end as encodejob_state
+        ,{{ cast_timestamp_to_iso8601('created_at') }} as encodejob_created_on
         ,{{ cast_timestamp_to_iso8601('last_modified') }} as encodejob_updated_on
 
     from source

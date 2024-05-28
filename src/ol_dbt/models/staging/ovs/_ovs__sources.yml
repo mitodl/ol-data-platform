@@ -20,7 +20,7 @@ sources:
       description: str, unique string for the video collection. May be blank.
     - name: description
       description: str, descriptive text for the video collection.
-    - name: owner
+    - name: owner_id
       description: int, foreign key to auth_user referencing the owner of this video
         collection.
     - name: is_logged_in_only
@@ -35,9 +35,9 @@ sources:
         with. May be blank.
     - name: schedule_retranscode
       description: boolean, this field is to support re-encoding videos for some collections.
-    - name: created_on
+    - name: created_at
       description: timestamp, date and time when the record was created.
-    - name: updated_on
+    - name: updated_at
       description: timestamp, date and time when the record was last updated.
 
   - name: raw__ovs__postgres__ui_video
@@ -73,9 +73,9 @@ sources:
         page.
     - name: schedule_retranscode
       description: boolean, this field is to support re-encoding videos for some collections.
-    - name: created_on
+    - name: created_at
       description: timestamp, date and time when the record was created.
-    - name: updated_on
+    - name: updated_at
       description: timestamp, date and time when the record was last updated.
 
   - name: raw__ovs__postgres__dj_elastictranscoder_encodejob
@@ -91,10 +91,10 @@ sources:
         model.
     - name: message
       description: str, json string for the transcoder message.
-    - name: status
+    - name: state
       description: int, 0 - Submitted, 1 - Progressing, 2 - Error, 3 - Warning, 4,
         Complete.
-    - name: created_on
+    - name: created_at
       description: timestamp, date and time when the record was created.
     - name: last_modified
       description: timestamp, date and time when the record was last updated.
@@ -118,7 +118,7 @@ sources:
       description: str, secret key used to access the edx endpoint.
     - name: expires_in
       description: int, access_token expires in seconds
-    - name: created_on
+    - name: created_at
       description: timestamp, date and time when the record was created.
     - name: updated_at
       description: timestamp, date and time when the record was last updated.
