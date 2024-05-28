@@ -134,6 +134,9 @@ models:
     description: str, json string for the transcoder message.
     tests:
     - not_null
+  - name: video_duration
+    description: int, the length of the video, in seconds. May be null if video transcoding
+      is not completed successful.
   - name: encodejob_state
     description: str, possible values are Submitted, Progressing, Error, Warning ,
       and Complete.
