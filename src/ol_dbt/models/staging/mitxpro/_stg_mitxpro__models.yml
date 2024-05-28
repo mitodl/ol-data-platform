@@ -2041,3 +2041,57 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "openedx_user_id"]
+
+- name: stg__mitxpro__openedx__mysql__edxval_video
+  description: video content on MIT xPro open edx platform
+  columns:
+  - name: video_id
+    description: int, primary key in edxval_video.
+    tests:
+    - unique
+    - not_null
+  - name: video_edx_uuid
+    description: str, hashed ID for the edx video
+    tests:
+    - unique
+    - not_null
+  - name: video_client_id
+    description: str, human readable name for video. e.g. 14.310x_Lect9_Seg8_Final.mp4
+  - name: video_status
+    description: str, values are external, imported, file_complete, and upload_failed.
+      The videos with 'external' and 'imported' status are not managed from ODL Video
+      Service (OVS) application.
+    tests:
+    - not_null
+  - name: video_duration
+    description: float, the length of the video, in seconds. Default to 0.0
+    tests:
+    - not_null
+  - name: video_created_on
+    description: timestamp, date and time when the record was created.
+    tests:
+    - not_null
+
+- name: stg__mitxpro__openedx__mysql__edxval_coursevideo
+  description: course ID and video association on MIT xPro open edx platform
+  columns:
+  - name: coursevideo_id
+    description: int, primary key in edxval_coursevideo.
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: video_id
+    description: int, foreign key in edxval_video
+    tests:
+    - not_null
+  - name: coursevideo_is_hidden
+    description: boolean, indicating if the video is hidden for the course.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "video_id"]

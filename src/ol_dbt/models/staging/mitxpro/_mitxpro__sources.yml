@@ -2223,3 +2223,33 @@ sources:
     - name: modified
       description: timestamp, datetime when this row was last updated. A change in
         this field implies that there was a state change.
+
+  - name: raw__xpro__openedx__mysql__edxval_video
+    description: video content on MIT xPro open edx platform
+    columns:
+    - name: id
+      description: int, primary key in edxval_video.
+    - name: edx_video_id
+      description: str, video hashed ID.
+    - name: client_video_id
+      description: str, human readable name for video. e.g. AMx_R3_DDV16_EBM.mp4
+    - name: status
+      description: str, values are external, imported, file_complete, and upload_failed.
+        The videos with 'external' and 'imported' status are not managed from ODL
+        Video Service (OVS) application.
+    - name: duration
+      description: int, the length of the video, in seconds. Default to 0.0
+    - name: created
+      description: timestamp, date and time when the record was created.
+
+  - name: raw__xpro__openedx__mysql__edxval_coursevideo
+    description: course ID and video association on MIT xPro edx platform
+    columns:
+    - name: id
+      description: int, primary key in edxval_coursevideo.
+    - name: course_id
+      description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: video_id
+      description: int, foreign key in edxval_video
+    - name: is_hidden
+      description: boolean, indicating if the video is hidden for the course.
