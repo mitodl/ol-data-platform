@@ -1,0 +1,46 @@
+---
+version: 2
+
+models:
+- name: int__ovs__videos
+  description: OVS complete videos, collections, and their associated open edx endpoints
+  columns:
+  - name: video_id
+    description: int, primary key in ui_video.
+    tests:
+    - not_null
+    - unique
+  - name: video_uuid
+    description: str, UUID to identify this video on OVS
+    tests:
+    - not_null
+    - unique
+  - name: courserun_readable_id
+    description: str, the open edX course ID that the video collection associated
+      with. May be blank.
+  - name: collection_uuid
+    description: str, UUID to identify this video collection.
+    tests:
+    - not_null
+  - name: collection_title
+    description: str, title of the video collection.
+    tests:
+    - not_null
+  - name: video_title
+    description: str, title of the video.
+    tests:
+    - not_null
+  - name: video_duration
+    description: int, the length of the video, in seconds.
+    tests:
+    - not_null
+  - name: edxendpoint_base_url
+    description: str, base URL of the edx endpoint e.g. https://courses.mitxonline.mit.edu
+    tests:
+    - not_null
+  - name: platform
+    description: str, open edx platform where the video is posted to from OVS
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['{{ var("mitxonline") }}', '{{ var("mitxpro") }}']

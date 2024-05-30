@@ -42,6 +42,8 @@ vars:
     dedp_mitxonline_good_economics_for_hard_times_course_number: '14.009x'
     dedp_mitxonline_good_economics_for_hard_times_internation_development_cutoff: '2023-08-01'
     ocw_production_url: 'https://ocw.mit.edu/'
+    mitxonline_openedx_url: 'https://courses.mitxonline.mit.edu'
+    mitxpro_openedx_url: 'https://courses.xpro.mit.edu'
 
     highest_education_values: ['Doctorate', "Master''s or professional degree", "Bachelor''s\
         \ degree", 'Associate degree', 'Secondary/high school', 'Junior secondary/junior
