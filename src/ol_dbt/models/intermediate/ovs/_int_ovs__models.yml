@@ -5,6 +5,17 @@ models:
 - name: int__ovs__videos
   description: OVS complete videos, collections, and their associated open edx endpoints
   columns:
+  - name: collection_uuid
+    description: str, UUID to identify this video collection.
+    tests:
+    - not_null
+  - name: collection_title
+    description: str, title of the video collection.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the open edX course ID that the video collection associated
+      with. May be blank.
   - name: video_id
     description: int, primary key in ui_video.
     tests:
@@ -15,17 +26,6 @@ models:
     tests:
     - not_null
     - unique
-  - name: courserun_readable_id
-    description: str, the open edX course ID that the video collection associated
-      with. May be blank.
-  - name: collection_uuid
-    description: str, UUID to identify this video collection.
-    tests:
-    - not_null
-  - name: collection_title
-    description: str, title of the video collection.
-    tests:
-    - not_null
   - name: video_title
     description: str, title of the video.
     tests:
