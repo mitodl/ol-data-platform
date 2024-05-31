@@ -3,7 +3,8 @@ version: 2
 
 models:
 - name: int__ovs__videos
-  description: OVS complete videos, collections, and their associated open edx endpoints
+  description: complete videos, collections, and their associated open edx endpoints
+    from ODL Video Service
   columns:
   - name: collection_uuid
     description: str, UUID to identify this video collection.
@@ -22,7 +23,7 @@ models:
     - not_null
     - unique
   - name: video_uuid
-    description: str, UUID to identify this video on OVS
+    description: str, UUID to identify this video on ODL Video Service
     tests:
     - not_null
     - unique
@@ -39,7 +40,8 @@ models:
     tests:
     - not_null
   - name: platform
-    description: str, open edx platform where the video is posted to from OVS
+    description: str, open edx platform where the video is posted to from ODL Video
+      Service
     tests:
     - not_null
     - accepted_values:
