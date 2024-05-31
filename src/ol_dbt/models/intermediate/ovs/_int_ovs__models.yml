@@ -28,11 +28,15 @@ models:
     - not_null
     - unique
   - name: video_title
-    description: str, title of the video.
+    description: str, title of the video. e.g. 14.310x_Lect9_Seg8_Final.mp4
     tests:
     - not_null
   - name: video_duration
     description: int, the length of the video, in seconds.
+    tests:
+    - not_null
+  - name: video_created_on
+    description: timestamp, date and time when the record was created.
     tests:
     - not_null
   - name: edxendpoint_base_url
