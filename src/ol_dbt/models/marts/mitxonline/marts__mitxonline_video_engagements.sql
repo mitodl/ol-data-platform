@@ -42,9 +42,7 @@ select
     , course_runs.course_number
     , course_runs.courserun_start_on
     , course_runs.courserun_end_on
-    , coalesce(
-        mitxonline_videos.video_duration, cast(video.useractivity_video_duration as decimal(38, 4))
-    ) as video_duration
+    , coalesce(mitxonline_videos.video_duration, video.useractivity_video_duration) as video_duration
 from video
 inner join course_runs on video.courserun_readable_id = course_runs.courserun_readable_id
 left join video_structure
