@@ -236,12 +236,16 @@ models:
     description: str, hash code for the video being watched.
     tests:
     - not_null
+  - name: video_edx_uuid
+    description: str, the video ID from MITx Online open edx.
   - name: video_title
     description: str, title of this video.
   - name: section_title
     description: str, title of section (aka chapter) this video belongs to.
   - name: video_duration
-    description: number, The length of the video file, in seconds.
+    description: float, The length of the video file, in seconds. Populated with data
+      from ODL Video Service (OVS) or tracking log. May be 0.0 for small amounts of
+      videos.
     tests:
     - not_null
   - name: video_currenttime
