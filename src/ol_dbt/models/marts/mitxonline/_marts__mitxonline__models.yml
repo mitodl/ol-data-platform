@@ -244,10 +244,8 @@ models:
     description: str, title of section (aka chapter) this video belongs to.
   - name: video_duration
     description: float, The length of the video file, in seconds. Populated with data
-      from ODL Video Service (OVS) or tracking log. May be 0.0 for small amounts of
-      videos.
-    tests:
-    - not_null
+      from ODL Video Service (OVS) or tracking log. May be null or 0.0 for small amounts
+      of videos.
   - name: video_currenttime
     description: number, The time in the video when this event was emitted. May be
       Null for seek_video
