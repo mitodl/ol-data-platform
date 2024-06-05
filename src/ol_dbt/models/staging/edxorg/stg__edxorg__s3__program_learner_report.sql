@@ -21,7 +21,7 @@ with source as (
         "user id" as user_id
         , "program uuid" as program_uuid
         , max(program_certificate_awarded_dt) as latest_program_cert_award_on
-        , max("completed program") as ever_completed_program        
+        , max("completed program") as ever_completed_program
     from source_sorted
     group by 1, 2
 )
@@ -81,12 +81,12 @@ with source as (
 
 )
 
-select 
-    cleaned.* 
+select
+    cleaned.*
     , add_program_cert_latest.latest_program_cert_award_on
     , add_program_cert_latest.ever_completed_program
 from cleaned
 left join add_program_cert_latest
-    on 
+    on
         cleaned.user_id = add_program_cert_latest.user_id
         and cleaned.program_uuid = add_program_cert_latest.program_uuid
