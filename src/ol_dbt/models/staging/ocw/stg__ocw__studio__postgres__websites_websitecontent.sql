@@ -53,6 +53,12 @@ with source as (
         , json_query(video_metadata, 'lax $.youtube_description' omit quotes) as video_youtube_description
         , json_query(video_metadata, 'lax $.video_speakers' omit quotes) as video_youtube_speakers
         , json_query(video_metadata, 'lax $.video_tags' omit quotes) as video_youtube_tags
+        -- video_files for video resources
+        , json_query(metadata, 'lax $.video_files') as video_files
+        , json_query(video_files, 'lax $.archive_url' omit quotes) as video_archive_url
+        , json_query(video_files, 'lax $.video_captions_file' omit quotes) as video_captions_file
+        , json_query(video_files, 'lax $.video_thumbnail_file' omit quotes) as video_thumbnail_file
+        , json_query(video_files, 'lax $.video_transcript_file' omit quotes) as video_transcript_file
 
     from source
 
