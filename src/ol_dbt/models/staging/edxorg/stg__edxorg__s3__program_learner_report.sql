@@ -5,11 +5,25 @@ with source as (
 , source_sorted as (
     select
         *
+        , case
+            when "date program certificate awarded" = 'null' then null
+            else to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%dT%H:%i:%sZ'))
+        end as program_certificate_awarded_dt
         , row_number() over (
             partition by "user id", "course run key", "program uuid"
             order by _airbyte_emitted_at desc, _ab_source_file_last_modified desc
         ) as row_num
     from source
+)
+
+, add_program_cert_latest as (
+    select
+        "user id" as user_id
+        , "program uuid" as program_uuid
+        , max(program_certificate_awarded_dt) as latest_program_cert_award_on
+        , max("completed program") as ever_completed_program        
+    from source
+    group by 1, 2
 )
 
 , dedup_source as (
@@ -67,4 +81,12 @@ with source as (
 
 )
 
-select * from cleaned
+select 
+    cleaned.* 
+    , add_program_cert_latest.latest_program_cert_award_on
+    , add_program_cert_latest.ever_completed_program
+from cleaned
+left join add_program_cert_latest
+    on 
+        dedup_source.user_id = add_program_cert_latest.user_id
+        and dedup_source.program_uuid = add_program_cert_latest.program_uuid

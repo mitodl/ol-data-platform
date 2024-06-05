@@ -438,6 +438,12 @@ models:
   - name: courserunenrollment_upgraded_on
     description: timestamp, the date in ISO-8601 format that the learner first upgraded
       to the verified track course mode.
+  - name: latest_program_cert_award_on
+    description: timestamp, the latest date and time that the learner has passed
+      each of the courses in the program and was awarded a program certificate.
+  - name: ever_completed_program
+    description: boolean, whether the learner at any point has passed each of the 
+      courses in the program with a grade that qualifies them for a verified certificate.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id", "program_uuid"]
