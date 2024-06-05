@@ -89,6 +89,14 @@ models:
     description: int, foreign key for order table
   - name: line_id
     description: int, foreign key for line table
+  - name: b2b_only_indicator
+    description: str, indicates whether the record is only related to a b2b order
+  - name: coupon_id
+    description: int, foreign key referencing ecommerce_coupon or the b2b coupon table
+  - name: coupon_name
+    description: string, human readable name for the coupon payment
+  - name: courserun_id
+    description: int, foreign key in courses_courserun
   - name: order_created_on
     description: timestamp, specifying when the order was initially created. If this
       is a b2b order it will be the timestamp that order was created otherwise it
@@ -96,26 +104,26 @@ models:
   - name: order_state
     description: string, order state. Options are "fulfilled", "failed", "created"
       "refunded"
-  - name: courserun_id
-    description: int, foreign key in courses_courserun
+  - name: order_tax_amount
+    description: numeric, the amount of tax paid. Only applicable for xPro for now.
+  - name: order_tax_country_code
+    description: str, the country code where the tax was applied. Only applicable
+      for xPro for now.
+  - name: order_tax_rate
+    description: numeric, the tax rate to apply. Only applicable for xPro for now.
+  - name: order_tax_rate_name
+    description: string, name of the tax rate assessed. Only applicable for xPro for
+      now.
+  - name: order_total_price_paid_plus_tax
+    description: numeric, total order amount plus the amount of tax paid. For xPro,
+      this is calculated order_total_price_paid+order_tax_amount. For other platform,
+      this is the same as order_total_price_paid
   - name: order_total_price_paid
     description: number, total order amount
   - name: product_id
     description: int, foreign key for product table
   - name: product_type
     description: string, readable product type
-  - name: user_email
-    description: str, user email associated with their account
-  - name: user_id
-    description: int, foreign key to the user table
-  - name: user_id
-    description: int, foreign key to the user table
-  - name: b2b_only_indicator
-    description: str, indicates whether the record is only related to a b2b order
-  - name: coupon_id
-    description: int, foreign key referencing ecommerce_coupon or the b2b coupon table
-  - name: coupon_name
-    description: string, human readable name for the coupon payment
   - name: receipt_authorization_code
     description: str, authorization code from cybersource payment
   - name: receipt_transaction_id
@@ -123,6 +131,10 @@ models:
       or a unique uuid
   - name: req_reference_number
     description: str, cybersource req reference number for a payment
+  - name: user_email
+    description: str, user email associated with their account
+  - name: user_id
+    description: int, foreign key to the user table
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["order_id", "line_id", "b2b_only_indicator", "platform", "coupon_id"]
@@ -134,26 +146,59 @@ models:
     grants:
       select: ['finance']
   columns:
-  - name: platform
-    description: string, application where the data is from
+  - name: coupon_code
+    description: str, discount code for the redeemed coupon if applicable
+  - name: coupon_redeemed_on
+    description: timestamp, specifying when the discount was redeemed by the user
+  - name: coupon_type
+    description: str, type of the coupon which describes what circumstances the coupon
+      can be redeemed.
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online and xPro courses, and {org}/{course} for edX.org courses. May be null
+      for some old edX.org runs and Bootcamps courses. Examples include MITx/6.00.2x
+      and course-v1:MITxT+14.740x.
     tests:
-    - not_null
-    - accepted_values:
-        values: '{{ var("platforms") }}'
-  - name: courserunenrollment_id
-    description: int, internal ID and foreign key to courserunenrollments on the corresponding
-      platform. Null for enrollments on edX.org.
-  - name: courserunenrollment_is_active
-    description: boolean, indicating whether the enrollment is active
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+  - name: course_title
+    description: str, title of the course. May be null for some old edX.org runs.
     tests:
-    - not_null
-  - name: user_id
-    description: int, user ID on the corresponding platform
-    tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'edX.org'"
+  - name: courserun_end_on
+    description: timestamp, date and time when the course run ends. May be Null.
   - name: courserun_id
     description: int, primary key representing a single course run on the corresponding
       platform. Null for course runs from edx.org
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, unique string to identify a course run on the corresponding
+      platform
+  - name: courserun_start_on
+    description: timestamp, date and time when the course run starts. May be Null.
+  - name: courserun_title
+    description: string, title of the course run on the corresponding platform. Maybe
+      blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when the course certificate was initially
+      created
+  - name: courseruncertificate_is_earned
+    description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
+      micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
+    tests:
+    - not_null
+  - name: courseruncertificate_url
+    description: str, URL to the course certificate for users who earned the certificate
+      on mitxonline.mit.edu, micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
+      It doesn't include the revoked certificates.
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on the corresponding platform
   - name: courserunenrollment_created_on
     description: timestamp, specifying when the enrollment was initially
     tests:
@@ -163,142 +208,85 @@ models:
   - name: courserunenrollment_enrollment_status
     description: string, enrollment status for users whose enrollment changed on the
       corresponding platform
+  - name: courserunenrollment_id
+    description: int, internal ID and foreign key to courserunenrollments on the corresponding
+      platform. Null for enrollments on edX.org.
+  - name: courserunenrollment_is_active
+    description: boolean, indicating whether the enrollment is active
+    tests:
+    - not_null
   - name: courserunenrollment_is_edx_enrolled
     description: boolean, indicating whether the user is enrolled on edX platform.
       For edx.org course enrollment, it would always be true. Null for Bootcamps as
       it doesn't apply.
-  - name: courserun_title
-    description: string, title of the course run on the corresponding platform. Maybe
-      blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
-  - name: courserun_readable_id
-    description: str, unique string to identify a course run on the corresponding
-      platform
-  - name: courserun_start_on
-    description: timestamp, date and time when the course run starts. May be Null.
-  - name: courserun_end_on
-    description: timestamp, date and time when the course run ends. May be Null.
-  - name: courserun_is_current
-    description: boolean, indicating if the course run is currently running. True
-      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
-      is in the past and courserun_end_on is in the future.
-    tests:
-    - not_null
-  - name: user_username
-    description: string, username to identify a user on the corresponding platform
-    tests:
-    - not_null
-  - name: user_email
-    description: string, user email that user registered on the corresponding platform
-    tests:
-    - not_null
-  - name: user_full_name
-    description: str, user full name on the platform user enrolled
-  - name: user_country_code
-    description: str, country code on the platform user enrolled. May be blank.
-  - name: user_highest_education
-    description: str, user's highest education on the platform user enrolled. May
-      be blank.
-  - name: user_company
-    description: str, user's company pulled on the platform user enrolled. May be
-      blank.
-  - name: courseruncertificate_is_earned
-    description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
-      micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
-    tests:
-    - not_null
-  - name: courseruncertificate_uuid
-    description: str, unique identifier for the certificate on the corresponding platform
-  - name: courseruncertificate_url
-    description: str, URL to the course certificate for users who earned the certificate
-      on mitxonline.mit.edu, micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
-      It doesn't include the revoked certificates.
-  - name: courseruncertificate_created_on
-    description: timestamp, date and time when the course certificate was initially
-      created
-  - name: order_id
-    description: int, unique identifier/foreign key to ecommerce orders from the corresponding
-      platform. Note that this doesn't include orders from edX.org, which we don't
-      have data for them
-  - name: order_state
-    description: string, order state from the corresponding platform. It doesn't include
-      'created' order state
-  - name: order_created_on
-    description: timestamp, specifying when the order was initially created
-  - name: order_reference_number
-    description: string, order reference number to identify an order on the corresponding
-      platform, e.g. mitxonline-production-20
-  - name: order_total_price_paid
-    description: number, total order amount for the order
-  - name: unit_price
-    description: numeric, price for the order line item before discount
-  - name: discount
-    description: str, discount in readable format. e.g. $100 off, 30% off, etc
-  - name: discount_amount
-    description: numeric, actual discount dollar amount. For percent-discount coupon,
-      this is calculated as line_price * percentage off
-  - name: payment_type
-    description: str, for xPro, the possible values are "staff", "marketing", "credit_card",
-      "purchase_order", "sales". For MITx Online, it's one of "marketing", "sales",
-      "financial-assistance", "customer-support", "staff", "legacy". Null for Bootcamps
-      or MicroMasters orders.
-  - name: coupon_type
-    description: str, type of the coupon which describes what circumstances the coupon
-      can be redeemed.
-  - name: coupon_code
-    description: str, discount code for the redeemed coupon if applicable
-  - name: coupon_redeemed_on
-    description: timestamp, specifying when the discount was redeemed by the user
-  - name: receipt_transaction_id
-    description: str, transaction ID from cybersource receipt
-  - name: receipt_authorization_code
-    description: str, authorization code from cybersource receipt
-  - name: receipt_payment_method
-    description: str, payment method from cybersource receipt. Value could be 'paypal'
-      or 'card'.
-  - name: receipt_req_reference_number
-    description: str, req_reference_number from cybersource receipt
-  - name: receipt_bill_to_address_state
-    description: str, address state from cybersource receipt
-  - name: receipt_bill_to_address_country
-    description: str, address country from cybersource receipt
-  - name: order_tax_country_code
-    description: str, the country code where the tax was applied. Only applicable
-      for xPro for now.
-  - name: order_tax_rate
-    description: numeric, the tax rate to apply. Only applicable for xPro for now.
-  - name: order_tax_rate_name
-    description: string, name of the tax rate assessed. Only applicable for xPro for
-      now.
-  - name: order_tax_amount
-    description: numeric, the amount of tax paid. Only applicable for xPro for now.
-  - name: order_total_price_paid_plus_tax
-    description: numeric, total order amount plus the amount of tax paid. For xPro,
-      this is calculated order_total_price_paid+order_tax_amount. For other platform,
-      this is the same as order_total_price_paid
-  - name: product_id
-    description: int, unique identifier/foreign key to ecommerce products on MITx
-      Online or xPro.
-  - name: product_program_readable_id
-    description: str, open edX program readable ID associated to ecommerce products
-      on MITx Online or xPro. Blank means that the product is course run.
   - name: courserungrade_grade
     description: float, course grade on edX.org or MITxOnline or xPro range from 0
       to 1
   - name: courserungrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline or xPro
-  - name: course_title
-    description: str, title of the course. May be null for some old edX.org runs.
+  - name: discount
+    description: str, discount in readable format. e.g. $100 off, 30% off, etc
+  - name: discount_amount
+    description: numeric, actual discount dollar amount. For percent-discount coupon,
+      this is calculated as line_price * percentage off
+  - name: order_id
+    description: int, unique identifier/foreign key to ecommerce orders from the corresponding
+      platform. Note that this doesn't include orders from edX.org, which we don't
+      have data for them
+  - name: order_reference_number
+    description: string, order reference number to identify an order on the corresponding
+      platform, e.g. mitxonline-production-20
+  - name: payment_bill_to_address_country
+    description: str, address country from most recent cybersource payment
+  - name: payment_bill_to_address_state
+    description: str, address state from most recent cybersource payment
+  - name: payment_method
+    description: str, payment method from cybersource receipt. Value could be 'paypal'
+      or 'card'.
+  - name: payment_transaction_id
+    description: str, unique identifier from most recent cybersource payment or UUID.
+  - name: payment_type
+    description: str, for xPro, the possible values are "staff", "marketing", "credit_card",
+      "purchase_order", "sales". For MITx Online, it's one of "marketing", "sales",
+      "financial-assistance", "customer-support", "staff", "legacy". Null for Bootcamps
+      or MicroMasters orders.
+  - name: platform
+    description: string, application where the data is from
     tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'edX.org'"
-  - name: course_readable_id
-    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
-      Online and xPro courses, and {org}/{course} for edX.org courses. May be null
-      for some old edX.org runs and Bootcamps courses.
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
+  - name: product_id
+    description: int, unique identifier/foreign key to ecommerce products on MITx
+      Online or xPro.
+  - name: product_program_readable_id
+    description: str, open edX program readable ID associated to ecommerce products
+      on MITx Online or xPro. Blank means that the product is course run.
+  - name: unit_price
+    description: numeric, price for the order line item before discount
+  - name: user_company
+    description: str, user's company pulled on the platform user enrolled. May be
+      blank.
+  - name: user_country_code
+    description: str, country code on the platform user enrolled. May be blank.
+  - name: user_email
+    description: string, user email that user registered on the corresponding platform
     tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+    - not_null
+  - name: user_full_name
+    description: str, user full name on the platform user enrolled
+  - name: user_highest_education
+    description: str, user's highest education on the platform user enrolled. May
+      be blank.
+  - name: user_id
+    description: int, user ID on the corresponding platform
+    tests:
+    - not_null
+  - name: user_username
+    description: string, username to identify a user on the corresponding platform
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]

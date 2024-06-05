@@ -1344,7 +1344,7 @@ models:
   - name: user_leadership_level
     description: str, user leadership level
   - name: user_gender
-    description: str, user gender
+    description: str, user gender. May be null if user didn't specify.
     tests:
     - accepted_values:
         values: '{{ var("gender_values") }}'

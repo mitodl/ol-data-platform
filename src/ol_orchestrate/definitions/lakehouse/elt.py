@@ -25,6 +25,7 @@ configured_airbyte_resource = airbyte_resource.configured(
         "use_https": True,
         "username": os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")[0],
         "password": os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")[1],
+        "request_timeout": 60,  # Allow up to a minute for Airbyte requests
         "request_additional_params": {
             "verify": False,
         },

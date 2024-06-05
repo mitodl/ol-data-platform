@@ -1330,7 +1330,7 @@ models:
   - name: user_address_postal_code
     description: str, user postal code
   - name: user_gender
-    description: str, user gender
+    description: str, user gender. May be null if user didn't specify.
     tests:
     - accepted_values:
         values: ['Male', 'Female', 'Other/Prefer Not to Say', '']
