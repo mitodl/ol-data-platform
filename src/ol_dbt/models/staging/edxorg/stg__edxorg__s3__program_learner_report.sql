@@ -21,7 +21,7 @@ with source as (
         cast("user id" as integer) as user_id
         , "program uuid" as program_uuid
         , max(program_certificate_awarded_dt) as latest_program_cert_award_on
-        , max("completed program") as ever_completed_program
+        , max("completed program") as ever_completed_program        
     from source_sorted
     group by 1, 2
 )
@@ -73,20 +73,17 @@ with source as (
             when "date first upgraded to verified" = 'null' then null
             else to_iso8601(date_parse("date first upgraded to verified", '%Y-%m-%d %H:%i:%s Z'))
         end as courserunenrollment_upgraded_on
-        , case
-            when "date program certificate awarded" = 'null' then null
-            else to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%dT%H:%i:%sZ'))
-        end as program_certificate_awarded_on
+        , program_certificate_awarded_dt as program_certificate_awarded_on
     from dedup_source
 
 )
 
-select
-    cleaned.*
+select 
+    cleaned.* 
     , add_program_cert_latest.latest_program_cert_award_on
-    , add_program_cert_latest.ever_completed_program
+    , cast(add_program_cert_latest.ever_completed_program as boolean) as ever_completed_program
 from cleaned
 left join add_program_cert_latest
-    on
+    on 
         cleaned.user_id = add_program_cert_latest.user_id
         and cleaned.program_uuid = add_program_cert_latest.program_uuid
