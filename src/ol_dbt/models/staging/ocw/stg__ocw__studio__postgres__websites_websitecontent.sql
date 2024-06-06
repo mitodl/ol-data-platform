@@ -56,6 +56,12 @@ with source as (
         , json_query(metadata, 'lax $.video_files.video_captions_file' omit quotes) as video_captions_file
         , json_query(metadata, 'lax $.video_files.video_thumbnail_file' omit quotes) as video_thumbnail_file
         , json_query(metadata, 'lax $.video_files.video_transcript_file' omit quotes) as video_transcript_file
+        -- external resources
+        , json_query(metadata, 'lax $.external_url' omit quotes) as external_resource_url
+        , json_query(metadata, 'lax $.license' omit quotes) as external_resource_license
+        , json_query(metadata, 'lax $.has_external_license_warning' omit quotes) as external_resource_license_warning
+        , json_query(metadata, 'lax $.is_broken' omit quotes) as external_resource_broken
+        , json_query(metadata, 'lax $.backup_url' omit quotes) as external_resource_backup_url
 
     from source
 
