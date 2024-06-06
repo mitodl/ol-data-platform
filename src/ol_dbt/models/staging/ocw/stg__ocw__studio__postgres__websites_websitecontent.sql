@@ -43,22 +43,19 @@ with source as (
         , {{ cast_timestamp_to_iso8601('created_on') }} as websitecontent_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as websitecontent_updated_on
         -- image_metadata for image resources
-        , json_query(metadata, 'lax $.image_metadata') as image_metadata
-        , json_query(image_metadata, 'lax $.credit' omit quotes) as image_credit
-        , json_query(image_metadata, 'lax $.caption' omit quotes) as image_caption
-        , json_query(image_metadata, 'lax $.alt_text' omit quotes) as image_alt_text
+        , json_query(metadata, 'lax $.image_metadata.credit' omit quotes) as image_credit
+        , json_query(metadata, 'lax $.image_metadata.caption' omit quotes) as image_caption
+        , json_query(metadata, 'lax $.image_metadata.alt_text' omit quotes) as image_alt_text
         -- video_metadata for video resources
-        , json_query(metadata, 'lax $.video_metadata') as video_metadata
-        , json_query(video_metadata, 'lax $.youtube_id' omit quotes) as video_youtube_id
-        , json_query(video_metadata, 'lax $.youtube_description' omit quotes) as video_youtube_description
-        , json_query(video_metadata, 'lax $.video_speakers' omit quotes) as video_youtube_speakers
-        , json_query(video_metadata, 'lax $.video_tags' omit quotes) as video_youtube_tags
+        , json_query(metadata, 'lax $.video_metadata.youtube_id' omit quotes) as video_youtube_id
+        , json_query(metadata, 'lax $.video_metadata.youtube_description' omit quotes) as video_youtube_description
+        , json_query(metadata, 'lax $.video_metadata.video_speakers' omit quotes) as video_youtube_speakers
+        , json_query(metadata, 'lax $.video_metadata.video_tags' omit quotes) as video_youtube_tags
         -- video_files for video resources
-        , json_query(metadata, 'lax $.video_files') as video_files
-        , json_query(video_files, 'lax $.archive_url' omit quotes) as video_archive_url
-        , json_query(video_files, 'lax $.video_captions_file' omit quotes) as video_captions_file
-        , json_query(video_files, 'lax $.video_thumbnail_file' omit quotes) as video_thumbnail_file
-        , json_query(video_files, 'lax $.video_transcript_file' omit quotes) as video_transcript_file
+        , json_query(metadata, 'lax $.video_files.archive_url' omit quotes) as video_archive_url
+        , json_query(metadata, 'lax $.video_files.video_captions_file' omit quotes) as video_captions_file
+        , json_query(metadata, 'lax $.video_files.video_thumbnail_file' omit quotes) as video_thumbnail_file
+        , json_query(metadata, 'lax $.video_files.video_transcript_file' omit quotes) as video_transcript_file
 
     from source
 
