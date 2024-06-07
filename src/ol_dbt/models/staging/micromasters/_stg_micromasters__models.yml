@@ -447,7 +447,8 @@ models:
     tests:
     - not_null
   - name: proctoredexamgrade_passing_score
-    description: float, passing score for the proctored exam, range between 0 to 100
+    description: float, passing score set for the proctored exam, range between 0
+      to 100
   - name: proctoredexamgrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
       set for this proctored exam
@@ -949,32 +950,7 @@ models:
     tests:
     - not_null
   - name: examrun_passing_score
-    description: float, passing score for the exam run, range between 0 to 1.
-    tests:
-    - not_null
-  - name: examrun_first_schedulable_on
-    description: timestamp, the first date and time a learner can start scheduling
-      the exam with Pearson.
-    tests:
-    - not_null
-  - name: examrun_last_schedulable_on
-    description: timestamp, the last date and time a learner can start scheduling
-      the exam with Pearson.
-    tests:
-    - not_null
-  - name: examrun_first_eligible_on
-    description: timestamp, the first date and time at which this exam run becomes
-      available
-    tests:
-    - not_null
-  - name: examrun_last_eligible_on
-    description: timestamp, the last date and time at which this exam run becomes
-      available
-    tests:
-    - not_null
-  - name: examrun_grades_available_on
-    description: timestamp, date and time when the grade becomes available to learners
-      on their dashboard
+    description: float, passing score for the exam run, range between 0 to 100.
     tests:
     - not_null
   - name: examrun_created_on

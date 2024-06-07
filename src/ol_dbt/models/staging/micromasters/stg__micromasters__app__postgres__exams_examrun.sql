@@ -14,12 +14,7 @@ with source as (
         , semester as examrun_semester
         , description as examrun_description
         , authorized as examrun_is_authorized
-        , passing_score as examrun_passing_score
-        ,{{ cast_timestamp_to_iso8601('date_first_schedulable') }} as examrun_first_schedulable_on
-        ,{{ cast_timestamp_to_iso8601('date_last_schedulable') }} as examrun_last_schedulable_on
-        ,{{ cast_timestamp_to_iso8601('date_first_eligible') }} as examrun_first_eligible_on
-        ,{{ cast_timestamp_to_iso8601('date_first_eligible') }} as examrun_last_eligible_on
-        ,{{ cast_timestamp_to_iso8601('date_grades_available') }} as examrun_grades_available_on
+        , passing_score * 100 as examrun_passing_score
         ,{{ cast_timestamp_to_iso8601('created_on') }} as examrun_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as examrun_updated_on
     from source

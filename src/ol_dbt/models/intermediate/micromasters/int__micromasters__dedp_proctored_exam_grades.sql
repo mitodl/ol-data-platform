@@ -30,15 +30,16 @@ select
     , courses.course_title
     , courses.course_number
     , examruns.examrun_readable_id
+    , examruns.examrun_semester
     , micromasters_users.user_edxorg_username
     , micromasters_users.user_mitxonline_username
     , micromasters_users.user_full_name
     , micromasters_users.user_email as user_micromasters_email
     , mixonline_users.user_email as user_mitxonline_email
-    , exam_grades.proctoredexamgrade_score
-    , exam_grades.proctoredexamgrade_is_passing
     , exam_grades.proctoredexamgrade_passing_score
+    , exam_grades.proctoredexamgrade_score
     , exam_grades.proctoredexamgrade_percentage_grade
+    , exam_grades.proctoredexamgrade_is_passing
     , exam_grades.proctoredexamgrade_exam_on
     , exam_grades.proctoredexamgrade_created_on
     , exam_grades.proctoredexamgrade_updated_on
