@@ -922,7 +922,7 @@ models:
       column_list: ["user_id", "program_id"]
 
 - name: stg__micromasters__app__postgres__exams_examrun
-  description: Proctored exam individual runs from MicroMasters application database
+  description: DEDP proctored exam runs from MicroMasters application database
   columns:
   - name: examrun_id
     description: int, primary key in exams_examrun
