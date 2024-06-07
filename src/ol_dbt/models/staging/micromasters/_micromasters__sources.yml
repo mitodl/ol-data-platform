@@ -570,3 +570,44 @@ sources:
       description: int, foreign key to courses_program
     - name: share_hash
       description: str, share hash for the program enrollment example:72ff85f6-b88d-4636-830a-69cf59f896f5
+
+
+  - name: raw__micromasters__app__postgres__exams_examrun
+    description: Proctored exam individual runs from MicroMasters application database
+    columns:
+    - name: id
+      description: int, primary key in exams_examrun
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: exam_series_code
+      description: str, unique series code for the exam. e.g., MIT_14.100x
+    - name: edx_exam_course_key
+      description: str, edX exam run ID formatted as course-v1:{org}+{exam code}+{semester},
+        e.g., course-v1:MITxT+14.100PEx+2T2022. May be null for exam runs before 2022.
+    - name: semester
+      description: str, semester for the exam run, e.g., 2T2022
+    - name: description
+      description: str, description for the exam run
+    - name: authorized
+      description: boolean, indicating if the exam run has authorizations from Pearson
+    - name: passing_score
+      description: float, passing score for the exam run, range between 0 to 1.
+    - name: date_first_schedulable
+      description: timestamp, the first date and time a learner can start scheduling
+        the exam with Pearson.
+    - name: date_last_schedulable
+      description: timestamp, the last date and time a learner can start scheduling
+        the exam with Pearson.
+    - name: date_first_eligible
+      description: timestamp, the first date and time at which this exam run becomes
+        available
+    - name: date_last_eligible
+      description: timestamp, the last date and time at which this exam run becomes
+        available
+    - name: date_grades_available
+      description: timestamp, date and time when the grade becomes available to learners
+        on their dashboard
+    - name: created_on
+      description: timestamp, date and time when the exam run was initially created
+    - name: updated_on
+      description: timestamp, date and time when the exam run was most recently updated
