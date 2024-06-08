@@ -14,6 +14,8 @@ select
     websites.website_uuid as course_uuid
     , websites.website_name as course_name
     , websites.website_title as course_title
+    , websitecontents.websitecontent_type as resource_type
+    , websitecontents.websitecontent_text_id as resource_uuid
 
 from websites
 inner join websitecontents
