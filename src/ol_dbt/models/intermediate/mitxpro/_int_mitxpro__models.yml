@@ -1666,9 +1666,8 @@ models:
     tests:
     - not_null
   - name: useractivity_video_duration
-    description: number, The length of the video file, in seconds.
-    tests:
-    - not_null
+    description: float, The length of the video file, in seconds. This is extracted
+      from event field in tracking log.
   - name: useractivity_video_currenttime
     description: number, The time in the video when this event was emitted
   - name: useractivity_video_old_time
@@ -2069,3 +2068,34 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
+
+- name: int__mitxpro__courserun_videos
+  description: course videos on MIT xPro open edx
+  columns:
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: coursevideo_is_hidden
+    description: boolean, indicating if the video is hidden for the course.
+    tests:
+    - not_null
+  - name: video_edx_uuid
+    description: str, hashed ID for the edx video
+    tests:
+    - not_null
+  - name: video_client_id
+    description: str, human readable name for video. e.g. TTSBSV3_Web3_BVB_FINAL.mp4
+  - name: video_status
+    description: str, values are external, imported, file_complete, and upload_failed.
+    tests:
+    - not_null
+  - name: video_duration
+    description: float, the length of the video, in seconds. Populated with data from
+      ODL Video Service (OVS) if the video is uploaded there. May be 0.0 for small
+      amounts of videos.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "video_edx_uuid"]
