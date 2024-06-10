@@ -426,33 +426,62 @@ models:
       column_list: ["courserun_id", "user_id"]
 
 - name: stg__micromasters__app__postgres__grades_proctoredexamgrade
-  description: DEDP proctor exam grades stored in MicroMasters database
+  description: DEDP proctored exam grades stored in MicroMasters database
   columns:
   - name: proctoredexamgrade_id
-    description: int, sequential ID representing a DEDP proctor exam grade
+    description: int, sequential ID representing a DEDP proctored exam grade
+    tests:
+    - not_null
+    - unique
   - name: course_id
     description: int, foreign key to courses_course
+    tests:
+    - not_null
   - name: user_id
     description: int, foreign key to auth_user
+    tests:
+    - not_null
   - name: proctoredexamgrade_letter_grade
-    description: str, letter grade indicating it's pass or fail
+    description: str, letter grade indicating it's pass or fail for the proctored
+      exam
+    tests:
+    - not_null
   - name: proctoredexamgrade_passing_score
-    description: float, passing score for the course, range between 0 to 100
+    description: float, passing score set for the proctored exam, range between 0
+      to 100
   - name: proctoredexamgrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
-      set for this course
+      set for this proctored exam
+    tests:
+    - not_null
   - name: proctoredexamgrade_percentage_grade
-    description: float, user percentage grade for the course, range between 0 to 1
+    description: float, user percentage grade for the proctored exam, range between
+      0 to 1
+    tests:
+    - not_null
   - name: proctoredexamgrade_score
-    description: float, user score for the course, range between 0 to 100
+    description: float, user score for the proctored exam, range between 0 to 100
+    tests:
+    - not_null
   - name: examrun_id
     description: int, foreign key to exams_examrun
+    tests:
+    - not_null
   - name: proctoredexamgrade_exam_on
-    description: timestamp, date and time for the exam
+    description: timestamp, date and time when this user took the exam
+    tests:
+    - not_null
   - name: proctoredexamgrade_created_on
     description: timestamp, date and time when this grade was initially created
+    tests:
+    - not_null
   - name: proctoredexamgrade_updated_on
     description: timestamp, date and time when this grade was most recently updated
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "examrun_id"]
 
 - name: stg__micromasters__app__postgres__auth_user
   columns:
@@ -880,7 +909,55 @@ models:
     - not_null
   - name: user_id
     description: int, foreign key for users_user
+    tests:
+    - not_null
   - name: program_id
     description: int, foreign key to courses_program
+    tests:
+    - not_null
   - name: share_hash
     description: str, share hash for the program enrollment
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "program_id"]
+
+- name: stg__micromasters__app__postgres__exams_examrun
+  description: DEDP proctored exam runs from MicroMasters application database
+  columns:
+  - name: examrun_id
+    description: int, primary key in exams_examrun
+    tests:
+    - not_null
+    - unique
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - not_null
+  - name: exam_series_code
+    description: str, unique series code for the exam. e.g., MIT_14.100x
+    tests:
+    - not_null
+  - name: examrun_readable_id
+    description: str, edX exam run ID formatted as course-v1:{org}+{exam code}+{semester},
+      e.g., course-v1:MITxT+14.100PEx+2T2022. May be null for exam runs before 2022.
+  - name: examrun_semester
+    description: str, semester for the exam run, e.g., 2T2022. May be null for exam
+      runs before 2022.
+  - name: examrun_description
+    description: str, description for the exam run
+  - name: examrun_is_authorized
+    description: boolean, indicating if the exam run has authorizations from Pearson
+    tests:
+    - not_null
+  - name: examrun_passing_score
+    description: float, passing score for the exam run, range between 0 to 100.
+    tests:
+    - not_null
+  - name: examrun_created_on
+    description: timestamp, date and time when the exam run was initially created
+    tests:
+    - not_null
+  - name: examrun_updated_on
+    description: timestamp, date and time when the exam run was most recently updated
+    tests:
+    - not_null
