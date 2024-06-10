@@ -5,11 +5,25 @@ with source as (
 , source_sorted as (
     select
         *
+        , case
+            when "date program certificate awarded" = 'null' then null
+            else to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%dT%H:%i:%sZ'))
+        end as program_certificate_awarded_dt
         , row_number() over (
             partition by "user id", "course run key", "program uuid"
             order by _airbyte_emitted_at desc, _ab_source_file_last_modified desc
         ) as row_num
     from source
+)
+
+, add_program_cert_latest as (
+    select
+        cast("user id" as integer) as user_id
+        , "program uuid" as program_uuid
+        , max(program_certificate_awarded_dt) as latest_program_cert_award_on
+        , max("completed program") as ever_completed_program
+    from source_sorted
+    group by 1, 2
 )
 
 , dedup_source as (
@@ -59,12 +73,38 @@ with source as (
             when "date first upgraded to verified" = 'null' then null
             else to_iso8601(date_parse("date first upgraded to verified", '%Y-%m-%d %H:%i:%s Z'))
         end as courserunenrollment_upgraded_on
-        , case
-            when "date program certificate awarded" = 'null' then null
-            else to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%dT%H:%i:%sZ'))
-        end as program_certificate_awarded_on
+        , program_certificate_awarded_dt as program_certificate_awarded_on
     from dedup_source
 
 )
 
-select * from cleaned
+select
+    cleaned.org_id
+    , cleaned.program_type
+    , cleaned.program_uuid
+    , cleaned.user_username
+    , cleaned.user_full_name
+    , cleaned.courserun_readable_id
+    , cleaned.course_title
+    , cleaned.courserunenrollment_enrollment_mode
+    , cleaned.user_id
+    , cleaned.user_has_completed_course
+    , cast(add_program_cert_latest.ever_completed_program as boolean) as user_has_completed_program
+    , cleaned.courserunenrollment_is_active
+    , cleaned.user_has_purchased_as_bundle
+    , cleaned.user_roles
+    , cleaned.courserungrade_letter_grade
+    , cleaned.courserungrade_grade
+    , cleaned.program_title
+    , cleaned.courserun_start_on
+    , cleaned.courserunenrollment_created_on
+    , cleaned.completed_course_on
+    , cleaned.courseactivity_last_activity_date
+    , cleaned.courserunenrollment_unenrolled_on
+    , cleaned.courserunenrollment_upgraded_on
+    , add_program_cert_latest.latest_program_cert_award_on as program_certificate_awarded_on
+from cleaned
+left join add_program_cert_latest
+    on
+        cleaned.user_id = add_program_cert_latest.user_id
+        and cleaned.program_uuid = add_program_cert_latest.program_uuid
