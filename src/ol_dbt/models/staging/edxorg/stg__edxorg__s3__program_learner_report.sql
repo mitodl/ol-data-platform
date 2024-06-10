@@ -21,7 +21,7 @@ with source as (
         cast("user id" as integer) as user_id
         , "program uuid" as program_uuid
         , max(program_certificate_awarded_dt) as latest_program_cert_award_on
-        , max("completed program") as ever_completed_program
+        , max("completed program") as ever_completed_program        
     from source_sorted
     group by 1, 2
 )
@@ -78,12 +78,33 @@ with source as (
 
 )
 
-select
-    cleaned.*
-    , add_program_cert_latest.latest_program_cert_award_on
-    , cast(add_program_cert_latest.ever_completed_program as boolean) as ever_completed_program
+select 
+    cleaned.org_id
+    , cleaned.program_type
+    , cleaned.program_uuid
+    , cleaned.user_username
+    , cleaned.user_full_name
+    , cleaned.courserun_readable_id
+    , cleaned.course_title
+    , cleaned.courserunenrollment_enrollment_mode
+    , cleaned.user_id
+    , cleaned.user_has_completed_course
+    , cast(add_program_cert_latest.ever_completed_program as boolean) as user_has_completed_program
+    , cleaned.courserunenrollment_is_active
+    , cleaned.user_has_purchased_as_bundle
+    , cleaned.user_roles
+    , cleaned.courserungrade_letter_grade
+    , cleaned.courserungrade_grade
+    , cleaned.program_title
+    , cleaned.courserun_start_on
+    , cleaned.courserunenrollment_created_on
+    , cleaned.completed_course_on
+    , cleaned.courseactivity_last_activity_date
+    , cleaned.courserunenrollment_unenrolled_on
+    , cleaned.courserunenrollment_upgraded_on
+    , add_program_cert_latest.latest_program_cert_award_on as program_certificate_awarded_on
 from cleaned
 left join add_program_cert_latest
-    on
+    on 
         cleaned.user_id = add_program_cert_latest.user_id
         and cleaned.program_uuid = add_program_cert_latest.program_uuid
