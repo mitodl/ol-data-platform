@@ -19,10 +19,10 @@ select
     , user_full_name
     , user_micromasters_email
     , user_mitxonline_email
+    , proctoredexamgrade_passing_score
     , proctoredexamgrade_percentage_grade
     , proctoredexamgrade_created_on
     , examrun_semester as semester
-
 from micromasters_exam_grades
 
 union all
@@ -36,6 +36,7 @@ select
     , mitxonline_exam_grades.user_full_name
     , micromasters_users.user_email as user_micromasters_email
     , mitxonline_exam_grades.user_email as user_mitxonline_email
+    , null as proctoredexamgrade_passing_score
     , mitxonline_exam_grades.proctoredexamgrade_grade as proctoredexamgrade_percentage_grade
     , mitxonline_exam_grades.proctoredexamgrade_created_on
     , mitxonline_exam_grades.semester
