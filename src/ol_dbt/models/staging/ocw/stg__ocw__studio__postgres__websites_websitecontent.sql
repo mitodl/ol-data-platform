@@ -42,7 +42,7 @@ with source as (
         , {{ cast_timestamp_to_iso8601('deleted') }} as websitecontent_deleted_on
         , {{ cast_timestamp_to_iso8601('created_on') }} as websitecontent_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as websitecontent_updated_on
-        -- miscellanous metadata
+        -- miscellaneous metadata
         , json_query(metadata, 'lax $.body' omit quotes) as metadata_body
         , json_query(metadata, 'lax $.description' omit quotes) as metadata_description
         , json_query(metadata, 'lax $.draft' omit quotes) as metadata_draft
@@ -54,10 +54,10 @@ with source as (
         , json_query(metadata, 'lax $.title' omit quotes) as metadata_title
         , json_query(metadata, 'lax $.uid' omit quotes) as metadata_uid
         -- image_metadata for image resources; could be in metadata or image_metadata
-        , json_query(metadata, 'lax $.metadata.alt_text' omit quotes) as metadata_image_alt_text
+        , json_query(metadata, 'lax $.metadata.image-alt' omit quotes) as metadata_image_alt_text
         , json_query(metadata, 'lax $.metadata.caption' omit quotes) as metadata_image_caption
         , json_query(metadata, 'lax $.metadata.credit' omit quotes) as metadata_image_credit
-        , json_query(metadata, 'lax $.image_metadata.alt_text' omit quotes) as image_alt_text
+        , json_query(metadata, 'lax $.image_metadata.image-alt' omit quotes) as image_alt_text
         , json_query(metadata, 'lax $.image_metadata.caption' omit quotes) as image_caption
         , json_query(metadata, 'lax $.image_metadata.credit' omit quotes) as image_credit
         -- video_metadata for video resources
