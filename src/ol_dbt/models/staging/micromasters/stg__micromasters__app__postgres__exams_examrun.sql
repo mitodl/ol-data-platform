@@ -14,7 +14,7 @@ with source as (
         , semester as examrun_semester
         , description as examrun_description
         , authorized as examrun_is_authorized
-        , passing_score * 100 as examrun_passing_score
+        , passing_score as examrun_passing_grade
         ,{{ cast_timestamp_to_iso8601('created_on') }} as examrun_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as examrun_updated_on
     from source

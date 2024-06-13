@@ -16,6 +16,7 @@ with exam_unit_grades as (
     select
         examrun_readable_id
         , examrun_semester
+        , examrun_passing_grade
         , course_id
     from {{ ref('stg__micromasters__app__postgres__exams_examrun') }}
 )
@@ -48,6 +49,7 @@ select
     , users.user_username
     , users.user_full_name
     , users.user_email
+    , exam_courseruns_from_micromasters.examrun_passing_grade as proctoredexamgrade_passing_grade
     , exam_courserun_grades.courserungrade_grade as proctoredexamgrade_grade
     , exam_courserun_grades.courserungrade_created_on as proctoredexamgrade_created_on
 from exam_courserun_grades
@@ -70,6 +72,7 @@ select
     , users.user_username
     , users.user_full_name
     , users.user_email
+    , null as proctoredexamgrade_passing_grade
     , exam_unit_grades.subsectiongrade_total_earned_graded_score / exam_unit_grades.subsectiongrade_total_graded_score
     as proctoredexamgrade_grade
     , exam_unit_grades.subsectiongrade_created_on as proctoredexamgrade_created_on

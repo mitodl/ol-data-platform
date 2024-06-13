@@ -1948,6 +1948,9 @@ models:
     description: str, user email on MITx Online
     tests:
     - not_null
+  - name: proctoredexamgrade_passing_grade
+    description: float, passing grade for the exam run, range between 0 to 1. Null
+      for MITx Online courses after 2T2022.
   - name: proctoredexamgrade_grade
     description: float, user's grade for the proctored exam, range between 0 to 1
       with 4 decimals.

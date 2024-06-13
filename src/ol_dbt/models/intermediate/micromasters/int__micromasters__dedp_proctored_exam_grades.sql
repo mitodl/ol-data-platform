@@ -31,6 +31,7 @@ select
     , courses.course_number
     , examruns.examrun_readable_id
     , examruns.examrun_semester
+    , examruns.examrun_passing_grade
     , micromasters_users.user_edxorg_username
     , micromasters_users.user_mitxonline_username
     , micromasters_users.user_full_name
