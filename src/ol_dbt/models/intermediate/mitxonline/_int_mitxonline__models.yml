@@ -1916,7 +1916,7 @@ models:
     tests:
     - not_null
   - name: course_title
-    description: str, title of the course that the exam grade associated with
+    description: str, title of the course associated with the exam grade
     tests:
     - not_null
   - name: semester
@@ -1953,7 +1953,7 @@ models:
       for MITx Online courses after 2T2022.
   - name: proctoredexamgrade_grade
     description: float, user's grade for the proctored exam, range between 0 to 1
-      with 4 decimals.
+      with 4 decimals,  e.g., 0.8251
     tests:
     - not_null
   - name: proctoredexamgrade_created_on

@@ -6,7 +6,7 @@ models:
   description: DEDP proctored exam grades combined from MicroMasters and MITx Online
   columns:
   - name: course_title
-    description: str, title of the course that the exam grade associated with
+    description: str, title of the course associated with the exam grade
   - name: course_number
     description: str, course number, for example, 14.73x or JPAL102x
     tests:
