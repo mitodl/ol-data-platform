@@ -1905,3 +1905,61 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "video_edx_uuid"]
+
+- name: int__mitxonline__proctored_exam_grades
+  description: exam grades either from MITx Online exam course runs or the proctored
+    exam unit in MITx Online courses
+  columns:
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 14.310x
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course associated with the exam grade
+    tests:
+    - not_null
+  - name: semester
+    description: str, semester for the exam, e.g., 2T2022.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, either representing the exam courserun, e.g. course-v1:MITxT+14.100PEx+2T2022,
+      or the courserun that contains the proctored exam unit, e.g. course-v1:MITxT+14.100x+1T2024.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, foreign key to auth_user on MITx Online open edx platform.
+    tests:
+    - not_null
+  - name: user_id
+    description: int, foreign key to users_user on MITx Online application.
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: user_username
+    description: str, username on MITx Online
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_email
+    description: str, user email on MITx Online
+    tests:
+    - not_null
+  - name: proctoredexamgrade_passing_grade
+    description: float, passing grade for the exam run, range between 0 to 1. Null
+      for MITx Online courses after 2T2022.
+  - name: proctoredexamgrade_grade
+    description: float, user's grade for the proctored exam, range between 0 to 1
+      with 4 decimals,  e.g., 0.8251
+    tests:
+    - not_null
+  - name: proctoredexamgrade_created_on
+    description: timestamp, date and time when this proctored exam grade was created.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id"]
