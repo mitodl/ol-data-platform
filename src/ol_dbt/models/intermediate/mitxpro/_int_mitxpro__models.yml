@@ -37,6 +37,8 @@ models:
     description: str, user email associated with their account
   - name: product_type
     description: string, readable product type
+  - name: courserun_id
+    description: int, foreign key to courses_courserun
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
       e.g. course-v1:xPRO+MLx1+R0

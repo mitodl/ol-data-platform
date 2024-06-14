@@ -510,10 +510,32 @@ models:
     description: int, primary key in users_user for the purchaser
     tests:
     - not_null
+  - name: user_username
+    description: str, username on MicroMasters
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_edxorg_id
+    description: int, user ID on edX.org
+  - name: user_edxorg_email
+    description: str, user email on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
+  - name: user_full_name
+    description: str, user full name on MicroMasters
+  - name: user_email
+    description: str, user email on MicroMasters
+    tests:
+    - not_null
   - name: order_reference_number
     description: string, readable id for the order
     tests:
     - unique
+  - name: line_id
+    description: int, foreign key to ecommerce_line
+    tests:
+    - not_null
   - name: line_price
     description: numeric, list price for the order line
     tests:
@@ -525,6 +547,9 @@ models:
   - name: courserun_edxorg_readable_id
     description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
       to match course in edxorg
+  - name: courserun_platform
+    description: str, indicating the platform where the course runs on. It's either
+      MITx Online or edX.org.
   - name: receipt_transaction_id
     description: str, transaction identifier from most recent cybersource payment
       for the order
@@ -548,6 +573,8 @@ models:
   - name: discount_amount
     description: numeric, actual discount dollar amount. For percent-discount coupon,
       this is calculated as line_price * percentage off
+  - name: coupon_id
+    description: int, foreign key to ecommerce_coupon
   - name: coupon_type
     description: str, type of the coupon which describes what circumstances the coupon
       can be redeemed. Possible values are "standard" or "discounted-previous-course".
@@ -558,6 +585,7 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__ecommerce_order')
+
 - name: int__micromasters__program_enrollments
   description: MicroMasters program enrolled users
   columns:
