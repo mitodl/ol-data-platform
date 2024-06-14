@@ -236,7 +236,7 @@ models:
     description: URL of the external resource
   - name: external_resource_license_warning
     description: whether the external resource has a license warning
-  - name: external_resource_broken
+  - name: external_resource_is_broken
     description: whether the external resource link is broken
 
 - name: stg__ocw__studio__postgres__websites_websitestarter

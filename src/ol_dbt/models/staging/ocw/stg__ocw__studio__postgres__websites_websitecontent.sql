@@ -74,7 +74,7 @@ with source as (
         , json_query(metadata, 'lax $.backup_url' omit quotes) as external_resource_backup_url
         , json_query(metadata, 'lax $.external_url' omit quotes) as external_resource_url
         , json_query(metadata, 'lax $.has_external_license_warning' omit quotes) as external_resource_license_warning
-        , json_query(metadata, 'lax $.is_broken' omit quotes) as external_resource_broken
+        , json_query(metadata, 'lax $.is_broken' omit quotes) as external_resource_is_broken
 
     from source
 
