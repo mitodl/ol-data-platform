@@ -31,7 +31,10 @@ with bootcamps__ecommerce_order as (
 , mitxpro_orders as (
     select
         mitxpro__ecommerce_allorders.line_id
+        , mitxpro__ecommerce_allcoupons.coupon_code
         , mitxpro__ecommerce_allcoupons.coupon_name
+        , mitxpro__ecommerce_allcoupons.coupon_type
+        , mitxpro__ecommerce_allorders.coupon_redeemed_on
         , mitxpro__ecommerce_allorders.order_created_on
         , mitxpro__ecommerce_allorders.order_state
         , mitxpro__ecommerce_allorders.product_id
@@ -41,6 +44,9 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_allorders.courserun_readable_id
         , mitxpro__ecommerce_order.order_purchaser_user_id
         , mitxpro__ecommerce_allorders.receipt_authorization_code
+        , mitxpro__ecommerce_allorders.receipt_bill_to_address_state
+        , mitxpro__ecommerce_allorders.receipt_bill_to_address_country
+        , mitxpro__ecommerce_allorders.receipt_payment_method
         , mitxpro__ecommerce_allorders.receipt_transaction_id
         , mitxpro__ecommerce_allorders.req_reference_number
         , mitxpro__ecommerce_order.order_tax_country_code
@@ -53,6 +59,14 @@ with bootcamps__ecommerce_order as (
         ) as order_total_price_paid
         , coalesce(mitxpro__ecommerce_allorders.coupon_id, mitxpro__ecommerce_allorders.b2bcoupon_id) as coupon_id
         , coalesce(mitxpro__ecommerce_allorders.order_id, mitxpro__ecommerce_allorders.b2border_id) as order_id
+        , case
+            when mitxpro__ecommerce_allorders.order_id is not null
+                then mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text
+            when
+                mitxpro__ecommerce_allorders.b2border_id is not null
+                and mitxpro__ecommerce_allorders.b2border_discount is not null
+                then concat('$', format('%.2f', mitxpro__ecommerce_allorders.b2border_discount), ' off')
+        end as discount
         , case
             --- the order reference number prefixes use the same format as in xpro application codebase
             when mitxpro__ecommerce_allorders.order_id is not null
@@ -85,9 +99,16 @@ with bootcamps__ecommerce_order as (
         , user_email
         , user_id
         , null as b2b_only_indicator
+        , discount_code as coupon_code
         , null as coupon_id
         , null as coupon_name
+        , discount_redemption_type as coupon_type
+        , discountredemption_timestamp as coupon_redeemed_on
+        , discount_amount_text as discount
         , payment_authorization_code as receipt_authorization_code
+        , payment_bill_to_address_state as receipt_bill_to_address_state
+        , payment_bill_to_address_country as receipt_bill_to_address_country
+        , payment_method as receipt_payment_method
         , payment_transaction_id as receipt_transaction_id
         , payment_req_reference_number as req_reference_number
         , order_created_on
@@ -114,9 +135,16 @@ with bootcamps__ecommerce_order as (
         , user_email
         , order_purchaser_user_id as user_id
         , b2b_only_indicator
+        , coupon_code
         , coupon_id
         , coupon_name
+        , coupon_type
+        , coupon_redeemed_on
+        , discount
         , receipt_authorization_code
+        , receipt_bill_to_address_state
+        , receipt_bill_to_address_country
+        , receipt_payment_method
         , receipt_transaction_id
         , req_reference_number
         , order_created_on
@@ -143,9 +171,16 @@ with bootcamps__ecommerce_order as (
         , user_email
         , order_purchaser_user_id as user_id
         , null as b2b_only_indicator
+        , null as coupon_code
         , null as coupon_id
         , null as coupon_name
+        , null as coupon_type
+        , null as coupon_redeemed_on
+        , null as discount
         , receipt_authorization_code
+        , receipt_bill_to_address_state
+        , receipt_bill_to_address_country
+        , receipt_payment_method
         , receipt_transaction_id
         , receipt_reference_number as req_reference_number
         , order_created_on
@@ -172,9 +207,16 @@ with bootcamps__ecommerce_order as (
         , user_edxorg_email as user_email
         , user_edxorg_id as user_id
         , null as b2b_only_indicator
+        , coupon_code
         , coupon_id
-        , coupon_code as coupon_name
+        , null as coupon_name
+        , coupon_type
+        , redeemedcoupon_created_on as coupon_redeemed_on
+        , coupon_discount_amount_text as discount
         , receipt_authorization_code
+        , receipt_bill_to_address_state
+        , receipt_bill_to_address_country
+        , receipt_payment_method
         , receipt_transaction_id
         , receipt_reference_number as req_reference_number
         , order_created_on
@@ -196,10 +238,14 @@ select
     , order_id
     , line_id
     , b2b_only_indicator
+    , coupon_code
     , coupon_id
     , coupon_name
+    , coupon_redeemed_on
+    , coupon_type
     , courserun_id
     , courserun_readable_id
+    , discount
     , order_created_on
     , order_reference_number
     , order_state
@@ -212,6 +258,9 @@ select
     , product_id
     , product_type
     , receipt_authorization_code
+    , receipt_bill_to_address_state
+    , receipt_bill_to_address_country
+    , receipt_payment_method
     , receipt_transaction_id
     , req_reference_number
     , user_email
