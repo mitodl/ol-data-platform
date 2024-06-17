@@ -1585,7 +1585,7 @@ models:
     description: str, human readable name for video. e.g. 14.310x_Lect9_Seg8_Final.mp4
   - name: video_status
     description: str, values are external, imported, file_complete, and upload_failed.
-      The videos with 'external' and 'imported' status are not managed from ODL Video
+      Videos with 'external' and 'imported' status may be not managed from ODL Video
       Service (OVS) application.
     tests:
     - not_null

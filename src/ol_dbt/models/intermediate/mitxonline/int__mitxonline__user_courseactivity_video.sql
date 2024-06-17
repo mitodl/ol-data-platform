@@ -14,7 +14,10 @@ select
     , useractivity_page_url
     , useractivity_timestamp
     , json_query(useractivity_event_object, 'lax $.id' omit quotes) as useractivity_video_id
-    , json_query(useractivity_event_object, 'lax $.duration' omit quotes) as useractivity_video_duration
+    , case
+        when lower(json_query(useractivity_event_object, 'lax $.duration' omit quotes)) = 'null' then null
+        else cast(json_query(useractivity_event_object, 'lax $.duration' omit quotes) as decimal(38, 4))
+    end as useractivity_video_duration
     , json_query(useractivity_event_object, 'lax $.currentTime' omit quotes) as useractivity_video_currenttime
     , json_query(useractivity_event_object, 'lax $.old_time' omit quotes) as useractivity_video_old_time
     , json_query(useractivity_event_object, 'lax $.new_time' omit quotes) as useractivity_video_new_time
