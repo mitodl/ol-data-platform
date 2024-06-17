@@ -79,6 +79,10 @@ from ol_orchestrate.assets.edxorg_archive import (
     gcs_edxorg_tracking_log_sensor,
     normalize_edxorg_tracking_log,
 )
+from ol_orchestrate.assets.openedx_course_archives import (
+    dummy_edxorg_course_xml,
+    extract_edxorg_courserun_metadata,
+)
 from ol_orchestrate.io_managers.filepath import (
     FileObjectIOManager,
     S3FileObjectIOManager,
@@ -200,5 +204,7 @@ retrieve_edx_exports = Definitions(
         normalize_edxorg_tracking_log,
         dummy_edxorg_course_structure,
         flatten_edxorg_course_structure,
+        extract_edxorg_courserun_metadata,
+        dummy_edxorg_course_xml,
     ],
 )

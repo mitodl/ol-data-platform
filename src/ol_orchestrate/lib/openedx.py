@@ -157,21 +157,19 @@ def process_course_xml(archive_path: Path) -> dict[str, Any]:
     :return: A dictionary with the parsed course metadata.
     :rtype: Dict[str, Any]
     """
-    json_data = {}
     with tarfile.open(archive_path, "r") as tf:
-        tf.extractall(filter="data")
-        for member in tf.getmembers():
-            # course xml file is in the root directory
-            course_id, run_tag = parse_course_id("course/course.xml")
-            # use the run_tag to get the course metadata file
-            course_metadata_file = f"{run_tag}.xml"
-            if not member.isdir() and member.path == (
-                f"course/course/{course_metadata_file}"
-            ):
-                course_metadata = parse_course_xml(member.path)
-                course_metadata["course_id"] = course_id
-                json_data[course_metadata["metadata"]] = course_metadata
-    return json_data
+        tar_info = tf.getmember("course/course.xml")
+        course_xml_file = tf.extract(tar_info)
+        # course xml file is in the root directory
+        course_id, run_tag = parse_course_id(course_xml_file)
+        # use the run_tag to get the course metadata file
+        tar_info = tf.getmember(f"course/course/{run_tag}.xml")
+        course_metadata_file = tf.extract(tar_info)
+        course_metadata = parse_course_xml(course_metadata_file)
+        course_metadata["course_id"] = course_id
+        course_xml_file.unlink()
+        course_metadata_file.unlink()
+    return course_metadata
 
 
 def parse_course_xml(metadata_file: str) -> dict[str, Any]:
@@ -246,13 +244,3 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
         "slug": slug,
         "chapter_ids": chapter_ids,
     }
-
-
-def write_course_json_file(metadata: dict[str, Any], metadata_file: Path):
-    """
-    Write a one line JSON file containing the dictionary of course metadata.
-
-    :param metadata: The dictionary with course metadata to be written to the file.
-    :param metadata_file: The path for the new JSON file with the course metadata.
-    """
-    metadata_file.write_text(json.dumps(metadata))
