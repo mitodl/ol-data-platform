@@ -15,5 +15,5 @@ select
     , a.id
     , a.score_type
 from a
-left join s on a.submission_uuid = s.uuid
-left join si on s.student_item_id = si.id
+inner join s on a.submission_uuid = s.uuid
+inner join si on s.student_item_id = si.id
