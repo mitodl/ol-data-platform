@@ -168,6 +168,43 @@ models:
 - name: int__ocw__resources
   description: supporting table for resources in OCW
   columns:
+  - name: course_uuid
+    description: str, UUID of course containing resource
+    tests:
+    - not_null
+    - unique
+  - name: course_name
+    description: str, name of the course
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+  - name: resource_type
+    description: str, resource type (image, video, etc.)
+    tests:
+    - not_null
+  - name: resource_uuid
+    description: str, UUID of the resource
+    tests:
+    - not_null
+  - name: resource_filename
+    description: str, filename of the resource file
+    tests:
+    - not_null
+  - name: resource_draft
+    description: boolean, whether the resource is draft
+    tests:
+    - not_null
+  - name: course_number
+    description: str, primary course number of the course
+    tests:
+    - not_null
+  - name: metadata
+    description: json, metadata of the resource
+    tests:
+    - not_null
   - name: image_alt_text
     description: str, alt text of the image resource
   - name: image_caption
