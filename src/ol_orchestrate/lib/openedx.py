@@ -158,15 +158,16 @@ def process_course_xml(archive_path: Path) -> dict[str, Any]:
     :rtype: Dict[str, Any]
     """
     with tarfile.open(archive_path, "r") as tf:
-        tar_info = tf.getmember("course/course.xml")
-        course_xml_file = tf.extract(tar_info)
-        # course xml file is in the root directory
-        course_id, run_tag = parse_course_id(course_xml_file)
-        # use the run_tag to get the course metadata file
-        tar_info = tf.getmember(f"course/course/{run_tag}.xml")
-        course_metadata_file = Path('course_metadata.xml')
-        tf.extract(tar_info, path=course_metadata_file)
-        course_metadata = parse_course_xml(course_metadata_file)
+        # get course info from the course xml file in the root directory
+        tar_info_course = tf.getmember("course/course.xml")
+        course_xml_file = Path("course.xml")
+        tf.extract(tar_info_course, path=course_xml_file)
+        course_id, run_tag = parse_course_id(str(course_xml_file))
+        # use the run_tag to find the course metadata file
+        tar_info_metadata = tf.getmember(f"course/course/{run_tag}.xml")
+        course_metadata_file = Path("course_metadata.xml")
+        tf.extract(tar_info_metadata, path=course_metadata_file)
+        course_metadata = parse_course_xml(str(course_metadata_file))
         course_metadata["course_id"] = course_id
         course_xml_file.unlink()
         course_metadata_file.unlink()
@@ -197,8 +198,8 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
     course_image = metadata_root.attrib.get("course_image", None)
     days_early_for_beta = metadata_root.attrib.get("days_early_for_beta", None)
     display_name = metadata_root.attrib.get("display_name", None)
-    enable_subsection_gating = metadata_root.attrib.get(
-        "enable_subsection_gating", None
+    enable_subsection_gating = bool(
+        metadata_root.attrib.get("enable_subsection_gating", None)
     )
     end = metadata_root.attrib.get("end", None)
     enrollment_end = metadata_root.attrib.get("enrollment_end", None)
@@ -210,12 +211,11 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
     learning_info = metadata_root.attrib.get("learning_info", None)
     minimum_grade_credit = metadata_root.attrib.get("minimum_grade_credit", None)
     mobile_available = metadata_root.attrib.get("mobile_available", None)
-    self_paced = metadata_root.attrib.get("self_paced", None)
+    self_paced = bool(metadata_root.attrib.get("self_paced", None))
     start = metadata_root.attrib.get("start", None)
     video_upload_pipeline = metadata_root.attrib.get("video_upload_pipeline", None)
     wiki = metadata_root.find("wiki", None)
-    if wiki:
-        slug = wiki.attrib.get("slug", None)
+    slug = wiki.attrib.get("slug", None) if wiki else None
     chapters = metadata_root.findall("chapter", None)
     # if there is chapter data
     if len(chapters) > 0:
