@@ -183,61 +183,25 @@ models:
     tests:
     - not_null
   - name: metadata_body
-    description: body of the metadata
+    description: str, body of the metadata
   - name: metadata_description
-    description: description of the metadata
+    description: str, description of the metadata
   - name: metadata_draft
-    description: resource draft status, according to metadata
+    description: boolean, resource draft status, according to metadata
   - name: metadata_file
-    description: file associated with the resource
+    description: str, file associated with the resource
   - name: metadata_file_size
-    description: size of the file associated with the resource
+    description: int, size of the file associated with the resource
   - name: metadata_license
-    description: license of the image or external resource
+    description: str, license of the image or external resource
   - name: metadata_legacy_type
-    description: legacy type (from Plone)
+    description: str, legacy type (from Plone)
   - name: metadata_resource_type
-    description: resource type, according to metadata
+    description: str, resource type, according to metadata
   - name: metadata_title
-    description: title, according to metadata
+    description: str, title, according to metadata
   - name: metadata_uid
-    description: UUID of the resource, according to metadata
-  - name: metadata_image_alt_text
-    description: alt text of the image resource
-  - name: metadata_image_caption
-    description: The caption of the image in the metadata
-  - name: metadata_image_credit
-    description: credit of the image resource
-  - name: image_alt_text
-    description: alt text of the image resource
-  - name: image_caption
-    description: caption of the image resourec
-  - name: image_credit
-    description: credit of the image resource
-  - name: video_youtube_speakers
-    description: speakers in the YouTube video
-  - name: video_youtube_tags
-    description: tags of the YouTube video
-  - name: video_youtube_description
-    description: description of the YouTube video
-  - name: video_youtube_id
-    description: YouTube ID of the video
-  - name: video_archive_url
-    description: archive URL of the video
-  - name: video_captions_file
-    description: captions file of the video resource
-  - name: video_thumbnail_file
-    description: thumbnail file of the video resource
-  - name: video_transcript_file
-    description: transcript file of the video resource
-  - name: external_resource_backup_url
-    description: backup URL of the external resource
-  - name: external_resource_url
-    description: URL of the external resource
-  - name: external_resource_license_warning
-    description: whether the external resource has a license warning
-  - name: external_resource_is_broken
-    description: whether the external resource link is broken
+    description: str, UUID of the resource, according to metadata
 
 - name: stg__ocw__studio__postgres__websites_websitestarter
   description: OCW starter projects that containing site configurations

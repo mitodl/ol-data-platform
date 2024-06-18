@@ -19,8 +19,7 @@ select
     , websitecontents.websitecontent_filename as resource_filename
     , websitecontents.metadata_draft as resource_draft
     , websites.primary_course_number as course_number
-    , websitecontents.video_captions_file
-    , websitecontents.video_transcript_file
+    , websitecontents.websitecontent_metadata as metadata --noqa: disable=RF04
     , 'https://ocw-studio.odl.mit.edu/sites/'
     || websites.website_name
     || '/type/'
@@ -28,15 +27,59 @@ select
     || '/edit/'
     || websitecontents.websitecontent_text_id
     || '/' as studio_url
+    -- image_metadata for image resources; could be in metadata or image_metadata
+    -- noqa: disable=RF02
     , COALESCE(
-        NULLIF(websitecontents.image_alt_text, ''), NULLIF(websitecontents.metadata_image_alt_text, '')
+        NULLIF(JSON_QUERY(websitecontents.websitecontent_metadata, 'lax $.metadata."image-alt"' omit quotes), '')
+        , NULLIF(
+            JSON_QUERY(websitecontents.websitecontent_metadata, 'lax $.image_metadata."image-alt"' omit quotes), ''
+        )
     ) as image_alt_text
     , COALESCE(
-        NULLIF(websitecontents.image_caption, ''), NULLIF(websitecontents.metadata_image_caption, '')
+        NULLIF(JSON_QUERY(websitecontents.websitecontent_metadata, 'lax $.metadata.caption' omit quotes), '')
+        , NULLIF(JSON_QUERY(websitecontents.websitecontent_metadata, 'lax $.image_metadata.caption' omit quotes), '')
     ) as image_caption
     , COALESCE(
-        NULLIF(websitecontents.image_credit, ''), NULLIF(websitecontents.metadata_image_credit, '')
+        NULLIF(JSON_QUERY(websitecontents.websitecontent_metadata, 'lax $.metadata.credit' omit quotes), '')
+        , NULLIF(JSON_QUERY(websitecontents.websitecontent_metadata, 'lax $.image_metadata.credit' omit quotes), '')
     ) as image_credit
+    -- video_metadata for video resources
+    , JSON_QUERY(
+        websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_speakers' omit quotes
+    ) as video_youtube_speakers
+    , JSON_QUERY(
+        websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_tags' omit quotes
+    ) as video_youtube_tags
+    , JSON_QUERY(
+        websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_description' omit quotes
+    ) as video_youtube_description
+    , JSON_QUERY(
+        websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_id' omit quotes
+    ) as video_youtube_id
+    -- video_files for video resources
+    , JSON_QUERY(
+        websitecontents.websitecontent_metadata, 'lax $.video_files.archive_url' omit quotes
+    ) as video_archive_url
+    , JSON_QUERY(
+        websitecontents.websitecontent_metadata, 'lax $.video_files.video_captions_file' omit quotes
+    ) as video_captions_file
+    , JSON_QUERY(
+        websitecontents.websitecontent_metadata, 'lax $.video_files.video_thumbnail_file' omit quotes
+    ) as video_thumbnail_file
+    , JSON_QUERY(
+        websitecontents.websitecontent_metadata, 'lax $.video_files.video_transcript_file' omit quotes
+    ) as video_transcript_file
+    -- external resources
+    , JSON_QUERY(
+        websitecontents.websitecontent_metadata, 'lax $.backup_url' omit quotes
+    ) as external_resource_backup_url
+    , JSON_QUERY(websitecontents.websitecontent_metadata, 'lax $.external_url' omit quotes) as external_resource_url
+    , CAST(
+        JSON_QUERY(websitecontents.websitecontent_metadata, 'lax $.has_external_license_warning' omit quotes) as boolean
+    ) as external_resource_license_warning
+    , CAST(
+        JSON_QUERY(websitecontents.websitecontent_metadata, 'lax $.is_broken' omit quotes) as boolean
+    ) as external_resource_is_broken
 
 from websites
 inner join websitecontents

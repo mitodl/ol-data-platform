@@ -45,7 +45,7 @@ with source as (
         -- miscellaneous metadata
         , json_query(metadata, 'lax $.body' omit quotes) as metadata_body
         , json_query(metadata, 'lax $.description' omit quotes) as metadata_description
-        , json_query(metadata, 'lax $.draft' omit quotes) as metadata_draft
+        , cast(json_query(metadata, 'lax $.draft' omit quotes) as boolean) as metadata_draft
         , json_query(metadata, 'lax $.file' omit quotes) as metadata_file
         , json_query(metadata, 'lax $.file_size' omit quotes) as metadata_file_size
         , json_query(metadata, 'lax $.license' omit quotes) as metadata_license
@@ -53,28 +53,6 @@ with source as (
         , json_query(metadata, 'lax $.resourcetype' omit quotes) as metadata_resource_type
         , json_query(metadata, 'lax $.title' omit quotes) as metadata_title
         , json_query(metadata, 'lax $.uid' omit quotes) as metadata_uid
-        -- image_metadata for image resources; could be in metadata or image_metadata
-        , json_query(metadata, 'lax $.metadata.image-alt' omit quotes) as metadata_image_alt_text
-        , json_query(metadata, 'lax $.metadata.caption' omit quotes) as metadata_image_caption
-        , json_query(metadata, 'lax $.metadata.credit' omit quotes) as metadata_image_credit
-        , json_query(metadata, 'lax $.image_metadata.image-alt' omit quotes) as image_alt_text
-        , json_query(metadata, 'lax $.image_metadata.caption' omit quotes) as image_caption
-        , json_query(metadata, 'lax $.image_metadata.credit' omit quotes) as image_credit
-        -- video_metadata for video resources
-        , json_query(metadata, 'lax $.video_metadata.video_speakers' omit quotes) as video_youtube_speakers
-        , json_query(metadata, 'lax $.video_metadata.video_tags' omit quotes) as video_youtube_tags
-        , json_query(metadata, 'lax $.video_metadata.youtube_description' omit quotes) as video_youtube_description
-        , json_query(metadata, 'lax $.video_metadata.youtube_id' omit quotes) as video_youtube_id
-        -- video_files for video resources
-        , json_query(metadata, 'lax $.video_files.archive_url' omit quotes) as video_archive_url
-        , json_query(metadata, 'lax $.video_files.video_captions_file' omit quotes) as video_captions_file
-        , json_query(metadata, 'lax $.video_files.video_thumbnail_file' omit quotes) as video_thumbnail_file
-        , json_query(metadata, 'lax $.video_files.video_transcript_file' omit quotes) as video_transcript_file
-        -- external resources
-        , json_query(metadata, 'lax $.backup_url' omit quotes) as external_resource_backup_url
-        , json_query(metadata, 'lax $.external_url' omit quotes) as external_resource_url
-        , json_query(metadata, 'lax $.has_external_license_warning' omit quotes) as external_resource_license_warning
-        , json_query(metadata, 'lax $.is_broken' omit quotes) as external_resource_is_broken
 
     from source
 
