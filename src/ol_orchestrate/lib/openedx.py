@@ -164,7 +164,7 @@ def process_course_xml(archive_path: Path) -> dict[str, Any]:
         course_id, run_tag = parse_course_id(course_xml_file)
         # use the run_tag to get the course metadata file
         tar_info = tf.getmember(f"course/course/{run_tag}.xml")
-        course_metadata_file = Path('course_metadata.xml')
+        course_metadata_file = Path("course_metadata.xml")
         tf.extract(tar_info, path=course_metadata_file)
         course_metadata = parse_course_xml(course_metadata_file)
         course_metadata["course_id"] = course_id
