@@ -187,13 +187,15 @@ models:
     grants:
       select: ['finance']
   columns:
-  - name: coupon_code
-    description: str, discount code for the redeemed coupon if applicable
-  - name: coupon_redeemed_on
-    description: timestamp, specifying when the discount was redeemed by the user
-  - name: coupon_type
-    description: str, type of the coupon which describes what circumstances the coupon
-      can be redeemed.
+  - name: platform
+    description: string, application where the data is from
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
+  - name: courserunenrollment_id
+    description: int, internal ID and foreign key to courserunenrollments on the corresponding
+      platform. Null for enrollments on edX.org.
   - name: course_readable_id
     description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
       Online and xPro courses, and {org}/{course} for edX.org courses. May be null
@@ -207,6 +209,13 @@ models:
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "platform != 'edX.org'"
+  - name: coupon_code
+    description: str, discount code for the redeemed coupon if applicable
+  - name: coupon_redeemed_on
+    description: timestamp, specifying when the discount was redeemed by the user
+  - name: coupon_type
+    description: str, type of the coupon which describes what circumstances the coupon
+      can be redeemed.
   - name: courserun_end_on
     description: timestamp, date and time when the course run ends. May be Null.
   - name: courserun_id
@@ -249,9 +258,6 @@ models:
   - name: courserunenrollment_enrollment_status
     description: string, enrollment status for users whose enrollment changed on the
       corresponding platform
-  - name: courserunenrollment_id
-    description: int, internal ID and foreign key to courserunenrollments on the corresponding
-      platform. Null for enrollments on edX.org.
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the enrollment is active
     tests:
@@ -278,32 +284,6 @@ models:
   - name: order_reference_number
     description: string, order reference number to identify an order on the corresponding
       platform, e.g. mitxonline-production-20
-  - name: payment_bill_to_address_country
-    description: str, address country from most recent cybersource payment
-  - name: payment_bill_to_address_state
-    description: str, address state from most recent cybersource payment
-  - name: payment_method
-    description: str, payment method from cybersource receipt. Value could be 'paypal'
-      or 'card'.
-  - name: payment_transaction_id
-    description: str, unique identifier from most recent cybersource payment or UUID.
-  - name: payment_type
-    description: str, for xPro, the possible values are "staff", "marketing", "credit_card",
-      "purchase_order", "sales". For MITx Online, it's one of "marketing", "sales",
-      "financial-assistance", "customer-support", "staff", "legacy". Null for Bootcamps
-      or MicroMasters orders.
-  - name: platform
-    description: string, application where the data is from
-    tests:
-    - not_null
-    - accepted_values:
-        values: '{{ var("platforms") }}'
-  - name: product_id
-    description: int, unique identifier/foreign key to ecommerce products on MITx
-      Online or xPro.
-  - name: product_program_readable_id
-    description: str, open edX program readable ID associated to ecommerce products
-      on MITx Online or xPro. Blank means that the product is course run.
   - name: unit_price
     description: numeric, price for the order line item before discount
   - name: user_company
@@ -336,7 +316,7 @@ models:
       column_list: ["courserunenrollment_id"]
       row_condition: "platform ='MITx Online'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id", "product_id"]
+      column_list: ["courserunenrollment_id"]
       row_condition: "platform ='xPro'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id", "order_reference_number"]
