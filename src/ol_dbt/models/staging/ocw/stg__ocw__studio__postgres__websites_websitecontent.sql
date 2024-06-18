@@ -45,7 +45,7 @@ with source as (
         -- miscellaneous metadata
         , json_query(metadata, 'lax $.body' omit quotes) as metadata_body
         , json_query(metadata, 'lax $.description' omit quotes) as metadata_description
-        , cast(json_query(metadata, 'lax $.draft' omit quotes) as boolean) as metadata_draft
+        , cast(nullif(json_query(metadata, 'lax $.draft' omit quotes), '') as boolean) as metadata_draft
         , json_query(metadata, 'lax $.file' omit quotes) as metadata_file
         , json_query(metadata, 'lax $.file_size' omit quotes) as metadata_file_size
         , json_query(metadata, 'lax $.license' omit quotes) as metadata_license
