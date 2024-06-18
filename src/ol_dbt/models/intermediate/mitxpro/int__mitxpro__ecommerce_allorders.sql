@@ -70,6 +70,7 @@ with b2becommerce_b2border as (
         , b2becommerce_b2border.b2border_discount
         , users.user_email
         , ecommerce_line.product_type
+        , course_runs.courserun_id
         , course_runs.courserun_readable_id
         , programs.program_readable_id
         , ecommerce_order.coupon_id
@@ -80,6 +81,10 @@ with b2becommerce_b2border as (
         , ecommerce_order.receipt_reference_number as req_reference_number
         , ecommerce_order.receipt_authorization_code
         , ecommerce_order.receipt_transaction_id
+        , ecommerce_order.receipt_payment_method
+        , ecommerce_order.receipt_bill_to_address_state
+        , ecommerce_order.receipt_bill_to_address_country
+        , ecommerce_couponredemption.couponredemption_created_on as coupon_redeemed_on
         , case when ecommerce_couponredemption.couponredemption_id is not null then true end as redeemed
     from ecommerce_order
     inner join ecommerce_line
@@ -115,6 +120,7 @@ with b2becommerce_b2border as (
         , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
         , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
         , b2becommerce_b2border.b2border_discount
+        , course_runs.courserun_id
         , course_runs.courserun_readable_id
         , programs.program_readable_id
         , ecommerce_coupon.coupon_id
@@ -128,6 +134,10 @@ with b2becommerce_b2border as (
         , b2becommerce_b2breceipt.b2breceipt_reference_number as req_reference_number
         , b2becommerce_b2breceipt.b2breceipt_authorization_code as receipt_authorization_code
         , b2becommerce_b2breceipt.b2breceipt_transaction_id as receipt_transaction_id
+        , b2becommerce_b2breceipt.b2breceipt_payment_method as receipt_payment_method
+        , b2becommerce_b2breceipt.b2breceipt_bill_to_address_state as receipt_bill_to_address_state
+        , b2becommerce_b2breceipt.b2breceipt_bill_to_address_country as receipt_bill_to_address_country
+        , b2becommerce_b2bcouponredemption.b2bcouponredemption_created_on as coupon_redeemed_on
         , case when b2becommerce_b2bcouponredemption.b2bcouponredemption_id is not null then true end as redeemed
     from b2becommerce_b2border
     left join ecommerce_couponpaymentversion
@@ -166,8 +176,10 @@ select
     , couponpaymentversion_coupon_type
     , b2border_discount
     , redeemed
+    , coupon_redeemed_on
     , user_email
     , product_type
+    , courserun_id
     , courserun_readable_id
     , program_readable_id
     , coupon_id
@@ -177,6 +189,9 @@ select
     , productversion_readable_id
     , receipt_authorization_code
     , receipt_transaction_id
+    , receipt_payment_method
+    , receipt_bill_to_address_state
+    , receipt_bill_to_address_country
 from reg_order_fields
 
 union distinct
@@ -192,8 +207,10 @@ select
     , couponpaymentversion_coupon_type
     , b2border_discount
     , redeemed
+    , coupon_redeemed_on
     , user_email
     , product_type
+    , courserun_id
     , courserun_readable_id
     , program_readable_id
     , coupon_id
@@ -203,4 +220,7 @@ select
     , productversion_readable_id
     , receipt_authorization_code
     , receipt_transaction_id
+    , receipt_payment_method
+    , receipt_bill_to_address_state
+    , receipt_bill_to_address_country
 from b2b_order_fields

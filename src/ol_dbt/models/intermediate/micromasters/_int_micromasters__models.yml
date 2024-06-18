@@ -7,7 +7,7 @@ models:
     had any new data for this table since 2022-09.
   columns:
   - name: program_title
-    description: str, title of the program
+    description: str, title of the MicroMasters program
     tests:
     - not_null
   - name: micromasters_program_id
@@ -15,10 +15,21 @@ models:
   - name: mitxonline_program_id
     description: int, id of the program in the mitxonline database
   - name: course_title
-    description: str, title of the course for example Foundations of Modern Finance
-      I
+    description: str, title of the course, for example Data Analysis for Social Scientists
   - name: course_number
     description: str, course number, for example 14.73x or JPAL102x
+  - name: examrun_readable_id
+    description: str, edX exam run ID formatted as course-v1:{org}+{exam code}+{semester},
+      e.g., course-v1:MITxT+14.100PEx+2T2022. May be null for exam runs before 2022.
+  - name: examrun_semester
+    description: str, semester for the exam run, e.g., 2T2022.
+    tests:
+    - not_null
+  - name: examrun_passing_grade
+    description: float, passing grade for the exam run, range between 0 to 1. Default
+      to 0.5.
+    tests:
+    - not_null
   - name: user_edxorg_username
     description: str, username on edX.org
   - name: user_mitxonline_username
@@ -31,28 +42,46 @@ models:
     - not_null
   - name: user_mitxonline_email
     description: str, current user email on mitxonline
+  - name: proctoredexamgrade_passing_score
+    description: float, passing score set for the proctored exam, range between 0
+      to 100
+    tests:
+    - not_null
   - name: proctoredexamgrade_score
-    description: float, user score for the course, range between 0 to 100
+    description: float, user score for the proctored exam, range between 0 to 100
+    tests:
+    - not_null
+  - name: proctoredexamgrade_percentage_grade
+    description: float, user percentage grade for the proctored exam, range between
+      0 to 1
+    tests:
+    - not_null
   - name: proctoredexamgrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
-      set for this course
-  - name: proctoredexamgrade_passing_score
-    description: float, passing score for the course, range between 0 to 100
-  - name: proctoredexamgrade_percentage_grade
-    description: float, user percentage grade for the course, range between 0 to 1
+      set for this proctored exam
+    tests:
+    - not_null
   - name: proctoredexamgrade_exam_on
     description: timestamp, date and time the learner took the exam
+    tests:
+    - not_null
   - name: proctoredexamgrade_created_on
     description: timestamp, date and time when this grade was initially created
+    tests:
+    - not_null
   - name: proctoredexamgrade_updated_on
     description: timestamp, date and time when this grade was most recently updated
     tests:
     - not_null
   - name: proctoredexamgrade_id
-    description: int, sequential ID representing a DEDP proctor exam grade
+    description: int, sequential ID representing a DEDP proctored exam grade in MicroMasters
+      database
     tests:
     - not_null
     - unique
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_micromasters_email", "proctoredexamgrade_exam_on"]
 
 - name: int__micromasters__course_enrollments
   description: MicroMasters enrollments. Enrollments in courses that satisfy the requirements
@@ -481,10 +510,32 @@ models:
     description: int, primary key in users_user for the purchaser
     tests:
     - not_null
+  - name: user_username
+    description: str, username on MicroMasters
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_edxorg_id
+    description: int, user ID on edX.org
+  - name: user_edxorg_email
+    description: str, user email on edX.org
+  - name: user_mitxonline_username
+    description: str, username on MITx Online
+  - name: user_full_name
+    description: str, user full name on MicroMasters
+  - name: user_email
+    description: str, user email on MicroMasters
+    tests:
+    - not_null
   - name: order_reference_number
     description: string, readable id for the order
     tests:
     - unique
+  - name: line_id
+    description: int, foreign key to ecommerce_line
+    tests:
+    - not_null
   - name: line_price
     description: numeric, list price for the order line
     tests:
@@ -496,6 +547,9 @@ models:
   - name: courserun_edxorg_readable_id
     description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
       to match course in edxorg
+  - name: courserun_platform
+    description: str, indicating the platform where the course runs on. It's either
+      MITx Online or edX.org.
   - name: receipt_transaction_id
     description: str, transaction identifier from most recent cybersource payment
       for the order
@@ -519,6 +573,8 @@ models:
   - name: discount_amount
     description: numeric, actual discount dollar amount. For percent-discount coupon,
       this is calculated as line_price * percentage off
+  - name: coupon_id
+    description: int, foreign key to ecommerce_coupon
   - name: coupon_type
     description: str, type of the coupon which describes what circumstances the coupon
       can be redeemed. Possible values are "standard" or "discounted-previous-course".
@@ -529,6 +585,7 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__ecommerce_order')
+
 - name: int__micromasters__program_enrollments
   description: MicroMasters program enrolled users
   columns:

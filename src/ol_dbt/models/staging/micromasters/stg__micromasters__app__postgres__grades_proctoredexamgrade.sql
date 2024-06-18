@@ -10,7 +10,7 @@ with source as (
         id as proctoredexamgrade_id
         , user_id
         , course_id
-        , passing_score as proctoredexamgrade_passing_score
+        , if(passing_score < 1, passing_score * 100, passing_score) as proctoredexamgrade_passing_score
         , passed as proctoredexamgrade_is_passing
         , score as proctoredexamgrade_score
         , grade as proctoredexamgrade_letter_grade
