@@ -88,6 +88,8 @@ models:
     description: timestamp, date and time when the website record was last updated
     tests:
     - not_null
+  - name: primary_course_number
+    description: str, primary course number of the course
 
 - name: stg__ocw__studio__postgres__websites_websitecontent
   description: OCW website content components such as page, resource, sitemetadata,

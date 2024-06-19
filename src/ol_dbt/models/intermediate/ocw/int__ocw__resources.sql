@@ -37,7 +37,7 @@ select
     || '/' as studio_url
     -- video_metadata for video resources
     , coalesce(
-        nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata."image-alt"' omit quotes), '')
+        nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.image_alt' omit quotes), '')
         , nullif(
             json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata."image-alt"' omit quotes), ''
         )
