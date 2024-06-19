@@ -31,6 +31,7 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('publish_date') }} as website_publish_date_updated_on
         ,{{ cast_timestamp_to_iso8601('created_on') }} as website_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as website_updated_on
+        , json_query(metadata, 'lax $.primary_course_number' omit quotes) as primary_course_number
 
     from source
 

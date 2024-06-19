@@ -18,7 +18,7 @@ models:
     - not_null
     - unique
   - name: website_short_id
-    description: str, short unique identifier for the OCW website. e.g. 18.05-spring-2022
+    description: str, short unique identifier for the OCW website. e.g., 18.05-spring-2022
     tests:
     - not_null
     - unique
@@ -39,7 +39,7 @@ models:
     - accepted_values:
         values: ["studio", "ocw-import"]
   - name: website_url_path
-    description: str, unique url relative path to the OCW website. e.g. courses/my-site-fall-2020
+    description: str, unique url relative path to the OCW website. e.g., courses/my-site-fall-2020
   - name: website_live_url
     description: str, webiste url on OCW production.
   - name: website_is_live
@@ -60,7 +60,7 @@ models:
   - name: website_metadata
     description: json, the json object that contains website's metadata such as description,
       course number, topics, department_numbers, instructors, etc. Full list of metadata
-      field can be found https://github.com/mitodl/ocw-hugo-projects/blob/main/ocw-course-v2/ocw-studio.yaml
+      fields can be found at https://github.com/mitodl/ocw-hugo-projects/blob/main/ocw-course-v2/ocw-studio.yaml
   - name: website_last_published_by_user_id
     description: int, foreign key to users_user, indicating who most recently published
       the website to OCW production
@@ -88,6 +88,8 @@ models:
     description: timestamp, date and time when the website record was last updated
     tests:
     - not_null
+  - name: primary_course_number
+    description: str, primary course number of the course
 
 - name: stg__ocw__studio__postgres__websites_websitecontent
   description: OCW website content components such as page, resource, sitemetadata,
@@ -109,7 +111,7 @@ models:
   - name: websitecontent_title
     description: str, title of this content component
   - name: websitecontent_type
-    description: str, type of this content component. e.g. page, sitemetadata, resource,
+    description: str, type of this content component. e.g., page, sitemetadata, resource,
       etc.
     tests:
     - not_null
@@ -124,7 +126,7 @@ models:
     tests:
     - not_null
   - name: websitecontent_dirpath
-    description: str, the directory path for the page content. e.g. content/resources
+    description: str, the directory path for the page content. e.g., content/resources
     tests:
     - not_null
   - name: websitecontent_file
@@ -150,26 +152,26 @@ models:
     description: int, course year extracted from sitemetadata.
   - name: course_level
     description: str, course level extracted from sitemetadata. Possible values are
-      Undergraduate , Graduate, Non-Credit, High School, or blank
+      Undergraduate, Graduate, Non-Credit, High School, or blank
   - name: course_topics
     description: json, hierarchical course topics (topic, subtopic, speciality) from
-      sitemetadata. e.g. [["Mathematics","Discrete Mathematics"],["Mathematics","Probability
+      sitemetadata. e.g., [["Mathematics","Discrete Mathematics"],["Mathematics","Probability
       and Statistics"]]
   - name: course_instructor_uuids
     description: json, course instructor's uuid extracted from sitemetadata
   - name: course_learning_resource_types
     description: str, course learning resource types or features extracted from sitemetadata
-      e.g. Lecture Notes, Problem Sets with Solutions...
+      e.g., Lecture Notes, Problem Sets with Solutions...
   - name: course_department_numbers
-    description: str, course department numbers in comma-separate list. e.g. STS,
+    description: str, course department numbers in comma-separated list. e.g., STS,
       8..
   - name: course_department_numbers_json
-    description: json, course department numbers in json array. e.g. ["STS", "8"..]
+    description: json, course department numbers in json array. e.g., ["STS", "8"..]
   - name: course_primary_course_number
-    description: str, the primary course number extracted from sitemetadata. e.g.
+    description: str, the primary course number extracted from sitemetadata. e.g.,
       21A.850J
   - name: course_extra_course_numbers
-    description: str, the extra course number extracted from sitemetadata. e.g. STS.484J
+    description: str, the extra course number extracted from sitemetadata. e.g., STS.484J
   - name: websitecontent_deleted_on
     description: timestamp, date and time for the soft delete
   - name: websitecontent_created_on
@@ -182,6 +184,26 @@ models:
       last updated
     tests:
     - not_null
+  - name: metadata_body
+    description: str, body of the metadata
+  - name: metadata_description
+    description: str, description of the metadata
+  - name: metadata_draft
+    description: boolean, resource draft status, according to metadata
+  - name: metadata_file
+    description: str, file associated with the resource
+  - name: metadata_file_size
+    description: int, size of the file associated with the resource
+  - name: metadata_license
+    description: str, license of the image or external resource
+  - name: metadata_legacy_type
+    description: str, legacy type (from Plone)
+  - name: metadata_resource_type
+    description: str, resource type, according to metadata
+  - name: metadata_title
+    description: str, title, according to metadata
+  - name: metadata_uid
+    description: str, UUID of the resource, according to metadata
 
 - name: stg__ocw__studio__postgres__websites_websitestarter
   description: OCW starter projects that containing site configurations
@@ -196,7 +218,7 @@ models:
     tests:
     - not_null
   - name: websitestarter_slug
-    description: str, short string to identify this starter. e.g. ocw-course-v2
+    description: str, short string to identify this starter. e.g., ocw-course-v2
     tests:
     - not_null
     - unique

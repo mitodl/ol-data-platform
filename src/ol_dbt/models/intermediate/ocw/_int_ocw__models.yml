@@ -164,3 +164,70 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["course_uuid", "course_department_number"]
+
+- name: int__ocw__resources
+  description: supporting table for resources in OCW
+  columns:
+  - name: course_uuid
+    description: str, UUID of course containing resource
+    tests:
+    - not_null
+  - name: course_name
+    description: str, name of the course
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+  - name: resource_type
+    description: str, resource type (image, video, etc.)
+  - name: resource_uuid
+    description: str, UUID of the resource
+    tests:
+    - not_null
+  - name: resource_filename
+    description: str, filename of the resource file
+    tests:
+    - not_null
+  - name: resource_draft
+    description: boolean, whether the resource is draft
+  - name: course_number
+    description: str, primary course number of the course
+  - name: metadata
+    description: json, metadata of the resource
+    tests:
+    - not_null
+  - name: image_alt_text
+    description: str, alt text of the image resource
+  - name: image_caption
+    description: str, caption of the image resourec
+  - name: image_credit
+    description: str, credit of the image resource
+  - name: video_youtube_speakers
+    description: str, speakers in the YouTube video
+  - name: video_youtube_tags
+    description: str, tags of the YouTube video
+  - name: video_youtube_description
+    description: str, description of the YouTube video
+  - name: video_youtube_id
+    description: str, YouTube ID of the video
+  - name: video_archive_url
+    description: str, archive URL of the video
+  - name: video_captions_file
+    description: str, captions file of the video resource
+  - name: video_thumbnail_file
+    description: str, thumbnail file of the video resource
+  - name: video_transcript_file
+    description: str, transcript file of the video resource
+  - name: external_resource_backup_url
+    description: str, backup URL of the external resource
+  - name: external_resource_url
+    description: URL of the external resource
+  - name: external_resource_license_warning
+    description: boolean, whether the external resource has a license warning
+  - name: external_resource_is_broken
+    description: boolean, whether the external resource link is broken
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_uuid", "resource_uuid"]

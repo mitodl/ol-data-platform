@@ -24,7 +24,7 @@ with source as (
         , json_query(metadata, 'lax $.course_description' omit quotes) as course_description
         , nullif(json_query(metadata, 'lax $.term' omit quotes), '') as course_term
         , nullif(json_query(metadata, 'lax $.year' omit quotes), '') as course_year
-        -- convert to comma-separate list to be consistent with extra_course_numbers
+        -- convert to comma-separated list to be consistent with extra_course_numbers
         , array_join(
             cast(json_parse(json_query(metadata, 'lax $.level')) as array (varchar)), ', ' --noqa
         ) as course_level
@@ -42,6 +42,17 @@ with source as (
         , {{ cast_timestamp_to_iso8601('deleted') }} as websitecontent_deleted_on
         , {{ cast_timestamp_to_iso8601('created_on') }} as websitecontent_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as websitecontent_updated_on
+        -- miscellaneous metadata
+        , json_query(metadata, 'lax $.body' omit quotes) as metadata_body
+        , json_query(metadata, 'lax $.description' omit quotes) as metadata_description
+        , cast(nullif(json_query(metadata, 'lax $.draft' omit quotes), '') as boolean) as metadata_draft
+        , json_query(metadata, 'lax $.file' omit quotes) as metadata_file
+        , json_query(metadata, 'lax $.file_size' omit quotes) as metadata_file_size
+        , json_query(metadata, 'lax $.license' omit quotes) as metadata_license
+        , json_query(metadata, 'lax $.ocw_type' omit quotes) as metadata_legacy_type
+        , json_query(metadata, 'lax $.resourcetype' omit quotes) as metadata_resource_type
+        , json_query(metadata, 'lax $.title' omit quotes) as metadata_title
+        , json_query(metadata, 'lax $.uid' omit quotes) as metadata_uid
 
     from source
 
