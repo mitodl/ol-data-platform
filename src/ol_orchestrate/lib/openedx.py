@@ -218,8 +218,11 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
     slug = wiki.attrib.get("slug", None) if wiki else None
     chapters = metadata_root.findall("chapter", None)
     # if there is chapter data
-    if len(chapters) > 0:
-        chapter_ids = [chapter.attrib.get("url_name", None) for chapter in chapters]
+    chapter_ids = (
+        [chapter.attrib.get("url_name", None) for chapter in chapters]
+        if len(chapters) > 0
+        else None
+    )
     return {
         "advertised_start": advertised_start,
         "allow_anonymous": allow_anonymous,
