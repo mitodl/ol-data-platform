@@ -93,7 +93,7 @@ def process_video_xml(archive_path: Path) -> dict[str, Any]:
     with tarfile.open(archive_path, "r") as tf:
         tf.extractall(filter="data")
         for member in tf.getmembers():
-            course_id, run_tag = parse_course_id("course/course.xml")
+            course_id, course_number, run_tag = parse_course_id("course/course.xml")
             if not member.isdir() and member.path.startswith("course/video/"):
                 video_data = parse_video_xml(member.path)
                 video_data["course_id"] = course_id
@@ -101,15 +101,16 @@ def process_video_xml(archive_path: Path) -> dict[str, Any]:
     return json_data
 
 
-def parse_course_id(course_xml: str) -> tuple[str, str]:
+def parse_course_id(course_xml: str) -> tuple[str, str, str]:
     """
     Parse the attributes of the course.xml file in the root directory
     and generate a properly formatted course_id string.
 
     :param course_xml: The file path to course.xml file
 
-    :return: A list containing the formatted course_id string and the course run_tag
-    :rtype: list[str]
+    :return: A list containing the formatted course_id string, course_number,
+     and the course run_tag
+    :rtype: tuple[str, str, str]
     """
     with Path(course_xml).open("r") as course:
         tree = ElementTree()
@@ -117,8 +118,8 @@ def parse_course_id(course_xml: str) -> tuple[str, str]:
         course_root = tree.getroot()
         run_tag = str(course_root.attrib.get("url_name", None))
         org = course_root.attrib.get("org", None)
-        course_number = course_root.attrib.get("course", None)
-    return f"course-v1:{org}+{course_number}+{run_tag}", run_tag
+        course_number = str(course_root.attrib.get("course", None))
+    return f"course-v1:{org}+{course_number}+{run_tag}", course_number, run_tag
 
 
 def parse_video_xml(video_file: str) -> dict[str, Any]:
@@ -162,13 +163,15 @@ def process_course_xml(archive_path: Path) -> dict[str, Any]:
         tar_info_course = tf.getmember("course/course.xml")
         course_xml_file = Path("course.xml")
         tf.extract(tar_info_course, path=course_xml_file)
-        course_id, run_tag = parse_course_id(str(course_xml_file))
+        course_id, course_number, run_tag = parse_course_id(str(course_xml_file))
         # use the run_tag to find the course metadata file
         tar_info_metadata = tf.getmember(f"course/course/{run_tag}.xml")
         course_metadata_file = Path("course_metadata.xml")
         tf.extract(tar_info_metadata, path=course_metadata_file)
         course_metadata = parse_course_xml(str(course_metadata_file))
         course_metadata["course_id"] = course_id
+        course_metadata["course_number"] = course_number
+        course_metadata["run_tag"] = run_tag
         course_xml_file.unlink()
         course_metadata_file.unlink()
     return course_metadata
