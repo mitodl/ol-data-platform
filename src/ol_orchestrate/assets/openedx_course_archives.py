@@ -25,7 +25,7 @@ def dummy_edxorg_course_xml(): ...
 
 
 @asset(
-    key=AssetKey(("edxorg", "raw_data", "course_metadata")),
+    key=AssetKey(("edxorg", "processed_data", "course_metadata")),
     partitions_def=course_and_source_partitions,
     group_name="edxorg",
     ins={"course_archive": AssetIn(key=AssetKey(("edxorg", "raw_data", "course_xml")))},
