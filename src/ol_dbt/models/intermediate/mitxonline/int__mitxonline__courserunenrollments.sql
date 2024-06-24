@@ -118,7 +118,9 @@ with enrollments as (
         , case
             when
                 dedp_enrollments_verified.user_id is not null
-                and dedp_enrollments_verified.courserun_id is not null then 'verified'
+                and dedp_enrollments_verified.courserun_id is not null
+                and enrollments.courserunenrollment_enrollment_status is null
+                then 'verified'
             else enrollments.courserunenrollment_enrollment_mode
         end as courserunenrollment_enrollment_mode
     from enrollments
