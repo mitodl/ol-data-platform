@@ -93,7 +93,7 @@ def process_video_xml(archive_path: Path) -> dict[str, Any]:
     with tarfile.open(archive_path, "r") as tf:
         tf.extractall(filter="data")
         for member in tf.getmembers():
-            course_id = parse_course_id("course/course.xml")
+            course_id, course_number, run_tag = parse_course_id("course/course.xml")
             if not member.isdir() and member.path.startswith("course/video/"):
                 video_data = parse_video_xml(member.path)
                 video_data["course_id"] = course_id
@@ -101,15 +101,25 @@ def process_video_xml(archive_path: Path) -> dict[str, Any]:
     return json_data
 
 
-def parse_course_id(course_xml: str) -> str:
+def parse_course_id(course_xml: str) -> tuple[str, str, str]:
+    """
+    Parse the attributes of the course.xml file in the root directory
+    and generate a properly formatted course_id string.
+
+    :param course_xml: The file path to course.xml file
+
+    :return: A list containing the formatted course_id string, course_number,
+     and the course run_tag
+    :rtype: tuple[str, str, str]
+    """
     with Path(course_xml).open("r") as course:
         tree = ElementTree()
         tree.parse(course)
         course_root = tree.getroot()
-        run_tag = course_root.attrib.get("url_name", None)
+        run_tag = str(course_root.attrib.get("url_name", None))
         org = course_root.attrib.get("org", None)
-        course_number = course_root.attrib.get("course", None)
-    return f"course-v1:{org}+{course_number}+{run_tag}"
+        course_number = str(course_root.attrib.get("course", None))
+    return f"course-v1:{org}+{course_number}+{run_tag}", course_number, run_tag
 
 
 def parse_video_xml(video_file: str) -> dict[str, Any]:
@@ -134,3 +144,110 @@ def write_video_json_file(video_data: dict[str, Any], video_data_file: Path):
     with Path(video_data_file).open("w") as video_file:
         video_file.write(json.dumps(video_data))
         video_file.write("\n")
+
+
+def process_course_xml(archive_path: Path) -> dict[str, Any]:
+    """
+    Pull course metadata out of course xml files for edx.org courses
+    (edx.org dumps). Process the course bundle by
+    getting the course_id, finding the metadata file path, calling the
+    function to parse the XML, and then return a dictionary with the metadata elements.
+
+    :param archive_path: The path to the tar archive for the course bundle
+
+    :return: A dictionary with the parsed course metadata.
+    :rtype: Dict[str, Any]
+    """
+    with tarfile.open(archive_path, "r") as tf:
+        # get course info from the course xml file in the root directory
+        tar_info_course = tf.getmember("course/course.xml")
+        course_xml_file = Path("course.xml")
+        tf.extract(tar_info_course, path=course_xml_file)
+        course_id, course_number, run_tag = parse_course_id(str(course_xml_file))
+        # use the run_tag to find the course metadata file
+        tar_info_metadata = tf.getmember(f"course/course/{run_tag}.xml")
+        course_metadata_file = Path("course_metadata.xml")
+        tf.extract(tar_info_metadata, path=course_metadata_file)
+        course_metadata = parse_course_xml(str(course_metadata_file))
+        course_metadata["course_id"] = course_id
+        course_metadata["course_number"] = course_number
+        course_metadata["run_tag"] = run_tag
+        course_xml_file.unlink()
+        course_metadata_file.unlink()
+    return course_metadata
+
+
+def parse_course_xml(metadata_file: str) -> dict[str, Any]:
+    """
+    Parse the attributes of the metadata XML file in the 'course/course' directory and
+    generate a dictionary with all the course metadata attributes.
+
+    :param metadata_file: The file path to metadata XML file. References the run_tag
+    from the parse_course_id function ('course/course/{run_tag}.xml').
+
+    :return: A dictionary with all of the course metadata attributes
+    :rtype: dict[str, Any]
+    """
+    with Path(metadata_file).open("r") as metadata:
+        tree = ElementTree()
+        tree.parse(metadata)
+        metadata_root = tree.getroot()
+    advertised_start = metadata_root.attrib.get("advertised_start", None)
+    allow_anonymous = metadata_root.attrib.get("allow_anonymous", None)
+    allow_unsupported_xblocks = metadata_root.attrib.get(
+        "allow_unsupported_xblocks", None
+    )
+    cert_html_view_enabled = metadata_root.attrib.get("cert_html_view_enabled", None)
+    course_image = metadata_root.attrib.get("course_image", None)
+    days_early_for_beta = metadata_root.attrib.get("days_early_for_beta", None)
+    display_name = metadata_root.attrib.get("display_name", None)
+    enable_subsection_gating = bool(
+        metadata_root.attrib.get("enable_subsection_gating", None)
+    )
+    end = metadata_root.attrib.get("end", None)
+    enrollment_end = metadata_root.attrib.get("enrollment_end", None)
+    enrollment_start = metadata_root.attrib.get("enrollment_start", None)
+    giturl = metadata_root.attrib.get("giturl", None)
+    graceperiod = metadata_root.attrib.get("graceperiod", None)
+    instructor_info = metadata_root.attrib.get("instructor_info", None)
+    language = metadata_root.attrib.get("language", None)
+    learning_info = metadata_root.attrib.get("learning_info", None)
+    minimum_grade_credit = metadata_root.attrib.get("minimum_grade_credit", None)
+    mobile_available = metadata_root.attrib.get("mobile_available", None)
+    self_paced = bool(metadata_root.attrib.get("self_paced", None))
+    start = metadata_root.attrib.get("start", None)
+    video_upload_pipeline = metadata_root.attrib.get("video_upload_pipeline", None)
+    wiki = metadata_root.find("wiki", None)
+    slug = wiki.attrib.get("slug", None) if wiki else None
+    chapters = metadata_root.findall("chapter", None)
+    # if there is chapter data
+    chapter_ids = (
+        [chapter.attrib.get("url_name", None) for chapter in chapters]
+        if len(chapters) > 0
+        else []
+    )
+    return {
+        "advertised_start": advertised_start,
+        "allow_anonymous": allow_anonymous,
+        "allow_unsupported_xblocks": allow_unsupported_xblocks,
+        "cert_html_view_enabled": cert_html_view_enabled,
+        "course_image": course_image,
+        "days_early_for_beta": days_early_for_beta,
+        "display_name": display_name,
+        "enable_subsection_gating": enable_subsection_gating,
+        "end": end,
+        "enrollment_end": enrollment_end,
+        "enrollment_start": enrollment_start,
+        "giturl": giturl,
+        "graceperiod": graceperiod,
+        "instructor_info": instructor_info,
+        "language": language,
+        "learning_info": learning_info,
+        "minimum_grade_credit": minimum_grade_credit,
+        "mobile_available": mobile_available,
+        "self_paced": self_paced,
+        "start": start,
+        "video_upload_pipeline": video_upload_pipeline,
+        "slug": slug,
+        "chapter_ids": chapter_ids,
+    }
