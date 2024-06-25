@@ -39,8 +39,8 @@ def extract_edxorg_courserun_metadata(
     context: AssetExecutionContext, course_archive: UPath
 ):
     # Download the remote file to the current working directory
-    course_archive.fs.download(course_archive, ".")
-    course_xml = Path(course_archive.name)
+    course_xml = Path("course.xml.tar.gz")
+    course_archive.fs.get_file(course_archive, course_xml)
     course_metadata = process_course_xml(course_xml)
     course_metadata_file = Path("course_metadata.json")
     course_metadata_file.write_text(json.dumps(course_metadata))

@@ -160,14 +160,18 @@ def process_course_xml(archive_path: Path) -> dict[str, Any]:
     """
     with tarfile.open(archive_path, "r") as tf:
         # get course info from the course xml file in the root directory
-        tar_info_course = tf.getmember("course/course.xml")
+        archive_root = tf.next()
+        if archive_root is None:
+            msg = "Unable to retrieve the archive root of the course XML."
+            raise ValueError(msg)
+        tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
         course_xml_file = Path("course.xml")
-        tf.extract(tar_info_course, path=course_xml_file)
+        tf.extract(tar_info_course, path=course_xml_file, filter="data")
         course_id, course_number, run_tag = parse_course_id(str(course_xml_file))
         # use the run_tag to find the course metadata file
-        tar_info_metadata = tf.getmember(f"course/course/{run_tag}.xml")
+        tar_info_metadata = tf.getmember(f"{archive_root.name}/course/{run_tag}.xml")
         course_metadata_file = Path("course_metadata.xml")
-        tf.extract(tar_info_metadata, path=course_metadata_file)
+        tf.extract(tar_info_metadata, path=course_metadata_file, filter="data")
         course_metadata = parse_course_xml(str(course_metadata_file))
         course_metadata["course_id"] = course_id
         course_metadata["course_number"] = course_number

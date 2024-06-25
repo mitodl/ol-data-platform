@@ -18,7 +18,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "3.12.*"
+python = "^3.12"
 PyPika = "^0.48.9"
 dagster = "^1.7, !=1.7.5"
 dagster-airbyte = "^0.23.0, !=0.23.5"
@@ -42,6 +42,7 @@ pyarrow = "^16.0.0"
 pydantic = "^2.5.3"
 pymysql = "^1.0.0"
 polars = "^0.20.15"
+universal-pathlib = "^0.2.2"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "*"
@@ -80,7 +81,7 @@ target = "qa"
 line_position = "leading"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 plugins = [
   "pydantic.mypy"
 ]
@@ -100,7 +101,7 @@ init_typed = true
 warn_required_dynamic_aliases = true
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 88
 lint.select = [
     "A",  # flake8-builtins
