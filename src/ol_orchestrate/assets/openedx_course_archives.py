@@ -38,7 +38,10 @@ def dummy_edxorg_course_xml(): ...
 def extract_edxorg_courserun_metadata(
     context: AssetExecutionContext, course_archive: UPath
 ):
-    course_metadata = process_course_xml(course_archive)
+    # Download the remote file to the current working directory
+    course_archive.fs.download(course_archive, ".")
+    course_xml = Path(course_archive.name)
+    course_metadata = process_course_xml(course_xml)
     course_metadata_file = Path("course_metadata.json")
     course_metadata_file.write_text(json.dumps(course_metadata))
     data_version = hashlib.file_digest(
@@ -54,3 +57,4 @@ def extract_edxorg_courserun_metadata(
             "object_key": course_metadata_object_key,
         },
     )
+    course_xml.unlink()
