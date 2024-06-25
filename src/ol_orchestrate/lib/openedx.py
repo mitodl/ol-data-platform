@@ -166,12 +166,12 @@ def process_course_xml(archive_path: Path) -> dict[str, Any]:
             raise ValueError(msg)
         tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
         course_xml_file = Path("course.xml")
-        tf.extract(tar_info_course, path=course_xml_file, filter="data")
+        course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
         course_id, course_number, run_tag = parse_course_id(str(course_xml_file))
         # use the run_tag to find the course metadata file
         tar_info_metadata = tf.getmember(f"{archive_root.name}/course/{run_tag}.xml")
         course_metadata_file = Path("course_metadata.xml")
-        tf.extract(tar_info_metadata, path=course_metadata_file, filter="data")
+        course_metadata_file.write_bytes(tf.extractfile(tar_info_metadata).read())  # type: ignore[union-attr]
         course_metadata = parse_course_xml(str(course_metadata_file))
         course_metadata["course_id"] = course_id
         course_metadata["course_number"] = course_number
