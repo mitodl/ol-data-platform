@@ -13,6 +13,7 @@ from dagster import (
 )
 
 from ol_orchestrate.assets.edxorg_archive import course_and_source_partitions
+from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.lib.openedx import process_course_xml
 
 
@@ -35,7 +36,7 @@ def dummy_edxorg_course_xml(): ...
     ),
 )
 def extract_edxorg_courserun_metadata(
-    context: AssetExecutionContext, course_archive: Path
+    context: AssetExecutionContext, course_archive: DagsterPath
 ):
     course_metadata = process_course_xml(course_archive)
     course_metadata_file = Path("course_metadata.json")
