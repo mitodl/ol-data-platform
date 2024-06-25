@@ -50,7 +50,6 @@ def extract_edxorg_courserun_metadata(
     course_metadata_object_key = f"edxorg/processed_data/course_metadata/{context.partition_key}/{data_version}.json"  # noqa: E501
     yield Output(
         (course_metadata_file, course_metadata_object_key),
-        output_name="flattened_course_structure",
         data_version=DataVersion(data_version),
         metadata={
             "course_id": course_metadata["course_id"],
