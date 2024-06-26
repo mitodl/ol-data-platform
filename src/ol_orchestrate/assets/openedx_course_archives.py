@@ -47,7 +47,8 @@ def extract_edxorg_courserun_metadata(
     data_version = hashlib.file_digest(
         course_metadata_file.open("rb"), "sha256"
     ).hexdigest()
-    course_metadata_object_key = f"edxorg/processed_data/course_metadata/{context.partition_key}/{data_version}.json"  # noqa: E501
+    partition_dict = context.partition_key.keys_by_dimension
+    course_metadata_object_key = f"edxorg/processed_data/course_metadata/{partition_dict["source_system"]}/{partition_dict["course_id"]}/{data_version}.json"  # noqa: E501
     yield Output(
         (course_metadata_file, course_metadata_object_key),
         data_version=DataVersion(data_version),
