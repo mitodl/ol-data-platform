@@ -141,8 +141,7 @@ models:
     tests:
     - not_null
   - name: program_is_dedp
-    description: boolean, specifying if the program is DEDP from the mixonline program
-      id
+    description: boolean, specifying if the program is DEDP
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "platform", "courserun_readable_id", "micromasters_program_id",
@@ -175,7 +174,9 @@ models:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__courses_program')
 - name: int__micromasters__program_requirements
-  description: Intermediate model for program requirements in MicroMasters
+  description: Intermediate model for program requirements in MicroMasters. The profile
+    data are selected in the order of MITx Online, MicroMasters, and edX.org, whichever
+    is not null.
   columns:
   - name: program_id
     description: int, foreign key to courses_program
@@ -214,7 +215,7 @@ models:
   - name: user_mitxonline_username
     description: str, username on MITx Online
   - name: user_email
-    description: str, The email address of the learner on the edX platform
+    description: str, user's email address from MITx Online, MicroMasters, or edX.org
     tests:
     - not_null
   - name: program_title
@@ -236,37 +237,34 @@ models:
     description: timestamp, timestamp of the course certificate that completed the
       program
   - name: user_gender
-    description: str, user's gender from user's profile on MITx Online or edX.org.
-      blank means user did not specify a gender. Null means this student signed up
-      before this information was collected
+    description: str, gender on user's profile from MITx Online, MicroMasters, or
+      edX.org
     tests:
     - accepted_values:
         values: '{{ var("gender_values") }}'
-  - name: user_address_city
-    description: str, city where user lives in from user's profile on MicroMasters.
-      Note that this data isn't available on MITx Online.
   - name: user_first_name
-    description: str, first name from user's profile on MITx Online or MicroMasters.
+    description: str, first name on user's profile from MITx Online or MicroMasters
   - name: user_last_name
     description: str, last name from user's profile on MITx Online or MicroMasters.
   - name: user_full_name
-    description: str, The full name from user's profile on MITx Online or MicroMasters.
+    description: str, user's full name from MITx Online, MicroMasters, or edX.org.
   - name: user_year_of_birth
-    description: str, user's birth year from user's profile on MITx Online or MicroMasters.
+    description: int, birth year on user's profile from MITx Online, MicroMasters,
+      or edX.org
   - name: user_country
-    description: str, Country from user's profile on MITx Online or MicroMasters
+    description: str, country code on user's profile from MITx Online, MicroMasters,
+      or edX.org
   - name: user_address_postal_code
-    description: str, postal code where user lives in from the profile on MicroMasters.
-      Note that this data isn't available on MITx Online.
+    description: str, postal code on user's profile from MicroMasters
   - name: user_street_address
-    description: str, street address where user lives in from user's profile on MicroMasters.
-      Note that this data isn't available on MITx Online.
+    description: str, street address on user's profile from MicroMasters
+  - name: user_address_city
+    description: str,  address city on user's profile from MicroMasters
   - name: user_address_state_or_territory
-    description: str,  state or territory where user lives in from user's profile
-      on MITx Online or MicroMasters.
+    description: str, state code or territory on user's profile from MITx Online or
+      MicroMasters
   - name: program_is_dedp
-    description: boolean, specifying if the program is DEDP from the mixonline program
-      id
+    description: boolean, specifying if the program is DEDP
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "micromasters_program_id", "mitxonline_program_id"]

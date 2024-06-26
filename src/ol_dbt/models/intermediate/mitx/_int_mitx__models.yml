@@ -116,7 +116,7 @@ models:
 - name: int__mitx__users
   description: MITx users combined from MITx Online and edX.org. For users who exist
     on both platforms, their profile data are selected in the order of MITx Online,
-    MicroMasters, and edX.org, whichever is not null
+    MicroMasters, and edX.org, whichever is not null.
   columns:
   - name: is_mitxonline_user
     description: boolean, indicating if this user is MITx Online user
@@ -128,6 +128,10 @@ models:
     - unique
   - name: user_edxorg_id
     description: int, user ID on edX.org
+    tests:
+    - unique
+  - name: user_micromasters_id
+    description: int, user ID on MicroMasters
     tests:
     - unique
   - name: user_mitxonline_username
@@ -145,6 +149,8 @@ models:
   - name: user_edxorg_email
     description: str, user email on edX.org. Not unique as some edxorg users found
       with same email for different username and user ID
+  - name: user_micromasters_email
+    description: str, user email on MicroMasters
   - name: user_joined_on_mitxonline
     description: timestamp, user join timestamp on MITx Online
   - name: user_joined_on_edxorg
@@ -159,26 +165,38 @@ models:
     description: boolean, indicating if user's account is active on edx.org. A user
       is inactive when their username or email is hashed.
   - name: user_full_name
-    description: str, user full name on edX.org or MITxOnline. Very small number of
-      edX.org users have blank full name, their name couldn't be populated from other
-      sources if they don't have their accounts linked on MicroMasters.
+    description: str, user's full name from MITx Online, MicroMasters, or edX.org.
+  - name: user_first_name
+    description: str, first name on user's profile from MITx Online or MicroMasters
+  - name: user_last_name
+    description: str, last name on user's profile from MITx Online or MicroMasters
   - name: user_address_country
-    description: str, country code provided by the user from MITx Online, MicroMasters,
+    description: str, country code on user's profile from MITx Online, MicroMasters,
       or edX.org
+  - name: user_address_state
+    description: str,  state code or territory on user's profile from MITx Online
+      or MicroMasters
+  - name: user_address_postal_code
+    description: str, postal code on user's profile from MicroMasters
+  - name: user_street_address
+    description: str, street address on user's profile from MicroMasters
+  - name: user_address_city
+    description: str, address city on user's profile from MicroMasters
   - name: user_highest_education
-    description: str, user's level of education from MITx Online, MicroMasters, or
-      edX.org
+    description: str, level of education on user's profile from MITx Online, MicroMasters,
+      or edX.org
   - name: user_gender
-    description: str, Gender selected by the user on their profile from MITx Online,
-      MicroMasters, or edX.org
+    description: str, gender on user's profile from MITx Online, MicroMasters, or
+      edX.org
   - name: user_birth_year
-    description: int, user's birth year from MITx Online, MicroMasters, or edX.org
+    description: int, birth year on user's profile from MITx Online, MicroMasters,
+      or edX.org
   - name: user_company
-    description: str, user's company pulled from MITx Online or MicroMasters
-  - name: user_job_title
-    description: str, user's job title pulled from MITx Online or MicroMasters
+    description: str, company or employer on user's profile from MITx Online or MicroMasters
   - name: user_industry
-    description: str, user's job industry pulled from MITx Online or MicroMasters
+    description: str, job industry on user's profile from MITx Online or MicroMasters
+  - name: user_job_title
+    description: str, job title on user's profile from MITx Online or MicroMasters
 
 - name: int__mitx__courserun_enrollments
   description: MITx courserun enrollments combined from MITx Online and edX.org
