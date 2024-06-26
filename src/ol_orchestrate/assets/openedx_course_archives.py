@@ -11,6 +11,9 @@ from dagster import (
     Output,
     asset,
 )
+from dagster._core.definitions.multi_dimensional_partitions import (
+    MULTIPARTITION_KEY_DELIMITER,
+)
 from upath import UPath
 
 from ol_orchestrate.assets.edxorg_archive import course_and_source_partitions
@@ -47,8 +50,14 @@ def extract_edxorg_courserun_metadata(
     data_version = hashlib.file_digest(
         course_metadata_file.open("rb"), "sha256"
     ).hexdigest()
-    partition_dict = context.partition_key.keys_by_dimension
-    course_metadata_object_key = f"edxorg/processed_data/course_metadata/{partition_dict["source_system"]}/{partition_dict["course_id"]}/{data_version}.json"  # noqa: E501
+    partition_parts = context.partition_key.split(MULTIPARTITION_KEY_DELIMITER)
+    partition_dict = {}
+    for partition_part in partition_parts:
+        if partition_part in ("prod", "edge"):
+            partition_dict["source_system"] = partition_part
+        else:
+            partition_dict["course_id"] = partition_part
+    course_metadata_object_key = f"edxorg/processed_data/course_metadata/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
     yield Output(
         (course_metadata_file, course_metadata_object_key),
         data_version=DataVersion(data_version),
