@@ -221,8 +221,6 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
     self_paced = bool(metadata_root.attrib.get("self_paced", None))
     start = metadata_root.attrib.get("start", None)
     video_upload_pipeline = metadata_root.attrib.get("video_upload_pipeline", None)
-    wiki = metadata_root.find("wiki", None)
-    slug = wiki.attrib.get("slug", None) if wiki else None
     chapters = metadata_root.findall("chapter", None)
     # if there is chapter data
     chapter_ids = (
@@ -252,6 +250,5 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
         "self_paced": self_paced,
         "start": start,
         "video_upload_pipeline": video_upload_pipeline,
-        "slug": slug,
         "chapter_ids": chapter_ids,
     }
