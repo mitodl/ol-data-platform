@@ -110,13 +110,10 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__auth_user')
+
 - name: __micromasters_program_certificates_dedp_from_micromasters
   description: DEDP program certificate earners according to the micromasters database
   columns:
-  - name: user_edxorg_username
-    description: str, The username of the learner on the edX platform
-    tests:
-    - not_null
   - name: user_mitxonline_username
     description: str, username on MITx Online
   - name: micromasters_program_id
@@ -127,8 +124,6 @@ models:
     description: str, title of the program
     tests:
     - not_null
-  - name: user_edxorg_id
-    description: int, Numerical user ID of a learner on the edX platform
   - name: program_certificate_hashed_id
     description: str, unique hash used to identify the program certificate
     tests:
@@ -139,14 +134,14 @@ models:
       program
     tests:
     - not_null
-  - name: micromasters_user_id
+  - name: user_micromasters_id
     description: str, user id in the micromasters database
+    tests:
+    - not_null
 
 - name: __micromasters_program_certificates_dedp_from_mitxonline
   description: DEDP program certificate earners according to the mitxonline database
   columns:
-  - name: user_edxorg_username
-    description: str, The username of the learner on the edX platform
   - name: user_mitxonline_username
     description: str, username on MITx Online
     tests:
@@ -159,8 +154,6 @@ models:
     description: str, title of the program
     tests:
     - not_null
-  - name: user_edxorg_id
-    description: int, Numerical user ID of a learner on the edX platform
   - name: program_certificate_hashed_id
     description: str, unique hash used to identify the program certificate
     tests:
@@ -171,8 +164,8 @@ models:
       program
     tests:
     - not_null
-  - name: micromasters_user_id
-    description: str, user id in the micromasters database
+  - name: user_micromasters_id
+    description: int, user id in the micromasters database
 
 - name: __micromasters_program_certificates_non_dedp
   description: Non DEDP program certificate earners. Data come from learners report
@@ -184,8 +177,6 @@ models:
     description: str, The username of the learner on the edX platform
     tests:
     - not_null
-  - name: user_mitxonline_username
-    description: str, username on MITx Online
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
   - name: mitxonline_program_id
@@ -206,8 +197,6 @@ models:
   - name: program_completion_timestamp
     description: timestamp, timestamp of the course certificate that completed the
       program
-  - name: micromasters_user_id
-    description: str, user id in the micromasters database
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_edxorg_username", "micromasters_program_id"]
@@ -223,6 +212,10 @@ models:
     description: int, sequential ID representing a program in MicroMasters
   - name: mitxonline_program_id
     description: int, sequential ID representing a program in Mitxonline
+  - name: user_micromasters_id
+    description: int, user id in MicroMasters
+    tests:
+    - not_null
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -245,18 +238,6 @@ models:
     description: str, unique string for the course e.g. 14.009x
     tests:
     - not_null
-  - name: user_edxorg_username
-    description: str, username on edX.org
-  - name: user_mitxonline_username
-    description: str, username on MITxOnline
-  - name: user_email
-    description: str, user email on edX.org
-    tests:
-    - not_null
-  - name: user_full_name
-    description: str, user full name on edX.org
-  - name: user_country
-    description: str, user country on edX.org
   - name: coursecertificate_hash
     description: str, unique hash used to identify this DEDP course certificate
     tests:
@@ -277,7 +258,7 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id"]
+      column_list: ["user_micromasters_id", "courserun_readable_id"]
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__grades_coursecertificate')
 
@@ -309,20 +290,10 @@ models:
     description: str, unique string for the course e.g. 14.009x
     tests:
     - not_null
-  - name: user_edxorg_username
-    description: str, username on edX.org
   - name: user_mitxonline_username
     description: str, username on MITxOnline
     tests:
     - not_null
-  - name: user_email
-    description: str, user email on MITx Online
-    tests:
-    - not_null
-  - name: user_full_name
-    description: str, user full name on MITx Online
-  - name: user_country
-    description: str, user country on MITx Online
   - name: courseruncertificate_uuid
     description: str, unique identifier for the certificate on MITx Online
     tests:
@@ -377,16 +348,6 @@ models:
     description: str, username on edX.org
     tests:
     - not_null
-  - name: user_mitxonline_username
-    description: str, username on MITxOnline
-  - name: user_email
-    description: str, user email on edX.org
-    tests:
-    - not_null
-  - name: user_full_name
-    description: str, user full name on edX.org
-  - name: user_country
-    description: str, user country on edX.org
   - name: courseruncertificate_download_url
     description: str, the full URL to the certificate
   - name: courseruncertificate_download_uuid
@@ -434,18 +395,10 @@ models:
     description: str, unique string for the course e.g. 14.009x
     tests:
     - not_null
-  - name: user_edxorg_username
-    description: str, username on edX.org
-  - name: user_mitxonline_username
-    description: str, username on MITxOnline
-  - name: user_email
-    description: str, user email on edX.org
+  - name: user_micromasters_id
+    description: int, user id in MicroMasters
     tests:
     - not_null
-  - name: user_full_name
-    description: str, user full name on edX.org
-  - name: user_country
-    description: str, user country on edX.org
   - name: coursegrade_grade
     description: float, course grade on edX.org range from 0 to 1
     tests:
@@ -454,7 +407,7 @@ models:
     description: timestamp, date and time when this grade was initially calculated
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id"]
+      column_list: ["user_micromasters_id", "courserun_readable_id"]
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__grades_combinedcoursegrade')
 
@@ -487,20 +440,10 @@ models:
     description: str, unique string for the course e.g. 14.009x
     tests:
     - not_null
-  - name: user_edxorg_username
-    description: str, username on edX.org
   - name: user_mitxonline_username
     description: str, username on MITxOnline
     tests:
     - not_null
-  - name: user_email
-    description: str, user email on MITx Online
-    tests:
-    - not_null
-  - name: user_full_name
-    description: str, user full name on MITx Online
-  - name: user_country
-    description: str, user country on MITx Online
   - name: courserungrade_grade
     description: float, course grade range from 0 to 1
     tests:
@@ -548,16 +491,6 @@ models:
     description: str, username on edX.org
     tests:
     - not_null
-  - name: user_mitxonline_username
-    description: str, username on MITxOnline
-  - name: user_email
-    description: str, user email on edX.org
-    tests:
-    - not_null
-  - name: user_full_name
-    description: str, user full name on edX.org
-  - name: user_country
-    description: str, user country on edX.org
   - name: courserungrade_user_grade
     description: float, course grade range from 0 to 1, maybe blank
   - name: courserungrade_is_passing

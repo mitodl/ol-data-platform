@@ -22,134 +22,107 @@ with micromasters_program_enrollments as (
     from {{ ref('int__mitxonline__programenrollments') }}
 )
 
-, mitxonline_users as (
-    select *
-    from {{ ref('int__mitxonline__users') }}
-)
-
-, micromasters_users as (
-    select *
-    from {{ ref('__micromasters__users') }}
-)
-
 , programs as (
     select *
     from {{ ref('int__mitx__programs') }}
 )
 
-, edx_users as (
-    select *
-    from {{ ref('int__edxorg__mitx_users') }}
+, mitx_users as (
+    select * from {{ ref('int__mitx__users') }}
 )
 
 , mitxonline_dedp_records as (
     select
-        micromasters_users.user_edxorg_username
-        , mitxonline_programenrollments.user_username as user_mitxonline_username
+        '{{ var("mitxonline") }}' as platform_name
+        , mitx_users.user_edxorg_username
+        , mitx_users.user_mitxonline_username
         , mitxonline_programenrollments.user_email
         , programs.micromasters_program_id
         , programs.program_title
         , mitxonline_programenrollments.program_id as mitxonline_program_id
-        , edx_users.user_id as user_edxorg_id
-        , micromasters_users.user_address_city
-        , mitxonline_users.user_first_name
-        , mitxonline_users.user_last_name
-        , micromasters_users.user_address_postal_code
-        , micromasters_users.user_street_address
-        , mitxonline_users.user_full_name
-        , micromasters_users.user_id as micromasters_user_id
-        , '{{ var("mitxonline") }}' as platform_name
-        , coalesce(
-            cast(mitxonline_users.user_birth_year as varchar)
-            , substring(micromasters_users.user_birth_date, 1, 4)
-        ) as user_year_of_birth
-        , coalesce(mitxonline_users.user_gender, micromasters_users.user_gender) as user_gender
-        , coalesce(mitxonline_users.user_address_country, micromasters_users.user_address_country) as user_country
-        , coalesce(mitxonline_users.user_address_state, micromasters_users.user_address_state_or_territory)
-        as user_address_state_or_territory
+        , mitx_users.user_edxorg_id
+        , mitx_users.user_address_city
+        , mitx_users.user_first_name
+        , mitx_users.user_last_name
+        , mitx_users.user_address_postal_code
+        , mitx_users.user_street_address
+        , mitx_users.user_full_name
+        , mitx_users.user_micromasters_id as micromasters_user_id
+        , mitx_users.user_birth_year as user_year_of_birth
+        , mitx_users.user_gender
+        , mitx_users.user_address_country as user_country
+        , mitx_users.user_address_state as user_address_state_or_territory
     from mitxonline_programenrollments
-    inner join mitxonline_users
-        on mitxonline_programenrollments.user_id = mitxonline_users.user_id
-    left join micromasters_users
-        on mitxonline_users.user_micromasters_profile_id = micromasters_users.user_profile_id
-    left join edx_users
-        on micromasters_users.user_edxorg_username = edx_users.user_username
     inner join programs
         on mitxonline_programenrollments.program_id = programs.mitxonline_program_id
+    inner join mitx_users
+        on mitxonline_programenrollments.user_id = mitx_users.user_mitxonline_id
     where programs.is_dedp_program = true
 )
 
 , mm_dedp_records as (
     select
-        micromasters_users.user_edxorg_username
-        , micromasters_users.user_mitxonline_username
-        , micromasters_users.user_email
+        mitx_users.user_edxorg_username
+        , mitx_users.user_mitxonline_username
+        , mitx_users.user_micromasters_email as user_email
         , programs.micromasters_program_id
         , programs.program_title
         , programs.mitxonline_program_id
-        , edx_users.user_id as user_edxorg_id
-        , edx_users.user_gender
-        , edx_users.user_country
-        , micromasters_users.user_address_city
-        , micromasters_users.user_first_name
-        , micromasters_users.user_last_name
-        , micromasters_users.user_address_postal_code
-        , micromasters_users.user_street_address
-        , micromasters_users.user_address_state_or_territory
-        , edx_users.user_full_name
-        , micromasters_users.user_id as micromasters_user_id
-        , case
-            when micromasters_users.user_mitxonline_username is not null
-                then '{{ var("mitxonline") }}'
-            else '{{ var("edxorg") }}'
-        end as platform_name
-        , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
+        , mitx_users.user_edxorg_id
+        , mitx_users.user_gender
+        , mitx_users.user_address_country as user_country
+        , mitx_users.user_address_city
+        , mitx_users.user_first_name
+        , mitx_users.user_last_name
+        , mitx_users.user_address_postal_code
+        , mitx_users.user_street_address
+        , mitx_users.user_address_state as user_address_state_or_territory
+        , mitx_users.user_full_name
+        , mitx_users.user_micromasters_id as micromasters_user_id
+        , mitx_users.user_birth_year as user_year_of_birth
+        , if(mitx_users.is_mitxonline_user = true, '{{ var("mitxonline") }}', '{{ var("edxorg") }}') as platform_name
     from mm_program_enrollments
-    inner join micromasters_users
-        on mm_program_enrollments.user_id = micromasters_users.user_id
     inner join programs
         on mm_program_enrollments.program_id = programs.micromasters_program_id
-    left join edx_users
-        on micromasters_users.user_edxorg_username = edx_users.user_username
+    inner join mitx_users
+        on mm_program_enrollments.user_id = mitx_users.user_micromasters_id
     left join mitxonline_dedp_records
         on
-            micromasters_users.user_email = mitxonline_dedp_records.user_email
+            mm_program_enrollments.user_id = mitxonline_dedp_records.micromasters_user_id
             and programs.program_title = mitxonline_dedp_records.program_title
     where
         programs.is_dedp_program = true
         and mitxonline_dedp_records.user_email is null
         and (
-            micromasters_users.user_mitxonline_username is not null
-            or micromasters_users.user_edxorg_username is not null
+            mitx_users.user_mitxonline_username is not null
+            or mitx_users.user_edxorg_username is not null
         )
 )
 
 , non_dedp_records as (
     select
-        micromasters_program_enrollments.user_username as user_edxorg_username
-        , micromasters_users.user_mitxonline_username
-        , edx_users.user_email
+        '{{ var("edxorg") }}' as platform_name
+        , mitx_users.user_edxorg_username
+        , mitx_users.user_mitxonline_username
+        , mitx_users.user_edxorg_email as user_email
         , programs.micromasters_program_id
         , programs.program_title
         , programs.mitxonline_program_id
-        , micromasters_program_enrollments.user_id as user_edxorg_id
-        , edx_users.user_gender
-        , edx_users.user_country
-        , micromasters_users.user_address_city
-        , micromasters_users.user_first_name
-        , micromasters_users.user_last_name
-        , micromasters_users.user_address_postal_code
-        , micromasters_users.user_street_address
-        , micromasters_users.user_address_state_or_territory
-        , micromasters_program_enrollments.user_full_name
-        , micromasters_users.user_id as micromasters_user_id
-        , '{{ var("edxorg") }}' as platform_name
-        , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
+        , mitx_users.user_edxorg_id
+        , mitx_users.user_gender
+        , mitx_users.user_address_country as user_country
+        , mitx_users.user_address_city
+        , mitx_users.user_first_name
+        , mitx_users.user_last_name
+        , mitx_users.user_address_postal_code
+        , mitx_users.user_street_address
+        , mitx_users.user_address_state as user_address_state_or_territory
+        , mitx_users.user_full_name
+        , mitx_users.user_micromasters_id as micromasters_user_id
+        , mitx_users.user_birth_year as user_year_of_birth
     from micromasters_program_enrollments
-    inner join edx_users
-        on micromasters_program_enrollments.user_id = edx_users.user_id
-    left join micromasters_users
-        on micromasters_program_enrollments.user_username = micromasters_users.user_edxorg_username
+    inner join mitx_users
+        on micromasters_program_enrollments.user_id = mitx_users.user_edxorg_id
     inner join programs
         on micromasters_program_enrollments.micromasters_program_id = programs.micromasters_program_id
     where

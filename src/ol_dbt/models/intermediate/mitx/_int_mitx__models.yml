@@ -119,9 +119,9 @@ models:
     MicroMasters, and edX.org, whichever is not null.
   columns:
   - name: is_mitxonline_user
-    description: boolean, indicating if this user is MITx Online user
+    description: boolean, indicating if this user has an account on MITx Online
   - name: is_edxorg_user
-    description: boolean, indicating if this user is edX.org user
+    description: boolean, indicating if this user has an account on edX.org
   - name: user_mitxonline_id
     description: int, user ID on MITx Online
     tests:

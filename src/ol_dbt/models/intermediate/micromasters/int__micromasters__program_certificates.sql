@@ -26,13 +26,13 @@ with program_certificates_dedp_from_micromasters as (
 , report as (
     select
         program_certificates_dedp_from_micromasters.program_certificate_hashed_id
-        , program_certificates_dedp_from_micromasters.user_edxorg_username
-        , program_certificates_dedp_from_micromasters.user_mitxonline_username
         , program_certificates_dedp_from_micromasters.program_title
         , program_certificates_dedp_from_micromasters.micromasters_program_id
         , program_certificates_dedp_from_micromasters.mitxonline_program_id
-        , program_certificates_dedp_from_micromasters.user_edxorg_id
         , program_certificates_dedp_from_micromasters.program_completion_timestamp
+        , mitx_users.user_edxorg_id
+        , mitx_users.user_edxorg_username
+        , mitx_users.user_mitxonline_username
         , mitx_users.user_micromasters_email as user_email
         , mitx_users.user_first_name
         , mitx_users.user_last_name
@@ -47,20 +47,20 @@ with program_certificates_dedp_from_micromasters as (
         , true as program_is_dedp
     from program_certificates_dedp_from_micromasters
     left join mitx_users
-        on program_certificates_dedp_from_micromasters.micromasters_user_id = mitx_users.user_micromasters_id
+        on program_certificates_dedp_from_micromasters.user_micromasters_id = mitx_users.user_micromasters_id
     where program_certificates_dedp_from_micromasters.program_completion_timestamp < '2022-10-01'
 
     union all
 
     select
         program_certificates_dedp_from_mitxonline.program_certificate_hashed_id
-        , program_certificates_dedp_from_mitxonline.user_edxorg_username
-        , program_certificates_dedp_from_mitxonline.user_mitxonline_username
         , program_certificates_dedp_from_mitxonline.program_title
         , program_certificates_dedp_from_mitxonline.micromasters_program_id
         , program_certificates_dedp_from_mitxonline.mitxonline_program_id
-        , program_certificates_dedp_from_mitxonline.user_edxorg_id
         , program_certificates_dedp_from_mitxonline.program_completion_timestamp
+        , mitx_users.user_edxorg_id
+        , mitx_users.user_edxorg_username
+        , mitx_users.user_mitxonline_username
         , mitx_users.user_mitxonline_email as user_email
         , mitx_users.user_first_name
         , mitx_users.user_last_name
@@ -82,13 +82,13 @@ with program_certificates_dedp_from_micromasters as (
 
     select
         program_certificates_non_dedp.program_certificate_hashed_id
-        , program_certificates_non_dedp.user_edxorg_username
-        , program_certificates_non_dedp.user_mitxonline_username
         , program_certificates_non_dedp.program_title
         , program_certificates_non_dedp.micromasters_program_id
         , program_certificates_non_dedp.mitxonline_program_id
-        , program_certificates_non_dedp.user_edxorg_id
         , program_certificates_non_dedp.program_completion_timestamp
+        , mitx_users.user_edxorg_id
+        , mitx_users.user_edxorg_username
+        , mitx_users.user_mitxonline_username
         , mitx_users.user_edxorg_email as user_email
         , mitx_users.user_first_name
         , mitx_users.user_last_name

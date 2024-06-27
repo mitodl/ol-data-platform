@@ -50,11 +50,6 @@ with dedp_course_certificates as (
     select * from {{ ref('int__mitx__programs') }}
 )
 
-, mm_users as (
-    select * from {{ ref('__micromasters__users') }}
-)
-
-
 select
     programs.program_title
     , programs.micromasters_program_id
@@ -64,11 +59,7 @@ select
     , courseruns.courserun_edxorg_readable_id
     , courseruns.courserun_platform
     , courses.course_number
-    , mm_users.user_edxorg_username
-    , mm_users.user_mitxonline_username
-    , mm_users.user_email
-    , mm_users.user_full_name
-    , mm_users.user_address_country as user_country
+    , dedp_course_certificates.user_id as user_micromasters_id
     , dedp_course_certificates.coursecertificate_hash
     , dedp_course_certificates.coursecertificate_url
     , dedp_course_certificates.coursecertificate_created_on
@@ -81,4 +72,3 @@ inner join highest_courserun_grades
 inner join courseruns on highest_courserun_grades.courserun_id = courseruns.courserun_id
 inner join courses on dedp_course_certificates.course_id = courses.course_id
 inner join programs on courses.program_id = programs.micromasters_program_id
-inner join mm_users on dedp_course_certificates.user_id = mm_users.user_id

@@ -4,10 +4,6 @@ with courserun_certificates as (
     where courseruncertificate_is_revoked = false
 )
 
-, mitxonline_users as (
-    select * from {{ ref('int__mitxonline__users') }}
-)
-
 , courseruns as (
     select * from {{ ref('int__mitxonline__course_runs') }}
 )
@@ -28,11 +24,7 @@ select
     , courseruns.courserun_readable_id
     , courseruns.courserun_platform
     , courses.course_number
-    , enrollments_with_program.user_edxorg_username
-    , mitxonline_users.user_username as user_mitxonline_username
-    , mitxonline_users.user_full_name
-    , mitxonline_users.user_address_country as user_country
-    , mitxonline_users.user_email
+    , courserun_certificates.user_username as user_mitxonline_username
     , courserun_certificates.courseruncertificate_uuid
     , courserun_certificates.courseruncertificate_url
     , courserun_certificates.courseruncertificate_created_on
@@ -40,7 +32,6 @@ select
 from courserun_certificates
 inner join courseruns on courserun_certificates.courserun_id = courseruns.courserun_id
 inner join courses on courserun_certificates.course_id = courses.course_id
-inner join mitxonline_users on courserun_certificates.user_id = mitxonline_users.user_id
 inner join enrollments_with_program
     on
         courseruns.courserun_id = enrollments_with_program.courserun_id
