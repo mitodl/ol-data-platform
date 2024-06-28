@@ -114,9 +114,9 @@ models:
     - not_null
 
 - name: int__mitx__users
-  description: MITx users combined from MITx Online and edX.org. For users who exist
-    on both platforms, their profile fields are selected in the order of MITx Online,
-    MicroMasters, and edX.org, whichever is not null.
+  description: MITx users combined from MITx Online, MicroMasters, and edX.org. For
+    users who exist on both platforms, their profile fields are selected in the order
+    of MITx Online, MicroMasters, and edX.org, whichever is not null.
   columns:
   - name: is_mitxonline_user
     description: boolean, indicating if this user has an account on MITx Online
