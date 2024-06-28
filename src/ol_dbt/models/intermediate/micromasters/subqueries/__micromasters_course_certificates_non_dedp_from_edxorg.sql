@@ -19,6 +19,7 @@ select
     , '{{ var("edxorg") }}' as courserun_platform
     , courseruns.course_number
     , courserun_certificates.user_username as user_edxorg_username
+    , courserun_certificates.user_id as user_edxorg_id
     , courserun_certificates.courseruncertificate_download_url
     , courserun_certificates.courseruncertificate_download_uuid
     , courserun_certificates.courseruncertificate_created_on

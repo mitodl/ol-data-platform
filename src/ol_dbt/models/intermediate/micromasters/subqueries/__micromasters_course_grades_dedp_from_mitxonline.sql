@@ -23,6 +23,7 @@ select
     , courseruns.courserun_platform
     , courses.course_number
     , courserun_grades.user_username as user_mitxonline_username
+    , courserun_grades.user_id as user_mitxonline_id
     , courserun_grades.courserungrade_grade
     , courserun_grades.courserungrade_is_passing
     , courserun_grades.courserungrade_created_on

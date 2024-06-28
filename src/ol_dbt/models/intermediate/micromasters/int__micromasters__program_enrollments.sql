@@ -88,15 +88,11 @@ with micromasters_program_enrollments as (
         on mm_program_enrollments.user_id = mitx_users.user_micromasters_id
     left join mitxonline_dedp_records
         on
-            mm_program_enrollments.user_id = mitxonline_dedp_records.micromasters_user_id
+            mitx_users.user_micromasters_email = mitxonline_dedp_records.user_email
             and programs.program_title = mitxonline_dedp_records.program_title
     where
         programs.is_dedp_program = true
         and mitxonline_dedp_records.user_email is null
-        and (
-            mitx_users.user_mitxonline_username is not null
-            or mitx_users.user_edxorg_username is not null
-        )
 )
 
 , non_dedp_records as (

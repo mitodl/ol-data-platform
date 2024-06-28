@@ -12,6 +12,7 @@ with mitxonline_program_certificates as (
 
 select
     mitxonline_program_certificates.user_username as user_mitxonline_username
+    , mitxonline_program_certificates.user_id as user_mitxonline_id
     , mitx_programs.micromasters_program_id
     , mitx_programs.program_title
     , mitx_programs.mitxonline_program_id

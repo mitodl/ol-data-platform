@@ -87,9 +87,10 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: str, user full name on edX.org or MITxOnline
+    description: str, user's full name from MITx Online, MicroMasters, or edX.org.
   - name: user_country
-    description: str, user country on edX.org or MITxOnline
+    description: str, country code on user's profile from MITx Online, MicroMasters,
+      or edX.org
   - name: courseruncertificate_url
     description: str, the full URL to this DEDP course certificate on MITx Online
   - name: courseruncertificate_created_on
@@ -204,8 +205,9 @@ models:
     description: int, count of program certificates earned for the the program
 
 - name: marts__micromasters_program_certificates
-  description: MicroMasters program certificate earners. The profile data are selected
-    in the order of MITx Online, MicroMasters, and edX.org, whichever is not null.
+  description: MicroMasters program certificate earners. User's profile fields are
+    selected in the order of MITx Online, MicroMasters, and edX.org, whichever is
+    not null.
   config:
     grants:
       select: ['mit_irx']
@@ -251,11 +253,14 @@ models:
     description: str, country code on user's profile from MITx Online, MicroMasters,
       or edX.org
   - name: user_address_postal_code
-    description: str, postal code on user's profile from MicroMasters
+    description: str, postal code on user's profile from MicroMasters. MITx Online
+      and edX.org don't collect this data.
   - name: user_street_address
-    description: str, street address on user's profile from MicroMasters
+    description: str, street address on user's profile from MicroMasters. MITx Online
+      and edX.org don't collect this data.
   - name: user_address_city
-    description: str, address city on user's profile from MicroMasters
+    description: str, address city on user's profile from MicroMasters. MITx Online
+      and edX.org don't collect this data.
   - name: user_address_state_or_territory
     description: str, state code or territory on user's profile from MITx Online or
       MicroMasters

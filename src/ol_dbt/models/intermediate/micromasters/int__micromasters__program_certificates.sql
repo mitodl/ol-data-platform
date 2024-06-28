@@ -75,7 +75,7 @@ with program_certificates_dedp_from_micromasters as (
         , true as program_is_dedp
     from program_certificates_dedp_from_mitxonline
     left join mitx_users
-        on program_certificates_dedp_from_mitxonline.user_mitxonline_username = mitx_users.user_mitxonline_username
+        on program_certificates_dedp_from_mitxonline.user_mitxonline_id = mitx_users.user_mitxonline_id
     where program_certificates_dedp_from_mitxonline.program_completion_timestamp >= '2022-10-01'
 
     union all
@@ -103,7 +103,7 @@ with program_certificates_dedp_from_micromasters as (
         , false as program_is_dedp
     from program_certificates_non_dedp
     left join mitx_users
-        on program_certificates_non_dedp.user_edxorg_username = mitx_users.user_edxorg_username
+        on program_certificates_non_dedp.user_edxorg_id = mitx_users.user_edxorg_id
 )
 
 

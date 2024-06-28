@@ -65,7 +65,7 @@ with course_grades_dedp_from_micromasters as (
         , course_grades_dedp_from_mitxonline.courserungrade_created_on as created_on
     from course_grades_dedp_from_mitxonline
     left join mitx_users
-        on course_grades_dedp_from_mitxonline.user_mitxonline_username = mitx_users.user_mitxonline_username
+        on course_grades_dedp_from_mitxonline.user_mitxonline_id = mitx_users.user_mitxonline_id
     where course_grades_dedp_from_mitxonline.courserun_platform = '{{ var("mitxonline") }}'
 
 )
@@ -124,7 +124,7 @@ with course_grades_dedp_from_micromasters as (
         , coalesce(mitx_users.user_edxorg_email, mitx_users.user_micromasters_email) as user_email
     from course_grades_non_dedp_program
     left join mitx_users
-        on course_grades_non_dedp_program.user_edxorg_username = mitx_users.user_edxorg_username
+        on course_grades_non_dedp_program.user_edxorg_id = mitx_users.user_edxorg_id
 )
 
 , program_course_grades as (

@@ -19,6 +19,7 @@ select
     , '{{ var("edxorg") }}' as courserun_platform
     , courseruns.course_number
     , courserun_grades.user_username as user_edxorg_username
+    , courserun_grades.user_id as user_edxorg_id
     , courserun_grades.courserungrade_is_passing
     , courserun_grades.courserungrade_user_grade
 from courserun_grades

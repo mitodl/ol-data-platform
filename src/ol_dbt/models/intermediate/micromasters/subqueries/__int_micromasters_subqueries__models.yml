@@ -146,6 +146,10 @@ models:
     description: str, username on MITx Online
     tests:
     - not_null
+  - name: user_mitxonline_id
+    description: int, user ID on MITx Online
+    tests:
+    - not_null
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
   - name: mitxonline_program_id
@@ -294,6 +298,10 @@ models:
     description: str, username on MITxOnline
     tests:
     - not_null
+  - name: user_mitxonline_id
+    description: int, user ID on MITx Online
+    tests:
+    - not_null
   - name: courseruncertificate_uuid
     description: str, unique identifier for the certificate on MITx Online
     tests:
@@ -346,6 +354,10 @@ models:
     - not_null
   - name: user_edxorg_username
     description: str, username on edX.org
+    tests:
+    - not_null
+  - name: user_edxorg_id
+    description: int, user ID on edX.org
     tests:
     - not_null
   - name: courseruncertificate_download_url
@@ -444,6 +456,10 @@ models:
     description: str, username on MITxOnline
     tests:
     - not_null
+  - name: user_mitxonline_id
+    description: int, user ID on MITx Online
+    tests:
+    - not_null
   - name: courserungrade_grade
     description: float, course grade range from 0 to 1
     tests:
@@ -489,6 +505,10 @@ models:
     - not_null
   - name: user_edxorg_username
     description: str, username on edX.org
+    tests:
+    - not_null
+  - name: user_edxorg_id
+    description: int, user ID on edX.org
     tests:
     - not_null
   - name: courserungrade_user_grade
