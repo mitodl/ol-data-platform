@@ -41,7 +41,7 @@ with edx_enrollments as (
         , program_requirements.program_title
     from edx_enrollments
     left join mitx_users
-        on edx_enrollments.user_edxorg_id = mitx_users.user_edxorg_id
+        on edx_enrollments.user_id = mitx_users.user_edxorg_id
     inner join program_requirements on edx_enrollments.course_number = program_requirements.course_number
 )
 
@@ -68,7 +68,7 @@ with edx_enrollments as (
         , mitxonline_enrollments_with_program.program_title
     from mitxonline_enrollments_with_program
     left join mitx_users
-        on mitxonline_enrollments_with_program.user_mitxonline_id = mitx_users.user_mitxonline_id
+        on mitxonline_enrollments_with_program.user_id = mitx_users.user_mitxonline_id
     where mitxonline_enrollments_with_program.courserunenrollment_platform = '{{ var("mitxonline") }}'
 )
 
