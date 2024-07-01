@@ -6,8 +6,6 @@ from pathlib import Path
 from typing import Any, Optional
 from xml.etree.ElementTree import ElementTree
 
-from pytz import utc
-
 
 def generate_block_indexes(
     course_structure: dict[str, Any], root_block_id: str
@@ -199,7 +197,6 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
     :return: A dictionary with all of the course metadata attributes
     :rtype: dict[str, Any]
     """
-    DEFAULT_START_DATE = datetime(2030, 1, 1, tzinfo=utc)
     with Path(metadata_file).open("r") as metadata:
         tree = ElementTree()
         tree.parse(metadata)
@@ -208,7 +205,7 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
     enrollment_end = metadata_root.attrib.get("enrollment_end")
     # Default value as defined in edx-platform code
     # https://github.com/openedx/edx-platform/blob/master/xmodule/course_metadata_utils.py#L17
-    start = metadata_root.attrib.get("start", DEFAULT_START_DATE)
+    start = metadata_root.attrib.get("start")
     end = metadata_root.attrib.get("end")
     # default to empty list
     instructor_info = metadata_root.attrib.get("instructor_info")
