@@ -56,14 +56,6 @@ with dedp_course_grades as (
     select * from {{ ref('int__mitx__programs') }}
 )
 
-, mm_users as (
-    select * from {{ ref('__micromasters__users') }}
-)
-
-, edx_users as (
-    select * from {{ ref('int__edxorg__mitx_users') }}
-)
-
 select
     programs.program_title
     , programs.micromasters_program_id
@@ -72,11 +64,7 @@ select
     , courseruns.courserun_readable_id
     , courseruns.courserun_platform
     , courses.course_number
-    , mm_users.user_edxorg_username
-    , mm_users.user_mitxonline_username
-    , mm_users.user_full_name
-    , mm_users.user_address_country as user_country
-    , mm_users.user_email
+    , dedp_course_grades.user_id as user_micromasters_id
     , cast(dedp_course_grades.coursegrade_grade / 100 as decimal(5, 3)) as coursegrade_grade
     , dedp_course_grades.coursegrade_created_on
 from dedp_course_grades
@@ -87,6 +75,3 @@ inner join highest_courserun_grades
 inner join courseruns on highest_courserun_grades.courserun_id = courseruns.courserun_id
 inner join courses on dedp_course_grades.course_id = courses.course_id
 inner join programs on courses.program_id = programs.micromasters_program_id
-inner join mm_users on dedp_course_grades.user_id = mm_users.user_id
----not all MM users can match with edx using edxorg username
-left join edx_users on mm_users.user_edxorg_username = edx_users.user_username

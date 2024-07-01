@@ -13,6 +13,10 @@ with program_certificates_dedp_from_micromasters as (
     from {{ ref('__micromasters_program_certificates_non_dedp') }}
 )
 
+, mitx_users as (
+    select * from {{ ref('int__mitx__users') }}
+)
+
 -- Some micromasters learners from previous semesters don't have mitxonline logins. The mitxonline
 -- database does not include the certificates for those users. However, for future semesters,
 -- the mitxonline  database will be the source for dedp program certificates and the table in
@@ -21,76 +25,85 @@ with program_certificates_dedp_from_micromasters as (
 
 , report as (
     select
-        program_certificate_hashed_id
-        , user_edxorg_username
-        , user_mitxonline_username
-        , user_email
-        , program_title
-        , micromasters_program_id
-        , mitxonline_program_id
-        , user_edxorg_id
-        , program_completion_timestamp
-        , user_gender
-        , user_address_city
-        , user_first_name
-        , user_last_name
-        , user_full_name
-        , user_year_of_birth
-        , user_country
-        , user_address_postal_code
-        , user_street_address
-        , user_address_state_or_territory
+        program_certificates_dedp_from_micromasters.program_certificate_hashed_id
+        , program_certificates_dedp_from_micromasters.program_title
+        , program_certificates_dedp_from_micromasters.micromasters_program_id
+        , program_certificates_dedp_from_micromasters.mitxonline_program_id
+        , program_certificates_dedp_from_micromasters.program_completion_timestamp
+        , mitx_users.user_edxorg_id
+        , mitx_users.user_edxorg_username
+        , mitx_users.user_mitxonline_username
+        , mitx_users.user_micromasters_email as user_email
+        , mitx_users.user_first_name
+        , mitx_users.user_last_name
+        , mitx_users.user_full_name
+        , mitx_users.user_gender
+        , mitx_users.user_birth_year as user_year_of_birth
+        , mitx_users.user_address_country as user_country
+        , mitx_users.user_address_state as user_address_state_or_territory
+        , mitx_users.user_address_city
+        , mitx_users.user_address_postal_code
+        , mitx_users.user_street_address
+        , true as program_is_dedp
     from program_certificates_dedp_from_micromasters
-    where program_completion_timestamp < '2022-10-01'
+    left join mitx_users
+        on program_certificates_dedp_from_micromasters.user_micromasters_id = mitx_users.user_micromasters_id
+    where program_certificates_dedp_from_micromasters.program_completion_timestamp < '2022-10-01'
 
     union all
 
     select
-        program_certificate_hashed_id
-        , user_edxorg_username
-        , user_mitxonline_username
-        , user_email
-        , program_title
-        , micromasters_program_id
-        , mitxonline_program_id
-        , user_edxorg_id
-        , program_completion_timestamp
-        , user_gender
-        , user_address_city
-        , user_first_name
-        , user_last_name
-        , user_full_name
-        , user_year_of_birth
-        , user_country
-        , user_address_postal_code
-        , user_street_address
-        , user_address_state_or_territory
+        program_certificates_dedp_from_mitxonline.program_certificate_hashed_id
+        , program_certificates_dedp_from_mitxonline.program_title
+        , program_certificates_dedp_from_mitxonline.micromasters_program_id
+        , program_certificates_dedp_from_mitxonline.mitxonline_program_id
+        , program_certificates_dedp_from_mitxonline.program_completion_timestamp
+        , mitx_users.user_edxorg_id
+        , mitx_users.user_edxorg_username
+        , mitx_users.user_mitxonline_username
+        , mitx_users.user_mitxonline_email as user_email
+        , mitx_users.user_first_name
+        , mitx_users.user_last_name
+        , mitx_users.user_full_name
+        , mitx_users.user_gender
+        , mitx_users.user_birth_year as user_year_of_birth
+        , mitx_users.user_address_country as user_country
+        , mitx_users.user_address_state as user_address_state_or_territory
+        , mitx_users.user_address_city
+        , mitx_users.user_address_postal_code
+        , mitx_users.user_street_address
+        , true as program_is_dedp
     from program_certificates_dedp_from_mitxonline
-    where program_completion_timestamp >= '2022-10-01'
+    left join mitx_users
+        on program_certificates_dedp_from_mitxonline.user_mitxonline_id = mitx_users.user_mitxonline_id
+    where program_certificates_dedp_from_mitxonline.program_completion_timestamp >= '2022-10-01'
 
     union all
 
     select
-        program_certificate_hashed_id
-        , user_edxorg_username
-        , user_mitxonline_username
-        , user_email
-        , program_title
-        , micromasters_program_id
-        , mitxonline_program_id
-        , user_edxorg_id
-        , program_completion_timestamp
-        , user_gender
-        , user_address_city
-        , user_first_name
-        , user_last_name
-        , user_full_name
-        , user_year_of_birth
-        , user_country
-        , user_address_postal_code
-        , user_street_address
-        , user_address_state_or_territory
+        program_certificates_non_dedp.program_certificate_hashed_id
+        , program_certificates_non_dedp.program_title
+        , program_certificates_non_dedp.micromasters_program_id
+        , program_certificates_non_dedp.mitxonline_program_id
+        , program_certificates_non_dedp.program_completion_timestamp
+        , mitx_users.user_edxorg_id
+        , mitx_users.user_edxorg_username
+        , mitx_users.user_mitxonline_username
+        , mitx_users.user_edxorg_email as user_email
+        , mitx_users.user_first_name
+        , mitx_users.user_last_name
+        , mitx_users.user_full_name
+        , mitx_users.user_gender
+        , mitx_users.user_birth_year as user_year_of_birth
+        , mitx_users.user_address_country as user_country
+        , mitx_users.user_address_state as user_address_state_or_territory
+        , mitx_users.user_address_city
+        , mitx_users.user_address_postal_code
+        , mitx_users.user_street_address
+        , false as program_is_dedp
     from program_certificates_non_dedp
+    left join mitx_users
+        on program_certificates_non_dedp.user_edxorg_id = mitx_users.user_edxorg_id
 )
 
 
@@ -105,15 +118,15 @@ select
     , report.user_edxorg_id
     , report.program_completion_timestamp
     , report.user_gender
-    , report.user_address_city
     , report.user_first_name
     , report.user_last_name
     , report.user_full_name
     , report.user_year_of_birth
     , report.user_country
     , report.user_address_postal_code
+    , report.user_address_city
     , report.user_street_address
     , report.user_address_state_or_territory
-    , if(report.mitxonline_program_id in (1, 2, 3), true, false) as program_is_dedp
+    , report.program_is_dedp
 from report
 order by report.program_completion_timestamp desc
