@@ -214,8 +214,8 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
     return {
         "enrollment_start": enrollment_start,
         "enrollment_end": enrollment_end,
-        "start": start,
-        "end": end,
+        "course_start": start,
+        "course_end": end,
         "instructor_info": instructor_info,
         "self_paced": self_paced,
         "title": title,
