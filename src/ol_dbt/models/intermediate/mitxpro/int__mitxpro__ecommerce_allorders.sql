@@ -18,11 +18,6 @@ with b2becommerce_b2border as (
     from {{ ref('int__mitxpro__ecommerce_couponpaymentversion') }}
 )
 
-, ecommerce_coupon as (
-    select *
-    from {{ ref('int__mitxpro__ecommerce_coupon') }}
-)
-
 , ecommerce_couponredemption as (
     select *
     from {{ ref('int__mitxpro__ecommerce_couponredemption') }}
@@ -123,7 +118,7 @@ with b2becommerce_b2border as (
         , course_runs.courserun_id
         , course_runs.courserun_readable_id
         , programs.program_readable_id
-        , ecommerce_coupon.coupon_id
+        , null as coupon_id
         , b2becommerce_b2border.b2bcoupon_id
         , b2becommerce_b2border.b2border_created_on as order_created_on
         , b2becommerce_b2border.b2border_status as order_state
@@ -142,8 +137,6 @@ with b2becommerce_b2border as (
     from b2becommerce_b2border
     left join ecommerce_couponpaymentversion
         on b2becommerce_b2border.couponpaymentversion_id = ecommerce_couponpaymentversion.couponpaymentversion_id
-    left join ecommerce_coupon
-        on ecommerce_couponpaymentversion.couponpayment_name = ecommerce_coupon.couponpayment_name
     left join ecommerce_order
         on ecommerce_couponpaymentversion.couponpaymentversion_id = ecommerce_order.couponpaymentversion_id
     left join ecommerce_line
