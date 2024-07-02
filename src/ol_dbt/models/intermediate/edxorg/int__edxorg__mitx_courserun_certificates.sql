@@ -74,7 +74,7 @@ with person_courses as (
         , dedp_edxorg_certificates_from_micromasters.coursecertificate_url as courseruncertificate_download_url
         , dedp_edxorg_certificates_from_micromasters.coursecertificate_hash as courseruncertificate_download_uuid
         , dedp_edxorg_certificates_from_micromasters.coursecertificate_hash as courseruncertificate_verify_uuid
-        , dedp_edxorg_certificates_from_micromasters.user_full_name as courseruncertificate_name
+        , micromasters_users.user_full_name as courseruncertificate_name
         , 'downloadable' as courseruncertificate_status
         , dedp_edxorg_certificates_from_micromasters.coursecertificate_created_on as courseruncertificate_created_on
         , dedp_edxorg_certificates_from_micromasters.coursecertificate_updated_on as courseruncertificate_updated_on
@@ -84,9 +84,11 @@ with person_courses as (
         , edxorg_enrollments.user_mitxonline_username
         , runs.courserun_title
         , runs.course_number
-        , coalesce(users.user_full_name, dedp_edxorg_certificates_from_micromasters.user_full_name) as user_full_name
+        , coalesce(micromasters_users.user_full_name, users.user_full_name) as user_full_name
     from dedp_edxorg_certificates_from_micromasters
-    inner join users on dedp_edxorg_certificates_from_micromasters.user_edxorg_username = users.user_username
+    inner join micromasters_users
+        on dedp_edxorg_certificates_from_micromasters.user_micromasters_id = micromasters_users.user_id
+    inner join users on micromasters_users.user_edxorg_username = users.user_username
     left join
         runs
         on dedp_edxorg_certificates_from_micromasters.courserun_edxorg_readable_id = runs.courserun_readable_id
@@ -94,12 +96,13 @@ with person_courses as (
         on
             dedp_edxorg_certificates_from_micromasters.courserun_readable_id
             = dedp_edxorg_grades_from_micromasters.courserun_readable_id
-            and dedp_edxorg_certificates_from_micromasters.user_email = dedp_edxorg_grades_from_micromasters.user_email
+            and dedp_edxorg_certificates_from_micromasters.user_micromasters_id
+            = dedp_edxorg_grades_from_micromasters.user_micromasters_id
     left join edxorg_enrollments
         on
             dedp_edxorg_certificates_from_micromasters.courserun_edxorg_readable_id
             = edxorg_enrollments.courserun_readable_id
-            and dedp_edxorg_certificates_from_micromasters.user_edxorg_username = edxorg_enrollments.user_username
+            and micromasters_users.user_edxorg_username = edxorg_enrollments.user_username
 )
 
 , edxorg_non_dedp_certificates as (
