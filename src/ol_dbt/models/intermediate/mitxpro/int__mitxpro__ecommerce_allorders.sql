@@ -118,7 +118,7 @@ with b2becommerce_b2border as (
         , course_runs.courserun_id
         , course_runs.courserun_readable_id
         , programs.program_readable_id
-        , null as coupon_id 
+        , null as coupon_id
         , b2becommerce_b2border.b2bcoupon_id
         , b2becommerce_b2border.b2border_created_on as order_created_on
         , b2becommerce_b2border.b2border_status as order_state
