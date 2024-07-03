@@ -82,6 +82,8 @@ models:
 - name: marts__combined__orders
   description: B2B and regular orders combined into one table
   columns:
+  - name: combined_orders_id
+    description: int, primary key for this table. At the grain of order, platform, and line.
   - name: platform
     description: string, describes platform associated with the order (edX.org, mitxonline,
       mitxpro, or bootcamps).
@@ -90,14 +92,12 @@ models:
   - name: order_id
     description: int, foreign key for order table. For edX.org, it refers to order
       table in MicroMasters application.
-    tests:
-    - not_null
+  - name: b2border_id
+    description: int, foreign key for b2b order table. This only applies to xPro b2b orders
+     everything else will be null.
   - name: line_id
     description: int, foreign key for line table. For edX.org, it refers to line table
       in MicroMasters application.
-  - name: b2b_only_indicator
-    description: string, 'Y' indicates the record is only related to a b2b order.
-      Only applicable for xPro.
   - name: coupon_code
     description: string, discount code for the redeemed coupon if applicable
   - name: coupon_id
@@ -178,7 +178,7 @@ models:
     description: int, foreign key to the user table on the corresponding platform
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["order_id", "line_id", "b2b_only_indicator", "platform", "coupon_id"]
+      column_list: ["order_id", "line_id", "b2border_id", "platform"]
 
 - name: marts__combined_course_enrollment_detail
   description: course enrollment detail with certificates, orders and coupons from
