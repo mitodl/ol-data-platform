@@ -55,7 +55,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_order.order_tax_amount
         , mitxpro__ecommerce_order.order_total_price_paid_plus_tax
         , mitxpro__ecommerce_allorders.coupon_id
-        , mitxpro__ecommerce_allorders.order_id 
+        , mitxpro__ecommerce_allorders.order_id
         , mitxpro__ecommerce_allorders.b2border_id
         , coalesce(
             mitxpro__ecommerce_order.order_total_price_paid, mitxpro__b2becommerce_b2border.b2border_total_price
@@ -236,12 +236,12 @@ select
         || cast(coalesce(line_id, 9) as varchar)
         || cast(coalesce(b2border_id, 9) as varchar)
         ||
-        cast(case 
+        cast(case
             when platform = 'xPro' then 1
             when platform = 'edX.org' then 2
             when platform = 'MITx Online' then 3
             when platform = 'Bootcamps' then 4
-            else 9 
+            else 9
         end as varchar) as bigint
     ) as combined_orders_id
     , platform
