@@ -54,11 +54,12 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_order.order_tax_rate_name
         , mitxpro__ecommerce_order.order_tax_amount
         , mitxpro__ecommerce_order.order_total_price_paid_plus_tax
+        , mitxpro__ecommerce_allorders.coupon_id
+        , mitxpro__ecommerce_allorders.order_id 
+        , mitxpro__ecommerce_allorders.b2border_id
         , coalesce(
             mitxpro__ecommerce_order.order_total_price_paid, mitxpro__b2becommerce_b2border.b2border_total_price
         ) as order_total_price_paid
-        , coalesce(mitxpro__ecommerce_allorders.coupon_id, mitxpro__ecommerce_allorders.b2bcoupon_id) as coupon_id
-        , coalesce(mitxpro__ecommerce_allorders.order_id, mitxpro__ecommerce_allorders.b2border_id) as order_id
         , case
             when mitxpro__ecommerce_allorders.order_id is not null
                 then mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text
@@ -74,10 +75,6 @@ with bootcamps__ecommerce_order as (
             when mitxpro__ecommerce_allorders.b2border_id is not null
                 then concat('xpro-bulk-production-', cast(mitxpro__ecommerce_allorders.b2border_id as varchar))
         end as order_reference_number
-        , case
-            when mitxpro__ecommerce_allorders.order_id is null
-                then 'Y'
-        end as b2b_only_indicator
     from mitxpro__ecommerce_allorders
     left join mitxpro__ecommerce_order
         on mitxpro__ecommerce_allorders.order_id = mitxpro__ecommerce_order.order_id
@@ -91,6 +88,7 @@ with bootcamps__ecommerce_order as (
     select
         '{{ var("mitxonline") }}' as platform
         , order_id
+        , null as b2border_id
         , line_id
         , courserun_id
         , courserun_readable_id
@@ -98,7 +96,6 @@ with bootcamps__ecommerce_order as (
         , product_type
         , user_email
         , user_id
-        , null as b2b_only_indicator
         , discount_code as coupon_code
         , null as coupon_id
         , null as coupon_name
@@ -127,6 +124,7 @@ with bootcamps__ecommerce_order as (
     select
         '{{ var("mitxpro") }}' as platform
         , order_id
+        , b2border_id
         , line_id
         , courserun_id
         , courserun_readable_id
@@ -134,7 +132,6 @@ with bootcamps__ecommerce_order as (
         , product_type
         , user_email
         , order_purchaser_user_id as user_id
-        , b2b_only_indicator
         , coupon_code
         , coupon_id
         , coupon_name
@@ -163,6 +160,7 @@ with bootcamps__ecommerce_order as (
     select
         '{{ var("bootcamps") }}' as platform
         , order_id
+        , null as b2border_id
         , line_id
         , courserun_id
         , courserun_readable_id
@@ -170,7 +168,6 @@ with bootcamps__ecommerce_order as (
         , null as product_type
         , user_email
         , order_purchaser_user_id as user_id
-        , null as b2b_only_indicator
         , null as coupon_code
         , null as coupon_id
         , null as coupon_name
@@ -199,6 +196,7 @@ with bootcamps__ecommerce_order as (
     select
         '{{ var("edxorg") }}' as platform
         , order_id
+        , null as b2border_id
         , line_id
         , null as courserun_id
         , courserun_readable_id
@@ -206,7 +204,6 @@ with bootcamps__ecommerce_order as (
         , null as product_type
         , user_edxorg_email as user_email
         , user_edxorg_id as user_id
-        , null as b2b_only_indicator
         , coupon_code
         , coupon_id
         , null as coupon_name
@@ -234,10 +231,23 @@ with bootcamps__ecommerce_order as (
 )
 
 select
-    platform
+    cast(
+        cast(coalesce(order_id, 9) as varchar)
+        || cast(coalesce(line_id, 9) as varchar)
+        || cast(coalesce(b2border_id, 9) as varchar)
+        ||
+        cast(case 
+            when platform = 'xPro' then 1
+            when platform = 'edX.org' then 2
+            when platform = 'MITx Online' then 3
+            when platform = 'Bootcamps' then 4
+            else 9 
+        end as varchar) as bigint
+    ) as combined_orders_id
+    , platform
     , order_id
+    , b2border_id
     , line_id
-    , b2b_only_indicator
     , coupon_code
     , coupon_id
     , coupon_name
