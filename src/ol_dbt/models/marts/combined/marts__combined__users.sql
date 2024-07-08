@@ -78,8 +78,7 @@ with mitx__users as (
         , user_industry
     from mitx__users
     --- filter out some micromasters users who don't have any social auth accounts or
-    --- we can't link their social auth accounts to neither mitxonline nor edxorg
-
+    --- we can't link their social auth accounts to mitxonline or edxorg
     where user_mitxonline_email is not null or user_edxorg_email is not null
 
     union all
