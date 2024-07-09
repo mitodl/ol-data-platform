@@ -83,8 +83,9 @@ models:
   description: B2B and regular orders combined into one table
   columns:
   - name: combined_orders_id
-    description: int, primary key for this table. At the grain of order id, line id,
-      b2b order id, and platform. Examples include 495884959191 and 5360536091.
+    description: int, primary key for this table. At the grain of order id, line id, b2b order id, 
+      and platform. If there are any nulls they will be defaulted to 9. 
+      Examples include 495884959191 and 5360536091.
   - name: platform
     description: string, describes platform associated with the order (edX.org, mitxonline,
       mitxpro, or bootcamps).
@@ -94,8 +95,8 @@ models:
     description: int, foreign key for order table. For edX.org, it refers to order
       table in MicroMasters application.
   - name: b2border_id
-    description: int, foreign key for b2b order table. This only applies to xPro b2b
-      orders everything else will be null.
+    description: int, foreign key for b2b order table. This only applies to xPro b2b orders
+     everything else will be null.
   - name: line_id
     description: int, foreign key for line table. For edX.org, it refers to line table
       in MicroMasters application.
