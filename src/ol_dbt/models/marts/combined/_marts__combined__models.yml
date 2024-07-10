@@ -76,8 +76,8 @@ models:
       platforms
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_id", "user_edxorg_id", "user_mitxpro_id", "user_bootcamps_id",
-        "platforms"]
+      column_list: ["user_mitxonline_username", "user_edxorg_username", "user_mitxpro_username",
+        "user_bootcamps_username", "platforms"]
 
 - name: marts__combined__orders
   description: B2B and regular orders combined into one table
