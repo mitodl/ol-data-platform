@@ -824,3 +824,47 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "user_id", "courseaccess_role"]
+
+- name: stg__edxorg__s3__courserun
+  description: edX.org course metadata extracted from course archive
+  columns:
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+    tests:
+    - unique
+    - not_null
+  - name: courserun_edx_readable_id
+    description: str, open edX Course ID format as {org}/{course}/{run}. This may
+      be used for joins with other tables
+    tests:
+    - unique
+    - not_null
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. CTL.SC2x
+    tests:
+    - not_null
+  - name: courserun_tag
+    description: str, the run tag from the course ID, e.g., 2T2023
+    tests:
+    - not_null
+  - name: courserun_institution
+    description: str, institution for the course, e.g., MITx
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: courserun_start_on
+    description: timestamp, specifying when the course begins
+  - name: courserun_end_on
+    description: timestamp, specifying when the course ends
+  - name: courserun_enrollment_start_on
+    description: timestamp, specifying when enrollment starts
+  - name: courserun_enrollment_end_on
+    description: timestamp, specifying when enrollment ends
+  - name: courserun_instructors
+    description: array, array of instructors' name
+  - name: self_paced
+    description: boolean, indicating whether the course is self_paced or instructor-paced

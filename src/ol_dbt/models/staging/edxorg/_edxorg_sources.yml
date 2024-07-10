@@ -885,3 +885,30 @@ sources:
         ccx_coach, limited_staff, sales_admin, beta_testers, finance_admin
     - name: user_id
       description: str, foreign key to auth_user.id
+
+  - name: raw__edxorg__s3__course_structure__course_metadata
+    description: edX.org course metadata extracted from course archive
+    columns:
+    - name: course_id
+      description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+    - name: course_number
+      description: str, unique string for the course. It can contain letters, numbers,
+        or periods. e.g. CTL.SC2x
+    - name: semester
+      description: str, the run tag from the course ID, e.g., 2T2023
+    - name: title
+      description: str, title of the course run
+    - name: course_start
+      description: str, specifying when the course begins
+    - name: course_end
+      description: str, specifying when the course ends
+    - name: enrollment_start
+      description: str, specifying when enrollment starts
+    - name: enrollment_end
+      description: str, specifying when enrollment ends
+    - name: institution
+      description: str, institution for the course, e.g., MITx
+    - name: instructor_info
+      description: str, instructors metadata
+    - name: self_paced
+      description: boolean, indicating whether the course is self_paced or instructor-paced
