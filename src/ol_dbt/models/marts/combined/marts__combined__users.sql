@@ -43,7 +43,7 @@ with mitx__users as (
         , case
             when user_is_active_on_mitxonline and user_joined_on_mitxonline > user_joined_on_edxorg
                 then user_mitxonline_email
-            else coalesce(user_edxorg_email, user_mitxonline_email)
+            else coalesce(user_edxorg_email, user_mitxonline_email, user_micromasters_email)
         end as user_email
         , case
             when user_is_active_on_mitxonline and user_joined_on_mitxonline > user_joined_on_edxorg
@@ -77,6 +77,7 @@ with mitx__users as (
         , user_job_title
         , user_industry
     from mitx__users
+    where is_mitxonline_user = true or is_edxorg_user = true
 
     union all
 
