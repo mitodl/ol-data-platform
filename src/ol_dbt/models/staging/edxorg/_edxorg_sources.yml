@@ -892,7 +892,8 @@ sources:
     - name: course_id
       description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
     - name: course_number
-      description: str, course number from the course ID, e.g., 6.00.2x
+      description: str, unique string for the course. It can contain letters, numbers,
+        or periods. e.g. CTL.SC2x
     - name: semester
       description: str, the run tag from the course ID, e.g., 2T2023
     - name: title
