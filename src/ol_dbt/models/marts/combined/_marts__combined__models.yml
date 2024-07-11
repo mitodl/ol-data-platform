@@ -83,8 +83,8 @@ models:
   description: B2B and regular orders combined into one table
   columns:
   - name: combined_orders_hash_id
-    description: int, primary key for this table. At the grain of order id, line id, 
-      and platform. 
+    description: int, primary key for this table. At the grain of order id, line id,
+      and platform.
   - name: platform
     description: string, describes platform associated with the order (edX.org, mitxonline,
       mitxpro, or bootcamps).
