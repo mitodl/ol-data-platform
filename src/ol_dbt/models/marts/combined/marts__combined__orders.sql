@@ -51,7 +51,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_order.order_tax_amount
         , mitxpro__ecommerce_order.order_total_price_paid_plus_tax
         , mitxpro__ecommerce_allorders.coupon_id
-        , mitxpro__ecommerce_allorders.order_id 
+        , mitxpro__ecommerce_allorders.order_id
         , mitxpro__ecommerce_order.order_total_price_paid
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
         , concat('xpro-b2c-production-', cast(mitxpro__ecommerce_allorders.order_id as varchar))
@@ -207,8 +207,8 @@ with bootcamps__ecommerce_order as (
 )
 
 select
-    {{ generate_hash_id('cast(order_id as varchar) 
-        || cast(coalesce(line_id, 9) as varchar) 
+    {{ generate_hash_id('cast(order_id as varchar)
+        || cast(coalesce(line_id, 9) as varchar)
         || platform') }} as combined_orders_hash_id
     , platform
     , order_id
