@@ -12,10 +12,6 @@ with bootcamps__ecommerce_order as (
     select * from {{ ref('int__mitxonline__ecommerce_order') }}
 )
 
-, mitxpro__b2becommerce_b2border as (
-    select * from {{ ref('int__mitxpro__b2becommerce_b2border') }}
-)
-
 , mitxpro__ecommerce_order as (
     select * from {{ ref('int__mitxpro__ecommerce_order') }}
 )
@@ -55,40 +51,23 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_order.order_tax_amount
         , mitxpro__ecommerce_order.order_total_price_paid_plus_tax
         , mitxpro__ecommerce_allorders.coupon_id
-        , mitxpro__ecommerce_allorders.order_id
-        , mitxpro__ecommerce_allorders.b2border_id
-        , coalesce(
-            mitxpro__ecommerce_order.order_total_price_paid, mitxpro__b2becommerce_b2border.b2border_total_price
-        ) as order_total_price_paid
-        , case
-            when mitxpro__ecommerce_allorders.order_id is not null
-                then mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text
-            when
-                mitxpro__ecommerce_allorders.b2border_id is not null
-                and mitxpro__ecommerce_allorders.b2border_discount is not null
-                then concat('$', format('%.2f', mitxpro__ecommerce_allorders.b2border_discount), ' off')
-        end as discount
-        , case
-            --- the order reference number prefixes use the same format as in xpro application codebase
-            when mitxpro__ecommerce_allorders.order_id is not null
-                then concat('xpro-b2c-production-', cast(mitxpro__ecommerce_allorders.order_id as varchar))
-            when mitxpro__ecommerce_allorders.b2border_id is not null
-                then concat('xpro-bulk-production-', cast(mitxpro__ecommerce_allorders.b2border_id as varchar))
-        end as order_reference_number
+        , mitxpro__ecommerce_allorders.order_id 
+        , mitxpro__ecommerce_order.order_total_price_paid
+        , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
+        , concat('xpro-b2c-production-', cast(mitxpro__ecommerce_allorders.order_id as varchar))
+        as order_reference_number
     from mitxpro__ecommerce_allorders
     left join mitxpro__ecommerce_order
         on mitxpro__ecommerce_allorders.order_id = mitxpro__ecommerce_order.order_id
-    left join mitxpro__b2becommerce_b2border
-        on mitxpro__ecommerce_allorders.b2border_id = mitxpro__b2becommerce_b2border.b2border_id
     left join mitxpro__ecommerce_allcoupons
         on mitxpro__ecommerce_allorders.coupon_id = mitxpro__ecommerce_allcoupons.coupon_id
+    where mitxpro__ecommerce_allorders.order_id is not null
 )
 
 , combined_orders as (
     select
         '{{ var("mitxonline") }}' as platform
         , order_id
-        , null as b2border_id
         , line_id
         , courserun_id
         , courserun_readable_id
@@ -124,7 +103,6 @@ with bootcamps__ecommerce_order as (
     select
         '{{ var("mitxpro") }}' as platform
         , order_id
-        , b2border_id
         , line_id
         , courserun_id
         , courserun_readable_id
@@ -160,7 +138,6 @@ with bootcamps__ecommerce_order as (
     select
         '{{ var("bootcamps") }}' as platform
         , order_id
-        , null as b2border_id
         , line_id
         , courserun_id
         , courserun_readable_id
@@ -196,7 +173,6 @@ with bootcamps__ecommerce_order as (
     select
         '{{ var("edxorg") }}' as platform
         , order_id
-        , null as b2border_id
         , line_id
         , null as courserun_id
         , courserun_readable_id
@@ -231,22 +207,11 @@ with bootcamps__ecommerce_order as (
 )
 
 select
-    cast(
-        cast(coalesce(order_id, 9) as varchar)
-        || cast(coalesce(line_id, 9) as varchar)
-        || cast(coalesce(b2border_id, 9) as varchar)
-        ||
-        cast(case
-            when platform = 'xPro' then 1
-            when platform = 'edX.org' then 2
-            when platform = 'MITx Online' then 3
-            when platform = 'Bootcamps' then 4
-            else 9
-        end as varchar) as bigint
-    ) as combined_orders_id
+    {{ generate_hash_id('cast(order_id as varchar) 
+        || cast(coalesce(line_id, 9) as varchar) 
+        || platform') }} as combined_orders_hash_id
     , platform
     , order_id
-    , b2border_id
     , line_id
     , coupon_code
     , coupon_id
