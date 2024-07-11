@@ -43,7 +43,7 @@ with lines as (
     select
         *
         , row_number() over (partition by order_id order by discountredemption_timestamp desc) as row_num
-    from {{ ref('stg__mitxonline__app__postgres__ecommerce_discountredemption') }}
+    from {{ ref('int__mitxonline__ecommerce_transaction') }}
 
 )
 
