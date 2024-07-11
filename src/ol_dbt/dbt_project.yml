@@ -74,12 +74,12 @@ models:
       +materialized: table
       +schema: staging
       +grants:
-        select: ['read_only_production']
+        select: ['read_only_production', 'reverse_etl']
     intermediate:
       +materialized: table
       +schema: intermediate
       +grants:
-        select: ['read_only_production', 'business_intelligence']
+        select: ['read_only_production', 'business_intelligence', 'reverse_etl']
     marts:
       +materialized: table
       +schema: mart
