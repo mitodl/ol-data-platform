@@ -54,6 +54,7 @@ select
     , lines.courserun_edxorg_readable_id
     , courseruns.courserun_platform
     , receipts.receipt_reference_number
+    , receipts.receipt_transaction_uuid
     , receipts.receipt_transaction_id
     , receipts.receipt_payment_method
     , receipts.receipt_authorization_code

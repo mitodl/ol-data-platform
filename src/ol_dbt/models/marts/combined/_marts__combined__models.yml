@@ -161,6 +161,24 @@ models:
     description: string, address country from cybersource payment
   - name: receipt_bill_to_address_state
     description: string, address state from cybersource payment
+  - name: receipt_payer_name
+    description: str, payer name from cybersource payment
+  - name: receipt_payer_email
+    description: str, payer email from cybersource payment
+  - name: receipt_payer_ip_address
+    description: str, payer IP address from cybersource payment
+  - name: receipt_payment_card_number
+    description: str, last 4 digits credit card number from cybersource payment
+  - name: receipt_payment_card_type
+    description: str, payment_card_type from cybersource, e.g, Visa
+  - name: receipt_transaction_uuid
+    description: str, payment transaction UUID from cybersource
+  - name: receipt_transaction_type
+    description: str, req_transaction_type from cybersource, e.g., sale
+  - name: receipt_payment_amount
+    description: numeric, req_amount from cybersource
+  - name: receipt_payment_currency
+    description: str, req_currency from cybersource
   - name: receipt_payment_method
     description: string, payment method from cybersource. Value could be 'paypal'
       or 'card'.
@@ -169,6 +187,8 @@ models:
       or a unique uuid
   - name: req_reference_number
     description: str, cybersource req reference number for a payment
+  - name: unit_price
+    description: numeric, price for the order line item before discount
   - name: user_email
     description: str, user email associated with their account on the corresponding
       platform
@@ -288,8 +308,6 @@ models:
   - name: order_reference_number
     description: string, order reference number to identify an order on the corresponding
       platform, e.g. mitxonline-production-20
-  - name: unit_price
-    description: numeric, price for the order line item before discount
   - name: user_company
     description: str, user's company pulled on the platform user enrolled. May be
       blank.

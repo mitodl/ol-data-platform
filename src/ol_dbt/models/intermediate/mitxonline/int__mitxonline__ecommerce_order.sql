@@ -86,6 +86,15 @@ select
     , payments.transaction_reference_number as payment_req_reference_number
     , payments.transaction_bill_to_address_state as payment_bill_to_address_state
     , payments.transaction_bill_to_address_country as payment_bill_to_address_country
+    , payments.transaction_uuid as payment_transaction_uuid
+    , payments.transaction_order_type as payment_transaction_type
+    , payments.transaction_payment_amount as payment_amount
+    , payments.transaction_payment_currency as payment_currency
+    , payments.transaction_payer_email as payment_payer_email
+    , payments.transaction_payment_card_number as payment_card_number
+    , payments.transaction_payer_ip_address as payment_payer_ip_address
+    , payments.transaction_payment_card_type as payment_card_type
+    , payments.transaction_payer_name as payment_payer_name
     , case
         when discounts.discount_type = 'percent-off'
             then cast(intermediate_products_view.product_price * (discounts.discount_amount / 100) as decimal(38, 2))

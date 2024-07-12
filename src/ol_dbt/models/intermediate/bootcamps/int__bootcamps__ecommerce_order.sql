@@ -9,7 +9,7 @@ with orders as (
 )
 
 , receipts as (
-    select * from {{ ref('stg__bootcamps__app__postgres__ecommerce_receipt') }}
+    select * from {{ ref('int__bootcamps__ecommerce_receipt') }}
 )
 
 , users as (
@@ -42,6 +42,15 @@ select
     , receipts.receipt_authorization_code
     , receipts.receipt_bill_to_address_state
     , receipts.receipt_bill_to_address_country
+    , receipts.receipt_transaction_uuid
+    , receipts.receipt_transaction_type
+    , receipts.receipt_payment_amount
+    , receipts.receipt_payment_currency
+    , receipts.receipt_payer_email
+    , receipts.receipt_payment_card_number
+    , receipts.receipt_payer_ip_address
+    , receipts.receipt_payment_card_type
+    , receipts.receipt_payer_name
     , users.user_username
     , users.user_email
     , users.user_full_name

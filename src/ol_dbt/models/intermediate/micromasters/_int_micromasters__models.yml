@@ -581,6 +581,8 @@ models:
     description: str, payer IP address from cybersource payment
   - name: receipt_payment_card_number
     description: str, last 4 digits credit card number from cybersource payment
+  - name: receipt_payment_card_type
+    description: str, payment_card_type from cybersource, e.g, Visa
   - name: receipt_transaction_uuid
     description: str, payment transaction UUID from cybersource
   - name: receipt_transaction_type

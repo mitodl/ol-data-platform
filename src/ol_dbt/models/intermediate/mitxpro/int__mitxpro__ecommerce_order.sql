@@ -25,7 +25,7 @@ with orders as (
 
 , receipts as (
     select *
-    from {{ ref('stg__mitxpro__app__postgres__ecommerce_receipt') }}
+    from {{ ref('int__mitxpro__ecommerce_receipt') }}
     where receipt_transaction_status != 'ERROR'
 )
 
@@ -55,6 +55,15 @@ select
     , receipts.receipt_transaction_id
     , receipts.receipt_bill_to_address_state
     , receipts.receipt_bill_to_address_country
+    , receipts.receipt_transaction_uuid
+    , receipts.receipt_transaction_type
+    , receipts.receipt_payment_amount
+    , receipts.receipt_payment_currency
+    , receipts.receipt_payment_card_number
+    , receipts.receipt_payment_card_type
+    , receipts.receipt_payer_ip_address
+    , receipts.receipt_payer_email
+    , receipts.receipt_payer_name
     , orders.order_tax_amount
     , orders.order_total_price_paid_plus_tax
 from orders
