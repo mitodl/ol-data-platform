@@ -23,10 +23,12 @@ select
     -- image_metadata for image resources; could be in metadata or image_metadata
     -- noqa: disable=RF02
     , cast(
-        json_query(websitecontents.websitecontent_metadata, 'lax $.is_broken' omit quotes) as boolean
+        nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.is_broken' omit quotes), '') as boolean
     ) as external_resource_is_broken
     , cast(
-        json_query(websitecontents.websitecontent_metadata, 'lax $.has_external_license_warning' omit quotes) as boolean
+        nullif(
+            json_query(websitecontents.websitecontent_metadata, 'lax $.has_external_license_warning' omit quotes), ''
+        ) as boolean
     ) as external_resource_license_warning
     , 'https://ocw-studio.odl.mit.edu/sites/'
     || websites.website_name
@@ -86,5 +88,5 @@ inner join websitecontents
 inner join websitestarters
     on websites.websitestarter_id = websitestarters.websitestarter_id
 where
-    websitecontents.websitecontent_type = 'resource'
+    (websitecontents.websitecontent_type = 'resource' or websitecontents.websitecontent_type = 'external-resource')
     and websitestarters.websitestarter_name = 'ocw-course'
