@@ -246,6 +246,7 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__b2becommerce_b2breceipt')
+
 - name: int__mitxpro__b2becommerce_b2border
   description: A B2B order is created when a company or other purchaser buys enrollment
     codes for many of learners through the xpro web form. This creates full price
@@ -692,6 +693,8 @@ models:
 - name: int__mitxpro__ecommerce_receipt
   description: Data returned from cybersource when a user pays for an order
   columns:
+  - name: order_id
+    description: int, primary key in ecommerce_order
   - name: receipt_id
     description: int, primary key representing a receipt
     tests:
@@ -730,11 +733,24 @@ models:
     description: str, address state from user's cybersource payment
   - name: receipt_bill_to_address_country
     description: str, address country from user's cybersource payment
-  - name: order_id
-    description: int, primary key in ecommerce_order
+  - name: receipt_payer_name
+    description: str, payer name from cybersource payment
+  - name: receipt_payer_email
+    description: str, payer email from cybersource payment
+  - name: receipt_payer_ip_address
+    description: str, payer IP address from cybersource payment
+  - name: receipt_payment_card_number
+    description: str, last 4 digits credit card number from cybersource payment
+  - name: receipt_transaction_uuid
+    description: str, payment transaction UUID from cybersource
+  - name: receipt_payment_amount
+    description: numeric, req_amount from cybersource
+  - name: receipt_payment_currency
+    description: str, req_currency from cybersource
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__ecommerce_receipt')
+
 - name: int__mitxpro__ecommerce_order
   columns:
   - name: order_id
