@@ -228,6 +228,10 @@ models:
     description: boolean, whether the external resource has a license warning
   - name: external_resource_is_broken
     description: boolean, whether the external resource link is broken
+  - name: content_type
+    description: str, websitecontent type of the resource (e.g., resource, external-resource)
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["course_uuid", "resource_uuid"]

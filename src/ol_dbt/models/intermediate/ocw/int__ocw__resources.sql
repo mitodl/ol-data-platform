@@ -20,6 +20,7 @@ select
     , websitecontents.metadata_draft as resource_draft
     , websites.primary_course_number as course_number
     , websitecontents.websitecontent_metadata as metadata --noqa: disable=RF04
+    , websitecontents.websitecontent_type as content_type
     -- image_metadata for image resources; could be in metadata or image_metadata
     -- noqa: disable=RF02
     , cast(
