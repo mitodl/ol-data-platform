@@ -252,8 +252,8 @@ with combined_enrollments as (
 select
     platform
     , courserunenrollment_id
-    , {{ generate_hash_id('cast(order_id as varchar) 
-        || cast(coalesce(line_id, 9) as varchar) 
+    , {{ generate_hash_id('cast(order_id as varchar)
+        || cast(coalesce(line_id, 9) as varchar)
         || platform') }} as combined_orders_hash_id
     , course_readable_id
     , course_title
