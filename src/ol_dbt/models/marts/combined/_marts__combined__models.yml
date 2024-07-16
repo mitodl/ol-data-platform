@@ -83,8 +83,8 @@ models:
   description: B2B and regular orders combined into one table
   columns:
   - name: combined_orders_hash_id
-    description: int, primary key for this table. At the grain of order id, line id, 
-      and platform. 
+    description: int, primary key for this table. At the grain of order id, line id,
+      and platform.
   - name: platform
     description: string, describes platform associated with the order (edX.org, mitxonline,
       mitxpro, or bootcamps).
@@ -195,8 +195,8 @@ models:
     description: int, internal ID and foreign key to courserunenrollments on the corresponding
       platform. Null for enrollments on edX.org.
   - name: combined_orders_hash_id
-    description: int, primary key for this table. At the grain of order id, line id, 
-      and platform. 
+    description: int, primary key for this table. At the grain of order id, line id,
+      and platform.
   - name: course_readable_id
     description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
       Online and xPro courses, and {org}/{course} for edX.org courses. May be null
