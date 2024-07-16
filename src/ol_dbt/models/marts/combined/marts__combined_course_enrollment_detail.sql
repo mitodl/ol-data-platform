@@ -48,6 +48,10 @@ with combined_enrollments as (
     where order_state in ('fulfilled', 'refunded')
 )
 
+, mitxpro__ecommerce_line as (
+    select * from {{ ref('int__mitxpro__ecommerce_line') }}
+)
+
 , combined_enrollment_detail as (
     select
         '{{ var("mitxonline") }}' as platform
@@ -75,6 +79,7 @@ with combined_enrollments as (
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , mitxonline_completed_orders.order_id
+        , mitxonline_completed_orders.line_id
         , mitxonline_completed_orders.order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
@@ -123,6 +128,7 @@ with combined_enrollments as (
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , micromasters_completed_orders.order_id
+        , micromasters_completed_orders.line_id
         , micromasters_completed_orders.order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
@@ -173,6 +179,7 @@ with combined_enrollments as (
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , mitxpro_completed_orders.order_id
+        , mitxpro__ecommerce_line.line_id
         , mitxpro_completed_orders.receipt_reference_number as order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
@@ -189,6 +196,8 @@ with combined_enrollments as (
         on mitxpro_enrollments.ecommerce_order_id = mitxpro_completed_orders.order_id
     left join combined_courseruns
         on mitxpro_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    left join mitxpro__ecommerce_line
+        on mitxpro_completed_orders.order_id = mitxpro__ecommerce_line.order_id
     where combined_enrollments.platform = '{{ var("mitxpro") }}'
 
 
@@ -220,6 +229,7 @@ with combined_enrollments as (
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , bootcamps_completed_orders.order_id
+        , bootcamps_completed_orders.line_id
         , bootcamps_completed_orders.order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
@@ -242,6 +252,9 @@ with combined_enrollments as (
 select
     platform
     , courserunenrollment_id
+    , {{ generate_hash_id('cast(order_id as varchar) 
+        || cast(coalesce(line_id, 9) as varchar) 
+        || platform') }} as combined_orders_hash_id
     , course_readable_id
     , course_title
     , courserun_id
@@ -261,6 +274,7 @@ select
     , courserunenrollment_is_edx_enrolled
     , courserungrade_grade
     , courserungrade_is_passing
+    , line_id
     , order_id
     , order_reference_number
     , user_company
