@@ -159,9 +159,9 @@ models:
       and Statistics"]]
   - name: course_instructor_uuids
     description: json, course instructor's uuid extracted from sitemetadata
-  - name: course_learning_resource_types
-    description: str, course learning resource types or features extracted from sitemetadata
-      e.g., Lecture Notes, Problem Sets with Solutions...
+  - name: learning_resource_types
+    description: str, learning resource types extracted from metadata e.g., Lecture
+      Notes, Problem Sets with Solutions...
   - name: course_department_numbers
     description: str, course department numbers in comma-separated list. e.g., STS,
       8..

@@ -21,6 +21,7 @@ select
     , websites.primary_course_number as course_number
     , websitecontents.websitecontent_metadata as metadata --noqa: disable=RF04
     , websitecontents.websitecontent_type as content_type
+    , websitecontents.learning_resource_types
     -- image_metadata for image resources; could be in metadata or image_metadata
     -- noqa: disable=RF02
     , cast(

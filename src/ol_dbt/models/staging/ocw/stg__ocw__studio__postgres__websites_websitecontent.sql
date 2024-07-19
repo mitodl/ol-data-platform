@@ -29,8 +29,8 @@ with source as (
             cast(json_parse(json_query(metadata, 'lax $.level')) as array (varchar)), ', ' --noqa
         ) as course_level
         , array_join(
-            cast(json_parse(json_query(metadata, 'lax $.learning_resource_types')) as array (varchar)), ', ' --noqa
-        ) as course_learning_resource_types
+            cast(json_parse(nullif(json_query(metadata, 'lax $.learning_resource_types'), '')) as array (varchar)), ', ' --noqa
+        ) as learning_resource_types
         , array_join(
             cast(json_parse(json_query(metadata, 'lax $.department_numbers')) as array (varchar)), ', ' --noqa
         ) as course_department_numbers

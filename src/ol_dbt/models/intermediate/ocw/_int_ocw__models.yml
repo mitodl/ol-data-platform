@@ -232,6 +232,8 @@ models:
     description: str, websitecontent type of the resource (e.g., resource, external-resource)
     tests:
     - not_null
+  - name: learning_resource_types
+    description: str, learning resource types of the resource (e.g., Lecture Notes)
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["course_uuid", "resource_uuid"]
