@@ -30,6 +30,7 @@ select
     , mitxonline_videos.video_edx_uuid
     , video_structure.coursestructure_block_title as video_title
     , video_structure.coursestructure_chapter_title as section_title
+    , video_structure.coursestructure_block_index
     , video.useractivity_page_url as page_url
     , video.useractivity_event_type as video_event_type
     , video.useractivity_timestamp as video_event_timestamp
