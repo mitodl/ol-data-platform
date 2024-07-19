@@ -11,18 +11,20 @@ with websites as (
 )
 
 select
-    websites.website_uuid as course_uuid
-    , websites.website_name as course_name
+    websites.website_name as course_name
+    , websites.primary_course_number as course_number
     , websites.website_title as course_title
+    , websites.website_uuid as course_uuid
+    , websitecontents.websitecontent_type as content_type
+    , websitecontents.learning_resource_types
+    , websitecontents.websitecontent_metadata as metadata --noqa: disable=RF04
+    , websitecontents.metadata_draft as resource_draft
+    , websitecontents.websitecontent_filename as resource_filename
+    , websitecontents.websitecontent_title as resource_title
     , websitecontents.metadata_resource_type as resource_type
     , websitecontents.websitecontent_text_id as resource_uuid
-    , websitecontents.websitecontent_filename as resource_filename
-    , websitecontents.metadata_draft as resource_draft
-    , websites.primary_course_number as course_number
-    , websitecontents.websitecontent_metadata as metadata --noqa: disable=RF04
-    , websitecontents.websitecontent_type as content_type
-    -- image_metadata for image resources; could be in metadata or image_metadata
     -- noqa: disable=RF02
+    -- external resources
     , cast(
         nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.is_broken' omit quotes), '') as boolean
     ) as external_resource_is_broken
@@ -38,7 +40,11 @@ select
     || '/edit/'
     || websitecontents.websitecontent_text_id
     || '/' as studio_url
-    -- video_metadata for video resources
+    , json_query(
+        websitecontents.websitecontent_metadata, 'lax $.backup_url' omit quotes
+    ) as external_resource_backup_url
+    , json_query(websitecontents.websitecontent_metadata, 'lax $.external_url' omit quotes) as external_resource_url
+    -- image_metadata for image resources; could be in metadata or image_metadata
     , coalesce(
         nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.image_alt' omit quotes), '')
         , nullif(
@@ -53,13 +59,7 @@ select
         nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.credit' omit quotes), '')
         , nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata.credit' omit quotes), '')
     ) as image_credit
-    , json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_speakers' omit quotes
-    ) as video_youtube_speakers
-    -- video_files for video resources
-    , json_query(
-        websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_tags' omit quotes
-    ) as video_youtube_tags
+    -- video_metadata for video resources
     , json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_description' omit quotes
     ) as video_youtube_description
@@ -67,9 +67,15 @@ select
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_id' omit quotes
     ) as video_youtube_id
     , json_query(
+        websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_speakers' omit quotes
+    ) as video_youtube_speakers
+    , json_query(
+        websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_tags' omit quotes
+    ) as video_youtube_tags
+    -- video_files for video resources
+    , json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.archive_url' omit quotes
     ) as video_archive_url
-    -- external resources
     , json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_captions_file' omit quotes
     ) as video_captions_file
@@ -79,10 +85,6 @@ select
     , json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_transcript_file' omit quotes
     ) as video_transcript_file
-    , json_query(
-        websitecontents.websitecontent_metadata, 'lax $.backup_url' omit quotes
-    ) as external_resource_backup_url
-    , json_query(websitecontents.websitecontent_metadata, 'lax $.external_url' omit quotes) as external_resource_url
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid

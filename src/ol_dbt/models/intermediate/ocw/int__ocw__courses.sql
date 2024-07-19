@@ -33,7 +33,7 @@ select
     , websitecontents.course_extra_course_numbers
     , websitecontents.course_topics
     , websitecontents.course_department_numbers
-    , websitecontents.course_learning_resource_types
+    , websitecontents.learning_resource_types as course_learning_resource_types
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
