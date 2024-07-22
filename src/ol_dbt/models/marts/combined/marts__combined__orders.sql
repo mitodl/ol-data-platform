@@ -57,7 +57,6 @@ with bootcamps__ecommerce_order as (
         , mitxonline__ecommerce_order.discount_redemption_type
         , mitxonline__ecommerce_order.discountredemption_timestamp
         , mitxonline__ecommerce_order.discount_amount_text
-        , mitxonline__transaction.transaction_authorization_code
         , mitxonline__transaction.transaction_bill_to_address_state
         , mitxonline__transaction.transaction_bill_to_address_country
         , mitxonline__transaction.transaction_uuid
@@ -69,16 +68,31 @@ with bootcamps__ecommerce_order as (
         , mitxonline__transaction.transaction_payer_name
         , mitxonline__transaction.transaction_payer_email
         , mitxonline__transaction.transaction_payer_ip_address
-        , mitxonline__transaction.transaction_readable_identifier
+        , mitxonline__transaction.transaction_payment_method
         , mitxonline__transaction.transaction_reference_number
-        , mitxonline__transaction.transaction_timestamp
         , mitxonline__ecommerce_order.order_created_on
         , mitxonline__ecommerce_order.order_reference_number
         , mitxonline__ecommerce_order.order_state
         , mitxonline__ecommerce_order.order_total_price_paid
+        , coalesce(
+            mitxonline__refund.transaction_readable_identifier
+            , mitxonline__transaction.transaction_readable_identifier
+        ) as transaction_readable_identifier
+        , coalesce(
+            mitxonline__refund.transaction_authorization_code
+            , mitxonline__transaction.transaction_authorization_code
+        ) as transaction_authorization_code
+        , coalesce(
+            mitxonline__refund.transaction_timestamp
+            , mitxonline__transaction.transaction_timestamp
+        ) as transaction_timestamp
     from mitxonline__ecommerce_order
     left join mitxonline__transaction
         on mitxonline__ecommerce_order.transaction_id = mitxonline__transaction.transaction_id
+    left join mitxonline__transaction as mitxonline__refund
+        on
+            mitxonline__ecommerce_order.order_id = mitxonline__refund.order_id
+            and mitxonline__refund.transaction_type = 'refund'
 )
 
 , bootcamps_orders as (
@@ -90,7 +104,7 @@ with bootcamps__ecommerce_order as (
         , bootcamps__ecommerce_order.line_price
         , bootcamps__ecommerce_order.user_email
         , bootcamps__ecommerce_order.order_purchaser_user_id
-        , bootcamps__transaction.receipt_authorization_code
+        , bootcamps__receipt.receipt_authorization_code
         , bootcamps__receipt.receipt_bill_to_address_state
         , bootcamps__receipt.receipt_bill_to_address_country
         , bootcamps__receipt.receipt_transaction_uuid
@@ -146,7 +160,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__receipts.receipt_payment_method
         , mitxpro__receipts.receipt_transaction_id
         , mitxpro__receipts.receipt_payment_timestamp
-        , mitxpro__ecommerce_order.req_reference_number
+        , mitxpro__ecommerce_order.receipt_reference_number
         , mitxpro__ecommerce_order.order_tax_country_code
         , mitxpro__ecommerce_order.order_tax_rate
         , mitxpro__ecommerce_order.order_tax_rate_name
@@ -161,10 +175,10 @@ with bootcamps__ecommerce_order as (
     from mitxpro__ecommerce_allorders
     left join mitxpro__ecommerce_order
         on mitxpro__ecommerce_allorders.order_id = mitxpro__ecommerce_order.order_id
-    left join mitxpro__lines
-        on mitxpro__ecommerce_order.order_id = mitxpro__lines.order_id
     left join mitxpro__receipts
         on mitxpro__ecommerce_order.order_id = mitxpro__receipts.order_id
+    left join mitxpro__lines
+        on mitxpro__ecommerce_allorders.line_id = mitxpro__lines.line_id
     left join mitxpro__ecommerce_allcoupons
         on mitxpro__ecommerce_allorders.coupon_id = mitxpro__ecommerce_allcoupons.coupon_id
     where mitxpro__ecommerce_allorders.order_id is not null
@@ -203,7 +217,7 @@ with bootcamps__ecommerce_order as (
         , transaction_payment_method as receipt_payment_method
         , transaction_readable_identifier as receipt_transaction_id
         , transaction_reference_number as req_reference_number
-        , transaction_timestamp as receipt_payment_timestamp
+        , transaction_timestamp as receipt_transaction_timestamp
         , order_created_on
         , order_reference_number
         , order_state
@@ -248,8 +262,8 @@ with bootcamps__ecommerce_order as (
         , receipt_payer_ip_address
         , receipt_payment_method
         , receipt_transaction_id
-        , req_reference_number
-        , receipt_payment_timestamp
+        , receipt_reference_number as req_reference_number
+        , receipt_payment_timestamp as receipt_transaction_timestamp
         , order_created_on
         , order_reference_number
         , order_state
@@ -295,7 +309,7 @@ with bootcamps__ecommerce_order as (
         , receipt_payment_method
         , receipt_transaction_id
         , receipt_reference_number as req_reference_number
-        , receipt_payment_timestamp
+        , receipt_payment_timestamp as receipt_transaction_timestamp
         , order_created_on
         , order_reference_number
         , order_state
@@ -341,7 +355,7 @@ with bootcamps__ecommerce_order as (
         , receipt_payment_method
         , receipt_transaction_id
         , receipt_reference_number as req_reference_number
-        , receipt_payment_timestamp
+        , receipt_payment_timestamp as receipt_transaction_timestamp
         , order_created_on
         , order_reference_number
         , order_state
@@ -385,10 +399,19 @@ select
     , receipt_authorization_code
     , receipt_bill_to_address_state
     , receipt_bill_to_address_country
+    , receipt_payment_amount
+    , receipt_payment_currency
+    , receipt_payment_card_number
+    , receipt_payment_card_type
     , receipt_payment_method
+    , receipt_payer_name
+    , receipt_payer_email
+    , receipt_payer_ip_address
     , receipt_transaction_id
+    , receipt_transaction_type
+    , receipt_transaction_uuid
     , req_reference_number
-    , receipt_payment_timestamp
+    , receipt_transaction_timestamp
     , unit_price
     , user_email
     , user_id

@@ -24,9 +24,9 @@ with source as (
         , json_query(data, 'lax $.req_customer_ip_address' omit quotes) as receipt_payer_ip_address
         , json_query(data, 'lax $.card_type_name' omit quotes) as receipt_payment_card_type
         , concat(
-            json_query(transaction_data, 'lax $.req_bill_to_forename' omit quotes)
+            json_query(data, 'lax $.req_bill_to_forename' omit quotes)
             , ' '
-            , json_query(transaction_data, 'lax $.req_bill_to_surname' omit quotes)
+            , json_query(data, 'lax $.req_bill_to_surname' omit quotes)
         ) as receipt_payer_name
         , data as receipt_data
         , json_query(data, 'lax $.signed_date_time' omit quotes) as receipt_payment_timestamp
