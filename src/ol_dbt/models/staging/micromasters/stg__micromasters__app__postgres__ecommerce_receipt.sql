@@ -16,7 +16,7 @@ with source as (
         , json_query(data, 'lax $.req_reference_number' omit quotes) as receipt_reference_number
         , json_query(data, 'lax $.req_bill_to_address_state' omit quotes) as receipt_bill_to_address_state
         , json_query(data, 'lax $.req_bill_to_address_country' omit quotes) as receipt_bill_to_address_country
-        , json_query(data, 'lax $.req_transaction_type' omit quotes) as receipt_order_type
+        , json_query(data, 'lax $.req_transaction_type' omit quotes) as receipt_transaction_type
         , json_query(data, 'lax $.req_amount' omit quotes) as receipt_payment_amount
         , json_query(data, 'lax $.req_currency' omit quotes) as receipt_payment_currency
         , json_query(data, 'lax $.req_bill_to_email' omit quotes) as receipt_payer_email
@@ -29,6 +29,7 @@ with source as (
             , json_query(transaction_data, 'lax $.req_bill_to_surname' omit quotes)
         ) as receipt_payer_name
         , data as receipt_data
+        , json_query(data, 'lax $.signed_date_time' omit quotes) as receipt_payment_timestamp
         ,{{ cast_timestamp_to_iso8601('created_at') }} as receipt_created_on
         ,{{ cast_timestamp_to_iso8601('modified_at') }} as receipt_updated_on
     from source

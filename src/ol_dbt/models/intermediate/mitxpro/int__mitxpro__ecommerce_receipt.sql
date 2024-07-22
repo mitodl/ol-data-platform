@@ -29,4 +29,5 @@ select
         , ' '
         , json_query(data, 'lax $.req_bill_to_surname' omit quotes)
     ) as receipt_payer_name
+    , json_query(data, 'lax $.signed_date_time' omit quotes) as receipt_payment_timestamp
 from receipts

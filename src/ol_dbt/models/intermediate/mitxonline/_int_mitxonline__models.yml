@@ -445,7 +445,7 @@ models:
     description: str, address country from cybersource payment
   - name: transaction_uuid
     description: str, payment transaction UUID from cybersource
-  - name: transaction_order_type
+  - name: transaction_req_type
     description: str, req_transaction_type from cybersource, e.g., sale
   - name: transaction_payer_name
     description: str, payer name from cybersource payment
@@ -461,6 +461,9 @@ models:
     description: numeric, req_amount from cybersource
   - name: transaction_payment_currency
     description: str, req_currency from cybersource
+  - name: transaction_timestamp
+    description: str, it's either the signed_date_time (payment date) or submitTimeUtc
+      (refund submitted time) from cybersource.
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__ecommerce_transaction')
@@ -558,6 +561,9 @@ models:
   - name: discountredemption_timestamp
     description: timestamp, specifying when the discount was redeemed from the most
       recent coupon redemption for the order
+  - name: transaction_id
+    description: int, foreign key to ecommerce_transaction referring to cybersource
+      payment
   - name: payment_transaction_id
     description: str, unique identifier from most recent cybersource payment or UUID.
   - name: payment_authorization_code
@@ -571,24 +577,6 @@ models:
     description: str, address state from most recent cybersource payment
   - name: payment_bill_to_address_country
     description: str, address country from most recent cybersource payment
-  - name: payment_transaction_uuid
-    description: str, payment transaction UUID from cybersource
-  - name: payment_transaction_type
-    description: str, req_transaction_type from cybersource, e.g., sale
-  - name: payment_amount
-    description: numeric, req_amount from cybersource
-  - name: payment_currency
-    description: str, req_currency from cybersource
-  - name: payment_payer_name
-    description: str, payer name from cybersource payment
-  - name: payment_payer_email
-    description: str, payer email from cybersource payment
-  - name: payment_payer_ip_address
-    description: str, payer IP address from cybersource payment
-  - name: payment_card_number
-    description: str, last 4 digits credit card number from cybersource payment
-  - name: payment_card_type
-    description: str, payment_card_type from cybersource, e.g, Visa
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__ecommerce_order')

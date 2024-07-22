@@ -72,10 +72,14 @@ models:
     description: str, last 4 digits credit card number from cybersource payment
   - name: receipt_transaction_uuid
     description: str, payment transaction UUID from cybersource
+  - name: receipt_transaction_type
+    description: str, req_transaction_type from cybersource, e.g., sale
   - name: receipt_payment_amount
     description: numeric, req_amount from cybersource
   - name: receipt_payment_currency
     description: str, req_currency from cybersource
+  - name: receipt_payment_timestamp
+    description: str, signed_date_time (payment date) from cybersource
   - name: receipt_data
     description: json, cybersource data for a payment
     tests:

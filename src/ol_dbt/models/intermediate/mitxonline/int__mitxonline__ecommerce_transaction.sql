@@ -19,7 +19,7 @@ select
     , json_query(
         transaction_data, 'lax $.req_bill_to_address_country' omit quotes
     ) as transaction_bill_to_address_country
-    , json_query(transaction_data, 'lax $.req_transaction_type' omit quotes) as transaction_order_type
+    , json_query(transaction_data, 'lax $.req_transaction_type' omit quotes) as transaction_req_type
     , json_query(transaction_data, 'lax $.req_amount' omit quotes) as transaction_payment_amount
     , json_query(transaction_data, 'lax $.req_currency' omit quotes) as transaction_payment_currency
     , json_query(transaction_data, 'lax $.req_bill_to_email' omit quotes) as transaction_payer_email
@@ -31,10 +31,12 @@ select
         , ' '
         , json_query(transaction_data, 'lax $.req_bill_to_surname' omit quotes)
     ) as transaction_payer_name
-    , case
-        when transaction_type = 'payment'
-            then json_query(transaction_data, 'lax $.auth_code' omit quotes)
-        when transaction_type = 'refund'
-            then json_query(transaction_data, 'lax $.processorInformation.approvalCode' omit quotes)
-    end as transaction_authorization_code
+    , coalesce(
+        json_query(transaction_data, 'lax $.auth_code' omit quotes)
+        , json_query(transaction_data, 'lax $.processorInformation.approvalCode' omit quotes)
+    ) as transaction_authorization_code
+    , coalesce(
+        json_query(transaction_data, 'lax $.signed_date_time' omit quotes)
+        , json_query(transaction_data, 'lax $.submitTimeUtc' omit quotes)
+    ) as transaction_timestamp
 from transactions

@@ -68,6 +68,7 @@ select
     , receipts.receipt_payer_ip_address
     , receipts.receipt_payment_card_type
     , receipts.receipt_payer_name
+    , receipts.receipt_payment_timestamp
     , coupons.coupon_id
     , coupons.coupon_type
     , coupons.coupon_code

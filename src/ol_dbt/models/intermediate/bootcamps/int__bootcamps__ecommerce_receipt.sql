@@ -8,6 +8,7 @@ select
     , receipt_created_on
     , receipt_updated_on
     , order_id
+    , receipt_data
     , json_query(data, 'lax $.req_transaction_uuid' omit quotes) as receipt_transaction_uuid
     , json_query(data, 'lax $.decision' omit quotes) as receipt_transaction_status
     , json_query(data, 'lax $.transaction_id' omit quotes) as receipt_transaction_id
@@ -28,4 +29,5 @@ select
         , ' '
         , json_query(data, 'lax $.req_bill_to_surname' omit quotes)
     ) as receipt_payer_name
+    , json_query(data, 'lax $.signed_date_time' omit quotes) as receipt_payment_timestamp
 from receipts

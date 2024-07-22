@@ -187,6 +187,8 @@ models:
       or a unique uuid
   - name: req_reference_number
     description: str, cybersource req reference number for a payment
+  - name: receipt_payment_timestamp
+    description: str, signed_date_time (payment date) from cybersource
   - name: unit_price
     description: numeric, price for the order line item before discount
   - name: user_email

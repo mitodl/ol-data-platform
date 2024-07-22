@@ -591,6 +591,8 @@ models:
     description: numeric, req_amount from cybersource
   - name: receipt_payment_currency
     description: str, req_currency from cybersource
+  - name: receipt_payment_timestamp
+    description: str, signed_date_time (payment date) from cybersource
   - name: coupon_discount_amount_text
     description: str, discount amount in readable format. It can be fixed discount
       which is $<dollar amount> off, fixed-price which is $<dollar amount> or percent-discount

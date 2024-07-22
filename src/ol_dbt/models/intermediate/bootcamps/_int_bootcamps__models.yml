@@ -89,6 +89,8 @@ models:
     description: numeric, req_amount from cybersource
   - name: receipt_payment_currency
     description: str, req_currency from cybersource
+  - name: receipt_payment_timestamp
+    description: str, signed_date_time (payment date) from cybersource
   - name: order_id
     description: int, primary key in ecommerce_order
   tests:
@@ -190,6 +192,8 @@ models:
     description: numeric, req_amount from cybersource
   - name: receipt_payment_currency
     description: str, req_currency from cybersource
+  - name: receipt_payment_timestamp
+    description: str, signed_date_time (payment date) from cybersource
   - name: user_username
     description: str, username to login on Bootcamps
     tests:

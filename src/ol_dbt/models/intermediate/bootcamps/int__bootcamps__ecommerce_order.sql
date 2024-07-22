@@ -51,6 +51,7 @@ select
     , receipts.receipt_payer_ip_address
     , receipts.receipt_payment_card_type
     , receipts.receipt_payer_name
+    , receipts.receipt_payment_timestamp
     , users.user_username
     , users.user_email
     , users.user_full_name
