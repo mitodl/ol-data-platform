@@ -38,3 +38,5 @@ with source as (
 )
 
 select * from renamed
+--exclude test course from the data
+where website_name != 'ocw-ci-test-course'
