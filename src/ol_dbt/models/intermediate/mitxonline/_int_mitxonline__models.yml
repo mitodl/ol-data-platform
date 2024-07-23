@@ -444,26 +444,31 @@ models:
   - name: transaction_bill_to_address_country
     description: str, address country from cybersource payment
   - name: transaction_uuid
-    description: str, payment transaction UUID from cybersource
+    description: str, unique merchant-generated identifier - req_transaction_uuid
+      from cybersource payment transaction, e.g., 02815b4f08e56882751a043839b7b481
   - name: transaction_req_type
-    description: str, req_transaction_type from cybersource, e.g., sale
+    description: str, type of transaction - req_transaction_type from cybersource
+      payment transaction, e.g., sale
   - name: transaction_payer_name
-    description: str, payer name from cybersource payment
+    description: str, payer name from cybersource payment transaction
   - name: transaction_payer_email
-    description: str, payer email from cybersource payment
+    description: str, payer email from cybersource payment transaction
   - name: transaction_payer_ip_address
-    description: str, payer IP address from cybersource payment
+    description: str, payer IP address from cybersource payment transaction
   - name: transaction_payment_card_type
-    description: str, payment_card_type from cybersource, e.g, Visa
+    description: str, name of the card type, card_type_name from cybersource payment
+      transaction, e.g., Visa
   - name: transaction_payment_card_number
-    description: str, last 4 digits credit card number from cybersource payment
+    description: str, last 4 digits credit card number from cybersource payment transaction
   - name: transaction_payment_amount
-    description: numeric, req_amount from cybersource
+    description: numeric, total amount for the order - req_amount from cybersource
+      payment transaction
   - name: transaction_payment_currency
-    description: str, req_currency from cybersource
+    description: str, currency used for the order - req_currency from cybersource
+      payment transaction
   - name: transaction_timestamp
-    description: str, it's either the signed_date_time (payment date) or submitTimeUtc
-      (refund submitted time) from cybersource.
+    description: str, either the signed_date_time from cybersource payment transaction,
+      or submitTimeUtc from cybersource refund transaction.
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__ecommerce_transaction')

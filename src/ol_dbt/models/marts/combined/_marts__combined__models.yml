@@ -156,47 +156,48 @@ models:
   - name: product_type
     description: string, readable product type
   - name: receipt_authorization_code
-    description: str, authorization code from cybersource. For MITx Online, this is
-      either auth_code or approvalCode from cybersource payment or refund transaction.
+    description: str, either the authorization code from cybersource payment transaction,
+      or approvalCode from cybersource refund transaction (MITx Online only).
   - name: receipt_bill_to_address_country
     description: string, address country from cybersource payment
   - name: receipt_bill_to_address_state
     description: string, address state from cybersource payment
   - name: receipt_payment_amount
-    description: numeric, total amount for the order, req_amount from cybersource
+    description: numeric, total amount for the order - req_amount from cybersource
       payment
   - name: receipt_payment_currency
-    description: str, currency used for the order, req_currency from cybersource payment
+    description: str, currency used for the order - req_currency from cybersource
+      payment transaction
   - name: receipt_payment_card_number
-    description: str, last 4 digits credit card number returned from cybersource payment
-      transaction
+    description: str, last 4 digits credit card number from cybersource payment transaction
   - name: receipt_payment_card_type
-    description: str, name of the card type, card_type_name returned from cybersource
-      payment transaction, e.g, Visa
+    description: str, name of the card type, card_type_name from cybersource payment
+      transaction, e.g., Visa
   - name: receipt_payment_method
-    description: string, payment method from cybersource. Value could be 'paypal'
-      or 'card'.
+    description: string, payment method from cybersource payment transaction. Value
+      could be 'paypal' or 'card'.
+  - name: receipt_payment_transaction_type
+    description: string, type of transaction - req_transaction_type from cybersource
+      payment transaction, e.g., sale
+  - name: receipt_payment_transaction_uuid
+    description: string, unique merchant-generated identifier - req_transaction_uuid
+      from cybersource payment transaction, e.g., 02815b4f08e56882751a043839b7b481
   - name: receipt_payer_name
-    description: str, payer name returned from cybersource payment transaction
+    description: string, payer name from cybersource payment transaction
   - name: receipt_payer_email
-    description: str, payer email address returned from cybersource payment transaction
+    description: string, payer email address from cybersource payment transaction
   - name: receipt_payer_ip_address
-    description: str, payer IP address returned from cybersource payment transaction
+    description: string, payer IP address from cybersource payment transaction
   - name: receipt_transaction_id
-    description: string, unique identifier for the payment or refund transaction.
-      It is the transaction_id from cybersource, e.g., 3735553783662130706689
-  - name: receipt_transaction_type
-    description: str, type of transaction, req_transaction_type from cybersource payment,
-      e.g., sale
-  - name: receipt_transaction_uuid
-    description: str, unique merchant-generated identifier, req_transaction_uuid from
-      cybersource payment, e.g., 02815b4f08e56882751a043839b7b481
-  - name: req_reference_number
-    description: str, cybersource req reference number for a payment
+    description: string, unique identifier - either transaction_id from cybersource
+      payment or refund transaction, e.g., 3735553783662130706689, OR unique UUID
+      if no payment required.
   - name: receipt_transaction_timestamp
-    description: str, signed_date_time from cybersource payment.  For MITx Online,
-      this is either signed_date_time or submitTimeUtc from cybersource payment or
-      refund transaction
+    description: string, either the signed_date_time from cybersource payment transaction,
+      or submitTimeUtc from cybersource refund transaction (MITx Online only).
+  - name: req_reference_number
+    description: string, cybersource req_reference_number from cybersource payment
+      transaction, e.g., mitxonline-production-1
   - name: unit_price
     description: numeric, price for the order line item before discount
   - name: user_email

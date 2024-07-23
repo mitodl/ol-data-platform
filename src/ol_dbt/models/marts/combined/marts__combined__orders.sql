@@ -74,6 +74,8 @@ with bootcamps__ecommerce_order as (
         , mitxonline__ecommerce_order.order_reference_number
         , mitxonline__ecommerce_order.order_state
         , mitxonline__ecommerce_order.order_total_price_paid
+        ----In MITx Online, there are two transactions for an refunded order.
+        ----Here we picked the refund transaction ID and auth code until we change the unique key
         , coalesce(
             mitxonline__refund.transaction_readable_identifier
             , mitxonline__transaction.transaction_readable_identifier
@@ -205,8 +207,8 @@ with bootcamps__ecommerce_order as (
         , transaction_authorization_code as receipt_authorization_code
         , transaction_bill_to_address_state as receipt_bill_to_address_state
         , transaction_bill_to_address_country as receipt_bill_to_address_country
-        , transaction_uuid as receipt_transaction_uuid
-        , transaction_req_type as receipt_transaction_type
+        , transaction_uuid as receipt_payment_transaction_uuid
+        , transaction_req_type as receipt_payment_transaction_type
         , transaction_payment_amount as receipt_payment_amount
         , transaction_payment_currency as receipt_payment_currency
         , transaction_payment_card_number as receipt_payment_card_number
@@ -251,8 +253,8 @@ with bootcamps__ecommerce_order as (
         , receipt_authorization_code
         , receipt_bill_to_address_state
         , receipt_bill_to_address_country
-        , receipt_transaction_uuid
-        , receipt_transaction_type
+        , receipt_transaction_uuid as receipt_payment_transaction_uuid
+        , receipt_transaction_type as receipt_payment_transaction_type
         , receipt_payment_amount
         , receipt_payment_currency
         , receipt_payment_card_number
@@ -297,8 +299,8 @@ with bootcamps__ecommerce_order as (
         , receipt_authorization_code
         , receipt_bill_to_address_state
         , receipt_bill_to_address_country
-        , receipt_transaction_uuid
-        , receipt_transaction_type
+        , receipt_transaction_uuid as receipt_payment_transaction_uuid
+        , receipt_transaction_type as receipt_payment_transaction_type
         , receipt_payment_amount
         , receipt_payment_currency
         , receipt_payment_card_number
@@ -343,8 +345,8 @@ with bootcamps__ecommerce_order as (
         , receipt_authorization_code
         , receipt_bill_to_address_state
         , receipt_bill_to_address_country
-        , receipt_transaction_uuid
-        , receipt_transaction_type
+        , receipt_transaction_uuid as receipt_payment_transaction_uuid
+        , receipt_transaction_type as receipt_payment_transaction_type
         , receipt_payment_amount
         , receipt_payment_currency
         , receipt_payment_card_number
@@ -404,14 +406,14 @@ select
     , receipt_payment_card_number
     , receipt_payment_card_type
     , receipt_payment_method
+    , receipt_payment_transaction_type
+    , receipt_payment_transaction_uuid
     , receipt_payer_name
     , receipt_payer_email
     , receipt_payer_ip_address
     , receipt_transaction_id
-    , receipt_transaction_type
-    , receipt_transaction_uuid
-    , req_reference_number
     , receipt_transaction_timestamp
+    , req_reference_number
     , unit_price
     , user_email
     , user_id

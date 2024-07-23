@@ -53,6 +53,9 @@ models:
   - name: receipt_transaction_id
     description: str, transaction identifier from user's cybersource payment. Maybe
       blank for CANCEL or ERROR transactions.
+  - name: receipt_transaction_type
+    description: str, type of transaction - req_transaction_type from cybersource
+      payment transaction, e.g., sale
   - name: receipt_payment_method
     description: str, payment method from cybersource transaction. Value could be
       'paypal' or 'card' if payment is not cancelled
@@ -63,21 +66,22 @@ models:
   - name: receipt_bill_to_address_country
     description: str, address country from cybersource payment
   - name: receipt_payer_name
-    description: str, payer name from cybersource payment
+    description: str, payer name from cybersource payment transaction
   - name: receipt_payer_email
-    description: str, payer email from cybersource payment
+    description: str, payer email from cybersource payment transaction
   - name: receipt_payer_ip_address
-    description: str, payer IP address from cybersource payment
-  - name: receipt_payment_card_number
-    description: str, last 4 digits credit card number from cybersource payment
-  - name: receipt_transaction_uuid
-    description: str, payment transaction UUID from cybersource
-  - name: receipt_transaction_type
-    description: str, req_transaction_type from cybersource, e.g., sale
+    description: str, payer IP address from cybersource payment transaction
   - name: receipt_payment_amount
-    description: numeric, req_amount from cybersource
+    description: numeric, total amount for the order - req_amount from cybersource
+      payment
   - name: receipt_payment_currency
-    description: str, req_currency from cybersource
+    description: str, currency used for the order - req_currency from cybersource
+      payment transaction
+  - name: receipt_payment_card_number
+    description: str, last 4 digits credit card number from cybersource payment transaction
+  - name: receipt_payment_card_type
+    description: str, name of the card type, card_type_name from cybersource payment
+      transaction, e.g., Visa
   - name: receipt_payment_timestamp
     description: str, signed_date_time (payment date) from cybersource
   - name: receipt_data

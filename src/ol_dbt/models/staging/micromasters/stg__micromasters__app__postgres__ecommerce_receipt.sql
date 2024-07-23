@@ -11,12 +11,12 @@ with source as (
         , json_query(data, 'lax $.decision' omit quotes) as receipt_transaction_status
         , json_query(data, 'lax $.transaction_id' omit quotes) as receipt_transaction_id
         , json_query(data, 'lax $.req_transaction_uuid' omit quotes) as receipt_transaction_uuid
+        , json_query(data, 'lax $.req_transaction_type' omit quotes) as receipt_transaction_type
         , json_query(data, 'lax $.req_payment_method' omit quotes) as receipt_payment_method
         , json_query(data, 'lax $.auth_code' omit quotes) as receipt_authorization_code
         , json_query(data, 'lax $.req_reference_number' omit quotes) as receipt_reference_number
         , json_query(data, 'lax $.req_bill_to_address_state' omit quotes) as receipt_bill_to_address_state
         , json_query(data, 'lax $.req_bill_to_address_country' omit quotes) as receipt_bill_to_address_country
-        , json_query(data, 'lax $.req_transaction_type' omit quotes) as receipt_transaction_type
         , json_query(data, 'lax $.req_amount' omit quotes) as receipt_payment_amount
         , json_query(data, 'lax $.req_currency' omit quotes) as receipt_payment_currency
         , json_query(data, 'lax $.req_bill_to_email' omit quotes) as receipt_payer_email
