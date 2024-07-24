@@ -69,6 +69,7 @@ with bootcamps__ecommerce_order as (
         , mitxonline__transaction.transaction_payer_email
         , mitxonline__transaction.transaction_payer_ip_address
         , mitxonline__transaction.transaction_payment_method
+        , mitxonline__transaction.transaction_timestamp as transaction_payment_timestamp
         , mitxonline__transaction.transaction_reference_number
         , mitxonline__ecommerce_order.order_created_on
         , mitxonline__ecommerce_order.order_reference_number
@@ -84,10 +85,6 @@ with bootcamps__ecommerce_order as (
             mitxonline__refund.transaction_authorization_code
             , mitxonline__transaction.transaction_authorization_code
         ) as transaction_authorization_code
-        , coalesce(
-            mitxonline__refund.transaction_timestamp
-            , mitxonline__transaction.transaction_timestamp
-        ) as transaction_timestamp
     from mitxonline__ecommerce_order
     left join mitxonline__transaction
         on mitxonline__ecommerce_order.transaction_id = mitxonline__transaction.transaction_id
@@ -217,9 +214,9 @@ with bootcamps__ecommerce_order as (
         , transaction_payer_email as receipt_payer_email
         , transaction_payer_ip_address as receipt_payer_ip_address
         , transaction_payment_method as receipt_payment_method
+        , transaction_payment_timestamp as receipt_payment_timestamp
         , transaction_readable_identifier as receipt_transaction_id
         , transaction_reference_number as req_reference_number
-        , transaction_timestamp as receipt_transaction_timestamp
         , order_created_on
         , order_reference_number
         , order_state
@@ -263,9 +260,9 @@ with bootcamps__ecommerce_order as (
         , receipt_payer_email
         , receipt_payer_ip_address
         , receipt_payment_method
+        , receipt_payment_timestamp
         , receipt_transaction_id
         , receipt_reference_number as req_reference_number
-        , receipt_payment_timestamp as receipt_transaction_timestamp
         , order_created_on
         , order_reference_number
         , order_state
@@ -309,9 +306,9 @@ with bootcamps__ecommerce_order as (
         , receipt_payer_email
         , receipt_payer_ip_address
         , receipt_payment_method
+        , receipt_payment_timestamp
         , receipt_transaction_id
         , receipt_reference_number as req_reference_number
-        , receipt_payment_timestamp as receipt_transaction_timestamp
         , order_created_on
         , order_reference_number
         , order_state
@@ -355,9 +352,9 @@ with bootcamps__ecommerce_order as (
         , receipt_payer_email
         , receipt_payer_ip_address
         , receipt_payment_method
+        , receipt_payment_timestamp
         , receipt_transaction_id
         , receipt_reference_number as req_reference_number
-        , receipt_payment_timestamp as receipt_transaction_timestamp
         , order_created_on
         , order_reference_number
         , order_state
@@ -406,13 +403,13 @@ select
     , receipt_payment_card_number
     , receipt_payment_card_type
     , receipt_payment_method
+    , receipt_payment_timestamp
     , receipt_payment_transaction_type
     , receipt_payment_transaction_uuid
     , receipt_payer_name
     , receipt_payer_email
     , receipt_payer_ip_address
     , receipt_transaction_id
-    , receipt_transaction_timestamp
     , req_reference_number
     , unit_price
     , user_email
