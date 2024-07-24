@@ -176,6 +176,8 @@ models:
   - name: receipt_payment_method
     description: string, payment method from cybersource payment transaction. Value
       could be 'paypal' or 'card'.
+  - name: receipt_payment_timestamp
+    description: string, the signed_date_time from cybersource payment transaction
   - name: receipt_payment_transaction_type
     description: string, type of transaction - req_transaction_type from cybersource
       payment transaction, e.g., sale
@@ -192,9 +194,6 @@ models:
     description: string, unique identifier - either transaction_id from cybersource
       payment or refund transaction, e.g., 3735553783662130706689, OR unique UUID
       if no payment required.
-  - name: receipt_transaction_timestamp
-    description: string, either the signed_date_time from cybersource payment transaction,
-      or submitTimeUtc from cybersource refund transaction (MITx Online only).
   - name: req_reference_number
     description: string, cybersource req_reference_number from cybersource payment
       transaction, e.g., mitxonline-production-1
