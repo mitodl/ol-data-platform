@@ -25,7 +25,7 @@ with orders as (
 
 , receipts as (
     select *
-    from {{ ref('stg__mitxpro__app__postgres__ecommerce_receipt') }}
+    from {{ ref('int__mitxpro__ecommerce_receipt') }}
     where receipt_transaction_status != 'ERROR'
 )
 
