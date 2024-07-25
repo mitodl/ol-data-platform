@@ -1,5 +1,6 @@
 import json  # noqa: INP001
 import os
+import re
 from pathlib import Path
 
 from dagster import (
@@ -53,9 +54,14 @@ airbyte_assets = load_assets_from_airbyte_instance(
     key_prefix="ol_warehouse_raw_data",
     connection_filter=lambda conn: "S3 Glue Data Lake" in conn.name,
     connection_to_group_fn=(
-        lambda conn_name: "ol_warehouse_raw"
-        if "S3 Glue Data Lake" in conn_name
-        else "non_lake_connection"
+        # Airbyte uses the unicode "right arrow" (U+2192) in the connection names for
+        # separating the source and destination. This selects the source name specifier
+        # and converts it to a lowercased, underscore separated string.
+        lambda conn_name: re.sub(
+            r"[^A-Za-z0-9_]", "", re.sub(r"[-\s]+", "_", conn_name)
+        )
+        .strip("_")
+        .lower()
     ),
 )
 
@@ -65,20 +71,36 @@ dbt_assets = load_assets_from_dbt_manifest(
     ),
 )
 
-airbyte_asset_job = define_asset_job(
-    name="airbyte_asset_sync",
-    selection=AssetSelection.assets(*dbt_assets)
-    .upstream()
-    .required_multi_asset_neighbors(),
-)
+# This section creates a separate job and schedule for each Airbyte connection that will
+# materialize the tables for that connection and any associated dbt staging models for
+# those tables. The eager auto materialize policy will then take effect for any
+# downstream dbt models that are dependent on those staging models being completed.
+group_names = set()
+for asset in airbyte_assets.compute_cacheable_data():
+    group_names.add(asset.group_name)
 
-airbyte_update_schedule = ScheduleDefinition(
-    name="daily_airbyte_sync",
-    cron_schedule="0 4 * * *",
-    job=airbyte_asset_job,
-    execution_timezone="UTC",
-    default_status=DefaultScheduleStatus.RUNNING,
-)
+airbyte_asset_jobs = []
+airbyte_update_schedules = []
+group_count = len(group_names)
+for count, group_name in enumerate(group_names, start=1):
+    job = define_asset_job(
+        name=f"sync_and_stage_{group_name}",
+        selection=AssetSelection.groups(group_name)
+        .downstream(depth=1, include_self=True)
+        .required_multi_asset_neighbors(),
+    )
+    airbyte_update_schedules.append(
+        ScheduleDefinition(
+            name=f"daily_sync_and_stage_{group_name}",
+            # Offset schedule starts by an hour for groupings of ~4 connections
+            cron_schedule=f"0 {count % (group_count // 4)} * * *",
+            job=job,
+            execution_timezone="UTC",
+            default_status=DefaultScheduleStatus.RUNNING,
+        )
+    )
+    airbyte_asset_jobs.append(job)
+
 
 elt = Definitions(
     assets=load_assets_from_current_module(
@@ -86,6 +108,6 @@ elt = Definitions(
     ),
     resources={"dbt": configured_dbt_cli},
     sensors=[],
-    jobs=[airbyte_asset_job],
-    schedules=[airbyte_update_schedule],
+    jobs=airbyte_asset_jobs,
+    schedules=airbyte_update_schedules,
 )
