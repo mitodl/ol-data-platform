@@ -9,7 +9,7 @@ from pypika import Query
 
 
 class AthenaClient:
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         work_group: str,
         schema_name: str,
