@@ -13,7 +13,9 @@ with websites as (
 select
     websites.website_name as course_name
     , websites.primary_course_number as course_number
-    , websites.website_title as course_title
+    , websites.metadata_course_term as course_term
+    , websites.metadata_course_title as course_title
+    , websites.metadata_course_year as course_year
     , websites.website_uuid as course_uuid
     , websitecontents.websitecontent_type as content_type
     , websitecontents.learning_resource_types
@@ -23,6 +25,7 @@ select
     , websitecontents.websitecontent_title as resource_title
     , websitecontents.metadata_resource_type as resource_type
     , websitecontents.websitecontent_text_id as resource_uuid
+    , websites.website_title
     -- noqa: disable=RF02
     -- external resources
     , cast(
