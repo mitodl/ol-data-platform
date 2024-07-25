@@ -54,11 +54,21 @@ select
     , lines.courserun_edxorg_readable_id
     , courseruns.courserun_platform
     , receipts.receipt_reference_number
+    , receipts.receipt_transaction_uuid
     , receipts.receipt_transaction_id
+    , receipts.receipt_transaction_type
     , receipts.receipt_payment_method
     , receipts.receipt_authorization_code
     , receipts.receipt_bill_to_address_state
     , receipts.receipt_bill_to_address_country
+    , receipts.receipt_payer_name
+    , receipts.receipt_payer_email
+    , receipts.receipt_payer_ip_address
+    , receipts.receipt_payment_amount
+    , receipts.receipt_payment_currency
+    , receipts.receipt_payment_card_number
+    , receipts.receipt_payment_card_type
+    , receipts.receipt_payment_timestamp
     , coupons.coupon_id
     , coupons.coupon_type
     , coupons.coupon_code

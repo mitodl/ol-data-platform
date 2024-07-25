@@ -52,7 +52,7 @@ with lines as (
     select
         *
         , row_number() over (partition by order_id order by transaction_created_on desc) as row_num
-    from {{ ref('stg__mitxonline__app__postgres__ecommerce_transaction') }}
+    from {{ ref('int__mitxonline__ecommerce_transaction') }}
     where transaction_type = 'payment'
 )
 
@@ -80,6 +80,7 @@ select
     , discounts.discount_code
     , discounts.discount_amount_text
     , discountredemptions.discountredemption_timestamp
+    , payments.transaction_id
     , payments.transaction_authorization_code as payment_authorization_code
     , payments.transaction_payment_method as payment_method
     , payments.transaction_readable_identifier as payment_transaction_id

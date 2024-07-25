@@ -9,7 +9,7 @@ with orders as (
 )
 
 , receipts as (
-    select * from {{ ref('stg__bootcamps__app__postgres__ecommerce_receipt') }}
+    select * from {{ ref('int__bootcamps__ecommerce_receipt') }}
 )
 
 , users as (
