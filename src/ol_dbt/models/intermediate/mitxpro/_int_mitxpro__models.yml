@@ -829,7 +829,7 @@ models:
     description: string, discount amount in readable format. It can be percent-off
       which is <dollar amount * 100>% off, dollars-off which is $<dollar amount> off
   - name: couponredemption_created_on
-    description: timestamp, specifying when the coupon was redeemed
+    description: timestamp, specifying when the coupon redemption record was created
   - name: receipt_reference_number
     description: str, transaction reference number from cybersource payment
   - name: receipt_transaction_id
