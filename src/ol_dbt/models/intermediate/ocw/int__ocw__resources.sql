@@ -43,9 +43,9 @@ select
     || '/edit/'
     || websitecontents.websitecontent_text_id
     || '/' as studio_url
-    , json_query(
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.backup_url' omit quotes
-    ) as external_resource_backup_url
+    ), '') as external_resource_backup_url
     , json_query(websitecontents.websitecontent_metadata, 'lax $.external_url' omit quotes) as external_resource_url
     -- image_metadata for image resources; could be in metadata or image_metadata
     , coalesce(
@@ -63,31 +63,31 @@ select
         , nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata.credit' omit quotes), '')
     ) as image_credit
     -- video_metadata for video resources
-    , json_query(
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_description' omit quotes
-    ) as video_youtube_description
-    , json_query(
+    ), '') as video_youtube_description
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_id' omit quotes
-    ) as video_youtube_id
-    , json_query(
+    ), '') as video_youtube_id
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_speakers' omit quotes
-    ) as video_youtube_speakers
-    , json_query(
+    ), '') as video_youtube_speakers
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_tags' omit quotes
-    ) as video_youtube_tags
+    ), '') as video_youtube_tags
     -- video_files for video resources
-    , json_query(
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.archive_url' omit quotes
-    ) as video_archive_url
-    , json_query(
+    ), '') as video_archive_url
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_captions_file' omit quotes
-    ) as video_captions_file
-    , json_query(
+    ), '') as video_captions_file
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_thumbnail_file' omit quotes
-    ) as video_thumbnail_file
-    , json_query(
+    ), '') as video_thumbnail_file
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_transcript_file' omit quotes
-    ) as video_transcript_file
+    ), '') as video_transcript_file
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
