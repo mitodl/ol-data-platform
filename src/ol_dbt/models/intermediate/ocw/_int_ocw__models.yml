@@ -182,6 +182,8 @@ models:
     description: str, title of the course, from the course metadata
   - name: course_term
     description: str, term course was taught, from the course metadata
+  - name: course_year
+    description: str, year course was taught, from the course metadata
   - name: course_uuid
     description: str, UUID of course containing resource
     tests:

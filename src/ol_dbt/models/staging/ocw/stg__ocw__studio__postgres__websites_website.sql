@@ -32,9 +32,9 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('created_on') }} as website_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as website_updated_on
         , nullif(json_query(metadata, 'lax $.primary_course_number' omit quotes), '') as primary_course_number
-        , nullif(json_query(metadata, 'lax $.course_term' omit quotes), '') as metadata_course_term
+        , nullif(json_query(metadata, 'lax $.term' omit quotes), '') as metadata_course_term
         , nullif(json_query(metadata, 'lax $.course_title' omit quotes), '') as metadata_course_title
-        , nullif(json_query(metadata, 'lax $.course_year' omit quotes), '') as metadata_course_year
+        , nullif(json_query(metadata, 'lax $.year' omit quotes), '') as metadata_course_year
     from source
 
 )
