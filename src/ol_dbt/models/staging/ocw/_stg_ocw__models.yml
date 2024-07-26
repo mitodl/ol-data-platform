@@ -90,6 +90,12 @@ models:
     - not_null
   - name: primary_course_number
     description: str, primary course number of the course
+  - name: metadata_course_term
+    description: str, course term extracted from metadata
+  - name: metadata_course_title
+    description: str, course title extracted from metadata
+  - name: metadata_course_year
+    description: str, course year extracted from metadata
 
 - name: stg__ocw__studio__postgres__websites_websitecontent
   description: OCW website content components such as page, resource, sitemetadata,

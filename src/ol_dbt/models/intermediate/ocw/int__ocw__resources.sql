@@ -10,12 +10,21 @@ with websites as (
     select * from {{ ref('stg__ocw__studio__postgres__websites_websitestarter') }}
 )
 
+, sitemetadata as (
+    select
+        website_uuid
+        , nullif(
+            json_query(websitecontent_metadata, 'lax $.primary_course_number' omit quotes), ''
+        ) as sitemetadata_primary_course_number
+        , nullif(json_query(websitecontent_metadata, 'lax $.term' omit quotes), '') as sitemetadata_course_term
+        , nullif(json_query(websitecontent_metadata, 'lax $.year' omit quotes), '') as sitemetadata_course_year
+        , nullif(json_query(websitecontent_metadata, 'lax $.course_title' omit quotes), '') as sitemetadata_course_title
+    from websitecontents
+    where websitecontent_type = 'sitemetadata'
+)
+
 select
     websites.website_name as course_name
-    , websites.primary_course_number as course_number
-    , websites.metadata_course_term as course_term
-    , websites.metadata_course_title as course_title
-    , websites.metadata_course_year as course_year
     , websites.website_uuid as course_uuid
     , websitecontents.websitecontent_type as content_type
     , websitecontents.learning_resource_types
@@ -36,6 +45,10 @@ select
             json_query(websitecontents.websitecontent_metadata, 'lax $.has_external_license_warning' omit quotes), ''
         ) as boolean
     ) as external_resource_license_warning
+    , coalesce(sitemetadata.sitemetadata_primary_course_number, websites.primary_course_number) as course_number
+    , coalesce(sitemetadata.sitemetadata_course_term, websites.metadata_course_term) as course_term
+    , coalesce(sitemetadata.sitemetadata_course_title, websites.metadata_course_title) as course_title
+    , coalesce(sitemetadata.sitemetadata_course_year, websites.metadata_course_year) as course_year
     , 'https://ocw-studio.odl.mit.edu/sites/'
     || websites.website_name
     || '/type/'
@@ -91,6 +104,8 @@ select
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
+left join sitemetadata
+    on websites.website_uuid = sitemetadata.website_uuid
 inner join websitestarters
     on websites.websitestarter_id = websitestarters.websitestarter_id
 where
