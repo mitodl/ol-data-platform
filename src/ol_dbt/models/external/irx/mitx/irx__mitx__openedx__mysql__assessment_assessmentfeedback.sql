@@ -27,7 +27,7 @@ select distinct
     , af.submission_uuid
     , af.feedback_text
 from af
-left join afa on af.id = afa.assessmentfeedback_id
-left join a on afa.assessment_id = a.id
-left join s on a.submission_uuid = s.uuid
-left join si on s.student_item_id = si.id
+inner join afa on af.id = afa.assessmentfeedback_id
+inner join a on afa.assessment_id = a.id
+inner join s on a.submission_uuid = s.uuid
+inner join si on s.student_item_id = si.id

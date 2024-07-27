@@ -20,6 +20,6 @@ select
     , ap.id
     , ap.feedback
 from ap
-left join a on ap.assessment_id = a.id
-left join s on a.submission_uuid = s.uuid
-left join si on s.student_item_id = si.id
+inner join a on ap.assessment_id = a.id
+inner join s on a.submission_uuid = s.uuid
+inner join si on s.student_item_id = si.id
