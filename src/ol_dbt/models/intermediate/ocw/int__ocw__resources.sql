@@ -13,12 +13,10 @@ with websites as (
 , sitemetadata as (
     select
         website_uuid
-        , nullif(
-            json_query(websitecontent_metadata, 'lax $.primary_course_number' omit quotes), ''
-        ) as sitemetadata_primary_course_number
-        , nullif(json_query(websitecontent_metadata, 'lax $.term' omit quotes), '') as sitemetadata_course_term
-        , nullif(json_query(websitecontent_metadata, 'lax $.year' omit quotes), '') as sitemetadata_course_year
-        , nullif(json_query(websitecontent_metadata, 'lax $.course_title' omit quotes), '') as sitemetadata_course_title
+        , course_primary_course_number as sitemetadata_primary_course_number
+        , course_term as sitemetadata_course_term
+        , course_title as sitemetadata_course_title
+        , course_year as sitemetadata_course_year
     from websitecontents
     where websitecontent_type = 'sitemetadata'
 )

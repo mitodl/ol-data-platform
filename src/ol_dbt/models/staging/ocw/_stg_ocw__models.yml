@@ -159,6 +159,8 @@ models:
   - name: course_level
     description: str, course level extracted from sitemetadata. Possible values are
       Undergraduate, Graduate, Non-Credit, High School, or blank
+  - name: course_title
+    description: str, course title extracted from sitemetadata
   - name: course_topics
     description: json, hierarchical course topics (topic, subtopic, speciality) from
       sitemetadata. e.g., [["Mathematics","Discrete Mathematics"],["Mathematics","Probability
