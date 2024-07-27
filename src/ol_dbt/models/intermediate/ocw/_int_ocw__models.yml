@@ -177,11 +177,13 @@ models:
     tests:
     - not_null
   - name: course_number
-    description: str, primary course number of the course
+    description: str, primary course number of the course, from the course metadata
   - name: course_title
-    description: str, title of the course
-    tests:
-    - not_null
+    description: str, title of the course, from the course metadata
+  - name: course_term
+    description: str, term course was taught, from the course metadata
+  - name: course_year
+    description: str, year course was taught, from the course metadata
   - name: course_uuid
     description: str, UUID of course containing resource
     tests:
@@ -238,6 +240,10 @@ models:
     description: str, speakers in the YouTube video
   - name: video_youtube_tags
     description: str, tags of the YouTube video
+  - name: website_title
+    description: str, title of the course
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["course_uuid", "resource_uuid"]

@@ -10,10 +10,19 @@ with websites as (
     select * from {{ ref('stg__ocw__studio__postgres__websites_websitestarter') }}
 )
 
+, sitemetadata as (
+    select
+        website_uuid
+        , course_primary_course_number as sitemetadata_primary_course_number
+        , course_term as sitemetadata_course_term
+        , course_title as sitemetadata_course_title
+        , course_year as sitemetadata_course_year
+    from websitecontents
+    where websitecontent_type = 'sitemetadata'
+)
+
 select
     websites.website_name as course_name
-    , websites.primary_course_number as course_number
-    , websites.website_title as course_title
     , websites.website_uuid as course_uuid
     , websitecontents.websitecontent_type as content_type
     , websitecontents.learning_resource_types
@@ -23,6 +32,7 @@ select
     , websitecontents.websitecontent_title as resource_title
     , websitecontents.metadata_resource_type as resource_type
     , websitecontents.websitecontent_text_id as resource_uuid
+    , websites.website_title
     -- noqa: disable=RF02
     -- external resources
     , cast(
@@ -33,6 +43,10 @@ select
             json_query(websitecontents.websitecontent_metadata, 'lax $.has_external_license_warning' omit quotes), ''
         ) as boolean
     ) as external_resource_license_warning
+    , coalesce(sitemetadata.sitemetadata_primary_course_number, websites.primary_course_number) as course_number
+    , coalesce(sitemetadata.sitemetadata_course_term, websites.metadata_course_term) as course_term
+    , coalesce(sitemetadata.sitemetadata_course_title, websites.metadata_course_title) as course_title
+    , coalesce(sitemetadata.sitemetadata_course_year, websites.metadata_course_year) as course_year
     , 'https://ocw-studio.odl.mit.edu/sites/'
     || websites.website_name
     || '/type/'
@@ -40,9 +54,9 @@ select
     || '/edit/'
     || websitecontents.websitecontent_text_id
     || '/' as studio_url
-    , json_query(
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.backup_url' omit quotes
-    ) as external_resource_backup_url
+    ), '') as external_resource_backup_url
     , json_query(websitecontents.websitecontent_metadata, 'lax $.external_url' omit quotes) as external_resource_url
     -- image_metadata for image resources; could be in metadata or image_metadata
     , coalesce(
@@ -60,34 +74,36 @@ select
         , nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata.credit' omit quotes), '')
     ) as image_credit
     -- video_metadata for video resources
-    , json_query(
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_description' omit quotes
-    ) as video_youtube_description
-    , json_query(
+    ), '') as video_youtube_description
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_id' omit quotes
-    ) as video_youtube_id
-    , json_query(
+    ), '') as video_youtube_id
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_speakers' omit quotes
-    ) as video_youtube_speakers
-    , json_query(
+    ), '') as video_youtube_speakers
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_tags' omit quotes
-    ) as video_youtube_tags
+    ), '') as video_youtube_tags
     -- video_files for video resources
-    , json_query(
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.archive_url' omit quotes
-    ) as video_archive_url
-    , json_query(
+    ), '') as video_archive_url
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_captions_file' omit quotes
-    ) as video_captions_file
-    , json_query(
+    ), '') as video_captions_file
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_thumbnail_file' omit quotes
-    ) as video_thumbnail_file
-    , json_query(
+    ), '') as video_thumbnail_file
+    , nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_transcript_file' omit quotes
-    ) as video_transcript_file
+    ), '') as video_transcript_file
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
+left join sitemetadata
+    on websites.website_uuid = sitemetadata.website_uuid
 inner join websitestarters
     on websites.websitestarter_id = websitestarters.websitestarter_id
 where

@@ -22,6 +22,7 @@ with source as (
         , metadata as websitecontent_metadata
         -- extract website metadata from sitemetadata for courses
         , json_query(metadata, 'lax $.course_description' omit quotes) as course_description
+        , nullif(json_query(metadata, 'lax $.course_title' omit quotes), '') as course_title
         , nullif(json_query(metadata, 'lax $.term' omit quotes), '') as course_term
         , nullif(json_query(metadata, 'lax $.year' omit quotes), '') as course_year
         -- convert to comma-separated list to be consistent with extra_course_numbers
@@ -41,7 +42,7 @@ with source as (
         , array_join(
             cast(json_parse(json_query(metadata, 'lax $.department_numbers')) as array (varchar)), ', ' --noqa
         ) as course_department_numbers
-        , json_query(metadata, 'lax $.primary_course_number' omit quotes) as course_primary_course_number
+        , nullif(json_query(metadata, 'lax $.primary_course_number' omit quotes), '') as course_primary_course_number
         , json_query(metadata, 'lax $.extra_course_numbers' omit quotes) as course_extra_course_numbers
         , json_query(metadata, 'lax $.instructors.content') as course_instructor_uuids
         , json_query(metadata, 'lax $.topics') as course_topics

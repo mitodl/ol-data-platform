@@ -90,6 +90,12 @@ models:
     - not_null
   - name: primary_course_number
     description: str, primary course number of the course
+  - name: metadata_course_term
+    description: str, course term extracted from metadata
+  - name: metadata_course_title
+    description: str, course title extracted from metadata
+  - name: metadata_course_year
+    description: str, course year extracted from metadata
 
 - name: stg__ocw__studio__postgres__websites_websitecontent
   description: OCW website content components such as page, resource, sitemetadata,
@@ -153,6 +159,8 @@ models:
   - name: course_level
     description: str, course level extracted from sitemetadata. Possible values are
       Undergraduate, Graduate, Non-Credit, High School, or blank
+  - name: course_title
+    description: str, course title extracted from sitemetadata
   - name: course_topics
     description: json, hierarchical course topics (topic, subtopic, speciality) from
       sitemetadata. e.g., [["Mathematics","Discrete Mathematics"],["Mathematics","Probability
