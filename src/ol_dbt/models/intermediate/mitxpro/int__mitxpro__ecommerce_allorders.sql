@@ -86,7 +86,7 @@ with b2becommerce_b2border as (
         , case
             when
                 ecommerce_couponredemption.couponredemption_id is not null
-                and orders.order_state in ('fulfilled', 'refunded')
+                and ecommerce_order.order_state in ('fulfilled', 'refunded')
                 then true
         end as redeemed
     from ecommerce_order
