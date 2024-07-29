@@ -104,7 +104,8 @@ models:
   - name: coupon_name
     description: string, human readable name for the coupon payment
   - name: coupon_redeemed_on
-    description: timestamp, specifying when the coupon was redeemed.
+    description: timestamp, specifying when the coupon was redeemed by the user for
+      for fulfilled or refunded orders
   - name: coupon_type
     description: string, type of the coupon which describes what circumstances the
       coupon can be redeemed.
@@ -240,13 +241,6 @@ models:
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "platform != 'edX.org'"
-  - name: coupon_code
-    description: str, discount code for the redeemed coupon if applicable
-  - name: coupon_redeemed_on
-    description: timestamp, specifying when the discount was redeemed by the user
-  - name: coupon_type
-    description: str, type of the coupon which describes what circumstances the coupon
-      can be redeemed.
   - name: courserun_end_on
     description: timestamp, date and time when the course run ends. May be Null.
   - name: courserun_id
@@ -303,11 +297,6 @@ models:
   - name: courserungrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline or xPro
-  - name: discount
-    description: str, discount in readable format. e.g. $100 off, 30% off, etc
-  - name: discount_amount
-    description: numeric, actual discount dollar amount. For percent-discount coupon,
-      this is calculated as line_price * percentage off
   - name: line_id
     description: int, foreign key for line table. For edX.org, it refers to line table
       in MicroMasters application.

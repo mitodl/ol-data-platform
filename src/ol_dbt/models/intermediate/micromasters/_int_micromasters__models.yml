@@ -613,7 +613,8 @@ models:
   - name: coupon_code
     description: str, coupon code for the redeemed coupon
   - name: redeemedcoupon_created_on
-    description: timestamp, specifying when the coupon was redeemed for the order
+    description: timestamp, specifying when the coupon was redeemed by user for fulfilled
+      or refunded orders
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__micromasters__app__postgres__ecommerce_order')

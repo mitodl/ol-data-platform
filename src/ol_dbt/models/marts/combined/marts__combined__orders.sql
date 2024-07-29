@@ -75,10 +75,6 @@ with bootcamps__ecommerce_order as (
         , mitxonline__ecommerce_order.order_reference_number
         , mitxonline__ecommerce_order.order_state
         , mitxonline__ecommerce_order.order_total_price_paid
-        , case
-            when mitxonline__ecommerce_order.order_state in ('fulfilled', 'refunded')
-                then mitxonline__ecommerce_order.discountredemption_timestamp
-        end as discount_redeemed_on
         ----In MITx Online, there are two transactions for an refunded order.
         ----Here we picked the refund transaction ID and auth code until we change the unique key
         , coalesce(
@@ -138,6 +134,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_allcoupons.coupon_code
         , mitxpro__ecommerce_allcoupons.coupon_name
         , mitxpro__ecommerce_allcoupons.coupon_type
+        , mitxpro__ecommerce_allorders.coupon_redeemed_on
         , mitxpro__ecommerce_allorders.order_created_on
         , mitxpro__ecommerce_allorders.order_state
         , mitxpro__ecommerce_allorders.product_id
@@ -172,10 +169,6 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_allorders.order_id
         , mitxpro__ecommerce_order.order_total_price_paid
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
-        , case
-            when mitxpro__ecommerce_order.order_state in ('fulfilled', 'refunded')
-                then mitxpro__ecommerce_order.couponredemption_created_on
-        end as coupon_redeemed_on
         , concat('xpro-b2c-production-', cast(mitxpro__ecommerce_allorders.order_id as varchar))
         as order_reference_number
     from mitxpro__ecommerce_allorders
@@ -206,7 +199,7 @@ with bootcamps__ecommerce_order as (
         , null as coupon_id
         , null as coupon_name
         , discount_redemption_type as coupon_type
-        , discount_redeemed_on as coupon_redeemed_on
+        , discountredemption_timestamp as coupon_redeemed_on
         , discount_amount_text as discount
         , transaction_authorization_code as receipt_authorization_code
         , transaction_bill_to_address_state as receipt_bill_to_address_state

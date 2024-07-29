@@ -79,7 +79,6 @@ select
     , discounts.discount_redemption_type
     , discounts.discount_code
     , discounts.discount_amount_text
-    , discountredemptions.discountredemption_timestamp
     , payments.transaction_id
     , payments.transaction_authorization_code as payment_authorization_code
     , payments.transaction_payment_method as payment_method
@@ -87,6 +86,10 @@ select
     , payments.transaction_reference_number as payment_req_reference_number
     , payments.transaction_bill_to_address_state as payment_bill_to_address_state
     , payments.transaction_bill_to_address_country as payment_bill_to_address_country
+    , case
+        when orders.order_state in ('fulfilled', 'refunded')
+            then discountredemptions.discountredemption_timestamp
+    end as discountredemption_timestamp
     , case
         when discounts.discount_type = 'percent-off'
             then cast(intermediate_products_view.product_price * (discounts.discount_amount / 100) as decimal(38, 2))
