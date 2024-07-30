@@ -73,7 +73,10 @@ select
     , coupons.coupon_type
     , coupons.coupon_code
     , coupons.coupon_discount_amount_text
-    , redeemedcoupons.redeemedcoupon_created_on
+    , case
+        when orders.order_state in ('fulfilled', 'refunded')
+            then redeemedcoupons.redeemedcoupon_created_on
+    end as redeemedcoupon_created_on
     , case
         when coupons.coupon_amount_type = 'percent-discount'
             then cast(lines.line_price * coupons.coupon_amount as decimal(38, 2))

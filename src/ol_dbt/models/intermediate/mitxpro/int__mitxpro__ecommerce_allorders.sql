@@ -79,8 +79,16 @@ with b2becommerce_b2border as (
         , ecommerce_order.receipt_payment_method
         , ecommerce_order.receipt_bill_to_address_state
         , ecommerce_order.receipt_bill_to_address_country
-        , ecommerce_couponredemption.couponredemption_created_on as coupon_redeemed_on
-        , case when ecommerce_couponredemption.couponredemption_id is not null then true end as redeemed
+        , case
+            when ecommerce_order.order_state in ('fulfilled', 'refunded')
+                then ecommerce_couponredemption.couponredemption_created_on
+        end as coupon_redeemed_on
+        , case
+            when
+                ecommerce_couponredemption.couponredemption_id is not null
+                and ecommerce_order.order_state in ('fulfilled', 'refunded')
+                then true
+        end as redeemed
     from ecommerce_order
     inner join ecommerce_line
         on ecommerce_order.order_id = ecommerce_line.order_id
@@ -132,8 +140,16 @@ with b2becommerce_b2border as (
         , b2becommerce_b2breceipt.b2breceipt_payment_method as receipt_payment_method
         , b2becommerce_b2breceipt.b2breceipt_bill_to_address_state as receipt_bill_to_address_state
         , b2becommerce_b2breceipt.b2breceipt_bill_to_address_country as receipt_bill_to_address_country
-        , b2becommerce_b2bcouponredemption.b2bcouponredemption_created_on as coupon_redeemed_on
-        , case when b2becommerce_b2bcouponredemption.b2bcouponredemption_id is not null then true end as redeemed
+        , case
+            when b2becommerce_b2border.b2border_status in ('fulfilled', 'refunded')
+                then b2becommerce_b2bcouponredemption.b2bcouponredemption_created_on
+        end as coupon_redeemed_on
+        , case
+            when
+                b2becommerce_b2bcouponredemption.b2bcouponredemption_id is not null
+                and b2becommerce_b2border.b2border_status in ('fulfilled', 'refunded')
+                then true
+        end as redeemed
     from b2becommerce_b2border
     left join ecommerce_couponpaymentversion
         on b2becommerce_b2border.couponpaymentversion_id = ecommerce_couponpaymentversion.couponpaymentversion_id

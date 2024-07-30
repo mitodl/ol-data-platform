@@ -31,8 +31,8 @@ models:
   - name: b2border_discount
     description: numeric, dollar discount amount for the order
   - name: redeemed
-    description: boolean, when an order uses a coupon this field will be true otherwise
-      it will be null
+    description: boolean, when a fulfilled/refunded order uses a coupon this field
+      will be true otherwise it will be null
   - name: coupon_redeemed_on
     description: timestamp, specifying when the b2b or regular coupon was redeemed.
   - name: user_email
@@ -183,7 +183,7 @@ models:
     tests:
     - not_null
   - name: couponredemption_created_on
-    description: timestamp, specifying when the coupon was redeemed
+    description: timestamp, specifying when the coupon redemption record was created.
     tests:
     - not_null
   - name: couponredemption_updated_on
@@ -829,7 +829,8 @@ models:
     description: string, discount amount in readable format. It can be percent-off
       which is <dollar amount * 100>% off, dollars-off which is $<dollar amount> off
   - name: couponredemption_created_on
-    description: timestamp, specifying when the coupon was redeemed
+    description: timestamp, specifying when the coupon was redeemed by user for fulfilled
+      or refunded orders
   - name: receipt_reference_number
     description: str, transaction reference number from cybersource payment
   - name: receipt_transaction_id

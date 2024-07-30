@@ -385,7 +385,7 @@ models:
   - name: discountredemption_id
     description: int, primary key representing a discount redemption
   - name: discountredemption_timestamp
-    description: timestamp, specifying when the discount was redeemed by the user
+    description: timestamp, specifying when the discount redemption record was created.
   - name: user_id
     description: int, foreign key for users_user
   - name: discount_id
@@ -564,8 +564,8 @@ models:
     description: str, discount code from the most recent coupon redemption for the
       order
   - name: discountredemption_timestamp
-    description: timestamp, specifying when the discount was redeemed from the most
-      recent coupon redemption for the order
+    description: timestamp, specifying when the discount was last redeemed by user
+      for fulfilled or refunded orders
   - name: transaction_id
     description: int, foreign key to ecommerce_transaction referring to cybersource
       payment
