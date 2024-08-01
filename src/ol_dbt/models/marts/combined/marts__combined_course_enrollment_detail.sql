@@ -52,6 +52,10 @@ with combined_enrollments as (
     select * from {{ ref('int__mitxpro__ecommerce_line') }}
 )
 
+, mart_order as (
+    select * from {{ ref('marts__combined__orders') }}
+)
+
 , combined_enrollment_detail as (
     select
         '{{ var("mitxonline") }}' as platform
@@ -250,38 +254,41 @@ with combined_enrollments as (
 )
 
 select
-    platform
-    , courserunenrollment_id
-    , {{ generate_hash_id('cast(order_id as varchar)
-        || cast(coalesce(line_id, 9) as varchar)
-        || platform') }} as combined_orders_hash_id
-    , course_readable_id
-    , course_title
-    , courserun_id
-    , courserun_is_current
-    , courserun_readable_id
-    , courserun_start_on
-    , courserun_end_on
-    , courserun_title
-    , courseruncertificate_created_on
-    , courseruncertificate_is_earned
-    , courseruncertificate_url
-    , courseruncertificate_uuid
-    , courserunenrollment_created_on
-    , courserunenrollment_enrollment_mode
-    , courserunenrollment_enrollment_status
-    , courserunenrollment_is_active
-    , courserunenrollment_is_edx_enrolled
-    , courserungrade_grade
-    , courserungrade_is_passing
-    , line_id
-    , order_id
-    , order_reference_number
-    , user_company
-    , user_country_code
-    , user_email
-    , user_full_name
-    , user_highest_education
-    , user_id
-    , user_username
+    combined_enrollment_detail.platform
+    , combined_enrollment_detail.courserunenrollment_id
+    , mart_order.combined_orders_hash_id
+    , combined_enrollment_detail.course_readable_id
+    , combined_enrollment_detail.course_title
+    , combined_enrollment_detail.courserun_id
+    , combined_enrollment_detail.courserun_is_current
+    , combined_enrollment_detail.courserun_readable_id
+    , combined_enrollment_detail.courserun_start_on
+    , combined_enrollment_detail.courserun_end_on
+    , combined_enrollment_detail.courserun_title
+    , combined_enrollment_detail.courseruncertificate_created_on
+    , combined_enrollment_detail.courseruncertificate_is_earned
+    , combined_enrollment_detail.courseruncertificate_url
+    , combined_enrollment_detail.courseruncertificate_uuid
+    , combined_enrollment_detail.courserunenrollment_created_on
+    , combined_enrollment_detail.courserunenrollment_enrollment_mode
+    , combined_enrollment_detail.courserunenrollment_enrollment_status
+    , combined_enrollment_detail.courserunenrollment_is_active
+    , combined_enrollment_detail.courserunenrollment_is_edx_enrolled
+    , combined_enrollment_detail.courserungrade_grade
+    , combined_enrollment_detail.courserungrade_is_passing
+    , combined_enrollment_detail.line_id
+    , combined_enrollment_detail.order_id
+    , combined_enrollment_detail.order_reference_number
+    , combined_enrollment_detail.user_company
+    , combined_enrollment_detail.user_country_code
+    , combined_enrollment_detail.user_email
+    , combined_enrollment_detail.user_full_name
+    , combined_enrollment_detail.user_highest_education
+    , combined_enrollment_detail.user_id
+    , combined_enrollment_detail.user_username
 from combined_enrollment_detail
+left join mart_order
+    on 
+        combined_enrollment_detail.platform = mart_order.platform
+        and combined_enrollment_detail.order_id = mart_order.order_id
+        and combined_enrollment_detail.line_id = mart_order.line_id
