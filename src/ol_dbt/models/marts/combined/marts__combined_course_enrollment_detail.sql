@@ -288,7 +288,7 @@ select
     , combined_enrollment_detail.user_username
 from combined_enrollment_detail
 left join mart_order
-    on 
+    on
         combined_enrollment_detail.platform = mart_order.platform
         and combined_enrollment_detail.order_id = mart_order.order_id
         and combined_enrollment_detail.line_id = mart_order.line_id
