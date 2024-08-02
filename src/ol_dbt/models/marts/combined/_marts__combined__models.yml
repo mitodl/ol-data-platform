@@ -80,7 +80,7 @@ models:
         "user_bootcamps_username", "platforms"]
 
 - name: marts__combined__orders
-  description: B2B and regular orders combined into one table
+  description: ecommerce regular b2c orders
   columns:
   - name: combined_orders_hash_id
     description: int, primary key for this table. At the grain of order id, line id,
@@ -153,9 +153,20 @@ models:
   - name: order_total_price_paid
     description: number, total order amount
   - name: product_id
-    description: int, foreign key for product table
+    description: int, foreign key for product table. May be null for bootcamps and
+      edX.org.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+  - name: product_readable_id
+    description: string, the product identifier either referring to courserun_readable_id
+      or program_readable_id. May be null for bootcamps and edX.org.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
   - name: product_type
-    description: string, readable product type
+    description: string, readable product type - either course run or program. May
+      be null for bootcamps and edX.org
   - name: receipt_authorization_code
     description: str, either the authorization code from cybersource payment transaction,
       or approvalCode from cybersource refund transaction (MITx Online only).
