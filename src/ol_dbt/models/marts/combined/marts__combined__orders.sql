@@ -171,6 +171,10 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
         , concat('xpro-b2c-production-', cast(mitxpro__ecommerce_allorders.order_id as varchar))
         as order_reference_number
+        , coalesce(
+            mitxpro__ecommerce_allorders.courserun_readable_id
+            , mitxpro__ecommerce_allorders.program_readable_id
+        ) as product_readable_id
     from mitxpro__ecommerce_allorders
     left join mitxpro__ecommerce_order
         on mitxpro__ecommerce_allorders.order_id = mitxpro__ecommerce_order.order_id
@@ -191,6 +195,7 @@ with bootcamps__ecommerce_order as (
         , courserun_id
         , courserun_readable_id
         , product_id
+        , courserun_readable_id as product_readable_id
         , product_type
         , product_price as unit_price
         , user_email
@@ -237,6 +242,7 @@ with bootcamps__ecommerce_order as (
         , courserun_id
         , courserun_readable_id
         , product_id
+        , product_readable_id
         , product_type
         , product_price as unit_price
         , user_email
@@ -283,6 +289,7 @@ with bootcamps__ecommerce_order as (
         , courserun_id
         , courserun_readable_id
         , null as product_id
+        , null as product_readable_id
         , null as product_type
         , line_price as unit_price
         , user_email
@@ -329,6 +336,7 @@ with bootcamps__ecommerce_order as (
         , null as courserun_id
         , courserun_readable_id
         , null as product_id
+        , null as product_readable_id
         , null as product_type
         , line_price as unit_price
         , user_edxorg_email as user_email
@@ -394,6 +402,7 @@ select
     , order_total_price_paid_plus_tax
     , order_total_price_paid
     , product_id
+    , product_readable_id
     , product_type
     , receipt_authorization_code
     , receipt_bill_to_address_state
