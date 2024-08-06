@@ -1,11 +1,6 @@
 from typing import Literal
 
-from dagster import (
-AssetSelection,
-    Definitions,
-    ScheduleDefinition,
-define_asset_job
-)
+from dagster import AssetSelection, Definitions, ScheduleDefinition
 from dagster_aws.s3 import S3Resource
 
 from ol_orchestrate.assets.edxorg_archive import (
@@ -13,7 +8,6 @@ from ol_orchestrate.assets.edxorg_archive import (
     course_list,
     course_structure,
 )
-
 from ol_orchestrate.io_managers.filepath import (
     S3FileObjectIOManager,
 )
@@ -88,6 +82,7 @@ openedx_data_extracts = Definitions(
     ],
 )
 
+
 def s3_uploads_bucket(
     dagster_env: Literal["dev", "qa", "production"],
 ) -> dict[str, Any]:
@@ -100,6 +95,7 @@ def s3_uploads_bucket(
         },
     }
     return bucket_map[dagster_env]
+
 
 def edxorg_data_archive_config(dagster_env):
     return {
