@@ -43,10 +43,17 @@ class CourseListConfig(Config):
     key=course_list_asset_key,
     group_name="openedx",
     io_manager_key="s3file_io_manager",
+    # TODO: best practice for passing in the config for page_size?
+    ins={
+        "course_list_config": AssetIn(
+            key=AssetKey(("openedx", "raw_data", "course_list_config"))
+        )
+    },
     auto_materialize_policy=AutoMaterializePolicy.eager(
         max_materializations_per_minute=None
     ),
 )
+<<<<<<< HEAD
 def course_list(context: AssetExecutionContext, config: CourseListConfig):
     course_ids = []
     course_id_generator = context.resources.openedx.get_edx_course_ids(
