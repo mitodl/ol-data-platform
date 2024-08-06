@@ -1,8 +1,22 @@
 from typing import Literal
 
-from dagster import Definitions, ScheduleDefinition
+from dagster import (
+AssetSelection,
+    Definitions,
+    ScheduleDefinition,
+define_asset_job
+)
 from dagster_aws.s3 import S3Resource
 
+from ol_orchestrate.assets.edxorg_archive import (
+    CourseListConfig,
+    course_list,
+    course_structure,
+)
+
+from ol_orchestrate.io_managers.filepath import (
+    S3FileObjectIOManager,
+)
 from ol_orchestrate.jobs.open_edx import extract_open_edx_data_to_ol_data_platform
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.openedx import OpenEdxApiClient
@@ -71,5 +85,55 @@ openedx_data_extracts = Definitions(
             name=f"{job.name}_nightly", cron_schedule="0 0 * * *", job=job
         )
         for job in ol_extract_jobs
+    ],
+)
+
+def s3_uploads_bucket(
+    dagster_env: Literal["dev", "qa", "production"],
+) -> dict[str, Any]:
+    bucket_map = {
+        "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
+        "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": "edxorg-raw-data"},
+        "production": {
+            "bucket": "ol-data-lake-landing-zone-production",
+            "prefix": "edxorg-raw-data",
+        },
+    }
+    return bucket_map[dagster_env]
+
+def edxorg_data_archive_config(dagster_env):
+    return {
+        "ops": {
+            "process_edxorg_archive_bundle": {
+                "config": {
+                    "s3_bucket": s3_uploads_bucket(dagster_env)["bucket"],
+                    "s3_prefix": s3_uploads_bucket(dagster_env)["prefix"],
+                }
+            },
+        }
+    }
+
+
+openedx_course_structures_job = extract_open_edx_data_to_ol_data_platform.to_job(
+    name="extract_open_edx_data_to_ol_data_platform",
+    config=edxorg_data_archive_config(DAGSTER_ENV),
+    selection=AssetSelection.assets(CourseListConfig, course_list, course_structure),
+)
+
+retrieve_openedx_course_data = Definitions(
+    resources={
+        "s3": S3Resource(),
+        "exports_dir": DailyResultsDir.configure_at_launch(),
+        "s3file_io_manager": S3FileObjectIOManager(
+            bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
+            path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+        ),
+        "vault": vault,
+    },
+    jobs=[openedx_course_structures_job],
+    assets=[
+        CourseListConfig,
+        course_list,
+        course_structure,
     ],
 )
