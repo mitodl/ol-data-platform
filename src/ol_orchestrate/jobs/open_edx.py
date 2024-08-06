@@ -1,17 +1,19 @@
 from dagster import graph
 
+from ol_orchestrate.assets.open_edx import (
+    course_list,
+    course_structure,
+)
 from ol_orchestrate.lib.hooks import (
     notify_healthchecks_io_on_failure,
     notify_healthchecks_io_on_success,
 )
-from ol_orchestrate.ops.object_storage import upload_files_to_s3
 from ol_orchestrate.ops.open_edx import (
     course_enrollments,
     course_roles,
     enrolled_users,
     export_edx_courses,
     export_edx_forum_database,
-    fetch_edx_course_structure_from_api,
     list_courses,
     student_submissions,
     upload_extracted_data,
@@ -69,6 +71,4 @@ def edx_course_pipeline():
     },
 )
 def extract_open_edx_data_to_ol_data_platform():
-    fetch_edx_course_structure_from_api(list_courses()).map(
-        lambda fpath: upload_files_to_s3(fpath)
-    )
+    course_structure(course_list())
