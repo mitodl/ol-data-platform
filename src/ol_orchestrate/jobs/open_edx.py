@@ -1,9 +1,5 @@
 from dagster import graph
 
-from ol_orchestrate.assets.open_edx import (
-    course_list,
-    course_structure,
-)
 from ol_orchestrate.lib.hooks import (
     notify_healthchecks_io_on_failure,
     notify_healthchecks_io_on_success,
