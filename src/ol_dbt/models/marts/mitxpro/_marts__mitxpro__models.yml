@@ -32,8 +32,8 @@ models:
       the program code. Examples include ML, QCF, AIPS, and DSBD.
   - name: list_price
     description: numeric, the product price for this version
-  - name: Product_description
-    description: string, product version discriptiom
+  - name: product_description
+    description: str, product description from the latest product version
   - name: start_date
     description: date, specifying when the course or program begins
   - name: end_date
