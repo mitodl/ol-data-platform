@@ -407,14 +407,14 @@ models:
     tests:
     - not_null
     - unique
-  - name: product_id
-    description: int, primary key from ecommerce_product on MITx Online and xPro
-  - name: product_description
-    description: str, product description
   - name: product_name
     description: str, title of the course run or program run
+  - name: product_id
+    description: int, primary key from ecommerce_product on MITx Online and xPro
   - name: product_type
     description: str, either 'course run' or 'program run'
+  - name: product_description
+    description: str, product description
   - name: product_platform
     description: str, indicating the partners for course/program. The possible values
       are Emeritus, xPRO, Simplilearn, Global Alumni, WHU, Susskind and MITx Online.

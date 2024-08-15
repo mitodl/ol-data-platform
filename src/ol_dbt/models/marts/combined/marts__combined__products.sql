@@ -74,10 +74,10 @@ with mitxonline_product as (
 select
     '{{ var("mitxonline") }}' as platform
     , product_readable_id
-    , product_id
-    , product_description
     , product_name
+    , product_id
     , product_type
+    , product_description
     , '{{ var("mitxonline") }}' as product_platform
     , false as product_is_private
     , list_price
@@ -92,10 +92,10 @@ union all
 select
     '{{ var("mitxpro") }}' as platform
     , product_readable_id
-    , product_id
-    , product_description
     , product_name
+    , product_id
     , product_type
+    , product_description
     , product_platform
     , product_is_private
     , list_price
