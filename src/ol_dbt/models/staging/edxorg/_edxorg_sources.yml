@@ -912,3 +912,36 @@ sources:
       description: str, instructors metadata
     - name: self_paced
       description: boolean, indicating whether the course is self_paced or instructor-paced
+
+  - name: raw__edxorg__s3__tables__courseware_studentmodule
+    columns:
+    - name: id
+      description: str, the auto-incremented ID for this table
+    - name: student_id
+      description: str, reference user id in auth_user from open edX
+    - name: course_id
+      description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
+    - name: module_id
+      description: str, block ID for a distinct piece of content in a course, referencing
+        course_structure
+    - name: module_type
+      description: str, category/type of the block, referencing course_structure.
+    - name: state
+      description: str, JSON text indicating the learner's last known state within
+        a course.
+    - name: done
+      description: str, not used. The value is 'na' in every row
+    - name: grade
+      description: str, floating point value indicating the total unweighted grade
+        for this problem that the learner has scored. e.g. how many responses they
+        got right within the problem. This data is also available in courseactivity_problemcheck
+    - name: max_grade
+      description: str, floating point value indicating the total possible unweighted
+        grade for this problem, or basically the number of responses that are in this
+        problem. This data is also available in courseactivity_problemcheck
+    - name: created
+      description: timestamp, datetime when this row was created, which is typically
+        when the learner first accesses this piece of content.
+    - name: modified
+      description: timestamp, datetime when this row was last updated. A change in
+        this field implies that there was a state change.
