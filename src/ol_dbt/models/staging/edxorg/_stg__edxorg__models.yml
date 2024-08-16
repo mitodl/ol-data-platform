@@ -868,3 +868,59 @@ models:
     description: array, array of instructors' name
   - name: self_paced
     description: boolean, indicating whether the course is self_paced or instructor-paced
+
+- name: stg__edxorg__s3__courseware_studentmodule
+  description: It holds the most current course state and score per course section
+    for learners on edX.org. There is a separate row for every piece of content that
+    a learner accesses.
+  columns:
+  - name: studentmodule_id
+    description: int, primary key in courseware_studentmodule
+    tests:
+    - not_null
+    - unique
+  - name: user_id
+    description: int, reference user id in auth_user
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs.
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, block ID for a distinct piece of content in a course, referencing
+      course_structure
+    tests:
+    - not_null
+  - name: coursestructure_block_category
+    description: str, category/type of the block, referencing course_structure.
+    tests:
+    - not_null
+  - name: studentmodule_state_data
+    description: json, JSON object indicating the user’s last known state in the course.
+      It may contain any attributes for different module types - course, chapter,
+      sequential, etc.
+    tests:
+    - not_null
+  - name: studentmodule_problem_grade
+    description: float, floating point value indicating the total unweighted grade
+      for this problem that the learner has scored. e.g. how many responses they got
+      right within the problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_problem_max_grade
+    description: float, floating point value indicating the total possible unweighted
+      grade for this problem, or basically the number of responses that are in this
+      problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_created_on
+    description: timestamp, datetime when this row was created, which is typically
+      when the learner first accesses this piece of content.
+    tests:
+    - not_null
+  - name: studentmodule_updated_on
+    description: timestamp, datetime when this row was last updated. A change in this
+      field implies that there was a state change.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id", "coursestructure_block_id"]
