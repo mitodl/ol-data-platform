@@ -875,7 +875,7 @@ models:
     a learner accesses.
   columns:
   - name: studentmodule_id
-    description: int, primary key for this table
+    description: int, primary key in courseware_studentmodule
     tests:
     - not_null
     - unique
