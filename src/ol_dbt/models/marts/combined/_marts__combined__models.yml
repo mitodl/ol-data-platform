@@ -393,3 +393,55 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
+
+- name: marts__combined__products
+  description: combined course or program products from MITx Online and xPro
+  columns:
+  - name: platform
+    description: str, application where data is from - MITx Online or xPro
+    tests:
+    - not_null
+  - name: product_platform
+    description: str, indicating the partners for course/program. The possible values
+      are Emeritus, xPRO, Simplilearn, Global Alumni, WHU, Susskind and MITx Online.
+    tests:
+    - not_null
+  - name: product_readable_id
+    description: str, unique open edX Course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} or program run ID formatted as program-v1:{org}+{program code}+{run_tag}
+    tests:
+    - not_null
+    - unique
+  - name: product_name
+    description: str, title of the course run or program run
+  - name: product_id
+    description: int, primary key from ecommerce_product on MITx Online or xPro
+  - name: product_type
+    description: str, either 'course run' or 'program run'
+  - name: product_description
+    description: str, product description
+  - name: list_price
+    description: numeric, the latest list price for the product.
+    tests:
+    - not_null
+  - name: product_is_active
+    description: boolean, indicating whether the product is visible at the checkout
+      page on MITx Online or xPro
+    tests:
+    - not_null
+  - name: product_is_private
+    description: boolean, indicating whether the product is public or private. Public
+      products are listed in the product drop-down on the bulk purchase form for xPro.
+    tests:
+    - not_null
+  - name: product_created_on
+    description: timestamp, date and time when the product was created on MITx Online
+      or xPro
+  - name: start_date
+    description: timestamp, date and time when the course or program starts
+  - name: end_date
+    description: timestamp, date and time when the course or program ends
+  - name: enrollment_start
+    description: timestamp, date and time when the course or program enrollment starts
+  - name: enrollment_end
+    description: timestamp, date and time when the course or program enrollment ends

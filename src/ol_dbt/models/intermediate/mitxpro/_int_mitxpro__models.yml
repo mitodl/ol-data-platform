@@ -985,6 +985,12 @@ models:
     description: boolean, Public product is purchasable through the bulk form at /ecommerce/bulk
     tests:
     - not_null
+  - name: product_list_price
+    description: numeric, the latest list price for the product.
+    tests:
+    - not_null
+  - name: product_description
+    description: str, product description from the latest product version
   - name: courserun_id
     description: int, primary key representing a single xPro course run
   - name: courserun_readable_id
