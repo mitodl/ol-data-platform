@@ -916,7 +916,7 @@ sources:
   - name: raw__edxorg__s3__tables__courseware_studentmodule
     columns:
     - name: id
-      description: str, the auto-incremented ID for this table
+      description: str, primary key for this table
     - name: student_id
       description: str, reference user id in auth_user from open edX
     - name: course_id

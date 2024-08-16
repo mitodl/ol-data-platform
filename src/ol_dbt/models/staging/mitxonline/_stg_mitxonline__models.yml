@@ -1338,7 +1338,7 @@ models:
     that a learner accesses.
   columns:
   - name: studentmodule_id
-    description: int, the auto-incremented ID for this table
+    description: int, primary key for this table
     tests:
     - not_null
     - unique
@@ -1391,7 +1391,7 @@ models:
   description: Persistent values for learners' subsection (aka sequential) grades.
   columns:
   - name: subsectiongrade_id
-    description: int, the auto-incremented ID for this table
+    description: int, primary key for this table
     tests:
     - not_null
     - unique
@@ -1459,7 +1459,7 @@ models:
   description: Stores the most recent override grades for a given subsection
   columns:
   - name: subsectiongradeoverride_id
-    description: int, the auto-incremented ID for this table
+    description: int, primary key for this table
     tests:
     - not_null
     - unique
@@ -1504,7 +1504,7 @@ models:
     learner at the time of computing the subsection grade.
   columns:
   - name: visibleblocks_id
-    description: int, the auto-incremented ID for this table
+    description: int, primary key for this table
     tests:
     - not_null
     - unique

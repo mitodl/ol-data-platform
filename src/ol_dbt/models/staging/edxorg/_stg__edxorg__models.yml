@@ -875,7 +875,7 @@ models:
     a learner accesses.
   columns:
   - name: studentmodule_id
-    description: int, the auto-incremented ID for this table
+    description: int, primary key for this table
     tests:
     - not_null
     - unique
