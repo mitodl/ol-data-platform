@@ -33,6 +33,8 @@ with mitxonline_product as (
         , mitxonline_product.courserun_readable_id as product_readable_id
         , mitxonline_product.product_price as list_price
         , mitxonline_product.product_description
+        , mitxonline_product.product_is_active
+        , mitxonline_product.product_created_on
         , mitxonline_course_runs.courserun_title as product_name
         , mitxonline_course_runs.courserun_start_on as start_on
         , mitxonline_course_runs.courserun_end_on as end_on
@@ -49,6 +51,8 @@ with mitxonline_product as (
         , mitxpro_product.product_list_price as list_price
         , mitxpro_product.product_description
         , mitxpro_product.product_is_private
+        , mitxpro_product.product_is_active
+        , mitxpro_product.product_created_on
         , mitxpro_course_runs.courserun_enrollment_start_on as enrollment_start_on
         , mitxpro_course_runs.courserun_enrollment_end_on as enrollment_end_on
         , if(mitxpro_product.product_type = 'program', 'program run', mitxpro_product.product_type) as product_type
@@ -73,14 +77,16 @@ with mitxonline_product as (
 
 select
     '{{ var("mitxonline") }}' as platform
+    , '{{ var("mitxonline") }}' as product_platform
     , product_readable_id
     , product_name
     , product_id
     , product_type
     , product_description
-    , '{{ var("mitxonline") }}' as product_platform
-    , false as product_is_private
     , list_price
+    , product_is_active
+    , false as product_is_private
+    , product_created_on
     , start_on
     , end_on
     , enrollment_start_on
@@ -91,14 +97,16 @@ union all
 
 select
     '{{ var("mitxpro") }}' as platform
+    , product_platform
     , product_readable_id
     , product_name
     , product_id
     , product_type
     , product_description
-    , product_platform
-    , product_is_private
     , list_price
+    , product_is_active
+    , product_is_private
+    , product_created_on
     , start_on
     , end_on
     , enrollment_start_on
