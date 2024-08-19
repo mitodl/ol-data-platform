@@ -220,10 +220,9 @@ models:
       column_list: ["courserun_readable_id", "user_id"]
 
 - name: stg__mitxresidential__openedx__tracking_logs__user_activity
-  description: Residential MITx event data that are emitted by server, the browser,
-    or the mobile device to capture information about user's interactions with a course.
-    This table filters out events that don't supply user identifiers like username
-    and user_id.
+  description: Residential MITx event data that are emitted by server and the browser
+    to capture information about user's interactions with a course. This table filters
+    out events that don't supply user identifiers like username and user_id.
   columns:
   - name: user_username
     description: str, username of a learner on Residential MITx open edx platform
@@ -251,7 +250,7 @@ models:
       member fields for applicable events are course_user_tags, module.
   - name: useractivity_event_source
     description: str, specifies the source of the interaction that triggered the event.
-      The values are - browser, mobile, server, task
+      The possible values are - browser, server, task.
     tests:
     - not_null
   - name: useractivity_event_type
@@ -268,10 +267,9 @@ models:
   - name: useractivity_session_id
     description: str, 32-character value to identify the user’s session. All browser
       events and the server 'enrollment' events include session value. Other server
-      events and mobile events do not include a session value.
+      events do not include a session value.
   - name: useractivity_ip
-    description: str, IP address of the user who triggered the event. Empty for mobile
-      events.
+    description: str, IP address of the user who triggered the event.
   - name: useractivity_http_host
     description: str, The site visited by the user, e.g., lms.mitx.mit.edu
     tests:
@@ -291,3 +289,56 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
         "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
+
+- name: stg__mitxresidential__openedx__courseware_studentmodule
+  description: It holds the most current course state and score per course section
+    for learners on Residential MITx . There is a separate row for every piece of
+    content that a learner accesses.
+  columns:
+  - name: studentmodule_id
+    description: int, primary key in courseware_studentmodule
+    tests:
+    - not_null
+    - unique
+  - name: user_id
+    description: int, reference user id in auth_user
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, block ID for a distinct piece of content in a course, referencing
+      course_structure
+    tests:
+    - not_null
+  - name: coursestructure_block_category
+    description: str, category/type of the block, referencing course_structure.
+    tests:
+    - not_null
+  - name: studentmodule_state_data
+    description: json, JSON object indicating the user’s last known state in the course.
+      It may contain any attributes for different module types - course, chapter,
+      sequential, etc.
+  - name: studentmodule_problem_grade
+    description: float, floating point value indicating the total unweighted grade
+      for this problem that the learner has scored. e.g. how many responses they got
+      right within the problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_problem_max_grade
+    description: float, floating point value indicating the total possible unweighted
+      grade for this problem, or basically the number of responses that are in this
+      problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_created_on
+    description: timestamp, datetime when this row was created, which is typically
+      when the learner first accesses this piece of content.
+    tests:
+    - not_null
+  - name: studentmodule_updated_on
+    description: timestamp, datetime when this row was last updated. A change in this
+      field implies that there was a state change.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id", "coursestructure_block_id"]

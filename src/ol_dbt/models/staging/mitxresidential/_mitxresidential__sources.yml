@@ -924,9 +924,8 @@ sources:
       description: timestamp, specifying when assessment workflow step was completed
 
   - name: raw__mitx__openedx__tracking_logs
-    description: Residential MITx event data that are emitted by server, the browser,
-      or the mobile device to capture information about user's interactions with a
-      course
+    description: Residential MITx event data that are emitted by server and the browser
+      to capture information about user's interactions with a course.
     columns:
     - name: username
       description: str, username of the open edX user who caused the event to be emitted.
@@ -939,7 +938,7 @@ sources:
         member fields for applicable events are course_user_tags, module.
     - name: event_source
       description: str, specifies the source of the interaction that triggered the
-        event. The values are - browser, mobile, server, task
+        event. The possible values are - browser, server, task
     - name: event_type
       description: str, type of event triggered. Values depend on event_source.
     - name: name
@@ -953,10 +952,9 @@ sources:
     - name: session
       description: str, 32-character value to identify the user’s session. All browser
         events and the server 'enrollment' events include a session value. Other server
-        events and mobile events do not include a session value.
+        events do not include a session value.
     - name: ip
-      description: str, IP address of the user who triggered the event. Empty for
-        mobile events.
+      description: str, IP address of the user who triggered the event
     - name: host
       description: str, the site visited by the user, e.g., lms.mitx.mit.edu
     - name: time
@@ -972,3 +970,36 @@ sources:
       description: str, internal used field for log file location
     - name: _ab_source_file_url
       description: str, url path for the raw log file
+
+  - name: raw__mitx__openedx__mysql__courseware_studentmodule
+    columns:
+    - name: id
+      description: str, primary key in courseware_studentmodule
+    - name: student_id
+      description: str, reference user id in auth_user from open edX
+    - name: course_id
+      description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
+    - name: module_id
+      description: str, block ID for a distinct piece of content in a course, referencing
+        course_structure
+    - name: module_type
+      description: str, category/type of the block, referencing course_structure.
+    - name: state
+      description: str, JSON text indicating the learner's last known state within
+        a course.
+    - name: done
+      description: str, not used. The value is 'na' in every row
+    - name: grade
+      description: str, floating point value indicating the total unweighted grade
+        for this problem that the learner has scored. e.g. how many responses they
+        got right within the problem. This data is also available in courseactivity_problemcheck
+    - name: max_grade
+      description: str, floating point value indicating the total possible unweighted
+        grade for this problem, or basically the number of responses that are in this
+        problem. This data is also available in courseactivity_problemcheck
+    - name: created
+      description: timestamp, datetime when this row was created, which is typically
+        when the learner first accesses this piece of content.
+    - name: modified
+      description: timestamp, datetime when this row was last updated. A change in
+        this field implies that there was a state change.
