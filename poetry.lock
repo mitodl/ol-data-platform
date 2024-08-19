@@ -4189,13 +4189,13 @@ tqdm = "*"
 
 [[package]]
 name = "sqlglot"
-version = "25.13.0"
+version = "25.14.0"
 description = "An easily customizable SQL parser and transpiler"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "sqlglot-25.13.0-py3-none-any.whl", hash = "sha256:b6e8c999c3c5a8b5bd31a7f22f8fe9073d9deae962674616796550515b130654"},
-    {file = "sqlglot-25.13.0.tar.gz", hash = "sha256:a84c4361dc701ed0566e17cd16a8b8f4b50c99c11578a23e45857f02fab17639"},
+    {file = "sqlglot-25.14.0-py3-none-any.whl", hash = "sha256:37ceb08e7527659cc3a08bad1010a84953183a5f7edd1bb3ab5969586875bce2"},
+    {file = "sqlglot-25.14.0.tar.gz", hash = "sha256:202c49fb1e3957364ec0dad3a0d48af29972047c34b31e7b000a518f609c0063"},
 ]
 
 [package.dependencies]
