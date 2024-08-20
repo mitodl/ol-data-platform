@@ -1,4 +1,4 @@
-import json  # noqa: INP001
+import json
 import os
 import re
 from pathlib import Path
@@ -14,8 +14,10 @@ from dagster import (
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
 from dagster_dbt import (
-    dbt_cli_resource,
-    load_assets_from_dbt_manifest,
+    DagsterDbtTranslator,
+    DbtCliResource,
+    DbtManifestAssetSelection,
+    DbtProject,
 )
 
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "dev")
@@ -44,7 +46,9 @@ dbt_config = {
     "profiles_dir": str(dbt_repo_dir),
     "target": dagster_deployment,
 }
-configured_dbt_cli = dbt_cli_resource.configured(dbt_config)
+dbt_project = DbtProject(project_dir=dbt_repo_dir, target=dagster_deployment)
+dbt_project.prepare_if_dev()
+dbt_cli = DbtCliResource(**dbt_config)
 
 airbyte_assets = load_assets_from_airbyte_instance(
     configured_airbyte_resource,
@@ -65,10 +69,11 @@ airbyte_assets = load_assets_from_airbyte_instance(
     ),
 )
 
-dbt_assets = load_assets_from_dbt_manifest(
-    manifest=json.loads(
-        dbt_repo_dir.joinpath("target", "manifest.json").read_text(),
-    ),
+dbt_assets = DbtManifestAssetSelection(
+    manifest=json.loads(dbt_repo_dir.joinpath("target", "manifest.json").read_text()),
+    select="*",
+    exclude="",
+    dagster_dbt_translator=DagsterDbtTranslator(),
 )
 
 # This section creates a separate job and schedule for each Airbyte connection that will
@@ -106,7 +111,7 @@ elt = Definitions(
     assets=load_assets_from_current_module(
         auto_materialize_policy=AutoMaterializePolicy.eager(),
     ),
-    resources={"dbt": configured_dbt_cli},
+    resources={"dbt": dbt_cli},
     sensors=[],
     jobs=airbyte_asset_jobs,
     schedules=airbyte_update_schedules,
