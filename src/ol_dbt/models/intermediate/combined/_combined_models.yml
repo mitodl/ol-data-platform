@@ -90,8 +90,8 @@ models:
     description: string, title of the course run on the corresponding platform. Maybe
       blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
   - name: courserun_readable_id
-    description: str, unique string to identify a course run on the corresponding
-      platform
+    description: str, Open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITx Online and xPro courses, {org}/{course}/{run_tag} for edX.org courses
   - name: user_username
     description: string, username on the corresponding platform
     tests:
@@ -140,8 +140,8 @@ models:
     description: string, title of the course run on the corresponding platform. Maybe
       blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
   - name: courserun_readable_id
-    description: str, unique string to identify a course run on the corresponding
-      platform
+    description: str, Open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITx Online and xPro courses, {org}/{course}/{run_tag} for edX.org courses
     tests:
     - not_null
   - name: user_username
