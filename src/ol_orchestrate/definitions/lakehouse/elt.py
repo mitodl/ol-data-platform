@@ -20,14 +20,38 @@ from dagster_dbt import (
     DbtProject,
 )
 
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.resources.secrets.vault import Vault
+
+if DAGSTER_ENV == "dev":
+    dagster_url = "http://localhost:3000"
+    airbyte_host = os.environ.get(
+        "DAGSTER_AIRBYTE_HOST", "config-airbyte-qa.odl.mit.edu"
+    )
+    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault._auth_github()  # noqa: SLF001
+else:
+    airbyte_host = "airbyte.service.consul"
+    dagster_url = (
+        "https://pipelines.odl.mit.edu"
+        if DAGSTER_ENV == "production"
+        else "https://pipelines-qa.odl.mit.edu"
+    )
+    vault = Vault(
+        vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+    )
+    vault._auth_aws_iam()  # noqa: SLF001
+
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "dev")
 configured_airbyte_resource = airbyte_resource.configured(
     {
-        "host": {"env": "DAGSTER_AIRBYTE_HOST"},
-        "port": {"env": "DAGSTER_AIRBYTE_PORT"},
+        "host": airbyte_host,
+        "port": os.environ.get("DAGSTER_AIRBYTE_PORT", "443"),
         "use_https": True,
-        "username": os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")[0],
-        "password": os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")[1],
+        "username": "dagster",
+        "password": vault.client.secrets.kv.v1.read_secret(
+            path="dagster-http-auth-password", mount_point="secret-data"
+        )["data"]["dagster_unhashed_password"],
         "request_timeout": 60,  # Allow up to a minute for Airbyte requests
         "request_additional_params": {
             "verify": False,
