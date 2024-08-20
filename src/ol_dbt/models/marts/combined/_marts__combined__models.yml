@@ -264,8 +264,8 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, unique string to identify a course run on the corresponding
-      platform
+    description: str, Open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITxOnline and xPro courses, {org}/{course}/{run_tag} for edX.org courses
   - name: courserun_start_on
     description: timestamp, date and time when the course run starts. May be Null.
   - name: courserun_title
