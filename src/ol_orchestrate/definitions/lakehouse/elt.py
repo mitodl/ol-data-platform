@@ -1,31 +1,50 @@
-import json  # noqa: INP001
 import os
 import re
-from pathlib import Path
 
 from dagster import (
     AssetSelection,
-    AutoMaterializePolicy,
     DefaultScheduleStatus,
     Definitions,
     ScheduleDefinition,
     define_asset_job,
-    load_assets_from_current_module,
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
 from dagster_dbt import (
-    dbt_cli_resource,
-    load_assets_from_dbt_manifest,
+    DbtCliResource,
 )
 
-dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "dev")
+from ol_orchestrate.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.resources.secrets.vault import Vault
+
+if DAGSTER_ENV == "dev":
+    dagster_url = "http://localhost:3000"
+    airbyte_host = os.environ.get(
+        "DAGSTER_AIRBYTE_HOST", "config-airbyte-qa.odl.mit.edu"
+    )
+    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault._auth_github()  # noqa: SLF001
+else:
+    airbyte_host = "airbyte.service.consul"
+    dagster_url = (
+        "https://pipelines.odl.mit.edu"
+        if DAGSTER_ENV == "production"
+        else "https://pipelines-qa.odl.mit.edu"
+    )
+    vault = Vault(
+        vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+    )
+    vault._auth_aws_iam()  # noqa: SLF001
+
 configured_airbyte_resource = airbyte_resource.configured(
     {
-        "host": {"env": "DAGSTER_AIRBYTE_HOST"},
-        "port": {"env": "DAGSTER_AIRBYTE_PORT"},
+        "host": airbyte_host,
+        "port": os.environ.get("DAGSTER_AIRBYTE_PORT", "443"),
         "use_https": True,
-        "username": os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")[0],
-        "password": os.getenv("DAGSTER_AIRBYTE_AUTH", "").split(":")[1],
+        "username": "dagster",
+        "password": vault.client.secrets.kv.v1.read_secret(
+            path="dagster-http-auth-password", mount_point="secret-data"
+        )["data"]["dagster_unhashed_password"],
         "request_timeout": 60,  # Allow up to a minute for Airbyte requests
         "request_additional_params": {
             "verify": False,
@@ -33,18 +52,12 @@ configured_airbyte_resource = airbyte_resource.configured(
     }
 )
 
-dbt_repo_dir = (
-    Path(__file__).parent.parent.parent.parent.joinpath("ol_dbt")
-    if dagster_deployment == "dev"
-    else Path("/opt/dbt")
-)
-
 dbt_config = {
-    "project_dir": str(dbt_repo_dir),
-    "profiles_dir": str(dbt_repo_dir),
-    "target": dagster_deployment,
+    "project_dir": str(DBT_REPO_DIR),
+    "profiles_dir": str(DBT_REPO_DIR),
+    "target": os.environ.get("DAGSTER_DBT_TARGET", DAGSTER_ENV),
 }
-configured_dbt_cli = dbt_cli_resource.configured(dbt_config)
+dbt_cli = DbtCliResource(**dbt_config)
 
 airbyte_assets = load_assets_from_airbyte_instance(
     configured_airbyte_resource,
@@ -65,11 +78,6 @@ airbyte_assets = load_assets_from_airbyte_instance(
     ),
 )
 
-dbt_assets = load_assets_from_dbt_manifest(
-    manifest=json.loads(
-        dbt_repo_dir.joinpath("target", "manifest.json").read_text(),
-    ),
-)
 
 # This section creates a separate job and schedule for each Airbyte connection that will
 # materialize the tables for that connection and any associated dbt staging models for
@@ -103,10 +111,8 @@ for count, group_name in enumerate(group_names, start=1):
 
 
 elt = Definitions(
-    assets=load_assets_from_current_module(
-        auto_materialize_policy=AutoMaterializePolicy.eager(),
-    ),
-    resources={"dbt": configured_dbt_cli},
+    assets=[full_dbt_project, airbyte_assets],
+    resources={"dbt": dbt_cli},
     sensors=[],
     jobs=airbyte_asset_jobs,
     schedules=airbyte_update_schedules,
