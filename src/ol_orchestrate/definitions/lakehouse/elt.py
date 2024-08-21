@@ -1,25 +1,19 @@
-import json
 import os
 import re
-from pathlib import Path
 
 from dagster import (
     AssetSelection,
-    AutoMaterializePolicy,
     DefaultScheduleStatus,
     Definitions,
     ScheduleDefinition,
     define_asset_job,
-    load_assets_from_current_module,
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
 from dagster_dbt import (
-    DagsterDbtTranslator,
     DbtCliResource,
-    DbtManifestAssetSelection,
-    DbtProject,
 )
 
+from ol_orchestrate.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.secrets.vault import Vault
 
@@ -42,7 +36,6 @@ else:
     )
     vault._auth_aws_iam()  # noqa: SLF001
 
-dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "dev")
 configured_airbyte_resource = airbyte_resource.configured(
     {
         "host": airbyte_host,
@@ -59,19 +52,11 @@ configured_airbyte_resource = airbyte_resource.configured(
     }
 )
 
-dbt_repo_dir = (
-    Path(__file__).parent.parent.parent.parent.joinpath("ol_dbt")
-    if dagster_deployment == "dev"
-    else Path("/opt/dbt")
-)
-
 dbt_config = {
-    "project_dir": str(dbt_repo_dir),
-    "profiles_dir": str(dbt_repo_dir),
-    "target": dagster_deployment,
+    "project_dir": str(DBT_REPO_DIR),
+    "profiles_dir": str(DBT_REPO_DIR),
+    "target": os.environ.get("DAGSTER_DBT_TARGET", DAGSTER_ENV),
 }
-dbt_project = DbtProject(project_dir=dbt_repo_dir, target=dagster_deployment)
-dbt_project.prepare_if_dev()
 dbt_cli = DbtCliResource(**dbt_config)
 
 airbyte_assets = load_assets_from_airbyte_instance(
@@ -93,12 +78,6 @@ airbyte_assets = load_assets_from_airbyte_instance(
     ),
 )
 
-dbt_assets = DbtManifestAssetSelection(
-    manifest=json.loads(dbt_repo_dir.joinpath("target", "manifest.json").read_text()),
-    select="*",
-    exclude="",
-    dagster_dbt_translator=DagsterDbtTranslator(),
-)
 
 # This section creates a separate job and schedule for each Airbyte connection that will
 # materialize the tables for that connection and any associated dbt staging models for
@@ -132,9 +111,7 @@ for count, group_name in enumerate(group_names, start=1):
 
 
 elt = Definitions(
-    assets=load_assets_from_current_module(
-        auto_materialize_policy=AutoMaterializePolicy.eager(),
-    ),
+    assets=[full_dbt_project, airbyte_assets],
     resources={"dbt": dbt_cli},
     sensors=[],
     jobs=airbyte_asset_jobs,
