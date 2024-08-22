@@ -180,3 +180,381 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxresidential__openedx__courserun_grade')
+
+- name: int__mitxresidential__user_courseactivity_problemcheck
+  description: Residential MITx users problem_check activities within a course
+  columns:
+  - name: user_username
+    description: str, username on Residential MITx
+    tests:
+    - not_null
+  - name: user_id
+    description: int, the edX user ID extracted from context field in tracking log.
+      This id doesn't always match with the id in auth_user. There could be multiple
+      user_ids for the same user_username. For those cases, use user_id from source
+      table auth_user for that user_username.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, problem_check - when a problem is successfully checked.
+    tests:
+    - not_null
+  - name: useractivity_problem_id
+    description: str, Unique ID for this problem in a course. It's recorded as a URL
+      format - block-v1:{org)+{course ID}+type@problem+block@{hash code}
+    tests:
+    - not_null
+  - name: useractivity_problem_name
+    description: str, display name of this problem in a course
+    tests:
+    - not_null
+  - name: useractivity_problem_attempts
+    description: number, The number of times the user attempted to answer this problem
+    tests:
+    - not_null
+  - name: useractivity_problem_student_answers
+    description: json, student answers to this problem in problem_id and internal
+      answer pair. For multiple questions, it lists every question and answer.
+    tests:
+    - not_null
+  - name: useractivity_problem_success
+    description: str, It's either 'correct' or 'incorrect'
+    tests:
+    - not_null
+  - name: useractivity_problem_current_grade
+    description: number, current grade value for this user
+    tests:
+    - not_null
+  - name: useractivity_problem_max_grade
+    description: number, Maximum possible grade value for this problem
+    tests:
+    - not_null
+  - name: useractivity_timestamp
+    description: timestamp, time when this event was emitted
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+        "useractivity_timestamp"]
+
+- name: int__mitxresidential__user_courseactivity_problemsubmitted
+  description: Residential MITx learners problem submission activities within a course
+  columns:
+  - name: useractivity_event_id
+    description: str, The unique identifier for tracing this problem submitted event
+    tests:
+    - not_null
+    - unique
+  - name: user_username
+    description: str, username on Residential MITx
+    tests:
+    - not_null
+  - name: user_id
+    description: int, the edX user ID extracted from context field in tracking log.
+      This id doesn't always match with the id in auth_user. There could be multiple
+      user_ids for the same user_username. For those cases, use user_id from source
+      table auth_user for that user_username.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
+    tests:
+    - not_null
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The value is server for this event.
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: str, edx.grades.problem.submitted - when a problem is submitted and
+      successfully saved
+    tests:
+    - not_null
+  - name: useractivity_path
+    description: str, relative url path of page that generated the problem submitted
+      event.
+  - name: useractivity_problem_id
+    description: str, Unique ID for this problem in a course, formatted as block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}.
+    tests:
+    - not_null
+  - name: useractivity_problem_name
+    description: str, display name of this problem in a course
+  - name: useractivity_problem_weight
+    description: number, the weight of this problem
+  - name: useractivity_problem_earned_score
+    description: str, learner’s weighted score for this problem.
+  - name: useractivity_problem_max_score
+    description: number, weighted maximum possible score for this problem.
+  - name: useractivity_timestamp
+    description: timestamp, time when this event was emitted
+    tests:
+    - not_null
+
+- name: int__mitxresidential__user_courseactivity_discussion
+  description: Residential MITx learners discussion forum activities within a course
+  columns:
+  - name: user_username
+    description: str, username on Residential MITx
+    tests:
+    - not_null
+  - name: user_id
+    description: int, the edX user ID extracted from context field in tracking log.
+      This id doesn't always match with the id in auth_user. There could be multiple
+      user_ids for the same user_username. For those cases, use user_id from source
+      table auth_user for that user_username.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
+    tests:
+    - not_null
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The value is server for the discussion events.
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: >
+      str, type of discussion forum event triggered. Values can be edx.forum.comment.created,
+      edx.forum.comment.edited, edx.forum.response.created, edx.forum.response.voted,
+      edx.forum.thread.created, edx.forum.thread.viewed, edx.forum.thread.voted, edx.forum.searched,
+      etc.
+      A list of discussion events can be found https://edx.readthedocs.io/projects/devdata/en/latest/
+      internal_data_formats/tracking_logs/student_event_types.html#discussion-forum-events
+    tests:
+    - not_null
+  - name: useractivity_path
+    description: str, relative url path of page that generated this discussion event.
+      e.g. for edx.forum.response.voted events, it indicates if this event is unvote
+      or upvote
+  - name: useractivity_discussion_post_id
+    description: str, unique identifier for the discussion post learner engaged in.
+      May be Null for edx.forum.searched event
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type != 'edx.forum.searched'"
+  - name: useractivity_discussion_post_title
+    description: str, title for the specific discussion post. May be Null for edx.forum.searched
+      event.
+  - name: useractivity_discussion_block_id
+    description: str, identifier for the specific discussion component. e.g. discussion_ps2A-tab5.
+      Value is the last part of 'coursestructure_block_id' string. May be Null for
+      edx.forum.searched event.
+  - name: useractivity_discussion_block_name
+    description: str, display name for the specific discussion component. This value
+      consists of the unit name and 'coursestructure_block_title' of this discussion
+      component.
+  - name: useractivity_discussion_page_url
+    description: str, URL of the page from which the discussion thread can be viewed.
+  - name: useractivity_discussion_search_query
+    description: str, the query text searched by the learner on the course discussion
+      page. Applicable for edx.forum.searched event.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'edx.forum.searched'"
+  - name: useractivity_discussion_roles
+    description: >
+      array, Identifies a user who doesn't have discussion management privileges
+      as a 'Student', or a user who has discussion management privileges as a course
+      'Community TA', 'Moderator', or 'Administrator'.
+      The value of role refers to name field in django_comment_client_role_users.
+      https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/sql_schema.html#id12
+  - name: useractivity_timestamp
+    description: timestamp, time when this event was emitted
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
+        "useractivity_discussion_post_id", "useractivity_timestamp"]
+
+- name: int__mitxresidential__user_courseactivity_showanswer
+  description: Residential MITx learners show answer events within a course
+  columns:
+  - name: user_username
+    description: str, username on Residential MITx
+    tests:
+    - not_null
+  - name: user_id
+    description: int, the edX user ID extracted from context field in tracking log.
+      This id doesn't always match with the id in auth_user. There could be multiple
+      user_ids for the same user_username. For those cases, use user_id from source
+      table auth_user for that user_username.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: useractivity_path
+    description: str, relative url path of page when the answer to a problem is shown
+      event.
+  - name: useractivity_problem_id
+    description: str, Unique ID for this problem in a course, formatted as block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}.
+    tests:
+    - not_null
+  - name: useractivity_timestamp
+    description: timestamp, time for this show answer event
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+        "useractivity_timestamp"]
+
+- name: int__mitxresidential__user_courseactivity_video
+  description: Residential MITx learners discussion forum activities within a course
+  columns:
+  - name: user_username
+    description: str, username on Residential MITx
+    tests:
+    - not_null
+  - name: user_id
+    description: int, the edX user ID extracted from context field. This id doesn't
+      always match with the id in auth_user. There could be multiple user_ids for
+      the same user_username. For those cases, use user_id from source table auth_user
+      for that user_username.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
+    tests:
+    - not_null
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The value can only be browser for video event as MITx Online doesn't have a
+      mobile app at this time.
+    tests:
+    - not_null
+  - name: useractivity_event_type
+    description: >
+      str, type of video event triggered. e.g. play_video, pause_video, stop_video,
+      complete_video, etc.
+      A list of video events can be found https://edx.readthedocs.io/projects/devdata/en/latest/
+      internal_data_formats/tracking_logs/student_event_types.html#video-interaction-events
+    tests:
+    - not_null
+  - name: useractivity_page_url
+    description: str, url of the page the user was visiting when the event was emitted.
+  - name: useractivity_video_id
+    description: str, hash code for the video being watched. This value is the last
+      part of coursestructure_block_id string
+    tests:
+    - not_null
+  - name: useractivity_video_duration
+    description: number, The length of the video file, in seconds.
+  - name: useractivity_video_currenttime
+    description: number, The time in the video when this event was emitted. May be
+      Null for load_video or seek_video events.
+  - name: useractivity_video_old_time
+    description: number, time in the video, in seconds, at which the user chose to
+      go to a different point in time for seek_video event
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'seek_video'"
+  - name: useractivity_video_new_time
+    description: number, time in the video, in seconds, that the user selected as
+      the destination point for seek_video event
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'seek_video'"
+  - name: useractivity_video_new_speed
+    description: number, new speed that the user selected for the video to play for
+      speed_change_video event. e.g. 0.75, 1.0, 1.25, 1.50.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'speed_change_video'"
+  - name: useractivity_video_old_speed
+    description: number, old speed at which the video was playing for speed_change_video
+      event.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "useractivity_event_type = 'speed_change_video'"
+  - name: useractivity_timestamp
+    description: timestamp, time when this event was emitted
+    tests:
+    - not_null
+
+- name: int__mitxresidential__user_courseactivities
+  description: Residential MITx learners activities aggregated statistics per course
+  columns:
+  - name: user_username
+    description: str, username on Residential MITx
+    tests:
+    - not_null
+  - name: user_id
+    description: int, the edX user ID extracted from context field in tracking log.
+      This id doesn't always match with the id in auth_user. There could be multiple
+      user_ids for the same user_username. For those cases, use user_id from source
+      table auth_user for that user_username.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
+    tests:
+    - not_null
+  - name: courseactivity_num_events
+    description: int, number of tracking log events
+    tests:
+    - not_null
+  - name: courseactivity_num_days_activity
+    description: int, number of days with activity
+    tests:
+    - not_null
+  - name: courseactivity_first_event_timestamp
+    description: timestamp, timestamp of user's first event within a course
+    tests:
+    - not_null
+  - name: courseactivity_last_event_timestamp
+    description: timestamp, timestamp of user's last event within a course
+    tests:
+    - not_null
+  - name: courseactivity_num_play_video
+    description: int, number of play_video events
+  - name: courseactivity_num_unique_play_video
+    description: int, number of unique videos played within a course
+  - name: courseactivity_num_chapters_visited
+    description: int, number of unique chapters visited within a course
+  - name: courseactivity_last_play_video_timestamp
+    description: timestamp, timestamp of user's last play_video event within a course
+  - name: courseactivity_last_problem_check_timestamp
+    description: timestamp, timestamp of user's last problem_check event within a
+      course
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id"]
+
+- name: int__mitxresidential__user_courseactivities_daily
+  description: Residential MITx learners activities aggregated daily per course
+  columns:
+  - name: user_username
+    description: str, username on Residential MITx
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+      for course runs since Fall 2014, {org}/{course number}/{run} for older runs
+    tests:
+    - not_null
+  - name: courseactivity_num_events
+    description: int, number of tracking log events (including all course activities)
+    tests:
+    - not_null
+  - name: courseactivity_date
+    description: date, date that user has any kind of activities in the course
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
