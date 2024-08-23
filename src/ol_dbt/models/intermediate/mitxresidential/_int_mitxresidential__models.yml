@@ -496,13 +496,6 @@ models:
     description: str, username on Residential MITx
     tests:
     - not_null
-  - name: user_id
-    description: int, the edX user ID extracted from context field in tracking log.
-      This id doesn't always match with the id in auth_user. There could be multiple
-      user_ids for the same user_username. For those cases, use user_id from source
-      table auth_user for that user_username.
-    tests:
-    - not_null
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}.
     tests:

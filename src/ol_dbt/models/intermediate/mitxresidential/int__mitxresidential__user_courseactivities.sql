@@ -36,7 +36,6 @@ with course_activities as (
 , all_course_activities_stats as (
     select
         course_activities.user_username
-        , course_activities.user_id
         , course_activities.courserun_readable_id
         , count(distinct date(from_iso8601_timestamp(course_activities.useractivity_timestamp)))
         as courseactivity_num_days_activity
@@ -46,7 +45,6 @@ with course_activities as (
     from course_activities
     group by
         course_activities.user_username
-        , course_activities.user_id
         , course_activities.courserun_readable_id
 )
 
