@@ -1,3 +1,10 @@
+"""DEPRECATION NOTICE: (TMM 2024-08-23)
+
+The logic in this module is deprecated in favor of the IO Manager interface.  For
+similar capabilities to what is found here please refer to
+src/ol_orchstrate/io_managers/filepath.py
+"""
+
 from pathlib import Path
 from typing import Optional
 
