@@ -43,7 +43,7 @@ with person_courses as (
             person_courses.user_id = user_info_combo.user_id
             and person_courses.courserun_readable_id = user_info_combo.courserunenrollment_courserun_readable_id
     left join micromasters_runs
-        on person_courses.courserun_readable_id = micromasters_runs.courserun_readable_id
+        on person_courses.courserun_readable_id = micromasters_runs.courserun_edxorg_readable_id
 )
 
 , edxorg_runs as (
