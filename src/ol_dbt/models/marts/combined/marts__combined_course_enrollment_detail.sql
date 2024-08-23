@@ -187,7 +187,7 @@ with combined_enrollments as (
         , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
-        , null as courserun_upgrade_deadline
+         , combined_enrollments.courserun_upgrade_deadline
     from mitxpro_enrollments
     inner join combined_enrollments
         on mitxpro_enrollments.courserunenrollment_id = combined_enrollments.courserunenrollment_id
