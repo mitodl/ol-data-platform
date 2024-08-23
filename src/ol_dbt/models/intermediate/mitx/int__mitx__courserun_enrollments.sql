@@ -54,7 +54,7 @@ with mitxonline_enrollments as (
         , courserun_readable_id
         , course_number
         , courserun_start_on
-        , null as courserun_upgrade_deadline
+        , courserun_upgrade_deadline
         , user_id
         , user_email
         , user_full_name
