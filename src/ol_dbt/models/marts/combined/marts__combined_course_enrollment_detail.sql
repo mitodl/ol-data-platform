@@ -85,6 +85,7 @@ with combined_enrollments as (
         , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
+        , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
         on
@@ -134,6 +135,7 @@ with combined_enrollments as (
         , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
+        , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
         on
@@ -185,6 +187,7 @@ with combined_enrollments as (
         , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
+        , null as courserun_upgrade_deadline
     from mitxpro_enrollments
     inner join combined_enrollments
         on mitxpro_enrollments.courserunenrollment_id = combined_enrollments.courserunenrollment_id
@@ -235,6 +238,7 @@ with combined_enrollments as (
         , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
+        , null as courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
         on
@@ -263,6 +267,7 @@ select
     , courserun_start_on
     , courserun_end_on
     , courserun_title
+    , courserun_upgrade_deadline
     , courseruncertificate_created_on
     , courseruncertificate_is_earned
     , courseruncertificate_url

@@ -110,6 +110,7 @@ with enrollments as (
         , mitxonline_runs.course_number
         , mitxonline_runs.course_id
         , mitxonline_runs.courserun_start_on
+        , mitxonline_runs.courserun_upgrade_deadline
         , mitxonline_users.user_username
         , mitxonline_users.user_email
         , mitxonline_users.user_edxorg_username

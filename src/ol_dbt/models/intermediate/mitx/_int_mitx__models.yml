@@ -261,6 +261,9 @@ models:
     description: str, title of the course run, maybe blank for some edX.org runs
   - name: courserun_start_on
     description: timestamp, date and time when the course starts
+  - name: courserun_upgrade_deadline
+    description: timestamp, specifying the date time beyond which users can not enroll
+      in paid course mode
   - name: user_email
     description: str, current user email on edX.org or MITxOnline. For edx.org, learners
       can update their emails, so this is not necessary the same email as when learner

@@ -36,6 +36,7 @@ with mitx_enrollments as (
         , mitx_enrollments.courserunenrollment_enrollment_mode
         , mitx_enrollments.courserunenrollment_enrollment_status
         , mitx_enrollments.courserunenrollment_is_edx_enrolled
+        , mitx_enrollments.courserun_upgrade_deadline
         , mitx_enrollments.user_id
         , mitx_enrollments.courserun_id
         , mitx_enrollments.courserun_title
@@ -62,6 +63,7 @@ with mitx_enrollments as (
         , mitx_enrollments.courserunenrollment_enrollment_mode
         , mitx_enrollments.courserunenrollment_enrollment_status
         , mitx_enrollments.courserunenrollment_is_edx_enrolled
+        , mitx_enrollments.courserun_upgrade_deadline
         , mitx_enrollments.user_id
         , mitx_enrollments.courserun_id
         , mitx_enrollments.courserun_title
@@ -88,6 +90,7 @@ with mitx_enrollments as (
         , mitxpro_enrollments.courserunenrollment_enrollment_mode
         , mitxpro_enrollments.courserunenrollment_enrollment_status
         , mitxpro_enrollments.courserunenrollment_is_edx_enrolled
+        , null as courserun_upgrade_deadline
         , mitxpro_enrollments.user_id
         , mitxpro_enrollments.courserun_id
         , mitxpro_enrollments.courserun_title
@@ -113,6 +116,7 @@ with mitx_enrollments as (
         , null as courserunenrollment_enrollment_mode
         , courserunenrollment_enrollment_status
         , null as courserunenrollment_is_edx_enrolled
+        , null as courserun_upgrade_deadline
         , user_id
         , courserun_id
         , courserun_title
