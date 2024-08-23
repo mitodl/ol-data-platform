@@ -238,7 +238,7 @@ with combined_enrollments as (
         , combined_enrollments.courserungrade_is_passing
         , combined_courseruns.course_title
         , combined_courseruns.course_readable_id
-        , null as courserun_upgrade_deadline
+         , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
         on
