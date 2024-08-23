@@ -5,7 +5,7 @@ with course_activities as (
     where courserun_readable_id is not null
 )
 
-select
+select distinct
     user_username
     , courserun_readable_id
     , user_id

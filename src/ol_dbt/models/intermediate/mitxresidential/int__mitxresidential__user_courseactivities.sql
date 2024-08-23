@@ -11,23 +11,6 @@ with course_activities as (
     select * from {{ ref('int__mitxresidential__user_courseactivity_problemcheck') }}
 )
 
-, course_state as (
-    select * from {{ ref('stg__mitxonline__openedx__mysql__courseware_studentmodule') }}
-)
-
-, course_chapters_stats as (
-    select
-        course_state.user_id
-        , course_state.courserun_readable_id
-        , count(distinct course_structure.coursestructure_chapter_id) as courseactivity_num_chapters_visited
-    from course_state
-    inner join course_structure
-        on
-            course_state.courserun_readable_id = course_structure.courserun_readable_id
-            and course_state.coursestructure_block_id = course_structure.coursestructure_block_id
-    group by course_state.user_id, course_state.courserun_readable_id
-)
-
 , problem_check_stats as (
     select
         user_username
@@ -76,7 +59,6 @@ select
     , play_video_stats.courseactivity_num_play_video
     , play_video_stats.courseactivity_last_play_video_timestamp
     , problem_check_stats.courseactivity_last_problem_check_timestamp
-    , course_chapters_stats.courseactivity_num_chapters_visited
     , all_course_activities_stats.courseactivity_first_event_timestamp
     , all_course_activities_stats.courseactivity_last_event_timestamp
 from all_course_activities_stats
@@ -88,7 +70,3 @@ left join problem_check_stats
     on
         all_course_activities_stats.user_username = problem_check_stats.user_username
         and all_course_activities_stats.courserun_readable_id = problem_check_stats.courserun_readable_id
-left join course_chapters_stats
-    on
-        all_course_activities_stats.user_id = course_chapters_stats.user_id
-        and all_course_activities_stats.courserun_readable_id = course_chapters_stats.courserun_readable_id

@@ -51,7 +51,6 @@ with source as (
         , cast(json_query(context, 'lax $.user_id' omit quotes) as integer) as user_id
         , json_query(context, 'lax $.org_id' omit quotes) as org_id
         , json_query(context, 'lax $.path' omit quotes) as useractivity_path
-        --- use regex here to preserve the nanoseconds
         , to_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace("time", '(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)', '$1T$2$3')
         )) as useractivity_timestamp

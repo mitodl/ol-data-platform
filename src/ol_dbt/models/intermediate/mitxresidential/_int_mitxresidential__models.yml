@@ -241,7 +241,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
-        "useractivity_timestamp"]
+        "useractivity_problem_student_answers", "useractivity_problem_attempts", "useractivity_timestamp"]
 
 - name: int__mitxresidential__user_courseactivity_problemsubmitted
   description: Residential MITx learners problem submission activities within a course
@@ -445,6 +445,11 @@ models:
       internal_data_formats/tracking_logs/student_event_types.html#video-interaction-events
     tests:
     - not_null
+  - name: useractivity_event_object
+    description: object, it includes member fields that identify the specific video
+      event. Example, id, code, new_time, old_time, etc.
+    tests:
+    - not_null
   - name: useractivity_page_url
     description: str, url of the page the user was visiting when the event was emitted.
   - name: useractivity_video_id
@@ -459,10 +464,8 @@ models:
       Null for load_video or seek_video events.
   - name: useractivity_video_old_time
     description: number, time in the video, in seconds, at which the user chose to
-      go to a different point in time for seek_video event
-    tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'seek_video'"
+      go to a different point in time for seek_video event. Small seek_video events
+      may not have old time recorded in this dataset.
   - name: useractivity_video_new_time
     description: number, time in the video, in seconds, that the user selected as
       the destination point for seek_video event
@@ -524,8 +527,6 @@ models:
     description: int, number of play_video events
   - name: courseactivity_num_unique_play_video
     description: int, number of unique videos played within a course
-  - name: courseactivity_num_chapters_visited
-    description: int, number of unique chapters visited within a course
   - name: courseactivity_last_play_video_timestamp
     description: timestamp, timestamp of user's last play_video event within a course
   - name: courseactivity_last_problem_check_timestamp

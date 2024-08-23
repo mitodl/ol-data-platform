@@ -11,6 +11,7 @@ select
     , user_id
     , useractivity_event_source
     , useractivity_event_type
+    , useractivity_event_object
     , useractivity_page_url
     , useractivity_timestamp
     , json_query(useractivity_event_object, 'lax $.id' omit quotes) as useractivity_video_id
