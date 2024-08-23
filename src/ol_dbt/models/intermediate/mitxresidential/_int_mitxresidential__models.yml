@@ -126,6 +126,8 @@ models:
     description: str, user's email associated with their account
     tests:
     - not_null
+  - name: user_full_name
+    description: str, user's full name on Residential MITx open edx platform.
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxresidential__openedx__courserun_enrollment')

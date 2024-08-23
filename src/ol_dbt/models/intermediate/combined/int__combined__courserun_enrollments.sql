@@ -10,6 +10,14 @@ with mitx_enrollments as (
     select * from {{ ref('int__bootcamps__courserunenrollments') }}
 )
 
+, residential_enrollments as (
+    select * from {{ ref('int__mitxresidential__courserun_enrollments') }}
+)
+
+, residential_grades as (
+    select * from {{ ref('int__mitxresidential__courserun_grades') }}
+)
+
 , mitx_grades as (
     select * from {{ ref('int__mitx__courserun_grades') }}
 )
@@ -123,6 +131,31 @@ with mitx_enrollments as (
         , null as courserungrade_grade
         , null as courserungrade_is_passing
     from bootcamps_enrollments
+
+    union all
+
+    select
+        '{{ var("residential") }}' as platform
+        , residential_enrollments.courserunenrollment_id
+        , residential_enrollments.courserunenrollment_is_active
+        , residential_enrollments.courserunenrollment_created_on
+        , residential_enrollments.courserunenrollment_enrollment_mode
+        , null as courserunenrollment_enrollment_status
+        , true as courserunenrollment_is_edx_enrolled
+        , residential_enrollments.user_id
+        , null as courserun_id
+        , residential_enrollments.courserun_title
+        , residential_enrollments.courserun_readable_id
+        , residential_enrollments.user_username
+        , residential_enrollments.user_email
+        , residential_enrollments.user_full_name
+        , residential_grades.courserungrade_grade
+        , null as courserungrade_is_passing
+    from residential_enrollments
+    left join residential_grades
+        on
+            residential_enrollments.courserun_readable_id = residential_grades.courserun_readable_id
+            and residential_enrollments.user_id = residential_grades.user_id
 )
 
 select

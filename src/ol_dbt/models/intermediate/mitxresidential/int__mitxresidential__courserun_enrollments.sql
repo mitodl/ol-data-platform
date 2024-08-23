@@ -21,6 +21,7 @@ with enrollments as (
         , runs.courserun_title
         , users.user_username
         , users.user_email
+        , users.user_full_name
     from enrollments
     left join runs on enrollments.courserun_readable_id = runs.courserun_readable_id
     left join users on enrollments.user_id = users.user_id
