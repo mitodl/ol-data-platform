@@ -271,6 +271,9 @@ models:
   - name: courserun_title
     description: string, title of the course run on the corresponding platform. Maybe
       blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
+  - name: courserun_upgrade_deadline
+    description: timestamp, specifying the date time beyond which users can not enroll
+      in paid course mode
   - name: courseruncertificate_created_on
     description: timestamp, date and time when the course certificate was initially
       created

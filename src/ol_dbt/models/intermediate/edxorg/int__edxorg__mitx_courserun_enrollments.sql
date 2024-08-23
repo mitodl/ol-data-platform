@@ -23,6 +23,10 @@ with person_courses as (
         and courserunenrollment_courserun_readable_id is not null
 )
 
+, micromasters_runs as (
+    select * from {{ ref('stg__micromasters__app__postgres__courses_courserun') }}
+)
+
 , edxorg_enrollments as (
     select
         person_courses.user_id
@@ -31,12 +35,15 @@ with person_courses as (
         , person_courses.courserunenrollment_created_on
         , person_courses.courserunenrollment_enrollment_mode
         , person_courses.courserunenrollment_is_active
+        , micromasters_runs.courserun_upgrade_deadline
     from
         person_courses
     inner join user_info_combo
         on
             person_courses.user_id = user_info_combo.user_id
             and person_courses.courserun_readable_id = user_info_combo.courserunenrollment_courserun_readable_id
+    left join micromasters_runs
+        on person_courses.courserun_readable_id = micromasters_runs.courserun_edxorg_readable_id
 )
 
 , edxorg_runs as (
@@ -54,10 +61,6 @@ with person_courses as (
 
 , micromasters_lines as (
     select * from {{ ref('stg__micromasters__app__postgres__ecommerce_line') }}
-)
-
-, micromasters_runs as (
-    select * from {{ ref('stg__micromasters__app__postgres__courses_courserun') }}
 )
 
 , micromasters_courses as (
@@ -99,6 +102,7 @@ with person_courses as (
         , micromasters_users.user_mitxonline_username
         , edxorg_runs.courserun_title
         , edxorg_runs.courserun_start_date as courserun_start_on
+        , edxorg_enrollments.courserun_upgrade_deadline
         , edxorg_users.user_country as user_address_country
         , coalesce(edxorg_users.user_full_name, micromasters_users.user_full_name) as user_full_name
         , case

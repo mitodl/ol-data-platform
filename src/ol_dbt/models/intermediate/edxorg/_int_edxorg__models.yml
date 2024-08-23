@@ -133,6 +133,9 @@ models:
     - not_null
   - name: courserun_start_on
     description: timestamp, date and time when the course starts
+  - name: courserun_upgrade_deadline
+    description: timestamp, specifying the date time beyond which users can not enroll
+      in paid course mode
   - name: user_username
     description: str, username of a learner on the edX platform
     tests:
