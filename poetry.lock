@@ -4384,21 +4384,21 @@ devenv = ["check-manifest", "pytest (>=4.3)", "pytest-cov", "pytest-mock (>=3.3)
 
 [[package]]
 name = "universal-pathlib"
-version = "0.2.2"
+version = "0.2.3"
 description = "pathlib api extended to use fsspec backends"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "universal_pathlib-0.2.2-py3-none-any.whl", hash = "sha256:9bc176112d593348bb29806a47e409eda78dff8d95391d66dd6f85e443aaa75d"},
-    {file = "universal_pathlib-0.2.2.tar.gz", hash = "sha256:6bc215548792ad5db3553708b1c19bafd9e2fa1667dc925ed404c95e52ae2f13"},
+    {file = "universal_pathlib-0.2.3-py3-none-any.whl", hash = "sha256:4e0f6f85ca7ce66aec866a9c5f32d4a081858d2e58c70a6be84fb2df1f2806d3"},
+    {file = "universal_pathlib-0.2.3.tar.gz", hash = "sha256:22f5f289fedec4b663956596742652e2177bca24661b6c8a173f5974cfee0052"},
 ]
 
 [package.dependencies]
-fsspec = ">=2022.1.0"
+fsspec = ">=2022.1.0,<2024.3.1 || >2024.3.1"
 
 [package.extras]
-dev = ["adlfs", "aiohttp", "cheroot", "gcsfs", "moto[s3,server] (<5)", "mypy (==1.8.0)", "packaging", "pydantic", "pydantic-settings", "pylint (==2.17.4)", "pytest (==8.0.0)", "pytest-cov (==4.1.0)", "pytest-mock (==3.12.0)", "pytest-sugar (==0.9.7)", "requests", "s3fs", "webdav4[fsspec]", "wsgidav"]
-tests = ["mypy (==1.8.0)", "packaging", "pylint (==2.17.4)", "pytest (==8.0.0)", "pytest-cov (==4.1.0)", "pytest-mock (==3.12.0)", "pytest-sugar (==0.9.7)"]
+dev = ["adlfs", "aiohttp", "cheroot", "gcsfs", "moto[s3,server] (<5)", "mypy (==1.10.0)", "packaging", "pydantic", "pydantic-settings", "pylint (==2.17.4)", "pytest (==8.0.0)", "pytest-cov (==4.1.0)", "pytest-mock (==3.12.0)", "pytest-mypy-plugins (==3.1.2)", "pytest-sugar (==0.9.7)", "requests", "s3fs", "smbprotocol", "webdav4[fsspec]", "wsgidav"]
+tests = ["mypy (==1.10.0)", "packaging", "pylint (==2.17.4)", "pytest (==8.0.0)", "pytest-cov (==4.1.0)", "pytest-mock (==3.12.0)", "pytest-mypy-plugins (==3.1.2)", "pytest-sugar (==0.9.7)"]
 
 [[package]]
 name = "uritemplate"
