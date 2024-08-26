@@ -29,7 +29,8 @@ vars:
   schema_suffix: dev
 
   open_learning:
-    platforms: ['Bootcamps', 'xPro', 'MITx Online', 'MicroMasters', 'edX.org']
+    platforms: ['Bootcamps', 'xPro', 'MITx Online', 'MicroMasters', 'edX.org', 'Residential
+        MITx']
     bootcamps: 'Bootcamps'
     edxorg: 'edX.org'
     mitxpro: 'xPro'

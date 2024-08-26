@@ -146,6 +146,7 @@ with mitx_enrollments as (
         , residential_enrollments.courserunenrollment_enrollment_mode
         , null as courserunenrollment_enrollment_status
         , true as courserunenrollment_is_edx_enrolled
+        , null as courserun_upgrade_deadline
         , residential_enrollments.user_id
         , null as courserun_id
         , residential_enrollments.courserun_title
@@ -154,7 +155,7 @@ with mitx_enrollments as (
         , residential_enrollments.user_email
         , residential_enrollments.user_full_name
         , residential_grades.courserungrade_grade
-        , null as courserungrade_is_passing
+        , if(residential_grades.courserungrade_letter_grade != '', true, false) as courserungrade_is_passing
     from residential_enrollments
     left join residential_grades
         on
@@ -172,7 +173,9 @@ select
     , if(combined_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned
 from combined_enrollments
 left join combined_courseruns
-    on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    on
+        combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+        and combined_enrollments.platform = combined_courseruns.platform
 left join combined_certificates
     on
         combined_enrollments.platform = combined_certificates.platform

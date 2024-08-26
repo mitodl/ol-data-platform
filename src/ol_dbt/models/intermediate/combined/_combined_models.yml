@@ -121,7 +121,7 @@ models:
       to 1. Null for bootcamps
   - name: courserungrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
-      set for this course on edX.org or MITxOnline or xPro. Null for bootcamps
+      set for this course on the corresponding platform. Null for bootcamps
   - name: course_title
     description: str, title of the course. May be null for some old edX.org runs.
   - name: course_readable_id

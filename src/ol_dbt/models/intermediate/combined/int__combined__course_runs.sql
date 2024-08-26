@@ -26,6 +26,18 @@ with mitx_courses as (
     select * from {{ ref('int__bootcamps__course_runs') }}
 )
 
+, residential_runs as (
+    select
+        *
+        , concat(
+            element_at(split(courserun_readable_id, '+'), 1)
+            , '+'
+            , element_at(split(courserun_readable_id, '+'), 2)
+        ) as course_readable_id
+    from {{ ref('int__mitxresidential__courseruns') }}
+)
+
+
 , combined_runs as (
     select
         '{{ var("mitxonline") }}' as platform
@@ -130,6 +142,30 @@ with mitx_courses as (
     from bootcamps_runs
     left join bootcamps_courses on bootcamps_runs.course_id = bootcamps_courses.course_id
 
+    union all
+
+    select
+        '{{ var("residential") }}' as platform
+        , courserun_title as course_title
+        , course_readable_id
+        , courserun_title
+        , courserun_readable_id
+        , null as courserun_url
+        , courserun_start_on
+        , courserun_end_on
+        , null as courserun_is_live
+        , case
+            when
+                courserun_end_on is null
+                and from_iso8601_timestamp(courserun_start_on) <= current_date
+                then true
+            when
+                from_iso8601_timestamp(courserun_start_on) <= current_date
+                and from_iso8601_timestamp(courserun_end_on) > current_date
+                then true
+            else false
+        end as courserun_is_current
+    from residential_runs
 )
 
 select * from combined_runs

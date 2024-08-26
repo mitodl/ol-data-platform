@@ -7,7 +7,7 @@ with enrollments as (
 )
 
 , users as (
-    select * from {{ ref('stg__mitxresidential__openedx__auth_user') }}
+    select * from {{ ref('int__mitxresidential__users') }}
 )
 
 , courserun_enrollments as (
