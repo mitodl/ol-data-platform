@@ -74,6 +74,7 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
+        , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courseruncertificate_url
@@ -126,6 +127,7 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
+        , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courseruncertificate_url
@@ -180,6 +182,7 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
+        , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courseruncertificate_url
@@ -231,6 +234,7 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
+        , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courseruncertificate_url
@@ -282,6 +286,7 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
+        , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courseruncertificate_url
@@ -340,6 +345,7 @@ select
     , user_email
     , user_full_name
     , user_highest_education
+    , user_gender
     , user_id
     , user_username
 from combined_enrollment_detail

@@ -333,6 +333,8 @@ models:
   - name: user_highest_education
     description: str, user's highest education on the platform user enrolled. May
       be blank.
+  - name: user_gender
+    description: str, gender on the platform user enrolled
   - name: user_id
     description: int, user ID on the corresponding platform
     tests:
