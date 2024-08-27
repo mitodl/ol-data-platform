@@ -12,11 +12,6 @@ with mitx__users as (
     select * from {{ ref('int__bootcamps__users') }}
 )
 
-, residential_users as (
-    select * from {{ ref('int__mitxresidential__users') }}
-)
-
-
 , combined_enrollments as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
@@ -41,12 +36,10 @@ with mitx__users as (
         , user_edxorg_id
         , null as user_mitxpro_id
         , null as user_bootcamps_id
-        , null as user_mitx_id
         , user_mitxonline_username
         , user_edxorg_username
         , null as user_mitxpro_username
         , null as user_bootcamps_username
-        , null as user_mitx_username
         , case
             when user_is_active_on_mitxonline and user_joined_on_mitxonline > user_joined_on_edxorg
                 then user_mitxonline_email
@@ -93,12 +86,10 @@ with mitx__users as (
         , null as user_edxorg_id
         , user_id as user_mitxpro_id
         , null as user_bootcamps_id
-        , null as user_mitx_id
         , null as user_mitxonline_username
         , null as user_edxorg_username
         , user_username as user_mitxpro_username
         , null as user_bootcamps_username
-        , null as user_mitx_username
         , user_email
         , user_joined_on
         , user_last_login
@@ -121,12 +112,10 @@ with mitx__users as (
         , null as user_edxorg_id
         , null as user_mitxpro_id
         , user_id as user_bootcamps_id
-        , null as user_mitx_id
         , null as user_mitxonline_username
         , null as user_edxorg_username
         , null as user_mitxpro_username
         , user_username as user_bootcamps_username
-        , null as user_mitx_username
         , user_email
         , user_joined_on
         , user_last_login
@@ -141,34 +130,6 @@ with mitx__users as (
         , user_job_title
         , user_industry
     from bootcamps_users
-
-    union all
-
-    select
-        null as user_mitxonline_id
-        , null as user_edxorg_id
-        , null as user_mitxpro_id
-        , null as user_bootcamps_id
-        , user_id as user_mitx_id
-        , null as user_mitxonline_username
-        , null as user_edxorg_username
-        , null as user_mitxpro_username
-        , null as user_bootcamps_username
-        , user_username as user_mitx_username
-        , user_email
-        , user_joined_on
-        , user_last_login
-        , user_is_active
-        , '{{ var("residential") }}' as platforms
-        , user_full_name
-        , user_address_country
-        , user_highest_education
-        , user_gender
-        , user_birth_year
-        , null as user_company
-        , null as user_job_title
-        , null as user_industry
-    from residential_users
 )
 
 select
@@ -189,12 +150,10 @@ select
     , combined_users.user_edxorg_id
     , combined_users.user_mitxpro_id
     , combined_users.user_bootcamps_id
-    , combined_users.user_mitx_id
     , combined_users.user_mitxonline_username
     , combined_users.user_edxorg_username
     , combined_users.user_mitxpro_username
     , combined_users.user_bootcamps_username
-    , combined_users.user_mitx_username
     , course_stats.num_of_course_enrolled
     , course_stats.num_of_course_passed
 from combined_users

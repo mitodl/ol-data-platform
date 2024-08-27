@@ -59,8 +59,6 @@ models:
     description: int, user ID on MITxPRO
   - name: user_bootcamps_id
     description: int, user ID on bootcamps
-  - name: user_mitx_id
-    description: int, open user ID on Residential MITx
   - name: user_mitxonline_username
     description: string, username on MITxOnline
   - name: user_edxorg_username
@@ -69,8 +67,6 @@ models:
     description: string, username on MITxPRO
   - name: user_bootcamps_username
     description: string, username on bootcamps
-  - name: user_mitx_username
-    description: string, username on Residential MITx
   - name: num_of_course_enrolled
     description: number, the number of courses learner enrolled based on their emails
       so this counts as same person if they use the email to register on different
@@ -82,7 +78,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_mitxonline_username", "user_edxorg_username", "user_mitxpro_username",
-        "user_bootcamps_username", "user_mitx_username", "platforms"]
+        "user_bootcamps_username", "platforms"]
 
 - name: marts__combined__orders
   description: ecommerce regular b2c orders
