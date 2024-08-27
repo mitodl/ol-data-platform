@@ -83,8 +83,8 @@ with combined_enrollments as (
         , mitxonline_completed_orders.order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
-        , combined_courseruns.course_title
-        , combined_courseruns.course_readable_id
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
@@ -135,8 +135,8 @@ with combined_enrollments as (
         , micromasters_completed_orders.order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
-        , combined_courseruns.course_title
-        , combined_courseruns.course_readable_id
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
@@ -189,8 +189,8 @@ with combined_enrollments as (
         , mitxpro_completed_orders.receipt_reference_number as order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
-        , combined_courseruns.course_title
-        , combined_courseruns.course_readable_id
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
     from mitxpro_enrollments
     inner join combined_enrollments
@@ -240,8 +240,8 @@ with combined_enrollments as (
         , bootcamps_completed_orders.order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
-        , combined_courseruns.course_title
-        , combined_courseruns.course_readable_id
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
@@ -291,15 +291,8 @@ with combined_enrollments as (
         , null as order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
-        , coalesce(combined_courseruns.course_title, combined_enrollments.courserun_title) as course_title
-        , coalesce(
-            combined_courseruns.course_readable_id
-            , concat(
-                element_at(split(combined_courseruns.course_readable_id, '+'), 1)
-                , '+'
-                , element_at(split(combined_courseruns.course_readable_id, '+'), 2)
-            )
-        ) as course_readable_id
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users

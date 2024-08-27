@@ -29,11 +29,7 @@ with mitx_courses as (
 , residential_runs as (
     select
         *
-        , concat(
-            element_at(split(courserun_readable_id, '+'), 1)
-            , '+'
-            , element_at(split(courserun_readable_id, '+'), 2)
-        ) as course_readable_id
+        , {{ extract_course_readable_id('courserun_readable_id') }} as course_readable_id
     from {{ ref('int__mitxresidential__courseruns') }}
 )
 

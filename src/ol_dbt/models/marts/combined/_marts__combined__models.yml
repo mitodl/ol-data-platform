@@ -246,12 +246,14 @@ models:
       and platform.
   - name: course_readable_id
     description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
-      Online and xPro courses, and {org}/{course} for edX.org courses. May be null
-      for some old edX.org runs, Bootcamps or Residential MITx courses. Examples include
-      MITx/6.00.2x and course-v1:MITxT+14.740x.
+      Online, xPro or Residential courses, and {org}/{course} for edX.org courses.
+      May be null for some Bootcamps courses. Examples include MITx/6.00.2x and course-v1:MITxT+14.740x.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'Bootcamps'"
   - name: course_title
-    description: str, title of the course. May be null for some old edX.org runs or
-      Residential MITx courses
+    description: str, title of the course. May be null for some edX.org and Residential
+      courses
   - name: courserun_end_on
     description: timestamp, date and time when the course run ends. May be Null.
   - name: courserun_id

@@ -19,3 +19,19 @@
               then regexp_extract(page, '{{ course_id_regex }}')
       end
 {% endmacro %}
+
+
+{% macro extract_course_readable_id(courserun_readable_id) %}
+    ---Output: course_readable_id in course-v1:{org}+{course number} format
+    ---Input: courserun_readable_id in course-v1:{org}+{course number}+{run tag} for courses created since Fall 2014,
+    --- {org}/{course number}/{run tag} for courses created before Fall 2014
+     case
+          when position('course-v' in {{ courserun_readable_id }} ) > 0
+             then regexp_extract({{ courserun_readable_id }}, 'course-v(\d{1}):([\w\.\-]+)\+([a-zA-Z0-9.-]+)')
+          else
+             concat(
+                  'course-v1:'
+                  , replace(regexp_extract({{ courserun_readable_id }}, '([\w]+)/([a-zA-Z0-9.-]+)'), '/', '+')
+             )
+      end
+{% endmacro %}

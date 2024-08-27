@@ -165,8 +165,11 @@ with mitx_enrollments as (
 
 select
     combined_enrollments.*
-    , combined_courseruns.course_title
-    , combined_courseruns.course_readable_id
+    , coalesce(combined_courseruns.course_title, combined_enrollments.courserun_title) as course_title
+    , coalesce(
+        combined_courseruns.course_readable_id
+        , {{ extract_course_readable_id('combined_enrollments.courserun_readable_id') }}
+    ) as course_readable_id
     , combined_certificates.courseruncertificate_created_on
     , combined_certificates.courseruncertificate_url
     , combined_certificates.courseruncertificate_uuid
