@@ -11,109 +11,53 @@ from dagster import (
     AssetExecutionContext,
     AssetIn,
     AssetKey,
-    AssetMaterialization,
     AssetOut,
     AutoMaterializePolicy,
-    Config,
-    DagsterEventType,
     DataVersion,
-    DynamicOutput,
-    DynamicPartitionsDefinition,
-    EventRecordsFilter,
-    MultiPartitionKey,
     Output,
-    StaticPartitionsDefinition,
     asset,
     multi_asset,
 )
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
-from pydantic import Field
 
-from ol_orchestrate.lib.dagster_helpers import sanitize_mapping_key
 from ol_orchestrate.lib.openedx import un_nest_course_structure
-
-course_list_asset_key = (AssetKey("openedx", "raw_data", "course_list"),)
-
-# make this a lib module eventually
-openedx_source_platforms = StaticPartitionsDefinition(
-    ["residential", "xpro", "mitxonline"]
-)
-course_and_source_partitions = DynamicPartitionsDefinition(name="course_and_source")
-openedx_course_structures = DynamicPartitionsDefinition(name="course_structure")
-openedx_course_blocks = DynamicPartitionsDefinition(name="course_block")
-
-class CourseListConfig(Config):
-    edx_course_api_page_size: int = Field(
-        default=100,
-        description="The number of records to return per API request. This can be "
-        "modified to address issues with rate limiting.",
-    )
+from ol_orchestrate.partitions.openedx import OPENEDX_COURSE_AND_SOURCE_PARTITION
 
 
 @asset(
-    # partitions_def=,
-    key=course_list_asset_key,
-    group_name="openedx",
-    io_manager_key="s3file_io_manager",
-    auto_materialize_policy=AutoMaterializePolicy.eager(
-        max_materializations_per_minute=None
-    ),
+    key=AssetKey(["openedx", "courseware"]),
+    partitions_def=OPENEDX_COURSE_AND_SOURCE_PARTITION,
 )
-def course_list(context: AssetExecutionContext, config: CourseListConfig):
-    course_ids = []
-    course_id_generator = context.resources.openedx.get_edx_course_ids(
-        page_size=config.edx_course_api_page_size,
-    )
-    for result_set in course_id_generator:
-        course_ids.extend([course["id"] for course in result_set])
-    yield Output(course_ids)
+def openedx_live_courseware(context: AssetExecutionContext): ...  # noqa: ARG001
 
 
 @multi_asset(
     outs={
         "course_structure": AssetOut(
             key=AssetKey(("openedx", "raw_data", "course_structure")),
-            io_manager_key="s3file_io_manager",
             description=("A json file with the course structure information."),
-            auto_materialize_policy=AutoMaterializePolicy.eager(
-                max_materializations_per_minute=None
-            ),
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
         ),
         "course_blocks": AssetOut(
             key=AssetKey(("openedx", "raw_data", "course_blocks")),
-            io_manager_key="s3file_io_manager",
             description=(
                 "A json file containing the hierarchical representation"
                 "of the course structure information with course blocks."
             ),
-            auto_materialize_policy=AutoMaterializePolicy.eager(
-                max_materializations_per_minute=None
-            ),
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
         ),
     },
-    ins={"course_list": AssetIn(key=course_list_asset_key)},
-    partitions_def=course_and_source_partitions,
+    ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
+    partitions_def=OPENEDX_COURSE_AND_SOURCE_PARTITION,
     group_name="openedx",
+    required_resource_keys={"openedx"},
 )
-def course_structure(
-    context: AssetExecutionContext,
-    course_list: list[str],
-):
-    dagster_instance = context.instance
-    ## TODO: Is this correctly iterating over the list of course_ids?
-    input_asset_materialization_event = dagster_instance.get_event_records(
-        event_records_filter=EventRecordsFilter(
-            asset_key=context.asset_key_for_input("course_list"),
-            event_type=DagsterEventType.ASSET_MATERIALIZATION,
-            asset_partitions=[context.partiton_key],
-        ),
-        limit=1,
-    )[0]
-    course_id = input_asset_materialization_event.asset_materialization.metadata[
-        "course_id"
-    ]
-    course_structure = context.resources.openedx.get_course_structure_document(
+def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG001
+    partition_dimensions = context.partition_key.keys_by_dimension()
+    source_system = context.resources.openedx.deployment
+    course_id = partition_dimensions["course_key"]
+    course_structure = context.resources.openedx.client.get_course_structure_document(
         course_id
     )
     course_structure_document = json.load(course_structure.open())
@@ -144,8 +88,8 @@ def course_structure(
             course_id, course_structure_document, data_retrieval_timestamp
         ):
             blocks.write(block)
-    structure_object_key = f"{context.open_edx_deployment}_openedx_extracts/course_structure/{context.partition_key}/course_structures_{data_version}.json"  # noqa: E501
-    blocks_object_key = f"{context.open_edx_deployment}_openedx_extracts/course_blocks/{context.partition_key}/course_blocks_{data_version}.json"  # noqa: E501
+    structure_object_key = f"{source_system}_openedx_extracts/course_structure/{course_id}/course_structures_{data_version}.json"  # noqa: E501
+    blocks_object_key = f"{source_system}_openedx_extracts/course_blocks/{course_id}/course_blocks_{data_version}.json"  # noqa: E501
     yield Output(
         (structures_file, structure_object_key),
         output_name="flattened_course_structure",

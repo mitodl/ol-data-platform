@@ -1,18 +1,17 @@
-from typing import Literal
+from typing import Any, Literal
 
-from dagster import AssetSelection, Definitions, ScheduleDefinition, define_asset_job
-from dagster_aws.s3 import S3Resource
-
-from ol_orchestrate.assets.openedx import (
-    course_list,
-    course_structure,
+from dagster import (
+    create_repository_using_definitions_args,
 )
+
+from ol_orchestrate.assets.openedx import course_structure, openedx_live_courseware
 from ol_orchestrate.io_managers.filepath import (
     S3FileObjectIOManager,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.resources.openedx import OpenEdxApiClient
+from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.sensors.openedx import course_run_sensor
 
 if DAGSTER_ENV == "dev":
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
@@ -25,7 +24,7 @@ else:
 
 
 def open_edx_extract_job_config(
-    open_edx_deployment: Literal["residential", "mitxonline", "xpro"],
+    open_edx_deployment: Literal["mitx", "mitxonline", "xpro"],
     dagster_env: Literal["qa", "production"],
 ):
     client = vault.client.secrets.kv.v1.read_secret(
@@ -82,35 +81,24 @@ def edxorg_data_archive_config(dagster_env):
     }
 
 
-openedx_course_structures_job = define_asset_job(
-    name="extract_open_edx_data_to_ol_data_platform",
-    config=open_edx_extract_job_config(DAGSTER_ENV),
-    selection=AssetSelection.assets(course_list).downstream(),
-    # only include direct descendants
-    depth=1,
-    include_self=True,
-)
-
-
-retrieve_openedx_course_data = Definitions(
-    resources={
-        "io_manager": S3FileObjectIOManager(
-            bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
-            path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
-        ),
-        "vault": vault,
-        "openedx": OpenEdxApiClient.configure_at_launch(),
-    },
-    jobs=[openedx_course_structures_job],
-    assets=[
-        course_list,
-        course_structure,
-    ],
-    schedules=[
-        ScheduleDefinition(
-            name=f"{openedx_course_structures_job.name}_nightly",
-            cron_schedule="0 0 * * *",
-            job=openedx_course_structures_job,
+for deployment_name in ["mitx", "mitxonline", "xpro"]:
+    locals()[f"{deployment_name}_openedx_assets_definition"] = (
+        create_repository_using_definitions_args(
+            name=f"{deployment_name}_openedx_assets",
+            resources={
+                "io_manager": S3FileObjectIOManager(
+                    bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
+                    path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+                ),
+                "vault": vault,
+                "openedx": OpenEdxApiClientFactory(
+                    deployment=deployment_name, vault=vault
+                ),
+            },
+            assets=[
+                openedx_live_courseware,
+                course_structure,
+            ],
+            sensors=[course_run_sensor],
         )
-    ],
-)
+    )

@@ -1,11 +1,14 @@
 import time
 from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Optional, Self
 
 import httpx
-from dagster import ConfigurableResource
+from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from pydantic import Field, PrivateAttr, ValidationError, validator
+
+from ol_orchestrate.resources.secrets.vault import Vault
 
 TOO_MANY_REQUESTS = 429
 
@@ -161,3 +164,41 @@ class OpenEdxApiClient(ConfigurableResource):
         """
         request_url = f"{self.lms_url}/api/course-structure/v0/{course_id}/"
         return self._fetch_with_auth(request_url)
+
+    def get_course_outline(self, course_id: str):
+        request_url = (
+            f"{self.lms_url}/api/learning_sequences/v1/course_outline/{course_id}"
+        )
+        return self._fetch_with_auth(request_url)
+
+
+class OpenEdxApiClientFactory(ConfigurableResource):
+    deployment: str = Field(
+        description="The canonical name of the Ope edX deployment managed by "
+        "Open Learning engineering. Refer to https://github.com/mitodl/ol-infrastructure/blob/main/src/bridge/settings/openedx/types.py#L73"
+    )
+    _client: OpenEdxApiClient = PrivateAttr()
+    vault: ResourceDependency[Vault]
+
+    def _initialize_client(self) -> OpenEdxApiClient:
+        client_secrets = self.vault.client.secrets.kv.v1.read_secret(
+            mount_point="secret-data",
+            path=f"pipelines/edx/{self.deployment}/edx-oauth-client",
+        )["data"]
+
+        self._client = OpenEdxApiClient(
+            client_id=client_secrets["id"],
+            client_secret=client_secrets["secret"],
+            lms_url=client_secrets["url"],
+            studio_url=client_secrets["studio_url"],
+        )
+        return self._client
+
+    @property
+    def client(self) -> OpenEdxApiClient:
+        return self._client
+
+    @contextmanager
+    def yield_for_execution(self, context: InitResourceContext) -> Generator[Self]:  # noqa: ARG002
+        self._initialize_client()
+        yield self
