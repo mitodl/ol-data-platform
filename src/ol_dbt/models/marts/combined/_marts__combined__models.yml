@@ -7,26 +7,27 @@ models:
   columns:
   - name: user_email
     description: string, user email on the corresponding platform including xpro,
-      bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx Online
-      then the email will be chosen from the last platform they joined if their account
-      is active
+      bootcamps, edX.org, MITx Online, and Residential MITx. If the user is on edX.org
+      and MITx Online then the email will be chosen from the last platform they joined
+      if their account is active
     tests:
     - not_null
   - name: user_joined_on
     description: timestamp, user join timestamp on the corresponding platform including
-      xpro, bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx
-      Online then the timestamp will be chosen from the latest platform they joined
-      if their account is active
+      xpro, bootcamps, edX.org, MITx Online, and Residential MITx. If the user is
+      on edX.org and MITx Online then the timestamp will be chosen from the latest
+      platform they joined if their account is active
   - name: user_last_login
     description: timestamp, user last login on the corresponding platform including
-      xpro, bootcamps, edX.org, or MITx Online. If the user is on edX.org and MITx
-      Online then the timestamp will be chosen from the latest login if their account
-      is active
+      xpro, bootcamps, edX.org, MITx Online, and Residential MITx. If the user is
+      on edX.org and MITx Online then the timestamp will be chosen from the latest
+      login if their account is active
   - name: user_is_active
     description: boolean, indicating if user's account is active on the corresponding
-      platform including xpro, bootcamps, edX.org, or MITx Online. If the user is
-      on edX.org and MITx Online then it will be true if their MITx Online account
-      is active, otherwise it will default to their edX.org account active status.
+      platform including xpro, bootcamps, edX.org, MITx Online, and Residential MITx.
+      If the user is on edX.org and MITx Online then it will be true if their MITx
+      Online account is active, otherwise it will default to their edX.org account
+      active status.
   - name: platforms
     description: string, application where the data is from
     tests:
@@ -241,17 +242,14 @@ models:
       and platform.
   - name: course_readable_id
     description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
-      Online and xPro courses, and {org}/{course} for edX.org courses. May be null
-      for some old edX.org runs and Bootcamps courses. Examples include MITx/6.00.2x
-      and course-v1:MITxT+14.740x.
+      Online, xPro or Residential courses, and {org}/{course} for edX.org courses.
+      May be null for some Bootcamps courses. Examples include MITx/6.00.2x and course-v1:MITxT+14.740x.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+        row_condition: "platform != 'Bootcamps'"
   - name: course_title
-    description: str, title of the course. May be null for some old edX.org runs.
-    tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'edX.org'"
+    description: str, title of the course. May be null for some edX.org and Residential
+      courses
   - name: courserun_end_on
     description: timestamp, date and time when the course run ends. May be Null.
   - name: courserun_id
@@ -335,6 +333,8 @@ models:
   - name: user_highest_education
     description: str, user's highest education on the platform user enrolled. May
       be blank.
+  - name: user_gender
+    description: str, gender on the platform user enrolled
   - name: user_id
     description: int, user ID on the corresponding platform
     tests:
@@ -356,6 +356,9 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id", "order_reference_number"]
       row_condition: "platform='Bootcamps'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserunenrollment_id"]
+      row_condition: "platform ='Residential MITx'"
 
 - name: marts__combined_program_enrollment_detail
   description: Mart model for program enrollments and certificates from different

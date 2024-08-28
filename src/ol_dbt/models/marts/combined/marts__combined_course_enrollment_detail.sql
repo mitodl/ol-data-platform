@@ -74,6 +74,7 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
+        , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courseruncertificate_url
@@ -83,8 +84,8 @@ with combined_enrollments as (
         , mitxonline_completed_orders.order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
-        , combined_courseruns.course_title
-        , combined_courseruns.course_readable_id
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
@@ -97,7 +98,9 @@ with combined_enrollments as (
             and combined_enrollments.courserun_id = mitxonline_completed_orders.courserun_id
             and mitxonline_completed_orders.row_num = 1
     left join combined_courseruns
-        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+        on
+            combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+            and combined_enrollments.platform = combined_courseruns.platform
     where combined_enrollments.platform = '{{ var("mitxonline") }}'
 
     union all
@@ -124,6 +127,7 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
+        , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courseruncertificate_url
@@ -133,8 +137,8 @@ with combined_enrollments as (
         , micromasters_completed_orders.order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
-        , combined_courseruns.course_title
-        , combined_courseruns.course_readable_id
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
@@ -148,7 +152,9 @@ with combined_enrollments as (
             and combined_enrollments.courserun_readable_id = micromasters_completed_orders.courserun_edxorg_readable_id
             and micromasters_completed_orders.row_num = 1
     left join combined_courseruns
-        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+        on
+            combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+            and combined_enrollments.platform = combined_courseruns.platform
     where combined_enrollments.platform = '{{ var("edxorg") }}'
 
 
@@ -176,6 +182,7 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
+        , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courseruncertificate_url
@@ -185,8 +192,8 @@ with combined_enrollments as (
         , mitxpro_completed_orders.receipt_reference_number as order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
-        , combined_courseruns.course_title
-        , combined_courseruns.course_readable_id
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
     from mitxpro_enrollments
     inner join combined_enrollments
@@ -227,6 +234,7 @@ with combined_enrollments as (
         , combined_users.user_address_country as user_country_code
         , combined_users.user_highest_education
         , combined_users.user_company
+        , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courseruncertificate_url
@@ -236,8 +244,8 @@ with combined_enrollments as (
         , bootcamps_completed_orders.order_reference_number
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
-        , combined_courseruns.course_title
-        , combined_courseruns.course_readable_id
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
     from combined_enrollments
     left join combined_users
@@ -249,8 +257,58 @@ with combined_enrollments as (
             combined_enrollments.user_id = bootcamps_completed_orders.order_purchaser_user_id
             and combined_enrollments.courserun_id = bootcamps_completed_orders.courserun_id
     left join combined_courseruns
-        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+        on
+            combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+            and combined_enrollments.platform = combined_courseruns.platform
     where combined_enrollments.platform = '{{ var("bootcamps") }}'
+
+    union all
+
+    select
+        '{{ var("residential") }}' as platform
+        , combined_enrollments.courserunenrollment_id
+        , combined_enrollments.courserunenrollment_is_active
+        , combined_enrollments.courserunenrollment_created_on
+        , combined_enrollments.courserunenrollment_enrollment_mode
+        , combined_enrollments.courserunenrollment_enrollment_status
+        , combined_enrollments.courserunenrollment_is_edx_enrolled
+        , combined_enrollments.user_id
+        , combined_enrollments.courserun_id
+        , combined_enrollments.courserun_title
+        , combined_enrollments.courserun_readable_id
+        , combined_courseruns.courserun_start_on
+        , combined_courseruns.courserun_end_on
+        , if(combined_courseruns.courserun_is_current is null, false, combined_courseruns.courserun_is_current)
+        as courserun_is_current
+        , combined_enrollments.user_username
+        , combined_enrollments.user_email
+        , combined_enrollments.user_full_name
+        , combined_users.user_address_country as user_country_code
+        , combined_users.user_highest_education
+        , combined_users.user_company
+        , combined_users.user_gender
+        , combined_enrollments.courseruncertificate_is_earned
+        , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_url
+        , combined_enrollments.courseruncertificate_uuid
+        , null as order_id
+        , null as line_id
+        , null as order_reference_number
+        , combined_enrollments.courserungrade_grade
+        , combined_enrollments.courserungrade_is_passing
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
+        , combined_enrollments.courserun_upgrade_deadline
+    from combined_enrollments
+    left join combined_users
+        on
+            combined_enrollments.user_username = combined_users.user_username
+            and combined_enrollments.platform = combined_users.platform
+    left join combined_courseruns
+        on
+            combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+            and combined_enrollments.platform = combined_courseruns.platform
+    where combined_enrollments.platform = '{{ var("residential") }}'
 )
 
 select
@@ -287,6 +345,7 @@ select
     , user_email
     , user_full_name
     , user_highest_education
+    , user_gender
     , user_id
     , user_username
 from combined_enrollment_detail

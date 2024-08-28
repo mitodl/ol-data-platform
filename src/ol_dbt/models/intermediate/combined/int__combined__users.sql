@@ -18,6 +18,10 @@ with mitxonline_users as (
     select * from {{ ref('int__edxorg__mitx_users') }}
 )
 
+, residential_users as (
+    select * from {{ ref('int__mitxresidential__users') }}
+)
+
 , micromasters_users as (
     select * from {{ ref('int__micromasters__users') }}
 )
@@ -97,6 +101,25 @@ with mitxonline_users as (
         , edxorg_users.user_is_active
     from edxorg_users
     left join micromasters_users on edxorg_users.user_username = micromasters_users.user_edxorg_username
+
+    union all
+
+    select
+        '{{ var("residential") }}' as platform
+        , user_id
+        , user_username
+        , user_email
+        , user_address_country
+        , user_highest_education
+        , user_gender
+        , user_birth_year
+        , null as user_company
+        , null as user_job_title
+        , null as user_industry
+        , user_joined_on
+        , user_last_login
+        , user_is_active
+    from residential_users
 )
 
 select * from combined_users
