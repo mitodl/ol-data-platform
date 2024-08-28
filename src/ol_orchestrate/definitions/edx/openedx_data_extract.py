@@ -8,7 +8,8 @@ from ol_orchestrate.assets.openedx import course_structure, openedx_live_coursew
 from ol_orchestrate.io_managers.filepath import (
     S3FileObjectIOManager,
 )
-from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.lib.assets_helper import add_prefix_to_asset_keys
+from ol_orchestrate.lib.constants import DAGSTER_ENV, OPENEDX_DEPLOYMENTS, VAULT_ADDRESS
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.sensors.openedx import course_run_sensor
@@ -24,7 +25,7 @@ else:
 
 
 def open_edx_extract_job_config(
-    open_edx_deployment: Literal["mitx", "mitxonline", "xpro"],
+    open_edx_deployment: OPENEDX_DEPLOYMENTS,
     dagster_env: Literal["qa", "production"],
 ):
     client = vault.client.secrets.kv.v1.read_secret(
@@ -81,12 +82,12 @@ def edxorg_data_archive_config(dagster_env):
     }
 
 
-for deployment_name in ["mitx", "mitxonline", "xpro"]:
+for deployment_name in OPENEDX_DEPLOYMENTS:
     locals()[f"{deployment_name}_openedx_assets_definition"] = (
         create_repository_using_definitions_args(
             name=f"{deployment_name}_openedx_assets",
             resources={
-                "io_manager": S3FileObjectIOManager(
+                "s3file_io_manager": S3FileObjectIOManager(
                     bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
                     path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
                 ),
@@ -96,8 +97,8 @@ for deployment_name in ["mitx", "mitxonline", "xpro"]:
                 ),
             },
             assets=[
-                openedx_live_courseware,
-                course_structure,
+                add_prefix_to_asset_keys(openedx_live_courseware, deployment_name),
+                add_prefix_to_asset_keys(course_structure, deployment_name),
             ],
             sensors=[course_run_sensor],
         )

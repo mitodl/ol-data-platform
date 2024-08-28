@@ -13,6 +13,7 @@ from dagster import (
     AssetKey,
     AssetOut,
     AutoMaterializePolicy,
+    AutomationCondition,
     DataVersion,
     Output,
     asset,
@@ -22,14 +23,36 @@ from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 
 from ol_orchestrate.lib.openedx import un_nest_course_structure
-from ol_orchestrate.partitions.openedx import OPENEDX_COURSE_AND_SOURCE_PARTITION
+from ol_orchestrate.partitions.openedx import (
+    OPENEDX_COURSE_RUN_PARTITION,
+)
 
 
 @asset(
     key=AssetKey(["openedx", "courseware"]),
-    partitions_def=OPENEDX_COURSE_AND_SOURCE_PARTITION,
+    partitions_def=OPENEDX_COURSE_RUN_PARTITION,
+    required_resource_keys={"openedx"},
+    description=("An instance of courseware running in an Open edX environment."),
+    automation_condition=AutomationCondition.on_cron(
+        cron_schedule="0 * * * *"
+    ).missing(),
 )
-def openedx_live_courseware(context: AssetExecutionContext): ...  # noqa: ARG001
+def openedx_live_courseware(context: AssetExecutionContext):
+    courserun_id = context.partition_key
+    # Retrieve the last published timestamp from
+    # /learning_sequences/v1/course_outline/{course_key_str}, using the last published
+    # information as the data version
+    course_outline = context.resources.openedx.client.get_course_outline(courserun_id)
+    return Output(
+        course_outline,
+        data_version=DataVersion(course_outline["published_version"]),
+        metadata={
+            "course_key": courserun_id,
+            "course_title": course_outline["title"],
+            "courseware_published_version": course_outline["published_version"],
+            "courseware_published_at": course_outline["published_at"],
+        },
+    )
 
 
 @multi_asset(
@@ -38,6 +61,7 @@ def openedx_live_courseware(context: AssetExecutionContext): ...  # noqa: ARG001
             key=AssetKey(("openedx", "raw_data", "course_structure")),
             description=("A json file with the course structure information."),
             auto_materialize_policy=AutoMaterializePolicy.eager(),
+            io_manager_key="s3file_io_manager",
         ),
         "course_blocks": AssetOut(
             key=AssetKey(("openedx", "raw_data", "course_blocks")),
@@ -46,10 +70,11 @@ def openedx_live_courseware(context: AssetExecutionContext): ...  # noqa: ARG001
                 "of the course structure information with course blocks."
             ),
             auto_materialize_policy=AutoMaterializePolicy.eager(),
+            io_manager_key="s3file_io_manager",
         ),
     },
     ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
-    partitions_def=OPENEDX_COURSE_AND_SOURCE_PARTITION,
+    partitions_def=OPENEDX_COURSE_RUN_PARTITION,
     group_name="openedx",
     required_resource_keys={"openedx"},
 )
