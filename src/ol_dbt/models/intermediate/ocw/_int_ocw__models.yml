@@ -30,10 +30,10 @@ models:
     description: str, indicating which courses were imported and which ones were authored
       in the app. Possible values are 'studio', 'ocw-import', or blank
   - name: course_url_path
-    description: str, unique url relative path to the OCW course website. e.g. courses/my-site-fall-2020.
+    description: str, unique URL relative path to the OCW course website. e.g., courses/my-site-fall-2020.
       For draft courses, it can be used to preview on https://draft.ocw.mit.edu/
   - name: course_live_url
-    description: str, url to the OCW course on production.
+    description: str, URL of the OCW course on production.
   - name: course_is_live
     description: boolean, indicating if the course website is currently published
       on OCW production.
@@ -172,6 +172,8 @@ models:
     description: str, websitecontent type of the resource (e.g., resource, external-resource)
     tests:
     - not_null
+  - name: course_live_url
+    description: str, url of the course on production
   - name: course_name
     description: str, name of the course
     tests:
@@ -214,6 +216,8 @@ models:
     description: str, filename of the resource file
     tests:
     - not_null
+  - name: resource_live_url
+    description: str, live URL of the resource on production
   - name: resource_title
     description: str, title of the resource
   - name: resource_type

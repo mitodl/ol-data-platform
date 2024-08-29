@@ -23,6 +23,7 @@ with websites as (
 
 select
     websites.website_name as course_name
+    , websites.website_live_url as course_live_url
     , websites.website_uuid as course_uuid
     , websitecontents.websitecontent_type as content_type
     , websitecontents.learning_resource_types
@@ -47,6 +48,7 @@ select
     , coalesce(sitemetadata.sitemetadata_course_term, websites.metadata_course_term) as course_term
     , coalesce(sitemetadata.sitemetadata_course_title, websites.metadata_course_title) as course_title
     , coalesce(sitemetadata.sitemetadata_course_year, websites.metadata_course_year) as course_year
+    , websites.website_live_url || '/resources/' || websitecontents.websitecontent_filename as resource_live_url
     , 'https://ocw-studio.odl.mit.edu/sites/'
     || websites.website_name
     || '/type/'
