@@ -668,7 +668,7 @@ models:
     tests:
     - not_null
   - name: useractivity_video_duration
-    description: number, The length of the video file, in seconds.
+    description: float, The length of the video file, in seconds.
   - name: useractivity_video_currenttime
     description: number, The time in the video when this event was emitted. May be
       Null for load_video or seek_video events.

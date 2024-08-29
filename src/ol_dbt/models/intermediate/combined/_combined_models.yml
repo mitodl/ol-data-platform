@@ -23,6 +23,8 @@ models:
     description: string, user email on the corresponding platform
     tests:
     - not_null
+  - name: user_full_name
+    description: str, user full name collected on the corresponding platform
   - name: user_address_country
     description: str, country code provided by the user on the corresponding platform
   - name: user_highest_education
@@ -355,6 +357,8 @@ models:
     - not_null
   - name: chapter_id
     description: str, block id of chapter within which this video belongs to.
+    tests:
+    - not_null
   - name: chapter_title
     description: str, title of chapter this video belongs to.
   - name: video_duration

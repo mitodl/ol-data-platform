@@ -1,17 +1,65 @@
-with mitxonline_video_engagements as (
-    select * from {{ ref('int__mitxonline__user_courseactivity_video') }}
-)
+with combined_video_engagements as (
+    select
+        '{{ var("mitxonline") }}' as platform
+        , user_username
+        , courserun_readable_id
+        , useractivity_video_id
+        , useractivity_page_url
+        , useractivity_event_type
+        , useractivity_timestamp
+        , useractivity_video_duration
+        , useractivity_video_currenttime
+        , useractivity_video_old_time
+        , useractivity_video_new_time
+    from {{ ref('int__mitxonline__user_courseactivity_video') }}
 
-, edxorg_video_engagements as (
-    select * from {{ ref('int__edxorg__mitx_user_courseactivity_video') }}
-)
+    union all
 
-, xpro_video_engagements as (
-    select * from {{ ref('int__edxorg__mitx_user_courseactivity_video') }}
-)
+    select
+        '{{ var("edxorg") }}' as platform
+        , user_username
+        , courserun_readable_id
+        , useractivity_video_id
+        , useractivity_page_url
+        , useractivity_event_type
+        , useractivity_timestamp
+        , useractivity_video_duration
+        , useractivity_video_currenttime
+        , useractivity_video_old_time
+        , useractivity_video_new_time
+    from {{ ref('int__edxorg__mitx_user_courseactivity_video') }}
 
-, residential_video_engagements as (
-    select * from {{ ref('int__mitxresidential__user_courseactivity_video') }}
+    union all
+
+    select
+        '{{ var("mitxpro") }}' as platform
+        , user_username
+        , courserun_readable_id
+        , useractivity_video_id
+        , useractivity_page_url
+        , useractivity_event_type
+        , useractivity_timestamp
+        , useractivity_video_duration
+        , useractivity_video_currenttime
+        , useractivity_video_old_time
+        , useractivity_video_new_time
+    from {{ ref('int__mitxpro__user_courseactivity_video') }}
+
+    union all
+
+    select
+        '{{ var("residential") }}' as platform
+        , user_username
+        , courserun_readable_id
+        , useractivity_video_id
+        , useractivity_page_url
+        , useractivity_event_type
+        , useractivity_timestamp
+        , useractivity_video_duration
+        , useractivity_video_currenttime
+        , useractivity_video_old_time
+        , useractivity_video_new_time
+    from {{ ref('int__mitxresidential__user_courseactivity_video') }}
 )
 
 , combined_video_structure as (
@@ -27,74 +75,16 @@ with mitxonline_video_engagements as (
 
 )
 
-, combined_video_engagements as (
-    select
-        '{{ var("mitxonline") }}' as platform
-        , user_username
-        , courserun_readable_id
-        , useractivity_video_id
-        , useractivity_page_url
-        , useractivity_event_type
-        , useractivity_timestamp
-        , useractivity_video_currenttime
-        , useractivity_video_old_time
-        , useractivity_video_new_time
-    from mitxonline_video_engagements
-
-    union all
-
-    select
-        '{{ var("edxorg") }}' as platform
-        , user_username
-        , courserun_readable_id
-        , useractivity_video_id
-        , useractivity_page_url
-        , useractivity_event_type
-        , useractivity_timestamp
-        , useractivity_video_currenttime
-        , useractivity_video_old_time
-        , useractivity_video_new_time
-    from edxorg_video_engagements
-
-    union all
-
-    select
-        '{{ var("mitxpro") }}' as platform
-        , user_username
-        , courserun_readable_id
-        , useractivity_video_id
-        , useractivity_page_url
-        , useractivity_event_type
-        , useractivity_timestamp
-        , useractivity_video_currenttime
-        , useractivity_video_old_time
-        , useractivity_video_new_time
-    from xpro_video_engagements
-
-    union all
-
-    select
-        '{{ var("residential") }}' as platform
-        , user_username
-        , courserun_readable_id
-        , useractivity_video_id
-        , useractivity_page_url
-        , useractivity_event_type
-        , useractivity_timestamp
-        , useractivity_video_currenttime
-        , useractivity_video_old_time
-        , useractivity_video_new_time
-    from residential_video_engagements
-)
-
 select
-    combined_video_engagements.user_username
+    combined_video_engagements.platform
+    , combined_video_engagements.user_username
     , combined_video_engagements.courserun_readable_id
-    , combined_video_structure.video_id
+    , combined_video_engagements.useractivity_video_id as video_id
     , combined_video_structure.video_edx_id
     , combined_video_structure.video_title
     , combined_video_structure.video_index
     , combined_video_structure.chapter_title
+    , combined_video_structure.chapter_id
     , combined_video_engagements.useractivity_page_url as page_url
     , combined_video_engagements.useractivity_event_type as video_event_type
     , combined_video_engagements.useractivity_timestamp as video_event_timestamp
@@ -107,7 +97,6 @@ select
     , combined_users.user_highest_education
     , combined_users.user_gender
     , combined_runs.courserun_title
-    , combined_runs.course_number
     , combined_runs.course_readable_id
     , combined_runs.courserun_is_current
     , combined_runs.courserun_start_on
