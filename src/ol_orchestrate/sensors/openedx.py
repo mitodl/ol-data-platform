@@ -6,7 +6,7 @@ from dagster import (
 
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.partitions.openedx import (
-    OPENEDX_COURSE_RUN_PARTITION,
+    OPENEDX_COURSE_RUN_PARTITIONS,
 )
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 
@@ -33,14 +33,14 @@ def course_run_sensor(
             ]
         )
     existing_keys = set(
-        OPENEDX_COURSE_RUN_PARTITION.get_partition_keys(
+        OPENEDX_COURSE_RUN_PARTITIONS[openedx.deployment].get_partition_keys(
             dynamic_partitions_store=context.instance
         )
     )
     new_course_run_ids = set(course_run_ids) - existing_keys
     return SensorResult(
         dynamic_partitions_requests=[
-            OPENEDX_COURSE_RUN_PARTITION.build_add_request(
+            OPENEDX_COURSE_RUN_PARTITIONS[openedx.deployment].build_add_request(
                 partition_keys=list(new_course_run_ids)
             )
         ],

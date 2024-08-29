@@ -8,8 +8,12 @@ from ol_orchestrate.assets.openedx import course_structure, openedx_live_coursew
 from ol_orchestrate.io_managers.filepath import (
     S3FileObjectIOManager,
 )
-from ol_orchestrate.lib.assets_helper import add_prefix_to_asset_keys
+from ol_orchestrate.lib.assets_helper import (
+    add_prefix_to_asset_keys,
+    late_bind_partition_to_asset,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV, OPENEDX_DEPLOYMENTS, VAULT_ADDRESS
+from ol_orchestrate.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.sensors.openedx import course_run_sensor
@@ -97,8 +101,14 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
                 ),
             },
             assets=[
-                add_prefix_to_asset_keys(openedx_live_courseware, deployment_name),
-                add_prefix_to_asset_keys(course_structure, deployment_name),
+                late_bind_partition_to_asset(
+                    add_prefix_to_asset_keys(openedx_live_courseware, deployment_name),
+                    OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+                ),
+                late_bind_partition_to_asset(
+                    add_prefix_to_asset_keys(course_structure, deployment_name),
+                    OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+                ),
             ],
             sensors=[course_run_sensor],
         )

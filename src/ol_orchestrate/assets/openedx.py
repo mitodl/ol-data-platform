@@ -23,14 +23,10 @@ from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 
 from ol_orchestrate.lib.openedx import un_nest_course_structure
-from ol_orchestrate.partitions.openedx import (
-    OPENEDX_COURSE_RUN_PARTITION,
-)
 
 
 @asset(
     key=AssetKey(["openedx", "courseware"]),
-    partitions_def=OPENEDX_COURSE_RUN_PARTITION,
     required_resource_keys={"openedx"},
     description=("An instance of courseware running in an Open edX environment."),
     automation_condition=AutomationCondition.on_cron(
@@ -74,7 +70,6 @@ def openedx_live_courseware(context: AssetExecutionContext):
         ),
     },
     ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
-    partitions_def=OPENEDX_COURSE_RUN_PARTITION,
     group_name="openedx",
     required_resource_keys={"openedx"},
 )
