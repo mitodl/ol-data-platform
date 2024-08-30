@@ -23,6 +23,8 @@ models:
     description: string, user email on the corresponding platform
     tests:
     - not_null
+  - name: user_full_name
+    description: str, user full name collected on the corresponding platform
   - name: user_address_country
     description: str, country code provided by the user on the corresponding platform
   - name: user_highest_education
@@ -252,3 +254,113 @@ models:
       is in the past and courserun_end_on is in the future.
     tests:
     - not_null
+
+- name: int__combined__course_structure
+  description: this table contains the latest course structure of the courses from
+    MITx Online ,xPro and edX.org.
+  columns:
+  - name: platform
+    description: str, MITx Online, xPro, edX.org
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline and xPro courses, {org}/{course}/{run_tag} for
+      edX.org courses
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, Unique ID for a distinct piece of content in a course, formatted
+      as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+    tests:
+    - not_null
+  - name: coursestructure_parent_block_id
+    description: str, parent block ID, same format as block_id
+  - name: coursestructure_block_index
+    description: int, sequence number giving order in which this block content appears
+      within the course
+    tests:
+    - not_null
+  - name: coursestructure_block_category
+    description: str, category/type of the block, it identifies core structural elements
+      of a course. Value includes but not limited to course, chapter, sequential,
+      vertical, discussion, html, problem, video, etc.
+    tests:
+    - not_null
+  - name: coursestructure_block_title
+    description: str, title of the block extracted from the metadata of the block.
+      This field comes from name field for the section, subsection, or unit on the
+      Studio 'Course Outline' page.
+  - name: coursestructure_block_metadata
+    description: str, json string of the metadata field for the block. It provides
+      additional information about this block, different block type may have different
+      member fields inside metadata.
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course extracted from the metadata of 'course'
+      block
+  - name: coursestructure_retrieved_at
+    description: timestamp, indicating when this course structure was initially retrieved
+      from S3
+    tests:
+    - not_null
+  - name: coursestructure_chapter_id
+    description: str, block id of chapter within which this child block belongs to.
+      Null for the 'course' block as it's the top block that doesn't belong to any
+      chapter.
+  - name: coursestructure_chapter_title
+    description: str, title of chapter within which this child block belongs to.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "courserun_readable_id", "coursestructure_block_index"]
+
+- name: int__combined__course_videos
+  description: this table contains video structure and metadata for MITx Online, xPro
+    and edX.org courses.
+  columns:
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline and xPro courses, {org}/{course}/{run_tag} for
+      edX.org courses.
+    tests:
+    - not_null
+  - name: video_id
+    description: str, hash code for the video. This value is the last part of video_block_id
+      string.
+    tests:
+    - not_null
+  - name: video_edx_id
+    description: str, the video ID on the open edx platform. edx_video_id extracted
+      from the video metadata.
+  - name: video_block_id
+    description: str, Unique ID for the video, formatted as block-v1:{org}+{course}+{run}type@{block
+      type}+block@{hash code}
+    tests:
+    - not_null
+  - name: video_parent_block_id
+    description: str, parent block ID, same format as block_id.
+  - name: video_index
+    description: int, sequence number giving order in which the video appears within
+      the course
+    tests:
+    - not_null
+  - name: video_title
+    description: str, title of the video extracted from the metadata of the block.
+      This field comes from name field for the section, subsection, or unit on the
+      Studio 'Course Outline' page.
+  - name: video_metadata
+    description: str, json string of the video metadata, e.g., display_name, edx_video_id
+    tests:
+    - not_null
+  - name: chapter_id
+    description: str, block id of chapter within which this video belongs to.
+  - name: chapter_title
+    description: str, title of chapter this video belongs to.
+  - name: video_duration
+    description: float, the length of the video, in seconds. May be 0.0.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "courserun_readable_id", "video_index"]

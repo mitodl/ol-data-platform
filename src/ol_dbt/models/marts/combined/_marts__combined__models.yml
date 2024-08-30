@@ -451,3 +451,130 @@ models:
     description: timestamp, date and time when the course or program enrollment starts
   - name: enrollment_end
     description: timestamp, date and time when the course or program enrollment ends
+
+- name: marts__combined_video_engagements
+  description: Learners video engagements - play, pause, seek, or stop video actions
+    from MITx Online, xPro, edX.org, Residential MITx.
+  columns:
+  - name: platform
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline, xPro, Residential courses, {org}/{course}/{run_tag}
+      for edX.org courses.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, open edx username on the corresponding platform
+    tests:
+    - not_null
+  - name: video_event_type
+    description: str, type of this video event. The value is one of play_video, seek_video,
+      pause_video, stop_video, complete_video.
+    tests:
+    - not_null
+  - name: page_url
+    description: str, url of the page the user was visiting when this video event
+      was emitted.
+  - name: video_id
+    description: str, hash code for the video being watched. This value is the last
+      part of video_block_id string.
+    tests:
+    - not_null
+  - name: video_edx_id
+    description: str, the video ID on the open edx platform.
+  - name: video_title
+    description: str, title of this video. Null for Residential MITx until we populate
+      the course structure data.
+  - name: video_index
+    description: int, sequence number giving order in which this block content appears
+      within the course. Null for Residential MITx until we populate the course structure
+      data.
+  - name: chapter_title
+    description: str, title of chapter this video belongs to. Null for Residential
+      MITx until we populate the course structure data.
+  - name: chapter_id
+    description: str, block id of chapter within which this video belongs to.
+  - name: video_duration
+    description: float, The length of the video file, in seconds. Populated with data
+      from ODL Video Service (OVS) or tracking log. May be 0.0.
+  - name: video_currenttime
+    description: number, The time in the video when this event was emitted. May be
+      Null for seek_video
+  - name: video_old_time
+    description: number, time in the video, in seconds, at which the user chose to
+      go to a different point in time for 'seek_video' event
+  - name: video_new_time
+    description: number, time in the video, in seconds, that the user selected as
+      the destination point for 'seek_video' event
+  - name: video_event_timestamp
+    description: timestamp, time of this video event
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on the corresponding platform
+  - name: user_email
+    description: str, user email on the corresponding platform
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+
+- name: marts__combined_course_engagements
+  description: Learners daily course engagement statistics from MITx Online, xPro,
+    edX.org, Residential MITx.
+  columns:
+  - name: platform
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline, xPro, Residential courses, {org}/{course}/{run_tag}
+      for edX.org courses.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, open edx username on the corresponding platform
+    tests:
+    - not_null
+  - name: courseactivity_date
+    description: date, date that user has any interactions within a course
+    tests:
+    - not_null
+  - name: num_events
+    description: int, number of course activity events for the user
+  - name: num_problem_submitted
+    description: int, number of problem submitted events in a course for the user
+  - name: num_video_played
+    description: int, number of play video events in a course for the user
+  - name: num_discussion_participated
+    description: int, number of discussion participated in a course including creating
+      a post, creating a comment about a response, or creating a reply to a post.
+  - name: user_full_name
+    description: str, user full name on the corresponding platform
+  - name: user_email
+    description: str, user email on the corresponding platform
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "user_username", "courserun_readable_id", "courseactivity_date"]

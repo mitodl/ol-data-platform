@@ -1003,3 +1003,31 @@ sources:
     - name: modified
       description: timestamp, datetime when this row was last updated. A change in
         this field implies that there was a state change.
+
+  - name: raw__mitx__openedx__mysql__edxval_video
+    description: video content on Residential MITx open edx platform
+    columns:
+    - name: id
+      description: int, primary key in edxval_video.
+    - name: edx_video_id
+      description: str, video hashed ID.
+    - name: client_video_id
+      description: str, human readable name for video. e.g. 14.310x_Lect9_Seg8_Final.mp4
+    - name: status
+      description: str, values are external and imported.
+    - name: duration
+      description: int, the length of the video, in seconds. Default to 0.0
+    - name: created
+      description: timestamp, date and time when the record was created.
+
+  - name: raw__mitx__openedx__mysql__edxval_coursevideo
+    description: course ID and video association on MITx Online open edx platform
+    columns:
+    - name: id
+      description: int, primary key in edxval_coursevideo.
+    - name: course_id
+      description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: video_id
+      description: int, foreign key in edxval_video
+    - name: is_hidden
+      description: boolean, indicating if the video is hidden for the course.

@@ -32,6 +32,7 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
+        , user_full_name
         , user_address_country
         , user_highest_education
         , user_gender
@@ -51,6 +52,7 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
+        , user_full_name
         , user_address_country
         , user_highest_education
         , user_gender
@@ -70,6 +72,7 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
+        , user_full_name
         , user_address_country
         , user_highest_education
         , user_gender
@@ -89,6 +92,7 @@ with mitxonline_users as (
         , edxorg_users.user_id
         , edxorg_users.user_username
         , edxorg_users.user_email
+        , edxorg_users.user_full_name
         , edxorg_users.user_country as user_address_country
         , edxorg_users.user_highest_education
         , edxorg_users.user_gender
@@ -109,6 +113,7 @@ with mitxonline_users as (
         , user_id
         , user_username
         , user_email
+        , user_full_name
         , user_address_country
         , user_highest_education
         , user_gender
