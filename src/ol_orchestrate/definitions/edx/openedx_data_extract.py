@@ -1,13 +1,22 @@
-from typing import Literal
+from typing import Any, Literal
 
-from dagster import Definitions, ScheduleDefinition
-from dagster_aws.s3 import S3Resource
+from dagster import (
+    create_repository_using_definitions_args,
+)
 
-from ol_orchestrate.jobs.open_edx import extract_open_edx_data_to_ol_data_platform
-from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.resources.openedx import OpenEdxApiClient
-from ol_orchestrate.resources.outputs import DailyResultsDir
+from ol_orchestrate.assets.openedx import course_structure, openedx_live_courseware
+from ol_orchestrate.io_managers.filepath import (
+    S3FileObjectIOManager,
+)
+from ol_orchestrate.lib.assets_helper import (
+    add_prefix_to_asset_keys,
+    late_bind_partition_to_asset,
+)
+from ol_orchestrate.lib.constants import DAGSTER_ENV, OPENEDX_DEPLOYMENTS, VAULT_ADDRESS
+from ol_orchestrate.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
+from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.sensors.openedx import course_run_sensor
 
 if DAGSTER_ENV == "dev":
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
@@ -20,7 +29,7 @@ else:
 
 
 def open_edx_extract_job_config(
-    open_edx_deployment: Literal["residential", "mitxonline", "xpro"],
+    open_edx_deployment: OPENEDX_DEPLOYMENTS,
     dagster_env: Literal["qa", "production"],
 ):
     client = vault.client.secrets.kv.v1.read_secret(
@@ -50,26 +59,57 @@ def open_edx_extract_job_config(
     }
 
 
-ol_extract_jobs = [
-    extract_open_edx_data_to_ol_data_platform.to_job(
-        resource_defs={
-            "results_dir": DailyResultsDir(),
-            "s3_upload": S3Resource(),
-            "s3": S3Resource(),
-            "openedx": OpenEdxApiClient.configure_at_launch(),
+def s3_uploads_bucket(
+    dagster_env: Literal["dev", "qa", "production"],
+) -> dict[str, Any]:
+    bucket_map = {
+        "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
+        "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": "edxorg-raw-data"},
+        "production": {
+            "bucket": "ol-data-lake-landing-zone-production",
+            "prefix": "edxorg-raw-data",
         },
-        name=f"extract_{deployment}_open_edx_data_to_data_platform",
-        config=open_edx_extract_job_config(deployment, DAGSTER_ENV),  # type: ignore[arg-type]
-    )
-    for deployment in ("residential", "xpro", "mitxonline")
-]
+    }
+    return bucket_map[dagster_env]
 
-openedx_data_extracts = Definitions(
-    jobs=ol_extract_jobs,
-    schedules=[
-        ScheduleDefinition(
-            name=f"{job.name}_nightly", cron_schedule="0 0 * * *", job=job
+
+def edxorg_data_archive_config(dagster_env):
+    return {
+        "ops": {
+            "process_edxorg_archive_bundle": {
+                "config": {
+                    "s3_bucket": s3_uploads_bucket(dagster_env)["bucket"],
+                    "s3_prefix": s3_uploads_bucket(dagster_env)["prefix"],
+                }
+            },
+        }
+    }
+
+
+for deployment_name in OPENEDX_DEPLOYMENTS:
+    locals()[f"{deployment_name}_openedx_assets_definition"] = (
+        create_repository_using_definitions_args(
+            name=f"{deployment_name}_openedx_assets",
+            resources={
+                "s3file_io_manager": S3FileObjectIOManager(
+                    bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
+                    path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+                ),
+                "vault": vault,
+                "openedx": OpenEdxApiClientFactory(
+                    deployment=deployment_name, vault=vault
+                ),
+            },
+            assets=[
+                late_bind_partition_to_asset(
+                    add_prefix_to_asset_keys(openedx_live_courseware, deployment_name),
+                    OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+                ),
+                late_bind_partition_to_asset(
+                    add_prefix_to_asset_keys(course_structure, deployment_name),
+                    OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+                ),
+            ],
+            sensors=[course_run_sensor],
         )
-        for job in ol_extract_jobs
-    ],
-)
+    )

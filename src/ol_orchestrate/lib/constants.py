@@ -9,3 +9,5 @@ if DAGSTER_ENV == "dev":
     VAULT_ADDRESS = os.getenv("VAULT_ADDR", "https://vault-qa.odl.mit.edu")
 else:
     VAULT_ADDRESS = os.getenv("VAULT_ADDR", f"https://vault-{DAGSTER_ENV}.odl.mit.edu")
+
+OPENEDX_DEPLOYMENTS = ["mitx", "mitxonline", "xpro"]
