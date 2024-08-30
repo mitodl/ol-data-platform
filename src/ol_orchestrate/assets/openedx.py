@@ -74,13 +74,11 @@ def openedx_live_courseware(context: AssetExecutionContext):
     required_resource_keys={"openedx"},
 )
 def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG001
-    partition_dimensions = context.partition_key.keys_by_dimension()
     source_system = context.resources.openedx.deployment
-    course_id = partition_dimensions["course_key"]
-    course_structure = context.resources.openedx.client.get_course_structure_document(
-        course_id
+    course_id = context.partition_key
+    course_structure_document = (
+        context.resources.openedx.client.get_course_structure_document(course_id)
     )
-    course_structure_document = json.load(course_structure.open())
     data_version = hashlib.sha256(
         json.dumps(course_structure_document).encode("utf-8")
     ).hexdigest()
@@ -112,7 +110,7 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
     blocks_object_key = f"{source_system}_openedx_extracts/course_blocks/{course_id}/course_blocks_{data_version}.json"  # noqa: E501
     yield Output(
         (structures_file, structure_object_key),
-        output_name="flattened_course_structure",
+        output_name="course_structure",
         data_version=DataVersion(data_version),
         metadata={"course_id": course_id, "object_key": structure_object_key},
     )
