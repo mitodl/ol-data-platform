@@ -56,51 +56,67 @@ select
     || '/edit/'
     || websitecontents.websitecontent_text_id
     || '/' as studio_url
-    , nullif(json_query(
+    , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.backup_url' omit quotes
-    ), '') as external_resource_backup_url
-    , json_query(websitecontents.websitecontent_metadata, 'lax $.external_url' omit quotes) as external_resource_url
+    ), ''), 'null') as external_resource_backup_url
+    , nullif(
+        nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.external_url' omit quotes), ''), 'null'
+    ) as external_resource_url
     -- image_metadata for image resources; could be in metadata or image_metadata
     , coalesce(
-        nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.image_alt' omit quotes), '')
-        , nullif(
-            json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata."image-alt"' omit quotes), ''
+        nullif(
+            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.image_alt' omit quotes), '')
+            , 'null'
         )
+        , nullif(nullif(
+            json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata."image-alt"' omit quotes), ''
+        ), 'null')
     ) as image_alt_text
     , coalesce(
-        nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.caption' omit quotes), '')
-        , nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata.caption' omit quotes), '')
+        nullif(
+            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.caption' omit quotes), '')
+            , 'null'
+        )
+        , nullif(
+            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata.caption' omit quotes), '')
+            , 'null'
+        )
     ) as image_caption
     , coalesce(
-        nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.credit' omit quotes), '')
-        , nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata.credit' omit quotes), '')
+        nullif(
+            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.credit' omit quotes), ''), 'null'
+        )
+        , nullif(
+            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata.credit' omit quotes), '')
+            , 'null'
+        )
     ) as image_credit
     -- video_metadata for video resources
-    , nullif(json_query(
+    , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_description' omit quotes
-    ), '') as video_youtube_description
-    , nullif(json_query(
+    ), ''), 'null') as video_youtube_description
+    , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.youtube_id' omit quotes
-    ), '') as video_youtube_id
-    , nullif(json_query(
+    ), ''), 'null') as video_youtube_id
+    , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_speakers' omit quotes
-    ), '') as video_youtube_speakers
-    , nullif(json_query(
+    ), ''), 'null') as video_youtube_speakers
+    , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_metadata.video_tags' omit quotes
-    ), '') as video_youtube_tags
+    ), ''), 'null') as video_youtube_tags
     -- video_files for video resources
-    , nullif(json_query(
+    , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.archive_url' omit quotes
-    ), '') as video_archive_url
-    , nullif(json_query(
+    ), ''), 'null') as video_archive_url
+    , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_captions_file' omit quotes
-    ), '') as video_captions_file
-    , nullif(json_query(
+    ), ''), 'null') as video_captions_file
+    , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_thumbnail_file' omit quotes
-    ), '') as video_thumbnail_file
-    , nullif(json_query(
+    ), ''), 'null') as video_thumbnail_file
+    , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_transcript_file' omit quotes
-    ), '') as video_transcript_file
+    ), ''), 'null') as video_transcript_file
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
