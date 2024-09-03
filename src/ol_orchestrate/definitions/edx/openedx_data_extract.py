@@ -3,7 +3,6 @@ from typing import Any, Literal
 from dagster import (
     create_repository_using_definitions_args,
 )
-from dagster_aws.s3 import S3PickleIOManager, S3Resource
 
 from ol_orchestrate.assets.openedx import course_structure, openedx_live_courseware
 from ol_orchestrate.io_managers.filepath import (
@@ -14,6 +13,7 @@ from ol_orchestrate.lib.assets_helper import (
     late_bind_partition_to_asset,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, OPENEDX_DEPLOYMENTS, VAULT_ADDRESS
+from ol_orchestrate.lib.dagster_helpers import default_io_manager
 from ol_orchestrate.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -27,37 +27,6 @@ else:
         vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
     )
     vault._auth_aws_iam()  # noqa: SLF001
-
-
-def open_edx_extract_job_config(
-    open_edx_deployment: OPENEDX_DEPLOYMENTS,
-    dagster_env: Literal["qa", "production"],
-):
-    client = vault.client.secrets.kv.v1.read_secret(
-        mount_point="secret-data",
-        path=f"pipelines/edx/{open_edx_deployment}/edx-oauth-client",
-    )["data"]
-    client_config = {
-        "client_id": client["id"],
-        "client_secret": client["secret"],
-        "lms_url": client["url"],
-        "studio_url": client["studio_url"],
-        "token_type": "JWT",
-    }
-
-    return {
-        "ops": {
-            "upload_files_to_s3": {
-                "config": {
-                    "destination_bucket": f"ol-data-lake-landing-zone-{dagster_env}",
-                    "destination_prefix": f"{open_edx_deployment}_openedx_extracts",
-                }
-            },
-        },
-        "resources": {
-            "openedx": {"config": client_config},
-        },
-    }
 
 
 def s3_uploads_bucket(
@@ -74,25 +43,12 @@ def s3_uploads_bucket(
     return bucket_map[dagster_env]
 
 
-def edxorg_data_archive_config(dagster_env):
-    return {
-        "ops": {
-            "process_edxorg_archive_bundle": {
-                "config": {
-                    "s3_bucket": s3_uploads_bucket(dagster_env)["bucket"],
-                    "s3_prefix": s3_uploads_bucket(dagster_env)["prefix"],
-                }
-            },
-        }
-    }
-
-
 for deployment_name in OPENEDX_DEPLOYMENTS:
     locals()[f"{deployment_name}_openedx_assets_definition"] = (
         create_repository_using_definitions_args(
             name=f"{deployment_name}_openedx_assets",
             resources={
-                "io_manager": S3PickleIOManager(S3Resource()),
+                "io_manager": default_io_manager(DAGSTER_ENV),
                 "s3file_io_manager": S3FileObjectIOManager(
                     bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
                     path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
