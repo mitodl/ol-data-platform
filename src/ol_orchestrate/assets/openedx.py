@@ -30,7 +30,7 @@ from ol_orchestrate.lib.openedx import un_nest_course_structure
     required_resource_keys={"openedx"},
     description=("An instance of courseware running in an Open edX environment."),
     automation_condition=AutomationCondition.on_cron(
-        cron_schedule="0 * * * *"
+        cron_schedule="0 */6 * * *"
     ).missing(),
 )
 def openedx_live_courseware(context: AssetExecutionContext):
