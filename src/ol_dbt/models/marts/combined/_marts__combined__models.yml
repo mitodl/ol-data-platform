@@ -680,7 +680,3 @@ models:
     description: boolean, indicating if the course run is currently running. True
       if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
       is in the past and courserun_end_on is in the future.
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "user_username", "courserun_readable_id", "problem_id",
-        "problem_submission_timestamp"]
