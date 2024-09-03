@@ -54,13 +54,13 @@ def openedx_live_courseware(context: AssetExecutionContext):
 @multi_asset(
     outs={
         "course_structure": AssetOut(
-            key=AssetKey(("openedx", "raw_data", "course_structure")),
+            key=AssetKey(("openedx", "processed_data", "course_structure")),
             description=("A json file with the course structure information."),
             auto_materialize_policy=AutoMaterializePolicy.eager(),
             io_manager_key="s3file_io_manager",
         ),
         "course_blocks": AssetOut(
-            key=AssetKey(("openedx", "raw_data", "course_blocks")),
+            key=AssetKey(("openedx", "processed_data", "course_blocks")),
             description=(
                 "A json file containing the hierarchical representation"
                 "of the course structure information with course blocks."
@@ -74,7 +74,6 @@ def openedx_live_courseware(context: AssetExecutionContext):
     required_resource_keys={"openedx"},
 )
 def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG001
-    source_system = context.resources.openedx.deployment
     course_id = context.partition_key
     course_structure_document = (
         context.resources.openedx.client.get_course_structure_document(course_id)
@@ -106,8 +105,8 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
             course_id, course_structure_document, data_retrieval_timestamp
         ):
             blocks.write(block)
-    structure_object_key = f"{source_system}_openedx_extracts/course_structure/{course_id}/course_structures_{data_version}.json"  # noqa: E501
-    blocks_object_key = f"{source_system}_openedx_extracts/course_blocks/{course_id}/course_blocks_{data_version}.json"  # noqa: E501
+    structure_object_key = f"{'/'.join(context.asset_key_for_output('course_structure').path)}/{course_id}/{data_version}.json"  # noqa: E501
+    blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_blocks').path)}/{course_id}/{data_version}.json"  # noqa: E501
     yield Output(
         (structures_file, structure_object_key),
         output_name="course_structure",
