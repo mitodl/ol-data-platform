@@ -1,8 +1,7 @@
 {{ config(materialized='view') }}
 
 with course_activities as (
-    select * from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
-    where courserun_readable_id is not null
+    select * from {{ ref('int__edxorg__mitx_user_activity') }}
 )
 
 select
