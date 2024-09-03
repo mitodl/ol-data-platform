@@ -3,6 +3,7 @@ from typing import Any, Literal
 from dagster import (
     create_repository_using_definitions_args,
 )
+from dagster_aws.s3 import S3PickleIOManager, S3Resource
 
 from ol_orchestrate.assets.openedx import course_structure, openedx_live_courseware
 from ol_orchestrate.io_managers.filepath import (
@@ -91,6 +92,7 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
         create_repository_using_definitions_args(
             name=f"{deployment_name}_openedx_assets",
             resources={
+                "io_manager": S3PickleIOManager(S3Resource()),
                 "s3file_io_manager": S3FileObjectIOManager(
                     bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
                     path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
