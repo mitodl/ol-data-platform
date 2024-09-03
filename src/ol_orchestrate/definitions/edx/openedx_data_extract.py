@@ -64,10 +64,10 @@ def s3_uploads_bucket(
 ) -> dict[str, Any]:
     bucket_map = {
         "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
-        "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": "edxorg-raw-data"},
+        "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": ""},
         "production": {
             "bucket": "ol-data-lake-landing-zone-production",
-            "prefix": "edxorg-raw-data",
+            "prefix": "",
         },
     }
     return bucket_map[dagster_env]
