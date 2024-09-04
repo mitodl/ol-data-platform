@@ -29,9 +29,7 @@ from ol_orchestrate.lib.openedx import un_nest_course_structure
     key=AssetKey(["openedx", "courseware"]),
     required_resource_keys={"openedx"},
     description=("An instance of courseware running in an Open edX environment."),
-    automation_condition=AutomationCondition.on_cron(
-        cron_schedule="0 */6 * * *"
-    ).missing(),
+    automation_condition=AutomationCondition.on_cron(cron_schedule="0 */6 * * *"),
 )
 def openedx_live_courseware(context: AssetExecutionContext):
     courserun_id = context.partition_key
