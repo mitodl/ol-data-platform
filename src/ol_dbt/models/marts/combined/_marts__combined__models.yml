@@ -601,7 +601,7 @@ models:
 
 - name: marts__combined_problem_submissions
   description: Learners problem submissions/responses history in a course from MITx
-    Online, xPro, edX.org, Residential MITx. If a learner has attempt the same problem
+    Online, xPro, edX.org, Residential MITx. If a learner has attempted the same problem
     multiple times, there is a separate row for each attempt.
   columns:
   - name: platform
@@ -653,7 +653,7 @@ models:
     tests:
     - not_null
   - name: problem_submission_timestamp
-    description: timestamp, time for this problem submission
+    description: timestamp, date and time for this problem submission.
     tests:
     - not_null
   - name: user_full_name
