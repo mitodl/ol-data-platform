@@ -1775,6 +1775,11 @@ models:
     description: str, display name of this problem in a course
     tests:
     - not_null
+  - name: useractivity_problem_student_answers
+    description: json, student answers to this problem in problem_id and internal
+      answer pair. For multiple questions, it lists every question and answer.
+    tests:
+    - not_null
   - name: useractivity_problem_attempts
     description: number, The number of times the user attempted to answer this problem
     tests:

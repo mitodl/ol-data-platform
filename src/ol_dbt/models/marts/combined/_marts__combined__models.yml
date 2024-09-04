@@ -518,8 +518,18 @@ models:
     description: str, user full name on the corresponding platform
   - name: user_email
     description: str, user email on the corresponding platform
+  - name: user_country_code
+    description: str, country code on the corresponding platform. May be blank.
+  - name: user_highest_education
+    description: str, user's highest education on the corresponding platform. May
+      be blank.
+  - name: user_gender
+    description: str, gender on the corresponding platform
   - name: courserun_title
     description: str, title of the course run
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online, xPro or Residential courses, {org}/{course} for edX.org courses.
   - name: courserun_start_on
     description: timestamp, datetime on when the course begins
   - name: courserun_end_on
@@ -565,8 +575,18 @@ models:
     description: str, user full name on the corresponding platform
   - name: user_email
     description: str, user email on the corresponding platform
+  - name: user_country_code
+    description: str, country code on the corresponding platform. May be blank.
+  - name: user_highest_education
+    description: str, user's highest education on the corresponding platform. May
+      be blank.
+  - name: user_gender
+    description: str, gender on the corresponding platform
   - name: courserun_title
     description: str, title of the course run
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online, xPro or Residential courses, {org}/{course} for edX.org courses.
   - name: courserun_start_on
     description: timestamp, datetime on when the course begins
   - name: courserun_end_on
@@ -578,3 +598,85 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["platform", "user_username", "courserun_readable_id", "courseactivity_date"]
+
+- name: marts__combined_problem_submissions
+  description: Learners problem submissions/responses history in a course from MITx
+    Online, xPro, edX.org, Residential MITx. If a learner has attempted the same problem
+    multiple times, there is a separate row for each attempt.
+  columns:
+  - name: platform
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+    tests:
+    - not_null
+  - name: user_username
+    description: str, open edx username on the corresponding platform
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline, xPro, Residential courses, {org}/{course}/{run_tag}
+      for edX.org courses.
+    tests:
+    - not_null
+  - name: problem_id
+    description: str, Unique ID for this problem in a course. It's formatted in block-v1:{org)+{course
+      ID}+type@problem+block@{hash code}
+    tests:
+    - not_null
+  - name: problem_name
+    description: str, display name of this problem in a course
+    tests:
+    - not_null
+  - name: num_attempts
+    description: number, The number of times the user had attempted at the time of
+      this submission.
+    tests:
+    - not_null
+  - name: student_answers
+    description: json, student answers to this problem in a name/value (problem_id/answer)
+      pair. For multiple questions, it lists every question and answer.
+    tests:
+    - not_null
+  - name: problem_success
+    description: str, It's either 'correct' or 'incorrect'
+    tests:
+    - not_null
+  - name: problem_grade
+    description: number, user grade for this problem at the time of this submission.
+      It can range from 0 to the max possible grade for this problem. e.g. if problem_max_grade
+      is 12, problem_grade can be anywhere between 0 to 12.
+    tests:
+    - not_null
+  - name: problem_max_grade
+    description: number, Maximum possible grade value for this problem.
+    tests:
+    - not_null
+  - name: problem_submission_timestamp
+    description: timestamp, date and time for this problem submission.
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on the corresponding platform
+  - name: user_email
+    description: str, user email on the corresponding platform
+  - name: user_country_code
+    description: str, country code on the corresponding platform. May be blank.
+  - name: user_highest_education
+    description: str, user's highest education on the corresponding platform. May
+      be blank.
+  - name: user_gender
+    description: str, gender on the corresponding platform
+  - name: courserun_title
+    description: str, title of the course run
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online, xPro or Residential courses, {org}/{course} for edX.org courses.
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
