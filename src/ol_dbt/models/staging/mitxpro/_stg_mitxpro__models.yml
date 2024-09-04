@@ -1843,7 +1843,11 @@ models:
     - not_null
 
 - name: stg__mitxpro__openedx__api__course_structure
-  description: This table contains historical changes to xPro's course content
+  description: This table captures the historical changes made to the xPro course
+    structure by comparing the new course block to the course block from the previous
+    day. If no changes are detected, no new rows are added to the table. If there
+    are any changes to the course structure, all blocks, including the updated or
+    new ones, are added to the table.
   columns:
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:xPRO+{course code}+{run_tag}

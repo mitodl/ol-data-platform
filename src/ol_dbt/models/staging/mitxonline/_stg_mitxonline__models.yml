@@ -1273,8 +1273,11 @@ models:
         "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
 
 - name: stg__mitxonline__openedx__api__course_structure
-  description: this table contains historical changes to open edX's course content
-    data.
+  description: This table captures the historical changes made to the MITx Online
+    course structure by comparing the new course block to the course block from the
+    previous day. If no changes are detected, no new rows are added to the table.
+    If there are any changes to the course structure, all blocks, including the updated
+    or new ones, are added to the table.
   columns:
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}

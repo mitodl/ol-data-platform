@@ -10,6 +10,9 @@ with mitxonline_course_structure as (
     select * from {{ ref('int__mitxpro__course_structure') }}
 )
 
+, residential_course_structure as (
+    select * from {{ ref('int__mitxresidential__course_structure') }}
+)
 
 , combined as (
     select
@@ -62,6 +65,24 @@ with mitxonline_course_structure as (
         , coursestructure_chapter_id
         , coursestructure_chapter_title
     from xpro_course_structure
+    where coursestructure_is_latest = true
+
+    union all
+
+    select
+        '{{ var("residential") }}' as platform
+        , courserun_readable_id
+        , courserun_title
+        , coursestructure_block_index
+        , coursestructure_block_id
+        , coursestructure_parent_block_id
+        , coursestructure_block_category
+        , coursestructure_block_title
+        , coursestructure_block_metadata
+        , coursestructure_retrieved_at
+        , coursestructure_chapter_id
+        , coursestructure_chapter_title
+    from residential_course_structure
     where coursestructure_is_latest = true
 )
 
