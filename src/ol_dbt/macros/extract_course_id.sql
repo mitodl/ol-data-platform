@@ -35,3 +35,15 @@
              )
       end
 {% endmacro %}
+
+--- course IDs come in two formats from different sources. This ensures that course IDs are consistently converted in
+--  all the downstream models.
+{% macro format_course_id(courserun_readable_id, convert_to_old_format=true) %}
+    {% if convert_to_old_format %}
+            -- format as {org}/{course number}/{run}
+           replace(replace(courserun_readable_id, 'course-v1:', ''), '+', '/')
+     {% else %}
+           -- format as course-v1:{org}+{course}+{run}
+           'course-v1:' || replace(courserun_readable_id, '/', '+')
+     {% endif %}
+{% endmacro %}
