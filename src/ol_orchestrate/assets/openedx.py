@@ -3,8 +3,10 @@
 
 import hashlib
 import json
-from datetime import UTC, datetime
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 import jsonlines
 from dagster import (
@@ -28,6 +30,7 @@ from ol_orchestrate.lib.openedx import un_nest_course_structure
 @asset(
     key=AssetKey(["openedx", "courseware"]),
     required_resource_keys={"openedx"},
+    group_name="openedx",
     description=("An instance of courseware running in an Open edX environment."),
     automation_condition=AutomationCondition.on_cron(cron_schedule="0 */6 * * *"),
 )
@@ -119,4 +122,56 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
             "course_id": course_id,
             "object_key": blocks_object_key,
         },
+    )
+
+
+@asset(
+    key=AssetKey(["openedx", "raw_data", "course_xml"]),
+    required_resource_keys={"openedx", "s3"},
+    io_manager_key="s3file_io_manager",
+    group_name="openedx",
+    description=(
+        "An importable artifact representing the contents of an Open edX course."
+    ),
+    automation_condition=AutomationCondition.eager(),
+)
+def course_xml(context: AssetExecutionContext):
+    course_key = context.partition_key
+    exported_courses = context.resources.openedx.client.export_courses(
+        course_ids=[course_key],
+    )
+    context.log.debug("Initiated export of course %s: %s", course_key, exported_courses)
+    successful_exports: set[str] = set()
+    failed_exports: set[str] = set()
+    tasks = exported_courses["upload_task_ids"]
+    while len(successful_exports.union(failed_exports)) < len(tasks):
+        time.sleep(timedelta(seconds=5).seconds)
+        for course_id, task_id in tasks.items():
+            task_status = context.resources.openedx.client.check_course_export_status(
+                course_id,
+                task_id,
+            )
+            if task_status["state"] == "Succeeded":
+                successful_exports.add(course_id)
+            if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
+                failed_exports.add(course_id)
+    if failed_exports:
+        raise Exception  # noqa: TRY002
+    s3_location = exported_courses["upload_urls"][course_key]
+    context.log.debug("Attempting to download the course XML from %s", s3_location)
+    s3_path = urlparse(s3_location)
+    course_file = Path(f"{course_key}.xml.tar.gz")
+    context.resources.s3.download_file(
+        Bucket=s3_path.hostname.split(".")[0],
+        Key=s3_path.path,
+        Filename=course_file,
+    )
+    data_version = hashlib.file_digest(course_file.open("rb"), "sha256").hexdigest()
+    target_path = (
+        f"{'/'.join(context.asset_key.path)}/{context.partition_key}/{data_version}.xml.tar.gz",
+    )
+    return Output(
+        (course_file, target_path),
+        data_version=DataVersion(data_version),
+        metadata={"course_id": course_key, "object_key": target_path},
     )
