@@ -28,11 +28,11 @@ from ol_orchestrate.lib.openedx import un_nest_course_structure
 
 
 @asset(
+    automation_condition=AutomationCondition.on_cron(cron_schedule="0 */6 * * *"),
+    description=("An instance of courseware running in an Open edX environment."),
+    group_name="openedx",
     key=AssetKey(["openedx", "courseware"]),
     required_resource_keys={"openedx"},
-    group_name="openedx",
-    description=("An instance of courseware running in an Open edX environment."),
-    automation_condition=AutomationCondition.on_cron(cron_schedule="0 */6 * * *"),
 )
 def openedx_live_courseware(context: AssetExecutionContext):
     courserun_id = context.partition_key
@@ -53,25 +53,25 @@ def openedx_live_courseware(context: AssetExecutionContext):
 
 
 @multi_asset(
+    group_name="openedx",
+    ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
     outs={
-        "course_structure": AssetOut(
-            key=AssetKey(("openedx", "processed_data", "course_structure")),
-            description=("A json file with the course structure information."),
-            auto_materialize_policy=AutoMaterializePolicy.eager(),
-            io_manager_key="s3file_io_manager",
-        ),
         "course_blocks": AssetOut(
-            key=AssetKey(("openedx", "processed_data", "course_blocks")),
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
             description=(
                 "A json file containing the hierarchical representation"
                 "of the course structure information with course blocks."
             ),
-            auto_materialize_policy=AutoMaterializePolicy.eager(),
             io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_blocks")),
+        ),
+        "course_structure": AssetOut(
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            description=("A json file with the course structure information."),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_structure")),
         ),
     },
-    ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
-    group_name="openedx",
     required_resource_keys={"openedx"},
 )
 def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG001
@@ -126,16 +126,17 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
 
 
 @asset(
-    key=AssetKey(["openedx", "raw_data", "course_xml"]),
-    required_resource_keys={"openedx", "s3"},
-    io_manager_key="s3file_io_manager",
-    group_name="openedx",
+    automation_condition=AutomationCondition.eager(),
     description=(
         "An importable artifact representing the contents of an Open edX course."
     ),
-    automation_condition=AutomationCondition.eager(),
+    group_name="openedx",
+    ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
+    io_manager_key="s3file_io_manager",
+    key=AssetKey(["openedx", "raw_data", "course_xml"]),
+    required_resource_keys={"openedx", "s3"},
 )
-def course_xml(context: AssetExecutionContext):
+def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
     course_key = context.partition_key
     exported_courses = context.resources.openedx.client.export_courses(
         course_ids=[course_key],
@@ -156,20 +157,19 @@ def course_xml(context: AssetExecutionContext):
             if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
                 failed_exports.add(course_id)
     if failed_exports:
-        raise Exception  # noqa: TRY002
+        errmsg = f"Unable to export the course XML for {course_key}"
+        raise Exception(errmsg)  # noqa: TRY002
     s3_location = exported_courses["upload_urls"][course_key]
     context.log.debug("Attempting to download the course XML from %s", s3_location)
     s3_path = urlparse(s3_location)
     course_file = Path(f"{course_key}.xml.tar.gz")
     context.resources.s3.download_file(
         Bucket=s3_path.hostname.split(".")[0],
-        Key=s3_path.path,
+        Key=s3_path.path.lstrip("/"),
         Filename=course_file,
     )
     data_version = hashlib.file_digest(course_file.open("rb"), "sha256").hexdigest()
-    target_path = (
-        f"{'/'.join(context.asset_key.path)}/{context.partition_key}/{data_version}.xml.tar.gz",
-    )
+    target_path = f"{'/'.join(context.asset_key.path)}/{context.partition_key}/{data_version}.xml.tar.gz"  # noqa: E501
     return Output(
         (course_file, target_path),
         data_version=DataVersion(data_version),
