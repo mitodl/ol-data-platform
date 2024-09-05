@@ -257,10 +257,11 @@ models:
 
 - name: int__combined__course_structure
   description: this table contains the latest course structure of the courses from
-    MITx Online ,xPro and edX.org.
+    MITx Online ,xPro, edX.org and Residential MITx.
   columns:
   - name: platform
-    description: str, MITx Online, xPro, edX.org
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
     tests:
     - not_null
     - accepted_values:
@@ -311,6 +312,9 @@ models:
     description: str, block id of chapter within which this child block belongs to.
       Null for the 'course' block as it's the top block that doesn't belong to any
       chapter.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "coursestructure_block_category != 'course'"
   - name: coursestructure_chapter_title
     description: str, title of chapter within which this child block belongs to.
   tests:
@@ -319,8 +323,13 @@ models:
 
 - name: int__combined__course_videos
   description: this table contains video structure and metadata for MITx Online, xPro
-    and edX.org courses.
+    , edX.org and Residential MITx courses.
   columns:
+  - name: platform
+    description: open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+    tests:
+    - not_null
   - name: courserun_readable_id
     description: str, the open edX course ID formatted as course-v1:{org}+{course
       code}+{run_tag} for MITxOnline and xPro courses, {org}/{course}/{run_tag} for
@@ -357,6 +366,8 @@ models:
     - not_null
   - name: chapter_id
     description: str, block id of chapter within which this video belongs to.
+    tests:
+    - not_null
   - name: chapter_title
     description: str, title of chapter this video belongs to.
   - name: video_duration

@@ -595,7 +595,11 @@ models:
       column_list: ["user_id", "courserun_readable_id"]
 
 - name: stg__edxorg__s3__course_structure
-  description: edx.org course contents
+  description: This table captures the historical changes made to the edX.org course
+    structure by comparing the new course block to the course block from the previous
+    day. If no changes are detected, no new rows are added to the table. If there
+    are any changes to the course structure, all blocks, including the updated or
+    new ones, are added to the table.
   columns:
   - name: courserun_readable_id
     description: str, course ID formatted as {org}/{course code}/{run_tag}

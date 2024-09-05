@@ -1,5 +1,5 @@
 with course_block_source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__api__course_blocks') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__mitx__openedx__api__course_blocks') }}
 )
 
 , course_block as (
