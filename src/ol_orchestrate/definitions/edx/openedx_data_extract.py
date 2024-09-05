@@ -8,6 +8,7 @@ from dagster_aws.s3 import S3Resource
 from ol_orchestrate.assets.openedx import (
     course_structure,
     course_xml,
+    extract_courserun_details,
     openedx_live_courseware,
 )
 from ol_orchestrate.io_managers.filepath import (
@@ -75,6 +76,12 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
                 ),
                 late_bind_partition_to_asset(
                     add_prefix_to_asset_keys(course_xml, deployment_name),
+                    OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+                ),
+                late_bind_partition_to_asset(
+                    add_prefix_to_asset_keys(
+                        extract_courserun_details, deployment_name
+                    ),
                     OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
                 ),
             ],

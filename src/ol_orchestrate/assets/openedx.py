@@ -23,8 +23,13 @@ from dagster import (
 )
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
+from upath import UPath
 
-from ol_orchestrate.lib.openedx import un_nest_course_structure
+from ol_orchestrate.lib.openedx import (
+    process_course_xml,
+    process_video_xml,
+    un_nest_course_structure,
+)
 
 
 @asset(
@@ -175,3 +180,64 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
         data_version=DataVersion(data_version),
         metadata={"course_id": course_key, "object_key": target_path},
     )
+
+
+@multi_asset(
+    group_name="openedx",
+    ins={"course_xml": AssetIn(key=AssetKey(("openedx", "raw_data", "course_xml")))},
+    outs={
+        "course_metadata": AssetOut(
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            description=(
+                "Metadata about the course run that is extracted from the XML export."
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_metadata")),
+        ),
+        "course_video": AssetOut(
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            description=(
+                "Details about the video elements in the course that are extracted "
+                "from the XML export."
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_video")),
+        ),
+    },
+)
+def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath):
+    # Download the remote file to the current working directory
+    course_xml_path = Path("course.xml.tar.gz")
+    course_xml.fs.get_file(course_xml, course_xml_path)
+    data_version = hashlib.file_digest(course_xml_path.open("rb"), "sha256").hexdigest()
+
+    # Process the course metadata
+    course_metadata = process_course_xml(course_xml_path)
+    course_metadata_file = Path("course_metadata.json")
+    course_metadata_file.write_text(json.dumps(course_metadata))
+    course_metadata_object_key = f"{'/'.join(context.asset_key_for_output('course_metadata').path)}/{context.partition_key}/{data_version}.json"  # noqa: E501
+    yield Output(
+        (course_metadata_file, course_metadata_object_key),
+        output_name="course_metadata",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": context.partition_key,
+            "object_key": course_metadata_object_key,
+        },
+    )
+
+    # Process the course video details
+    video_details = process_video_xml(course_xml_path)
+    course_video_file = Path("video_details.jsonl")
+    jsonlines.open(course_video_file, "w").write_all(video_details)
+    course_video_object_key = f"{'/'.join(context.asset_key_for_output('course_video').path)}/{context.partition_key}/{data_version}.json"  # noqa: E501
+    yield Output(
+        (course_video_file, course_video_object_key),
+        output_name="course_video",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": context.partition_key,
+            "object_key": course_metadata_object_key,
+        },
+    )
+    course_xml_path.unlink()

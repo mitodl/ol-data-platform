@@ -3,7 +3,7 @@ import json
 import tarfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import IO, Any, Optional
 from xml.etree.ElementTree import ElementTree
 
 
@@ -88,22 +88,31 @@ def un_nest_course_structure(
     return course_blocks
 
 
-def process_video_xml(archive_path: Path) -> dict[str, Any]:
-    json_data = {}
+def process_video_xml(archive_path: Path) -> list[dict[str, str]]:
+    video_block_details = []
     with tarfile.open(archive_path, "r") as tf:
-        tf.extractall(filter="data")
+        # get course info from the course xml file in the root directory
+        archive_root = tf.next()
+        if archive_root is None:
+            msg = "Unable to retrieve the archive root of the course XML."
+            raise ValueError(msg)
+        tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
+        course_xml_file = Path("course.xml")
+        course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
+        course_id, course_number, run_tag, org = parse_course_id(str(course_xml_file))
+        course_xml_file.unlink()
         for member in tf.getmembers():
-            course_id, course_number, run_tag, org = parse_course_id(
-                "course/course.xml"
-            )
             if not member.isdir() and member.path.startswith("course/video/"):
-                video_data = parse_video_xml(member.path)
+                xml_data = tf.extractfile(member)
+                if not xml_data:
+                    continue
+                video_data = parse_video_xml(xml_data)
                 video_data["course_id"] = course_id
-                json_data[video_data["video_block_id"]] = video_data
-    return json_data
+                video_block_details.append(video_data)
+    return video_block_details
 
 
-def parse_course_id(course_xml: str) -> tuple[str, str, str, str]:
+def parse_course_id(course_xml: str | Path) -> tuple[str, str, str, str]:
     """
     Parse the attributes of the course.xml file in the root directory
     and generate a properly formatted course_id string.
@@ -124,16 +133,15 @@ def parse_course_id(course_xml: str) -> tuple[str, str, str, str]:
     return f"course-v1:{org}+{course_number}+{run_tag}", course_number, run_tag, org
 
 
-def parse_video_xml(video_file: str) -> dict[str, Any]:
-    with Path(video_file).open("r") as video:
-        tree = ElementTree()
-        tree.parse(video)
-        video_root = tree.getroot()
-        video_block_id = video_root.attrib.get("url_name", None)
-        edx_video_id = video_root.attrib.get("edx_video_id", None)
-        video_asset = video_root.find("video_asset", None)
-        if video_asset:
-            duration = video_asset.attrib.get("duration", None)
+def parse_video_xml(video_file: IO[bytes]) -> dict[str, Any]:
+    tree = ElementTree()
+    tree.parse(video_file)
+    video_root = tree.getroot()
+    video_block_id = video_root.attrib.get("url_name", None)
+    edx_video_id = video_root.attrib.get("edx_video_id", None)
+    video_asset = video_root.find("video_asset", None)
+    if video_asset:
+        duration = video_asset.attrib.get("duration", None)
 
     return {
         "video_block_id": video_block_id,
