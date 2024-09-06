@@ -6,6 +6,7 @@ import json
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 
 import jsonlines
@@ -207,13 +208,15 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
 )
 def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath):
     # Download the remote file to the current working directory
-    course_xml_path = Path("course.xml.tar.gz")
+    course_xml_path = Path(NamedTemporaryFile(delete=False, suffix=".xml.tar.gz"))
     course_xml.fs.get_file(course_xml, course_xml_path)
     data_version = hashlib.file_digest(course_xml_path.open("rb"), "sha256").hexdigest()
 
     # Process the course metadata
     course_metadata = process_course_xml(course_xml_path)
-    course_metadata_file = Path("course_metadata.json")
+    course_metadata_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_metadata.json").name
+    )
     course_metadata_file.write_text(json.dumps(course_metadata))
     course_metadata_object_key = f"{'/'.join(context.asset_key_for_output('course_metadata').path)}/{context.partition_key}/{data_version}.json"  # noqa: E501
     yield Output(
@@ -228,7 +231,9 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
 
     # Process the course video details
     video_details = process_video_xml(course_xml_path)
-    course_video_file = Path("video_details.jsonl")
+    course_video_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_video.jsonl").name
+    )
     jsonlines.open(course_video_file, "w").write_all(video_details)
     course_video_object_key = f"{'/'.join(context.asset_key_for_output('course_video').path)}/{context.partition_key}/{data_version}.json"  # noqa: E501
     yield Output(

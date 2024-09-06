@@ -3,6 +3,7 @@ import json
 import tarfile
 from datetime import UTC, datetime
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import IO, Any, Optional
 from xml.etree.ElementTree import ElementTree
 
@@ -97,7 +98,9 @@ def process_video_xml(archive_path: Path) -> list[dict[str, str]]:
             msg = "Unable to retrieve the archive root of the course XML."
             raise ValueError(msg)
         tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
-        course_xml_file = Path("course.xml")
+        course_xml_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_course.xml").name
+        )
         course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
         course_id, course_number, run_tag, org = parse_course_id(str(course_xml_file))
         course_xml_file.unlink()
@@ -175,12 +178,16 @@ def process_course_xml(archive_path: Path) -> dict[str, Any]:
             msg = "Unable to retrieve the archive root of the course XML."
             raise ValueError(msg)
         tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
-        course_xml_file = Path("course.xml")
+        course_xml_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_course.xml").name
+        )
         course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
         course_id, course_number, run_tag, org = parse_course_id(str(course_xml_file))
         # use the run_tag to find the course metadata file
         tar_info_metadata = tf.getmember(f"{archive_root.name}/course/{run_tag}.xml")
-        course_metadata_file = Path("course_metadata.xml")
+        course_metadata_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_metadata.xml").name
+        )
         course_metadata_file.write_bytes(tf.extractfile(tar_info_metadata).read())  # type: ignore[union-attr]
         course_metadata = parse_course_xml(str(course_metadata_file))
         # add courserun data from the parse_course_id output
