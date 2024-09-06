@@ -242,7 +242,7 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
         data_version=DataVersion(data_version),
         metadata={
             "course_id": context.partition_key,
-            "object_key": course_metadata_object_key,
+            "object_key": course_video_object_key,
         },
     )
     course_xml_path.unlink()
