@@ -3,8 +3,11 @@
 
 import hashlib
 import json
-from datetime import UTC, datetime
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from tempfile import NamedTemporaryFile
+from urllib.parse import urlparse
 
 import jsonlines
 from dagster import (
@@ -21,15 +24,21 @@ from dagster import (
 )
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
+from upath import UPath
 
-from ol_orchestrate.lib.openedx import un_nest_course_structure
+from ol_orchestrate.lib.openedx import (
+    process_course_xml,
+    process_video_xml,
+    un_nest_course_structure,
+)
 
 
 @asset(
+    automation_condition=AutomationCondition.on_cron(cron_schedule="0 */6 * * *"),
+    description=("An instance of courseware running in an Open edX environment."),
+    group_name="openedx",
     key=AssetKey(["openedx", "courseware"]),
     required_resource_keys={"openedx"},
-    description=("An instance of courseware running in an Open edX environment."),
-    automation_condition=AutomationCondition.on_cron(cron_schedule="0 */6 * * *"),
 )
 def openedx_live_courseware(context: AssetExecutionContext):
     courserun_id = context.partition_key
@@ -50,25 +59,25 @@ def openedx_live_courseware(context: AssetExecutionContext):
 
 
 @multi_asset(
+    group_name="openedx",
+    ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
     outs={
-        "course_structure": AssetOut(
-            key=AssetKey(("openedx", "processed_data", "course_structure")),
-            description=("A json file with the course structure information."),
-            auto_materialize_policy=AutoMaterializePolicy.eager(),
-            io_manager_key="s3file_io_manager",
-        ),
         "course_blocks": AssetOut(
-            key=AssetKey(("openedx", "processed_data", "course_blocks")),
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
             description=(
                 "A json file containing the hierarchical representation"
                 "of the course structure information with course blocks."
             ),
-            auto_materialize_policy=AutoMaterializePolicy.eager(),
             io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_blocks")),
+        ),
+        "course_structure": AssetOut(
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            description=("A json file with the course structure information."),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_structure")),
         ),
     },
-    ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
-    group_name="openedx",
     required_resource_keys={"openedx"},
 )
 def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG001
@@ -120,3 +129,120 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
             "object_key": blocks_object_key,
         },
     )
+
+
+@asset(
+    automation_condition=AutomationCondition.eager(),
+    description=(
+        "An importable artifact representing the contents of an Open edX course."
+    ),
+    group_name="openedx",
+    ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
+    io_manager_key="s3file_io_manager",
+    key=AssetKey(["openedx", "raw_data", "course_xml"]),
+    required_resource_keys={"openedx", "s3"},
+)
+def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
+    course_key = context.partition_key
+    exported_courses = context.resources.openedx.client.export_courses(
+        course_ids=[course_key],
+    )
+    context.log.debug("Initiated export of course %s: %s", course_key, exported_courses)
+    successful_exports: set[str] = set()
+    failed_exports: set[str] = set()
+    tasks = exported_courses["upload_task_ids"]
+    while len(successful_exports.union(failed_exports)) < len(tasks):
+        time.sleep(timedelta(seconds=5).seconds)
+        for course_id, task_id in tasks.items():
+            task_status = context.resources.openedx.client.check_course_export_status(
+                course_id,
+                task_id,
+            )
+            if task_status["state"] == "Succeeded":
+                successful_exports.add(course_id)
+            if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
+                failed_exports.add(course_id)
+    if failed_exports:
+        errmsg = f"Unable to export the course XML for {course_key}"
+        raise Exception(errmsg)  # noqa: TRY002
+    s3_location = exported_courses["upload_urls"][course_key]
+    context.log.debug("Attempting to download the course XML from %s", s3_location)
+    s3_path = urlparse(s3_location)
+    course_file = Path(f"{course_key}.xml.tar.gz")
+    context.resources.s3.download_file(
+        Bucket=s3_path.hostname.split(".")[0],
+        Key=s3_path.path.lstrip("/"),
+        Filename=course_file,
+    )
+    data_version = hashlib.file_digest(course_file.open("rb"), "sha256").hexdigest()
+    target_path = f"{'/'.join(context.asset_key.path)}/{context.partition_key}/{data_version}.xml.tar.gz"  # noqa: E501
+    return Output(
+        (course_file, target_path),
+        data_version=DataVersion(data_version),
+        metadata={"course_id": course_key, "object_key": target_path},
+    )
+
+
+@multi_asset(
+    group_name="openedx",
+    ins={"course_xml": AssetIn(key=AssetKey(("openedx", "raw_data", "course_xml")))},
+    outs={
+        "course_metadata": AssetOut(
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            description=(
+                "Metadata about the course run that is extracted from the XML export."
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_metadata")),
+        ),
+        "course_video": AssetOut(
+            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            description=(
+                "Details about the video elements in the course that are extracted "
+                "from the XML export."
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_video")),
+        ),
+    },
+)
+def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath):
+    # Download the remote file to the current working directory
+    course_xml_path = Path(NamedTemporaryFile(delete=False, suffix=".xml.tar.gz"))
+    course_xml.fs.get_file(course_xml, course_xml_path)
+    data_version = hashlib.file_digest(course_xml_path.open("rb"), "sha256").hexdigest()
+
+    # Process the course metadata
+    course_metadata = process_course_xml(course_xml_path)
+    course_metadata_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_metadata.json").name
+    )
+    course_metadata_file.write_text(json.dumps(course_metadata))
+    course_metadata_object_key = f"{'/'.join(context.asset_key_for_output('course_metadata').path)}/{context.partition_key}/{data_version}.json"  # noqa: E501
+    yield Output(
+        (course_metadata_file, course_metadata_object_key),
+        output_name="course_metadata",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": context.partition_key,
+            "object_key": course_metadata_object_key,
+        },
+    )
+
+    # Process the course video details
+    video_details = process_video_xml(course_xml_path)
+    course_video_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_video.jsonl").name
+    )
+    jsonlines.open(course_video_file, "w").write_all(video_details)
+    course_video_object_key = f"{'/'.join(context.asset_key_for_output('course_video').path)}/{context.partition_key}/{data_version}.json"  # noqa: E501
+    yield Output(
+        (course_video_file, course_video_object_key),
+        output_name="course_video",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": context.partition_key,
+            "object_key": course_metadata_object_key,
+        },
+    )
+    course_xml_path.unlink()
