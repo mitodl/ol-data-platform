@@ -208,7 +208,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
 )
 def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath):
     # Download the remote file to the current working directory
-    course_xml_path = Path(NamedTemporaryFile(delete=False, suffix=".xml.tar.gz"))
+    course_xml_path = Path(NamedTemporaryFile(delete=False, suffix=".xml.tar.gz").name)
     course_xml.fs.get_file(course_xml, course_xml_path)
     data_version = hashlib.file_digest(course_xml_path.open("rb"), "sha256").hexdigest()
 
