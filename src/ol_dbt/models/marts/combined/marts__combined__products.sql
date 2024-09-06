@@ -40,6 +40,7 @@ with mitxonline_product as (
         , mitxonline_course_runs.courserun_end_on as end_on
         , mitxonline_course_runs.courserun_enrollment_start_on as enrollment_start_on
         , mitxonline_course_runs.courserun_enrollment_end_on as enrollment_end_on
+        , mitxonline_course_runs.courserun_upgrade_deadline
     from mitxonline_product
     left join mitxonline_course_runs
         on mitxonline_product.courserun_id = mitxonline_course_runs.courserun_id
@@ -91,6 +92,7 @@ select
     , end_on
     , enrollment_start_on
     , enrollment_end_on
+    , courserun_upgrade_deadline
 from mitxonline_product_view
 
 union all
@@ -111,4 +113,5 @@ select
     , end_on
     , enrollment_start_on
     , enrollment_end_on
+    , null as courserun_upgrade_deadline
 from mitxpro_product_view

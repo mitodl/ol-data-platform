@@ -26,6 +26,10 @@ with mitx_courses as (
     select * from {{ ref('int__bootcamps__course_runs') }}
 )
 
+, micromasters_runs as (
+    select * from {{ ref('stg__micromasters__app__postgres__courses_courserun') }}
+)
+
 , residential_runs as (
     select
         *
@@ -44,6 +48,7 @@ with mitx_courses as (
         , mitxonline_runs.courserun_url
         , mitxonline_runs.courserun_start_on
         , mitxonline_runs.courserun_end_on
+        , mitxonline_runs.courserun_upgrade_deadline
         , mitxonline_runs.courserun_is_live
         , case
             when
@@ -71,6 +76,7 @@ with mitx_courses as (
         , edxorg_runs.courserun_url
         , edxorg_runs.courserun_start_date as courserun_start_on
         , edxorg_runs.courserun_end_date as courserun_end_on
+        , micromasters_runs.courserun_upgrade_deadline
         , null as courserun_is_live
         , case
             when
@@ -85,6 +91,7 @@ with mitx_courses as (
         end as courserun_is_current
     from edxorg_runs
     left join mitx_courses on edxorg_runs.course_number = mitx_courses.course_number
+    left join micromasters_runs on edxorg_runs.courserun_readable_id = micromasters_runs.courserun_edxorg_readable_id
 
     union all
 
@@ -97,6 +104,7 @@ with mitx_courses as (
         , mitxpro_runs.courserun_url
         , mitxpro_runs.courserun_start_on
         , mitxpro_runs.courserun_end_on
+        , null as courserun_upgrade_deadline
         , mitxpro_runs.courserun_is_live
         , case
             when
@@ -123,6 +131,7 @@ with mitx_courses as (
         , null as courserun_url
         , bootcamps_runs.courserun_start_on
         , bootcamps_runs.courserun_end_on
+        , null as courserun_upgrade_deadline
         , null as courserun_is_live
         , case
             when
@@ -149,6 +158,7 @@ with mitx_courses as (
         , null as courserun_url
         , courserun_start_on
         , courserun_end_on
+        , null as courserun_upgrade_deadline
         , null as courserun_is_live
         , case
             when

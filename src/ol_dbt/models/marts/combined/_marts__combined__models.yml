@@ -451,6 +451,9 @@ models:
     description: timestamp, date and time when the course or program enrollment starts
   - name: enrollment_end
     description: timestamp, date and time when the course or program enrollment ends
+  - name: courserun_upgrade_deadline
+    description: timestamp, date and time beyond which the learner can not enroll
+      in paid course mode. Only populated for MITx Online courses.
 
 - name: marts__combined_video_engagements
   description: Learners video engagements - play, pause, seek, or stop video actions
