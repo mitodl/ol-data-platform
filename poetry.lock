@@ -4874,13 +4874,13 @@ devenv = ["check-manifest", "pytest (>=4.3)", "pytest-cov", "pytest-mock (>=3.3)
 
 [[package]]
 name = "universal-pathlib"
-version = "0.2.4"
+version = "0.2.5"
 description = "pathlib api extended to use fsspec backends"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "universal_pathlib-0.2.4-py3-none-any.whl", hash = "sha256:1a696cda4fe5a25cd7cab0e74c09c911afdbbec991161ef406e5e628dd6e1695"},
-    {file = "universal_pathlib-0.2.4.tar.gz", hash = "sha256:5570a11fd88cad1bbc6220b3e723fdd8adfc5c5e00865209e88af03ff4aa154b"},
+    {file = "universal_pathlib-0.2.5-py3-none-any.whl", hash = "sha256:a634f700eca827b4ad03bfa0267e51161560dd1de83b051cf0fccf39b3e56b32"},
+    {file = "universal_pathlib-0.2.5.tar.gz", hash = "sha256:ea5d4fb8178c2ab469cf4fa46d0ceb16ccb378da46dbbc28a8b9c1eebdccc655"},
 ]
 
 [package.dependencies]
