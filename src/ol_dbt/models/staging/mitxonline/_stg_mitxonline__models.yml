@@ -1612,3 +1612,44 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "video_id"]
+
+- name: stg__mitxonline__app__postgres__cms_coursepage
+  description: course page metadata sourced from Wagtail CMS
+  columns:
+  - name: wagtail_page_id
+    description: int, reference to wagtailcore_page
+    tests:
+    - unique
+    - not_null
+  - name: course_id
+    description: int, reference to courses_course
+    tests:
+    - unique
+    - not_null
+  - name: course_description
+    description: text, the description shown on the home page and product page.
+    tests:
+    - not_null
+  - name: course_length
+    description: str, a short description indicating how long it takes to complete
+      (e.g. '4 weeks').
+    tests:
+    - not_null
+  - name: course_effort
+    description: str, a short description indicating how much effort is required (e.g.
+      1-3 hours per week).
+  - name: course_price
+    description: json, specify the product price details.
+    tests:
+    - not_null
+  - name: course_prerequisites
+    description: text, a short description indicating prerequisites of this course/program.
+  - name: course_faq_url
+    description: str, URL a relevant FAQ page or entry for the course/program.
+  - name: course_about
+    description: text, details about this course/program.
+  - name: course_what_you_learn
+    description: text, what you will learn from this course.
+  - name: course_video_url
+    description: str, URL to the video to be displayed for this course/program. It
+      can be an HLS or Youtube video URL.

@@ -5,11 +5,16 @@ with source as (
 , cleaned as (
     select
         page_ptr_id as wagtail_page_id
-        , description as cms_coursepage_description
         , course_id
-        , length as cms_coursepage_length
-        , effort as cms_coursepage_effort
-        , prerequisites as cms_coursepage_prerequisites
+        , description as course_description
+        , length as course_length
+        , effort as course_effort
+        , price as course_price_detail
+        , prerequisites as course_prerequisites
+        , faq_url as course_faq_url
+        , about as course_about
+        , what_you_learn as course_what_you_learn
+        , video_url as course_video_url
     from source
 )
 

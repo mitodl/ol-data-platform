@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__cms_instructorpage') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__app__postgres__cms_instructorpage') }}
 )
 
 , cleaned as (
