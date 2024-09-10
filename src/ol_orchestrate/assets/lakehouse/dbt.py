@@ -4,7 +4,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 from dagster import AssetExecutionContext, AutomationCondition
-from dagster_dbt import DagsterDbtTranslator, DbtCliResource, DbtProject, dbt_assets
+from dagster_dbt import (
+    DagsterDbtTranslator,
+    DagsterDbtTranslatorSettings,
+    DbtCliResource,
+    DbtProject,
+    dbt_assets,
+)
 
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
@@ -20,18 +26,29 @@ dbt_project = DbtProject(
 dbt_project.prepare_if_dev()
 
 
-class EagerAutomationTranslator(DagsterDbtTranslator):
+class DbtAutomationTranslator(DagsterDbtTranslator):
     def get_automation_condition(
         self,
         dbt_resource_props: Mapping[str, Any],  # noqa: ARG002
     ) -> Optional[AutomationCondition]:
-        return AutomationCondition.eager()
+        return (
+            AutomationCondition.code_version_changed()
+            .any_deps_updated()
+            .any_downstream_conditions()
+        )
 
 
 @dbt_assets(
     manifest=dbt_project.manifest_path,
     project=dbt_project,
-    dagster_dbt_translator=EagerAutomationTranslator(),
+    dagster_dbt_translator=DbtAutomationTranslator(
+        settings=DagsterDbtTranslatorSettings(enable_code_references=True)
+    ),
 )
 def full_dbt_project(context: AssetExecutionContext, dbt: DbtCliResource):
-    yield from dbt.cli(["build"], context=context).stream()
+    yield from (
+        dbt.cli(["build"], context=context)
+        .stream()
+        .fetch_column_metadata()
+        .fetch_row_counts()
+    )
