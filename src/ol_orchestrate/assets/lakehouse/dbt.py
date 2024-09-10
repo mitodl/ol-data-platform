@@ -31,10 +31,13 @@ class DbtAutomationTranslator(DagsterDbtTranslator):
         self,
         dbt_resource_props: Mapping[str, Any],  # noqa: ARG002
     ) -> Optional[AutomationCondition]:
-        return (
-            AutomationCondition.code_version_changed()
-            .any_deps_updated()
-            .any_downstream_conditions()
+        no_upstream_dependencies_in_process = (
+            ~AutomationCondition.any_deps_in_progress()
+        )
+        has_upstream_changes = AutomationCondition.any_deps_updated()
+        has_code_changes = AutomationCondition.code_version_changed()
+        return no_upstream_dependencies_in_process & (
+            has_upstream_changes | has_code_changes
         )
 
 
