@@ -1,0 +1,15 @@
+---
+version: 2
+
+seeds:
+- name: user_course_roles
+  description: user access roles seed file used for row level access filters on Superset
+  columns:
+  - name: hashed_user_email
+    description: str, user_email hashed in sha256. e.g., sha256(cast('<USER_EMAIL>'
+      as varbinary))
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITx Online courses, {org}/{course}/{run_tag} for edX.org courses.
+  - name: courseaccess_role
+    description: str, instructor or staff
