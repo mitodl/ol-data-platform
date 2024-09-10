@@ -192,12 +192,8 @@ models:
     - not_null
   - name: user_username
     description: str, unique username on the open edX platform
-    tests:
-    - not_null
   - name: user_email
     description: str, user's email on the open edX platform
-    tests:
-    - not_null
   - name: user_full_name
     description: str, full name from user's profile on MITx Online or xPro application.
       For Residential, this is from the open edX users table.
@@ -209,9 +205,11 @@ models:
       and data_researcher on the open edX platform.
     tests:
     - not_null
+  - name: hashed_user_email
+    description: str, user_email hashed in sha256 by generate_hash_id.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "user_email", "courserun_readable_id", "courseaccess_role"]
+      column_list: ["platform", "hashed_user_email", "courserun_readable_id", "courseaccess_role"]
 
 - name: int__combined__course_runs
   description: Intermediate combined model for courses and runs from different platforms

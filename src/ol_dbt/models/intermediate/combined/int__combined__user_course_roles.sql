@@ -42,6 +42,10 @@ with mitxonline_courseroles as (
     select * from {{ ref('stg__edxorg__s3__user_profile') }}
 )
 
+, user_course_role_seed_file as (
+    select * from {{ ref('user_course_roles') }}
+)
+
 , combined_courseroles as (
     select
         '{{ var("mitxonline") }}' as platform
@@ -51,6 +55,7 @@ with mitxonline_courseroles as (
         , mitxonline_courseroles.courserun_readable_id
         , mitxonline_courseroles.organization
         , mitxonline_courseroles.courseaccess_role
+        , {{ generate_hash_id('mitxonline_openedx_users.user_email') }} as hashed_user_email
     from mitxonline_courseroles
     inner join mitxonline_openedx_users
         on mitxonline_courseroles.openedx_user_id = mitxonline_openedx_users.openedx_user_id
@@ -69,6 +74,7 @@ with mitxonline_courseroles as (
         , edxorg_courseroles.courserun_edx_readable_id as courserun_readable_id
         , edxorg_courseroles.organization
         , edxorg_courseroles.courseaccess_role
+        , {{ generate_hash_id('edxorg_users.user_email') }} as hashed_user_email
     from edxorg_courseroles
     inner join edxorg_users
         on edxorg_courseroles.user_id = edxorg_users.user_id
@@ -85,6 +91,7 @@ with mitxonline_courseroles as (
         , mitxpro_courseroles.courserun_readable_id
         , mitxpro_courseroles.organization
         , mitxpro_courseroles.courseaccess_role
+        , {{ generate_hash_id('mitxpro_openedx_users.user_email') }} as hashed_user_email
     from mitxpro_courseroles
     inner join mitxpro_openedx_users
         on mitxpro_courseroles.openedx_user_id = mitxpro_openedx_users.openedx_user_id
@@ -103,8 +110,28 @@ with mitxonline_courseroles as (
         , residential_courseroles.courserun_readable_id
         , residential_courseroles.organization
         , residential_courseroles.courseaccess_role
+        , {{ generate_hash_id('residential_openedx_users.user_email') }} as hashed_user_email
     from residential_courseroles
     inner join residential_openedx_users on residential_courseroles.user_id = residential_openedx_users.user_id
 )
 
-select * from combined_courseroles
+select
+    combined_courseroles.user_username
+    , combined_courseroles.user_email
+    , combined_courseroles.user_full_name
+    , coalesce(combined_courseroles.courserun_readable_id, user_course_role_seed_file.courserun_readable_id)
+    as courserun_readable_id
+    , coalesce(combined_courseroles.organization, user_course_role_seed_file.organization)
+    as organization
+    , coalesce(combined_courseroles.courseaccess_role, user_course_role_seed_file.courseaccess_role)
+    as courseaccess_role
+    , coalesce(combined_courseroles.hashed_user_email, user_course_role_seed_file.hashed_user_email)
+    as hashed_user_email
+    , coalesce(combined_courseroles.platform, user_course_role_seed_file.platform) as platform
+from combined_courseroles
+full outer join user_course_role_seed_file
+    on
+        combined_courseroles.platform = user_course_role_seed_file.platform
+        and combined_courseroles.hashed_user_email = user_course_role_seed_file.hashed_user_email
+        and combined_courseroles.courserun_readable_id = user_course_role_seed_file.courserun_readable_id
+        and combined_courseroles.courseaccess_role = user_course_role_seed_file.courseaccess_role
