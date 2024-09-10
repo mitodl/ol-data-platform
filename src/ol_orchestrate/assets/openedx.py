@@ -15,7 +15,6 @@ from dagster import (
     AssetIn,
     AssetKey,
     AssetOut,
-    AutoMaterializePolicy,
     AutomationCondition,
     DataVersion,
     Output,
@@ -26,6 +25,7 @@ from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from upath import UPath
 
+from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
     process_video_xml,
@@ -63,7 +63,7 @@ def openedx_live_courseware(context: AssetExecutionContext):
     ins={"courseware": AssetIn(key=AssetKey(["openedx", "courseware"]))},
     outs={
         "course_blocks": AssetOut(
-            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            automation_condition=upstream_or_code_changes(),
             description=(
                 "A json file containing the hierarchical representation"
                 "of the course structure information with course blocks."
@@ -72,7 +72,7 @@ def openedx_live_courseware(context: AssetExecutionContext):
             key=AssetKey(("openedx", "processed_data", "course_blocks")),
         ),
         "course_structure": AssetOut(
-            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            automation_condition=upstream_or_code_changes(),
             description=("A json file with the course structure information."),
             io_manager_key="s3file_io_manager",
             key=AssetKey(("openedx", "processed_data", "course_structure")),
@@ -132,7 +132,7 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
 
 
 @asset(
-    automation_condition=AutomationCondition.eager(),
+    automation_condition=upstream_or_code_changes(),
     description=(
         "An importable artifact representing the contents of an Open edX course."
     ),
@@ -188,7 +188,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
     ins={"course_xml": AssetIn(key=AssetKey(("openedx", "raw_data", "course_xml")))},
     outs={
         "course_metadata": AssetOut(
-            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            automation_condition=upstream_or_code_changes(),
             description=(
                 "Metadata about the course run that is extracted from the XML export."
             ),
@@ -196,7 +196,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
             key=AssetKey(("openedx", "processed_data", "course_metadata")),
         ),
         "course_video": AssetOut(
-            auto_materialize_policy=AutoMaterializePolicy.eager(),
+            automation_condition=upstream_or_code_changes(),
             description=(
                 "Details about the video elements in the course that are extracted "
                 "from the XML export."

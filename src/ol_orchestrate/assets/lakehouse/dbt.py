@@ -12,6 +12,7 @@ from dagster_dbt import (
     dbt_assets,
 )
 
+from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 DBT_REPO_DIR = (
@@ -31,14 +32,7 @@ class DbtAutomationTranslator(DagsterDbtTranslator):
         self,
         dbt_resource_props: Mapping[str, Any],  # noqa: ARG002
     ) -> Optional[AutomationCondition]:
-        no_upstream_dependencies_in_process = (
-            ~AutomationCondition.any_deps_in_progress()
-        )
-        has_upstream_changes = AutomationCondition.any_deps_updated()
-        has_code_changes = AutomationCondition.code_version_changed()
-        return no_upstream_dependencies_in_process & (
-            has_upstream_changes | has_code_changes
-        )
+        return upstream_or_code_changes()
 
 
 @dbt_assets(
