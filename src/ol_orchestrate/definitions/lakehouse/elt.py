@@ -3,6 +3,7 @@ import re
 
 from dagster import (
     AssetSelection,
+    AutomationConditionSensorDefinition,
     DefaultScheduleStatus,
     Definitions,
     ScheduleDefinition,
@@ -113,7 +114,13 @@ for count, group_name in enumerate(group_names, start=1):
 elt = Definitions(
     assets=[full_dbt_project, airbyte_assets],
     resources={"dbt": dbt_cli},
-    sensors=[],
+    sensors=[
+        AutomationConditionSensorDefinition(
+            "dbt_automation_sensor",
+            minimum_interval_seconds=3600,
+            asset_selection=[full_dbt_project],
+        )
+    ],
     jobs=airbyte_asset_jobs,
     schedules=airbyte_update_schedules,
 )

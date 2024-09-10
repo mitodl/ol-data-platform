@@ -1,6 +1,7 @@
 from typing import Any, Literal
 
 from dagster import (
+    AutomationConditionSensorDefinition,
     create_repository_using_definitions_args,
 )
 from dagster_aws.s3 import S3Resource
@@ -50,6 +51,24 @@ def s3_uploads_bucket(
 
 
 for deployment_name in OPENEDX_DEPLOYMENTS:
+    deployment_assets = [
+        late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(openedx_live_courseware, deployment_name),
+            OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+        ),
+        late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(course_structure, deployment_name),
+            OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+        ),
+        late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(course_xml, deployment_name),
+            OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+        ),
+        late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(extract_courserun_details, deployment_name),
+            OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+        ),
+    ]
     locals()[f"{deployment_name}_openedx_assets_definition"] = (
         create_repository_using_definitions_args(
             name=f"{deployment_name}_openedx_assets",
@@ -65,26 +84,14 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
                 ),
                 "s3": S3Resource(),
             },
-            assets=[
-                late_bind_partition_to_asset(
-                    add_prefix_to_asset_keys(openedx_live_courseware, deployment_name),
-                    OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
-                ),
-                late_bind_partition_to_asset(
-                    add_prefix_to_asset_keys(course_structure, deployment_name),
-                    OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
-                ),
-                late_bind_partition_to_asset(
-                    add_prefix_to_asset_keys(course_xml, deployment_name),
-                    OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
-                ),
-                late_bind_partition_to_asset(
-                    add_prefix_to_asset_keys(
-                        extract_courserun_details, deployment_name
-                    ),
-                    OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+            assets=deployment_assets,
+            sensors=[
+                course_run_sensor,
+                AutomationConditionSensorDefinition(
+                    f"{deployment_name}_openedx_automation_sensor",
+                    minimum_interval_seconds=3600,
+                    asset_selection=deployment_assets,
                 ),
             ],
-            sensors=[course_run_sensor],
         )
     )
