@@ -1653,3 +1653,38 @@ models:
   - name: course_video_url
     description: str, URL to the video to be displayed for this course/program. It
       can be an HLS or Youtube video URL.
+
+- name: stg__mitxonline__app__postgres__courses_coursetopic
+  columns:
+  - name: coursetopic_id
+    description: int, primary key for courses_coursetopic
+    tests:
+    - unique
+    - not_null
+  - name: coursetopic_name
+    description: str, name of a course topic
+    tests:
+    - not_null
+  - name: coursetopic_parent_id
+    description: int, id for the parent coursetopic of the subtopic. For example 'Computer
+      Science' is the parent topic of 'AI'
+  - name: coursetopic_created_on
+    description: timestamp, date and time when a course topic was initially created
+    tests:
+    - not_null
+  - name: coursetopic_updated_on
+    description: timestamp, date and time when a course topic was most recently updated
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["coursetopic_name", "coursetopic_parent_id"]
+
+- name: stg__mitxonline__app__postgres__cms_coursepage_topics
+  columns:
+  - name: id
+    description: int, primary key for cms_coursepage_topics
+  - name: coursepage_id
+    description: int, foreign key to cms_coursepage
+  - name: coursetopic_id
+    description: int, foreign key to courses_coursetopic

@@ -1840,3 +1840,26 @@ sources:
     - name: feature_image_id
       description: int, reference to wagtailimages_image. Image is used where the
         instructor is featured or linked.
+
+  - name: raw__mitxonline__app__postgres__courses_coursestopic
+    columns:
+    - name: id
+      description: int, primary key for courses_coursetopic
+    - name: name
+      description: str, name of a course topic
+    - name: parent_id
+      description: int, id for the parent coursetopic of the subtopic. For example
+        'Computer Science' is the parent topic of 'AI'
+    - name: created_on
+      description: timestamp, specifying when a course topic was initially created
+    - name: updated_on
+      description: timestamp, specifying when a course topic was most recently updated
+
+  - name: raw__mitxonline__app__postgres__cms_coursepage_topics
+    columns:
+    - name: id
+      description: int, primary key for cms_coursepage_topics
+    - name: coursepage_id
+      description: int, foreign key to cms_coursepage
+    - name: coursetopic_id
+      description: int, foreign key to courses_coursetopic
