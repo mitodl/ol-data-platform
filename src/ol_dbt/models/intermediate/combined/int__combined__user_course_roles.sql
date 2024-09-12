@@ -115,55 +115,54 @@ with mitxonline_courseroles as (
     inner join residential_openedx_users on residential_courseroles.user_id = residential_openedx_users.user_id
 )
 
-, combined_users as (
+, seed_file_users as (
     select * from (
         select
-            platform
-            , user_username
-            , user_email
-            , hashed_user_email
-            , user_full_name
-            , row_number() over (partition by hashed_user_email, platform order by user_email desc) as row_num
+            combined_courseroles.platform
+            , combined_courseroles.user_username
+            , combined_courseroles.user_email
+            , combined_courseroles.hashed_user_email
+            , combined_courseroles.user_full_name
+            , row_number() over (
+                partition by combined_courseroles.hashed_user_email, combined_courseroles.platform
+                order by combined_courseroles.user_email desc
+            ) as row_num
         from combined_courseroles
+        inner join user_course_role_seed_file
+            on combined_courseroles.hashed_user_email = user_course_role_seed_file.hashed_user_email
     )
     where row_num = 1
 )
 
-, combined_courseroles_with_seed as (
-    select
-        combined_courseroles.user_username
-        , combined_courseroles.user_email
-        , combined_courseroles.user_full_name
-        , coalesce(combined_courseroles.courserun_readable_id, user_course_role_seed_file.courserun_readable_id)
-        as courserun_readable_id
-        , coalesce(combined_courseroles.organization, user_course_role_seed_file.organization)
-        as organization
-        , coalesce(combined_courseroles.courseaccess_role, user_course_role_seed_file.courseaccess_role)
-        as courseaccess_role
-        , coalesce(combined_courseroles.hashed_user_email, user_course_role_seed_file.hashed_user_email)
-        as hashed_user_email
-        , coalesce(combined_courseroles.platform, user_course_role_seed_file.platform) as platform
-    from combined_courseroles
-    full outer join user_course_role_seed_file
-        on
-            combined_courseroles.platform = user_course_role_seed_file.platform
-            and combined_courseroles.hashed_user_email = user_course_role_seed_file.hashed_user_email
-            and combined_courseroles.courserun_readable_id = user_course_role_seed_file.courserun_readable_id
-            and combined_courseroles.courseaccess_role = user_course_role_seed_file.courseaccess_role
-)
-
---- augment user's email, full name added by seed file
 select
-    combined_courseroles_with_seed.platform
-    , combined_users.user_username
-    , combined_users.user_email
-    , combined_users.user_full_name
-    , combined_courseroles_with_seed.courserun_readable_id
-    , combined_courseroles_with_seed.organization
-    , combined_courseroles_with_seed.courseaccess_role
-    , combined_courseroles_with_seed.hashed_user_email
-from combined_courseroles_with_seed
-left join combined_users
+    platform
+    , combined_courseroles.user_username
+    , combined_courseroles.user_email
+    , combined_courseroles.user_full_name
+    , combined_courseroles.courserun_readable_id
+    , organization
+    , courseaccess_role
+    , hashed_user_email
+from combined_courseroles
+
+union all
+
+select
+    user_course_role_seed_file.platform
+    , seed_file_users.user_username
+    , seed_file_users.user_email
+    , seed_file_users.user_full_name
+    , user_course_role_seed_file.courserun_readable_id
+    , user_course_role_seed_file.organization
+    , user_course_role_seed_file.courseaccess_role
+    , user_course_role_seed_file.hashed_user_email
+from user_course_role_seed_file
+left join combined_courseroles
     on
-        combined_courseroles_with_seed.platform = combined_users.platform
-        and combined_courseroles_with_seed.hashed_user_email = combined_users.hashed_user_email
+        user_course_role_seed_file.platform = combined_courseroles.platform
+        and user_course_role_seed_file.hashed_user_email = combined_courseroles.hashed_user_email
+        and user_course_role_seed_file.courserun_readable_id = combined_courseroles.courserun_readable_id
+        and user_course_role_seed_file.courseaccess_role = combined_courseroles.courseaccess_role
+left join seed_file_users
+    on user_course_role_seed_file.hashed_user_email = seed_file_users.hashed_user_email
+where combined_courseroles.hashed_user_email is null
