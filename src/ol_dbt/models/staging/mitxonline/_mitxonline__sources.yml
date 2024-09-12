@@ -1729,40 +1729,6 @@ sources:
     - name: is_hidden
       description: boolean, indicating if the video is hidden for the course.
 
-  - name: raw__mitxonline__app__postgres__cms_coursepage
-    columns:
-    - name: page_ptr_id
-      description: int, reference to wagtailcore_page
-    - name: course_id
-      description: int, reference to courses_course
-    - name: description
-      description: text, the description shown on the home page and product page.
-    - name: length
-      description: str, a short description indicating how long it takes to complete
-        (e.g. '4 weeks').
-    - name: effort
-      description: str, a short description indicating how much effort is required
-        (e.g. 1-3 hours per week).
-    - name: price
-      description: json string, specify the product price details.
-    - name: prerequisites
-      description: text, a short description indicating prerequisites of this course/program.
-    - name: faq_url
-      description: str, URL a relevant FAQ page or entry for the course/program.
-    - name: about
-      description: text, details about this course/program.
-    - name: what_you_learn
-      description: text, what you will learn from this course.
-    - name: feature_image_id
-      description: int, reference to wagtailimages_image. Image that will be used
-        where the course is featured or linked.
-    - name: video_url
-      description: str, URL to the video to be displayed for this course/program.
-        It can be an HLS or Youtube video URL.
-    - name: faculty_section_title
-      description: str, the title text to display in the faculty cards section of
-        the product page.
-
   - name: raw__mitxonline__app__postgres__wagtailcore_page
     columns:
     - name: id
@@ -1825,10 +1791,78 @@ sources:
         for published pages will be the title as it exists in the current published
         version).
 
+  - name: raw__mitxonline__app__postgres__cms_coursepage
+    columns:
+    - name: page_ptr_id
+      description: int, foreign key to wagtailcore_page
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: description
+      description: text, the description shown on the home page and product page.
+    - name: length
+      description: str, a short description indicating how long it takes to complete
+        (e.g. '4 weeks').
+    - name: effort
+      description: str, a short description indicating how much effort is required
+        (e.g. 1-3 hours per week).
+    - name: price
+      description: json string, specify the product price details.
+    - name: prerequisites
+      description: text, a short description indicating prerequisites of this course.
+    - name: faq_url
+      description: str, URL a relevant FAQ page or entry for the course.
+    - name: about
+      description: text, details about this course.
+    - name: what_you_learn
+      description: text, what you will learn from this course.
+    - name: feature_image_id
+      description: int, reference to wagtailimages_image. Image that will be used
+        where the course is featured or linked.
+    - name: video_url
+      description: str, URL to the video to be displayed for this course. It can be
+        an HLS or Youtube video URL.
+    - name: faculty_section_title
+      description: str, the title text to display in the faculty cards section of
+        the product page.
+
+  - name: raw__mitxonline__app__postgres__cms_programpage
+    columns:
+    - name: page_ptr_id
+      description: int, foreign key to wagtailcore_page
+    - name: program_id
+      description: int, foreign key to courses_program
+    - name: description
+      description: text, the description shown on the home page and product page.
+    - name: length
+      description: str, a short description indicating how long it takes to complete
+        (e.g. '4 weeks').
+    - name: effort
+      description: str, a short description indicating how much effort is required
+        (e.g. 1-3 hours per week).
+    - name: price
+      description: json string, specify the product price details.
+    - name: prerequisites
+      description: text, a short description indicating prerequisites of this program.
+    - name: faq_url
+      description: str, URL a relevant FAQ page or entry for the program.
+    - name: about
+      description: text, details about this program.
+    - name: what_you_learn
+      description: text, what you will learn from this program.
+    - name: feature_image_id
+      description: int, reference to wagtailimages_image. Image that will be used
+        where the course is featured or linked.
+    - name: video_url
+      description: str, URL to the video to be displayed for this program. It can
+        be an HLS or Youtube video URL.
+    - name: faculty_section_title
+      description: str, the title text to display in the faculty cards section of
+        the product page.
+
   - name: raw__mitxonline__app__postgres__cms_instructorpage
     columns:
     - name: page_ptr_id
-      description: int, reference to wagtailcore_page
+      description: int, foreign key to wagtailcore_page
     - name: instructor_name
       description: str, the name of the instructor.
     - name: instructor_title
@@ -1840,6 +1874,14 @@ sources:
     - name: feature_image_id
       description: int, reference to wagtailimages_image. Image is used where the
         instructor is featured or linked.
+
+  - name: raw__mitxonline__app__postgres__cms_instructorpagelink
+    columns:
+    - name: page_id
+      description: int, foreign key to wagtail_page referring to the course page
+    - name: linked_instructor_page_id
+      description: int, foreign key to wagtail_page referring to the linked instructor
+        page
 
   - name: raw__mitxonline__app__postgres__courses_coursestopic
     columns:

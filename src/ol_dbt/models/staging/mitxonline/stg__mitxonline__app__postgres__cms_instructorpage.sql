@@ -5,9 +5,10 @@ with source as (
 , cleaned as (
     select
         page_ptr_id as wagtail_page_id
-        , instructor_name as cms_instructorpage_instructor_name
-        , instructor_title as cms_instructorpage_instructor_title
-        , instructor_bio_long as cms_instructorpage_instructor_bio_long
+        , instructor_name
+        , instructor_title
+        , instructor_bio_short
+        , instructor_bio_long
     from source
 )
 

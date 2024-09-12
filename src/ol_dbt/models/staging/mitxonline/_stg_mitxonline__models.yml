@@ -1613,16 +1613,85 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "video_id"]
 
+- name: stg__mitxonline__app__postgres__cms_wagtail_page
+  columns:
+  - name: wagtail_page_id
+    description: int, primary key for this table.
+    tests:
+    - not_null
+    - unique
+  - name: wagtail_page_path
+    description: str, the full materialized path for each node (readonly) e.g. 0001
+      is root path, 00010001 is the path to a node in this requirement tree
+    tests:
+    - not_null
+    - unique
+  - name: wagtail_page_depth
+    description: int, depth of a node in the tree. A root node has a depth of 1.
+    tests:
+    - not_null
+  - name: wagtail_page_num_children
+    description: int, the number of children of a node
+    tests:
+    - not_null
+  - name: wagtail_page_title
+    description: str, human-readable title of the page
+    tests:
+    - not_null
+  - name: wagtail_page_slug
+    description: str, this is used for constructing the page’s URL.
+    tests:
+    - not_null
+  - name: wagtail_page_is_live
+    description: boolean, if set to true this page is published
+    tests:
+    - not_null
+  - name: wagtail_page_has_unpublished_changes
+    description: boolean, set to True when the page is either in draft or published
+      with draft changes.
+    tests:
+    - not_null
+  - name: wagtail_page_seo_title
+    description: str, alternate SEO-crafted title, for use in the page’s <title> HTML
+      tag.
+    tests:
+    - not_null
+  - name: wagtail_page_url_path
+    description: str, url path for the page
+    tests:
+    - not_null
+  - name: wagtail_page_search_description
+    description: str, SEO-crafted description of the content, used for search indexing.
+      This is also suitable for the page’s <meta name="description"> HTML tag.
+    tests:
+    - not_null
+  - name: contenttype_id
+    description: int, primary key in django_contenttype. The cms_ table of that has
+      data for this page
+    tests:
+    - not_null
+  - name: owner_user_id
+    description: int, foreign key to users_user to reference the page owner
+  - name: wagtail_page_live_pagerevision_id
+    description: int, foreign key to wagtailcore_pagerevision of the page's latest
+      revision
+  - name: wagtail_page_latest_revision_created_on
+    description: timestamp, timestamp of the page's latest revision
+  - name: wagtail_page_first_published_on
+    description: timestamp, date and time when the page was first published
+  - name: wagtail_page_last_published_on
+    description: timestamp, date and time when the page was last published
+
 - name: stg__mitxonline__app__postgres__cms_coursepage
   description: course page metadata sourced from Wagtail CMS
   columns:
   - name: wagtail_page_id
-    description: int, reference to wagtailcore_page
+    description: int, foreign key to wagtail_page
     tests:
     - unique
     - not_null
   - name: course_id
-    description: int, reference to courses_course
+    description: int, foreign key to courses_course
     tests:
     - unique
     - not_null
@@ -1638,21 +1707,62 @@ models:
   - name: course_effort
     description: str, a short description indicating how much effort is required (e.g.
       1-3 hours per week).
-  - name: course_price
+  - name: course_price_detail
     description: json, specify the product price details.
     tests:
     - not_null
   - name: course_prerequisites
-    description: text, a short description indicating prerequisites of this course/program.
+    description: text, a short description indicating prerequisites of this course.
   - name: course_faq_url
-    description: str, URL a relevant FAQ page or entry for the course/program.
+    description: str, URL a relevant FAQ page or entry for the course.
   - name: course_about
-    description: text, details about this course/program.
+    description: text, details about this course.
   - name: course_what_you_learn
     description: text, what you will learn from this course.
   - name: course_video_url
-    description: str, URL to the video to be displayed for this course/program. It
-      can be an HLS or Youtube video URL.
+    description: str, URL to the video to be displayed for this course. It can be
+      an HLS or Youtube video URL.
+
+- name: stg__mitxonline__app__postgres__cms_programpage
+  description: program page metadata sourced from Wagtail CMS
+  columns:
+  - name: wagtail_page_id
+    description: int, foreign key to wagtail_page
+    tests:
+    - unique
+    - not_null
+  - name: program_id
+    description: int, foreign key to courses_program
+    tests:
+    - unique
+    - not_null
+  - name: program_description
+    description: text, the description shown on the home page and product page.
+    tests:
+    - not_null
+  - name: program_length
+    description: str, a short description indicating how long it takes to complete
+      (e.g. '4 weeks').
+    tests:
+    - not_null
+  - name: program_effort
+    description: str, a short description indicating how much effort is required (e.g.
+      1-3 hours per week).
+  - name: program_price_detail
+    description: json, specify the product price details.
+    tests:
+    - not_null
+  - name: program_prerequisites
+    description: text, a short description indicating prerequisites of this program.
+  - name: program_faq_url
+    description: str, URL a relevant FAQ page or entry for the program.
+  - name: program_about
+    description: text, details about this program.
+  - name: program_what_you_learn
+    description: text, what you will learn from this program.
+  - name: program_video_url
+    description: str, URL to the video to be displayed for this program. It can be
+      an HLS or Youtube video URL.
 
 - name: stg__mitxonline__app__postgres__courses_coursetopic
   columns:
@@ -1682,9 +1792,40 @@ models:
 
 - name: stg__mitxonline__app__postgres__cms_coursepage_topics
   columns:
-  - name: id
-    description: int, primary key for cms_coursepage_topics
-  - name: coursepage_id
-    description: int, foreign key to cms_coursepage
+  - name: wagtail_page_id
+    description: int, foreign key to cms_coursepage referring to the course page
+    tests:
+    - not_null
   - name: coursetopic_id
     description: int, foreign key to courses_coursetopic
+    tests:
+    - not_null
+
+- name: stg__mitxonline__app__postgres__cms_instructorpage
+  columns:
+  - name: wagtail_page_id
+    description: int, foreign key to cms_coursepage referring to the course page
+    tests:
+    - not_null
+  - name: instructor_name
+    description: str, the name of the instructor.
+    tests:
+    - not_null
+  - name: instructor_title
+    description: str, the instructor's title (academic or otherwise).
+  - name: instructor_bio_short
+    description: str, a short biography of the instructor. May be blank.
+  - name: instructor_bio_long
+    description: str, a longer biography of the instructor.
+
+- name: stg__mitxonline__app__postgres__cms_instructorpagelink
+  columns:
+  - name: wagtail_page_id
+    description: int, foreign key to wagtail_page referring to the course page
+    tests:
+    - not_null
+  - name: instructor_wagtail_page_id
+    description: int, foreign key to wagtail_page referring to the linked instructor
+      page
+    tests:
+    - not_null

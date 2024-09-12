@@ -4,5 +4,5 @@ with source as (
 
 select
     coursepage_id as wagtail_page_id
-    , coursetopic_id
+    , coursestopic_id as coursetopic_id
 from source
