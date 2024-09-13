@@ -9,12 +9,12 @@ with source as (
         , description as course_description
         , length as course_length
         , effort as course_effort
-        , price as course_price_detail
         , prerequisites as course_prerequisites
         , faq_url as course_faq_url
         , about as course_about
         , what_you_learn as course_what_you_learn
         , video_url as course_video_url
+        , json_query(price, 'lax $.value.text' omit quotes) as course_price
     from source
 )
 

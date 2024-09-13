@@ -20,6 +20,7 @@ select
     , courses.course_readable_id
     , courses.course_number
     , course_pages.course_description
+    , course_pages.course_price
     , course_pages.course_length
     , course_pages.course_effort
     , course_pages.course_prerequisites

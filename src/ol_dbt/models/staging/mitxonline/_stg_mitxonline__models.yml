@@ -1707,8 +1707,9 @@ models:
   - name: course_effort
     description: str, a short description indicating how much effort is required (e.g.
       1-3 hours per week).
-  - name: course_price_detail
-    description: json, specify the product price details.
+  - name: course_price
+    description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
+      available)
     tests:
     - not_null
   - name: course_prerequisites
@@ -1748,8 +1749,8 @@ models:
   - name: program_effort
     description: str, a short description indicating how much effort is required (e.g.
       1-3 hours per week).
-  - name: program_price_detail
-    description: json, specify the product price details.
+  - name: program_price
+    description: str, product price in plain text. e.g. $250 - $1000.
     tests:
     - not_null
   - name: program_prerequisites

@@ -21,6 +21,7 @@ select
     , programs.program_is_dedp
     , programs.program_is_micromasters
     , program_pages.program_description
+    , program_pages.program_price
     , program_pages.program_length
     , program_pages.program_effort
     , program_pages.program_prerequisites

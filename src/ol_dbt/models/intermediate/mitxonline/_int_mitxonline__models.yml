@@ -913,6 +913,9 @@ models:
     - not_null
   - name: course_description
     description: text, the description shown on the home page and product page.
+  - name: course_price
+    description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
+      available)
   - name: course_length
     description: str, a short description indicating how long it takes to complete
       (e.g. '4 weeks').
@@ -1230,6 +1233,8 @@ models:
     - not_null
   - name: program_description
     description: text, the description shown on the home page and product page.
+  - name: program_price
+    description: str, product price in plain text. e.g. $250 - $1000.
   - name: program_length
     description: str, a short description indicating how long it takes to complete
       (e.g. '4 weeks').
