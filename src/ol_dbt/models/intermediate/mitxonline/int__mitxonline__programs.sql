@@ -18,6 +18,7 @@ select
     , programs.program_is_live
     , programs.program_readable_id
     , programs.program_type
+    , programs.program_availability
     , programs.program_is_dedp
     , programs.program_is_micromasters
     , program_pages.program_description

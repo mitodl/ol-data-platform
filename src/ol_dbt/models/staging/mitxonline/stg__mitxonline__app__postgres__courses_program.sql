@@ -11,6 +11,7 @@ with source as (
         , title as program_title
         , readable_id as program_readable_id
         , program_type
+        , availability as program_availability
         , if(program_type like 'MicroMasters%', true, false) as program_is_micromasters
         , if(readable_id like '%DEDP%', true, false) as program_is_dedp
         ,{{ cast_timestamp_to_iso8601('created_on') }} as program_created_on
