@@ -1200,6 +1200,17 @@ models:
     description: str, short description indicating about the time commitments
   - name: cms_programpage_catalog_details
     description: str, the description shown on the catalog page for this product
+  - name: cms_programpage_slug
+    description: str, used for constructing the program page’s URL.
+  - name: cms_programpage_url_path
+    description: str, url path for the page
+  - name: cms_programpage_is_live
+    description: boolean, if set to true this program page is published
+  - name: cms_programpage_first_published_on
+    description: timestamp, date and time when the program page was first published
+  - name: cms_programpage_last_published_on
+    description: timestamp, date and time when the program page was last published
+
 - name: int__mitxpro__program_runs
   description: Intermediate model of program runs in MITxPro
   columns:
@@ -1283,6 +1294,17 @@ models:
     description: str, short description indicating about the time commitments
   - name: cms_coursepage_catalog_details
     description: str, the description shown on the catalog page for this product
+  - name: cms_coursepage_slug
+    description: str, used for constructing the course page’s URL.
+  - name: cms_coursepage_url_path
+    description: str, url path for the page
+  - name: cms_coursepage_is_live
+    description: boolean, if set to true this course page is published
+  - name: cms_coursepage_first_published_on
+    description: timestamp, date and time when the course page was first published
+  - name: cms_coursepage_last_published_on
+    description: timestamp, date and time when the course page was last published
+
 - name: int__mitxpro__course_runs
   description: Intermediate model of course runs in MIT xPro.
   columns:

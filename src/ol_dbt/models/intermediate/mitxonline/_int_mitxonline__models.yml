@@ -884,6 +884,7 @@ models:
       compare_model: ref('stg__mitxonline__app__postgres__courses_programenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id"]
+
 - name: int__mitxonline__courses
   description: Intermediate model for MITxOnline courses
   columns:
@@ -924,6 +925,16 @@ models:
     description: text, details about this course.
   - name: course_what_you_learn
     description: text, what you will learn from this course.
+  - name: course_page_slug
+    description: str, used for constructing the program page’s URL.
+  - name: course_page_url_path
+    description: str, url path for the page
+  - name: course_page_is_live
+    description: boolean, if set to true this program page is published
+  - name: course_page_first_published_on
+    description: timestamp, date and time when the course page was first published
+  - name: course_page_last_published_on
+    description: timestamp, date and time when the course page was last published
 
 - name: int__mitxonline__course_to_departments
   description: Intermediate model for MITxOnline course to department
@@ -1231,6 +1242,16 @@ models:
     description: text, details about this program.
   - name: program_what_you_learn
     description: text, what you will learn from this program.
+  - name: program_page_slug
+    description: str, used for constructing the program page’s URL.
+  - name: program_page_url_path
+    description: str, url path for the page
+  - name: program_page_is_live
+    description: boolean, if set to true this program page is published
+  - name: program_page_first_published_on
+    description: timestamp, date and time when the page was first published
+  - name: program_page_last_published_on
+    description: timestamp, date and time when the page was last published
 
 - name: int__mitxonline__program_requirements
   columns:
