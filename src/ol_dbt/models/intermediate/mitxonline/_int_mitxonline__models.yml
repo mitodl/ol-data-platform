@@ -1227,6 +1227,10 @@ models:
     description: str, either 'anytime' or 'date'
     tests:
     - not_null
+  - name: program_certification_type
+    description: str, either 'MicroMasters Credential' or 'Certificate of Completion'
+    tests:
+    - not_null
   - name: program_is_dedp
     description: boolean, specifying if the program is DEDP from readable_id
     tests:
