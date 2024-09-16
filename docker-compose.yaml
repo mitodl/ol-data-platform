@@ -1,3 +1,4 @@
+---
 # -*- mode: yaml -*-
 
 services:
@@ -8,16 +9,17 @@ services:
     container_name: dagster_webserver
     image: dagster_webserver_image
     restart: unless-stopped
-    entrypoint: ["poetry", "run", "dagster-webserver", "-w", "/opt/dagster/app/workspace.yaml", "-h", "0.0.0.0", "-p", "3000"]
+    entrypoint: ["poetry", "run", "dagster-webserver", "-w", "/opt/dagster/app/workspace.yaml",
+      "-h", "0.0.0.0", "-p", "3000"]
     ports:
-      - ":3000"
+    - ":3000"
     env_file:
-      - .env
+    - .env
     environment:
-      - DAGSTER_CURRENT_IMAGE: "dagster_webserver_image"
+    - DAGSTER_CURRENT_IMAGE: "dagster_webserver_image"
     volumes: # Make docker client accessible so we can terminate containers from the webserver
-      - "{{ context.edx_pipeline_definition_directory }}:/etc/dagster/:ro"
-      - /etc/aws/:/etc/aws/:ro
+    - "{{ context.edx_pipeline_definition_directory }}:/etc/dagster/:ro"
+    - /etc/aws/:/etc/aws/:ro
 
   # This service runs the dagster-daemon process, which is responsible for taking runs
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
@@ -28,9 +30,9 @@ services:
     # restart: unless-stopped
     entrypoint: ["poetry", "run", "dagster-daemon", "run", "-w", "/opt/dagster/app/workspace.yaml"]
     env_file:
-      - .env
+    - .env
     environment:
-      - DAGSTER_CURRENT_IMAGE: "dagster_daemon_image"
+    - DAGSTER_CURRENT_IMAGE: "dagster_daemon_image"
     volumes: # Make docker client accessible so we can terminate containers from the webserver
-      - "{{ context.edx_pipeline_definition_directory }}:/etc/dagster/:ro"
-      - /etc/aws/:/etc/aws/:ro
+    - "{{ context.edx_pipeline_definition_directory }}:/etc/dagster/:ro"
+    - /etc/aws/:/etc/aws/:ro
