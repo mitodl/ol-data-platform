@@ -1,0 +1,36 @@
+# -*- mode: yaml -*-
+
+services:
+  # This service runs dagster-webserver, which loads your user code from the user code container.
+  # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
+  # a queue and later dequeued and launched by dagster-daemon.
+  dagster-webserver:
+    container_name: dagster_webserver
+    image: dagster_webserver_image
+    restart: unless-stopped
+    entrypoint: ["poetry", "run", "dagster-webserver", "-w", "/opt/dagster/app/workspace.yaml", "-h", "0.0.0.0", "-p", "3000"]
+    ports:
+      - ":3000"
+    env_file:
+      - .env
+    environment:
+      - DAGSTER_CURRENT_IMAGE: "dagster_webserver_image"
+    volumes: # Make docker client accessible so we can terminate containers from the webserver
+      - "{{ context.edx_pipeline_definition_directory }}:/etc/dagster/:ro"
+      - /etc/aws/:/etc/aws/:ro
+
+  # This service runs the dagster-daemon process, which is responsible for taking runs
+  # off of the queue and launching them, as well as creating runs from schedules or sensors.
+  dagster-daemon:
+    container_name: dagster_daemon
+    image: dagster_daemon_image
+    restart: on-failure
+    # restart: unless-stopped
+    entrypoint: ["poetry", "run", "dagster-daemon", "run", "-w", "/opt/dagster/app/workspace.yaml"]
+    env_file:
+      - .env
+    environment:
+      - DAGSTER_CURRENT_IMAGE: "dagster_daemon_image"
+    volumes: # Make docker client accessible so we can terminate containers from the webserver
+      - "{{ context.edx_pipeline_definition_directory }}:/etc/dagster/:ro"
+      - /etc/aws/:/etc/aws/:ro
