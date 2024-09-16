@@ -16,6 +16,19 @@ with courses as (
     select * from {{ ref('stg__mitxpro__app__postgres__courses_platform') }}
 )
 
+, certificate_page as (
+    select * from {{ ref('stg__mitxpro__app__postgres__cms_certificatepage') }}
+)
+
+, certificate_page_path as (
+    select
+        certificate_page.wagtail_page_id
+        , wagtail_page.wagtail_page_path
+    from certificate_page
+    inner join wagtail_page
+        on certificate_page.wagtail_page_id = wagtail_page.wagtail_page_id
+)
+
 select
     courses.course_id
     , courses.program_id
@@ -31,6 +44,7 @@ select
     , cms_courses.cms_coursepage_duration
     , cms_courses.cms_coursepage_format
     , cms_courses.cms_coursepage_time_commitment
+    , certificate_page.cms_certificate_ceus
     , wagtail_page.wagtail_page_slug as cms_coursepage_slug
     , wagtail_page.wagtail_page_url_path as cms_coursepage_url_path
     , wagtail_page.wagtail_page_is_live as cms_coursepage_is_live
@@ -43,3 +57,5 @@ left join wagtail_page
     on cms_courses.wagtail_page_id = wagtail_page.wagtail_page_id
 left join platform
     on courses.platform_id = platform.platform_id
+left join certificate_page_path
+    on wagtail_page.wagtail_page_path like certificate_page_path.wagtail_page_path || '%'

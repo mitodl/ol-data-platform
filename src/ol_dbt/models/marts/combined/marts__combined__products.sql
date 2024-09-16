@@ -6,6 +6,10 @@ with mitxonline_product as (
     select * from {{ ref('int__mitxonline__course_runs') }}
 )
 
+, mitxonline_courses as (
+    select * from {{ ref('int__mitxonline__courses') }}
+)
+
 , mitxpro_product as (
     select * from {{ ref('int__mitxpro__ecommerce_product') }}
 )
@@ -41,9 +45,18 @@ with mitxonline_product as (
         , mitxonline_course_runs.courserun_enrollment_start_on as enrollment_start_on
         , mitxonline_course_runs.courserun_enrollment_end_on as enrollment_end_on
         , mitxonline_course_runs.courserun_upgrade_deadline
+        , mitxonline_courses.course_length as duration
+        , mitxonline_courses.course_effort as time_commitment
+        , mitxonline_courses.course_certification_type as certification_type
+        , if(mitxonline_course_runs.courserun_is_self_paced = true, 'Self-paced', 'Instructor-paced')
+        as pace
     from mitxonline_product
     left join mitxonline_course_runs
         on mitxonline_product.courserun_id = mitxonline_course_runs.courserun_id
+    left join mitxonline_courses
+        on mitxonline_course_runs.course_id = mitxonline_courses.course_id
+    left join program_requirements
+        on mitxonline_courses.course_id = program_requirements.course_id
 )
 
 , mitxpro_product_view as (
@@ -56,6 +69,10 @@ with mitxonline_product as (
         , mitxpro_product.product_created_on
         , mitxpro_course_runs.courserun_enrollment_start_on as enrollment_start_on
         , mitxpro_course_runs.courserun_enrollment_end_on as enrollment_end_on
+        , mitxpro_courses.cms_coursepage_duration as duration
+        , mitxpro_courses.cms_coursepage_time_commitment as time_commitment
+        , mitxpro_courses.cms_coursepage_format as delivery
+        , mitxpro_courses.cms_certificate_ceus as continuing_education_credits
         , if(mitxpro_product.product_type = 'program', 'program run', mitxpro_product.product_type) as product_type
         , coalesce(mitxpro_courses.platform_name, mitxpro_programs.platform_name) as product_platform
         , coalesce(
@@ -93,6 +110,13 @@ select
     , enrollment_start_on
     , enrollment_end_on
     , courserun_upgrade_deadline
+    , pace
+    , duration
+    , time_commitment
+    , certification_type
+    , 'Online' as delivery
+    , null as continuing_education_credits
+    , 'MITx' as offered_by
 from mitxonline_product_view
 
 union all
@@ -114,4 +138,11 @@ select
     , enrollment_start_on
     , enrollment_end_on
     , null as courserun_upgrade_deadline
+    , null as pace
+    , duration
+    , time_commitment
+    , 'Professional Certificate' as certification_type
+    , delivery
+    , continuing_education_credits
+    , 'xPro' as offered_by
 from mitxpro_product_view

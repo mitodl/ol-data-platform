@@ -13,6 +13,29 @@ with courses as (
     select * from {{ ref('stg__mitxonline__app__postgres__cms_wagtail_page') }}
 )
 
+, program_requirements as (
+    select * from {{ ref('int__mitxonline__program_requirements') }}
+)
+
+, programs as (
+    select * from {{ ref('int__mitxonline__programs') }}
+)
+
+, course_certification_type as (
+    select * from (
+        select
+            program_requirements.course_id
+            , program_requirements.program_id
+            , programs.program_certification_type
+            , row_number() over (
+                partition by program_requirements.course_id order by programs.program_is_micromasters
+            ) as row_num
+        from program_requirements
+        inner join programs on program_requirements.program_id = programs.program_id
+    )
+    where row_num = 1
+)
+
 select
     courses.course_id
     , courses.course_title
@@ -26,6 +49,7 @@ select
     , course_pages.course_prerequisites
     , course_pages.course_about
     , course_pages.course_what_you_learn
+    , course_certification_type.program_certification_type as course_certification_type
     , wagtail_page.wagtail_page_slug as course_page_slug
     , wagtail_page.wagtail_page_url_path as course_page_url_path
     , wagtail_page.wagtail_page_is_live as course_page_is_live
@@ -34,3 +58,4 @@ select
 from courses
 left join course_pages on courses.course_id = course_pages.course_id
 left join wagtail_page on course_pages.wagtail_page_id = wagtail_page.wagtail_page_id
+left join course_certification_type on courses.course_id = course_certification_type.course_id

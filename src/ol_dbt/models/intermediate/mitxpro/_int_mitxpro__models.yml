@@ -1294,6 +1294,9 @@ models:
     description: str, short description indicating about the time commitments
   - name: cms_coursepage_catalog_details
     description: str, the description shown on the catalog page for this product
+  - name: cms_certificate_ceus
+    description: str, number of continuing education units or credits offered. e.g.
+      4.5
   - name: cms_coursepage_slug
     description: str, used for constructing the course page’s URL.
   - name: cms_coursepage_url_path
