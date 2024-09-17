@@ -454,6 +454,33 @@ models:
   - name: courserun_upgrade_deadline
     description: timestamp, date and time beyond which the learner can not enroll
       in paid course mode. Only populated for MITx Online courses.
+  - name: duration
+    description: str, a short description indicating how long the course or program
+      takes to complete (e.g. '4 weeks')
+  - name: time_commitment
+    description: str, short description indicating about the time commitments
+  - name: certification_type
+    description: str, either 'MicroMasters Credential' or 'Certificate of Completion'
+      for MITx Online courses. 'Professional Certificate' for xPro courses.
+    tests:
+    - not_null
+  - name: delivery
+    description: str, 'Online' or 'Other' for xPro. 'Online' for MITx Online.
+    tests:
+    - not_null
+  - name: continuing_education_credits
+    description: str, number of continuing education units or credits offered. e.g.
+      4.5. NULL for MITx Online courses.
+  - name: pace
+    description: str, 'Self-paced' or 'Instructor-paced' for MITx Online courses.
+  - name: topics
+    description: str, list of topic names for a course.
+  - name: instructors
+    description: str, list of instructor names for a course.
+  - name: offered_by
+    description: str, 'MITx' or 'xPro'
+    tests:
+    - not_null
 
 - name: marts__combined_video_engagements
   description: Learners video engagements - play, pause, seek, or stop video actions

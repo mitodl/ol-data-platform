@@ -928,6 +928,14 @@ models:
     description: text, details about this course.
   - name: course_what_you_learn
     description: text, what you will learn from this course.
+  - name: course_certification_type
+    description: str, either 'MicroMasters Credential' or 'Certificate of Completion'.
+    tests:
+    - not_null
+  - name: course_topics
+    description: str, list of topic names for a course.
+  - name: course_instructors
+    description: str, list of instructor names for a course.
   - name: course_page_slug
     description: str, used for constructing the program page’s URL.
   - name: course_page_url_path

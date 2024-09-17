@@ -1297,6 +1297,10 @@ models:
   - name: cms_certificate_ceus
     description: str, number of continuing education units or credits offered. e.g.
       4.5
+  - name: course_topics
+    description: str, list of topic names for a course.
+  - name: course_instructors
+    description: str, list of instructor names for a course.
   - name: cms_coursepage_slug
     description: str, used for constructing the course page’s URL.
   - name: cms_coursepage_url_path
@@ -1452,9 +1456,6 @@ models:
       run
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxpro__course_runs')
-        field: courserun_id
   - name: courserun_title
     description: str, title of the course run
     tests:
@@ -1469,9 +1470,6 @@ models:
     description: int, foreign key to courses_course representing a single course
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxpro__courses')
-        field: course_id
   - name: courserungrade_grade
     description: float, user's grade for the course (range between 0.0 to 1.0)
     tests:
@@ -1523,23 +1521,14 @@ models:
       run
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxpro__course_runs')
-        field: courserun_id
   - name: course_id
     description: int, foreign key to courses_course representing a single course
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxpro__courses')
-        field: course_id
   - name: user_id
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxpro__users')
-        field: user_id
   - name: courseruncertificate_url
     description: str, the full URL to the certificate on MIT xPro if it's not revoked
     tests:
@@ -1840,6 +1829,13 @@ models:
     description: int, primary key in courses_coursetopic
     tests:
     - not_null
+  - name: coursetopic_name
+    description: str, name of a course topic
+    tests:
+    - not_null
+  - name: coursetopic_parent_coursetopic_id
+    description: int, id for the parent coursetopic for subtopics. For example 'Technology'
+      is the parent topic for 'Technology:Data Science'
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["course_id", "coursetopic_id"]

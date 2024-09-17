@@ -48,6 +48,8 @@ with mitxonline_product as (
         , mitxonline_courses.course_length as duration
         , mitxonline_courses.course_effort as time_commitment
         , mitxonline_courses.course_certification_type as certification_type
+        , mitxonline_courses.course_topics as topics
+        , mitxonline_courses.course_instructors as instructors
         , if(mitxonline_course_runs.courserun_is_self_paced = true, 'Self-paced', 'Instructor-paced')
         as pace
     from mitxonline_product
@@ -55,8 +57,6 @@ with mitxonline_product as (
         on mitxonline_product.courserun_id = mitxonline_course_runs.courserun_id
     left join mitxonline_courses
         on mitxonline_course_runs.course_id = mitxonline_courses.course_id
-    left join program_requirements
-        on mitxonline_courses.course_id = program_requirements.course_id
 )
 
 , mitxpro_product_view as (
@@ -73,6 +73,8 @@ with mitxonline_product as (
         , mitxpro_courses.cms_coursepage_time_commitment as time_commitment
         , mitxpro_courses.cms_coursepage_format as delivery
         , mitxpro_courses.cms_certificate_ceus as continuing_education_credits
+        , mitxpro_courses.course_topics as topics
+        , mitxpro_courses.course_instructors as instructors
         , if(mitxpro_product.product_type = 'program', 'program run', mitxpro_product.product_type) as product_type
         , coalesce(mitxpro_courses.platform_name, mitxpro_programs.platform_name) as product_platform
         , coalesce(
@@ -116,6 +118,8 @@ select
     , certification_type
     , 'Online' as delivery
     , null as continuing_education_credits
+    , topics
+    , instructors
     , 'MITx' as offered_by
 from mitxonline_product_view
 
@@ -144,5 +148,7 @@ select
     , 'Professional Certificate' as certification_type
     , delivery
     , continuing_education_credits
+    , topics
+    , instructors
     , 'xPro' as offered_by
 from mitxpro_product_view
