@@ -24,7 +24,7 @@ from ol_orchestrate.lib.dagster_helpers import default_io_manager
 from ol_orchestrate.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
-from ol_orchestrate.sensors.openedx import course_run_sensor
+from ol_orchestrate.sensors.openedx import course_run_sensor, course_version_sensor
 
 if DAGSTER_ENV == "dev":
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
@@ -87,6 +87,7 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
             assets=deployment_assets,
             sensors=[
                 course_run_sensor,
+                course_version_sensor,
                 AutomationConditionSensorDefinition(
                     f"{deployment_name}_openedx_automation_sensor",
                     minimum_interval_seconds=3600,
