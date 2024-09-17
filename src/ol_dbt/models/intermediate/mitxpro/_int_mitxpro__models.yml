@@ -965,6 +965,7 @@ models:
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__ecommerce_productversion')
+
 - name: int__mitxpro__ecommerce_product
   description: Intermediate model of xPro Products.
   columns:
