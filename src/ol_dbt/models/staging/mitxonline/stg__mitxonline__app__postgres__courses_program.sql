@@ -11,7 +11,10 @@ with source as (
         , title as program_title
         , readable_id as program_readable_id
         , program_type
+        , availability as program_availability
         , if(program_type like 'MicroMasters%', true, false) as program_is_micromasters
+        , if(program_type like 'MicroMasters%', 'MicroMasters Credential', 'Certificate of Completion')
+        as program_certification_type
         , if(readable_id like '%DEDP%', true, false) as program_is_dedp
         ,{{ cast_timestamp_to_iso8601('created_on') }} as program_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as program_updated_on

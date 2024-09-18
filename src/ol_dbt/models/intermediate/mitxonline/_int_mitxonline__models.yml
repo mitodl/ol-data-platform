@@ -884,6 +884,7 @@ models:
       compare_model: ref('stg__mitxonline__app__postgres__courses_programenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id"]
+
 - name: int__mitxonline__courses
   description: Intermediate model for MITxOnline courses
   columns:
@@ -910,6 +911,33 @@ models:
     tests:
     - unique
     - not_null
+  - name: course_description
+    description: text, the description shown on the home page and product page.
+  - name: course_price
+    description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
+      available)
+  - name: course_length
+    description: str, a short description indicating how long it takes to complete
+      (e.g. '4 weeks').
+  - name: course_effort
+    description: str, a short description indicating how much effort is required (e.g.
+      1-3 hours per week).
+  - name: course_prerequisites
+    description: text, a short description indicating prerequisites of this course.
+  - name: course_about
+    description: text, details about this course.
+  - name: course_what_you_learn
+    description: text, what you will learn from this course.
+  - name: course_page_slug
+    description: str, used for constructing the program page’s URL.
+  - name: course_page_url_path
+    description: str, url path for the page
+  - name: course_page_is_live
+    description: boolean, if set to true this program page is published
+  - name: course_page_first_published_on
+    description: timestamp, date and time when the course page was first published
+  - name: course_page_last_published_on
+    description: timestamp, date and time when the course page was last published
 
 - name: int__mitxonline__course_to_departments
   description: Intermediate model for MITxOnline course to department
@@ -1195,6 +1223,14 @@ models:
   - name: program_type
     description: str, type of the program. Value is free text, it could be MicroMasters®,
       Series, etc
+  - name: program_availability
+    description: str, either 'anytime' or 'date'
+    tests:
+    - not_null
+  - name: program_certification_type
+    description: str, either 'MicroMasters Credential' or 'Certificate of Completion'
+    tests:
+    - not_null
   - name: program_is_dedp
     description: boolean, specifying if the program is DEDP from readable_id
     tests:
@@ -1203,6 +1239,32 @@ models:
     description: boolean, specifying if the program is MITx MicroMasters® Program
     tests:
     - not_null
+  - name: program_description
+    description: text, the description shown on the home page and product page.
+  - name: program_price
+    description: str, product price in plain text. e.g. $250 - $1000.
+  - name: program_length
+    description: str, a short description indicating how long it takes to complete
+      (e.g. '4 weeks').
+  - name: program_effort
+    description: str, a short description indicating how much effort is required (e.g.
+      1-3 hours per week).
+  - name: program_prerequisites
+    description: text, a short description indicating prerequisites of this program.
+  - name: program_about
+    description: text, details about this program.
+  - name: program_what_you_learn
+    description: text, what you will learn from this program.
+  - name: program_page_slug
+    description: str, used for constructing the program page’s URL.
+  - name: program_page_url_path
+    description: str, url path for the page
+  - name: program_page_is_live
+    description: boolean, if set to true this program page is published
+  - name: program_page_first_published_on
+    description: timestamp, date and time when the page was first published
+  - name: program_page_last_published_on
+    description: timestamp, date and time when the page was last published
 
 - name: int__mitxonline__program_requirements
   columns:
@@ -1996,3 +2058,44 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_username", "courserun_readable_id"]
+
+- name: int__mitxonline__course_instructors
+  columns:
+  - name: course_id
+    description: int, primary key in the courses_course table
+    tests:
+    - not_null
+  - name: instructor_name
+    description: str, the name of the instructor.
+    tests:
+    - not_null
+  - name: instructor_title
+    description: str, the instructor's title (academic or otherwise).
+  - name: instructor_bio_short
+    description: str, a short biography of the instructor. May be blank.
+  - name: instructor_bio_long
+    description: str, a longer biography of the instructor.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_id", "instructor_name"]
+
+- name: int__mitxonline__course_to_topics
+  columns:
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - not_null
+  - name: coursetopic_id
+    description: int, foreign key to courses_coursetopic
+    tests:
+    - not_null
+  - name: coursetopic_name
+    description: str, name of a course topic
+    tests:
+    - not_null
+  - name: coursetopic_parent_id
+    description: int, id for the parent coursetopic of the subtopic. For example 'Computer
+      Science' is the parent topic of 'AI'
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_id", "coursetopic_id"]

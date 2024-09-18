@@ -15,7 +15,6 @@ from dagster import (
     AssetIn,
     AssetKey,
     AssetOut,
-    AutomationCondition,
     DataVersion,
     Output,
     asset,
@@ -34,7 +33,6 @@ from ol_orchestrate.lib.openedx import (
 
 
 @asset(
-    automation_condition=AutomationCondition.on_cron(cron_schedule="0 */6 * * *"),
     description=("An instance of courseware running in an Open edX environment."),
     group_name="openedx",
     key=AssetKey(["openedx", "courseware"]),
