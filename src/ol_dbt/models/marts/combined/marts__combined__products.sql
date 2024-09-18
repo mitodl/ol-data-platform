@@ -10,6 +10,10 @@ with mitxonline_product as (
     select * from {{ ref('int__mitxonline__courses') }}
 )
 
+, mitxonline_programs as (
+    select * from {{ ref('int__mitxonline__programs') }}
+)
+
 , mitxpro_product as (
     select * from {{ ref('int__mitxpro__ecommerce_product') }}
 )
@@ -44,7 +48,7 @@ with mitxonline_product as (
         , mitxonline_course_runs.courserun_end_on as end_on
         , mitxonline_course_runs.courserun_enrollment_start_on as enrollment_start_on
         , mitxonline_course_runs.courserun_enrollment_end_on as enrollment_end_on
-        , mitxonline_course_runs.courserun_upgrade_deadline
+        , mitxonline_course_runs.courserun_upgrade_deadline as upgrade_deadline
         , mitxonline_courses.course_length as duration
         , mitxonline_courses.course_effort as time_commitment
         , mitxonline_courses.course_certification_type as certification_type
@@ -57,6 +61,35 @@ with mitxonline_product as (
         on mitxonline_product.courserun_id = mitxonline_course_runs.courserun_id
     left join mitxonline_courses
         on mitxonline_course_runs.course_id = mitxonline_courses.course_id
+    left join mitxonline_programs
+        on mitxonline_product.program_readable_id = mitxonline_programs.program_readable_id
+
+    union all
+
+    select
+        null as product_id
+        , 'program' as product_type
+        , mitxonline_programs.program_readable_id as product_readable_id
+        , null as list_price
+        , mitxonline_programs.program_description as product_description
+        , mitxonline_product.product_is_active
+        , null as product_created_on
+        , mitxonline_programs.program_title as product_name
+        , null as start_on
+        , null as end_on
+        , null as enrollment_start_on
+        , null as enrollment_end_on
+        , null as upgrade_deadline
+        , mitxonline_programs.program_length as duration
+        , mitxonline_programs.program_effort as time_commitment
+        , mitxonline_programs.program_certification_type as certification_type
+        , mitxonline_programs.program_topics as topics
+        , mitxonline_programs.program_instructors as instructors
+        , null as pace
+    from mitxonline_programs
+    left join mitxonline_product
+        on mitxonline_programs.program_readable_id = mitxonline_product.program_readable_id
+    where mitxonline_product.program_readable_id is null
 )
 
 , mitxpro_product_view as (
@@ -69,12 +102,15 @@ with mitxonline_product as (
         , mitxpro_product.product_created_on
         , mitxpro_course_runs.courserun_enrollment_start_on as enrollment_start_on
         , mitxpro_course_runs.courserun_enrollment_end_on as enrollment_end_on
-        , mitxpro_courses.cms_coursepage_duration as duration
-        , mitxpro_courses.cms_coursepage_time_commitment as time_commitment
-        , mitxpro_courses.cms_coursepage_format as delivery
-        , mitxpro_courses.cms_certificate_ceus as continuing_education_credits
         , mitxpro_courses.course_topics as topics
-        , mitxpro_courses.course_instructors as instructors
+        , coalesce(mitxpro_courses.cms_coursepage_duration, mitxpro_programs.cms_programpage_duration) as duration
+        , coalesce(
+            mitxpro_courses.cms_coursepage_time_commitment, mitxpro_programs.cms_programpage_time_commitment
+        ) as time_commitment
+        , coalesce(mitxpro_courses.cms_coursepage_format, mitxpro_programs.cms_programpage_format) as delivery
+        , coalesce(mitxpro_courses.cms_certificate_ceus, mitxpro_programs.cms_certificate_ceus)
+        as continuing_education_credits
+        , coalesce(mitxpro_courses.course_instructors, mitxpro_programs.program_instructors) as instructors
         , if(mitxpro_product.product_type = 'program', 'program run', mitxpro_product.product_type) as product_type
         , coalesce(mitxpro_courses.platform_name, mitxpro_programs.platform_name) as product_platform
         , coalesce(
@@ -111,7 +147,7 @@ select
     , end_on
     , enrollment_start_on
     , enrollment_end_on
-    , courserun_upgrade_deadline
+    , upgrade_deadline
     , pace
     , duration
     , time_commitment
@@ -141,7 +177,7 @@ select
     , end_on
     , enrollment_start_on
     , enrollment_end_on
-    , null as courserun_upgrade_deadline
+    , null as upgrade_deadline
     , null as pace
     , duration
     , time_commitment

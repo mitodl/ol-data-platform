@@ -1199,6 +1199,13 @@ models:
     description: str, short subheading to appear below the title on the program page
   - name: cms_programpage_time_commitment
     description: str, short description indicating about the time commitments
+  - name: cms_certificate_ceus
+    description: str, number of continuing education units or credits offered. e.g.
+      4.5
+  - name: program_topics
+    description: str, list of topic names for all courses in the program
+  - name: program_instructors
+    description: str, list of instructor names for the program
   - name: cms_programpage_catalog_details
     description: str, the description shown on the catalog page for this product
   - name: cms_programpage_slug
@@ -1583,16 +1590,10 @@ models:
     description: int, foreign key to courses_program representing a single program
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxpro__programs')
-        field: program_id
   - name: user_id
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxpro__users')
-        field: user_id
   - name: programcertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
   - name: programcertificate_created_on

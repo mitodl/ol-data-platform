@@ -427,14 +427,11 @@ models:
   - name: product_description
     description: str, product description
   - name: list_price
-    description: numeric, the latest list price for the product.
-    tests:
-    - not_null
+    description: numeric, the latest list price for the product. May be Null for MITx
+      Online program.
   - name: product_is_active
     description: boolean, indicating whether the product is visible at the checkout
       page on MITx Online or xPro
-    tests:
-    - not_null
   - name: product_is_private
     description: boolean, indicating whether the product is public or private. Public
       products are listed in the product drop-down on the bulk purchase form for xPro.
@@ -451,7 +448,7 @@ models:
     description: timestamp, date and time when the course or program enrollment starts
   - name: enrollment_end
     description: timestamp, date and time when the course or program enrollment ends
-  - name: courserun_upgrade_deadline
+  - name: upgrade_deadline
     description: timestamp, date and time beyond which the learner can not enroll
       in paid course mode. Only populated for MITx Online courses.
   - name: duration
