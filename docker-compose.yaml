@@ -14,10 +14,9 @@ services:
     entrypoint: ["poetry", "run", "dagster-webserver", "-w", "/opt/dagster/app/workspace.yaml",
       "-h", "0.0.0.0", "-p", "3000"]
     ports:
-    - ":3000"
-    env_file:
-    - dagster.yaml
+    - "3000:3000"
     environment:
+    - GITHUB_TOKEN=${GITHUB_TOKEN}
     - DAGSTER_CURRENT_IMAGE="dagster-webserver"
     volumes: # Make docker client accessible so we can terminate containers from the webserver
     - /var/run/docker.sock:/var/run/docker.sock
@@ -36,9 +35,8 @@ services:
     restart: on-failure
     # restart: unless-stopped
     entrypoint: ["poetry", "run", "dagster-daemon", "run", "-w", "/opt/dagster/app/workspace.yaml"]
-    env_file:
-    - dagster.yaml
     environment:
+    - GITHUB_TOKEN=${GITHUB_TOKEN}
     - DAGSTER_CURRENT_IMAGE="dagster-daemon"
     volumes: # Make docker client accessible so we can terminate containers from the webserver
     - /var/run/docker.sock:/var/run/docker.sock
