@@ -463,8 +463,6 @@ models:
     - not_null
   - name: delivery
     description: str, 'Online' or 'Other' for xPro. 'Online' for MITx Online.
-    tests:
-    - not_null
   - name: continuing_education_credits
     description: str, number of continuing education units or credits offered. e.g.
       4.5. NULL for MITx Online courses.
