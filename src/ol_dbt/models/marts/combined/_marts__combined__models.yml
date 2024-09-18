@@ -25,7 +25,7 @@ models:
       course-v1:xPRO+MLx2
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "course_title", "program_title"]
+      column_list: ["platform", "program_id", "course_readable_id"]
 
 - name: marts__combined__users
   description: Mart model for users from different platforms

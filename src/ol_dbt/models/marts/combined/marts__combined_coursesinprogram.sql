@@ -1,5 +1,5 @@
-with mitx_courserun_enroll_w_programs as (
-    select * from {{ ref('int__mitx__courserun_enrollments_with_programs') }}
+with mitx_programs as (
+    select * from {{ ref('int__mitx__program_requirements') }}
 )
 
 , mitx__courses as (
@@ -14,32 +14,41 @@ with mitx_courserun_enroll_w_programs as (
     select * from {{ ref('int__mitxpro__programs') }}
 )
 
-select
-    mitx_courserun_enroll_w_programs.platform
+select 
+    'MITx Online' as platform
     , mitx__courses.course_title
-    , mitx_courserun_enroll_w_programs.program_title
-    , case
-        when mitx_courserun_enroll_w_programs.platform = 'MITx Online'
-            then mitx__courses.mitxonline_course_id
-    end as course_id
-    , case
-        when mitx_courserun_enroll_w_programs.platform = 'MITx Online'
-            then mitx_courserun_enroll_w_programs.mitxonline_program_id
-    end as program_id
+    , mitx_programs.program_title
+    , mitx__courses.mitxonline_course_id as course_id
+    , mitx_programs.mitxonline_program_id as program_id
     , mitx__courses.course_readable_id
-from mitx_courserun_enroll_w_programs
+from mitx_programs
 inner join mitx__courses
-    on mitx_courserun_enroll_w_programs.course_number = mitx__courses.course_number
+    on mitx_programs.course_number = mitx__courses.course_number
+where mitx__courses.is_on_mitxonline = true
+
+union all
+
+select 
+    'edX.org' as platform
+    , mitx__courses.course_title
+    , mitx_programs.program_title
+    , mitx__courses.mitxonline_course_id as course_id
+    , mitx_programs.mitxonline_program_id as program_id
+    , mitx__courses.course_readable_id
+from mitx_programs
+inner join mitx__courses
+    on mitx_programs.course_number = mitx__courses.course_number
+where mitx__courses.is_on_edxorg = true
 
 union all
 
 select
-    'xPRO' as platform
+    'xPro' as platform
     , mitxpro__courses.course_title
     , mitxpro__programs.program_title
     , mitxpro__courses.course_id
     , mitxpro__courses.program_id
     , mitxpro__courses.course_readable_id
-from mitxpro__courses
-left join mitxpro__programs
+from mitxpro__courses 
+left join mitxpro__programs 
     on mitxpro__courses.program_id = mitxpro__programs.program_id
