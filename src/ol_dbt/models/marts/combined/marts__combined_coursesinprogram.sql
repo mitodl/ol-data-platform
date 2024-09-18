@@ -14,7 +14,7 @@ with mitx_programs as (
     select * from {{ ref('int__mitxpro__programs') }}
 )
 
-select 
+select
     'MITx Online' as platform
     , mitx__courses.course_title
     , mitx_programs.program_title
@@ -28,7 +28,7 @@ where mitx__courses.is_on_mitxonline = true
 
 union all
 
-select 
+select
     'edX.org' as platform
     , mitx__courses.course_title
     , mitx_programs.program_title
@@ -49,6 +49,6 @@ select
     , mitxpro__courses.course_id
     , mitxpro__courses.program_id
     , mitxpro__courses.course_readable_id
-from mitxpro__courses 
-left join mitxpro__programs 
+from mitxpro__courses
+left join mitxpro__programs
     on mitxpro__courses.program_id = mitxpro__programs.program_id
