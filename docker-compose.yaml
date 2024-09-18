@@ -24,8 +24,6 @@ services:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ./src/ol_orchestrate:/opt/dagster/app
     - ./src/ol_dbt:/opt/dbt
-
-
   # This service runs the dagster-daemon process, which is responsible for taking runs
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
   dagster_daemon:
