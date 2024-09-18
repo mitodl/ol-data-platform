@@ -1,38 +1,6 @@
 ---
-storage:
-  postgres:
-    postgres_db:
-      username:
-        env: DAGSTER_PG_USERNAME
-      password:
-        env: DAGSTER_PG_PASSWORD
-      hostname:
-        env: DAGSTER_PG_HOST
-      db_name:
-        env: DAGSTER_PG_DB
-      port: 5432
-
-compute_logs:
-  module: dagster_aws.s3.compute_log_manager
-  class: S3ComputeLogManager
-  config:
-    bucket: "mycorp-dagster-compute-logs"
-    prefix: "dagster-test-"
-
 local_artifact_storage:
   module: dagster.core.storage.root
   class: LocalArtifactStorage
   config:
     base_dir: "/opt/dagster/local/"
-
-run_launcher:
-  module: dagster_docker
-  class: DockerRunLauncher
-  config:
-    env_vars:
-    - DAGSTER_PG_USERNAME
-    - DAGSTER_PG_PASSWORD
-    - DAGSTER_PG_DB
-    container_kwargs:
-      volumes:
-      - ~/GIT/ol-data-platform:/opt/dagster/app/
