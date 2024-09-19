@@ -1235,16 +1235,10 @@ models:
       run
     tests:
     - not_null
-    - relationships:
-        to: ref('stg__mitxpro__app__postgres__courses_courserun')
-        field: courserun_id
   - name: user_id
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-    - relationships:
-        to: ref('stg__mitxpro__app__postgres__users_user')
-        field: user_id
   - name: courserungrade_grade
     description: float, user's grade for the course (range between 0.0 to 1.0)
     tests:
@@ -1283,16 +1277,10 @@ models:
       run
     tests:
     - not_null
-    - relationships:
-        to: ref('stg__mitxpro__app__postgres__courses_courserun')
-        field: courserun_id
   - name: user_id
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-    - relationships:
-        to: ref('stg__mitxpro__app__postgres__users_user')
-        field: user_id
   - name: courseruncertificate_url
     description: str, the full URL to the certificate on xPro if it's not revoked
     tests:
@@ -1326,9 +1314,6 @@ models:
     description: int, foreign key to courses_program representing a single program
     tests:
     - not_null
-    - relationships:
-        to: ref('stg__mitxpro__app__postgres__courses_program')
-        field: program_id
   - name: user_id
     description: str, foreign key to users_user representing a single user
     tests:

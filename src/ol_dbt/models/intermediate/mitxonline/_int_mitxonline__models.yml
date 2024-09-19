@@ -928,6 +928,14 @@ models:
     description: text, details about this course.
   - name: course_what_you_learn
     description: text, what you will learn from this course.
+  - name: course_certification_type
+    description: str, either 'MicroMasters Credential' or 'Certificate of Completion'.
+    tests:
+    - not_null
+  - name: course_topics
+    description: str, list of topic names for a course.
+  - name: course_instructors
+    description: str, list of instructor names for a course.
   - name: course_page_slug
     description: str, used for constructing the program page’s URL.
   - name: course_page_url_path
@@ -1239,6 +1247,10 @@ models:
     description: boolean, specifying if the program is MITx MicroMasters® Program
     tests:
     - not_null
+  - name: program_topics
+    description: str, list of topic names for all courses in the program
+  - name: program_instructors
+    description: str, list of instructor names for the program
   - name: program_description
     description: text, the description shown on the home page and product page.
   - name: program_price
@@ -2062,7 +2074,7 @@ models:
 - name: int__mitxonline__course_instructors
   columns:
   - name: course_id
-    description: int, primary key in the courses_course table
+    description: int, foreign key to the courses_course table
     tests:
     - not_null
   - name: instructor_name
@@ -2099,3 +2111,23 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["course_id", "coursetopic_id"]
+
+- name: int__mitxonline__program_instructors
+  columns:
+  - name: program_id
+    description: int, foreign key to the courses_program table
+    tests:
+    - not_null
+  - name: instructor_name
+    description: str, the name of the instructor.
+    tests:
+    - not_null
+  - name: instructor_title
+    description: str, the instructor's title (academic or otherwise).
+  - name: instructor_bio_short
+    description: str, a short biography of the instructor. May be blank.
+  - name: instructor_bio_long
+    description: str, a longer biography of the instructor.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["program_id", "instructor_name"]

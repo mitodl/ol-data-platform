@@ -24,7 +24,7 @@ with products as (
             select
                 *
                 , row_number() over (partition by product_id order by productversion_updated_on desc) as row_num
-            from {{ ref('stg__mitxpro__app__postgres__ecommerce_productversion') }}
+            from {{ ref('int__mitxpro__ecommerce_productversion') }}
         ) as product
     where row_num = 1
 )
