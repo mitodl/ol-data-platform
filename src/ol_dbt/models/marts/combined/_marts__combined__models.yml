@@ -1,6 +1,5 @@
 ---
 version: 2
-
 models:
 - name: marts__combined_coursesinprogram
   description: Mart model for course to program association for the different platforms
