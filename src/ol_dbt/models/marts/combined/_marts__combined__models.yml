@@ -17,6 +17,8 @@ models:
     description: str, title of the program
   - name: program_id
     description: int, foreign key representing a single program
+    tests:
+    - not_null
   - name: course_readable_id
     description: str, Open edX ID formatted as course-v1:{org}+{course code} e.g.
       course-v1:xPRO+MLx2

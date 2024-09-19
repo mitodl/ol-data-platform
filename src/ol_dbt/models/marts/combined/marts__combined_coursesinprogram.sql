@@ -56,5 +56,5 @@ select
     , mitxpro__courses.course_readable_id
     , mitxpro__programs.program_readable_id
 from mitxpro__courses
-left join mitxpro__programs
+inner join mitxpro__programs
     on mitxpro__courses.program_id = mitxpro__programs.program_id
