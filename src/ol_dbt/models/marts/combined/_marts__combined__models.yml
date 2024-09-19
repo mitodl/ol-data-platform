@@ -16,8 +16,6 @@ models:
     description: str, title of the course
   - name: program_title
     description: str, title of the program
-  - name: course_id
-    description: int, foreign key representing a single course
   - name: program_id
     description: int, foreign key representing a single program
   - name: course_readable_id
