@@ -455,7 +455,8 @@ models:
     description: str, a short description indicating how long the course or program
       takes to complete (e.g. '4 weeks')
   - name: time_commitment
-    description: str, short description indicating about the time commitments
+    description: str, short description indicating about the time commitments (e.g.
+      '5-7 hours per week')
   - name: certification_type
     description: str, either 'MicroMasters Credential' or 'Certificate of Completion'
       for MITx Online courses. 'Professional Certificate' for xPro courses.
