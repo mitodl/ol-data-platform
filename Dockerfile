@@ -30,7 +30,9 @@ RUN pip install poetry
 
 ENV DAGSTER_HOME=/opt/dagster/dagster_home/
 # Copy dagster instance YAML to $DAGSTER_HOME
-COPY dagster.yaml /opt/dagster/dagster_home/
+COPY src/ol_orchestrate/dagster.yaml /opt/dagster/dagster_home/
+# Copy poetry project to the $WORKDIR
+COPY pyproject.toml /opt/dagster/code
 
 USER dagster
 EXPOSE 3000
