@@ -29,12 +29,11 @@ RUN wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | apt-key add -
 RUN pip install poetry
 
 ENV DAGSTER_HOME=/opt/dagster/dagster_home/
-# Copy dagster instance YAML to $DAGSTER_HOME
-COPY src/ol_orchestrate/dagster.yaml /opt/dagster/dagster_home/
-# Copy poetry project to the $WORKDIR
-COPY pyproject.toml /opt/dagster/code
 
 USER dagster
 EXPOSE 3000
 WORKDIR /opt/dagster/code
+# Copy poetry project to the $WORKDIR
+COPY pyproject.toml /opt/dagster/code
+
 RUN poetry install --without=dev --no-cache
