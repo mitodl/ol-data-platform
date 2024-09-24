@@ -192,12 +192,16 @@ models:
     - not_null
   - name: external_resource_backup_url
     description: str, backup URL of the external resource
+  - name: external_resource_backup_url_status_code
+    description: int, status code of the external resource backup URL
   - name: external_resource_is_broken
     description: boolean, whether the external resource link is broken
   - name: external_resource_license_warning
     description: boolean, whether the external resource has a license warning
   - name: external_resource_url
     description: URL of the external resource
+  - name: external_resource_url_status_code
+    description: int, status code of the external resource URL
   - name: image_alt_text
     description: str, alt text of the image resource
   - name: image_caption
