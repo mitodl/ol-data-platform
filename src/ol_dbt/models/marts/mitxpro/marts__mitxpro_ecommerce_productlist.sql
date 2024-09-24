@@ -42,8 +42,11 @@ with ecommerce_product as (
     select *
     from (
         select
-            *
-            , rank() over (partition by product_id order by productversion_updated_on desc) as myrank
+            ecommerce_productversion.*
+            , rank() over (
+                partition by ecommerce_productversion.product_id
+                order by ecommerce_productversion.productversion_updated_on desc
+            ) as myrank
         from ecommerce_productversion
     ) as a
     where myrank = 1
