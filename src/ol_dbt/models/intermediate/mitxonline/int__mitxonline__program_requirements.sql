@@ -101,14 +101,16 @@ with program_requirements as (
         , sum(electiveset_required_number) as program_num_elective_courses
     from (
         select
-            program_id
-            , programrequirement_requirement_id
-            , avg(electiveset_required_number) as electiveset_required_number
+            combined_requirements.program_id
+            , combined_requirements.programrequirement_requirement_id
+            , avg(combined_requirements.electiveset_required_number) as electiveset_required_number
         from combined_requirements
         where
-            programrequirement_type = 'Elective'
-            and programrequirement_is_a_nested_requirement = false
-        group by program_id, programrequirement_requirement_id
+            combined_requirements.programrequirement_type = 'Elective'
+            and combined_requirements.programrequirement_is_a_nested_requirement = false
+        group by
+            combined_requirements.program_id
+            , combined_requirements.programrequirement_requirement_id
     ) group by program_id
 
 )

@@ -50,7 +50,7 @@ with source as (
         , cert_status as courseruncertificate_status
         , coalesce(is_active = 1, false) as courserunenrollment_is_active
         --- trino doesn't have function to convert first letter to upper case
-        , regexp_replace(
+        , regexp_replace( -- noqa: PRS
             {{ transform_gender_value('gender') }}, '(^[a-z])(.)', x -> upper(x[1]) || x[2] -- noqa
         ) as user_gender
         ,{{ transform_education_value('loe') }} as user_highest_education

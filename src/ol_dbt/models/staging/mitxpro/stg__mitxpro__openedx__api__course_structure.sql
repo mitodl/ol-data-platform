@@ -5,8 +5,14 @@ with course_block_source as (
 , course_block as (
     select * from (
         select
-            *
-            , lag(course_content_hash) over (partition by block_id, course_id order by retrieved_at asc)
+            course_block_source.*
+            , lag(course_block_source.course_content_hash)
+                over (
+                    partition by
+                        course_block_source.block_id
+                        , course_block_source.course_id
+                    order by course_block_source.retrieved_at asc
+                )
             as previous_content_hash
         from course_block_source
     )

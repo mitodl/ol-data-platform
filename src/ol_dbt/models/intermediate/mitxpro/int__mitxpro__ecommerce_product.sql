@@ -22,9 +22,12 @@ with products as (
     select * from
         (
             select
-                *
-                , row_number() over (partition by product_id order by productversion_updated_on desc) as row_num
-            from {{ ref('int__mitxpro__ecommerce_productversion') }}
+                productversion.*
+                , row_number() over (
+                    partition by productversion.product_id
+                    order by productversion.productversion_updated_on desc
+                ) as row_num
+            from {{ ref('int__mitxpro__ecommerce_productversion') }} as productversion
         ) as product
     where row_num = 1
 )
