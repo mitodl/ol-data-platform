@@ -44,6 +44,12 @@ select
             json_query(websitecontents.websitecontent_metadata, 'lax $.has_external_license_warning' omit quotes), ''
         ) as boolean
     ) as external_resource_license_warning
+    , nullif(nullif(
+        json_query(websitecontents.websitecontent_metadata, 'lax $.url_status_code' omit quotes), ''
+    ), 'null') as external_resource_url_status_code
+    , nullif(nullif(
+        json_query(websitecontents.websitecontent_metadata, 'lax $.backup_url_status_code' omit quotes), ''
+    ), 'null') as external_resource_backup_url_status_code
     , coalesce(sitemetadata.sitemetadata_primary_course_number, websites.primary_course_number) as course_number
     , coalesce(sitemetadata.sitemetadata_course_term, websites.metadata_course_term) as course_term
     , coalesce(sitemetadata.sitemetadata_course_title, websites.metadata_course_title) as course_title
