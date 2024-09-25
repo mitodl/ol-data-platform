@@ -31,6 +31,9 @@ models:
 
 - name: marts__combined__users
   description: Mart model for users from different platforms
+  config:
+    grants:
+      select: ['finance']
   columns:
   - name: user_email
     description: string, user email on the corresponding platform including xpro,
