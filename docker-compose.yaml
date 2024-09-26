@@ -21,7 +21,8 @@ services:
     volumes: # Make docker client accessible so we can terminate containers from the webserver
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ./src/ol_orchestrate:/opt/dagster/app
+    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/app/workspace.yaml
+    - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
     - ./src/ol_dbt:/opt/dbt
   # This service runs the dagster-daemon process, which is responsible for taking runs
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
@@ -40,5 +41,6 @@ services:
     volumes: # Make docker client accessible so we can terminate containers from the webserver
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ./src/ol_orchestrate:/opt/dagster/app
+    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/app/workspace.yaml
+    - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
     - ./src/ol_dbt:/opt/dbt
