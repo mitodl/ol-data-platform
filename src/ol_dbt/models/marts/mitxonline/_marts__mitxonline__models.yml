@@ -90,9 +90,6 @@ models:
 
 - name: marts__mitxonline_course_enrollments
   description: learners MITx Online course enrollments and demographics
-  config:
-    grants:
-      select: ['finance']
   columns:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
