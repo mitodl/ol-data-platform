@@ -112,6 +112,9 @@ models:
 
 - name: marts__combined__orders
   description: ecommerce regular b2c orders
+  config:
+    grants:
+      select: ['finance']
   columns:
   - name: combined_orders_hash_id
     description: int, primary key for this table. At the grain of order id, line id,
