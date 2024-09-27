@@ -36,6 +36,7 @@ cross-task dependency control.
 
 ## 3 Proposed Implementation
 
+### Overview
 There are two main categories of data ingestion/integration being executed in the
 "Learn" application. These are "learning resources" and "news". Ultimately, all of the
 data being ingested ends up in a tabular format that is stored in the application
@@ -66,16 +67,70 @@ the data platform consists of:
 - Provide access to these tables to the Learn application (this is where most of the
   nuance lies)
 
+Another piece of the overall data flow which is important to address is creation and
+maintenance of the search index. This _can_ continue to be managed by the Learn
+application, but would also benefit from being controlled through the data
+platform. Because the data platform has an understanding of what data is changing and
+when, it can more intelligently and incrementally maintain the index.
 
+The key requirement for making use of the collected data in the context of the Learn
+application is to have a shared representation between what is created by the data
+platform and what is consumed by the application. Broadly speaking, this will be
+achieved through a shared library of the schema representation for the data. Whether
+this is a JSON Schema, Pydantic model, Python dataclass, etc. is subject to
+experimentation, but the conceptual approach is straightforward.
 
+### Ingestion
+The majority of the data being processed is structured data sources from databases and
+APIs. For data sourced from other applications that we control, there are already
+existing data feeds into the warehouse environment. For REST API based sources, a
+majority of them can easily be ingested via Airbyte using their [connector
+builder](https://docs.airbyte.com/connector-development/connector-builder-ui/overview). For
+GraphQL sources we can implement client logic in Dagster code (perhaps using [Ariadne
+Codegen](https://github.com/mirumee/ariadne-codegen)).
 
-## 4 Metrics & Dashboards
+Another source of content for Learn is from unstructured sources (e.g. PDFs, HTML text,
+etc.). For extraction of data from these sources we rely on Tika to retrieve the
+text. We will continue using Tika for that extraction process, but the management of
+that interaction will be encapsulated as a Dagster
+[asset](https://docs.dagster.io/concepts/assets/software-defined-assets).
 
-*What are the main metrics we should be measuring? For example, when interacting with an external system, it might be the external system latency. When adding a new table, how fast would it fill up?*
+### Transformation
+The transformation of the collected data will largely be managed through creation of dbt
+models. The final representation of the table structures can be tailored to meet the
+needs of the Learn application. The benefit of this approach is that the Learn-oriented
+tables are no longer the only possible use of the collected data, and alternative
+structures can be generated to suit other use cases (e.g. business analytics, AI context
+embedding, knowledge graphs, etc.). For cases where SQL is insufficiently expressive to perform a
+transformation we still have access to Python and other arbitrary compute to manipulate
+the data and write it back into the warehouse layer.
+
+### Delivery
+The final stage of the data flow is to deliver the processed information to end
+users. This is done via the Django implementation of Learn which relies on a combination
+of the Postgres tables and OpenSearch indexes that store the information. There are
+numerous paths to routing this data, with the most direct being to allow the data
+platform to manage the writes to the Postgres and OpenSearch layers.
+
+## 4 Measuring Results
+
+The core metrics that we are driving toward with this migration is to improve visibility
+of data flows and reduce the error rates related to incomplete or out of sync data. The
+ways that these shortcomings manifest currently are:
+- Long and unpredictable execution times for data loads
+- Lack of visibility into what data was loaded and when
+- Lack of error recovery when long-running tasks are interrupted (e.g. Heroku dyno
+  restarts)
+
+We don't currently have any concrete metrics on the rate of occurrence or the impact of
+these shortcomings. If desired we can work to quantify these details in a before and
+after manner.
 
 ## 5 Drawbacks
 
 *Are there any reasons why we should not do this? Here we aim to evaluate risk and check ourselves.*
+
+
 
 ## 6 Alternatives
 
@@ -88,9 +143,14 @@ the data platform consists of:
 - *What other systems or teams are affected by this proposal?*
 - *How could this be exploited by malicious attackers?*
 
+- need to train developers on use of Dagster and dbt
+- developer environment complexity/data access
+
 ## 8 Unresolved questions
 
 *What parts of the proposal are still being defined or not covered by this proposal?*
+- path for loading data into application
+- developer experience - where does dagster and dbt code live?
 
 ## 9 Conclusion
 
