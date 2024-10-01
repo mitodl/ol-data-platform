@@ -12,9 +12,11 @@ building data applications.
 - Ensure you are able to authenticate into GitHub + Vault
 	https://github.com/mitodl/ol-data-platform/tree/main
 	https://vault-qa.odl.mit.edu/v1/auth/github/login
+	`vault login -address=https://vault-qa.odl.mit.edu -method=github`
 	https://vault-production.odl.mit.edu/v1/auth/github/login
+	`vault login -address=https://vault-production.odl.mit.edu -method=github`
 - Export
 	`export GITHUB_TOKEN=[YOUR_GITHUB_TOKEN]`
 - Call docker compose up
-	`docker compose up`
+	`docker compose up --build`
 - Navigate to localhost:3000 to access the Dagster UI
