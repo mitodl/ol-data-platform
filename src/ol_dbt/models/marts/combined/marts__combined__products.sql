@@ -37,9 +37,11 @@ with mitxonline_product as (
 , mitxonline_product_view as (
     select
         mitxonline_product.product_id
-        , mitxonline_product.product_type
-        , mitxonline_product.courserun_readable_id as product_readable_id
-        , mitxonline_product.product_price as list_price
+        , coalesce(mitxonline_product.product_type, 'course run') as product_type
+        , coalesce(
+            mitxonline_product.courserun_readable_id, mitxonline_course_runs.courserun_readable_id
+        ) as product_readable_id
+        , coalesce(cast(mitxonline_product.product_price as varchar), mitxonline_courses.course_price) as list_price
         , mitxonline_product.product_description
         , mitxonline_product.product_is_active
         , mitxonline_product.product_created_on
@@ -61,13 +63,12 @@ with mitxonline_product as (
             , true
             , false
         ) as is_live
-    from mitxonline_product
-    left join mitxonline_course_runs
-        on mitxonline_product.courserun_id = mitxonline_course_runs.courserun_id
-    left join mitxonline_courses
+    from mitxonline_course_runs
+    inner join mitxonline_courses
         on mitxonline_course_runs.course_id = mitxonline_courses.course_id
-    left join mitxonline_programs
-        on mitxonline_product.program_readable_id = mitxonline_programs.program_readable_id
+    left join mitxonline_product
+        on mitxonline_course_runs.courserun_id = mitxonline_product.courserun_id
+
 
     union all
 
@@ -105,7 +106,7 @@ with mitxonline_product as (
 , mitxpro_product_view as (
     select
         mitxpro_product.product_id
-        , mitxpro_product.product_list_price as list_price
+        , cast(mitxpro_product.product_list_price as varchar) as list_price
         , mitxpro_product.product_description
         , mitxpro_product.product_is_private
         , mitxpro_product.product_is_active
