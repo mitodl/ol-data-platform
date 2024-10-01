@@ -511,9 +511,9 @@ models:
     tests:
     - not_null
   - name: is_live
-    description: boolean, indicating whether the course/program is set as live on
-      MITx Online or xPro. Courses/Programs set as is_live=false are not listed on
-      the catalog page.
+    description: boolean, indicating whether the course/program page is set as live
+      on MITx Online or xPro. Courses/Programs set as is_live=false are not listed
+      on the catalog page.
     tests:
     - not_null
 
