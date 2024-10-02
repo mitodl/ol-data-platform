@@ -41,7 +41,7 @@ with mitxonline_product as (
         , coalesce(
             mitxonline_product.courserun_readable_id, mitxonline_course_runs.courserun_readable_id
         ) as product_readable_id
-        , coalesce(cast(mitxonline_product.product_price as varchar), mitxonline_courses.course_price) as list_price
+        , mitxonline_product.product_price as list_price
         , mitxonline_product.product_description
         , mitxonline_product.product_is_active
         , mitxonline_product.product_created_on
@@ -106,7 +106,7 @@ with mitxonline_product as (
 , mitxpro_product_view as (
     select
         mitxpro_product.product_id
-        , cast(mitxpro_product.product_list_price as varchar) as list_price
+        , mitxpro_product.product_list_price as list_price
         , mitxpro_product.product_description
         , mitxpro_product.product_is_private
         , mitxpro_product.product_is_active
