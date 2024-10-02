@@ -37,8 +37,10 @@ with mitxonline_product as (
 , mitxonline_product_view as (
     select
         mitxonline_product.product_id
-        , mitxonline_product.product_type
-        , mitxonline_product.courserun_readable_id as product_readable_id
+        , coalesce(mitxonline_product.product_type, 'course run') as product_type
+        , coalesce(
+            mitxonline_product.courserun_readable_id, mitxonline_course_runs.courserun_readable_id
+        ) as product_readable_id
         , mitxonline_product.product_price as list_price
         , mitxonline_product.product_description
         , mitxonline_product.product_is_active
@@ -56,13 +58,17 @@ with mitxonline_product as (
         , mitxonline_courses.course_instructors as instructors
         , if(mitxonline_course_runs.courserun_is_self_paced = true, 'Self-paced', 'Instructor-paced')
         as pace
-    from mitxonline_product
-    left join mitxonline_course_runs
-        on mitxonline_product.courserun_id = mitxonline_course_runs.courserun_id
-    left join mitxonline_courses
+        , if(
+            mitxonline_courses.course_page_is_live = true and mitxonline_courses.course_is_live = true
+            , true
+            , false
+        ) as is_live
+    from mitxonline_course_runs
+    inner join mitxonline_courses
         on mitxonline_course_runs.course_id = mitxonline_courses.course_id
-    left join mitxonline_programs
-        on mitxonline_product.program_readable_id = mitxonline_programs.program_readable_id
+    left join mitxonline_product
+        on mitxonline_course_runs.courserun_id = mitxonline_product.courserun_id
+
 
     union all
 
@@ -86,6 +92,11 @@ with mitxonline_product as (
         , mitxonline_programs.program_topics as topics
         , mitxonline_programs.program_instructors as instructors
         , null as pace
+        , if(
+            mitxonline_programs.program_is_live = true and mitxonline_programs.program_page_is_live = true
+            , true
+            , false
+        ) as is_live
     from mitxonline_programs
     left join mitxonline_product
         on mitxonline_programs.program_readable_id = mitxonline_product.program_readable_id
@@ -119,6 +130,13 @@ with mitxonline_product as (
         , coalesce(mitxpro_course_runs.courserun_title, mitxpro_program_runs.program_title) as product_name
         , coalesce(mitxpro_course_runs.courserun_start_on, mitxpro_program_runs.programrun_start_on) as start_on
         , coalesce(mitxpro_course_runs.courserun_end_on, mitxpro_program_runs.programrun_end_on) as end_on
+        , case
+            when mitxpro_courses.course_is_live = true and mitxpro_courses.cms_coursepage_is_live = true
+                then true
+            when mitxpro_programs.program_is_live = true and mitxpro_programs.cms_programpage_is_live = true
+                then true
+            else false
+        end as is_live
     from mitxpro_product
     left join mitxpro_course_runs
         on mitxpro_product.courserun_id = mitxpro_course_runs.courserun_id
@@ -157,6 +175,7 @@ select
     , topics
     , instructors
     , 'MITx' as offered_by
+    , is_live
 from mitxonline_product_view
 
 union all
@@ -187,4 +206,5 @@ select
     , topics
     , instructors
     , 'xPro' as offered_by
+    , is_live
 from mitxpro_product_view

@@ -460,8 +460,8 @@ models:
   - name: product_description
     description: str, product description
   - name: list_price
-    description: numeric, the latest list price for the product. May be Null for MITx
-      Online program.
+    description: numeric, the latest list price for the product. Null for MITx Online
+      programs and some MITx Online courses that have no normalized price.
   - name: product_is_active
     description: boolean, indicating whether the product is visible at the checkout
       page on MITx Online or xPro
@@ -508,6 +508,12 @@ models:
     description: str, list of instructor names for a course.
   - name: offered_by
     description: str, 'MITx' or 'xPro'
+    tests:
+    - not_null
+  - name: is_live
+    description: boolean, indicating whether the course/program page is set as live
+      on MITx Online or xPro. Courses/Programs set as is_live=false are not listed
+      on the catalog page.
     tests:
     - not_null
 
