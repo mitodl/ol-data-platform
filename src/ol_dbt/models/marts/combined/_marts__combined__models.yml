@@ -149,8 +149,8 @@ models:
     description: string, unique string to identify a course run on the corresponding
       platform.
   - name: discount
-    description: str, discount applied for the order in readable format, e.g., $100
-      off, 30% off.
+    description: str, discount applied for the order in readable format, e.g., $100,
+      30%.
   - name: order_created_on
     description: timestamp, specifying when the order was initially created. If this
       is a b2b order it will be the timestamp that order was created otherwise it
