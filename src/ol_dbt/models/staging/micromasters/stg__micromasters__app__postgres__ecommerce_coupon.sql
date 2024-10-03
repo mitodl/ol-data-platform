@@ -18,7 +18,7 @@ with source as (
         , invoice_id as couponinvoice_id
         , case
             when amount_type = 'fixed-discount'
-                then concat('$', format('%.2f', amount), ' off')
+                then concat('$', format('%.2f', amount))
             when amount_type = 'fixed-price'
                 then concat('Fixed Price: ', format('%.2f', amount))
             when amount_type = 'percent-discount'
