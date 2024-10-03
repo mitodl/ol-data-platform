@@ -16,9 +16,9 @@ with source as (
         , payment_type as discount_source
         , case
             when discount_type = 'percent-off'
-                then concat(format('%.2f', amount), '% off')
+                then concat(format('%.2f', amount), '%')
             when discount_type = 'dollars-off'
-                then concat('$', format('%.2f', amount), ' off')
+                then concat('$', format('%.2f', amount))
             when discount_type = 'fixed-price'
                 then concat('Fixed Price: ', format('%.2f', amount))
         end as discount_amount_text
