@@ -29,19 +29,19 @@ with mitx__users as (
 )
 
 , program_stats as (
-    select
+    select 
         user_email
         , count(distinct programcertificate_uuid) as cert_count
     from combined_programs
-    group by user_email
+    group by user_email 
 )
 
 , orders_stats as (
-    select
+    select 
         user_email
         , sum(order_total_price_paid) as total_amount_paid_orders
     from orders
-    group by user_email
+    group by user_email 
 )
 
 , course_stats as (
@@ -54,27 +54,9 @@ with mitx__users as (
                 when courserungrade_is_passing = true then course_title
             end
         ) as num_of_course_passed
-        , min(case
-            when
-                substring(courserun_readable_id, length(courserun_readable_id), 1) = 'a'
-                then
-                    substring(courserun_readable_id, length(courserun_readable_id) - 4, 4) || '~'
-                    || substring(courserun_readable_id, length(courserun_readable_id) - 6, 1)
-            else
-                substring(courserun_readable_id, length(courserun_readable_id) - 3, 4) || '~'
-                || substring(courserun_readable_id, length(courserun_readable_id) - 5, 1)
-        end) as year_and_term_first_enrollment
-        , max(case
-            when
-                substring(courserun_readable_id, length(courserun_readable_id), 1) = 'a'
-                then
-                    substring(courserun_readable_id, length(courserun_readable_id) - 4, 4) || '~'
-                    || substring(courserun_readable_id, length(courserun_readable_id) - 6, 1)
-            else
-                substring(courserun_readable_id, length(courserun_readable_id) - 3, 4) || '~'
-                || substring(courserun_readable_id, length(courserun_readable_id) - 5, 1)
-        end) as year_and_term_latest_enrollment
-        , count(distinct courseruncertificate_uuid) as number_of_courserun_certificates
+        , min(courserun_start_on) as first_course_start_datetime
+        , max(courserun_start_on) as last_course_start_datetime
+        , count(distinct courseruncertificate_uuid) as number_of_certificates
     from combined_enrollments
     group by user_email
 )
@@ -205,8 +187,8 @@ select
     , combined_users.user_bootcamps_username
     , course_stats.num_of_course_enrolled
     , course_stats.num_of_course_passed
-    , course_stats.year_and_term_first_enrollment
-    , course_stats.year_and_term_latest_enrollment
+    , course_stats.first_course_start_datetime
+    , course_stats.last_course_start_datetime
     , course_stats.number_of_courserun_certificates
     , orders_stats.total_amount_paid_orders
     , income.latest_income_usd

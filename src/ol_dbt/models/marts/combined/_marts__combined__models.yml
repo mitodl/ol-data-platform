@@ -105,13 +105,12 @@ models:
     description: number, the number of courses learner passed based on their emails
       so this counts as same person if they use the email to register on different
       platforms
-  - name: year_and_term_first_enrollment
+  - name: first_course_start_datetime
     description: string, year and term from the users first course enrollment
-  - name: year_and_term_latest_enrollment
+  - name: last_course_start_datetime
     description: string, year and term from the users latest course enrollment
   - name: number_of_courserun_certificates
-    description: int, number of course run enrollment certificates associated with
-      the user
+    description: int, number of course run enrollment certificates associated with the user
   - name: total_amount_paid_orders
     description: int, sum of total orders paid associated with the user
   - name: latest_income_usd
