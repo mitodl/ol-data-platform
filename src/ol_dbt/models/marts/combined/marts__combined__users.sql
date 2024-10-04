@@ -16,6 +16,34 @@ with mitx__users as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
+, combined_programs as (
+    select * from {{ ref('marts__combined_program_enrollment_detail') }}
+)
+
+, orders as (
+    select * from {{ ref('marts__combined__orders') }}
+)
+
+, income as (
+    select * from {{ ref('marts__mitxonline_user_profiles') }}
+)
+
+, program_stats as (
+    select 
+        user_email
+        , count(distinct programcertificate_uuid) as cert_count
+    from combined_programs
+    group by user_email 
+)
+
+, orders_stats as (
+    select 
+        user_email
+        , sum(order_total_price_paid) as total_amount_paid_orders
+    from orders
+    group by user_email 
+)
+
 , course_stats as (
     select
         user_email
@@ -26,6 +54,27 @@ with mitx__users as (
                 when courserungrade_is_passing = true then course_title
             end
         ) as num_of_course_passed
+        , min(case 
+            when
+                substring(courserun_readable_id, length(courserun_readable_id), 1) = 'a'
+                then 
+                    substring(courserun_readable_id, length(courserun_readable_id) - 4, 4) || '
+                    -' || substring(courserun_readable_id, length(courserun_readable_id) - 6, 1)
+            else
+                substring(courserun_readable_id, length(courserun_readable_id) - 3, 4) || '
+                -' || substring(courserun_readable_id, length(courserun_readable_id) - 5, 1)
+        end) as year_and_term_first_enrollment
+        , max(case 
+            when 
+                substring(courserun_readable_id, length(courserun_readable_id), 1) = 'a'
+                then 
+                    substring(courserun_readable_id, length(courserun_readable_id) - 4, 4) || '
+                    -' || substring(courserun_readable_id, length(courserun_readable_id) - 6, 1)
+            else
+                substring(courserun_readable_id, length(courserun_readable_id) - 3, 4) || '
+                -' || substring(courserun_readable_id, length(courserun_readable_id) - 5, 1)
+        end) as year_and_term_latest_enrollment
+        , count(distinct courseruncertificate_uuid) as number_of_courserun_certificates
     from combined_enrollments
     group by user_email
 )
@@ -156,5 +205,14 @@ select
     , combined_users.user_bootcamps_username
     , course_stats.num_of_course_enrolled
     , course_stats.num_of_course_passed
+    , course_stats.year_and_term_first_enrollment
+    , course_stats.year_and_term_latest_enrollment
+    , course_stats.number_of_courserun_certificates
+    , orders_stats.total_amount_paid_orders
+    , income.latest_income_usd
+    , case when program_stats.cert_count > 0 then 'Y' end as program_cred_ind
 from combined_users
 left join course_stats on combined_users.user_email = course_stats.user_email
+left join program_stats on combined_users.user_email = program_stats.user_email
+left join orders_stats on combined_users.user_email = orders_stats.user_email
+left join income on combined_users.user_mitxonline_username = income.user_username
