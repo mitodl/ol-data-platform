@@ -18,11 +18,11 @@ with source as (
         , invoice_id as couponinvoice_id
         , case
             when amount_type = 'fixed-discount'
-                then concat(format('%.2f', amount), ' off')
+                then concat('$', format('%.2f', amount))
             when amount_type = 'fixed-price'
                 then concat('Fixed Price: ', format('%.2f', amount))
             when amount_type = 'percent-discount'
-                then concat(format('%.2f', amount * 100), '% off')
+                then concat(format('%.2f', amount * 100), '%')
         end as coupon_discount_amount_text
         ,{{ cast_timestamp_to_iso8601('created_on') }} as coupon_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as coupon_updated_on
