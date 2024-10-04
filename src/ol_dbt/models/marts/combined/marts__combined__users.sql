@@ -29,19 +29,19 @@ with mitx__users as (
 )
 
 , program_stats as (
-    select
+    select 
         user_email
         , count(distinct programcertificate_uuid) as cert_count
     from combined_programs
-    group by user_email
+    group by user_email 
 )
 
 , orders_stats as (
-    select
+    select 
         user_email
         , sum(order_total_price_paid) as total_amount_paid_orders
     from orders
-    group by user_email
+    group by user_email 
 )
 
 , course_stats as (
@@ -54,25 +54,25 @@ with mitx__users as (
                 when courserungrade_is_passing = true then course_title
             end
         ) as num_of_course_passed
-        , min(case
+        , min(case 
             when
                 substring(courserun_readable_id, length(courserun_readable_id), 1) = 'a'
-                then
-                    substring(courserun_readable_id, length(courserun_readable_id) - 4, 4) || '
-                    -' || substring(courserun_readable_id, length(courserun_readable_id) - 6, 1)
+                then 
+                    substring(courserun_readable_id, length(courserun_readable_id) - 4, 4) || '~'
+                    || substring(courserun_readable_id, length(courserun_readable_id) - 6, 1)
             else
-                substring(courserun_readable_id, length(courserun_readable_id) - 3, 4) || '
-                -' || substring(courserun_readable_id, length(courserun_readable_id) - 5, 1)
+                substring(courserun_readable_id, length(courserun_readable_id) - 3, 4) || '~'
+                || substring(courserun_readable_id, length(courserun_readable_id) - 5, 1)
         end) as year_and_term_first_enrollment
-        , max(case
-            when
+        , max(case 
+            when 
                 substring(courserun_readable_id, length(courserun_readable_id), 1) = 'a'
-                then
-                    substring(courserun_readable_id, length(courserun_readable_id) - 4, 4) || '
-                    -' || substring(courserun_readable_id, length(courserun_readable_id) - 6, 1)
+                then 
+                    substring(courserun_readable_id, length(courserun_readable_id) - 4, 4) || '~'
+                    || substring(courserun_readable_id, length(courserun_readable_id) - 6, 1)
             else
-                substring(courserun_readable_id, length(courserun_readable_id) - 3, 4) || '
-                -' || substring(courserun_readable_id, length(courserun_readable_id) - 5, 1)
+                substring(courserun_readable_id, length(courserun_readable_id) - 3, 4) || '~'
+                || substring(courserun_readable_id, length(courserun_readable_id) - 5, 1)
         end) as year_and_term_latest_enrollment
         , count(distinct courseruncertificate_uuid) as number_of_courserun_certificates
     from combined_enrollments
