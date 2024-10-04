@@ -33,19 +33,19 @@ with mitx__users as (
 )
 
 , program_stats as (
-    select 
+    select
         user_email
         , count(distinct programcertificate_uuid) as cert_count
     from combined_programs
-    group by user_email 
+    group by user_email
 )
 
 , orders_stats as (
-    select 
+    select
         user_email
         , sum(order_total_price_paid) as total_amount_paid_orders
     from orders
-    group by user_email 
+    group by user_email
 )
 
 , course_stats as (
@@ -63,7 +63,7 @@ with mitx__users as (
         , count(distinct combined_enrollments.courseruncertificate_uuid) as number_of_certificates
     from combined_enrollments
     left join combined_courseruns
-    on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
     group by user_email
 )
 
