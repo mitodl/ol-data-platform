@@ -33,29 +33,29 @@ with mitx__users as (
 )
 
 , program_stats as (
-    select 
+    select
         user_email
         , count(distinct programcertificate_uuid) as cert_count
-        , sum(case 
-            when 
+        , sum(case
+            when
                 program_title in (
                     'Data, Economics, and Design of Policy'
                     , 'Data, Economics, and Design of Policy: International Development'
                     , 'Data, Economics, and Design of Policy: Public Policy'
-                ) 
-                then 1 
+                )
+                then 1
             else 0
         end) as dedp_program_cred_count
     from combined_programs
-    group by user_email 
+    group by user_email
 )
 
 , orders_stats as (
-    select 
+    select
         user_email
         , sum(order_total_price_paid) as total_amount_paid_orders
     from orders
-    group by user_email 
+    group by user_email
 )
 
 , course_stats as (
@@ -65,7 +65,7 @@ with mitx__users as (
         , count(
             distinct
             case
-                when combined_enrollments.courserungrade_is_passing = true 
+                when combined_enrollments.courserungrade_is_passing = true
                     then combined_enrollments.course_title
             end
         ) as num_of_course_passed
