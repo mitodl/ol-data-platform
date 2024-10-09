@@ -176,6 +176,8 @@ select
     , combined_programs.program_title
     , combined_programs.program_is_live
     , combined_programs.program_readable_id
+    , {{ generate_hash_id('cast(combined_programs.user_id as varchar) || combined_programs.platform_name') }}
+    as user_hashed_id
     , combined_programs.user_id
     , combined_programs.user_email
     , combined_programs.user_username
@@ -195,6 +197,8 @@ select
     , mm_no_dups.program_title
     , mm_no_dups.program_is_live
     , mm_no_dups.program_readable_id
+    , {{ generate_hash_id('cast(mm_no_dups.user_id as varchar) || mm_no_dups.platform_name') }}
+    as user_hashed_id
     , mm_no_dups.user_id
     , mm_no_dups.user_email
     , mm_no_dups.user_username

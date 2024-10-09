@@ -127,4 +127,7 @@ with mitxonline_users as (
     from residential_users
 )
 
-select * from combined_users
+select
+    {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_hashed_id
+    , *
+from combined_users

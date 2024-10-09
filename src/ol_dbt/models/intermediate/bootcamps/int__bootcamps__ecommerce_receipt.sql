@@ -9,6 +9,7 @@ select
     , receipt_updated_on
     , order_id
     , receipt_data
+    , cast(json_query(receipt_data, 'lax $.req_amount' omit quotes) as decimal(38, 2)) as receipt_payment_amount
     , json_query(receipt_data, 'lax $.req_transaction_uuid' omit quotes) as receipt_transaction_uuid
     , json_query(receipt_data, 'lax $.decision' omit quotes) as receipt_transaction_status
     , json_query(receipt_data, 'lax $.transaction_id' omit quotes) as receipt_transaction_id
@@ -18,7 +19,6 @@ select
     , json_query(receipt_data, 'lax $.req_reference_number' omit quotes) as receipt_reference_number
     , json_query(receipt_data, 'lax $.req_bill_to_address_state' omit quotes) as receipt_bill_to_address_state
     , json_query(receipt_data, 'lax $.req_bill_to_address_country' omit quotes) as receipt_bill_to_address_country
-    , json_query(receipt_data, 'lax $.req_amount' omit quotes) as receipt_payment_amount
     , json_query(receipt_data, 'lax $.req_currency' omit quotes) as receipt_payment_currency
     , json_query(receipt_data, 'lax $.req_bill_to_email' omit quotes) as receipt_payer_email
     , json_query(receipt_data, 'lax $.req_card_number' omit quotes) as receipt_payment_card_number

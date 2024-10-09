@@ -423,4 +423,5 @@ select
     , unit_price
     , user_email
     , user_id
+    , {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_hashed_id
 from combined_orders

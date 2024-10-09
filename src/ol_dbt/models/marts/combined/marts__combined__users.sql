@@ -4,12 +4,9 @@ with mitx__users as (
     select * from {{ ref('int__mitx__users') }}
 )
 
-, mitxpro_users as (
-    select * from {{ ref('int__mitxpro__users') }}
-)
-
-, bootcamps_users as (
-    select * from {{ ref('int__bootcamps__users') }}
+, non_mitx_users as (
+    select * from {{ ref('int__combined__users') }}
+    where platform in ('{{ var("mitxpro") }}', '{{ var("bootcamps") }}')
 )
 
 , combined_enrollments as (
@@ -32,7 +29,8 @@ with mitx__users as (
 
 , combined_users as (
     select
-        user_mitxonline_id
+        user_hashed_id
+        , user_mitxonline_id
         , user_edxorg_id
         , null as user_mitxpro_id
         , null as user_bootcamps_id
@@ -82,7 +80,8 @@ with mitx__users as (
     union all
 
     select
-        null as user_mitxonline_id
+        user_hashed_id
+        , null as user_mitxonline_id
         , null as user_edxorg_id
         , user_id as user_mitxpro_id
         , null as user_bootcamps_id
@@ -103,12 +102,14 @@ with mitx__users as (
         , user_company
         , user_job_title
         , user_industry
-    from mitxpro_users
+    from non_mitx_users
+    where platform = '{{ var("mitxpro") }}'
 
     union all
 
     select
-        null as user_mitxonline_id
+        user_hashed_id
+        , null as user_mitxonline_id
         , null as user_edxorg_id
         , null as user_mitxpro_id
         , user_id as user_bootcamps_id
@@ -129,11 +130,13 @@ with mitx__users as (
         , user_company
         , user_job_title
         , user_industry
-    from bootcamps_users
+    from non_mitx_users
+    where platform = '{{ var("bootcamps") }}'
 )
 
 select
-    combined_users.platforms
+    combined_users.user_hashed_id
+    , combined_users.platforms
     , combined_users.user_email
     , combined_users.user_joined_on
     , combined_users.user_last_login

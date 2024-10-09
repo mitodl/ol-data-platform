@@ -11,6 +11,7 @@ select
     , transaction_created_on
     , transaction_readable_identifier
     , transaction_type
+    , cast(json_query(transaction_data, 'lax $.req_amount' omit quotes) as decimal(38, 2)) as transaction_payment_amount
     , json_query(transaction_data, 'lax $.req_transaction_uuid' omit quotes) as transaction_uuid
     , json_query(transaction_data, 'lax $.decision' omit quotes) as transaction_status
     , json_query(transaction_data, 'lax $.req_payment_method' omit quotes) as transaction_payment_method
@@ -20,7 +21,6 @@ select
         transaction_data, 'lax $.req_bill_to_address_country' omit quotes
     ) as transaction_bill_to_address_country
     , json_query(transaction_data, 'lax $.req_transaction_type' omit quotes) as transaction_req_type
-    , json_query(transaction_data, 'lax $.req_amount' omit quotes) as transaction_payment_amount
     , json_query(transaction_data, 'lax $.req_currency' omit quotes) as transaction_payment_currency
     , json_query(transaction_data, 'lax $.req_bill_to_email' omit quotes) as transaction_payer_email
     , json_query(transaction_data, 'lax $.req_card_number' omit quotes) as transaction_payment_card_number
