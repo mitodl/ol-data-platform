@@ -110,7 +110,8 @@ models:
   - name: last_course_start_datetime
     description: string, year and term from the users latest course enrollment
   - name: number_of_courserun_certificates
-    description: int, number of course run enrollment certificates associated with the user
+    description: int, number of course run enrollment certificates associated with
+      the user
   - name: total_amount_paid_orders
     description: int, sum of total orders paid associated with the user
   - name: latest_income_usd
