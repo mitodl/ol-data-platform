@@ -218,6 +218,7 @@ with combined_course_activities_daily as (
 
 select
     combined_course_activities_daily.platform
+    , combined_users.user_hashed_id
     , combined_course_activities_daily.user_username
     , combined_course_activities_daily.courserun_readable_id
     , combined_course_activities_daily.courseactivity_date

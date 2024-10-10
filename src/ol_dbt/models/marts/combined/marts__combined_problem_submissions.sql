@@ -83,6 +83,7 @@ select
     , combined_problem_checks.useractivity_problem_current_grade as problem_grade
     , combined_problem_checks.useractivity_problem_max_grade as problem_max_grade
     , combined_problem_checks.useractivity_timestamp as problem_submission_timestamp
+    , combined_users.user_hashed_id
     , combined_users.user_full_name
     , combined_users.user_email
     , combined_users.user_address_country as user_country_code

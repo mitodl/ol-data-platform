@@ -118,6 +118,10 @@ models:
     users who exist on both platforms, their profile fields are selected in the order
     of MITx Online, MicroMasters, and edX.org, whichever is not null.
   columns:
+  - name: user_hashed_id
+    description: str, primary key for this table to identify the user
+    tests:
+    - unique
   - name: is_mitxonline_user
     description: boolean, indicating if this user has an account on MITx Online
   - name: is_edxorg_user

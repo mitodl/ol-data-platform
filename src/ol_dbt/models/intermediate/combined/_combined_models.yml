@@ -5,6 +5,10 @@ models:
 - name: int__combined__users
   description: Intermediate model for users from different platforms
   columns:
+  - name: user_hashed_id
+    description: str, primary key for this table to identify the user
+    tests:
+    - unique
   - name: platform
     description: string, application where the data is from
     tests:
