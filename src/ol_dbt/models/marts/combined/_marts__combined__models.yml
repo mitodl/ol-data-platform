@@ -105,6 +105,21 @@ models:
     description: number, the number of courses learner passed based on their emails
       so this counts as same person if they use the email to register on different
       platforms
+  - name: first_course_start_datetime
+    description: string, year and term from the users first course enrollment
+  - name: last_course_start_datetime
+    description: string, year and term from the users latest course enrollment
+  - name: number_of_courserun_certificates
+    description: int, number of course run enrollment certificates associated with
+      the user
+  - name: total_amount_paid_orders
+    description: int, sum of total orders paid associated with the user
+  - name: latest_income_usd
+    description: int, the users latest income in usd. Only populated for mitxonline.
+  - name: has_program_certificate
+    description: boolean, Set to true if the user has recieved a program credential
+  - name: has_dedp_program_certificate
+    description: boolean, Set to true if the user has recieved a DEDP program credential
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_mitxonline_username", "user_edxorg_username", "user_mitxpro_username",

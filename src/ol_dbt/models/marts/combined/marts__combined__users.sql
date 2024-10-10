@@ -16,18 +16,68 @@ with mitx__users as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
-, course_stats as (
+, combined_programs as (
+    select * from {{ ref('marts__combined_program_enrollment_detail') }}
+)
+
+, orders as (
+    select * from {{ ref('marts__combined__orders') }}
+)
+
+, income as (
+    select * from {{ ref('marts__mitxonline_user_profiles') }}
+)
+
+, combined_courseruns as (
+    select * from {{ ref('int__combined__course_runs') }}
+)
+
+, program_stats as (
     select
         user_email
-        , count(distinct course_title) as num_of_course_enrolled
+        , count(distinct programcertificate_uuid) as cert_count
+        , sum(case
+            when
+                program_title in (
+                    'Data, Economics, and Design of Policy'
+                    , 'Data, Economics, and Design of Policy: International Development'
+                    , 'Data, Economics, and Design of Policy: Public Policy'
+                )
+                and
+                programcertificate_uuid is not null
+                then 1
+            else 0
+        end) as dedp_program_cred_count
+    from combined_programs
+    group by user_email
+)
+
+, orders_stats as (
+    select
+        user_email
+        , sum(order_total_price_paid) as total_amount_paid_orders
+    from orders
+    group by user_email
+)
+
+, course_stats as (
+    select
+        combined_enrollments.user_email
+        , count(distinct combined_enrollments.course_title) as num_of_course_enrolled
         , count(
             distinct
             case
-                when courserungrade_is_passing = true then course_title
+                when combined_enrollments.courserungrade_is_passing = true
+                    then combined_enrollments.course_title
             end
         ) as num_of_course_passed
+        , min(combined_courseruns.courserun_start_on) as first_course_start_datetime
+        , max(combined_courseruns.courserun_start_on) as last_course_start_datetime
+        , count(distinct combined_enrollments.courseruncertificate_uuid) as number_of_courserun_certificates
     from combined_enrollments
-    group by user_email
+    left join combined_courseruns
+        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    group by combined_enrollments.user_email
 )
 
 , combined_users as (
@@ -156,5 +206,15 @@ select
     , combined_users.user_bootcamps_username
     , course_stats.num_of_course_enrolled
     , course_stats.num_of_course_passed
+    , course_stats.first_course_start_datetime
+    , course_stats.last_course_start_datetime
+    , course_stats.number_of_courserun_certificates
+    , orders_stats.total_amount_paid_orders
+    , income.latest_income_usd
+    , case when program_stats.cert_count > 0 then true end as has_program_certificate
+    , case when program_stats.dedp_program_cred_count > 0 then true end as has_dedp_program_certificate
 from combined_users
 left join course_stats on combined_users.user_email = course_stats.user_email
+left join program_stats on combined_users.user_email = program_stats.user_email
+left join orders_stats on combined_users.user_email = orders_stats.user_email
+left join income on combined_users.user_mitxonline_username = income.user_username
