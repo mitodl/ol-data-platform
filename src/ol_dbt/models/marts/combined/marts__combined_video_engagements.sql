@@ -91,6 +91,7 @@ select
     , combined_video_engagements.useractivity_video_currenttime as video_currenttime
     , combined_video_engagements.useractivity_video_old_time as video_old_time
     , combined_video_engagements.useractivity_video_new_time as video_new_time
+    , combined_users.user_hashed_id
     , combined_users.user_full_name
     , combined_users.user_email
     , combined_users.user_address_country as user_country_code

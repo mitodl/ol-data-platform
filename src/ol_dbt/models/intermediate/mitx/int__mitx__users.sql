@@ -157,6 +157,12 @@ select
     , user_company
     , user_industry
     , user_job_title
+    , case
+        when is_mitxonline_user = true
+            then {{ generate_hash_id("cast(user_mitxonline_id as varchar) || 'MITx Online'") }}
+        when is_edxorg_user = true
+            then {{ generate_hash_id("cast(user_edxorg_id as varchar) || 'edX.org'") }}
+    end as user_hashed_id
 from mitxonline_edxorg_users
 
 union distinct
@@ -192,6 +198,7 @@ select
     , micromasters_users.user_company_name as user_company
     , micromasters_users.user_company_industry as user_industry
     , micromasters_users.user_job_position as user_job_title
+    , {{ generate_hash_id("cast(user_micromasters_id as varchar) || 'MicroMasters'") }} as user_hashed_id
 from micromasters_users
 left join mitxonline_edxorg_users
     on micromasters_users.user_id = mitxonline_edxorg_users.user_micromasters_id

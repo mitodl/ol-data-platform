@@ -35,6 +35,10 @@ models:
     grants:
       select: ['finance']
   columns:
+  - name: user_hashed_id
+    description: str, primary key for the combined_users table.
+    tests:
+    - unique
   - name: user_email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx. If the user is on edX.org
@@ -266,6 +270,8 @@ models:
       platform
   - name: user_id
     description: int, foreign key to the user table on the corresponding platform
+  - name: user_hashed_id
+    description: str, foreign key to combined_users
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["order_id", "line_id", "platform"]
@@ -388,13 +394,17 @@ models:
     description: int, user ID on the corresponding platform
     tests:
     - not_null
+  - name: user_hashed_id
+    description: str, foreign key to combined_users to identify the user
+    tests:
+    - not_null
   - name: user_username
     description: string, username to identify a user on the corresponding platform
     tests:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id"]
+      column_list: ["user_hashed_id", "courserun_readable_id"]
       row_condition: "platform='edX.org'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id"]
@@ -427,8 +437,10 @@ models:
   - name: program_readable_id
     description: str, readable ID from xpro or mitxonline formatted as program-v1:{org}+{program
       code} e.g.program-v1:xPRO+MLx
+  - name: user_hashed_id
+    description: str, foreign key to combined_users to identify the user
   - name: user_id
-    description: int, unique id assigned to the user
+    description: int, user ID on the corresponding platform
   - name: user_email
     description: string, email
   - name: user_username
@@ -595,6 +607,8 @@ models:
     description: timestamp, time of this video event
     tests:
     - not_null
+  - name: user_hashed_id
+    description: str, foreign key to combined_users to identify the user
   - name: user_full_name
     description: str, user full name on the corresponding platform
   - name: user_email
@@ -635,6 +649,8 @@ models:
       for edX.org courses.
     tests:
     - not_null
+  - name: user_hashed_id
+    description: str, foreign key to combined_users to identify the user.
   - name: user_username
     description: str, open edx username on the corresponding platform
     tests:
@@ -737,6 +753,8 @@ models:
     description: timestamp, date and time for this problem submission.
     tests:
     - not_null
+  - name: user_hashed_id
+    description: str, foreign key to combined_users to identify the user.
   - name: user_full_name
     description: str, user full name on the corresponding platform
   - name: user_email
