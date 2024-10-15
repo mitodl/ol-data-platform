@@ -442,9 +442,11 @@ models:
   - name: user_id
     description: int, user ID on the corresponding platform
   - name: user_email
-    description: string, email
+    description: string, user's email on the corresponding platform. For a small number
+      of legacy DEDP learners whose accounts cannot be linked to either edX.org or
+      MITx Online based on their usernames, this will be learner's MicroMasters email.
   - name: user_username
-    description: string, username
+    description: string, username on the corresponding platform
   - name: programenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the program
   - name: programenrollment_created_on
@@ -460,6 +462,10 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
+      row_condition: "program_id !=2 and platform_name !='edX.org'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "user_email"]
+      row_condition: "program_id =2 and platform_name ='edX.org'"
 
 - name: marts__combined__products
   description: combined course or program products from MITx Online and xPro
