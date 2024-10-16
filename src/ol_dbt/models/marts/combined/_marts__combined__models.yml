@@ -374,6 +374,10 @@ models:
   - name: order_reference_number
     description: string, order reference number to identify an order on the corresponding
       platform, e.g. mitxonline-production-20
+  - name: courserunenrollment_upgraded_on
+    description: timestamp, date and time when the learner upgraded to the verified
+      track course mode. May be the same as the date when the course enrollment was
+      created for xPro.
   - name: user_company
     description: str, user's company pulled on the platform user enrolled. May be
       blank.
