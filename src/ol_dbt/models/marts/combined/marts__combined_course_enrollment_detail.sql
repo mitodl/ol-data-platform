@@ -87,6 +87,8 @@ with combined_enrollments as (
         , combined_enrollments.course_title
         , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
+        , if(mitxonline_completed_orders.order_id is not null, mitxonline_completed_orders.order_created_on, null)
+        as courserunenrollment_upgraded_on
     from combined_enrollments
     left join combined_users
         on
@@ -140,6 +142,8 @@ with combined_enrollments as (
         , combined_enrollments.course_title
         , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
+        , if(micromasters_completed_orders.order_id is not null, micromasters_completed_orders.order_created_on, null)
+        as courserunenrollment_upgraded_on
     from combined_enrollments
     left join combined_users
         on
@@ -195,6 +199,8 @@ with combined_enrollments as (
         , combined_enrollments.course_title
         , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
+        , if(mitxpro_completed_orders.order_id is not null, mitxpro_completed_orders.order_created_on, null)
+        as courserunenrollment_upgraded_on
     from mitxpro_enrollments
     inner join combined_enrollments
         on mitxpro_enrollments.courserunenrollment_id = combined_enrollments.courserunenrollment_id
@@ -247,6 +253,8 @@ with combined_enrollments as (
         , combined_enrollments.course_title
         , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
+        , if(bootcamps_completed_orders.order_id is not null, bootcamps_completed_orders.order_created_on, null)
+        as courserunenrollment_upgraded_on
     from combined_enrollments
     left join combined_users
         on
@@ -299,6 +307,7 @@ with combined_enrollments as (
         , combined_enrollments.course_title
         , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
+        , null as courserunenrollment_upgraded_on
     from combined_enrollments
     left join combined_users
         on
@@ -335,6 +344,7 @@ select
     , courserunenrollment_enrollment_status
     , courserunenrollment_is_active
     , courserunenrollment_is_edx_enrolled
+    , courserunenrollment_upgraded_on
     , courserungrade_grade
     , courserungrade_is_passing
     , line_id

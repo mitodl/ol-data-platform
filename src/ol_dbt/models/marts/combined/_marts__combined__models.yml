@@ -365,15 +365,20 @@ models:
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline or xPro
   - name: line_id
-    description: int, foreign key for line table. For edX.org, it refers to line table
-      in MicroMasters application.
+    description: int, foreign key to ecommerce line table for fulfilled or refunded
+      orders on the corresponding platform. For edX.org, it refers to line table in
+      MicroMasters application.
   - name: order_id
-    description: int, unique identifier/foreign key to ecommerce orders from the corresponding
-      platform. Note that this doesn't include orders from edX.org, which we don't
-      have data for them
+    description: int, foreign key to ecommerce order table for fulfilled or refunded
+      orders on the corresponding platform. Note that this does not include orders
+      from edX.org, for which we do not have data.
   - name: order_reference_number
-    description: string, order reference number to identify an order on the corresponding
-      platform, e.g. mitxonline-production-20
+    description: string, order reference number to identify a fulfilled or refunded
+      order on the corresponding platform, e.g. mitxonline-production-20
+  - name: courserunenrollment_upgraded_on
+    description: timestamp, date and time when the learner upgraded to the verified
+      track course mode. May be the same as the date when the course enrollment was
+      created for xPro.
   - name: user_company
     description: str, user's company pulled on the platform user enrolled. May be
       blank.
