@@ -9,7 +9,6 @@ from dagster import (
     AssetIn,
     AssetKey,
     AssetOut,
-    AutoMaterializePolicy,
     DataVersion,
     Output,
     asset,
@@ -39,7 +38,6 @@ def dummy_edxorg_course_xml(): ...
 @multi_asset(
     partitions_def=course_and_source_partitions,
     group_name="edxorg",
-    io_manager_key="s3file_io_manager",
     ins={"course_archive": AssetIn(key=AssetKey(("edxorg", "raw_data", "course_xml")))},
     outs={
         "course_metadata": AssetOut(
@@ -60,9 +58,6 @@ def dummy_edxorg_course_xml(): ...
             key=AssetKey(("edxorg", "processed_data", "course_video")),
         ),
     },
-    auto_materialize_policy=AutoMaterializePolicy.eager(
-        max_materializations_per_minute=None
-    ),
 )
 def extract_edxorg_courserun_metadata(
     context: AssetExecutionContext, course_archive: UPath
