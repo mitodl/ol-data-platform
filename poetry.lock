@@ -1231,7 +1231,7 @@ name = "dagster-webserver"
 version = "1.8.12"
 description = "Web UI for dagster."
 optional = false
-python-versions = "<3.13,>=3.8"
+python-versions = ""
 files = [
     {file = "dagster-webserver-1.8.12.tar.gz", hash = "sha256:6f155366eb1abe327c88bfa4ee03652b2aaabd9f5fdb73a136b3dcdb0f8d7d58"},
     {file = "dagster_webserver-1.8.12-py3-none-any.whl", hash = "sha256:a339c839f477725b4b19fcc456e67273b51f2165513e97c16cf73a64e313182a"},
