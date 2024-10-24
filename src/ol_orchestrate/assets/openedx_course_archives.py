@@ -85,6 +85,7 @@ def extract_edxorg_courserun_metadata(
     course_metadata_object_key = f"{'/'.join(context.asset_key_for_output('course_metadata').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
     yield Output(
         (course_metadata_file, course_metadata_object_key),
+        output_name="course_metadata",
         data_version=DataVersion(data_version),
         metadata={
             "course_id": partition_dict["course_id"],
