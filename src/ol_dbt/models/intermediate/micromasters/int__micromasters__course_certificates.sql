@@ -25,7 +25,7 @@ with course_certificates_dedp_from_micromasters as (
 
 
 , dedp_course_certificates_combined as (
-    select
+    select distinct
         course_certificates_dedp_from_micromasters.program_title
         , course_certificates_dedp_from_micromasters.micromasters_program_id
         , course_certificates_dedp_from_micromasters.mitxonline_program_id
@@ -44,11 +44,12 @@ with course_certificates_dedp_from_micromasters as (
     from course_certificates_dedp_from_micromasters
     left join mitx_users
         on course_certificates_dedp_from_micromasters.user_micromasters_id = mitx_users.user_micromasters_id
-    left join course_certificates_dedp_from_mitxonline
+    inner join course_certificates_dedp_from_mitxonline
         on (
             mitx_users.user_mitxonline_id = course_certificates_dedp_from_mitxonline.user_mitxonline_id
             or mitx_users.user_micromasters_email = course_certificates_dedp_from_mitxonline.user_mitxonline_email
         )
+     and course_certificates_dedp_from_micromasters.courserun_readable_id = course_certificates_dedp_from_mitxonline.courserun_readable_id
     where course_certificates_dedp_from_micromasters.courserun_platform = '{{ var("edxorg") }}'
 
     union all
