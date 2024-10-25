@@ -49,7 +49,8 @@ with course_certificates_dedp_from_micromasters as (
             mitx_users.user_mitxonline_id = course_certificates_dedp_from_mitxonline.user_mitxonline_id
             or mitx_users.user_micromasters_email = course_certificates_dedp_from_mitxonline.user_mitxonline_email
         )
-     and course_certificates_dedp_from_micromasters.courserun_readable_id = course_certificates_dedp_from_mitxonline.courserun_readable_id
+        and course_certificates_dedp_from_micromasters.courserun_readable_id
+        = course_certificates_dedp_from_mitxonline.courserun_readable_id
     where course_certificates_dedp_from_micromasters.courserun_platform = '{{ var("edxorg") }}'
 
     union all
