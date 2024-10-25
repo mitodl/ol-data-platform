@@ -24,6 +24,7 @@ select
     , courseruns.courserun_readable_id
     , courseruns.courserun_platform
     , courses.course_number
+    , courserun_certificates.user_email as user_mitxonline_email
     , courserun_certificates.user_username as user_mitxonline_username
     , courserun_certificates.user_id as user_mitxonline_id
     , courserun_certificates.courseruncertificate_uuid
