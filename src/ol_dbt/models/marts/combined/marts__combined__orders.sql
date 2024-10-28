@@ -230,11 +230,11 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_amount
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
-        , case 
+        , case
             when discount_amount_text like '%Fixed%'
                 then cast(
                     product_price - cast(
-                        substring(discount_amount_text, 14) 
+                        substring(discount_amount_text, 14)
                         as decimal(38, 2)
                     ) as varchar
                 )
@@ -380,11 +380,11 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_amount
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
-        , case 
+        , case
             when coupon_discount_amount_text like '%Fixed%'
                 then cast(
                     line_price - cast(
-                        substring(coupon_discount_amount_text, 14) 
+                        substring(coupon_discount_amount_text, 14)
                         as decimal(38, 2)
                     ) as varchar
                 )
