@@ -25,7 +25,7 @@ with course_certificates_dedp_from_micromasters as (
 
 
 , dedp_course_certificates_combined as (
-    select distinct
+    select
         course_certificates_dedp_from_micromasters.program_title
         , course_certificates_dedp_from_micromasters.micromasters_program_id
         , course_certificates_dedp_from_micromasters.mitxonline_program_id
@@ -38,19 +38,12 @@ with course_certificates_dedp_from_micromasters as (
         , mitx_users.user_full_name
         , mitx_users.user_address_country as user_country
         , mitx_users.user_micromasters_email as user_email
-        , course_certificates_dedp_from_mitxonline.courseruncertificate_uuid
-        , course_certificates_dedp_from_mitxonline.courseruncertificate_url
-        , course_certificates_dedp_from_mitxonline.courseruncertificate_created_on
+        , course_certificates_dedp_from_micromasters.coursecertificate_hash as courseruncertificate_uuid
+        , course_certificates_dedp_from_micromasters.coursecertificate_url as courseruncertificate_url
+        , course_certificates_dedp_from_micromasters.coursecertificate_created_on as courseruncertificate_created_on
     from course_certificates_dedp_from_micromasters
     left join mitx_users
         on course_certificates_dedp_from_micromasters.user_micromasters_id = mitx_users.user_micromasters_id
-    inner join course_certificates_dedp_from_mitxonline
-        on (
-            mitx_users.user_mitxonline_id = course_certificates_dedp_from_mitxonline.user_mitxonline_id
-            or mitx_users.user_micromasters_email = course_certificates_dedp_from_mitxonline.user_mitxonline_email
-        )
-        and course_certificates_dedp_from_micromasters.courserun_readable_id
-        = course_certificates_dedp_from_mitxonline.courserun_readable_id
     where course_certificates_dedp_from_micromasters.courserun_platform = '{{ var("edxorg") }}'
 
     union all
