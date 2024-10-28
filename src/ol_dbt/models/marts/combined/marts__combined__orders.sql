@@ -56,7 +56,6 @@ with bootcamps__ecommerce_order as (
         , mitxonline__ecommerce_order.discount_code
         , mitxonline__ecommerce_order.discount_redemption_type
         , mitxonline__ecommerce_order.discountredemption_timestamp
-        , mitxonline__ecommerce_order.discount_amount_text
         , mitxonline__transaction.transaction_bill_to_address_state
         , mitxonline__transaction.transaction_bill_to_address_country
         , mitxonline__transaction.transaction_uuid
@@ -75,6 +74,7 @@ with bootcamps__ecommerce_order as (
         , mitxonline__ecommerce_order.order_reference_number
         , mitxonline__ecommerce_order.order_state
         , mitxonline__ecommerce_order.order_total_price_paid
+        , mitxonline__ecommerce_order.discount_amount_text
         ----In MITx Online, there are two transactions for an refunded order.
         ----Here we picked the refund transaction ID and auth code until we change the unique key
         , coalesce(
@@ -205,7 +205,6 @@ with bootcamps__ecommerce_order as (
         , null as coupon_name
         , discount_redemption_type as coupon_type
         , discountredemption_timestamp as coupon_redeemed_on
-        , discount_amount_text as discount
         , transaction_authorization_code as receipt_authorization_code
         , transaction_bill_to_address_state as receipt_bill_to_address_state
         , transaction_bill_to_address_country as receipt_bill_to_address_country
@@ -231,6 +230,16 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_amount
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
+        , case
+            when discount_amount_text like '%Fixed%'
+                then cast(
+                    product_price - cast(
+                        substring(discount_amount_text, 14)
+                        as decimal(38, 2)
+                    ) as varchar
+                )
+            else discount_amount_text
+        end as discount
     from mitxonline_orders
 
     union all
@@ -252,7 +261,6 @@ with bootcamps__ecommerce_order as (
         , coupon_name
         , coupon_type
         , coupon_redeemed_on
-        , discount
         , receipt_authorization_code
         , receipt_bill_to_address_state
         , receipt_bill_to_address_country
@@ -278,6 +286,7 @@ with bootcamps__ecommerce_order as (
         , order_tax_amount
         , order_total_price_paid_plus_tax
         , order_total_price_paid
+        , discount
     from mitxpro_orders
 
     union all
@@ -299,7 +308,6 @@ with bootcamps__ecommerce_order as (
         , null as coupon_name
         , null as coupon_type
         , null as coupon_redeemed_on
-        , null as discount
         , receipt_authorization_code
         , receipt_bill_to_address_state
         , receipt_bill_to_address_country
@@ -325,6 +333,7 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_amount
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
+        , null as discount
     from bootcamps_orders
 
     union all
@@ -346,7 +355,6 @@ with bootcamps__ecommerce_order as (
         , null as coupon_name
         , coupon_type
         , redeemedcoupon_created_on as coupon_redeemed_on
-        , coupon_discount_amount_text as discount
         , receipt_authorization_code
         , receipt_bill_to_address_state
         , receipt_bill_to_address_country
@@ -372,6 +380,16 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_amount
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
+        , case
+            when coupon_discount_amount_text like '%Fixed%'
+                then cast(
+                    line_price - cast(
+                        substring(coupon_discount_amount_text, 14)
+                        as decimal(38, 2)
+                    ) as varchar
+                )
+            else coupon_discount_amount_text
+        end as discount
     from micromasters_orders
     where courserun_platform = '{{ var("edxorg") }}'
 
