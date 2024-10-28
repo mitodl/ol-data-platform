@@ -238,7 +238,7 @@ with bootcamps__ecommerce_order as (
                         as decimal(38, 2)
                     ) as varchar
                 )
-            else coupon_discount_amount_text
+            else discount_amount_text
         end as discount
     from mitxonline_orders
 
