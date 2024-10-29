@@ -66,6 +66,7 @@ with mitxpro__programenrollments as (
         , mitxpro__program_certificates.programcertificate_created_on
         , mitxpro__program_certificates.programcertificate_is_revoked
         , mitxpro__program_certificates.programcertificate_uuid
+        , mitxpro__program_certificates.programcertificate_url
     from mitxpro__programenrollments
     inner join mitxpro__programs
         on mitxpro__programenrollments.program_id = mitxpro__programs.program_id
@@ -91,6 +92,7 @@ with mitxpro__programenrollments as (
         , mitxonline__program_certificates.programcertificate_created_on
         , mitxonline__program_certificates.programcertificate_is_revoked
         , mitxonline__program_certificates.programcertificate_uuid
+        , mitxonline__program_certificates.programcertificate_url
     from mitxonline__programenrollments
     inner join mitxonline__programs
         on mitxonline__programenrollments.program_id = mitxonline__programs.program_id
@@ -116,6 +118,7 @@ with mitxpro__programenrollments as (
         , edx_program_certificates.program_certificate_awarded_on as programcertificate_created_on
         , null as programcertificate_is_revoked
         , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
+        , null as programcertificate_url
     from edx_program_enrollments
     left join mitx__users
         on edx_program_enrollments.user_id = mitx__users.user_id
@@ -146,9 +149,16 @@ with mitxpro__programenrollments as (
         , null as programenrollment_is_active
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
-        , micromasters__certs.program_completion_timestamp as programcertificate_created_on
-        , null as programcertificate_is_revoked
-        , micromasters__certs.program_certificate_hashed_id as programcertificate_uuid
+        , coalesce(
+            mitxonline__program_certificates.programcertificate_created_on
+            , micromasters__certs.program_completion_timestamp
+        ) as programcertificate_created_on
+        , mitxonline__program_certificates.programcertificate_is_revoked
+        , coalesce(
+            mitxonline__program_certificates.programcertificate_uuid
+            , micromasters__certs.program_certificate_hashed_id
+        ) as programcertificate_uuid
+        , mitxonline__program_certificates.programcertificate_url
     from micromasters__program_enrollments
     inner join micromasters__users
         on micromasters__program_enrollments.micromasters_user_id = micromasters__users.user_id
@@ -157,6 +167,11 @@ with mitxpro__programenrollments as (
             micromasters__program_enrollments.micromasters_program_id
             = micromasters__certs.micromasters_program_id
             and micromasters__program_enrollments.user_email = micromasters__certs.user_email
+    left join mitxonline__program_certificates
+        on
+            micromasters__program_enrollments.micromasters_program_id
+            = mitxonline__program_certificates.micromasters_program_id
+            and micromasters__program_enrollments.user_id = mitxonline__program_certificates.user_id
     left join combined_programs
         on
             micromasters__program_enrollments.user_email = combined_programs.user_email
@@ -187,6 +202,7 @@ select
     , combined_programs.programcertificate_created_on
     , combined_programs.programcertificate_is_revoked
     , combined_programs.programcertificate_uuid
+    , combined_programs.programcertificate_url
 from combined_programs
 
 union all
@@ -208,4 +224,5 @@ select
     , mm_no_dups.programcertificate_created_on
     , mm_no_dups.programcertificate_is_revoked
     , mm_no_dups.programcertificate_uuid
+    , mm_no_dups.programcertificate_url
 from mm_no_dups

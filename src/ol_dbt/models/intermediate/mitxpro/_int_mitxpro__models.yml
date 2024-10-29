@@ -1616,6 +1616,10 @@ models:
     description: str, email
     tests:
     - not_null
+  - name: programcertificate_url
+    description: str, URL to the program certificate on xpro.mit.edu
+    tests:
+    - unique
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__courses_programcertificate')
