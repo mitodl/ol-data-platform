@@ -52,6 +52,10 @@ with combined_enrollments as (
     select * from {{ ref('int__mitxpro__ecommerce_line') }}
 )
 
+, mitxonline_certificates as (
+    select * from {{ ref('int__mitxonline__courserun_certificates') }}
+)
+
 , combined_enrollment_detail as (
     select
         '{{ var("mitxonline") }}' as platform
@@ -130,10 +134,11 @@ with combined_enrollments as (
         , combined_users.user_highest_education
         , combined_users.user_company
         , combined_users.user_gender
-        , combined_enrollments.courseruncertificate_is_earned
-        , combined_enrollments.courseruncertificate_created_on
-        , combined_enrollments.courseruncertificate_url
-        , combined_enrollments.courseruncertificate_uuid
+        , if(mitxonline_certificates.courseruncertificate_is_revoked = false, true, false)
+        as courseruncertificate_is_earned
+        , mitxonline_certificates.courseruncertificate_created_on
+        , mitxonline_certificates.courseruncertificate_url
+        , mitxonline_certificates.courseruncertificate_uuid
         , micromasters_completed_orders.order_id
         , micromasters_completed_orders.line_id
         , micromasters_completed_orders.order_reference_number
@@ -159,6 +164,13 @@ with combined_enrollments as (
         on
             combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
             and combined_enrollments.platform = combined_courseruns.platform
+    left join mitxonline_certificates
+        on (
+            micromasters_users.user_mitxonline_username = mitxonline_certificates.user_username
+            or micromasters_users.user_email = mitxonline_certificates.user_email
+        )
+        and combined_enrollments.courserun_readable_id
+        = replace(replace(mitxonline_certificates.courserun_readable_id, 'course-v1:', ''), '+', '/')
     where combined_enrollments.platform = '{{ var("edxorg") }}'
 
 
