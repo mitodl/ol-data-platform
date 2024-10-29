@@ -32,7 +32,7 @@ with certificates as (
         , users.user_email
         , if(
             certificates.programcertificate_is_revoked = false
-            , concat('https://xpro.mit.edu/certificate/program/', certificates.programcertificate_uuid)
+            , concat('https://mitxonline.mit.edu/certificate/program/', certificates.programcertificate_uuid)
             , null
         ) as programcertificate_url
     from certificates

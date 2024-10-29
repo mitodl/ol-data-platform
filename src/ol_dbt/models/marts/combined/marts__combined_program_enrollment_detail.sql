@@ -169,9 +169,14 @@ with mitxpro__programenrollments as (
             and micromasters__program_enrollments.user_email = micromasters__certs.user_email
     left join mitxonline__program_certificates
         on
-            micromasters__program_enrollments.micromasters_program_id
-            = mitxonline__program_certificates.micromasters_program_id
-            and micromasters__program_enrollments.user_id = mitxonline__program_certificates.user_id
+            micromasters__program_enrollments.mitxonline_program_id
+            = mitxonline__program_certificates.program_id
+            and (
+                micromasters__program_enrollments.user_mitxonline_username
+                = mitxonline__program_certificates.user_username
+                or micromasters__program_enrollments.user_email
+                = mitxonline__program_certificates.user_email
+            )
     left join combined_programs
         on
             micromasters__program_enrollments.user_email = combined_programs.user_email
