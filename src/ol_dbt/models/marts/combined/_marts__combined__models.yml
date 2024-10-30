@@ -463,6 +463,10 @@ models:
     description: boolean, indicating whether the certificate is revoked and invalid
   - name: programcertificate_uuid
     description: str, unique identifier for the program certificate
+  - name: programcertificate_url
+    description: str, URL to the program certificate for users who earned the certificate
+      on either mitxonline.mit.edu or xpro.mit.edu. Null for certificate earned on
+      edX.org or certificates that have been revoked.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]

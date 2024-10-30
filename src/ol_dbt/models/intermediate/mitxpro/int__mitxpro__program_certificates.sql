@@ -25,6 +25,11 @@ with certificates as (
         , certificates.user_id
         , users.user_username
         , users.user_email
+        , if(
+            certificates.programcertificate_is_revoked = false
+            , concat('https://xpro.mit.edu/certificate/program/', certificates.programcertificate_uuid)
+            , null
+        ) as programcertificate_url
     from certificates
     inner join programs on certificates.program_id = programs.program_id
     inner join users on certificates.user_id = users.user_id
