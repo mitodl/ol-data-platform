@@ -1389,7 +1389,8 @@ models:
     tests:
     - not_null
   - name: programcertificate_url
-    description: str, URL to the program certificate on mitxonline.mit.edu
+    description: str, URL to the program certificate on mitxonline.mit.edu. Null for
+      certificates that have been revoked.
     tests:
     - unique
   tests:

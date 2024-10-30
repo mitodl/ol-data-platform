@@ -1582,7 +1582,8 @@ models:
     - unique
     - not_null
   - name: programcertificate_uuid
-    description: str, unique identifier for the program certificate
+    description: str, unique identifier for the program certificate. Null for certificates
+      that have been revoked.
     tests:
     - unique
     - not_null
