@@ -466,7 +466,7 @@ models:
   - name: programcertificate_url
     description: str, URL to the program certificate for users who earned the certificate
       on either mitxonline.mit.edu or xpro.mit.edu. Null for certificate earned on
-      edX.org.
+      edX.org or certificates that have been revoked.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
