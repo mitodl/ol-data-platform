@@ -172,12 +172,12 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_allorders.coupon_id
         , mitxpro__ecommerce_allorders.order_id
         , mitxpro__ecommerce_order.order_total_price_paid
-        , mitxpro__programruns.programrun_readable_id
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
         , concat('xpro-b2c-production-', cast(mitxpro__ecommerce_allorders.order_id as varchar))
         as order_reference_number
         , coalesce(
             mitxpro__ecommerce_allorders.courserun_readable_id
+            , mitxpro__programruns.programrun_readable_id
             , mitxpro__ecommerce_allorders.program_readable_id
         ) as product_readable_id
     from mitxpro__ecommerce_allorders
@@ -247,7 +247,6 @@ with bootcamps__ecommerce_order as (
                 )
             else discount_amount_text
         end as discount
-        , null as programrun_readable_id
     from mitxonline_orders
 
     union all
@@ -295,7 +294,6 @@ with bootcamps__ecommerce_order as (
         , order_total_price_paid_plus_tax
         , order_total_price_paid
         , discount
-        , programrun_readable_id
     from mitxpro_orders
 
     union all
@@ -343,7 +341,6 @@ with bootcamps__ecommerce_order as (
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
         , null as discount
-        , null as programrun_readable_id
     from bootcamps_orders
 
     union all
@@ -400,7 +397,6 @@ with bootcamps__ecommerce_order as (
                 )
             else coupon_discount_amount_text
         end as discount
-        , null as programrun_readable_id
     from micromasters_orders
     where courserun_platform = '{{ var("edxorg") }}'
 
@@ -433,7 +429,6 @@ select
     , product_id
     , product_readable_id
     , product_type
-    , programrun_readable_id
     , receipt_authorization_code
     , receipt_bill_to_address_state
     , receipt_bill_to_address_country

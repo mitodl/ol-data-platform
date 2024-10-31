@@ -221,9 +221,6 @@ models:
   - name: product_type
     description: string, readable product type - either course run or program. May
       be null for bootcamps and edX.org
-  - name: programrun_readable_id
-    description: str, unique program run ID formatted as program-v1:{org}+{program
-      code}+{run_tag} e.g. program-v1:xPRO+MLx+R1. Only populated for xpro.
   - name: receipt_authorization_code
     description: str, either the authorization code from cybersource payment transaction,
       or approvalCode from cybersource refund transaction (MITx Online only).
