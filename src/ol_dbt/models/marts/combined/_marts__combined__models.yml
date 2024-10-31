@@ -213,8 +213,9 @@ models:
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
   - name: product_readable_id
-    description: string, the product identifier either referring to courserun_readable_id
-      or program_readable_id. May be null for bootcamps and edX.org.
+    description: string, the product identifier either referring to courserun_readable_id,
+      programrun_readable_id, or program_readable_id. May be null for bootcamps and
+      edX.org.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"

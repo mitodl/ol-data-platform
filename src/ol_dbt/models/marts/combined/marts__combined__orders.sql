@@ -24,6 +24,10 @@ with bootcamps__ecommerce_order as (
     select * from {{ ref('int__mitxpro__ecommerce_line') }}
 )
 
+, mitxpro__programruns as (
+    select * from {{ ref('int__mitxpro__program_runs') }}
+)
+
 , mitxpro__receipts as (
     select *
     from {{ ref('int__mitxpro__ecommerce_receipt') }}
@@ -173,6 +177,7 @@ with bootcamps__ecommerce_order as (
         as order_reference_number
         , coalesce(
             mitxpro__ecommerce_allorders.courserun_readable_id
+            , mitxpro__programruns.programrun_readable_id
             , mitxpro__ecommerce_allorders.program_readable_id
         ) as product_readable_id
     from mitxpro__ecommerce_allorders
@@ -184,6 +189,8 @@ with bootcamps__ecommerce_order as (
         on mitxpro__ecommerce_allorders.line_id = mitxpro__lines.line_id
     left join mitxpro__ecommerce_allcoupons
         on mitxpro__ecommerce_allorders.coupon_id = mitxpro__ecommerce_allcoupons.coupon_id
+    left join mitxpro__programruns
+        on mitxpro__lines.programrun_id = mitxpro__programruns.programrun_id
     where mitxpro__ecommerce_allorders.order_id is not null
 )
 
