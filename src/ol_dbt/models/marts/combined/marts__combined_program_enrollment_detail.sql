@@ -18,6 +18,11 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__mitxonline__programs') }}
 )
 
+
+, mitx__programs as (
+    select * from {{ ref('int__mitx__programs') }}
+)
+
 , mitxonline__program_certificates as (
     select * from {{ ref('int__mitxonline__program_certificates') }}
 )
@@ -30,7 +35,7 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__edxorg__mitx_program_enrollments') }}
 )
 
-, mitx__users as (
+, edxorg__users as (
     select * from {{ ref('int__edxorg__mitx_users') }}
 )
 
@@ -38,17 +43,6 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__micromasters__program_enrollments') }}
 )
 
-, micromasters__users as (
-    select * from {{ ref('__micromasters__users') }}
-)
-
-, micromasters__certs as (
-    select * from {{ ref('int__micromasters__program_certificates') }}
-)
-
-, mitxonline__users as (
-    select * from {{ ref('int__mitxonline__users') }}
-)
 
 , combined_programs as (
     select
@@ -110,7 +104,7 @@ with mitxpro__programenrollments as (
         , null as program_is_live
         , null as program_readable_id
         , edx_program_enrollments.user_id
-        , mitx__users.user_email
+        , edxorg__users.user_email
         , edx_program_enrollments.user_username
         , null as programenrollment_is_active
         , null as programenrollment_created_on
@@ -120,74 +114,48 @@ with mitxpro__programenrollments as (
         , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
         , null as programcertificate_url
     from edx_program_enrollments
-    left join mitx__users
-        on edx_program_enrollments.user_id = mitx__users.user_id
+    left join edxorg__users
+        on edx_program_enrollments.user_id = edxorg__users.user_id
     left join edx_program_certificates
         on
             edx_program_enrollments.program_uuid = edx_program_certificates.program_uuid
             and edx_program_enrollments.user_id = edx_program_certificates.user_id
-)
 
-, mm_no_dups as (
+    union all
+
     select
         micromasters__program_enrollments.platform_name
         , micromasters__program_enrollments.micromasters_program_id as program_id
         , micromasters__program_enrollments.program_title
-        , null as program_is_live
-        , null as program_readable_id
-        , case
-            when micromasters__program_enrollments.platform_name = '{{ var("mitxonline") }}'
-                then mitxonline__users.user_id
-            else micromasters__program_enrollments.user_edxorg_id
-        end as user_id
+        , mitxonline__programs.program_is_live
+        , mitxonline__programs.program_readable_id
+        , micromasters__program_enrollments.user_edxorg_id as user_id
         , micromasters__program_enrollments.user_email
-        , case
-            when micromasters__program_enrollments.platform_name = '{{ var("mitxonline") }}'
-                then micromasters__program_enrollments.user_mitxonline_username
-            else micromasters__program_enrollments.user_edxorg_username
-        end as user_username
+        , micromasters__program_enrollments.user_edxorg_username as user_username
         , null as programenrollment_is_active
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
-        , coalesce(
-            mitxonline__program_certificates.programcertificate_created_on
-            , micromasters__certs.program_completion_timestamp
-        ) as programcertificate_created_on
-        , mitxonline__program_certificates.programcertificate_is_revoked
-        , coalesce(
-            mitxonline__program_certificates.programcertificate_uuid
-            , micromasters__certs.program_certificate_hashed_id
-        ) as programcertificate_uuid
-        , mitxonline__program_certificates.programcertificate_url
+        , edx_program_certificates.program_certificate_awarded_on as programcertificate_created_on
+        , null as programcertificate_is_revoked
+        , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
+        , null as programcertificate_url
     from micromasters__program_enrollments
-    inner join micromasters__users
-        on micromasters__program_enrollments.micromasters_user_id = micromasters__users.user_id
-    left join micromasters__certs
+    left join mitx__programs
+        on micromasters__program_enrollments.micromasters_program_id = mitx__programs.micromasters_program_id
+    left join mitxonline__programs
+        on mitx__programs.mitxonline_program_id = mitxonline__programs.program_id
+    left join edx_program_certificates
         on
-            micromasters__program_enrollments.micromasters_program_id
-            = micromasters__certs.micromasters_program_id
-            and micromasters__program_enrollments.user_email = micromasters__certs.user_email
-    left join mitxonline__program_certificates
+            micromasters__program_enrollments.micromasters_program_id = edx_program_certificates.micromasters_program_id
+            and micromasters__program_enrollments.user_edxorg_id = edx_program_certificates.user_id
+    left join edx_program_enrollments
         on
-            micromasters__program_enrollments.mitxonline_program_id
-            = mitxonline__program_certificates.program_id
-            and (
-                micromasters__program_enrollments.user_mitxonline_username
-                = mitxonline__program_certificates.user_username
-                or micromasters__program_enrollments.user_email
-                = mitxonline__program_certificates.user_email
-            )
-    left join combined_programs
-        on
-            micromasters__program_enrollments.user_email = combined_programs.user_email
-            and micromasters__program_enrollments.program_title = combined_programs.program_title
-    left join mitxonline__users
-        on
-            micromasters__program_enrollments.user_mitxonline_username
-            = mitxonline__users.user_username
+            micromasters__program_enrollments.micromasters_program_id = edx_program_enrollments.micromasters_program_id
+            and micromasters__program_enrollments.user_edxorg_id = edx_program_enrollments.user_id
     where
-        combined_programs.user_email is null
-        and combined_programs.program_title is null
+        micromasters__program_enrollments.platform_name = '{{ var("edxorg") }}'
+        and edx_program_enrollments.user_id is null
+        and edx_program_enrollments.micromasters_program_id is null
 )
 
 select
@@ -209,25 +177,3 @@ select
     , combined_programs.programcertificate_uuid
     , combined_programs.programcertificate_url
 from combined_programs
-
-union all
-
-select
-    mm_no_dups.platform_name
-    , mm_no_dups.program_id
-    , mm_no_dups.program_title
-    , mm_no_dups.program_is_live
-    , mm_no_dups.program_readable_id
-    , {{ generate_hash_id('cast(mm_no_dups.user_id as varchar) || mm_no_dups.platform_name') }}
-    as user_hashed_id
-    , mm_no_dups.user_id
-    , mm_no_dups.user_email
-    , mm_no_dups.user_username
-    , mm_no_dups.programenrollment_is_active
-    , mm_no_dups.programenrollment_created_on
-    , mm_no_dups.programenrollment_enrollment_status
-    , mm_no_dups.programcertificate_created_on
-    , mm_no_dups.programcertificate_is_revoked
-    , mm_no_dups.programcertificate_uuid
-    , mm_no_dups.programcertificate_url
-from mm_no_dups
