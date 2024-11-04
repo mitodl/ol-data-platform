@@ -121,7 +121,7 @@ elt = Definitions(
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=3600,
-            asset_selection=[full_dbt_project],
+            target=[full_dbt_project],
         )
     ],
     jobs=airbyte_asset_jobs,

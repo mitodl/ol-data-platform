@@ -91,7 +91,7 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
                 AutomationConditionSensorDefinition(
                     f"{deployment_name}_openedx_automation_sensor",
                     minimum_interval_seconds=3600,
-                    asset_selection=deployment_assets,
+                    target=deployment_assets,
                 ),
             ],
         )
