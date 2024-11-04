@@ -365,7 +365,7 @@ select
     , user_company
     , user_country_code
     , user_email
-    , user_full_name
+    , replace(replace(replace(user_full_name, ' ', '<>'), '><', ''), '<>', ' ') as user_full_name
     , user_highest_education
     , user_gender
     , {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_hashed_id
