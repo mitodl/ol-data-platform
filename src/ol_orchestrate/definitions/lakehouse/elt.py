@@ -18,15 +18,18 @@ from ol_orchestrate.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.secrets.vault import Vault
 
+airbyte_host_map = {
+    "dev": "config-airbyte-qa.odl.mit.edu",
+    "qa": "api-airbyte-qa.odl.mit.edu",
+    "production": "api-airbyte.odl.mit.edu",
+}
+
+airbyte_host = os.environ.get("DAGSTER_AIRBYTE_HOST", airbyte_host_map[DAGSTER_ENV])
 if DAGSTER_ENV == "dev":
     dagster_url = "http://localhost:3000"
-    airbyte_host = os.environ.get(
-        "DAGSTER_AIRBYTE_HOST", "config-airbyte-qa.odl.mit.edu"
-    )
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
     vault._auth_github()  # noqa: SLF001
 else:
-    airbyte_host = "airbyte.service.consul"
     dagster_url = (
         "https://pipelines.odl.mit.edu"
         if DAGSTER_ENV == "production"
