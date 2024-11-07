@@ -6,7 +6,7 @@ with source as (
     select
         id as user_profile_id
         , user_id
-        , name as user_full_name
+        , replace(replace(replace(name, ' ', '<>'), '><', ''), '<>', ' ') as user_full_name
         , year_of_birth as user_birth_year
         , nullif(city, '') as user_address_city
         , nullif(country, '') as user_address_country

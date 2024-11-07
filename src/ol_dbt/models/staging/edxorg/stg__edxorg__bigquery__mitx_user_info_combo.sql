@@ -14,7 +14,7 @@ with source as (
         , email as user_email
         , username as user_username
         , id_map_hash_id as user_map_hash_id
-        , profile_name as user_full_name
+        , replace(replace(replace(profile_name, ' ', '<>'), '><', ''), '<>', ' ') as user_full_name
         , profile_mailing_address as user_mailing_address
         , profile_goals as user_profile_goals
         , profile_city as user_city

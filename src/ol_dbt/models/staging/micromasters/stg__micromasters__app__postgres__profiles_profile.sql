@@ -40,10 +40,18 @@ with source as (
         ,{{ cast_date_to_iso8601('date_of_birth') }} as user_birth_date
         , coalesce(romanized_first_name, first_name) as user_first_name
         , coalesce(romanized_last_name, last_name) as user_last_name
-        , concat_ws(
-            chr(32)
-            , nullif(first_name, '')
-            , nullif(last_name, '')
+        , replace(
+            replace(
+                replace(
+                    (
+                        concat_ws(
+                            chr(32)
+                            , nullif(first_name, '')
+                            , nullif(last_name, '')
+                        )
+                    ), ' ', '<>'
+                ), '><', ''
+            ), '<>', ' '
         ) as user_full_name
         , concat_ws(
             chr(32)

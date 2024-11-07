@@ -389,7 +389,7 @@ models:
     tests:
     - not_null
   - name: user_full_name
-    description: str, user full name on the platform user enrolled
+    description: str, user full name on the platform user enrolled.
   - name: user_highest_education
     description: str, user's highest education on the platform user enrolled. May
       be blank.
