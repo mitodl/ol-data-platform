@@ -10,12 +10,20 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__mitxpro__program_certificates') }}
 )
 
+, mitxpro__users as (
+    select * from {{ ref('int__mitxpro__users') }}
+)
+
 , mitxonline__programenrollments as (
     select * from {{ ref('int__mitxonline__programenrollments') }}
 )
 
 , mitxonline__programs as (
     select * from {{ ref('int__mitxonline__programs') }}
+)
+
+, mitxonline__users as (
+    select * from {{ ref('int__mitxonline__users') }}
 )
 
 , mitx__programs as (
@@ -49,11 +57,13 @@ with mitxpro__programenrollments as (
         , mitxpro__programs.program_title
         , mitxpro__programs.program_title as program_name
         , null as program_track
+        , 'Professional Certificate' as program_type
         , mitxpro__programs.program_is_live
         , mitxpro__programs.program_readable_id
         , mitxpro__programenrollments.user_id
         , mitxpro__programenrollments.user_email
         , mitxpro__programenrollments.user_username
+        , mitxpro__users.user_full_name
         , mitxpro__programenrollments.programenrollment_is_active
         , mitxpro__programenrollments.programenrollment_created_on
         , mitxpro__programenrollments.programenrollment_enrollment_status
@@ -64,6 +74,8 @@ with mitxpro__programenrollments as (
     from mitxpro__programenrollments
     inner join mitxpro__programs
         on mitxpro__programenrollments.program_id = mitxpro__programs.program_id
+    left join mitxpro__users
+        on mitxpro__programenrollments.user_id = mitxpro__users.user_id
     left join mitxpro__program_certificates
         on
             mitxpro__programenrollments.program_id = mitxpro__program_certificates.program_id
@@ -77,11 +89,13 @@ with mitxpro__programenrollments as (
         , mitxonline__programs.program_title
         , mitxonline__programs.program_name
         , mitxonline__programs.program_track
+        , mitxonline__programs.program_type
         , mitxonline__programs.program_is_live
         , mitxonline__programs.program_readable_id
         , mitxonline__programenrollments.user_id
         , mitxonline__programenrollments.user_email
         , mitxonline__programenrollments.user_username
+        , mitxonline__users.user_full_name
         , mitxonline__programenrollments.programenrollment_is_active
         , mitxonline__programenrollments.programenrollment_created_on
         , mitxonline__programenrollments.programenrollment_enrollment_status
@@ -92,6 +106,8 @@ with mitxpro__programenrollments as (
     from mitxonline__programenrollments
     inner join mitxonline__programs
         on mitxonline__programenrollments.program_id = mitxonline__programs.program_id
+    left join mitxonline__users
+        on mitxonline__programenrollments.user_id = mitxonline__users.user_id
     left join mitxonline__program_certificates
         on
             mitxonline__programenrollments.user_id = mitxonline__program_certificates.user_id
@@ -105,11 +121,13 @@ with mitxpro__programenrollments as (
         , edx_program_enrollments.program_title
         , edx_program_enrollments.program_name
         , edx_program_enrollments.program_track
+        , edx_program_enrollments.program_type
         , null as program_is_live
         , null as program_readable_id
         , edx_program_enrollments.user_id
         , edxorg__users.user_email
         , edx_program_enrollments.user_username
+        , edxorg__users.user_full_name
         , null as programenrollment_is_active
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
@@ -133,11 +151,13 @@ with mitxpro__programenrollments as (
         , micromasters__program_enrollments.program_title
         , mitxonline__programs.program_name
         , mitxonline__programs.program_track
+        , mitxonline__programs.program_type
         , mitxonline__programs.program_is_live
         , mitxonline__programs.program_readable_id
         , micromasters__program_enrollments.user_edxorg_id as user_id
         , micromasters__program_enrollments.user_email
         , micromasters__program_enrollments.user_edxorg_username as user_username
+        , micromasters__program_enrollments.user_full_name
         , null as programenrollment_is_active
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
@@ -170,6 +190,7 @@ select
     , combined_programs.program_title
     , combined_programs.program_name
     , combined_programs.program_track
+    , combined_programs.program_type
     , combined_programs.program_is_live
     , combined_programs.program_readable_id
     , {{ generate_hash_id('cast(combined_programs.user_id as varchar) || combined_programs.platform_name') }}
@@ -177,6 +198,7 @@ select
     , combined_programs.user_id
     , combined_programs.user_email
     , combined_programs.user_username
+    , combined_programs.user_full_name
     , combined_programs.programenrollment_is_active
     , combined_programs.programenrollment_created_on
     , combined_programs.programenrollment_enrollment_status

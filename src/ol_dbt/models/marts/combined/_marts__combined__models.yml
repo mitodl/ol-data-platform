@@ -435,15 +435,22 @@ models:
   - name: program_id
     description: int, id representing a single program on a particular platform
   - name: program_title
-    description: str, title of the program, including the specific track, if applicable.
+    description: str, title of the program, including the specific track if applicable.
       e.g., Statistics and Data Science (General Track)
   - name: program_name
     description: str, name of the program, which does not specify which track. e.g.,
       Statistics and Data Science
+    tests:
+    - not_null
   - name: program_track
     description: str, name of the specific track for MicroMasters programs. For example,
       Statistics and Data Science program has multiple tracks - General Track, Methods
       Track, Social Sciences Track, and 'Time Series and Social Sciences Track'.
+  - name: program_type
+    description: str,  the type of the program. Possible values are 'MicroMasters',
+      'XSeries' and 'Professional Certificate'
+    tests:
+    - not_null
   - name: program_is_live
     description: boolean, indicating whether the program is available to users on
       the MITxOnline website or MITxPro website
@@ -460,6 +467,8 @@ models:
       MITx Online based on their usernames, this will be learner's MicroMasters email.
   - name: user_username
     description: string, username on the corresponding platform
+  - name: user_full_name
+    description: string, user full name on the corresponding platform
   - name: programenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the program
   - name: programenrollment_created_on

@@ -339,7 +339,7 @@ models:
     tests:
     - not_null
   - name: program_title
-    description: str, title of the program, including the specific track, if applicable.
+    description: str, title of the program, including the specific track if applicable.
     tests:
     - not_null
   - name: program_track

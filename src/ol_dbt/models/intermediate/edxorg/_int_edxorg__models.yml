@@ -399,8 +399,8 @@ models:
     tests:
     - not_null
   - name: program_title
-    description: str, title of the program on edX.org, including the specific track,
-      if applicable. e.g., Statistics and Data Science (General Track)
+    description: str, title of the program, including the specific track if applicable.
+      e.g., Statistics and Data Science (General Track)
     tests:
     - not_null
   - name: program_name

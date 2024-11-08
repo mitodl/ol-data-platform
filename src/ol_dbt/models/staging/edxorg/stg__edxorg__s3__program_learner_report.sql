@@ -53,7 +53,7 @@ with source as (
         , case
             when "program uuid" like '%941d3eaf56966c7' then 'Finance'
             when "program uuid" like '%3173ff51e11a748' then 'MIT Finance'
-            when "program uuid" like '%8c11bfd9c0d7b07' then 'Statistics and Data Science (General track)'
+            when "program uuid" like '%8c11bfd9c0d7b07' then 'Statistics and Data Science (General Track)'
             when "program uuid" like '%cd7c6461dd9b1d4' then 'Statistics and Data Science (Social Sciences Track)'
             else "program title"
         end as program_title

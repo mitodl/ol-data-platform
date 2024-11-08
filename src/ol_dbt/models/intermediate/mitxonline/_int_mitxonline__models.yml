@@ -1220,7 +1220,7 @@ models:
   - name: program_is_live
     description: boolean, indicating whether the program is available to users
   - name: program_title
-    description: str, title of the program, including the specific track, if applicable.
+    description: str, title of the program, including the specific track if applicable.
     tests:
     - not_null
   - name: program_name
