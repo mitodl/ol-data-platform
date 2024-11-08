@@ -1,7 +1,7 @@
 id,platform_name,platform_description,platform_domain
-1,MITx Online,Online courses from MIT faculty and instructors,mitxonline.mit.edu
-2,edX.org,MIT Online courses on edX.org,www.edx.org
-3,MIT xPRO,MIT Professional development courses and programs that build skills and augment careers,xpro.mit.edu
-4,MITx Residential,MITx Residential,lms.mitx.mit.edu
-5,MIT Bootcamps,MIT Bootcamps,bootcamp.odl.mit.edu
-6,OCW,MIT Open Course Ware,ocw.mit.edu
+mitxonline,MITx Online,Online courses from MIT faculty and instructors,mitxonline.mit.edu
+edxorg,edX.org,MIT Online courses on edX.org,www.edx.org
+mitxpro,MIT xPRO,MIT Professional development courses and programs that build skills and augment careers,xpro.mit.edu
+residential,MITx Residential,MITx Residential,lms.mitx.mit.edu
+bootcamps,MIT Bootcamps,MIT Bootcamps,bootcamp.odl.mit.edu
+ocw,OCW,MIT Open Course Ware,ocw.mit.edu
