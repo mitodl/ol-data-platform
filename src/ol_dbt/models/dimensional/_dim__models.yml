@@ -1,0 +1,26 @@
+---
+version: 2
+
+models:
+- name: dim_platform
+  description: Platform information about the technical system that a given event
+    is executed within the context of.
+  columns:
+  - name: platform_id
+    description: string, primary key for this table
+    tests:
+    - not_null
+    - unique
+  - name: platform_name
+    description: string, name of the platform
+    tests:
+    - not_null
+    - unique
+  - name: platform_description
+    description: string, description of the platform
+    tests:
+    - not_null
+  - name: platform_domain
+    description: string, domain name of the platform, e.g. mitxonline.mit.edu
+    tests:
+    - not_null

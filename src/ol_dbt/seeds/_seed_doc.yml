@@ -16,3 +16,26 @@ seeds:
     description: str, organization that lists the course. e.g. MITx, MITxT
   - name: platform
     description: str, MITx Online or edX.org
+
+- name: platforms
+  description: Platform information about the technical system that a given event
+    is executed within the context of.
+  columns:
+  - name: id
+    description: string, unique identifier for the platform, e.g., mitxonline
+    tests:
+    - not_null
+    - unique
+  - name: platform_name
+    description: string, name of the platform
+    tests:
+    - not_null
+    - unique
+  - name: platform_description
+    description: string, description of the platform
+    tests:
+    - not_null
+  - name: platform_domain
+    description: string, domain name of the platform, e.g. mitxonline.mit.edu
+    tests:
+    - not_null
