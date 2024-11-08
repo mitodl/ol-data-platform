@@ -349,10 +349,8 @@ models:
     tests:
     - not_null
   - name: program_uuid
-    description: str, the UUID of the program on edX.org. 'MIT Finance' and 'Finance'
-      are two different UUIDs, as they have different required courses. 'Statistics
-      and Data Science' is split into 'Statistics and Data Science' and 'Statistics
-      and Data Science (General track)', which are also two different program UUIDs.
+    description: str, the UUID of the program on edX.org. Each program and its separate
+      track have a different UUID.
     tests:
     - not_null
   - name: program_title
@@ -396,16 +394,24 @@ models:
     tests:
     - not_null
   - name: program_uuid
-    description: str, the UUID of the program on edX.org. 'MIT Finance' and 'Finance'
-      are two different UUIDs, as they have different required courses. 'Statistics
-      and Data Science' is split into 'Statistics and Data Science' and 'Statistics
-      and Data Science (General track)', which are also two different program UUIDs.
+    description: str,  the UUID of the program on edX.org. Each program and its separate
+      track have a different UUID.
     tests:
     - not_null
   - name: program_title
-    description: str, title of the program on edX.org.
+    description: str, title of the program on edX.org, including the specific track,
+      if applicable. e.g., Statistics and Data Science (General Track)
     tests:
     - not_null
+  - name: program_name
+    description: str, name of the program, which does not specify which track. e.g.,
+      Statistics and Data Science
+    tests:
+    - not_null
+  - name: program_track
+    description: str, name of the specific track for MicroMasters programs. For example,
+      Statistics and Data Science program has multiple tracks - General Track, Methods
+      Track, Social Sciences Track, and 'Time Series and Social Sciences Track'.
   - name: user_id
     description: int, the edX learner ID in the LMS in a user's course run enrollment
       record.

@@ -18,7 +18,6 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__mitxonline__programs') }}
 )
 
-
 , mitx__programs as (
     select * from {{ ref('int__mitx__programs') }}
 )
@@ -43,12 +42,13 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__micromasters__program_enrollments') }}
 )
 
-
 , combined_programs as (
     select
         mitxpro__programs.platform_name
         , mitxpro__programs.program_id
         , mitxpro__programs.program_title
+        , mitxpro__programs.program_title as program_name
+        , null as program_track
         , mitxpro__programs.program_is_live
         , mitxpro__programs.program_readable_id
         , mitxpro__programenrollments.user_id
@@ -75,6 +75,8 @@ with mitxpro__programenrollments as (
         '{{ var("mitxonline") }}' as platform_name
         , mitxonline__programs.program_id
         , mitxonline__programs.program_title
+        , mitxonline__programs.program_name
+        , mitxonline__programs.program_track
         , mitxonline__programs.program_is_live
         , mitxonline__programs.program_readable_id
         , mitxonline__programenrollments.user_id
@@ -101,6 +103,8 @@ with mitxpro__programenrollments as (
         '{{ var("edxorg") }}' as platform_name
         , edx_program_enrollments.micromasters_program_id as program_id
         , edx_program_enrollments.program_title
+        , edx_program_enrollments.program_name
+        , edx_program_enrollments.program_track
         , null as program_is_live
         , null as program_readable_id
         , edx_program_enrollments.user_id
@@ -127,6 +131,8 @@ with mitxpro__programenrollments as (
         micromasters__program_enrollments.platform_name
         , micromasters__program_enrollments.micromasters_program_id as program_id
         , micromasters__program_enrollments.program_title
+        , mitxonline__programs.program_name
+        , mitxonline__programs.program_track
         , mitxonline__programs.program_is_live
         , mitxonline__programs.program_readable_id
         , micromasters__program_enrollments.user_edxorg_id as user_id
@@ -162,6 +168,8 @@ select
     combined_programs.platform_name
     , combined_programs.program_id
     , combined_programs.program_title
+    , combined_programs.program_name
+    , combined_programs.program_track
     , combined_programs.program_is_live
     , combined_programs.program_readable_id
     , {{ generate_hash_id('cast(combined_programs.user_id as varchar) || combined_programs.platform_name') }}
