@@ -1419,13 +1419,13 @@ typing-extensions = ">=4.4,<5"
 
 [[package]]
 name = "dbt-trino"
-version = "1.8.2"
+version = "1.8.3"
 description = "The trino adapter plugin for dbt (data build tool)"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "dbt-trino-1.8.2.tar.gz", hash = "sha256:5380c38ec8c4ad58829f6b78341eb9d55c6c43ddc5f21b6fdbdb47b1e4f38f2f"},
-    {file = "dbt_trino-1.8.2-py3-none-any.whl", hash = "sha256:fdd8019337bbdfb3810be3c7be52cfe7cb4ec4c07d9187cfbd644ac916ce91cf"},
+    {file = "dbt-trino-1.8.3.tar.gz", hash = "sha256:e3266f48809740f4f52fca2a9987acf73ecc41936dfd50eb1e4df05e75c7f04e"},
+    {file = "dbt_trino-1.8.3-py3-none-any.whl", hash = "sha256:ad7bce3906093119c30a4e2038c24660aa624eaf90846d416f0e4bc56e5895a1"},
 ]
 
 [package.dependencies]
