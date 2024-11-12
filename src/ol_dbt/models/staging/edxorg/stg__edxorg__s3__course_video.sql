@@ -11,7 +11,7 @@ with source as (
         course_id as courserun_readable_id
         , video_block_id
         , edx_video_id as video_edx_id
-        , duration as video_duration
+        , cast(duration as decimal(38, 4)) as video_duration
     from most_recent_source
 )
 
