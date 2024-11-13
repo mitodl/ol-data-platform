@@ -53,6 +53,8 @@ with source as (
         , case
             when "program uuid" like '%941d3eaf56966c7' then 'Finance'
             when "program uuid" like '%3173ff51e11a748' then 'MIT Finance'
+            when "program uuid" like '%8c11bfd9c0d7b07' then 'Statistics and Data Science (General Track)'
+            when "program uuid" like '%cd7c6461dd9b1d4' then 'Statistics and Data Science (Social Sciences Track)'
             else "program title"
         end as program_title
         , to_iso8601(date_parse("course run start date", '%Y-%m-%d %H:%i:%s Z')) as courserun_start_on
@@ -82,6 +84,7 @@ select
     cleaned.org_id
     , cleaned.program_type
     , cleaned.program_uuid
+    , cleaned.program_title
     , cleaned.user_username
     , cleaned.user_full_name
     , cleaned.courserun_readable_id
@@ -95,7 +98,6 @@ select
     , cleaned.user_roles
     , cleaned.courserungrade_letter_grade
     , cleaned.courserungrade_grade
-    , cleaned.program_title
     , cleaned.courserun_start_on
     , cleaned.courserunenrollment_created_on
     , cleaned.completed_course_on
@@ -103,6 +105,7 @@ select
     , cleaned.courserunenrollment_unenrolled_on
     , cleaned.courserunenrollment_upgraded_on
     , add_program_cert_latest.latest_program_cert_award_on as program_certificate_awarded_on
+    , regexp_extract(cleaned.program_title, '\((.*?)\)', 1) as program_track
 from cleaned
 left join add_program_cert_latest
     on

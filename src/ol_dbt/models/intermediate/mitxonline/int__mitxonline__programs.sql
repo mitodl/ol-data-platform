@@ -43,6 +43,8 @@ with programs as (
 select
     programs.program_id
     , programs.program_title
+    , programs.program_name
+    , programs.program_track
     , programs.program_is_live
     , programs.program_readable_id
     , programs.program_type

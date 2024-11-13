@@ -1220,16 +1220,25 @@ models:
   - name: program_is_live
     description: boolean, indicating whether the program is available to users
   - name: program_title
-    description: str, title of the program
+    description: str, title of the program, including the specific track if applicable.
     tests:
     - not_null
+  - name: program_name
+    description: str, name of the program, which does not specify which track. e.g.,
+      Data, Economics, and Design of Policy
+    tests:
+    - not_null
+  - name: program_track
+    description: str, name of the specific track for MicroMasters programs. For example,
+      DEDP program has two separate tracks - International Development and Public
+      Policy.
   - name: program_readable_id
     description: str, Open edX ID formatted as program-v1:{org}+{program code}
     tests:
     - unique
     - not_null
   - name: program_type
-    description: str, type of the program. Value is free text, it could be MicroMasters®,
+    description: str, type of the program. Value is free text, it could be MicroMasters,
       Series, etc
   - name: program_availability
     description: str, either 'anytime' or 'date'
@@ -1364,7 +1373,7 @@ models:
     tests:
     - not_null
   - name: program_type
-    description: str, type of the program. Value is free text, it could be MicroMasters®,
+    description: str, type of the program. Value is free text, it could be MicroMasters,
       Series, etc
   - name: program_is_dedp
     description: boolean, specifying if the program is DEDP from readable_id

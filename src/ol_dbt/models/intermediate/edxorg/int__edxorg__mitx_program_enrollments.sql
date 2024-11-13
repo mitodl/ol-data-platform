@@ -27,6 +27,8 @@ select
     , program_learners_sorted.user_full_name
     , program_learners_sorted.user_has_completed_program
     , micromasters_programs.micromasters_program_id
+    , program_learners_sorted.program_track
+    , coalesce(micromasters_programs.program_title, program_learners_sorted.program_title) as program_name
 from program_learners_sorted
 left join micromasters_programs
     on (
