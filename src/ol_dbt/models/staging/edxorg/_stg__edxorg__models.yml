@@ -936,6 +936,11 @@ models:
     description: str, edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
+  - name: courserun_old_readable_id
+    description: str, edX Course ID formatted as {org}/{course number}/{run}, which
+      is used for joining because it matches the format in other edX.org tables.
+    tests:
+    - not_null
   - name: video_block_id
     description: str, hash code or module name for the video. This value is the last
       part of video block ID string, e.g., block-v1:{org}+{course}+{run}type@{block

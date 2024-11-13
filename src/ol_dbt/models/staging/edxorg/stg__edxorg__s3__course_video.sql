@@ -12,6 +12,7 @@ with source as (
         , video_block_id
         , edx_video_id as video_edx_id
         , cast(duration as decimal(38, 4)) as video_duration
+        , replace(replace(course_id, 'course-v1:', ''), '+', '/') as courserun_old_readable_id
     from most_recent_source
 )
 
