@@ -1238,7 +1238,7 @@ models:
     - unique
     - not_null
   - name: program_type
-    description: str, type of the program. Value is free text, it could be MicroMasters®,
+    description: str, type of the program. Value is free text, it could be MicroMasters,
       Series, etc
   - name: program_availability
     description: str, either 'anytime' or 'date'
@@ -1373,7 +1373,7 @@ models:
     tests:
     - not_null
   - name: program_type
-    description: str, type of the program. Value is free text, it could be MicroMasters®,
+    description: str, type of the program. Value is free text, it could be MicroMasters,
       Series, etc
   - name: program_is_dedp
     description: boolean, specifying if the program is DEDP from readable_id
