@@ -255,22 +255,23 @@ def process_edxorg_archive_bundle(
             # Avoid processing CSV files that consist of only a header row. These files
             # cause Airbyte to throw errors when attempting to infer the schema.
             # (TMM 2024-03-14)
-            if (
-                table_name
-                and pl.read_csv(
-                    archive_file,
-                    has_header=True,
-                    n_rows=2,
-                    separator="\t",
-                    ignore_errors=True,
-                    truncate_ragged_lines=True,
-                ).is_empty()
-            ):
-                context.log.debug(
-                    "Skipping further processing of empty CSV file %s", tinfo.name
-                )
-                archive_file.unlink()
-                continue
+            if table_name:
+                try:
+                    pl.read_csv(
+                        archive_file,
+                        has_header=True,
+                        n_rows=2,
+                        separator="\t",
+                        infer_schema=False,
+                        truncate_ragged_lines=True,
+                        raise_if_empty=True,
+                    )
+                except pl.exceptions.PolarsError:
+                    context.log.debug(
+                        "Skipping further processing of empty CSV file %s", tinfo.name
+                    )
+                    archive_file.unlink()
+                    continue
             data_version = hashlib.file_digest(
                 archive_file.open("rb"), "sha256"
             ).hexdigest()
