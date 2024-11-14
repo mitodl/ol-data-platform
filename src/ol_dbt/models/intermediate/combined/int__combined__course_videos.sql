@@ -7,7 +7,6 @@ with video_structure as (
     where coursestructure_block_category = 'video'
 )
 
---- no edxorg course videos until we parse the data from course xml
 , combined_videos as (
 
     select
@@ -35,6 +34,15 @@ with video_structure as (
         , video_duration
     from {{ ref('int__mitxresidential__courserun_videos') }}
 
+    union all
+
+    select
+        '{{ var("edxorg") }}' as platform
+        , courserun_old_readable_id as courserun_readable_id
+        , video_block_id as video_edx_uuid
+        , video_duration
+    from {{ ref('stg__edxorg__s3__course_video') }}
+
 )
 
 select
@@ -55,4 +63,7 @@ left join combined_videos
     on
         video_structure.courserun_readable_id = combined_videos.courserun_readable_id
         and video_structure.platform = combined_videos.platform
-        and video_structure.video_edx_uuid = combined_videos.video_edx_uuid
+        and (
+            video_structure.video_edx_uuid = combined_videos.video_edx_uuid
+            or video_structure.video_id = combined_videos.video_edx_uuid
+        )

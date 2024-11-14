@@ -945,3 +945,19 @@ sources:
     - name: modified
       description: timestamp, datetime when this row was last updated. A change in
         this field implies that there was a state change.
+
+  - name: raw__edxorg__s3__course_structure__course_video
+    description: edX.org course video metadata
+    columns:
+    - name: courserun_id
+      description: str, edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: video_block_id
+      description: str, hash code or module name for the video. This value is the
+        last part of video block ID string, e.g., block-v1:{org}+{course}+{run}type@{block
+        type}+block@{module name or hash code}.
+    - name: edx_video_id
+      description: str, video ID on the edX platform. This value is the same as the
+        edx_video_id field in the coursestructure_block_metadata JSON for the video
+        block.
+    - name: duration
+      description: float, the length of the video, in seconds. May be 0.0.
