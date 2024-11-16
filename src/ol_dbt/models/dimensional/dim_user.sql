@@ -79,7 +79,7 @@ with mitxonline_users as (
         , edx_profile.user_address_country
         , edx_profile.user_highest_education
         , edx_profile.user_gender
-        , substring(user_birth_date, 1, 4) as user_birth_year
+        , cast(substring(user_birth_date, 1, 4) as bigint) as user_birth_year
         , edx_employment.user_company_name
         , edx_profile.user_job_title
         , edx_employment.user_company_industry
