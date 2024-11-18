@@ -16,7 +16,7 @@ with mitxonline_course_structure as (
 
 , combined as (
     select
-        '{{ var("mitxonline") }}' as platform
+        'mitxonline' as platform
         , courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
@@ -30,7 +30,7 @@ with mitxonline_course_structure as (
     union all
 
     select
-        '{{ var("edxorg") }}' as platform
+        'edxorg' as platform
         , courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
@@ -44,7 +44,7 @@ with mitxonline_course_structure as (
     union all
 
     select
-        '{{ var("mitxpro") }}' as platform
+        'mitxpro' as platform
         , courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
@@ -58,7 +58,7 @@ with mitxonline_course_structure as (
     union all
 
     select
-        '{{ var("residential") }}' as platform
+        'residential' as platform
         , courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
