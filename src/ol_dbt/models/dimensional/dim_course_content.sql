@@ -83,14 +83,14 @@ with mitxonline_course_structure as (
     select
         combined.platform
         , combined.courserun_readable_id
-        , combined.coursestructure_block_index as content_block_index
-        , combined.coursestructure_block_id as content_block_id
-        , combined.coursestructure_parent_block_id as parent_content_block_id
-        , combined.coursestructure_block_category as content_block_category
-        , combined.coursestructure_block_title as content_block_title
-        , combined.coursestructure_block_metadata as content_block_metadata
-        , combined.coursestructure_retrieved_at as content_retrieved_at
-        , if(latest_course_structure.max_retrieved_date is not null, true, false) as content_is_latest
+        , combined.coursestructure_block_index as block_index
+        , combined.coursestructure_block_id as block_id
+        , combined.coursestructure_parent_block_id as parent_block_id
+        , combined.coursestructure_block_category as block_category
+        , combined.coursestructure_block_title as block_title
+        , combined.coursestructure_block_metadata as block_metadata
+        , combined.coursestructure_retrieved_at as retrieved_at
+        , if(latest_course_structure.max_retrieved_date is not null, true, false) as is_latest
     from combined
     left join latest_course_structure
         on
@@ -101,14 +101,14 @@ with mitxonline_course_structure as (
 )
 
 select
-    {{ generate_hash_id('platform || content_block_id || content_retrieved_at') }} as content_id
+    {{ generate_hash_id('block_id || retrieved_at') }} as id
     , courserun_readable_id
-    , content_block_index
-    , content_block_id
-    , parent_content_block_id
-    , content_block_category
-    , content_block_title
-    , content_block_metadata
-    , content_retrieved_at
-    , content_is_latest
+    , block_index
+    , block_id
+    , parent_block_id
+    , block_category
+    , block_title
+    , block_metadata
+    , retrieved_at
+    , is_latest
 from combined_course_content
