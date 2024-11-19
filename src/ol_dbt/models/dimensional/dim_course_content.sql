@@ -16,8 +16,7 @@ with mitxonline_course_structure as (
 
 , combined as (
     select
-        'mitxonline' as platform
-        , courserun_readable_id
+        courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
         , coursestructure_parent_block_id
@@ -27,11 +26,10 @@ with mitxonline_course_structure as (
         , coursestructure_retrieved_at
     from mitxonline_course_structure
 
-    union all
+    union distinct
 
     select
-        'edxorg' as platform
-        , courserun_readable_id
+        courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
         , coursestructure_parent_block_id
@@ -41,11 +39,10 @@ with mitxonline_course_structure as (
         , coursestructure_retrieved_at
     from edxorg_course_structure
 
-    union all
+    union distinct
 
     select
-        'mitxpro' as platform
-        , courserun_readable_id
+        courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
         , coursestructure_parent_block_id
@@ -55,11 +52,10 @@ with mitxonline_course_structure as (
         , coursestructure_retrieved_at
     from xpro_course_structure
 
-    union all
+    union distinct
 
     select
-        'residential' as platform
-        , courserun_readable_id
+        courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
         , coursestructure_parent_block_id
@@ -72,17 +68,15 @@ with mitxonline_course_structure as (
 
 , latest_course_structure as (
     select
-        platform
-        , courserun_readable_id
+        courserun_readable_id
         , max(coursestructure_retrieved_at) as max_retrieved_date
     from combined
-    group by platform, courserun_readable_id
+    group by courserun_readable_id
 )
 
 , combined_course_content as (
     select
-        combined.platform
-        , combined.courserun_readable_id
+        combined.courserun_readable_id
         , combined.coursestructure_block_index as block_index
         , combined.coursestructure_block_id as block_id
         , combined.coursestructure_parent_block_id as parent_block_id
@@ -94,8 +88,7 @@ with mitxonline_course_structure as (
     from combined
     left join latest_course_structure
         on
-            combined.platform = latest_course_structure.platform
-            and combined.courserun_readable_id = latest_course_structure.courserun_readable_id
+            combined.courserun_readable_id = latest_course_structure.courserun_readable_id
             and combined.coursestructure_retrieved_at = latest_course_structure.max_retrieved_date
 
 )
