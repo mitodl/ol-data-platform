@@ -94,7 +94,7 @@ with mitxonline_course_structure as (
 )
 
 select
-    {{ generate_hash_id('block_id || retrieved_at') }} as id
+    {{ generate_hash_id('block_id || retrieved_at') }} as content_id
     , courserun_readable_id
     , block_index
     , block_id

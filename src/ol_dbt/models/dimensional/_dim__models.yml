@@ -29,14 +29,14 @@ models:
   description: Slowly Changing Dimension model for course content, including courses,
     chapters, subsections, problems, videos, and other contents across different platforms.
   columns:
-  - name: id
+  - name: content_id
     description: string, primary key for this table
     tests:
     - not_null
     - unique
   - name: courserun_readable_id
-    description: string, the open edX course ID formatted as course-v1:{org}+{course
-      code}+{run_tag} for courses on MITxOnline, xPro and Residential platform, {org}/{course}/{run_tag}
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for courses on MITxOnline, xPro and Residential platform, {org}/{course}/{run_tag}
       for edX.org courses
     tests:
     - not_null
