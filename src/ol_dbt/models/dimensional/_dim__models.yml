@@ -39,7 +39,7 @@ models:
     - not_null
   - name: email
     description: string, user email on the corresponding platform including xpro,
-      bootcamps, edX.org, MITx Online, and Residential MITx.
+      bootcamps, edX.org, MITx Online, and Residential MITx. 
     tests:
     - not_null
   - name: full_name

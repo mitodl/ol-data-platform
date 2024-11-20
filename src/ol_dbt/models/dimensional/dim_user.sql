@@ -14,7 +14,7 @@ with mitxonline_users as (
 )
 
 , mitxonline_user_view as (
-    select
+    select  
         mitxonline_users.user_username
         , mitxonline_users.user_email
         , mitxonline_users.user_full_name
@@ -54,7 +54,7 @@ with mitxonline_users as (
 )
 
 , mitx_user_info_combo as (
-    select
+    select 
         user_id
         , user_username
         , courserun_platform
@@ -64,7 +64,7 @@ with mitxonline_users as (
 )
 
 , edx_employment as (
-    select
+    select 
         user_profile_id
         , user_company_name
         , user_company_industry
@@ -74,7 +74,7 @@ with mitxonline_users as (
 )
 
 , edxorg_view as (
-    select
+    select 
         mitx_user_info_combo.user_username
         , mitx_user_info_combo.user_email
         , edx_profile.user_full_name
@@ -89,19 +89,19 @@ with mitxonline_users as (
         , mitx_user_info_combo.user_id
     from mitx_user_info_combo
     left join edx_usersocialauth
-        on
+        on 
             mitx_user_info_combo.user_username = edx_usersocialauth.user_username
-            and
+            and 
             edx_usersocialauth.user_auth_provider = 'edxorg'
     left join edx_profile on edx_usersocialauth.user_id = edx_profile.user_id
-    left join edx_employment
-        on
+    left join edx_employment 
+        on 
             edx_profile.user_profile_id = edx_employment.user_profile_id
-            and
+            and 
             edx_employment.rn = 1
-    where
+    where 
         mitx_user_info_combo.rn = 1
-        and
+        and 
         mitx_user_info_combo.courserun_platform = 'edX.org'
 )
 
@@ -121,7 +121,7 @@ with mitxonline_users as (
 )
 
 , xpro_user_view as (
-    select
+    select 
         xpro_users.user_username
         , xpro_users.user_email
         , xpro_users.user_full_name
@@ -156,7 +156,7 @@ with mitxonline_users as (
 )
 
 , bootcamps_user_view as (
-    select
+    select 
         users.user_username
         , users.user_email
         , users_profile.user_full_name
@@ -186,7 +186,7 @@ with mitxonline_users as (
 )
 
 , mitxresidential_user_view as (
-    select
+    select 
         mitxresidential_users.user_username
         , mitxresidential_users.user_email
         , mitxresidential_profiles.user_address_country
@@ -196,14 +196,14 @@ with mitxonline_users as (
         , mitxresidential_users.user_is_active
         , 'residential' as platform
         , mitxresidential_users.user_id
-        , coalesce(mitxresidential_users.user_full_name, mitxresidential_profiles.user_full_name)
+        , coalesce(mitxresidential_users.user_full_name, mitxresidential_profiles.user_full_name) 
         as user_full_name
     from mitxresidential_users
     left join mitxresidential_profiles on mitxresidential_users.user_id = mitxresidential_profiles.user_id
 )
 
 select
-    {{ generate_hash_id('user_id || platform') }} as user_id
+    {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_id
     , user_username as username
     , user_email as email
     , user_full_name as full_name
@@ -220,7 +220,7 @@ from mitxonline_user_view
 union all
 
 select
-    {{ generate_hash_id('user_id || platform') }} as user_id
+    {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_id
     , user_username as username
     , user_email as email
     , user_full_name as full_name
@@ -237,7 +237,7 @@ from edxorg_view
 union all
 
 select
-    {{ generate_hash_id('user_id || platform') }} as user_id
+    {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_id
     , user_username as username
     , user_email as email
     , user_full_name as full_name
@@ -254,7 +254,7 @@ from xpro_user_view
 union all
 
 select
-    {{ generate_hash_id('user_id || platform') }} as user_id
+    {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_id
     , user_username as username
     , user_email as email
     , user_full_name as full_name
@@ -271,7 +271,7 @@ from bootcamps_user_view
 union all
 
 select
-    {{ generate_hash_id('user_id || platform') }} as user_id
+    {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_id
     , user_username as username
     , user_email as email
     , user_full_name as full_name
