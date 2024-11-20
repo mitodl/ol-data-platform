@@ -68,6 +68,7 @@ with mitxonline_users as (
         user_profile_id
         , user_company_name
         , user_company_industry
+        , user_job_position
         , row_number() over (partition by user_profile_id order by user_start_date desc) as rn
     from edx_user_employment
 )
@@ -82,7 +83,7 @@ with mitxonline_users as (
         , edx_profile.user_gender
         , cast(substring(edx_profile.user_birth_date, 1, 4) as bigint) as user_birth_year
         , edx_employment.user_company_name
-        , edx_user_employment.user_job_position as user_job_title
+        , edx_employment.user_job_position as user_job_title
         , edx_employment.user_company_industry
         , 'edxorg' as platform
         , mitx_user_info_combo.user_id
