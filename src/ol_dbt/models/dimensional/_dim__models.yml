@@ -26,7 +26,7 @@ models:
     - not_null
 
 - name: dim_user
-  description: Dimensional model for users from different platforms
+  description: Dimensional model for users from different platforms.
   columns:
   - name: user_id
     description: string, primary key for this user dim table
