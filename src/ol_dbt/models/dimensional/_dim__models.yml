@@ -28,40 +28,39 @@ models:
 - name: dim_user
   description: Dimensional model for users from different platforms
   columns:
-  - name: dim_user_id
+  - name: user_id
     description: string, primary key for this user dim table
     tests:
     - not_null
     - unique
-  - name: user_username
+  - name: username
     description: str, username on a particular platform
-  - name: user_email
+    tests:
+    - not_null
+  - name: email
     description: string, user email on the corresponding platform including xpro,
-      bootcamps, edX.org, MITx Online, and Residential MITx. If the user is on edX.org
-      and MITx Online then the email will be chosen from the last platform they joined
-      if their account is active
-  - name: user_full_name
+      bootcamps, edX.org, MITx Online, and Residential MITx. 
+    tests:
+    - not_null
+  - name: full_name
     description: str, user full name. Very small number of edX.org users have blank
       full name, their name couldn't be populated from other sources if they don't
       have their accounts linked on MicroMasters.
-  - name: user_address_country
+  - name: address_country
     description: str, country code provided by the user on the corresponding platform
-  - name: user_highest_education
+  - name: highest_education
     description: str, user's level of education
-  - name: user_gender
+  - name: gender
     description: str, Gender selected by the user on their profile on the corresponding
       platform
-  - name: user_birth_year
+  - name: birth_year
     description: int, user's birth year
-  - name: user_company
+  - name: company
     description: str, user's company
-  - name: user_job_title
+  - name: job_title
     description: str, user's job title
-  - name: user_industry
+  - name: industry
     description: str, user's job industry
   - name: user_is_active
     description: boolean, indicating if user's account is active on the corresponding
       platform including xpro, bootcamps, edX.org, MITx Online, and Residential MITx.
-      If the user is on edX.org and MITx Online then it will be true if their MITx
-      Online account is active, otherwise it will default to their edX.org account
-      active status.

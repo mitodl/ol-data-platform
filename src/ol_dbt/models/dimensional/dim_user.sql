@@ -14,7 +14,7 @@ with mitxonline_users as (
 )
 
 , mitxonline_user_view as (
-    select
+    select  
         mitxonline_users.user_username
         , mitxonline_users.user_email
         , mitxonline_users.user_full_name
@@ -27,6 +27,7 @@ with mitxonline_users as (
         , mitxonline_profile.user_industry
         , mitxonline_users.user_is_active
         , 'mitxonline' as platform
+        , mitxonline_users.user_id
     from mitxonline_users
     left join mitxonline_legaladdress on mitxonline_users.user_id = mitxonline_legaladdress.user_id
     left join mitxonline_profile on mitxonline_users.user_id = mitxonline_profile.user_id
@@ -53,7 +54,7 @@ with mitxonline_users as (
 )
 
 , mitx_user_info_combo as (
-    select
+    select 
         user_id
         , user_username
         , courserun_platform
@@ -63,7 +64,7 @@ with mitxonline_users as (
 )
 
 , edx_employment as (
-    select
+    select 
         user_profile_id
         , user_company_name
         , user_company_industry
@@ -72,7 +73,7 @@ with mitxonline_users as (
 )
 
 , edxorg_view as (
-    select
+    select 
         mitx_user_info_combo.user_username
         , mitx_user_info_combo.user_email
         , edx_profile.user_full_name
@@ -81,24 +82,25 @@ with mitxonline_users as (
         , edx_profile.user_gender
         , cast(substring(edx_profile.user_birth_date, 1, 4) as bigint) as user_birth_year
         , edx_employment.user_company_name
-        , edx_profile.user_job_title
+        , edx_user_employment.user_job_position as user_job_title
         , edx_employment.user_company_industry
-        , 'edx' as platform
+        , 'edxorg' as platform
+        , mitx_user_info_combo.user_id
     from mitx_user_info_combo
     left join edx_usersocialauth
-        on
+        on 
             mitx_user_info_combo.user_username = edx_usersocialauth.user_username
-            and
+            and 
             edx_usersocialauth.user_auth_provider = 'edxorg'
     left join edx_profile on edx_usersocialauth.user_id = edx_profile.user_id
-    left join edx_employment
-        on
+    left join edx_employment 
+        on 
             edx_profile.user_profile_id = edx_employment.user_profile_id
-            and
+            and 
             edx_employment.rn = 1
-    where
+    where 
         mitx_user_info_combo.rn = 1
-        and
+        and 
         mitx_user_info_combo.courserun_platform = 'edX.org'
 )
 
@@ -118,7 +120,7 @@ with mitxonline_users as (
 )
 
 , xpro_user_view as (
-    select
+    select 
         xpro_users.user_username
         , xpro_users.user_email
         , xpro_users.user_full_name
@@ -130,7 +132,8 @@ with mitxonline_users as (
         , xpro_users_profile.user_job_title
         , xpro_users_profile.user_industry
         , xpro_users.user_is_active
-        , 'xpro' as platform
+        , 'mitxpro' as platform
+        , xpro_users.user_id
     from xpro_users
     left join xpro_users_profile on xpro_users.user_id = xpro_users_profile.user_id
     left join xpro_users_legaladdress on xpro_users.user_id = xpro_users_legaladdress.user_id
@@ -152,7 +155,7 @@ with mitxonline_users as (
 )
 
 , bootcamps_user_view as (
-    select
+    select 
         users.user_username
         , users.user_email
         , users_profile.user_full_name
@@ -165,73 +168,119 @@ with mitxonline_users as (
         , users_profile.user_industry
         , users.user_is_active
         , 'bootcamps' as platform
+        , users.user_id
     from users
     left join users_legaladdress on users.user_id = users_legaladdress.user_id
     left join users_profile on users.user_id = users_profile.user_id
 )
 
+, mitxresidential_users as (
+    select *
+    from {{ ref('stg__mitxresidential__openedx__auth_user') }}
+)
+
+, mitxresidential_profiles as (
+    select *
+    from {{ ref('stg__mitxresidential__openedx__auth_userprofile') }}
+)
+
+, mitxresidential_user_view as (
+    select 
+        mitxresidential_users.user_username
+        , mitxresidential_users.user_email
+        , coalesce(mitxresidential_users.user_full_name, mitxresidential_profiles.user_full_name) 
+            as user_full_name
+        , mitxresidential_profiles.user_address_country
+        , mitxresidential_profiles.user_highest_education
+        , mitxresidential_profiles.user_gender
+        , mitxresidential_profiles.user_birth_year
+        , mitxresidential_users.user_is_active
+        , "residential" as platform
+        , mitxresidential_users.user_id
+    from mitxresidential_users
+    left join mitxresidential_profiles on mitxresidential_users.user_id =  mitxresidential_profiles.user_id
+
+)
+
 select
-    {{ generate_hash_id('user_username || platform') }} as dim_user_id
-    , user_username
-    , user_email
-    , user_full_name
-    , user_address_country
-    , user_highest_education
-    , user_gender
-    , user_birth_year
-    , user_company
-    , user_job_title
-    , user_industry
+    {{ generate_hash_id('user_id || platform') }} as user_id
+    , user_username as username
+    , user_email as email
+    , user_full_name as full_name
+    , user_address_country as address_country
+    , user_highest_education as highest_education
+    , user_gender as gender
+    , user_birth_year as birth_year
+    , user_company as company
+    , user_job_title as job_title
+    , user_industry as industry
     , user_is_active
 from mitxonline_user_view
 
 union all
 
 select
-    {{ generate_hash_id('user_username || platform') }} as dim_user_id
-    , user_username
-    , user_email
-    , user_full_name
-    , user_address_country
-    , user_highest_education
-    , user_gender
-    , user_birth_year
-    , user_company_name as user_company
-    , user_job_title
-    , user_company_industry as user_industry
+    {{ generate_hash_id('user_id || platform') }} as user_id
+    , user_username as username
+    , user_email as email
+    , user_full_name as full_name
+    , user_address_country as address_country
+    , user_highest_education as highest_education
+    , user_gender as gender
+    , user_birth_year as birth_year
+    , user_company_name as company
+    , user_job_title as job_title
+    , user_company_industry as industry
     , null as user_is_active
 from edxorg_view
 
 union all
 
 select
-    {{ generate_hash_id('user_username || platform') }} as dim_user_id
-    , user_username
-    , user_email
-    , user_full_name
-    , user_address_country
-    , user_highest_education
-    , user_gender
-    , user_birth_year
-    , user_company
-    , user_job_title
-    , user_industry
+    {{ generate_hash_id('user_id || platform') }} as user_id
+    , user_username as username
+    , user_email as email
+    , user_full_name as full_name
+    , user_address_country as address_country
+    , user_highest_education as highest_education
+    , user_gender as gender
+    , user_birth_year as birth_year
+    , user_company as company
+    , user_job_title as job_title
+    , user_industry as industry
     , user_is_active
 from xpro_user_view
 
 union all
 
 select
-    {{ generate_hash_id('user_username || platform') }} as dim_user_id
-    , user_username
-    , user_email
-    , user_full_name
-    , user_address_country
-    , user_highest_education
-    , user_gender
-    , user_birth_year
-    , user_company
-    , user_job_title
-    , user_industry
+    {{ generate_hash_id('user_id || platform') }} as user_id
+    , user_username as username
+    , user_email as email
+    , user_full_name as full_name
+    , user_address_country as address_country
+    , user_highest_education as highest_education
+    , user_gender as gender
+    , user_birth_year as birth_year
+    , user_company as company
+    , user_job_title as job_title
+    , user_industry as industry
     , user_is_active
 from bootcamps_user_view
+
+union all
+
+select
+    {{ generate_hash_id('user_id || platform') }} as user_id
+    , user_username as username
+    , user_email as email
+    , user_full_name as full_name
+    , user_address_country as address_country
+    , user_highest_education as highest_education
+    , user_gender as gender
+    , user_birth_year as birth_year
+    , null as company
+    , null as job_title
+    , null as industry
+    , user_is_active
+from mitxresidential_user_view
