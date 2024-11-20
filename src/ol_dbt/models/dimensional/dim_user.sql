@@ -188,8 +188,6 @@ with mitxonline_users as (
     select
         mitxresidential_users.user_username
         , mitxresidential_users.user_email
-        , coalesce(mitxresidential_users.user_full_name, mitxresidential_profiles.user_full_name)
-            as user_full_name
         , mitxresidential_profiles.user_address_country
         , mitxresidential_profiles.user_highest_education
         , mitxresidential_profiles.user_gender
@@ -197,9 +195,10 @@ with mitxonline_users as (
         , mitxresidential_users.user_is_active
         , "residential" as platform
         , mitxresidential_users.user_id
+        , coalesce(mitxresidential_users.user_full_name, mitxresidential_profiles.user_full_name)
+        as user_full_name
     from mitxresidential_users
-    left join mitxresidential_profiles on mitxresidential_users.user_id =  mitxresidential_profiles.user_id
-
+    left join mitxresidential_profiles on mitxresidential_users.user_id = mitxresidential_profiles.user_id
 )
 
 select
