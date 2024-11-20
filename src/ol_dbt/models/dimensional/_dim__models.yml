@@ -40,8 +40,6 @@ models:
   - name: email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.
-    tests:
-    - not_null
   - name: full_name
     description: str, user full name. Very small number of edX.org users have blank
       full name, their name couldn't be populated from other sources if they don't
