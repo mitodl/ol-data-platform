@@ -27,7 +27,8 @@ models:
 
 - name: dim_course_content
   description: Slowly Changing Dimension model for course content, including courses,
-    chapters, subsections, problems, videos, and other contents across different platforms.
+    chapters, subsections, problems, videos, and other contents across the Open edX
+    platforms.
   columns:
   - name: content_id
     description: string, primary key for this table
