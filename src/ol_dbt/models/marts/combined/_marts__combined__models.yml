@@ -331,6 +331,9 @@ models:
   - name: courseruncertificate_created_on
     description: timestamp, date and time when the course certificate was initially
       created
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "courseruncertificate_is_earned = true"
   - name: courseruncertificate_is_earned
     description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
       edX.org or xpro.mit.edu.

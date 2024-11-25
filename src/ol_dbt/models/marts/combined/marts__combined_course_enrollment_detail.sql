@@ -134,11 +134,23 @@ with combined_enrollments as (
         , combined_users.user_highest_education
         , combined_users.user_company
         , combined_users.user_gender
-        , if(mitxonline_certificates.courseruncertificate_is_revoked = false, true, false)
-        as courseruncertificate_is_earned
-        , mitxonline_certificates.courseruncertificate_created_on
-        , mitxonline_certificates.courseruncertificate_url
-        , mitxonline_certificates.courseruncertificate_uuid
+        , case
+            when mitxonline_certificates.courseruncertificate_is_revoked = false then true
+            when combined_enrollments.courseruncertificate_created_on is not null then true
+            else false
+        end as courseruncertificate_is_earned
+        , coalesce(
+            mitxonline_certificates.courseruncertificate_created_on
+            , combined_enrollments.courseruncertificate_created_on
+        ) as courseruncertificate_created_on
+        , coalesce(
+            mitxonline_certificates.courseruncertificate_url
+            , combined_enrollments.courseruncertificate_url
+        ) as courseruncertificate_url
+        , coalesce(
+            mitxonline_certificates.courseruncertificate_uuid
+            , combined_enrollments.courseruncertificate_uuid
+        ) as courseruncertificate_uuid
         , micromasters_completed_orders.order_id
         , micromasters_completed_orders.line_id
         , micromasters_completed_orders.order_reference_number
