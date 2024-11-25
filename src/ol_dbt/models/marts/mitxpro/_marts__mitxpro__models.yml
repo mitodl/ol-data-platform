@@ -4,9 +4,6 @@ version: 2
 models:
 - name: marts__mitxpro_ecommerce_productlist
   description: Xpro product line table with denormalized data
-  config:
-    grants:
-      select: ['finance']
   columns:
   - name: product_platform
     description: string, defaulted to xPro

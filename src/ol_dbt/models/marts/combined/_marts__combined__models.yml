@@ -31,9 +31,6 @@ models:
 
 - name: marts__combined__users
   description: Mart model for users from different platforms
-  config:
-    grants:
-      select: ['finance']
   columns:
   - name: user_hashed_id
     description: str, primary key for the combined_users table.
@@ -131,9 +128,6 @@ models:
 
 - name: marts__combined__orders
   description: ecommerce regular b2c orders
-  config:
-    grants:
-      select: ['finance']
   columns:
   - name: combined_orders_hash_id
     description: int, primary key for this table. At the grain of order id, line id,
@@ -280,9 +274,6 @@ models:
 - name: marts__combined_course_enrollment_detail
   description: course enrollment detail with certificates, orders and coupons from
     OL platforms. No order data for edX.org course purchase.
-  config:
-    grants:
-      select: ['finance']
   columns:
   - name: platform
     description: string, application where the data is from
