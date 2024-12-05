@@ -34,7 +34,11 @@ def s3_csv_files(
 # Create the pipeline
 pipeline = dlt.pipeline(
     pipeline_name="s3_csv_to_jsonl_pipeline",
-    destination="filesystem",  # Can be replaced with other destinations like Redshift, BigQuery
+    destination={
+        "type": "filesystem",
+        "path": "s3://your-bucket/path/to/output/jsonl/files/",
+        "file_format": "jsonl"  # Specify JSONL format
+    },
     dataset_name="csv_data"
 )
 
