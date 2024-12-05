@@ -2,7 +2,7 @@
 version: 2
 models:
 - name: program_summary_report
-  description: MITx program aggregate statistics
+  description: MITx program summary report
   columns:
   - name: program_name
     description: str, name of the program. If program is split over multiple tracks,
