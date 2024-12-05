@@ -15,6 +15,10 @@ models:
     description: str, title of the course
   - name: program_title
     description: str, title of the program
+  - name: program_name
+    description: str, name of the program. If program is split over multiple tracks,
+      the program name is the same for all tracks. e.g. Data, Economics, and Design
+      of Policy
   - name: program_id
     description: int, foreign key representing a single program
     tests:
@@ -432,8 +436,9 @@ models:
     description: str, title of the program, including the specific track if applicable.
       e.g., Statistics and Data Science (General Track)
   - name: program_name
-    description: str, name of the program, which does not specify which track. e.g.,
-      Statistics and Data Science
+    description: str, name of the program. If program is split over multiple tracks,
+      the program name is the same for all tracks. e.g. Data, Economics, and Design
+      of Policy
     tests:
     - not_null
   - name: program_track

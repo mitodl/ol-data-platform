@@ -1,0 +1,49 @@
+---
+version: 2
+models:
+- name: program_summary_report
+  description: MITx program aggregate statistics
+  columns:
+  - name: program_name
+    description: str, name of the program. If program is split over multiple tracks,
+      the program name is the same for all tracks. e.g. Data, Economics, and Design
+      of Policy
+    tests:
+    - not_null
+  - name: total_enrollments
+    description: int, count of course enrollments in the program, aggregated by user_email
+      and courserun_readable_id
+    tests:
+    - not_null
+  - name: unique_users
+    description: int, count of unique users who took courses in the program, aggregated
+      by user_email
+    tests:
+    - not_null
+  - name: unique_countries
+    description: int, count of unique countries of enrolled users, aggregated by user_email
+    tests:
+    - not_null
+  - name: verified_enrollments
+    description: int, count of verified (paid) enrollments in the program's courses,
+      aggregated by user_email and courserun_readable_id
+    tests:
+    - not_null
+  - name: unique_verified_users
+    description: int, count of unique verified users enrolled in the program's courses,
+      aggregated by user_email
+    tests:
+    - not_null
+  - name: course_certificates
+    description: int, count of course certificate earned for the courses in the program,
+      aggregated by user_email and courserun_readable_id
+    tests:
+    - not_null
+  - name: unique_course_certificate_earners
+    description: int, count of unique users who earned a certificate for one of the
+      program's courses, aggregated by user_email
+    tests:
+    - not_null
+  - name: program_certificates
+    description: int, count of program certificates earned for the the program, aggregated
+      by user_email
