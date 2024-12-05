@@ -19,9 +19,10 @@ with mitx_programs as (
 )
 
 select
-    'MITx Online' as platform
+    '{{ var("mitxonline") }}' as platform
     , mitx__courses.course_title
     , mitx_programs.program_title
+    , mitxonline__programs.program_name
     , mitx_programs.mitxonline_program_id as program_id
     , mitx__courses.course_readable_id
     , mitxonline__programs.program_readable_id
@@ -35,9 +36,10 @@ where mitx__courses.is_on_mitxonline = true
 union all
 
 select
-    'edX.org' as platform
+    '{{ var("edxorg") }}' as platform
     , mitx__courses.course_title
     , mitx_programs.program_title
+    , mitx_programs.program_title as program_name
     , mitx_programs.micromasters_program_id as program_id
     , mitx__courses.course_readable_id
     , null as program_readable_id
@@ -49,9 +51,10 @@ where mitx__courses.is_on_mitxonline = false
 union all
 
 select
-    'xPro' as platform
+    '{{ var("mitxpro") }}' as platform
     , mitxpro__courses.course_title
     , mitxpro__programs.program_title
+    , mitxpro__programs.program_title as program_name
     , mitxpro__courses.program_id
     , mitxpro__courses.course_readable_id
     , mitxpro__programs.program_readable_id
