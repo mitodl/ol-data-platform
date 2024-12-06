@@ -468,6 +468,10 @@ models:
     description: string, username on the corresponding platform
   - name: user_full_name
     description: string, user full name on the corresponding platform
+  - name: user_has_completed_program
+    description: boolean, whether the learner has completed program to earn the certificate
+    tests:
+    - not_null
   - name: programenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the program
   - name: programenrollment_created_on
