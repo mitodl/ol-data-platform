@@ -50,7 +50,7 @@ with program_enrollments as (
         program_name
         , count(distinct user_email) as program_certificates
     from program_enrollments
-    where programcertificate_created_on is not null
+    where user_has_completed_program = true
     group by program_name
 )
 
