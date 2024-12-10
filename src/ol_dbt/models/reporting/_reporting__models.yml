@@ -2,7 +2,9 @@
 version: 2
 models:
 - name: program_summary_report
-  description: MITx program summary report
+  description: MITx and xPro Program Summary report. A count of all users, enrollments
+    (audit and verified), certificates and program credentials aggregated for each
+    program.
   columns:
   - name: program_name
     description: str, name of the program. If program is split over multiple tracks,
@@ -45,5 +47,7 @@ models:
     tests:
     - not_null
   - name: program_certificates
-    description: int, count of program certificates earned for the the program, aggregated
-      by user_email
+    description: int, count of program certificates earned for each program, aggregated
+      by user_email. If a user gets the Statistics and Data Science program certificate
+      in both the General and Social Sciences tracks, it would be counted as one program
+      certificate.
