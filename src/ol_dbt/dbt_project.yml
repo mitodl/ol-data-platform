@@ -86,6 +86,11 @@ models:
       +schema: mart
       +grants:
         select: ['read_only_production', 'business_intelligence', 'reverse_etl', 'finance']
+    reporting:
+      +materialized: table
+      +schema: reporting
+      +grants:
+        select: ['read_only_production', 'business_intelligence', 'reverse_etl']
     external:
       +materialized: table
       +schema: external
