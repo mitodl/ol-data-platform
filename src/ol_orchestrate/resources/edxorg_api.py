@@ -6,7 +6,7 @@ from typing import Any, Self
 
 import httpx
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
-from pydantic import Field, PrivateAttr, ValidationError, validator
+from pydantic import Field, PrivateAttr
 
 from ol_orchestrate.resources.secrets.vault import Vault
 
@@ -35,12 +35,6 @@ class EdxorgApiClient(ConfigurableResource):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._initialize_client()
-
-    @validator("token_type")
-    def validate_token_type(self, token_type):
-        if token_type.lower() not in ["jwt", "bearer"]:
-            raise ValidationError
-        return token_type
 
     def _initialize_client(self) -> None:
         if self._http_client is not None:
@@ -95,16 +89,16 @@ class EdxorgApiClient(ConfigurableResource):
             raise
         return response.json()
 
-    def get_program_catalog_data(self) -> Generator[list[dict[str, str]], None, None]:
+    def get_edxorg_programs(self):
         """
-        Retrieve the program catalog data from the edX.org REST API by walking
-        through the paginated results
+        Retrieve the program metadata from the edX.org REST API by walking through
+         the paginated results
 
         Yield: A generator for walking the paginated list of programs returned
         from the API
 
         """
-        request_url = "https://discovery.edx.org/api/v1/programs/ "
+        request_url = "https://discovery.edx.org/api/v1/programs/"
         response_data = self._fetch_with_token(request_url)
         results = response_data["results"]
         next_page = response_data["next"]
@@ -122,7 +116,7 @@ class EdxorgApiClientFactory(ConfigurableResource):
     def _initialize_client(self) -> EdxorgApiClient:
         client_secrets = self.vault.client.secrets.kv.v1.read_secret(
             mount_point="secret-data",
-            path="pipelines/edxorg/edx-oauth-client",  # to be updated
+            path="pipelines/edx/org/edxorg_api",  # to be added on production
         )["data"]
 
         self._client = EdxorgApiClient(
