@@ -2,7 +2,7 @@ import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any, Self
+from typing import Any, Optional, Self
 
 import httpx
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
@@ -28,8 +28,8 @@ class EdxorgApiClient(ConfigurableResource):
             "Time (in seconds) to allow for requests to complete before timing out."
         ),
     )
-    _access_token: str = PrivateAttr(default=None)
-    _access_token_expires: datetime = PrivateAttr(default=None)
+    _access_token: Optional[str] = PrivateAttr(default=None)
+    _access_token_expires: Optional[datetime] = PrivateAttr(default=None)
     _http_client: httpx.Client = PrivateAttr(default=None)
 
     def __init__(self, *args, **kwargs):
@@ -42,7 +42,7 @@ class EdxorgApiClient(ConfigurableResource):
         timeout = httpx.Timeout(self.http_timeout, connect=10)
         self._http_client = httpx.Client(timeout=timeout)
 
-    def _get_access_token(self) -> str:
+    def _get_access_token(self) -> Optional[str]:
         """
         Get an access token from the edX.org access token endpoint
 
@@ -50,7 +50,7 @@ class EdxorgApiClient(ConfigurableResource):
             str: the access token
         """
         now = datetime.now(tz=UTC)
-        if self._access_token is None or self._access_token_expires < now:
+        if self._access_token is None or (self._access_token_expires or now) < now:
             payload = {
                 "grant_type": "client_credentials",
                 "client_id": self.client_id,
