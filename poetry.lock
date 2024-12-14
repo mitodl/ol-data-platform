@@ -208,17 +208,6 @@ test = ["anyio[trio]", "coverage[toml] (>=7)", "exceptiongroup (>=1.2.0)", "hypo
 trio = ["trio (>=0.26.1)"]
 
 [[package]]
-name = "appdirs"
-version = "1.4.4"
-description = "A small Python module for determining appropriate platform-specific dirs, e.g. a \"user data dir\"."
-optional = false
-python-versions = "*"
-files = [
-    {file = "appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"},
-    {file = "appdirs-1.4.4.tar.gz", hash = "sha256:7d5d0167b2b1ba821647616af46a749d1c653740dd0d2415100fe26e27afdf41"},
-]
-
-[[package]]
 name = "attrs"
 version = "24.2.0"
 description = "Classes Without Boilerplate"
@@ -4770,23 +4759,23 @@ sqlcipher = ["sqlcipher3_binary"]
 
 [[package]]
 name = "sqlfluff"
-version = "3.2.5"
+version = "3.3.0"
 description = "The SQL Linter for Humans"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "sqlfluff-3.2.5-py3-none-any.whl", hash = "sha256:ae9ff821986b5b0dd1ea858392db7f0eb80343c2cdeee7900fa031f581e04643"},
-    {file = "sqlfluff-3.2.5.tar.gz", hash = "sha256:39822db2c6ad7dac9f6e43d36a3d086c503c051b09665d14a5bdf644770f6ef6"},
+    {file = "sqlfluff-3.3.0-py3-none-any.whl", hash = "sha256:83c29db0e7773bb5075543e2049a919632f6ced8a2b475d6a69879da52b03097"},
+    {file = "sqlfluff-3.3.0.tar.gz", hash = "sha256:ea0b752c0b8f4602a56fa5b381eb5c806799e4941df8fc0aad0842c9d4283e03"},
 ]
 
 [package.dependencies]
-appdirs = "*"
 chardet = "*"
 click = "*"
 colorama = ">=0.3"
 diff-cover = ">=2.5.0"
 Jinja2 = "*"
 pathspec = "*"
+platformdirs = "*"
 pytest = "*"
 pyyaml = ">=5.1"
 regex = "*"
