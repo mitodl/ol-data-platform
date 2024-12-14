@@ -5144,20 +5144,20 @@ devenv = ["check-manifest", "pytest (>=4.3)", "pytest-cov", "pytest-mock (>=3.3)
 
 [[package]]
 name = "universal-pathlib"
-version = "0.2.5"
+version = "0.2.6"
 description = "pathlib api extended to use fsspec backends"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "universal_pathlib-0.2.5-py3-none-any.whl", hash = "sha256:a634f700eca827b4ad03bfa0267e51161560dd1de83b051cf0fccf39b3e56b32"},
-    {file = "universal_pathlib-0.2.5.tar.gz", hash = "sha256:ea5d4fb8178c2ab469cf4fa46d0ceb16ccb378da46dbbc28a8b9c1eebdccc655"},
+    {file = "universal_pathlib-0.2.6-py3-none-any.whl", hash = "sha256:700dec2b58ef34b87998513de6d2ae153b22f083197dfafb8544744edabd1b18"},
+    {file = "universal_pathlib-0.2.6.tar.gz", hash = "sha256:50817aaeaa9f4163cb1e76f5bdf84207fa05ce728b23fd779479b3462e5430ac"},
 ]
 
 [package.dependencies]
 fsspec = ">=2022.1.0,<2024.3.1 || >2024.3.1"
 
 [package.extras]
-dev = ["adlfs", "aiohttp", "cheroot", "gcsfs", "moto[s3,server]", "paramiko", "pydantic", "pydantic-settings", "requests", "s3fs", "smbprotocol", "webdav4[fsspec]", "wsgidav"]
+dev = ["adlfs", "aiohttp", "cheroot", "gcsfs", "moto[s3,server]", "paramiko", "pydantic", "pydantic-settings", "requests", "s3fs", "smbprotocol", "typing_extensions", "webdav4[fsspec]", "wsgidav"]
 tests = ["mypy (>=1.10.0)", "packaging", "pylint (>=2.17.4)", "pytest (>=8)", "pytest-cov (>=4.1.0)", "pytest-mock (>=3.12.0)", "pytest-mypy-plugins (>=3.1.2)", "pytest-sugar (>=0.9.7)"]
 
 [[package]]
