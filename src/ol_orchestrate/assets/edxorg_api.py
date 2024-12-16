@@ -1,5 +1,7 @@
 # Call edxorg APIs to get courses and programs data
 # Model the different asset objects according to their type and data structure
+import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -8,14 +10,16 @@ from dagster import (
     AssetExecutionContext,
     AssetKey,
     AssetOut,
+    DataVersion,
     Output,
     multi_asset,
 )
 
+from ol_orchestrate.resources.edxorg_api import EdxorgApiClientFactory
+
 
 @multi_asset(
     group_name="edxorg",
-    required_resource_keys={"edxorg_api"},
     outs={
         "program_metadata": AssetOut(
             description="The metadata for MITx programs extracted from edxorg "
@@ -29,17 +33,17 @@ from dagster import (
         ),
     },
 )
-def edxorg_program_metadata(context: AssetExecutionContext):
-    data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
-
-    program_data_generator = context.resources.edxorg_api.get_edxorg_programs()
+def edxorg_program_metadata(
+    context: AssetExecutionContext, edxorg_api: EdxorgApiClientFactory
+):
+    program_data_generator = edxorg_api.client.get_edxorg_programs()
 
     mitx_programs = []
     mitx_program_courses = []
+    data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
     for result_batch in program_data_generator:
         for program in result_batch:
-            # Check if 'authoring_organizations' exists in the program and that it's a
-            # list with at least one element
+            # Filter out Non MITx program data as we only need MITx programs for now
             if (
                 "authoring_organizations" in program
                 and isinstance(program["authoring_organizations"], list)
@@ -69,10 +73,20 @@ def edxorg_program_metadata(context: AssetExecutionContext):
                         }
                     )
 
-    program_file = Path(f"program_{data_retrieval_timestamp}.json")
-    program_course_file = Path(f"program_course_{data_retrieval_timestamp}.json")
-    program_object_key = f"{'/'.join(context.asset_key_for_output('program_metadata').path)}/{data_retrieval_timestamp}.json"  # noqa: E501
-    program_course_object_key = f"{'/'.join(context.asset_key_for_output('program_course_metadata').path)}//{data_retrieval_timestamp}.json"  # noqa: E501
+    context.log.info("Extracted %d MITx programs....", len(mitx_programs))
+    context.log.info("Extracted %d MITx program courses....", len(mitx_program_courses))
+
+    program_data_version = hashlib.sha256(
+        json.dumps(mitx_programs).encode("utf-8")
+    ).hexdigest()
+    program_course_data_version = hashlib.sha256(
+        json.dumps(mitx_program_courses).encode("utf-8")
+    ).hexdigest()
+
+    program_file = Path(f"program_{program_data_version}.json")
+    program_course_file = Path(f"program_course_{program_course_data_version}.json")
+    program_object_key = f"{'/'.join(context.asset_key_for_output('program_metadata').path)}/{program_data_version}.json"  # noqa: E501
+    program_course_object_key = f"{'/'.join(context.asset_key_for_output('program_course_metadata').path)}/{program_course_data_version}.json"  # noqa: E501
 
     with (
         jsonlines.open(program_file, mode="w") as programs,
@@ -84,11 +98,13 @@ def edxorg_program_metadata(context: AssetExecutionContext):
     yield Output(
         (program_file, program_object_key),
         output_name="program_metadata",
+        data_version=DataVersion(program_data_version),
         metadata={"object_key": program_object_key},
     )
 
     yield Output(
         (program_course_file, program_course_object_key),
         output_name="program_course_metadata",
+        data_version=DataVersion(program_course_data_version),
         metadata={"object_key": program_course_object_key},
     )
