@@ -40,7 +40,7 @@ def s3_uploads_bucket(
 
 edxorg_api_daily_schedule = ScheduleDefinition(
     name="edxorg_api_schedule",
-    target=AssetSelection.all(),
+    target=AssetSelection.assets(edxorg_program_metadata),
     cron_schedule="@daily",
     execution_timezone="Etc/UTC",
 )
