@@ -117,13 +117,13 @@ left join videos_played_count_tbl
 left join videos_in_courserun
     on courserunenrollments.courserun_readable_id = videos_in_courserun.courserun_readable_id
 left join problems_submitted_count_tbl
-    on 
+    on
         courserunenrollments.courserun_readable_id = problems_submitted_count_tbl.courserun_readable_id
         and courserunenrollments.user_username = problems_submitted_count_tbl.user_username
 left join problems_in_courserun
     on courserunenrollments.courserun_readable_id = problems_in_courserun.courserun_readable_id
 left join discussions_paticipated_in_count_tbl
-    on 
+    on
         courserunenrollments.courserun_readable_id = discussions_paticipated_in_count_tbl.courserun_readable_id
         and courserunenrollments.user_username = discussions_paticipated_in_count_tbl.user_username
 left join discussions_in_courserun
