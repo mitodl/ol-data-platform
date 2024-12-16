@@ -52,7 +52,8 @@ models:
       in both the General and Social Sciences tracks, it would be counted as one program
       certificate.
 - name: report_mitxonline_course_engagements
-  description: MITx Online learners course video, problem, and discussion engagement metrics
+  description: MITx Online learners course video, problem, and discussion engagement
+    metrics
   columns:
   - name: courserun_readable_id
     description: string, unique ID representing a single MITx Online course run
