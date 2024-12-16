@@ -103,24 +103,24 @@ select
     , problems_in_courserun.count_problems_in_courserun
     , discussions_paticipated_in_count_tbl.discussions_paticipated_in
     , discussions_in_courserun.discussions_total
-    , case 
+    , case
         when videos_in_courserun.count_videos_in_courserun <> 0
-            then 
-                videos_played_count_tbl.count_videos_played 
+            then
+                videos_played_count_tbl.count_videos_played
                 / videos_in_courserun.count_videos_in_courserun
     end
     as pct_videos_played
-    , case 
+    , case
         when problems_in_courserun.count_problems_in_courserun <> 0
-            then 
-                problems_submitted_count_tbl.count_problems_submitted 
+            then
+                problems_submitted_count_tbl.count_problems_submitted
                 / problems_in_courserun.count_problems_in_courserun
     end
     as pct_problems_submitted
-    , case 
+    , case
         when discussions_in_courserun.discussions_total <> 0
-            then 
-                discussions_paticipated_in_count_tbl.discussions_paticipated_in 
+            then
+                discussions_paticipated_in_count_tbl.discussions_paticipated_in
                 / discussions_in_courserun.discussions_total
     end
     as pct_discussions_in
@@ -132,13 +132,13 @@ left join videos_played_count_tbl
 left join videos_in_courserun
     on courserunenrollments.courserun_readable_id = videos_in_courserun.courserun_readable_id
 left join problems_submitted_count_tbl
-    on 
+    on
         courserunenrollments.courserun_readable_id = problems_submitted_count_tbl.courserun_readable_id
         and courserunenrollments.user_username = problems_submitted_count_tbl.user_username
 left join problems_in_courserun
     on courserunenrollments.courserun_readable_id = problems_in_courserun.courserun_readable_id
 left join discussions_paticipated_in_count_tbl
-    on 
+    on
         courserunenrollments.courserun_readable_id = discussions_paticipated_in_count_tbl.courserun_readable_id
         and courserunenrollments.user_username = discussions_paticipated_in_count_tbl.user_username
 left join discussions_in_courserun
