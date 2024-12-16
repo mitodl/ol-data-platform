@@ -51,3 +51,28 @@ models:
       by user_email. If a user gets the Statistics and Data Science program certificate
       in both the General and Social Sciences tracks, it would be counted as one program
       certificate.
+- name: report_mitxonline_course_engagements
+  description: MITx Online learners course engagement metrics
+  columns:
+  - name: courserun_readable_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: user_username
+    description: str, name chosen by user and used for login
+  - name: count_videos_in_courserun
+    description: int, count of total videos in a course run
+  - name: count_videos_played
+    description: int, count of total videos played by a learner
+  - name: count_problems_submitted
+    description: int, count of total problems submitted by a learner
+  - name: count_problems_in_courserun
+    description: int, count of total problems in a course run
+  - name: discussions_paticipated_in
+    description: int, count of total discussions participated in by a learner
+  - name: discussions_total
+    description: int, count of total discussions in a courserun
+  - name: pct_videos_played
+    description: float, count_videos_played divided by count_videos_in_courserun
+  - name: pct_problems_submitted
+    description: float, count_problems_submitted divided by count_problems_in_courserun
+  - name: pct_discussions_in
+    description: float, discussions_paticipated_in divided by discussions_total
