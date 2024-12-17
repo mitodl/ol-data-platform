@@ -59,7 +59,7 @@ class OpenEdxApiClient(ConfigurableResource):
 
     def _fetch_access_token(self) -> Optional[str]:
         now = datetime.now(tz=UTC)
-        if self._access_token is None or (self._access_token_expires or now) < now:
+        if self._access_token is None or (self._access_token_expires or now) <= now:
             payload = {
                 "grant_type": "client_credentials",
                 "client_id": self.client_id,
@@ -86,12 +86,15 @@ class OpenEdxApiClient(ConfigurableResource):
         return response.json()["username"]
 
     def _fetch_with_auth(
-        self, request_url: str, page_size: int = 100
+        self, request_url: str, page_number: Optional[int] = None, page_size: int = 100
     ) -> dict[Any, Any]:
+        request_params = {"username": self._username, "page_size": page_size}
+        if page_number:
+            request_params["page"] = page_number
         response = self._http_client.get(
             request_url,
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
-            params={"username": self._username, "page_size": page_size},
+            params=request_params,
         )
 
         try:
@@ -99,7 +102,7 @@ class OpenEdxApiClient(ConfigurableResource):
         except httpx.HTTPStatusError as error_response:
             if error_response.response.status_code == TOO_MANY_REQUESTS:
                 time.sleep(60)
-                return self._fetch_with_auth(request_url, page_size)
+                return self._fetch_with_auth(request_url, page_size=page_size)
             raise
         return response.json()
 
@@ -115,12 +118,14 @@ class OpenEdxApiClient(ConfigurableResource):
             the API
         """
         request_url = f"{self.lms_url}/api/courses/v1/courses/"
-        response_data = self._fetch_with_auth(request_url, page_size)
+        response_data = self._fetch_with_auth(request_url, page_size=page_size)
         course_data = response_data["results"]
         next_page = response_data["pagination"].get("next")
         yield course_data
         while next_page:
-            response_data = self._fetch_with_auth(next_page, page_size)
+            response_data = self._fetch_with_auth(
+                request_url, page_number=next_page, page_size=page_size
+            )
             next_page = response_data["pagination"].get("next")
             yield response_data["results"]
 
