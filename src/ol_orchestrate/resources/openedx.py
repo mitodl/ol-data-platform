@@ -87,10 +87,13 @@ class OpenEdxApiClient(ConfigurableResource):
         return response.json()["username"]
 
     def _fetch_with_auth(
-        self, request_url: str, page_size: int = 100, **extra_params
+        self,
+        request_url: str,
+        page_size: int = 100,
+        extra_params: dict[str, Any] | None = None,
     ) -> dict[Any, Any]:
         request_params = {"username": self._username, "page_size": page_size}
-        request_params.update(**extra_params)
+        request_params.update(**(extra_params or {}))
         response = self._http_client.get(
             request_url,
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
@@ -103,7 +106,7 @@ class OpenEdxApiClient(ConfigurableResource):
             if error_response.response.status_code == TOO_MANY_REQUESTS:
                 time.sleep(60)
                 return self._fetch_with_auth(
-                    request_url, page_size=page_size, **extra_params
+                    request_url, page_size=page_size, extra_params=extra_params
                 )
             raise
         return response.json()
@@ -126,7 +129,7 @@ class OpenEdxApiClient(ConfigurableResource):
         yield course_data
         while next_page:
             response_data = self._fetch_with_auth(
-                request_url, page_size=page_size, **parse_qs(next_page)
+                request_url, page_size=page_size, extra_params=parse_qs(next_page)
             )
             next_page = response_data["pagination"].get("next")
             yield response_data["results"]
