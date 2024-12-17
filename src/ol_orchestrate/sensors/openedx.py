@@ -86,66 +86,61 @@ def course_version_sensor(
     # course_run_ids that don't have keys in the context cursor, create an entry in the
     # cursor dictionary with the results of the call to the get_course_outline method.
 
-    cursor = json.loads(context.cursor or "{}")
+    cursor: dict[str, str] = json.loads(context.cursor or "{}")
     asset_events = []
     for course_run_id in course_run_ids:
         course_cursor = CourseCursor(
-            **cursor.get(
-                json.loads(course_run_id),
-                CourseCursor(
-                    published_version="", course_end=datetime(9999, 12, 31, tzinfo=UTC)
-                ).model_dump(),
+            **json.loads(
+                cursor.get(
+                    course_run_id,
+                    CourseCursor(
+                        published_version="",
+                        course_end=datetime(9999, 12, 31, tzinfo=UTC),
+                    ).model_dump_json(),
+                )
             )
         )
         if (
-            not course_cursor
-            or not course_cursor.course_end
-            or course_cursor.course_end > datetime.now(tz=UTC) - timedelta(days=90)
+            course_cursor
+            and course_cursor.course_end
+            and course_cursor.course_end <= datetime.now(tz=UTC) - timedelta(days=90)
         ):
-            try:
-                response = openedx.client.get_course_outline(course_run_id)
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == HTTP_NOT_FOUND:
-                    context.log.exception(
-                        "Course outline not found for key %s", course_run_id
-                    )
-                    continue
-                else:
-                    raise
-            if response["published_version"] == course_cursor.published_version:
-                continue
-            else:
-                course_update = CourseCursor(
-                    published_version=response["published_version"],
-                    published_at=datetime.fromisoformat(response["published_at"]),
-                    course_start=datetime.fromisoformat(response["course_start"]),
-                    course_end=datetime.fromisoformat(response["course_end"])
-                    if response["course_end"]
-                    else None,
-                )
-                asset_events.append(
-                    AssetMaterialization(
-                        asset_key=AssetKey(
-                            (openedx.deployment, "openedx", "courseware")
-                        ),
-                        partition=course_run_id,
-                        metadata={
-                            "source": f"{openedx.deployment} openedx",
-                            "materialization_time": datetime.fromisoformat(
-                                response["at_time"]
-                            ).isoformat(),
-                        },
-                        tags={
-                            DATA_VERSION_TAG: DataVersion(
-                                course_update.published_version
-                            ).value
-                        },
-                    )
-                )
-                cursor[course_run_id] = course_update.model_dump_json()
-
-        else:
             continue
+        try:
+            response = openedx.client.get_course_outline(course_run_id)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != HTTP_NOT_FOUND:
+                raise
+            context.log.exception("Course outline not found for key %s", course_run_id)
+            continue
+        if response["published_version"] != course_cursor.published_version:
+            course_update = CourseCursor(
+                published_version=response["published_version"],
+                published_at=datetime.fromisoformat(response["published_at"]),
+                course_start=datetime.fromisoformat(response["course_start"]),
+                course_end=datetime.fromisoformat(response["course_end"])
+                if response["course_end"]
+                else None,
+            )
+            asset_events.append(
+                AssetMaterialization(
+                    asset_key=AssetKey((openedx.deployment, "openedx", "courseware")),
+                    partition=course_run_id,
+                    metadata={
+                        "source": f"{openedx.deployment} openedx",
+                        "materialization_time": datetime.fromisoformat(
+                            response["at_time"]
+                        ).isoformat(),
+                    },
+                    tags={
+                        DATA_VERSION_TAG: DataVersion(
+                            course_update.published_version
+                        ).value
+                    },
+                )
+            )
+            cursor[course_run_id] = course_update.model_dump_json()
+
     context.update_cursor(json.dumps(cursor))
 
     return SensorResult(asset_events=asset_events)
