@@ -3,6 +3,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any, Optional, Self
+from urllib.parse import parse_qs
 
 import httpx
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
@@ -86,15 +87,14 @@ class OpenEdxApiClient(ConfigurableResource):
         return response.json()["username"]
 
     def _fetch_with_auth(
-        self, request_url: str, page_number: Optional[int] = None, page_size: int = 100
+        self, request_url: str, page_size: int = 100, **extra_params
     ) -> dict[Any, Any]:
         request_params = {"username": self._username, "page_size": page_size}
-        if page_number:
-            request_params["page"] = page_number
+        request_params.update(**extra_params)
         response = self._http_client.get(
             request_url,
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
-            params=request_params,
+            params=httpx.QueryParams(**request_params),
         )
 
         try:
@@ -102,7 +102,9 @@ class OpenEdxApiClient(ConfigurableResource):
         except httpx.HTTPStatusError as error_response:
             if error_response.response.status_code == TOO_MANY_REQUESTS:
                 time.sleep(60)
-                return self._fetch_with_auth(request_url, page_size=page_size)
+                return self._fetch_with_auth(
+                    request_url, page_size=page_size, **extra_params
+                )
             raise
         return response.json()
 
@@ -124,7 +126,7 @@ class OpenEdxApiClient(ConfigurableResource):
         yield course_data
         while next_page:
             response_data = self._fetch_with_auth(
-                request_url, page_number=next_page, page_size=page_size
+                request_url, page_size=page_size, **parse_qs(next_page)
             )
             next_page = response_data["pagination"].get("next")
             yield response_data["results"]
