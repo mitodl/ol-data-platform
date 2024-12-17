@@ -91,7 +91,7 @@ def course_version_sensor(
     for course_run_id in course_run_ids:
         course_cursor = CourseCursor(
             **cursor.get(
-                course_run_id,
+                json.loads(course_run_id),
                 CourseCursor(
                     published_version="", course_end=datetime(9999, 12, 31, tzinfo=UTC)
                 ).model_dump(),
