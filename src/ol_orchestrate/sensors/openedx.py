@@ -95,7 +95,7 @@ def course_version_sensor(
                 CourseCursor(
                     published_version="", course_end=datetime(9999, 12, 31, tzinfo=UTC)
                 ).model_dump(),
-            ),
+            )
         )
         if (
             not course_cursor
