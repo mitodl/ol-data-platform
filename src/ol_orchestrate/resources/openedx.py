@@ -94,8 +94,12 @@ class OpenEdxApiClient(ConfigurableResource):
         page_size: int = 100,
         extra_params: dict[str, Any] | None = None,
     ) -> dict[Any, Any]:
-        request_params = {"username": self._username, "page_size": page_size}
-        request_params.update(**(extra_params or {}))
+        if self.token_url == f"{self.lms_url}/oauth2/access_token":
+            request_params = {"username": self._username, "page_size": page_size}
+            request_params.update(**(extra_params or {}))
+        else:
+            request_params = {}
+
         response = self._http_client.get(
             request_url,
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
