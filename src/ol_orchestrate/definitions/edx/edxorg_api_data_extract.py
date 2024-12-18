@@ -11,7 +11,7 @@ from ol_orchestrate.assets.edxorg_api import edxorg_program_metadata
 from ol_orchestrate.io_managers.filepath import S3FileObjectIOManager
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
-from ol_orchestrate.resources.edxorg_api import EdxorgApiClientFactory
+from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
 if DAGSTER_ENV == "dev":
@@ -54,7 +54,7 @@ edxorg_program_metadata_extract = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
-        "edxorg_api": EdxorgApiClientFactory(vault=vault),
+        "edxorg_api": OpenEdxApiClientFactory(deployment="edxorg", vault=vault),
     },
     assets=[edxorg_program_metadata],
     schedules=[edxorg_api_daily_schedule],

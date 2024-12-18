@@ -32,6 +32,10 @@ class OpenEdxApiClient(ConfigurableResource):
         default="JWT",
         description="Token type to generate for use with authenticated requests",
     )
+    token_url: str = Field(
+        default=f"{lms_url}/oauth2/access_token",
+        description="URL to request token. e.g. https://lms.mitx.mit.edu/oauth2/access_token",
+    )
     http_timeout: int = Field(
         default=60,
         description=(
@@ -67,9 +71,7 @@ class OpenEdxApiClient(ConfigurableResource):
                 "client_secret": self.client_secret,
                 "token_type": self.token_type,
             }
-            response = self._http_client.post(
-                f"{self.lms_url}/oauth2/access_token", data=payload
-            )
+            response = self._http_client.post(self.token_url, data=payload)
             response.raise_for_status()
             self._access_token = response.json()["access_token"]
             self._access_token_expires = now + timedelta(
@@ -181,6 +183,25 @@ class OpenEdxApiClient(ConfigurableResource):
         )
         return self._fetch_with_auth(request_url)
 
+    def get_edxorg_programs(self):
+        """
+        Retrieve the program metadata from the edX.org REST API by walking through
+         the paginated results
+
+        Yield: A generator for walking the paginated list of programs returned
+        from the API
+
+        """
+        request_url = "https://discovery.edx.org/api/v1/programs/"
+        response_data = self._fetch_with_auth(request_url)
+        results = response_data["results"]
+        next_page = response_data["next"]
+        yield results
+        while next_page:
+            response_data = self._fetch_with_auth(next_page)
+            next_page = response_data["next"]
+            yield response_data["results"]
+
 
 class OpenEdxApiClientFactory(ConfigurableResource):
     deployment: str = Field(
@@ -201,6 +222,9 @@ class OpenEdxApiClientFactory(ConfigurableResource):
             client_secret=client_secrets["secret"],
             lms_url=client_secrets["url"],
             studio_url=client_secrets["studio_url"],
+            token_url=client_secrets.get(
+                "token_url", f"{client_secrets['url']}/oauth2/access_token"
+            ),
         )
         return self._client
 
