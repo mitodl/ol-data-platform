@@ -117,7 +117,9 @@ def course_version_sensor(
             course_update = CourseCursor(
                 published_version=response["published_version"],
                 published_at=datetime.fromisoformat(response["published_at"]),
-                course_start=datetime.fromisoformat(response["course_start"]),
+                course_start=datetime.fromisoformat(response["course_start"])
+                if response["course_start"]
+                else None,
                 course_end=datetime.fromisoformat(response["course_end"])
                 if response["course_end"]
                 else None,
