@@ -22,8 +22,7 @@ from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
     group_name="edxorg",
     outs={
         "program_metadata": AssetOut(
-            description="The metadata for MITx programs extracted from edxorg "
-            "program API",
+            description="The metadata for programs extracted from edxorg program API",
             key=AssetKey(("edxorg", "processed_data", "program_metadata")),
         ),
         "program_course_metadata": AssetOut(
@@ -44,6 +43,11 @@ def edxorg_program_metadata(
     for result_batch in program_data_generator:
         for program in result_batch:
             program_uuid = program["uuid"]
+            org = (
+                program["authoring_organizations"][0].get("key", None)
+                if program["authoring_organizations"]
+                else None
+            )
             edxorg_programs.append(
                 {
                     "uuid": program_uuid,
@@ -51,6 +55,7 @@ def edxorg_program_metadata(
                     "subtitle": program["subtitle"],
                     "type": program["type"],
                     "status": program["status"],
+                    "authoring_organizations": org,
                     "data_modified_timestamp": program["data_modified_timestamp"],
                     "retrieved_at": data_retrieval_timestamp,
                 }
