@@ -14,7 +14,7 @@ with source as (
                     , to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%d %H:%i:%s Z'))
                 )
 
-        end as program_certificate_awarded_dt
+        end as program_certificate_awarded_at
         , row_number() over (
             partition by "user id", "course run key", "program uuid"
             order by _airbyte_emitted_at desc, _ab_source_file_last_modified desc
@@ -26,7 +26,7 @@ with source as (
     select
         cast("user id" as integer) as user_id
         , "program uuid" as program_uuid
-        , min(program_certificate_awarded_dt) as earliest_program_cert_award_on
+        , min(program_certificate_awarded_at) as earliest_program_cert_award_on
         , max("completed program") as ever_completed_program
     from source_sorted
     group by 1, 2
