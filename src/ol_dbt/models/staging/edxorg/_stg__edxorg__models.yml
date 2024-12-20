@@ -416,7 +416,8 @@ models:
       was generated for that verified learner.
   - name: program_certificate_awarded_on
     description: timestamp, the date in ISO-8601 format that the learner has passed
-      each of the courses in the program and was awarded a program certificate.
+      each of the courses in the program and was awarded a program certificate. This
+      is the first date that the learner was awarded a program certificate.
   - name: courserun_start_on
     description: timestamp, the start date of the course run in ISO-8601 string.
     tests:
