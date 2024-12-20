@@ -81,7 +81,7 @@ with source as (
             when "date first upgraded to verified" = 'null' then null
             else to_iso8601(date_parse("date first upgraded to verified", '%Y-%m-%d %H:%i:%s Z'))
         end as courserunenrollment_upgraded_on
-        , program_certificate_awarded_dt as program_certificate_awarded_on
+        , program_certificate_awarded_at as program_certificate_awarded_on
     from dedup_source
 
 )
