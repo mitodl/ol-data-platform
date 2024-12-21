@@ -1416,20 +1416,20 @@ typing-extensions = ">=4.4,<5"
 
 [[package]]
 name = "dbt-trino"
-version = "1.8.5"
+version = "1.9.0"
 description = "The trino adapter plugin for dbt (data build tool)"
 optional = false
-python-versions = ">=3.8"
+python-versions = ">=3.9"
 files = [
-    {file = "dbt-trino-1.8.5.tar.gz", hash = "sha256:b8bf16a1701654b35102cebd927d4c03cb17fc1a50db74812c2d6ee10295b6ff"},
-    {file = "dbt_trino-1.8.5-py3-none-any.whl", hash = "sha256:adad0ebf979902f6bed1435ad2b51489a5ba7bd06e17e5a7827d183d09268e11"},
+    {file = "dbt-trino-1.9.0.tar.gz", hash = "sha256:c665a001a79bc3f9cf71ea20dea56d2efd8af826cb9cf0298725395dfd806421"},
+    {file = "dbt_trino-1.9.0-py3-none-any.whl", hash = "sha256:1df942e1927bdde641120a2d76dac0a0b2f9360df3fe17489399f0aaac672f41"},
 ]
 
 [package.dependencies]
-dbt-adapters = ">=1.1.1,<2.0"
-dbt-common = ">=1.0.4,<2.0"
+dbt-adapters = ">=1.10.4,<2.0"
+dbt-common = ">=1.14.0,<2.0"
 dbt-core = ">=1.8.0"
-trino = ">=0.328,<1.0"
+trino = ">=0.331,<1.0"
 
 [[package]]
 name = "decorator"
