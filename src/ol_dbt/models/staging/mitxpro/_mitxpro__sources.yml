@@ -2253,3 +2253,67 @@ sources:
       description: int, foreign key in edxval_video
     - name: is_hidden
       description: boolean, indicating if the video is hidden for the course.
+
+  - name: raw__emeritus__bigquery__api_enrollments
+    description: xPro course enrollments that are offered on the Emeritus platform
+    columns:
+    - name: batch_id
+      description: str, course run ID on the Emeritus platform, e.g. B-33210
+    - name: batch
+      description: str, course title (Batch Start Month – Batch Start Year), e.g.
+        Leading Teams (Nov-2024)
+    - name: batch_start_date
+      description: str, course run start date and time in ISO 8601 format
+    - name: batch_end_date
+      description: str, course run end date and time in ISO 8601 format
+    - name: wrike_run_code
+      description: str, course run readable ID on the Emeritus platform, e.g. MO-AIL-24-12#1
+    - name: student_id
+      description: str, user ID on the Emeritus platform
+    - name: first_name
+      description: str, user's first name
+    - name: last_name
+      description: str, user's last name
+    - name: email
+      description: str, user's email on the Emeritus platform
+    - name: gender
+      description: str, user's gender
+    - name: work_exp_slab
+      description: str, user's years experience. Options are <5 Years, 5-9 Years,
+        10-14 Years, 15-19 Years, 20+ Years, and unknown.
+    - name: company_name
+      description: str, user's company
+    - name: function
+      description: str, user's job function, e.g. Consulting, General Management
+    - name: industry
+      description: str, user's job industry
+    - name: job_title
+      description: str, user's job title
+    - name: residential_address
+      description: str, user's residential address
+    - name: residential_city
+      description: str, user's residential city
+    - name: residential_state
+      description: str, user's residential state
+    - name: residential_zip_code
+      description: str, user's residential zip code
+    - name: country
+      description: str, user's residential country
+    - name: nationality
+      description: str, user's nationality
+    - name: gdpr_agree
+      description: str, same as user's country
+    - name: gdpr_consent_date
+      description: str, date and time when the user provided consent to the GDPR
+    - name: enrollment_type
+      description: str, enrollment type, e.g. B2C, B2B
+    - name: status
+      description: str, Enrolled
+    - name: deferred
+      description: str, Indicating whether enrollment is deferred
+    - name: opportunity_created_date
+      description: str, date and time when the enrolment was created in Emeritus's
+        CRM.
+    - name: opportunity_last_modified_date
+      description: str, date and time when the enrolment was last updated in Emeritus's
+        CRM.
