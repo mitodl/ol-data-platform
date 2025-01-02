@@ -7,12 +7,7 @@ with source as (
         *
         , case
             when "date program certificate awarded" = 'null' then null
-            else
-                -- Try parsing once and handle both formats
-                coalesce(
-                    try(to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%dT%H:%i:%sZ')))
-                    , to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%d %H:%i:%s Z'))
-                )
+            else to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%dT%H:%i:%sZ'))
         end as program_certificate_awarded_dt
         , row_number() over (
             partition by "user id", "course run key", "program uuid"
