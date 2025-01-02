@@ -2125,7 +2125,7 @@ models:
   - name: user_gdpr_degree
     description: str, same as user's country
   - name: user_gdpr_consent_date
-    description: str, GDPR consent date and time in ISO 8601 format
+    description: timestamp, date and time when the user provided consent to the GDPR
   - name: enrollment_type
     description: str, enrollment type, e.g. B2C, B2B
   - name: is_enrolled
