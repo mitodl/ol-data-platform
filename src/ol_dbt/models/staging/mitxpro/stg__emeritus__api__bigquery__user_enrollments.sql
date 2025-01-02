@@ -10,8 +10,8 @@ with source as (
         ---course run
         batch_id as courserun_id
         , batch as courserun_title
-        , batch_start_date as courserun_start_on
-        , batch_end_date as courserun_end_on
+        , {{ cast_timestamp_to_iso8601('batch_start_date') }} as courserun_start_on
+        , {{ cast_timestamp_to_iso8601('batch_end_date') }} as courserun_end_on
         --wrike_run_code maps to external_course_run_id in xPro app
         , wrike_run_code as courserun_external_readable_id
 
@@ -25,12 +25,12 @@ with source as (
         , residential_zip_code as user_address_postal_code
         , country as user_address_country
         , gdpr_agree as user_gdpr_agree
-        , gdpr_consent_date as user_gdpr_consent_date
+        , {{ cast_timestamp_to_iso8601('gdpr_consent_date') }} as user_gdpr_consent_date
 
         ---enrollment
         , enrollment_type
-        , opportunity_created_date as enrollment_created_on
-        , opportunity_last_modified_date as enrollment_updated_on
+        , {{ cast_timestamp_to_iso8601('opportunity_created_date') }} as enrollment_created_on
+        , {{ cast_timestamp_to_iso8601('opportunity_last_modified_date') }} as enrollment_updated_on
         , if(lower(status) = 'enrolled', true, false) as is_enrolled
         , if("deferred" = true, 'deferred', null) as enrollment_status
 

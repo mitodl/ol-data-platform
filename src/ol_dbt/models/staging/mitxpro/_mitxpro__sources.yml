@@ -2260,7 +2260,8 @@ sources:
     - name: batch_id
       description: str, course run ID on the Emeritus platform, e.g. B-33210
     - name: batch
-      description: str, course run title
+      description: str, course title (Batch Start Month – Batch Start Year), e.g.
+        Leading Teams (Nov-2024)
     - name: batch_start_date
       description: str, course run start date and time in ISO 8601 format
     - name: batch_end_date
@@ -2277,6 +2278,9 @@ sources:
       description: str, user's email on the Emeritus platform
     - name: gender
       description: str, user's gender
+    - name: work_exp_slab
+      description: str, user's years experience. Options are <5 Years, 5-9 Years,
+        10-14 Years, 15-19 Years, 20+ Years, and unknown.
     - name: company_name
       description: str, user's company
     - name: function
@@ -2300,7 +2304,7 @@ sources:
     - name: gdpr_agree
       description: str, same as user's country
     - name: gdpr_consent_date
-      description: str, GDPR consent date and time in ISO 8601 format
+      description: str, date and time when the user provided consent to the GDPR
     - name: enrollment_type
       description: str, enrollment type, e.g. B2C, B2B
     - name: status
@@ -2308,6 +2312,8 @@ sources:
     - name: deferred
       description: str, Indicating whether enrollment is deferred
     - name: opportunity_created_date
-      description: str, to be confirmed
+      description: str, date and time when the enrolment was created in Emeritus's
+        CRM.
     - name: opportunity_last_modified_date
-      description: str, to be confirmed
+      description: str, date and time when the enrolment was last updated in Emeritus's
+        CRM.

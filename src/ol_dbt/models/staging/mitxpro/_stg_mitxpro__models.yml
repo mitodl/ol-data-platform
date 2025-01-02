@@ -2072,13 +2072,14 @@ models:
     tests:
     - not_null
   - name: courserun_title
-    description: str, course run title
+    description: str, course title (Start Month – Start Year), e.g. Leading Teams
+      (Nov-2024)
     tests:
     - not_null
   - name: courserun_start_on
-    description: str, course run start date and time in ISO 8601 format
+    description: timestamp, course run start date and time in ISO 8601 format
   - name: courserun_end_on
-    description: str, course run end date and time in ISO 8601 format
+    description: timestamp, course run end date and time in ISO 8601 format
   - name: courserun_external_readable_id
     description: str, course run readable ID on the Emeritus platform, e.g. MO-AIL-24-12#1
       It maps to external_course_run_id in xPro app.
@@ -2098,6 +2099,9 @@ models:
     description: str, user's email on the Emeritus platform. May be null.
   - name: user_gender
     description: str, user's gender
+  - name: user_years_experience
+    description: str, user's years experience. Options are <5 Years, 5-9 Years, 10-14
+      Years, 15-19 Years, 20+ Years, and unknown.
   - name: user_company
     description: str, user's company
   - name: user_job_function
@@ -2131,9 +2135,15 @@ models:
   - name: enrollment_status
     description: str, user's enrollment status change, e.g. deferred
   - name: enrollment_created_on
-    description: str, to be confirmed
+    description: timestamp, date and time when the enrolment was created in Emeritus's
+      CRM.
+    tests:
+    - not_null
   - name: enrollment_updated_on
-    description: str, to be confirmed
+    description: timestamp, date and time when the enrolment was last updated in Emeritus's
+      CRM.
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_external_readable_id", "user_email", "user_full_name"]
