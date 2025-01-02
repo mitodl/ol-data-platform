@@ -7,8 +7,14 @@ with source as (
         *
         , case
             when "date program certificate awarded" = 'null' then null
-            else to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%dT%H:%i:%sZ'))
-        end as program_certificate_awarded_dt
+            else
+            -- Try parsing once and handle both formats
+                coalesce(
+                    try(to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%dT%H:%i:%sZ')))
+                    , to_iso8601(date_parse("date program certificate awarded", '%Y-%m-%d %H:%i:%s Z'))
+                )
+
+        end as program_certificate_awarded_at
         , row_number() over (
             partition by "user id", "course run key", "program uuid"
             order by _airbyte_emitted_at desc, _ab_source_file_last_modified desc
@@ -16,11 +22,11 @@ with source as (
     from source
 )
 
-, add_program_cert_latest as (
+, aggregated_program_certificate as (
     select
         cast("user id" as integer) as user_id
         , "program uuid" as program_uuid
-        , max(program_certificate_awarded_dt) as latest_program_cert_award_on
+        , min(program_certificate_awarded_at) as earliest_program_cert_award_on
         , max("completed program") as ever_completed_program
     from source_sorted
     group by 1, 2
@@ -75,7 +81,7 @@ with source as (
             when "date first upgraded to verified" = 'null' then null
             else to_iso8601(date_parse("date first upgraded to verified", '%Y-%m-%d %H:%i:%s Z'))
         end as courserunenrollment_upgraded_on
-        , program_certificate_awarded_dt as program_certificate_awarded_on
+        , program_certificate_awarded_at as program_certificate_awarded_on
     from dedup_source
 
 )
@@ -92,7 +98,7 @@ select
     , cleaned.courserunenrollment_enrollment_mode
     , cleaned.user_id
     , cleaned.user_has_completed_course
-    , cast(add_program_cert_latest.ever_completed_program as boolean) as user_has_completed_program
+    , cast(aggregated_program_certificate.ever_completed_program as boolean) as user_has_completed_program
     , cleaned.courserunenrollment_is_active
     , cleaned.user_has_purchased_as_bundle
     , cleaned.user_roles
@@ -104,10 +110,10 @@ select
     , cleaned.courseactivity_last_activity_date
     , cleaned.courserunenrollment_unenrolled_on
     , cleaned.courserunenrollment_upgraded_on
-    , add_program_cert_latest.latest_program_cert_award_on as program_certificate_awarded_on
+    , aggregated_program_certificate.earliest_program_cert_award_on as program_certificate_awarded_on
     , regexp_extract(cleaned.program_title, '\((.*?)\)', 1) as program_track
 from cleaned
-left join add_program_cert_latest
+left join aggregated_program_certificate
     on
-        cleaned.user_id = add_program_cert_latest.user_id
-        and cleaned.program_uuid = add_program_cert_latest.program_uuid
+        cleaned.user_id = aggregated_program_certificate.user_id
+        and cleaned.program_uuid = aggregated_program_certificate.program_uuid
