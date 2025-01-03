@@ -16,17 +16,14 @@ models:
     - accepted_values:
         values: '{{ var("platforms") }}'
   - name: user_id
-    description: int, user ID on the corresponding platform
-    tests:
-    - not_null
+    description: string, user ID from the corresponding platform. May be null for
+      some Emeritus learners.
   - name: user_username
-    description: string, username on the corresponding platform
-    tests:
-    - not_null
+    description: string, username on the corresponding platform. May be null for some
+      Emeritus learners.
   - name: user_email
-    description: string, user email on the corresponding platform
-    tests:
-    - not_null
+    description: string, user email on the corresponding platform. May be null for
+      some Emeritus learners.
   - name: user_full_name
     description: str, user full name collected on the corresponding platform
   - name: user_address_country

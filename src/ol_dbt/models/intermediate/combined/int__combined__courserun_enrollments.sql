@@ -6,6 +6,10 @@ with mitx_enrollments as (
     select * from {{ ref('int__mitxpro__courserunenrollments') }}
 )
 
+, emeritus_enrollments as (
+    select * from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
+)
+
 , bootcamps_enrollments as (
     select * from {{ ref('int__bootcamps__courserunenrollments') }}
 )
@@ -34,6 +38,9 @@ with mitx_enrollments as (
     select * from {{ ref('int__combined__course_runs') }}
 )
 
+-- , mitxpro_courseruns as (
+--     select * from {{ ref('int__mitxpro__course_runs') }}
+-- )
 
 , combined_enrollments as (
     select
@@ -113,6 +120,32 @@ with mitx_enrollments as (
         on
             mitxpro_enrollments.courserun_readable_id = mitxpro_grades.courserun_readable_id
             and mitxpro_enrollments.user_username = mitxpro_grades.user_username
+
+    union all
+
+    select
+        'Emeritus' as platform
+        , null as courserunenrollment_id
+        , emeritus_enrollments.is_enrolled as courserunenrollment_is_active
+        , emeritus_enrollments.enrollment_created_on as courserunenrollment_created_on
+        , null as courserunenrollment_enrollment_mode
+        , emeritus_enrollments.enrollment_status as courserunenrollment_enrollment_status
+        , null as courserunenrollment_is_edx_enrolled
+        , null as courserun_upgrade_deadline
+        , emeritus_enrollments.user_id
+        , emeritus_enrollments.courserun_id
+        , emeritus_enrollments.courserun_title
+        , emeritus_enrollments.courserun_external_readable_id
+        --         , mitxpro_courseruns.courserun_readable_id
+        , null as user_username
+        , emeritus_enrollments.user_email
+        , emeritus_enrollments.user_full_name
+        , null as courserungrade_grade
+        , null as courserungrade_is_passing
+    from emeritus_enrollments
+    -- left join mitxpro_courseruns
+    -- on emeritus_enrollments.courserun_external_readable_id
+    -- = mitxpro_courseruns.courserun_external_readable_id
 
     union all
 

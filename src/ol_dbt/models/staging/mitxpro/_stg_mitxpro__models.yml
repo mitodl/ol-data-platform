@@ -1159,6 +1159,8 @@ models:
       course
     tests:
     - not_null
+  - name: courserun_external_readable_id
+    description: str, course run readable ID on the external platforms such as Emeritus.
   - name: courserun_is_live
     description: boolean, indicating whether the course run is available to users
       on MITxPro website

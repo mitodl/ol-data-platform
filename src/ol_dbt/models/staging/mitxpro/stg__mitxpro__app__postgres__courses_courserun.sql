@@ -8,6 +8,7 @@ with source as (
     select
         id as courserun_id
         , course_id
+        , external_course_run_id as courserun_external_readable_id
         , live as courserun_is_live
         , title as courserun_title
         , courseware_id as courserun_readable_id
