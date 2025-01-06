@@ -37,8 +37,8 @@ WORKDIR /opt/dagster/code
 RUN poetry install --without=dev --no-cache
 
 RUN cd /opt/dbt && \
-    poetry run -C /opt/dagster/code dbt deps && \
-    poetry run -C /opt/dagster/code dbt ls --target dev
+    poetry run -C /opt/dagster/code dbt deps --project-dir /opt/dbt && \
+    poetry run -C /opt/dagster/code dbt ls --project-dir /opt/dbt --profiles-dir /opt/dbt --target dev
 
 # ENTRYPOINTS
 # Dagster Daemon
