@@ -257,7 +257,7 @@ def process_edxorg_archive_bundle(
             # (TMM 2024-03-14)
             if table_name:
                 try:
-                    pl.read_csv(
+                    df = pl.read_csv(
                         archive_file,
                         has_header=True,
                         n_rows=2,
@@ -270,6 +270,9 @@ def process_edxorg_archive_bundle(
                     context.log.debug(
                         "Skipping further processing of empty CSV file %s", tinfo.name
                     )
+                    archive_file.unlink()
+                    continue
+                if df.is_empty():
                     archive_file.unlink()
                     continue
             data_version = hashlib.file_digest(
