@@ -33,7 +33,6 @@ class OpenEdxApiClient(ConfigurableResource):
         description="Token type to generate for use with authenticated requests",
     )
     token_url: str = Field(
-        default=f"{lms_url}/oauth2/access_token",
         description="URL to request token. e.g. https://lms.mitx.mit.edu/oauth2/access_token",
     )
     http_timeout: int = Field(

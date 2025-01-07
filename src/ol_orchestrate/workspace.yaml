@@ -4,6 +4,7 @@ load_from:
 - python_module: ol_orchestrate.definitions.edx.openedx_data_extract
 - python_module: ol_orchestrate.definitions.edx.retrieve_edxorg_raw_data
 - python_module: ol_orchestrate.definitions.edx.sync_program_credential_reports
+- python_module: ol_orchestrate.definitions.edx.edxorg_api_data_extract
 - python_module: ol_orchestrate.definitions.lakehouse.elt
 - python_module: ol_orchestrate.definitions.platform.notification
 - python_module: ol_orchestrate.repositories.edx_gcs_courses
