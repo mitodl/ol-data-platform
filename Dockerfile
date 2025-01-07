@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 python:3.12-slim AS dagster-base
+FROM --platform=linux/amd64 python:3.13-slim AS dagster-base
 
 # Docker run launcher example
 RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app
