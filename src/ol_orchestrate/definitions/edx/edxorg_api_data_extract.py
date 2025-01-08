@@ -29,10 +29,10 @@ def s3_uploads_bucket(
 ) -> dict[str, Any]:
     bucket_map = {
         "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
-        "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": ""},
+        "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": "edxorg-api-data"},
         "production": {
             "bucket": "ol-data-lake-landing-zone-production",
-            "prefix": "",
+            "prefix": "edxorg-api-data",
         },
     }
     return bucket_map[dagster_env]
