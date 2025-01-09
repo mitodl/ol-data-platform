@@ -110,7 +110,9 @@ class OpenEdxApiClient(ConfigurableResource):
             response.raise_for_status()
         except httpx.HTTPStatusError as error_response:
             if error_response.response.status_code == TOO_MANY_REQUESTS:
-                time.sleep(60)
+                retry_after = error_response.response.headers.get("Retry-After", 60)
+                delay = int(retry_after) if retry_after.isdigit() else 60
+                time.sleep(delay)
                 return self._fetch_with_auth(
                     request_url, page_size=page_size, extra_params=extra_params
                 )
