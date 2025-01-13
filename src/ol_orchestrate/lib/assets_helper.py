@@ -1,11 +1,20 @@
-from dagster import AssetsDefinition, PartitionsDefinition
+from functools import partial
+
+from dagster import AssetsDefinition, AssetSpec, PartitionsDefinition
+
+
+def late_bind_partition_to_spec(
+    partition_def: PartitionsDefinition, asset_spec: AssetSpec
+) -> AssetSpec:
+    return asset_spec.replace_attributes(partitions_def=partition_def)
 
 
 def late_bind_partition_to_asset(
     asset_def: AssetsDefinition, partition_def: PartitionsDefinition
 ) -> AssetsDefinition:
-    asset_def.partitions_def = partition_def
-    return asset_def
+    return asset_def.map_asset_specs(
+        partial(late_bind_partition_to_spec, partition_def)
+    )
 
 
 def add_prefix_to_asset_keys(
