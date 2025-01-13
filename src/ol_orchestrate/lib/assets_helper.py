@@ -4,7 +4,7 @@ from dagster import AssetsDefinition, PartitionsDefinition
 def late_bind_partition_to_asset(
     asset_def: AssetsDefinition, partition_def: PartitionsDefinition
 ) -> AssetsDefinition:
-    asset_def._partitions_def = partition_def  # noqa: SLF001
+    asset_def.partitions_def = partition_def
     return asset_def
 
 
