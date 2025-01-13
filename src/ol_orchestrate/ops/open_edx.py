@@ -632,7 +632,7 @@ def export_edx_courses(
     # Possible status values found here:
     # https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
     while len(successful_exports.union(failed_exports)) < len(tasks):
-        time.sleep(timedelta(seconds=5).seconds)
+        time.sleep(timedelta(seconds=60).seconds)
         for course_id, task_id in tasks.items():
             task_status = context.resources.openedx.check_course_export_status(
                 course_id,

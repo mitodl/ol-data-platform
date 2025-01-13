@@ -150,7 +150,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
     failed_exports: set[str] = set()
     tasks = exported_courses["upload_task_ids"]
     while len(successful_exports.union(failed_exports)) < len(tasks):
-        time.sleep(timedelta(seconds=5).seconds)
+        time.sleep(timedelta(seconds=20).seconds)
         for course_id, task_id in tasks.items():
             task_status = context.resources.openedx.client.check_course_export_status(
                 course_id,
