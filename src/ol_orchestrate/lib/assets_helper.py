@@ -11,15 +11,10 @@ def late_bind_partition_to_asset(
 def add_prefix_to_asset_keys(
     asset_def: AssetsDefinition, asset_key_prefix: str
 ) -> AssetsDefinition:
-    in_key_map = {
+    key_map = {
         dep_key: dep_key.with_prefix(asset_key_prefix)
         for dep_key in asset_def.dependency_keys
-    }
-    out_key_map = {
-        out_key: out_key.with_prefix(asset_key_prefix) for out_key in asset_def.keys
-    }
-
+    } | {out_key: out_key.with_prefix(asset_key_prefix) for out_key in asset_def.keys}
     return asset_def.with_attributes(
-        output_asset_key_replacements=out_key_map,
-        input_asset_key_replacements=in_key_map,
+        asset_key_replacements=key_map,
     )
