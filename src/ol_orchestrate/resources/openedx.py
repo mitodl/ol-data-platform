@@ -164,10 +164,8 @@ class OpenEdxApiClient(ConfigurableResource):
     def check_course_export_status(
         self, course_id: str, task_id: str
     ) -> dict[str, str]:
-        request_url = (
-            f"{self.studio_url}/api/courses/v0/export/{course_id}/?task_id={task_id}"
-        )
-        return self._fetch_with_auth(request_url)
+        request_url = f"{self.studio_url}/api/courses/v0/export/{course_id}/"
+        return self._fetch_with_auth(request_url, extra_params={"task_id": task_id})
 
     def get_course_structure_document(self, course_id: str):
         """Retrieve the course structure for an active course as JSON.
