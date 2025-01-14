@@ -26,10 +26,27 @@ with mitxonline_users as (
     select * from {{ ref('int__micromasters__users') }}
 )
 
+, emeritus_users as (
+    select
+        user_id
+        , user_email
+        , user_full_name
+        , user_address_country
+        , user_gender
+        , user_company
+        , user_job_title
+        , user_industry
+        , row_number() over (
+            partition by coalesce(user_id, user_email, user_full_name)
+            order by coalesce(user_gdpr_consent_date, enrollment_created_on) desc
+        ) as row_num
+    from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
+)
+
 , combined_users as (
     select
         '{{ var("mitxonline") }}' as platform
-        , user_id
+        , cast(user_id as varchar) as user_id
         , user_username
         , user_email
         , user_full_name
@@ -49,7 +66,7 @@ with mitxonline_users as (
 
     select
         '{{ var("mitxpro") }}' as platform
-        , user_id
+        , cast(user_id as varchar) as user_id
         , user_username
         , user_email
         , user_full_name
@@ -68,8 +85,29 @@ with mitxonline_users as (
     union all
 
     select
-        '{{ var("bootcamps") }}' as platform
+        '{{ var("emeritus") }}' as platform
         , user_id
+        , null as user_username
+        , user_email
+        , user_full_name
+        , user_address_country
+        , null as user_highest_education
+        , user_gender
+        , null as user_birth_year
+        , user_company
+        , user_job_title
+        , user_industry
+        , null as user_joined_on
+        , null as user_last_login
+        , null as user_is_active
+    from emeritus_users
+    where row_num = 1
+
+    union all
+
+    select
+        '{{ var("bootcamps") }}' as platform
+        , cast(user_id as varchar) as user_id
         , user_username
         , user_email
         , user_full_name
@@ -89,7 +127,7 @@ with mitxonline_users as (
 
     select
         '{{ var("edxorg") }}' as platform
-        , edxorg_users.user_id
+        , cast(edxorg_users.user_id as varchar) as user_id
         , edxorg_users.user_username
         , edxorg_users.user_email
         , edxorg_users.user_full_name
@@ -110,7 +148,7 @@ with mitxonline_users as (
 
     select
         '{{ var("residential") }}' as platform
-        , user_id
+        , cast(user_id as varchar) as user_id
         , user_username
         , user_email
         , user_full_name
@@ -128,6 +166,13 @@ with mitxonline_users as (
 )
 
 select
-    {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_hashed_id
+    case
+        when user_id is not null
+            then {{ generate_hash_id('user_id || platform') }}
+        when user_email is not null
+            then {{ generate_hash_id('user_email || platform') }}
+        else
+            {{ generate_hash_id('user_full_name || platform') }}
+    end as user_hashed_id
     , *
 from combined_users

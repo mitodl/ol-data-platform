@@ -44,9 +44,10 @@ models:
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx. If the user is on edX.org
       and MITx Online then the email will be chosen from the last platform they joined
-      if their account is active
+      if their account is active. May be null for some xPRO Emeritus learners.
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platforms != 'xPRO Emeritus'"
   - name: user_joined_on
     description: timestamp, user join timestamp on the corresponding platform including
       xpro, bootcamps, edX.org, MITx Online, and Residential MITx. If the user is
@@ -129,6 +130,7 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_mitxonline_username", "user_edxorg_username", "user_mitxpro_username",
         "user_bootcamps_username", "platforms"]
+      row_condition: "platforms != 'xPRO Emeritus'"
 
 - name: marts__combined__orders
   description: ecommerce regular b2c orders
@@ -383,9 +385,11 @@ models:
   - name: user_country_code
     description: str, country code on the platform user enrolled. May be blank.
   - name: user_email
-    description: string, user email that user registered on the corresponding platform
+    description: string, user email that user registered on the corresponding platform.
+      May be null for some xPRO Emeritus learners.
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Emeritus'"
   - name: user_full_name
     description: str, user full name on the platform user enrolled.
   - name: user_highest_education
@@ -394,17 +398,21 @@ models:
   - name: user_gender
     description: str, gender on the platform user enrolled
   - name: user_id
-    description: int, user ID on the corresponding platform
+    description: int, user ID on the corresponding platform. May be null for some
+      xPRO Emeritus learners.
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Emeritus'"
   - name: user_hashed_id
     description: str, foreign key to combined_users to identify the user
     tests:
     - not_null
   - name: user_username
-    description: string, username to identify a user on the corresponding platform
+    description: string, username to identify a user on the corresponding platform.
+      Null for all the xPRO Emeritus.
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Emeritus'"
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_hashed_id", "courserun_readable_id"]

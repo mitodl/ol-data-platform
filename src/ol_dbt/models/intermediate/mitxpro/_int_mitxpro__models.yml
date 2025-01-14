@@ -1356,6 +1356,9 @@ models:
     tests:
     - unique
     - not_null
+  - name: courserun_external_readable_id
+    description: str, course run readable ID on the external platforms such as xPRO
+      Emeritus.
   - name: courserun_url
     description: str, url location for the course run on MITxPro website
   - name: courserun_start_on
