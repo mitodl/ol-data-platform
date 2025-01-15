@@ -16,17 +16,14 @@ models:
     - accepted_values:
         values: '{{ var("platforms") }}'
   - name: user_id
-    description: int, user ID on the corresponding platform
-    tests:
-    - not_null
+    description: string, user ID from the corresponding platform. May be null for
+      some xPRO Emeritus learners.
   - name: user_username
-    description: string, username on the corresponding platform
-    tests:
-    - not_null
+    description: string, username on the corresponding platform. Null for all the
+      xPRO Emeritus learners.
   - name: user_email
-    description: string, user email on the corresponding platform
-    tests:
-    - not_null
+    description: string, user email on the corresponding platform. May be null for
+      some xPRO Emeritus learners.
   - name: user_full_name
     description: str, user full name collected on the corresponding platform
   - name: user_address_country
@@ -72,9 +69,8 @@ models:
     tests:
     - not_null
   - name: user_id
-    description: int, user ID on the corresponding platform
-    tests:
-    - not_null
+    description: int, user ID on the corresponding platform. May be null for some
+      Emeritus learners.
   - name: courserun_id
     description: int, primary key representing a single course run on the corresponding
       platform. Null for course runs from edx.org
@@ -102,13 +98,11 @@ models:
     description: str, Open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
       for MITx Online and xPro courses, {org}/{course}/{run_tag} for edX.org courses
   - name: user_username
-    description: string, username on the corresponding platform
-    tests:
-    - not_null
+    description: string, username on the corresponding platform. May be null for some
+      Emeritus learners.
   - name: user_email
-    description: string, user email on the corresponding platform
-    tests:
-    - not_null
+    description: string, user email on the corresponding platform. May be null for
+      some Emeritus learners.
   - name: user_full_name
     description: str, user full name on user's profile on the corresponding platform
   - name: courseruncertificate_is_earned
