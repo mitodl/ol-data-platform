@@ -43,10 +43,10 @@ def edxorg_program_metadata(
     total_extracted_count = 0
     for i, data in enumerate(program_data_generator):
         if i == 0:
-            count, result_batch = data # First iteration gives total count and results
+            count, result_batch = data  # First iteration gives total count and results
             context.log.info("Total programs to extract: %d programs", count)
         else:
-            result_batch = data # Subsequent iterations give only results
+            result_batch = data  # Subsequent iterations give only results
 
         batch_count = len(result_batch)
         total_extracted_count += batch_count

@@ -200,7 +200,9 @@ class OpenEdxApiClient(ConfigurableResource):
         count = response_data["count"]
         yield count, results
         while next_page:
-            response_data = self._fetch_with_auth(request_url, extra_params=parse_qs(next_page))
+            response_data = self._fetch_with_auth(
+                request_url, extra_params=parse_qs(next_page)
+            )
             next_page = response_data["next"]
             yield response_data["results"]
 
