@@ -40,7 +40,21 @@ def edxorg_program_metadata(
     edxorg_programs = []
     edxorg_program_courses = []
     data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
-    for result_batch in program_data_generator:
+    total_extracted_count = 0
+    for i, data in enumerate(program_data_generator):
+        if i == 0:
+            count, result_batch = data  # First iteration gives total count and results
+            context.log.info("Total programs to extract: %d programs", count)
+        else:
+            result_batch = data  # Subsequent iterations give only results
+
+        batch_count = len(result_batch)
+        total_extracted_count += batch_count
+        context.log.info(
+            "Extracted a batch of %d programs. Total so far: %d programs.",
+            batch_count,
+            total_extracted_count,
+        )
         for program in result_batch:
             program_uuid = program["uuid"]
             org = (
@@ -71,8 +85,10 @@ def edxorg_program_metadata(
                     }
                 )
 
-    context.log.info("Extracted %d programs....", len(edxorg_programs))
-    context.log.info("Extracted %d program courses....", len(edxorg_program_courses))
+    context.log.info("Total extracted %d programs....", len(edxorg_programs))
+    context.log.info(
+        "Total extracted %d program courses....", len(edxorg_program_courses)
+    )
 
     program_data_version = hashlib.sha256(
         json.dumps(edxorg_programs).encode("utf-8")
