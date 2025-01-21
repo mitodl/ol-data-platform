@@ -14,5 +14,5 @@ select
     , ce.deadline
     , cc.course_key as course_id
 from ce
-left join cc on ce.course_id = cc.id
+inner join cc on ce.course_id = cc.id
 order by ce.username
