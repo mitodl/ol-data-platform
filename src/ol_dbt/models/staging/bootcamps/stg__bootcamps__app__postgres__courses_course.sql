@@ -8,6 +8,7 @@ with source as (
     select
         id as course_id
         , title as course_title
+        , readable_id as course_readable_id
     from source
 )
 

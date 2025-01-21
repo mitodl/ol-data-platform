@@ -50,6 +50,7 @@ select
     , users.user_full_name
     , users.user_first_name
     , users.user_last_name
+    , users.user_birth_country
     , users.user_address_country
     , users.user_address_city
     , users.user_address_state_or_territory

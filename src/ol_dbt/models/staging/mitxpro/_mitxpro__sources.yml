@@ -1422,17 +1422,20 @@ sources:
     description: Stores the mapping of students to the courses they are enrolled in.
     columns:
     - name: course_id
-      description: string, unique ID representing a single MITx Pro course run
+      description: string, Open edX Course ID in the format course-v1:xPro+{course
+        code}+{run_tag}
     - name: mode
-      description: string, the mode in which the user took the course (eg. audit)
+      description: string, indicating what kind of enrollment this is. Possible values
+        are audit or no-id-professional
     - name: id
       description: int, the auto-incremented ID for this table
     - name: is_active
       description: boolean, whether the user has been active in a course
     - name: created
-      description: timestamp, specifying when the user first enrolled in the course
+      description: timestamp, date and time when this enrollment was initially created
+        on xPro open edx platform.
     - name: user_id
-      description: int, the foreign key to the users_user table
+      description: int, user ID on xPro open edx platform
 
   - name: raw__xpro__openedx__mysql__teams_courseteam
     description: Stores unique course teams
@@ -2220,3 +2223,97 @@ sources:
     - name: modified
       description: timestamp, datetime when this row was last updated. A change in
         this field implies that there was a state change.
+
+  - name: raw__xpro__openedx__mysql__edxval_video
+    description: video content on MIT xPro open edx platform
+    columns:
+    - name: id
+      description: int, primary key in edxval_video.
+    - name: edx_video_id
+      description: str, video hashed ID.
+    - name: client_video_id
+      description: str, human readable name for video. e.g. AMx_R3_DDV16_EBM.mp4
+    - name: status
+      description: str, values are external, imported, file_complete, and upload_failed.
+        The videos with 'external' and 'imported' status are not managed from ODL
+        Video Service (OVS) application.
+    - name: duration
+      description: int, the length of the video, in seconds. Default to 0.0
+    - name: created
+      description: timestamp, date and time when the record was created.
+
+  - name: raw__xpro__openedx__mysql__edxval_coursevideo
+    description: course ID and video association on MIT xPro edx platform
+    columns:
+    - name: id
+      description: int, primary key in edxval_coursevideo.
+    - name: course_id
+      description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: video_id
+      description: int, foreign key in edxval_video
+    - name: is_hidden
+      description: boolean, indicating if the video is hidden for the course.
+
+  - name: raw__emeritus__bigquery__api_enrollments
+    description: xPro course enrollments that are offered on the Emeritus platform
+    columns:
+    - name: batch_id
+      description: str, course run ID on the Emeritus platform, e.g. B-33210
+    - name: batch
+      description: str, course title (Batch Start Month – Batch Start Year), e.g.
+        Leading Teams (Nov-2024)
+    - name: batch_start_date
+      description: str, course run start date and time in ISO 8601 format
+    - name: batch_end_date
+      description: str, course run end date and time in ISO 8601 format
+    - name: wrike_run_code
+      description: str, course run readable ID on the Emeritus platform, e.g. MO-AIL-24-12#1
+    - name: student_id
+      description: str, user ID on the Emeritus platform
+    - name: first_name
+      description: str, user's first name
+    - name: last_name
+      description: str, user's last name
+    - name: email
+      description: str, user's email on the Emeritus platform
+    - name: gender
+      description: str, user's gender
+    - name: work_exp_slab
+      description: str, user's years experience. Options are <5 Years, 5-9 Years,
+        10-14 Years, 15-19 Years, 20+ Years, and unknown.
+    - name: company_name
+      description: str, user's company
+    - name: function
+      description: str, user's job function, e.g. Consulting, General Management
+    - name: industry
+      description: str, user's job industry
+    - name: job_title
+      description: str, user's job title
+    - name: residential_address
+      description: str, user's residential address
+    - name: residential_city
+      description: str, user's residential city
+    - name: residential_state
+      description: str, user's residential state
+    - name: residential_zip_code
+      description: str, user's residential zip code
+    - name: country
+      description: str, user's residential country
+    - name: nationality
+      description: str, user's nationality
+    - name: gdpr_agree
+      description: str, same as user's country
+    - name: gdpr_consent_date
+      description: str, date and time when the user provided consent to the GDPR
+    - name: enrollment_type
+      description: str, enrollment type, e.g. B2C, B2B
+    - name: status
+      description: str, Enrolled
+    - name: deferred
+      description: str, Indicating whether enrollment is deferred
+    - name: opportunity_created_date
+      description: str, date and time when the enrolment was created in Emeritus's
+        CRM.
+    - name: opportunity_last_modified_date
+      description: str, date and time when the enrolment was last updated in Emeritus's
+        CRM.

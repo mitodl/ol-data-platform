@@ -1,11 +1,15 @@
 import time
 from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Optional, Self
+from urllib.parse import parse_qs
 
 import httpx
-from dagster import ConfigurableResource
+from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from pydantic import Field, PrivateAttr, ValidationError, validator
+
+from ol_orchestrate.resources.secrets.vault import Vault
 
 TOO_MANY_REQUESTS = 429
 
@@ -28,14 +32,17 @@ class OpenEdxApiClient(ConfigurableResource):
         default="JWT",
         description="Token type to generate for use with authenticated requests",
     )
+    token_url: str = Field(
+        description="URL to request token. e.g. https://lms.mitx.mit.edu/oauth2/access_token",
+    )
     http_timeout: int = Field(
         default=60,
         description=(
             "Time (in seconds) to allow for requests to complete before timing out."
         ),
     )
-    _access_token: str = PrivateAttr(default=None)
-    _access_token_expires: datetime = PrivateAttr(default=None)
+    _access_token: Optional[str] = PrivateAttr(default=None)
+    _access_token_expires: Optional[datetime] = PrivateAttr(default=None)
     _http_client: httpx.Client = PrivateAttr(default=None)
 
     def __init__(self, *args, **kwargs):
@@ -54,18 +61,16 @@ class OpenEdxApiClient(ConfigurableResource):
         timeout = httpx.Timeout(self.http_timeout, connect=10)
         self._http_client = httpx.Client(timeout=timeout)
 
-    def _fetch_access_token(self) -> str:
+    def _fetch_access_token(self) -> Optional[str]:
         now = datetime.now(tz=UTC)
-        if self._access_token is None or (self._access_token_expires or now) < now:
+        if self._access_token is None or (self._access_token_expires or now) <= now:
             payload = {
                 "grant_type": "client_credentials",
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
                 "token_type": self.token_type,
             }
-            response = self._http_client.post(
-                f"{self.lms_url}/oauth2/access_token", data=payload
-            )
+            response = self._http_client.post(self.token_url, data=payload)
             response.raise_for_status()
             self._access_token = response.json()["access_token"]
             self._access_token_expires = now + timedelta(
@@ -83,20 +88,34 @@ class OpenEdxApiClient(ConfigurableResource):
         return response.json()["username"]
 
     def _fetch_with_auth(
-        self, request_url: str, page_size: int = 100
+        self,
+        request_url: str,
+        page_size: int = 100,
+        extra_params: dict[str, Any] | None = None,
     ) -> dict[Any, Any]:
+        if self.token_url == f"{self.lms_url}/oauth2/access_token":
+            request_params = {"username": self._username, "page_size": page_size}
+        else:
+            request_params = {}
+
+        request_params.update(**(extra_params or {}))
+
         response = self._http_client.get(
             request_url,
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
-            params={"username": self._username, "page_size": page_size},
+            params=httpx.QueryParams(**request_params),
         )
 
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as error_response:
             if error_response.response.status_code == TOO_MANY_REQUESTS:
-                time.sleep(60)
-                return self._fetch_with_auth(request_url, page_size)
+                retry_after = error_response.response.headers.get("Retry-After", 60)
+                delay = int(retry_after) if retry_after.isdigit() else 60
+                time.sleep(delay)
+                return self._fetch_with_auth(
+                    request_url, page_size=page_size, extra_params=extra_params
+                )
             raise
         return response.json()
 
@@ -112,12 +131,14 @@ class OpenEdxApiClient(ConfigurableResource):
             the API
         """
         request_url = f"{self.lms_url}/api/courses/v1/courses/"
-        response_data = self._fetch_with_auth(request_url, page_size)
+        response_data = self._fetch_with_auth(request_url, page_size=page_size)
         course_data = response_data["results"]
         next_page = response_data["pagination"].get("next")
         yield course_data
         while next_page:
-            response_data = self._fetch_with_auth(next_page, page_size)
+            response_data = self._fetch_with_auth(
+                request_url, page_size=page_size, extra_params=parse_qs(next_page)
+            )
             next_page = response_data["pagination"].get("next")
             yield response_data["results"]
 
@@ -143,13 +164,8 @@ class OpenEdxApiClient(ConfigurableResource):
     def check_course_export_status(
         self, course_id: str, task_id: str
     ) -> dict[str, str]:
-        response = self._http_client.get(
-            f"{self.studio_url}/api/courses/v0/export/{course_id}/?task_id={task_id}",
-            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
-            timeout=60,
-        )
-        response.raise_for_status()
-        return response.json()
+        request_url = f"{self.studio_url}/api/courses/v0/export/{course_id}/"
+        return self._fetch_with_auth(request_url, extra_params={"task_id": task_id})
 
     def get_course_structure_document(self, course_id: str):
         """Retrieve the course structure for an active course as JSON.
@@ -161,3 +177,66 @@ class OpenEdxApiClient(ConfigurableResource):
         """
         request_url = f"{self.lms_url}/api/course-structure/v0/{course_id}/"
         return self._fetch_with_auth(request_url)
+
+    def get_course_outline(self, course_id: str):
+        request_url = (
+            f"{self.lms_url}/api/learning_sequences/v1/course_outline/{course_id}"
+        )
+        return self._fetch_with_auth(request_url)
+
+    def get_edxorg_programs(self):
+        """
+        Retrieve the program metadata from the edX.org REST API by walking through
+         the paginated results
+
+        Yield: A generator for walking the paginated list of programs returned
+        from the API
+
+        """
+        request_url = "https://discovery.edx.org/api/v1/programs/"
+        response_data = self._fetch_with_auth(request_url)
+        results = response_data["results"]
+        next_page = response_data["next"]
+        count = response_data["count"]
+        yield count, results
+        while next_page:
+            response_data = self._fetch_with_auth(
+                request_url, extra_params=parse_qs(next_page)
+            )
+            next_page = response_data["next"]
+            yield response_data["results"]
+
+
+class OpenEdxApiClientFactory(ConfigurableResource):
+    deployment: str = Field(
+        description="The canonical name of the Ope edX deployment managed by "
+        "Open Learning engineering. Refer to https://github.com/mitodl/ol-infrastructure/blob/main/src/bridge/settings/openedx/types.py#L73"
+    )
+    _client: OpenEdxApiClient = PrivateAttr()
+    vault: ResourceDependency[Vault]
+
+    def _initialize_client(self) -> OpenEdxApiClient:
+        client_secrets = self.vault.client.secrets.kv.v1.read_secret(
+            mount_point="secret-data",
+            path=f"pipelines/edx/{self.deployment}/edx-oauth-client",
+        )["data"]
+
+        self._client = OpenEdxApiClient(
+            client_id=client_secrets["id"],
+            client_secret=client_secrets["secret"],
+            lms_url=client_secrets["url"],
+            studio_url=client_secrets["studio_url"],
+            token_url=client_secrets.get(
+                "token_url", f"{client_secrets['url']}/oauth2/access_token"
+            ),
+        )
+        return self._client
+
+    @property
+    def client(self) -> OpenEdxApiClient:
+        return self._client
+
+    @contextmanager
+    def yield_for_execution(self, context: InitResourceContext) -> Generator[Self]:  # noqa: ARG002
+        self._initialize_client()
+        yield self

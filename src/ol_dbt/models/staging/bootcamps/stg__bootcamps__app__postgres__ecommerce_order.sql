@@ -9,7 +9,7 @@ with source as (
         id as order_id
         , status as order_state
         , user_id as order_purchaser_user_id
-        , application_id as application_id
+        , application_id
         , payment_type as order_payment_type
         , cast(total_price_paid as decimal(38, 2)) as order_total_price_paid
         , concat('BOOTCAMP-prod-', cast(id as varchar)) as order_reference_number

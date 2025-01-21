@@ -5,6 +5,10 @@ models:
 - name: int__combined__users
   description: Intermediate model for users from different platforms
   columns:
+  - name: user_hashed_id
+    description: str, primary key for this table to identify the user
+    tests:
+    - unique
   - name: platform
     description: string, application where the data is from
     tests:
@@ -12,17 +16,16 @@ models:
     - accepted_values:
         values: '{{ var("platforms") }}'
   - name: user_id
-    description: int, user ID on the corresponding platform
-    tests:
-    - not_null
+    description: string, user ID from the corresponding platform. May be null for
+      some xPRO Emeritus learners.
   - name: user_username
-    description: string, username on the corresponding platform
-    tests:
-    - not_null
+    description: string, username on the corresponding platform. Null for all the
+      xPRO Emeritus learners.
   - name: user_email
-    description: string, user email on the corresponding platform
-    tests:
-    - not_null
+    description: string, user email on the corresponding platform. May be null for
+      some xPRO Emeritus learners.
+  - name: user_full_name
+    description: str, user full name collected on the corresponding platform
   - name: user_address_country
     description: str, country code provided by the user on the corresponding platform
   - name: user_highest_education
@@ -42,6 +45,11 @@ models:
     description: timestamp, user join timestamp
   - name: user_last_login
     description: timestamp, user last login
+  - name: user_is_active
+    description: boolean, indicating if user's account is active on xPro, Bootcamps,
+      edX.org, or MITx Online. Note that we do export compliance checks for all users
+      in xPro and Bootcamps, so users didn't pass export compliance will remain user_is_active=false
+      in xPro and Bootcamps. That doesn't apply for edx.org and MITx Online.
 
 - name: int__combined__courserun_enrollments
   description: Intermediate model for user course enrollments from different platforms
@@ -52,15 +60,17 @@ models:
     - not_null
     - accepted_values:
         values: '{{ var("platforms") }}'
+  - name: courserunenrollment_id
+    description: int, enrollment ID on the corresponding platform. Null for enrollments
+      from edX.org for now
   - name: courserunenrollment_is_active
     description: boolean, indicating whether enrollment is active on the corresponding
       platform
     tests:
     - not_null
   - name: user_id
-    description: int, user ID on the corresponding platform
-    tests:
-    - not_null
+    description: int, user ID on the corresponding platform. May be null for some
+      Emeritus learners.
   - name: courserun_id
     description: int, primary key representing a single course run on the corresponding
       platform. Null for course runs from edx.org
@@ -74,27 +84,51 @@ models:
   - name: courserunenrollment_enrollment_status
     description: string, enrollment status for users whose enrollment changed on the
       corresponding platform
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, indicating whether the user is enrolled on edX platform.
+      For edx.org course enrollment, it would always be true. Null for Bootcamps as
+      it doesn't apply.
+  - name: courserun_upgrade_deadline
+    description: timestamp, specifying the date time beyond which users can not enroll
+      in paid course mode
   - name: courserun_title
     description: string, title of the course run on the corresponding platform. Maybe
       blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
   - name: courserun_readable_id
-    description: str, unique string to identify a course run on the corresponding
-      platform
+    description: str, Open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITx Online and xPro courses, {org}/{course}/{run_tag} for edX.org courses
   - name: user_username
-    description: string, username on the corresponding platform
-    tests:
-    - not_null
+    description: string, username on the corresponding platform. May be null for some
+      Emeritus learners.
   - name: user_email
-    description: string, user email on the corresponding platform
-    tests:
-    - not_null
+    description: string, user email on the corresponding platform. May be null for
+      some Emeritus learners.
   - name: user_full_name
     description: str, user full name on user's profile on the corresponding platform
-  - name: user_has_certificate
-    description: boolean, indicating if user has earned certificate for enrolled course-run
-      on the corresponding platform.
+  - name: courseruncertificate_is_earned
+    description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
+      micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
     tests:
     - not_null
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on the corresponding platform
+  - name: courseruncertificate_url
+    description: str, URL to the course certificate for users who earned the certificate
+      on mitxonline.mit.edu, micromasters.mit.edu (legacy), edX.org or xpro.mit.edu.
+      It doesn't include the revoked certificates.
+  - name: courserungrade_grade
+    description: float, course grade on edX.org or MITxOnline or xPro range from 0
+      to 1. Null for bootcamps
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on the corresponding platform. Null for bootcamps
+  - name: course_title
+    description: str, title of the course. May be null for some edX.org and Residential
+      courses.
+  - name: course_readable_id
+    description: str, open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online and xPro courses, and {org}/{course} for edX.org courses. May be null
+      for some Bootcamps courses.
 
 - name: int__combined__courserun_certificates
   description: course certificates model combined from different platforms. It excludes
@@ -110,8 +144,8 @@ models:
     description: string, title of the course run on the corresponding platform. Maybe
       blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
   - name: courserun_readable_id
-    description: str, unique string to identify a course run on the corresponding
-      platform
+    description: str, Open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITx Online and xPro courses, {org}/{course}/{run_tag} for edX.org courses
     tests:
     - not_null
   - name: user_username
@@ -124,6 +158,10 @@ models:
     description: str, user full name on user's profile on the corresponding platform
   - name: courseruncertificate_url
     description: str, the full URL to the certificate on the corresponding platform
+    tests:
+    - not_null
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on the corresponding platform
     tests:
     - not_null
   - name: courseruncertificate_created_on
@@ -145,17 +183,15 @@ models:
     - not_null
   - name: courserun_readable_id
     description: str, the open edX Course ID formatted as course-v1:{org}+{course
-      number}+{run_tag}
+      number}+{run_tag} for MITx Online, xPro and Residential MITx. For edx.org platform,
+      it is formatted as {org}/{course number}/{run_tag} so it can be used to match
+      with other edx.org datasets.
     tests:
     - not_null
   - name: user_username
     description: str, unique username on the open edX platform
-    tests:
-    - not_null
   - name: user_email
     description: str, user's email on the open edX platform
-    tests:
-    - not_null
   - name: user_full_name
     description: str, full name from user's profile on MITx Online or xPro application.
       For Residential, this is from the open edX users table.
@@ -167,6 +203,175 @@ models:
       and data_researcher on the open edX platform.
     tests:
     - not_null
+  - name: hashed_user_email
+    description: str, user_email hashed in sha256 by generate_hash_id.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "courseaccess_role"]
+      column_list: ["platform", "hashed_user_email", "courserun_readable_id", "courseaccess_role"]
+
+- name: int__combined__course_runs
+  description: Intermediate combined model for courses and runs from different platforms
+  columns:
+  - name: platform
+    description: string, application where the data is from
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
+  - name: courserun_readable_id
+    description: str, unique string to identify a course run on the corresponding
+      platform. Maybe null for Bootcamps runs.
+    tests:
+    - unique
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'Bootcamps'"
+  - name: courserun_url
+    description: str, url for the course run in MITx Online, xPro or edX.org. Null
+      for Bootcamps.
+  - name: course_readable_id
+    description: int, readable ID to identify a course on the corresponding platform.
+      May be null for Bootcamps.
+  - name: courserun_title
+    description: str, title of the course run on the corresponding platform. May be
+      null for small amounts of courses from edX.org
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'edX.org'"
+  - name: courserun_start_on
+    description: timestamp, specifying when the course run begins. May be Null.
+  - name: courserun_end_on
+    description: timestamp, specifying when the course run ends. May be Null.
+  - name: courserun_upgrade_deadline
+    description: timestamp, date and time beyond which the learner can not enroll
+      in paid course mode. Only populated for MITx Online and MicroMasters course
+      runs.
+  - name: courserun_is_live
+    description: boolean, indicating whether the course run is available to users
+      on MITx Online and xPro. Null for Bootcamps and edx.org.
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+    tests:
+    - not_null
+
+- name: int__combined__course_structure
+  description: this table contains the latest course structure of the courses from
+    MITx Online ,xPro, edX.org and Residential MITx.
+  columns:
+  - name: platform
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline and xPro courses, {org}/{course}/{run_tag} for
+      edX.org courses
+    tests:
+    - not_null
+  - name: coursestructure_block_id
+    description: str, Unique ID for a distinct piece of content in a course, formatted
+      as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+    tests:
+    - not_null
+  - name: coursestructure_parent_block_id
+    description: str, parent block ID, same format as block_id
+  - name: coursestructure_block_index
+    description: int, sequence number giving order in which this block content appears
+      within the course
+    tests:
+    - not_null
+  - name: coursestructure_block_category
+    description: str, category/type of the block, it identifies core structural elements
+      of a course. Value includes but not limited to course, chapter, sequential,
+      vertical, discussion, html, problem, video, etc.
+    tests:
+    - not_null
+  - name: coursestructure_block_title
+    description: str, title of the block extracted from the metadata of the block.
+      This field comes from name field for the section, subsection, or unit on the
+      Studio 'Course Outline' page.
+  - name: coursestructure_block_metadata
+    description: str, json string of the metadata field for the block. It provides
+      additional information about this block, different block type may have different
+      member fields inside metadata.
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course extracted from the metadata of 'course'
+      block
+  - name: coursestructure_retrieved_at
+    description: timestamp, indicating when this course structure was initially retrieved
+      from S3
+    tests:
+    - not_null
+  - name: coursestructure_chapter_id
+    description: str, block id of chapter within which this child block belongs to.
+      Null for the 'course' block as it's the top block that doesn't belong to any
+      chapter.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "coursestructure_block_category != 'course'"
+  - name: coursestructure_chapter_title
+    description: str, title of chapter within which this child block belongs to.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "courserun_readable_id", "coursestructure_block_index"]
+
+- name: int__combined__course_videos
+  description: this table contains video structure and metadata for MITx Online, xPro
+    , edX.org and Residential MITx courses.
+  columns:
+  - name: platform
+    description: open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline and xPro courses, {org}/{course}/{run_tag} for
+      edX.org courses.
+    tests:
+    - not_null
+  - name: video_id
+    description: str, hash code for the video. This value is the last part of video_block_id
+      string.
+    tests:
+    - not_null
+  - name: video_edx_id
+    description: str, the video ID on the open edx platform. edx_video_id extracted
+      from the video metadata.
+  - name: video_block_id
+    description: str, Unique ID for the video, formatted as block-v1:{org}+{course}+{run}type@{block
+      type}+block@{hash code}
+    tests:
+    - not_null
+  - name: video_parent_block_id
+    description: str, parent block ID, same format as block_id.
+  - name: video_index
+    description: int, sequence number giving order in which the video appears within
+      the course
+    tests:
+    - not_null
+  - name: video_title
+    description: str, title of the video extracted from the metadata of the block.
+      This field comes from name field for the section, subsection, or unit on the
+      Studio 'Course Outline' page.
+  - name: video_metadata
+    description: str, json string of the video metadata, e.g., display_name, edx_video_id
+    tests:
+    - not_null
+  - name: chapter_id
+    description: str, block id of chapter within which this video belongs to.
+    tests:
+    - not_null
+  - name: chapter_title
+    description: str, title of chapter this video belongs to.
+  - name: video_duration
+    description: float, the length of the video, in seconds. May be 0.0.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "courserun_readable_id", "video_index"]

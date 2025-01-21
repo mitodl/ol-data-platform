@@ -60,6 +60,7 @@ select
     , profiles.user_full_name
     , profiles.user_first_name
     , profiles.user_last_name
+    , profiles.user_birth_country
     , profiles.user_address_country
     , profiles.user_address_city
     , profiles.user_address_state_or_territory

@@ -1,0 +1,41 @@
+---
+version: 2
+
+seeds:
+- name: user_course_roles
+  description: user access roles seed file used for row level access filters on Superset
+  columns:
+  - name: hashed_user_email
+    description: str, user_email hashed in sha256 by generate_hash_id.
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITx Online courses, {org}/{course}/{run_tag} for edX.org courses.
+  - name: courseaccess_role
+    description: str, instructor or staff
+  - name: organization
+    description: str, organization that lists the course. e.g. MITx, MITxT
+  - name: platform
+    description: str, MITx Online or edX.org
+
+- name: platforms
+  description: Platform information about the technical system that a given event
+    is executed within the context of.
+  columns:
+  - name: id
+    description: string, unique identifier for the platform, e.g., mitxonline
+    tests:
+    - not_null
+    - unique
+  - name: platform_name
+    description: string, name of the platform
+    tests:
+    - not_null
+    - unique
+  - name: platform_description
+    description: string, description of the platform
+    tests:
+    - not_null
+  - name: platform_domain
+    description: string, domain name of the platform, e.g. mitxonline.mit.edu
+    tests:
+    - not_null

@@ -5,7 +5,7 @@ with source as (
 , cleaned as (
     select
         id as user_profile_id
-        , name as user_full_name
+        , replace(replace(replace(name, ' ', '<>'), '><', ''), '<>', ' ') as user_full_name
         , birth_year as user_birth_year
         , company as user_company
         , job_title as user_job_title

@@ -29,25 +29,31 @@ vars:
   schema_suffix: dev
 
   open_learning:
-    platforms: ['Bootcamps', 'xPro', 'MITx Online', 'MicroMasters', 'edX.org']
+    platforms: ['Bootcamps', 'xPro', 'xPRO Emeritus', 'MITx Online', 'MicroMasters',
+      'edX.org', 'Residential MITx']
     bootcamps: 'Bootcamps'
     edxorg: 'edX.org'
     mitxpro: 'xPro'
     micromasters: 'MicroMasters'
     mitxonline: 'MITx Online'
     residential: 'Residential MITx'
+    emeritus: 'xPRO Emeritus'
     dedp_micromasters_program_id: 2
     dedp_mitxonline_international_development_program_id: 1
     dedp_mitxonline_public_policy_program_id: 2
     dedp_mitxonline_good_economics_for_hard_times_course_number: '14.009x'
     dedp_mitxonline_good_economics_for_hard_times_internation_development_cutoff: '2023-08-01'
+    ocw_production_url: 'https://ocw.mit.edu/'
+    mitxonline_openedx_url: 'https://courses.mitxonline.mit.edu'
+    mitxpro_openedx_url: 'https://courses.xpro.mit.edu'
 
     highest_education_values: ['Doctorate', "Master''s or professional degree", "Bachelor''s\
         \ degree", 'Associate degree', 'Secondary/high school', 'Junior secondary/junior
         high/middle school', 'Elementary/primary school', 'No formal education', 'Other
-        education', '']
+        education', "Doctorate in science or engineering", "Doctorate in another field",
+      '']
     gender_values: ['Male', 'Female', 'Transgender', 'Non-binary/non-conforming',
-      'Other/Prefer Not to Say', '']
+      'Binary', 'Other/Prefer Not to Say', '']
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
@@ -70,20 +76,25 @@ models:
       +materialized: table
       +schema: staging
       +grants:
-        select: ['read_only_production']
+        select: ['read_only_production', 'reverse_etl']
     intermediate:
       +materialized: table
       +schema: intermediate
       +grants:
-        select: ['read_only_production', 'business_intelligence']
+        select: ['read_only_production', 'business_intelligence', 'reverse_etl']
     marts:
       +materialized: table
       +schema: mart
       +grants:
+        select: ['read_only_production', 'business_intelligence', 'reverse_etl', 'finance']
+    reporting:
+      +materialized: table
+      +schema: reporting
+      +grants:
         select: ['read_only_production', 'business_intelligence', 'reverse_etl']
     external:
       +materialized: table
-      +schema: mart
+      +schema: external
       +grants:
         select: ['read_only_production', 'business_intelligence', 'reverse_etl', 'mit_irx']
     sample:

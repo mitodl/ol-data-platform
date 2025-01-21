@@ -1,7 +1,11 @@
-import datetime
 import hashlib
 import json
-from typing import Any, Optional
+import tarfile
+from datetime import UTC, datetime
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+from typing import IO, Any, Optional
+from xml.etree.ElementTree import ElementTree
 
 
 def generate_block_indexes(
@@ -43,7 +47,7 @@ def un_nest_course_structure(
     root_block = ""
     course_title = None
     course_start = None
-    retrieved_at = retrieval_time or datetime.datetime.now(tz=datetime.UTC).isoformat()
+    retrieved_at = retrieval_time or datetime.now(tz=UTC).isoformat()
     course_blocks = []
     content_hash = hashlib.sha256(
         json.dumps(course_structure).encode("utf-8")
@@ -83,3 +87,152 @@ def un_nest_course_structure(
             }
         )
     return course_blocks
+
+
+def process_video_xml(archive_path: Path) -> list[dict[str, str]]:
+    video_block_details = []
+    with tarfile.open(archive_path, "r") as tf:
+        # get course info from the course xml file in the root directory
+        archive_root = tf.next()
+        if archive_root is None:
+            msg = "Unable to retrieve the archive root of the course XML."
+            raise ValueError(msg)
+        tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
+        course_xml_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_course.xml").name
+        )
+        course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
+        course_id, course_number, run_tag, org = parse_course_id(str(course_xml_file))
+        course_xml_file.unlink()
+        for member in tf.getmembers():
+            if not member.isdir() and member.path.startswith(
+                f"{archive_root.name}/video/"
+            ):
+                xml_data = tf.extractfile(member)
+                if not xml_data:
+                    continue
+                video_data = parse_video_xml(xml_data)
+                video_data["course_id"] = course_id
+                video_block_details.append(video_data)
+    return video_block_details
+
+
+def parse_course_id(course_xml: str | Path) -> tuple[str, str, str, str]:
+    """
+    Parse the attributes of the course.xml file in the root directory
+    and generate a properly formatted course_id string.
+
+    :param course_xml: The file path to course.xml file
+
+    :return: A list containing the formatted course_id string, course_number,
+     and the course run_tag
+    :rtype: tuple[str, str, str]
+    """
+    with Path(course_xml).open("r") as course:
+        tree = ElementTree()
+        tree.parse(course)
+        course_root = tree.getroot()
+        run_tag = str(course_root.attrib.get("url_name", None))
+        org = str(course_root.attrib.get("org", None))
+        course_number = str(course_root.attrib.get("course", None))
+    return f"course-v1:{org}+{course_number}+{run_tag}", course_number, run_tag, org
+
+
+def parse_video_xml(video_file: IO[bytes]) -> dict[str, Any]:
+    tree = ElementTree()
+    tree.parse(video_file)
+    video_root = tree.getroot()
+    video_block_id = video_root.attrib.get("url_name", None)
+    edx_video_id = video_root.attrib.get("edx_video_id", None)
+    video_asset = video_root.find("video_asset", None)
+    duration = video_asset.attrib.get("duration", None) if video_asset else "0.0"
+
+    return {
+        "video_block_id": video_block_id,
+        "edx_video_id": edx_video_id,
+        "duration": duration,
+    }
+
+
+def write_video_json_file(video_data: dict[str, Any], video_data_file: Path):
+    with Path(video_data_file).open("w") as video_file:
+        video_file.write(json.dumps(video_data))
+        video_file.write("\n")
+
+
+def process_course_xml(archive_path: Path) -> dict[str, Any]:
+    """
+    Pull course metadata out of course xml files for edx.org courses
+    (edx.org dumps). Process the course bundle by
+    getting the course_id, finding the metadata file path, calling the
+    function to parse the XML, and then return a dictionary with the metadata elements.
+
+    :param archive_path: The path to the tar archive for the course bundle
+
+    :return: A dictionary with the parsed course metadata.
+    :rtype: Dict[str, Any]
+    """
+    with tarfile.open(archive_path, "r") as tf:
+        # get course info from the course xml file in the root directory
+        archive_root = tf.next()
+        if archive_root is None:
+            msg = "Unable to retrieve the archive root of the course XML."
+            raise ValueError(msg)
+        tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
+        course_xml_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_course.xml").name
+        )
+        course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
+        course_id, course_number, run_tag, org = parse_course_id(str(course_xml_file))
+        # use the run_tag to find the course metadata file
+        tar_info_metadata = tf.getmember(f"{archive_root.name}/course/{run_tag}.xml")
+        course_metadata_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_metadata.xml").name
+        )
+        course_metadata_file.write_bytes(tf.extractfile(tar_info_metadata).read())  # type: ignore[union-attr]
+        course_metadata = parse_course_xml(str(course_metadata_file))
+        # add courserun data from the parse_course_id output
+        course_metadata["course_id"] = course_id
+        course_metadata["course_number"] = course_number
+        # courserun_semester is run_tag
+        course_metadata["semester"] = run_tag
+        course_metadata["institution"] = org
+        course_xml_file.unlink()
+        course_metadata_file.unlink()
+    return course_metadata
+
+
+def parse_course_xml(metadata_file: str) -> dict[str, Any]:
+    """
+    Parse the attributes of the metadata XML file in the 'course/course' directory and
+    generate a dictionary with all the course metadata attributes.
+
+    :param metadata_file: The file path to metadata XML file. References the run_tag
+    from the parse_course_id function ('course/course/{run_tag}.xml').
+
+    :return: A dictionary with all of the course metadata attributes
+    :rtype: dict[str, Any]
+    """
+    with Path(metadata_file).open("r") as metadata:
+        tree = ElementTree()
+        tree.parse(metadata)
+        metadata_root = tree.getroot()
+    enrollment_start = metadata_root.attrib.get("enrollment_start")
+    enrollment_end = metadata_root.attrib.get("enrollment_end")
+    # Default value as defined in edx-platform code
+    # https://github.com/openedx/edx-platform/blob/master/xmodule/course_metadata_utils.py#L17
+    start = metadata_root.attrib.get("start")
+    end = metadata_root.attrib.get("end")
+    # default to empty list
+    instructor_info = metadata_root.attrib.get("instructor_info")
+    self_paced = bool(metadata_root.attrib.get("self_paced", False))
+    title = metadata_root.attrib.get("display_name")
+    return {
+        "enrollment_start": enrollment_start,
+        "enrollment_end": enrollment_end,
+        "course_start": start,
+        "course_end": end,
+        "instructor_info": instructor_info,
+        "self_paced": self_paced,
+        "title": title,
+    }

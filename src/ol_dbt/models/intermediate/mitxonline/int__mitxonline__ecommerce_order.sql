@@ -11,10 +11,10 @@ with lines as (
     from {{ ref('stg__mitxonline__app__postgres__reversion_version') }}
     where
         contenttype_id in (
-            select contenttype_id
+            select contenttypes.contenttype_id
             from
                 contenttypes
-            where contenttype_full_name = 'ecommerce_product'
+            where contenttypes.contenttype_full_name = 'ecommerce_product'
         )
 )
 
@@ -52,7 +52,7 @@ with lines as (
     select
         *
         , row_number() over (partition by order_id order by transaction_created_on desc) as row_num
-    from {{ ref('stg__mitxonline__app__postgres__ecommerce_transaction') }}
+    from {{ ref('int__mitxonline__ecommerce_transaction') }}
     where transaction_type = 'payment'
 )
 
@@ -79,13 +79,17 @@ select
     , discounts.discount_redemption_type
     , discounts.discount_code
     , discounts.discount_amount_text
-    , discountredemptions.discountredemption_timestamp
+    , payments.transaction_id
     , payments.transaction_authorization_code as payment_authorization_code
     , payments.transaction_payment_method as payment_method
     , payments.transaction_readable_identifier as payment_transaction_id
     , payments.transaction_reference_number as payment_req_reference_number
     , payments.transaction_bill_to_address_state as payment_bill_to_address_state
     , payments.transaction_bill_to_address_country as payment_bill_to_address_country
+    , case
+        when orders.order_state in ('fulfilled', 'refunded')
+            then discountredemptions.discountredemption_timestamp
+    end as discountredemption_timestamp
     , case
         when discounts.discount_type = 'percent-off'
             then cast(intermediate_products_view.product_price * (discounts.discount_amount / 100) as decimal(38, 2))

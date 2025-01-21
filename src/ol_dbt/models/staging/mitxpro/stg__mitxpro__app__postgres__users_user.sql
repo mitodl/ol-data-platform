@@ -10,7 +10,7 @@ with source as (
         , username as user_username
         , email as user_email
         , is_active as user_is_active
-        , name as user_full_name
+        , replace(replace(replace(name, ' ', '<>'), '><', ''), '<>', ' ') as user_full_name
         ,{{ cast_timestamp_to_iso8601('created_on') }} as user_joined_on
         ,{{ cast_timestamp_to_iso8601('last_login') }} as user_last_login
     from source

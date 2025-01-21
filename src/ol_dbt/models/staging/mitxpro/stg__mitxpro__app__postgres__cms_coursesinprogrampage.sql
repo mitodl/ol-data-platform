@@ -7,8 +7,8 @@ with source as (
         page_ptr_id as wagtail_page_id
         , heading as cms_coursesinprogrampage_heading
         , body as cms_coursesinprogrampage_body
-        ,  cast(json_parse(json_query(contents, 'lax $[*].value'  with array wrapper)) as array(integer)) --noqa
-            as cms_coursesinprogrampage_coursepage_wagtail_page_ids
+        , cast(json_parse(json_query(contents, 'lax $[*].value' with array wrapper)) as array(integer)) --noqa
+        as cms_coursesinprogrampage_coursepage_wagtail_page_ids
     from source
 )
 

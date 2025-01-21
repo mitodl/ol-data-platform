@@ -131,6 +131,10 @@ sources:
     - name: legacy
       description: boolean, used to distinguish the older bootcamp courses from the
         newer ones
+    - name: readable_id
+      description: str, readable ID formatted as bootcamp-v1:{type}+{topic}-{format}.
+        type is either 'public' or 'private', format is either ol (online) or f2f
+        (face to face).
 
   - name: raw__bootcamps__app__postgres__klasses_bootcamprun
     columns:
@@ -294,3 +298,122 @@ sources:
       description: timestamp, specifying when a certificate was most recently updated
     - name: is_revoked
       description: boolean, indicating whether the certificate is revoked and invalid
+
+  - name: raw__bootcamps__app__postgres__django_content_type
+    columns:
+    - name: id
+      description: int, sequential ID for the django model
+    - name: model
+      description: str, the name of the django model
+    - name: app_label
+      description: str, the  functional group the model belongs to
+
+  - name: raw__bootcamps__app__postgres__applications_bootcampapplication
+    columns:
+    - name: id
+      description: int, primary key representing a single bootcamp application
+    - name: bootcamp_run_id
+      description: int, foreign key to klasses_bootcamprun representing a single bootcamp
+        course run
+    - name: user_id
+      description: str, foreign key to auth_user representing a single user
+    - name: state
+      description: str, current state of the bootcamp application. Possible values
+        are awaiting_profile_completion, awaiting_resume, awaiting_user_submissions,
+        awaiting_submission_review, awaiting_payment, complete, rejected, refunded
+    - name: linkedin_url
+      description: str, linkedIn profile url for the user in a bootcamp application
+    - name: resume_file
+      description: str, the resume file path for the user in a bootcamp application
+    - name: resume_upload_date
+      description: timestamp, specifying when the resume was uploaded to our system
+    - name: created_on
+      description: timestamp, specifying when the application was initially created
+    - name: updated_on
+      description: timestamp, specifying when the application was most recently updated
+
+  - name: raw__bootcamps__app__postgres__applications_applicationstep
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: bootcamp_id
+      description: int, foreign key to klasses_bootcamp representing a single bootcamp
+        course
+    - name: submission_type
+      description: str, indicating the state of the submitted item for review in a
+        bootcamp application. Possible values are videointerviewsubmission and quizsubmission,
+        but only videointerviewsubmission is currently used.
+    - name: step_order
+      description: int, indicating the stage in a bootcamp application for which users
+        must submit something for review
+
+  - name: raw__bootcamps__app__postgres__applications_bootcamprunapplicationstep
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: bootcamp_run_id
+      description: int, foreign key to klasses_bootcamprun representing a single bootcamp
+        course run
+    - name: application_step_id
+      description: int, foreign key to applicationstep representing a single application
+        step
+    - name: due_date
+      description: timestamp, the due date of this application step for a bootcamp
+        run
+
+  - name: raw__bootcamps__app__postgres__applications_applicationstepsubmission
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: bootcamp_application_id
+      description: int, foreign key to bootcampapplication
+    - name: content_type_id
+      description: int, foreign key to django_content_type. It's either videointerviewsubmission
+        or quizsubmission django model
+    - name: object_id
+      description: int, foreign key to applications_videointerviewsubmission or applications_quizsubmission
+        tables
+    - name: run_application_step_id
+      description: int, foreign key to applications_bootcamprunapplicationstep table
+    - name: review_status
+      description: str, review state for the bootcamp application. Possible values
+        are pending, approved, rejected and waitlisted.
+    - name: submission_status
+      description: str, submission state for the bootcamp application. Possible values
+        are pending and submitted
+    - name: submitted_date
+      description: timestamp, specifying when submitted_status was updated
+    - name: review_status_date
+      description: timestamp, specifying when review_status was updated
+    - name: created_on
+      description: timestamp, specifying when the row was initially created
+    - name: updated_on
+      description: timestamp, specifying when the row was most recently updated
+
+  - name: raw__bootcamps__app__postgres__klasses_personalprice
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: bootcamp_run_id
+      description: int, foreign key to klasses_bootcamprun representing a single bootcamp
+        course run
+    - name: user_id
+      description: str, foreign key to auth_user representing a single user
+    - name: price
+      description: float, user's personal price for this bootcamp run
+    - name: application_stage
+      description: str, this was used to track the application from SMApply, now it's
+        is blank as application is managed in the bootcamps app. The state from bootcampapplication
+        is more correct then this field.
+
+  - name: raw__bootcamps__app__postgres__klasses_installment
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: bootcamp_run_id
+      description: int, foreign key to klasses_bootcamprun representing a single bootcamp
+        course run
+    - name: deadline
+      description: timestamp, specifying when the installment payment was due
+    - name: amount
+      description: float, installment payment amount

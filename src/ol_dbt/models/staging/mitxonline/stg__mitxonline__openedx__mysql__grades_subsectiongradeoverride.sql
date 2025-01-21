@@ -4,6 +4,8 @@ with source as (
    }}
 )
 
+{{ deduplicate_query('source', 'most_recent_source') }}
+
 , cleaned as (
 
     select
@@ -17,7 +19,7 @@ with source as (
         , system as subsectiongradeoverride_system
         , to_iso8601(from_iso8601_timestamp_nanos(created)) as subsectiongradeoverride_created_on
         , to_iso8601(from_iso8601_timestamp_nanos(modified)) as subsectiongradeoverride_updated_on
-    from source
+    from most_recent_source
 )
 
 select * from cleaned

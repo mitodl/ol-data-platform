@@ -24,6 +24,7 @@ select
     , mitx_enrollments.courserunenrollment_is_active
     , mitx_enrollments.courserun_title
     , mitx_enrollments.courserunenrollment_enrollment_mode
+    , programs.is_dedp_program as program_is_dedp
 from mitx_enrollments
 inner join programs
     on

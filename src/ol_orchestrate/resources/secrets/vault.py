@@ -1,11 +1,9 @@
 import os
-from collections.abc import Generator
 from typing import Optional
 
 import boto3
 import hvac
-from dagster import ConfigurableResource, InitResourceContext
-from dagster._config.pythonic_config.conversion_utils import TResValue
+from dagster import ConfigurableResource
 from pydantic import PrivateAttr
 
 
@@ -38,12 +36,6 @@ class Vault(ConfigurableResource):
             use_token=True,
             mount_point=self.auth_mount or "github",
         )
-
-    def yield_for_execution(
-        self,
-        context: InitResourceContext,  # noqa: ARG002
-    ) -> Generator[TResValue, None, None]:
-        return self._client
 
     @property
     def client(self) -> hvac.Client:

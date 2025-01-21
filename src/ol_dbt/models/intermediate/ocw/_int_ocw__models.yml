@@ -1,0 +1,257 @@
+---
+version: 2
+
+models:
+- name: int__ocw__courses
+  description: OCW courses metadata on production environment
+  columns:
+  - name: course_uuid
+    description: str, unique identifier for the OCW course
+    tests:
+    - not_null
+    - unique
+  - name: course_name
+    description: str, unique name of the OCW course. It appears as part of OCW Studio
+      urls
+    tests:
+    - not_null
+    - unique
+  - name: course_readable_id
+    description: str, short unique identifier for the OCW course. e.g. 18.05-spring-2022
+      The source of this field is short ID of the website.
+    tests:
+    - not_null
+    - unique
+  - name: course_title
+    description: str, title of the OCW course
+    tests:
+    - not_null
+  - name: course_source
+    description: str, indicating which courses were imported and which ones were authored
+      in the app. Possible values are 'studio', 'ocw-import', or blank
+  - name: course_url_path
+    description: str, unique URL relative path to the OCW course website. e.g., courses/my-site-fall-2020.
+      For draft courses, it can be used to preview on https://draft.ocw.mit.edu/
+  - name: course_live_url
+    description: str, URL of the OCW course on production.
+  - name: course_is_live
+    description: boolean, indicating if the course website is currently published
+      on OCW production.
+    tests:
+    - not_null
+  - name: course_is_unpublished
+    description: boolean, indicating if the course website is currently unpublished
+      on OCW production.
+    tests:
+    - not_null
+  - name: course_has_never_published
+    description: boolean, indicating if the course website has never been published
+      on OCW production.
+    tests:
+    - not_null
+  - name: course_first_published_on
+    description: timestamp, date and time when the course website was first published
+      to OCW production
+  - name: course_publish_date_updated_on
+    description: timestamp, date and time when the publish date was most recently
+      updated on OCW production. The publish date is updated by the webhook to Concourse
+      pipeline (it rebuilds every site) whenever we do a release in ocw repos.
+  - name: course_created_on
+    description: timestamp, date and time when the course record was created
+    tests:
+    - not_null
+  - name: course_updated_on
+    description: timestamp, date and time when the course record was last updated
+    tests:
+    - not_null
+  - name: course_description
+    description: str, course description on OCW website
+  - name: course_term
+    description: str, course term. Possible values are Spring, Summer, Fall, January
+      IAP, or blank
+  - name: course_year
+    description: int, course year
+  - name: course_level
+    description: str, course level in comma-separated list. Possible values are Undergraduate
+      , Graduate, Non-Credit, High School, or blank
+  - name: course_primary_course_number
+    description: str, the primary course number e.g. 21A.850J
+    tests:
+    - not_null
+  - name: course_extra_course_numbers
+    description: str, the extra course number e.g. STS.484J
+  - name: course_department_numbers
+    description: str, course department numbers in comma-separate list. e.g. STS,
+      8.. The department name is available in int__ocw__course_departments.
+  - name: course_topics
+    description: json, hierarchical course topics (topic, subtopic, speciality) in
+      json format. The unnested version of this data is available in int__ocw__course_topics.
+      e.g. [["Mathematics","Discrete Mathematics"],["Mathematics","Probability and
+      Statistics"]]
+  - name: course_learning_resource_types
+    description: str, course learning resource types or features in comma-separated
+      list. e.g. Lecture Notes, Problem Sets with Solutions,... Full list https://github.com/mitodl/ocw-hugo-projects/blob/049c85e6544a36ba69a89602e5014f6085ef8831/
+      ocw-course-v2/ocw-studio.yaml#L163-L207
+
+- name: int__ocw__course_topics
+  description: supporting table containing tabular course topic data for OCW courses
+  columns:
+  - name: course_uuid
+    description: str, foreign key to ocw_courses
+    tests:
+    - not_null
+  - name: course_topic
+    description: str, course topic name e.g. Fine Arts
+    tests:
+    - not_null
+  - name: course_subtopic
+    description: str, course subtopic e.g. Architecture
+  - name: course_speciality
+    description: str, course_speciality. e.g. Architectural Engineering
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_uuid", "course_topic", "course_subtopic", "course_speciality"]
+
+- name: int__ocw__course_instructors
+  description: supporting table containing tabular instructor profile data for OCW
+    courses
+  columns:
+  - name: course_instructor_uuid
+    description: str, uuid string to identify the instructor
+    tests:
+    - not_null
+  - name: course_uuid
+    description: str, foreign key to ocw_courses
+    tests:
+    - not_null
+  - name: course_instructor_title
+    description: str, instructor title on the OCW website
+    tests:
+    - not_null
+  - name: course_instructor_first_name
+    description: str, instructor's first name
+    tests:
+    - not_null
+  - name: course_instructor_last_name
+    description: str, instructor's last name
+    tests:
+    - not_null
+  - name: course_instructor_middle_initial
+    description: str, instructor's middle name
+  - name: course_instructor_salutation
+    description: str, instructor's salutation e.g. Dr.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_uuid", "course_instructor_uuid"]
+
+- name: int__ocw__course_departments
+  description: supporting table containing tabular department number and name for
+    OCW courses. The mapping is available in https://github.com/mitodl/ocw-hugo-themes
+    /blob/main/base-theme/data/departments.json
+  columns:
+  - name: course_uuid
+    description: str, foreign key to ocw_courses
+    tests:
+    - not_null
+  - name: course_department_number
+    description: str, number or short code to represent a department. e.g. 5, HST
+    tests:
+    - not_null
+  - name: course_department_name
+    description: str, display name for the department on OCW course website
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_uuid", "course_department_number"]
+
+- name: int__ocw__resources
+  description: supporting table for resources in OCW
+  columns:
+  - name: content_type
+    description: str, websitecontent type of the resource (e.g., resource, external-resource)
+    tests:
+    - not_null
+  - name: course_live_url
+    description: str, url of the course on production
+  - name: course_name
+    description: str, name of the course
+    tests:
+    - not_null
+  - name: course_number
+    description: str, primary course number of the course, from the course metadata
+  - name: course_title
+    description: str, title of the course, from the course metadata
+  - name: course_term
+    description: str, term course was taught, from the course metadata
+  - name: course_year
+    description: str, year course was taught, from the course metadata
+  - name: course_uuid
+    description: str, UUID of course containing resource
+    tests:
+    - not_null
+  - name: external_resource_backup_url
+    description: str, backup URL of the external resource
+  - name: external_resource_backup_url_status_code
+    description: int, status code of the external resource backup URL
+  - name: external_resource_is_broken
+    description: boolean, whether the external resource link is broken
+  - name: external_resource_license_warning
+    description: boolean, whether the external resource has a license warning
+  - name: external_resource_url
+    description: URL of the external resource
+  - name: external_resource_url_status_code
+    description: int, status code of the external resource URL
+  - name: image_alt_text
+    description: str, alt text of the image resource
+  - name: image_caption
+    description: str, caption of the image resourec
+  - name: image_credit
+    description: str, credit of the image resource
+  - name: learning_resource_types
+    description: str, learning resource types of the resource (e.g., Lecture Notes)
+  - name: metadata
+    description: json, metadata of the resource
+    tests:
+    - not_null
+  - name: resource_draft
+    description: boolean, whether the resource is draft
+  - name: resource_filename
+    description: str, filename of the resource file
+    tests:
+    - not_null
+  - name: resource_live_url
+    description: str, live URL of the resource on production
+  - name: resource_title
+    description: str, title of the resource
+  - name: resource_type
+    description: str, resource type (image, video, etc.)
+  - name: resource_uuid
+    description: str, UUID of the resource
+    tests:
+    - not_null
+  - name: video_archive_url
+    description: str, archive URL of the video
+  - name: video_captions_file
+    description: str, captions file of the video resource
+  - name: video_description
+    description: str, description of the YouTube video
+  - name: video_thumbnail_file
+    description: str, thumbnail file of the video resource
+  - name: video_transcript_file
+    description: str, transcript file of the video resource
+  - name: video_youtube_description
+    description: str, description of the YouTube video
+  - name: video_youtube_id
+    description: str, YouTube ID of the video
+  - name: video_youtube_speakers
+    description: str, speakers in the YouTube video
+  - name: video_youtube_tags
+    description: str, tags of the YouTube video
+  - name: website_title
+    description: str, title of the course
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_uuid", "resource_uuid"]

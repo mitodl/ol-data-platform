@@ -9,7 +9,7 @@ DEFAULT_MYSQL_PORT = 3306
 
 
 class MySQLClient:
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         hostname: str,
         username: str,

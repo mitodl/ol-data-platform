@@ -21,7 +21,7 @@ jobs:
 
     - name: "Step 02 - Install dbt"
       id: step-02
-      run: pip3 install dbt-core dbt-duckdb
+      run: pip3 install dbt-duckdb
 
     - name: "Step 03 - Verify dbt"
       id: step-03

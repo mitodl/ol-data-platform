@@ -4,7 +4,7 @@ with mitxonline_courses as (
         , course_title
         , course_is_live
         , course_readable_id
-        , course_number as course_number
+        , course_number
     from {{ ref('int__mitxonline__courses') }}
 )
 
@@ -24,6 +24,7 @@ with mitxonline_courses as (
         , micromasters_program_id
         , micromasters_course_id
         , course_number
+        , course_readable_id
     from edx_courseruns
     where course_recency_rank = 1
 )
@@ -33,6 +34,7 @@ with mitxonline_courses as (
         mitxonline_courses.mitxonline_course_id
         , edx_courses.micromasters_course_id
         , coalesce(mitxonline_courses.course_number, edx_courses.course_number) as course_number
+        , coalesce(mitxonline_courses.course_readable_id, edx_courses.course_readable_id) as course_readable_id
         , coalesce(mitxonline_courses.course_title, edx_courses.course_title) as course_title
         , coalesce(mitxonline_courses.course_number is not null, false) as is_on_mitxonline
         , coalesce(edx_courses.course_number is not null, false) as is_on_edxorg

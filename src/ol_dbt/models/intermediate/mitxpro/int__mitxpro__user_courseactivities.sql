@@ -65,7 +65,7 @@ with course_activities as (
         , course_activities.courserun_readable_id
         , coalesce(users.openedx_user_id, course_activities.openedx_user_id) as openedx_user_id
         , count(distinct date(from_iso8601_timestamp(course_activities.useractivity_timestamp)))
-            as courseactivity_num_days_activity
+        as courseactivity_num_days_activity
         , count(*) as courseactivity_num_events
         , min(course_activities.useractivity_timestamp) as courseactivity_first_event_timestamp
         , max(course_activities.useractivity_timestamp) as courseactivity_last_event_timestamp

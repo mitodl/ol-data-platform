@@ -385,7 +385,7 @@ models:
   - name: discountredemption_id
     description: int, primary key representing a discount redemption
   - name: discountredemption_timestamp
-    description: timestamp, specifying when the discount was redeemed by the user
+    description: timestamp, specifying when the discount redemption record was created.
   - name: user_id
     description: int, foreign key for users_user
   - name: discount_id
@@ -407,16 +407,17 @@ models:
     tests:
     - not_null
   - name: transaction_amount
-    description: numeric, transaction ammount
+    description: numeric, transaction amount
     tests:
     - not_null
   - name: order_id
-    description: int, foreign id in the ecommerce_orders tabe for the order associated
+    description: int, foreign id in the ecommerce_orders table for the order associated
       with the transaction
     tests:
     - not_null
   - name: transaction_created_on
-    description: timestamp, specifying when the transaction was initially created
+    description: timestamp, specifying when the transaction was initially created.
+      This may be the same as payment or refund submitted timestamp from cybersource.
   - name: transaction_readable_identifier
     description: string, unique identifier. Either the transaction_id from cybersource
       or a unique uuid
@@ -435,13 +436,39 @@ models:
     description: str, payment method from cybersource Value could be 'paypal' or 'card'.
       May be blank for no payment required or refund.
   - name: transaction_authorization_code
-    description: str, authorization code from cybersource payment
+    description: str, authorization/approval code from cybersource payment or refund
   - name: receipt_reference_number
     description: str, req_reference_number from cybersource payment
   - name: transaction_bill_to_address_state
     description: str, address state from cybersource payment
   - name: transaction_bill_to_address_country
     description: str, address country from cybersource payment
+  - name: transaction_uuid
+    description: str, unique merchant-generated identifier - req_transaction_uuid
+      from cybersource payment transaction, e.g., 02815b4f08e56882751a043839b7b481
+  - name: transaction_req_type
+    description: str, type of transaction - req_transaction_type from cybersource
+      payment transaction, e.g., sale
+  - name: transaction_payer_name
+    description: str, payer name from cybersource payment transaction
+  - name: transaction_payer_email
+    description: str, payer email from cybersource payment transaction
+  - name: transaction_payer_ip_address
+    description: str, payer IP address from cybersource payment transaction
+  - name: transaction_payment_card_type
+    description: str, name of the card type, card_type_name from cybersource payment
+      transaction, e.g., Visa
+  - name: transaction_payment_card_number
+    description: str, last 4 digits credit card number from cybersource payment transaction
+  - name: transaction_payment_amount
+    description: numeric, total amount for the order - req_amount from cybersource
+      payment transaction
+  - name: transaction_payment_currency
+    description: str, currency used for the order - req_currency from cybersource
+      payment transaction
+  - name: transaction_timestamp
+    description: str, either the signed_date_time from cybersource payment transaction,
+      or submitTimeUtc from cybersource refund transaction.
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__ecommerce_transaction')
@@ -537,8 +564,11 @@ models:
     description: str, discount code from the most recent coupon redemption for the
       order
   - name: discountredemption_timestamp
-    description: timestamp, specifying when the discount was redeemed from the most
-      recent coupon redemption for the order
+    description: timestamp, specifying when the discount was last redeemed by user
+      for fulfilled or refunded orders
+  - name: transaction_id
+    description: int, foreign key to ecommerce_transaction referring to cybersource
+      payment
   - name: payment_transaction_id
     description: str, unique identifier from most recent cybersource payment or UUID.
   - name: payment_authorization_code
@@ -669,6 +699,9 @@ models:
     - not_null
   - name: courserun_start_on
     description: timestamp, date and time when the course starts
+  - name: courserun_upgrade_deadline
+    description: timestamp, specifying the date time beyond which users can not enroll
+      in paid course mode
   - name: user_username
     description: str, name chosen by user
     tests:
@@ -851,6 +884,7 @@ models:
       compare_model: ref('stg__mitxonline__app__postgres__courses_programenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id"]
+
 - name: int__mitxonline__courses
   description: Intermediate model for MITxOnline courses
   columns:
@@ -877,6 +911,41 @@ models:
     tests:
     - unique
     - not_null
+  - name: course_description
+    description: text, the description shown on the home page and product page.
+  - name: course_price
+    description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
+      available)
+  - name: course_length
+    description: str, a short description indicating how long it takes to complete
+      (e.g. '4 weeks').
+  - name: course_effort
+    description: str, a short description indicating how much effort is required (e.g.
+      1-3 hours per week).
+  - name: course_prerequisites
+    description: text, a short description indicating prerequisites of this course.
+  - name: course_about
+    description: text, details about this course.
+  - name: course_what_you_learn
+    description: text, what you will learn from this course.
+  - name: course_certification_type
+    description: str, either 'MicroMasters Credential' or 'Certificate of Completion'.
+    tests:
+    - not_null
+  - name: course_topics
+    description: str, list of topic names for a course.
+  - name: course_instructors
+    description: str, list of instructor names for a course.
+  - name: course_page_slug
+    description: str, used for constructing the program page’s URL.
+  - name: course_page_url_path
+    description: str, url path for the page
+  - name: course_page_is_live
+    description: boolean, if set to true this program page is published
+  - name: course_page_first_published_on
+    description: timestamp, date and time when the course page was first published
+  - name: course_page_last_published_on
+    description: timestamp, date and time when the course page was last published
 
 - name: int__mitxonline__course_to_departments
   description: Intermediate model for MITxOnline course to department
@@ -1151,17 +1220,34 @@ models:
   - name: program_is_live
     description: boolean, indicating whether the program is available to users
   - name: program_title
-    description: str, title of the program
+    description: str, title of the program, including the specific track if applicable.
     tests:
     - not_null
+  - name: program_name
+    description: str, name of the program, which does not specify which track. e.g.,
+      Data, Economics, and Design of Policy
+    tests:
+    - not_null
+  - name: program_track
+    description: str, name of the specific track for MicroMasters programs. For example,
+      DEDP program has two separate tracks - International Development and Public
+      Policy.
   - name: program_readable_id
     description: str, Open edX ID formatted as program-v1:{org}+{program code}
     tests:
     - unique
     - not_null
   - name: program_type
-    description: str, type of the program. Value is free text, it could be MicroMasters®,
+    description: str, type of the program. Value is free text, it could be MicroMasters,
       Series, etc
+  - name: program_availability
+    description: str, either 'anytime' or 'date'
+    tests:
+    - not_null
+  - name: program_certification_type
+    description: str, either 'MicroMasters Credential' or 'Certificate of Completion'
+    tests:
+    - not_null
   - name: program_is_dedp
     description: boolean, specifying if the program is DEDP from readable_id
     tests:
@@ -1170,6 +1256,36 @@ models:
     description: boolean, specifying if the program is MITx MicroMasters® Program
     tests:
     - not_null
+  - name: program_topics
+    description: str, list of topic names for all courses in the program
+  - name: program_instructors
+    description: str, list of instructor names for the program
+  - name: program_description
+    description: text, the description shown on the home page and product page.
+  - name: program_price
+    description: str, product price in plain text. e.g. $250 - $1000.
+  - name: program_length
+    description: str, a short description indicating how long it takes to complete
+      (e.g. '4 weeks').
+  - name: program_effort
+    description: str, a short description indicating how much effort is required (e.g.
+      1-3 hours per week).
+  - name: program_prerequisites
+    description: text, a short description indicating prerequisites of this program.
+  - name: program_about
+    description: text, details about this program.
+  - name: program_what_you_learn
+    description: text, what you will learn from this program.
+  - name: program_page_slug
+    description: str, used for constructing the program page’s URL.
+  - name: program_page_url_path
+    description: str, url path for the page
+  - name: program_page_is_live
+    description: boolean, if set to true this program page is published
+  - name: program_page_first_published_on
+    description: timestamp, date and time when the page was first published
+  - name: program_page_last_published_on
+    description: timestamp, date and time when the page was last published
 
 - name: int__mitxonline__program_requirements
   columns:
@@ -1257,7 +1373,7 @@ models:
     tests:
     - not_null
   - name: program_type
-    description: str, type of the program. Value is free text, it could be MicroMasters®,
+    description: str, type of the program. Value is free text, it could be MicroMasters,
       Series, etc
   - name: program_is_dedp
     description: boolean, specifying if the program is DEDP from readable_id
@@ -1281,6 +1397,11 @@ models:
     description: str, user full name on MITx Online
     tests:
     - not_null
+  - name: programcertificate_url
+    description: str, URL to the program certificate on mitxonline.mit.edu. Null for
+      certificates that have been revoked.
+    tests:
+    - unique
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__courses_programcertificate')
@@ -1344,7 +1465,7 @@ models:
   - name: user_leadership_level
     description: str, user leadership level
   - name: user_gender
-    description: str, user gender
+    description: str, user gender. May be null if user didn't specify.
     tests:
     - accepted_values:
         values: '{{ var("gender_values") }}'
@@ -1420,9 +1541,8 @@ models:
     tests:
     - not_null
   - name: useractivity_video_duration
-    description: number, The length of the video file, in seconds.
-    tests:
-    - not_null
+    description: float, The length of the video file, in seconds. This is extracted
+      from event field in tracking log.
   - name: useractivity_video_currenttime
     description: number, The time in the video when this event was emitted. May be
       Null for load_video or seek_video events.
@@ -1875,3 +1995,153 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
+
+- name: int__mitxonline__courserun_videos
+  description: course videos on MITx Online open edx
+  columns:
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: coursevideo_is_hidden
+    description: boolean, indicating if the video is hidden for the course.
+    tests:
+    - not_null
+  - name: video_edx_uuid
+    description: str, hashed ID for the edx video
+    tests:
+    - not_null
+  - name: video_client_id
+    description: str, human readable name for video. e.g. 14.310x_Lect9_Seg8_Final.mp4
+  - name: video_status
+    description: str, values are external, imported, file_complete, and upload_failed.
+    tests:
+    - not_null
+  - name: video_duration
+    description: float, the length of the video, in seconds. Populated with data from
+      ODL Video Service (OVS) if the video is uploaded there. May be 0.0 for small
+      amounts of videos.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "video_edx_uuid"]
+
+- name: int__mitxonline__proctored_exam_grades
+  description: exam grades either from MITx Online exam course runs or the proctored
+    exam unit in MITx Online courses
+  columns:
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 14.310x
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course associated with the exam grade
+    tests:
+    - not_null
+  - name: semester
+    description: str, semester for the exam, e.g., 2T2022.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, either representing the exam courserun, e.g. course-v1:MITxT+14.100PEx+2T2022,
+      or the courserun that contains the proctored exam unit, e.g. course-v1:MITxT+14.100x+1T2024.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, foreign key to auth_user on MITx Online open edx platform.
+    tests:
+    - not_null
+  - name: user_id
+    description: int, foreign key to users_user on MITx Online application.
+    tests:
+    - not_null
+  - name: user_full_name
+    description: str, user full name on MITx Online
+  - name: user_username
+    description: str, username on MITx Online
+    tests:
+    - not_null
+  - name: user_edxorg_username
+    description: str, username on edX.org
+  - name: user_email
+    description: str, user email on MITx Online
+    tests:
+    - not_null
+  - name: proctoredexamgrade_passing_grade
+    description: float, passing grade for the exam run, range between 0 to 1. Null
+      for MITx Online courses after 2T2022.
+  - name: proctoredexamgrade_grade
+    description: float, user's grade for the proctored exam, range between 0 to 1
+      with 4 decimals,  e.g., 0.8251
+    tests:
+    - not_null
+  - name: proctoredexamgrade_created_on
+    description: timestamp, date and time when this proctored exam grade was created.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "courserun_readable_id"]
+
+- name: int__mitxonline__course_instructors
+  columns:
+  - name: course_id
+    description: int, foreign key to the courses_course table
+    tests:
+    - not_null
+  - name: instructor_name
+    description: str, the name of the instructor.
+    tests:
+    - not_null
+  - name: instructor_title
+    description: str, the instructor's title (academic or otherwise).
+  - name: instructor_bio_short
+    description: str, a short biography of the instructor. May be blank.
+  - name: instructor_bio_long
+    description: str, a longer biography of the instructor.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_id", "instructor_name"]
+
+- name: int__mitxonline__course_to_topics
+  columns:
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - not_null
+  - name: coursetopic_id
+    description: int, foreign key to courses_coursetopic
+    tests:
+    - not_null
+  - name: coursetopic_name
+    description: str, name of a course topic
+    tests:
+    - not_null
+  - name: coursetopic_parent_id
+    description: int, id for the parent coursetopic of the subtopic. For example 'Computer
+      Science' is the parent topic of 'AI'
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["course_id", "coursetopic_id"]
+
+- name: int__mitxonline__program_instructors
+  columns:
+  - name: program_id
+    description: int, foreign key to the courses_program table
+    tests:
+    - not_null
+  - name: instructor_name
+    description: str, the name of the instructor.
+    tests:
+    - not_null
+  - name: instructor_title
+    description: str, the instructor's title (academic or otherwise).
+  - name: instructor_bio_short
+    description: str, a short biography of the instructor. May be blank.
+  - name: instructor_bio_long
+    description: str, a longer biography of the instructor.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["program_id", "instructor_name"]

@@ -3,6 +3,8 @@ with grades_persistentsubsectiongrade as (
     from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__mysql__grades_persistentsubsectiongrade') }}
 )
 
+{{ deduplicate_query('grades_persistentsubsectiongrade', 'most_recent_source') }}
+
 select
     course_id
     , user_id
@@ -14,5 +16,5 @@ select
     , first_attempted
     , created
     , modified
-from grades_persistentsubsectiongrade
+from most_recent_source
 order by user_id, first_attempted

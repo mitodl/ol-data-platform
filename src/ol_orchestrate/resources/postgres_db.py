@@ -11,7 +11,7 @@ DEFAULT_POSTGRES_QUERY_CHUNKSIZE = 5000
 
 
 class PostgresClient:
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         hostname: str,
         username: str,

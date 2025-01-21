@@ -2,21 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__xpro__openedx__mysql__courseware_studentmodule') }}
 )
 
---- guard against duplications by airbyte Incremental Sync - Append
-, source_sorted as (
-    select
-        *
-        , row_number() over (
-            partition by id order by _airbyte_emitted_at desc
-        ) as row_num
-    from source
-)
-
-, most_recent_source as (
-    select *
-    from source_sorted
-    where row_num = 1
-)
+{{ deduplicate_query('source', 'most_recent_source') }}
 
 , cleaned as (
 

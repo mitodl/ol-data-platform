@@ -1,0 +1,47 @@
+---
+# -*- mode: yaml -*-
+
+services:
+  # This service runs dagster-webserver, which loads your user code from the user code container.
+  # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
+  # a queue and later dequeued and launched by dagster-daemon.
+  dagster_webserver:
+    container_name: dagster_webserver
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    entrypoint: ["poetry", "run", "dagster-webserver", "-w", "/opt/dagster/app/workspace.yaml",
+      "-h", "0.0.0.0", "-p", "3000"]
+    ports:
+    - "3000:3000"
+    environment:
+    - GITHUB_TOKEN=${GITHUB_TOKEN}
+    - DAGSTER_CURRENT_IMAGE="dagster-webserver"
+    volumes: # Make docker client accessible so we can terminate containers from the webserver
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/app/workspace.yaml
+    - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
+    - ./src/ol_dbt:/opt/dagster/code/ol_dbt
+
+  # This service runs the dagster-daemon process, which is responsible for taking runs
+  # off of the queue and launching them, as well as creating runs from schedules or sensors.
+  dagster_daemon:
+    container_name: dagster_daemon
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dagster-daemon
+    restart: on-failure
+    # restart: unless-stopped
+    entrypoint: ["poetry", "run", "dagster-daemon", "run", "-w", "/opt/dagster/app/workspace.yaml"]
+    environment:
+    - GITHUB_TOKEN=${GITHUB_TOKEN}
+    - DAGSTER_CURRENT_IMAGE="dagster-daemon"
+    volumes: # Make docker client accessible so we can terminate containers from the webserver
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/app/workspace.yaml
+    - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
+    - ./src/ol_dbt:/opt/dagster/code/ol_dbt

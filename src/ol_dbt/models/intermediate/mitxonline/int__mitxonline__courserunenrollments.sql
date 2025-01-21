@@ -110,6 +110,7 @@ with enrollments as (
         , mitxonline_runs.course_number
         , mitxonline_runs.course_id
         , mitxonline_runs.courserun_start_on
+        , mitxonline_runs.courserun_upgrade_deadline
         , mitxonline_users.user_username
         , mitxonline_users.user_email
         , mitxonline_users.user_edxorg_username
@@ -118,7 +119,9 @@ with enrollments as (
         , case
             when
                 dedp_enrollments_verified.user_id is not null
-                and dedp_enrollments_verified.courserun_id is not null then 'verified'
+                and dedp_enrollments_verified.courserun_id is not null
+                and enrollments.courserunenrollment_enrollment_status is null
+                then 'verified'
             else enrollments.courserunenrollment_enrollment_mode
         end as courserunenrollment_enrollment_mode
     from enrollments

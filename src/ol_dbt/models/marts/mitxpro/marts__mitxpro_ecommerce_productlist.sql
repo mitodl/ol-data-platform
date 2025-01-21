@@ -42,8 +42,11 @@ with ecommerce_product as (
     select *
     from (
         select
-            *
-            , rank() over (partition by product_id order by productversion_updated_on desc) as myrank
+            ecommerce_productversion.*
+            , rank() over (
+                partition by ecommerce_productversion.product_id
+                order by ecommerce_productversion.productversion_updated_on desc
+            ) as myrank
         from ecommerce_productversion
     ) as a
     where myrank = 1
@@ -63,10 +66,12 @@ with ecommerce_product as (
 
 select
     'xPRO' as product_platform
-    , ecommerce_product.product_id as eproductid
+    , ecommerce_product.product_id as productid
     , course_runs.courserun_title as product_name
-    , course_runs.courserun_readable_id as product_id
+    , course_runs.courserun_readable_id as product_readable_id
+    , ecommerce_productversion_latest.productversion_readable_id
     , ecommerce_product.product_type
+    , courses.short_program_code
     , cast(ecommerce_productversion_latest.productversion_price as decimal(38, 2)) as list_price
     , ecommerce_productversion_latest.productversion_description as product_description
     , substring(course_runs.courserun_start_on, 1, 10) as start_date
@@ -102,10 +107,12 @@ union all
 
 select
     'xPRO' as product_platform
-    , ecommerce_product.product_id as eproductid
+    , ecommerce_product.product_id as productid
     , program_runs.program_title as product_name
-    , program_runs.programrun_readable_id as product_id
+    , program_runs.programrun_readable_id as product_readable_id
+    , ecommerce_productversion_latest.productversion_readable_id
     , 'programrun' as product_type
+    , program_runs.short_program_code
     , cast(ecommerce_productversion_latest.productversion_price as decimal(38, 2)) as list_price
     , ecommerce_productversion_latest.productversion_description as product_description
     , substring(program_runs.programrun_start_on, 1, 10) as start_date

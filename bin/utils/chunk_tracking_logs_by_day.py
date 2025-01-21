@@ -8,6 +8,7 @@ This script is designed to take a source bucket and a destination bucket, and pr
 all files that are in the root of the bucket to be located in path prefixes that are
 chunked by date.
 """
+
 import sys
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Optional

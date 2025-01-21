@@ -1,155 +1,95 @@
-with enrollments as (
+with micromasters_enrollments as (
     select *
     from {{ ref('int__micromasters__course_enrollments') }}
 )
 
-, course_certificates as (
+, micromasters_course_certificates as (
     select *
     from {{ ref('int__micromasters__course_certificates') }}
 )
 
-, program_certificates as (
+, micromasters_program_certificates as (
     select *
     from {{ ref('int__micromasters__program_certificates') }}
 )
 
-, enrollments_by_program as (
-    select
-        micromasters_program_id
-        , mitxonline_program_id
-        , arbitrary(program_title) as program_title
-        , count(*) as total_enrollments
-        , count(distinct user_email) as unique_users
-        , count(distinct user_address_country) as unique_countries
-        , count_if(courserunenrollment_enrollment_mode = 'verified') as verified_enrollments
-        , count(distinct case when courserunenrollment_enrollment_mode = 'verified' then user_email end)
-            as unique_verified_users
-    from enrollments
-    group by micromasters_program_id, mitxonline_program_id
+, mitx_programs as (
+    select *
+    from {{ ref('int__mitx__programs') }}
 )
 
-, enrollments_total as (
+, enrollments as (
     select
-        'total' as program_title
-        , 0 as micromasters_program_id
-        , 0 as mitxonline_program_id
-        , count(distinct concat_ws(',', cast(user_id as varchar), platform, courserun_readable_id)) as total_enrollments
-        , count(distinct user_email) as unique_users
-        , count(distinct user_address_country) as unique_countries
-        , count_if(courserunenrollment_enrollment_mode = 'verified') as verified_enrollments
-        , count(distinct case when courserunenrollment_enrollment_mode = 'verified' then user_email end)
-            as unique_verified_users
-    from enrollments
+        case when
+            mitx_programs.is_dedp_program = true then 'Data, Economics, and Design of Policy'
+        else micromasters_enrollments.program_title end as program_title
+        , count(
+            distinct micromasters_enrollments.courserun_readable_id
+            || micromasters_enrollments.user_email
+        ) as total_enrollments
+        , count(distinct micromasters_enrollments.user_email) as unique_users
+        , count(distinct micromasters_enrollments.user_address_country) as unique_countries
+        , count(distinct case
+            when micromasters_enrollments.courserunenrollment_enrollment_mode = 'verified'
+                then (micromasters_enrollments.courserun_readable_id || micromasters_enrollments.user_email)
+        end) as verified_enrollments
+        , count(distinct case
+            when micromasters_enrollments.courserunenrollment_enrollment_mode = 'verified'
+                then micromasters_enrollments.user_email
+        end) as unique_verified_users
+    from micromasters_enrollments
+    inner join mitx_programs
+        on
+            micromasters_enrollments.micromasters_program_id = mitx_programs.micromasters_program_id
+            or micromasters_enrollments.mitxonline_program_id = mitx_programs.mitxonline_program_id
+    group by 1
 )
 
-, enrollments_combined as (
+, course_certs as (
     select
-        program_title
-        , micromasters_program_id
-        , mitxonline_program_id
-        , total_enrollments
-        , unique_users
-        , unique_countries
-        , verified_enrollments
-        , unique_verified_users
-    from enrollments_by_program
-    union all
-    select
-        program_title
-        , micromasters_program_id
-        , mitxonline_program_id
-        , total_enrollments
-        , unique_users
-        , unique_countries
-        , verified_enrollments
-        , unique_verified_users
-    from enrollments_total
+        case when
+            mitx_programs.is_dedp_program = true then 'Data, Economics, and Design of Policy'
+        else micromasters_course_certificates.program_title end as program_title
+        , count(
+            distinct
+            micromasters_course_certificates.courserun_readable_id
+            || micromasters_course_certificates.user_email
+        ) as course_certificates
+        , count(distinct micromasters_course_certificates.user_email) as unique_course_certificate_earners
+    from micromasters_course_certificates
+    inner join mitx_programs
+        on
+            micromasters_course_certificates.micromasters_program_id = mitx_programs.micromasters_program_id
+            or micromasters_course_certificates.mitxonline_program_id = mitx_programs.mitxonline_program_id
+    group by 1
 )
 
-, course_certificates_by_program as (
+, program_certs as (
     select
-        micromasters_program_id
-        , mitxonline_program_id
-        , count(*) as course_certificates
-        , count(distinct user_email) as unique_course_certificate_earners
-    from course_certificates
-    group by micromasters_program_id, mitxonline_program_id
-)
-
-, course_certificates_total as (
-    select
-        0 as micromasters_program_id
-        , 0 as mitxonline_program_id
-        , count(distinct concat_ws(',', courserun_readable_id, user_edxorg_username, user_mitxonline_username))
-            as course_certificates
-        , count(distinct user_email) as unique_course_certificate_earners
-    from course_certificates
-)
-
-, course_certificates_combined as (
-    select
-        micromasters_program_id
-        , mitxonline_program_id
-        , course_certificates
-        , unique_course_certificate_earners
-    from course_certificates_by_program
-    union all
-    select
-        micromasters_program_id
-        , mitxonline_program_id
-        , course_certificates
-        , unique_course_certificate_earners
-    from course_certificates_total
-)
-
-, program_certificates_by_program as (
-    select
-        micromasters_program_id
-        , mitxonline_program_id
-        , count(*) as program_certificates
-    from program_certificates
-    group by micromasters_program_id, mitxonline_program_id
-)
-
-, program_certificates_total as (
-    select
-        0 as micromasters_program_id
-        , 0 as mitxonline_program_id
-        , count(*) as program_certificates
-    from program_certificates
-)
-
-, program_certificates_combined as (
-    select
-        micromasters_program_id
-        , mitxonline_program_id
-        , program_certificates
-    from program_certificates_by_program
-    union all
-    select
-        micromasters_program_id
-        , mitxonline_program_id
-        , program_certificates
-    from program_certificates_total
+        case when
+            mitx_programs.is_dedp_program = true then 'Data, Economics, and Design of Policy'
+        else micromasters_program_certificates.program_title end as program_title
+        , count(distinct micromasters_program_certificates.user_email) as program_certificates
+    from micromasters_program_certificates
+    inner join mitx_programs
+        on
+            micromasters_program_certificates.micromasters_program_id = mitx_programs.micromasters_program_id
+            or micromasters_program_certificates.mitxonline_program_id = mitx_programs.mitxonline_program_id
+    group by 1
 )
 
 select
-    enrollments_combined.program_title
-    , enrollments_combined.total_enrollments
-    , enrollments_combined.unique_users
-    , enrollments_combined.unique_countries
-    , enrollments_combined.verified_enrollments
-    , enrollments_combined.unique_verified_users
-    , course_certificates_combined.course_certificates
-    , course_certificates_combined.unique_course_certificate_earners
-    , program_certificates_combined.program_certificates
-from enrollments_combined
-left join course_certificates_combined
-    on
-        enrollments_combined.micromasters_program_id = course_certificates_combined.micromasters_program_id
-        or enrollments_combined.mitxonline_program_id = course_certificates_combined.mitxonline_program_id
-left join program_certificates_combined
-    on
-        enrollments_combined.micromasters_program_id = program_certificates_combined.micromasters_program_id
-        or enrollments_combined.mitxonline_program_id = program_certificates_combined.mitxonline_program_id
-order by enrollments_combined.micromasters_program_id, enrollments_combined.mitxonline_program_id
+    enrollments.program_title
+    , enrollments.total_enrollments
+    , enrollments.unique_users
+    , enrollments.unique_countries
+    , enrollments.verified_enrollments
+    , enrollments.unique_verified_users
+    , course_certs.course_certificates
+    , course_certs.unique_course_certificate_earners
+    , program_certs.program_certificates
+from enrollments
+left join course_certs
+    on enrollments.program_title = course_certs.program_title
+left join program_certs
+    on enrollments.program_title = program_certs.program_title

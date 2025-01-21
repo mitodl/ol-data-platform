@@ -7,12 +7,19 @@ with source as (
         id as user_id
         , username as user_username
         , email as user_email
-        , first_name as user_first_name
-        , last_name as user_last_name
         , is_active as user_is_active
         , is_staff as user_is_staff
         , is_superuser as user_is_superuser
-        , concat_ws(' ', first_name, last_name) as user_full_name
+        , nullif(first_name, '') as user_first_name
+        , nullif(last_name, '') as user_last_name
+        , replace(
+            replace(
+                replace(
+                    (concat(nullif(first_name, ''), ' ', nullif(last_name, '')))
+                    , ' ', '<>'
+                ), '><', ''
+            ), '<>', ' '
+        ) as user_full_name
         , to_iso8601(from_iso8601_timestamp_nanos(date_joined)) as user_joined_on
         , to_iso8601(from_iso8601_timestamp_nanos(last_login)) as user_last_login
     from source

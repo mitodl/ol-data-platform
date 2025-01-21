@@ -1698,3 +1698,210 @@ sources:
       description: str, the name of the assessment workflow step
     - name: submitter_completed_at
       description: timestamp, specifying when assessment workflow step was completed
+
+  - name: raw__mitxonline__openedx__mysql__edxval_video
+    description: video content on MITx Online open edx platform
+    columns:
+    - name: id
+      description: int, primary key in edxval_video.
+    - name: edx_video_id
+      description: str, video hashed ID.
+    - name: client_video_id
+      description: str, human readable name for video. e.g. 14.310x_Lect9_Seg8_Final.mp4
+    - name: status
+      description: str, values are external, imported, file_complete, and upload_failed.
+        The videos with 'external' and 'imported' status are not managed from ODL
+        Video Service (OVS) application.
+    - name: duration
+      description: int, the length of the video, in seconds. Default to 0.0
+    - name: created
+      description: timestamp, date and time when the record was created.
+
+  - name: raw__mitxonline__openedx__mysql__edxval_coursevideo
+    description: course ID and video association on MITx Online open edx platform
+    columns:
+    - name: id
+      description: int, primary key in edxval_coursevideo.
+    - name: course_id
+      description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: video_id
+      description: int, foreign key in edxval_video
+    - name: is_hidden
+      description: boolean, indicating if the video is hidden for the course.
+
+  - name: raw__mitxonline__app__postgres__wagtailcore_page
+    columns:
+    - name: id
+      description: int, primary key for wagtailcore_page
+    - name: path
+      description: str, the full materialized path for each node (readonly) e.g. 0001
+        is root path, 00010001 is the path to a node in this requirement tree
+    - name: depth
+      description: int, depth of a node in the tree. A root node has a depth of 1.
+    - name: numchild
+      description: int, the number of children of a node
+    - name: title
+      description: str, human-readable title of the page
+    - name: slug
+      description: str, this is used for constructing the page’s URL.
+    - name: live
+      description: boolean, if set to true this page is published
+    - name: has_unpublished_changes
+      description: boolean, set to True when the page is either in draft or published
+        with draft changes.
+    - name: seo_title
+      description: str, alternate SEO-crafted title, for use in the page’s <title>
+        HTML tag.
+    - name: url_path
+      description: str, url path for the page
+    - name: show_in_menus
+      description: boolean, toggles whether the page should be included in site-wide
+        menus
+    - name: search_description
+      description: str, SEO-crafted description of the content, used for search indexing.
+        This is also suitable for the page’s <meta name="description"> HTML tag.
+    - name: go_live_at
+      description: timestamp, timestamp for when the page is scheduled to go live
+    - name: expire_at
+      description: timestamp, timestamp for when the page is scheduled to be expired.
+        This functionality is not used by xpro
+    - name: expired
+      description: boolean, whether the page has expired. This functionality is not
+        used by xpro
+    - name: content_type_id
+      description: int, primary key in django_contenttype. The cms_ table of that
+        has data for this page
+    - name: owner_id
+      description: int, primary key in users_user of the page owner
+    - name: locked
+      description: boolean, when set to True, the Wagtail editor will not allow any
+        users to edit the content of the page. This functionality is not used by xpro
+    - name: latest_revision_created_at
+      description: timestamp, timestamp of the page's latest revision
+    - name: first_published_at
+      description: timestamp, timestamp when the page was first published
+    - name: live_revision_id
+      description: int, primary key in wagtailcore_pagerevision of the page's latest
+        revision
+    - name: last_published_at
+      description: timestamp, timestamp when the page was last published
+    - name: draft_title
+      description: str, human-readable title of the page, incorporating any changes
+        that have been made in a draft edit (in contrast to the title field, which
+        for published pages will be the title as it exists in the current published
+        version).
+
+  - name: raw__mitxonline__app__postgres__cms_coursepage
+    columns:
+    - name: page_ptr_id
+      description: int, foreign key to wagtailcore_page
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: description
+      description: text, the description shown on the home page and product page.
+    - name: length
+      description: str, a short description indicating how long it takes to complete
+        (e.g. '4 weeks').
+    - name: effort
+      description: str, a short description indicating how much effort is required
+        (e.g. 1-3 hours per week).
+    - name: price
+      description: json string, specify the product price details.
+    - name: prerequisites
+      description: text, a short description indicating prerequisites of this course.
+    - name: faq_url
+      description: str, URL a relevant FAQ page or entry for the course.
+    - name: about
+      description: text, details about this course.
+    - name: what_you_learn
+      description: text, what you will learn from this course.
+    - name: feature_image_id
+      description: int, reference to wagtailimages_image. Image that will be used
+        where the course is featured or linked.
+    - name: video_url
+      description: str, URL to the video to be displayed for this course. It can be
+        an HLS or Youtube video URL.
+    - name: faculty_section_title
+      description: str, the title text to display in the faculty cards section of
+        the product page.
+
+  - name: raw__mitxonline__app__postgres__cms_programpage
+    columns:
+    - name: page_ptr_id
+      description: int, foreign key to wagtailcore_page
+    - name: program_id
+      description: int, foreign key to courses_program
+    - name: description
+      description: text, the description shown on the home page and product page.
+    - name: length
+      description: str, a short description indicating how long it takes to complete
+        (e.g. '4 weeks').
+    - name: effort
+      description: str, a short description indicating how much effort is required
+        (e.g. 1-3 hours per week).
+    - name: price
+      description: json string, specify the product price details.
+    - name: prerequisites
+      description: text, a short description indicating prerequisites of this program.
+    - name: faq_url
+      description: str, URL a relevant FAQ page or entry for the program.
+    - name: about
+      description: text, details about this program.
+    - name: what_you_learn
+      description: text, what you will learn from this program.
+    - name: feature_image_id
+      description: int, reference to wagtailimages_image. Image that will be used
+        where the course is featured or linked.
+    - name: video_url
+      description: str, URL to the video to be displayed for this program. It can
+        be an HLS or Youtube video URL.
+    - name: faculty_section_title
+      description: str, the title text to display in the faculty cards section of
+        the product page.
+
+  - name: raw__mitxonline__app__postgres__cms_instructorpage
+    columns:
+    - name: page_ptr_id
+      description: int, foreign key to wagtailcore_page
+    - name: instructor_name
+      description: str, the name of the instructor.
+    - name: instructor_title
+      description: str, the instructor's title (academic or otherwise).
+    - name: instructor_bio_short
+      description: str, a short biography of the instructor.
+    - name: instructor_bio_long
+      description: str, a longer biography of the instructor.
+    - name: feature_image_id
+      description: int, reference to wagtailimages_image. Image is used where the
+        instructor is featured or linked.
+
+  - name: raw__mitxonline__app__postgres__cms_instructorpagelink
+    columns:
+    - name: page_id
+      description: int, foreign key to wagtail_page referring to the course page
+    - name: linked_instructor_page_id
+      description: int, foreign key to wagtail_page referring to the linked instructor
+        page
+
+  - name: raw__mitxonline__app__postgres__courses_coursestopic
+    columns:
+    - name: id
+      description: int, primary key for courses_coursetopic
+    - name: name
+      description: str, name of a course topic
+    - name: parent_id
+      description: int, id for the parent coursetopic of the subtopic. For example
+        'Computer Science' is the parent topic of 'AI'
+    - name: created_on
+      description: timestamp, specifying when a course topic was initially created
+    - name: updated_on
+      description: timestamp, specifying when a course topic was most recently updated
+
+  - name: raw__mitxonline__app__postgres__cms_coursepage_topics
+    columns:
+    - name: id
+      description: int, primary key for cms_coursepage_topics
+    - name: coursepage_id
+      description: int, foreign key to cms_coursepage
+    - name: coursetopic_id
+      description: int, foreign key to courses_coursetopic

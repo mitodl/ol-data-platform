@@ -18,6 +18,20 @@ with products as (
     from {{ ref('stg__mitxpro__app__postgres__courses_program') }}
 )
 
+, latest_productversion as (
+    select * from
+        (
+            select
+                productversion.*
+                , row_number() over (
+                    partition by productversion.product_id
+                    order by productversion.productversion_updated_on desc
+                ) as row_num
+            from {{ ref('int__mitxpro__ecommerce_productversion') }} as productversion
+        ) as product
+    where row_num = 1
+)
+
 , product_subquery as (
     select
         products.product_id
@@ -42,9 +56,12 @@ with products as (
 
 select
     product_subquery.*
+    , latest_productversion.productversion_price as product_list_price
+    , latest_productversion.productversion_description as product_description
     , courseruns.course_id
     , courseruns.courserun_readable_id
     , programs.program_readable_id
 from product_subquery
+left join latest_productversion on product_subquery.product_id = latest_productversion.product_id
 left join courseruns on product_subquery.courserun_id = courseruns.courserun_id
 left join programs on product_subquery.program_id = programs.program_id

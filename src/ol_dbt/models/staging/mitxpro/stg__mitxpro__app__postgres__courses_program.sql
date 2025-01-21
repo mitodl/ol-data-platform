@@ -10,6 +10,16 @@ with source as (
         , live as program_is_live
         , title as program_title
         , readable_id as program_readable_id
+        , substring(
+            readable_id, ((position('+' in readable_id)) + 1)
+            , (
+                position(
+                    'x' in substring(
+                        readable_id, position('+' in readable_id)
+                    )
+                ) - 2
+            )
+        ) as short_program_code
         , platform_id
         ,{{ cast_timestamp_to_iso8601('created_on') }} as program_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as program_updated_on

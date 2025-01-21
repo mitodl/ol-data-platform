@@ -1,4 +1,5 @@
 """Helper class for parquet data output."""
+
 from pyarrow import concat_tables, parquet
 
 

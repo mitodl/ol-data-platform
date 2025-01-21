@@ -8,7 +8,7 @@ with source as (
         , product_name as cms_certificate_product_name
         , CEUs as cms_certificate_ceus --noqa
         , cast(json_parse(json_query(signatories, 'lax $[*].value' with array wrapper)) as array(integer)) --noqa
-            as cms_certificate_signitory_ids
+        as cms_certificate_signitory_ids
         , institute_text as cms_certificate_institute_text
         , overrides as cms_certificate_overrides
     from source

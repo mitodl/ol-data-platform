@@ -1,0 +1,135 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__ovs__postgres__ui_collection
+    description: video collections created on OVS
+    columns:
+    - name: id
+      description: int, primary key in ui_collection.
+    - name: key
+      description: str, UUID to identify this video collection.
+    - name: title
+      description: str, title of the video collection.
+    - name: slug
+      description: str, unique string for the video collection. May be blank.
+    - name: description
+      description: str, descriptive text for the video collection.
+    - name: owner_id
+      description: int, foreign key to auth_user referencing the owner of this video
+        collection.
+    - name: is_logged_in_only
+      description: boolean, indicating if the video collection can only be viewed
+        by logged in users.
+    - name: allow_share_openedx
+      description: boolean, indicating if the video collection url can be shared.
+    - name: stream_source
+      description: str, Youtube, Cloudfront or Null.
+    - name: edx_course_id
+      description: str, the open edX course ID that the video collection associated
+        with. May be blank.
+    - name: schedule_retranscode
+      description: boolean, this field is to support re-encoding videos for some collections.
+    - name: created_at
+      description: timestamp, date and time when the record was created.
+    - name: updated_at
+      description: timestamp, date and time when the record was last updated.
+
+  - name: raw__ovs__postgres__ui_video
+    description: videos uploaded on OVS
+    columns:
+    - name: id
+      description: int, primary key in ui_video.
+    - name: key
+      description: str, UUID to identify this video.
+    - name: collection_id
+      description: int, foreign key to ui_collection.
+    - name: title
+      description: str, title of the video.
+    - name: description
+      description: str, descriptive text for the video.
+    - name: source_url
+      description: str, source URL of the video.
+    - name: status
+      description: str, possible values are Created, Uploading, Upload failed, Transcoding,
+        Transcode failed internal error, Transcode failed video error, Retranscode
+        scheduled, Retranscoding, Retranscode failed error, Error, Complete.
+    - name: multiangle
+      description: boolean, indicating if this video is multi-angle.
+    - name: is_public
+      description: boolean, indicating if this video is public.
+    - name: is_private
+      description: boolean, indicating if this video is private.
+    - name: is_logged_in_only
+      description: boolean, indicating if this video can only be viewed by logged
+        in users.
+    - name: custom_order
+      description: int, it is used to control the order of videos on the collection
+        page.
+    - name: schedule_retranscode
+      description: boolean, this field is to support re-encoding videos for some collections.
+    - name: created_at
+      description: timestamp, date and time when the record was created.
+    - name: updated_at
+      description: timestamp, date and time when the record was last updated.
+
+  - name: raw__ovs__postgres__dj_elastictranscoder_encodejob
+    description: AWS Elastic Transcoder's EncodeJob objects for videos uploaded on
+      OVS
+    columns:
+    - name: id
+      description: str, unique string to identify the EncodeJob object.
+    - name: object_id
+      description: int, foreign key to ui_video.
+    - name: contenttype_id
+      description: int, foreign key to django_content_type that refers to the video
+        model.
+    - name: message
+      description: str, json string for the transcoder message.
+    - name: state
+      description: int, 0 - Submitted, 1 - Progressing, 2 - Error, 3 - Warning, 4,
+        Complete.
+    - name: created_at
+      description: timestamp, date and time when the record was created.
+    - name: last_modified
+      description: timestamp, date and time when the record was last updated.
+
+  - name: raw__ovs__postgres__ui_edxendpoint
+    description: edx endpoint configuration used for posting videos
+    columns:
+    - name: id
+      description: int, primary key in ui_edxendpoint
+    - name: name
+      description: str, name of the edx endpoint
+    - name: base_url
+      description: str, base URL of the edx endpoint e.g. https://courses.mitxonline.mit.edu
+    - name: edx_video_api_path
+      description: str, edx video API path. e.g. /api/val/v0/videos/
+    - name: access_token
+      description: str, access token used to access the edx endpoint.
+    - name: client_id
+      description: str, client id used to access the edx endpoint.
+    - name: secret_key
+      description: str, secret key used to access the edx endpoint.
+    - name: expires_in
+      description: int, access_token expires in seconds
+    - name: created_at
+      description: timestamp, date and time when the record was created.
+    - name: updated_at
+      description: timestamp, date and time when the record was last updated.
+
+
+  - name: raw__ovs__postgres__ui_collectionedxendpoint
+    description: reference table that maps collection to edx endpoint
+    columns:
+    - name: id
+      description: int, primary key in ui_collectionedxendpoint
+    - name: collection_id
+      description: int, foreign key to ui_collection
+    - name: edx_endpoint_id
+      description: int, foreign key to ui_edxendpoint

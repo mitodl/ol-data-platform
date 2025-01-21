@@ -24,18 +24,19 @@ with program_requirements as (
         , operator_nodes.programrequirement_title
         , operator_nodes.programrequirement_path
         , operator_nodes.programrequirement_operator_value
-            as electiveset_required_number
+        as electiveset_required_number
         , case operator_nodes.programrequirement_operator
             when 'min_number_of' then 'Elective'
-            when 'all_of' then 'Core' end
-            as programrequirement_type
+            when 'all_of' then 'Core'
+        end
+        as programrequirement_type
 
         , row_number()
             over (
                 partition by course_nodes.course_id, course_nodes.program_id
                 order by length(operator_nodes.programrequirement_path) desc
             )
-            as requirement_nesting
+        as requirement_nesting
     from course_nodes
     left join operator_nodes
         on course_nodes.programrequirement_path like operator_nodes.programrequirement_path || '%'
@@ -77,7 +78,7 @@ with program_requirements as (
         , child_requirements.electiveset_required_number
         , parent_requirements.programrequirement_requirement_id as programrequirement_parent_requirement_id
         , parent_requirements.programrequirement_requirement_id is not null
-            as programrequirement_is_a_nested_requirement
+        as programrequirement_is_a_nested_requirement
     from child_requirements
     left join parent_requirements
         on
@@ -100,14 +101,16 @@ with program_requirements as (
         , sum(electiveset_required_number) as program_num_elective_courses
     from (
         select
-            program_id
-            , programrequirement_requirement_id
-            , avg(electiveset_required_number) as electiveset_required_number
+            combined_requirements.program_id
+            , combined_requirements.programrequirement_requirement_id
+            , avg(combined_requirements.electiveset_required_number) as electiveset_required_number
         from combined_requirements
         where
-            programrequirement_type = 'Elective'
-            and programrequirement_is_a_nested_requirement = false
-        group by program_id, programrequirement_requirement_id
+            combined_requirements.programrequirement_type = 'Elective'
+            and combined_requirements.programrequirement_is_a_nested_requirement = false
+        group by
+            combined_requirements.program_id
+            , combined_requirements.programrequirement_requirement_id
     ) group by program_id
 
 )

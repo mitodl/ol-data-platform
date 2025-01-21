@@ -18,11 +18,6 @@ with micromasters_program_certificates as (
     from {{ ref('int__edxorg__mitx_users') }}
 )
 
-, micromasters_users as (
-    select *
-    from {{ ref('__micromasters__users') }}
-)
-
 , programs as (
     select *
     from {{ ref('int__mitx__programs') }}
@@ -37,29 +32,15 @@ with micromasters_program_certificates as (
 , non_dedp_certificates as (
     select
         edx_users.user_username as user_edxorg_username
-        , micromasters_users.user_mitxonline_username
-        , edx_users.user_email
         , programs.micromasters_program_id
         , micromasters_program_certificates.program_title
         , programs.mitxonline_program_id
         , micromasters_program_certificates.user_id as user_edxorg_id
-        , edx_users.user_gender
-        , edx_users.user_country
-        , micromasters_users.user_address_city
-        , micromasters_users.user_first_name
-        , micromasters_users.user_last_name
-        , micromasters_users.user_address_postal_code
-        , micromasters_users.user_street_address
-        , micromasters_users.user_address_state_or_territory
-        , edx_users.user_full_name
+        , micromasters_program_certificates.program_certificate_hashed_id
         , micromasters_program_certificates.program_certificate_awarded_on as program_completion_timestamp
-        , micromasters_users.user_id as micromasters_user_id
-        , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from micromasters_program_certificates
     left join edx_users
         on micromasters_program_certificates.user_id = edx_users.user_id
-    left join micromasters_users
-        on micromasters_program_certificates.user_username = micromasters_users.user_edxorg_username
     left join programs
         on micromasters_program_certificates.micromasters_program_id = programs.micromasters_program_id
     where micromasters_program_certificates.row_num = 1
@@ -73,29 +54,15 @@ with micromasters_program_certificates as (
 , non_dedp_overides as (
     select
         edx_users.user_username as user_edxorg_username
-        , micromasters_users.user_mitxonline_username
-        , edx_users.user_email
         , programs.micromasters_program_id
         , programs.program_title
         , programs.mitxonline_program_id
         , edx_users.user_id as user_edxorg_id
-        , edx_users.user_gender
-        , edx_users.user_country
-        , micromasters_users.user_address_city
-        , micromasters_users.user_first_name
-        , micromasters_users.user_last_name
-        , micromasters_users.user_address_postal_code
-        , micromasters_users.user_street_address
-        , micromasters_users.user_address_state_or_territory
-        , edx_users.user_full_name
+        , program_certificates_override_list.program_certificate_hashed_id
         , null as program_completion_timestamp
-        , micromasters_users.user_id as micromasters_user_id
-        , substring(micromasters_users.user_birth_date, 1, 4) as user_year_of_birth
     from program_certificates_override_list
     inner join edx_users
         on program_certificates_override_list.user_edxorg_id = edx_users.user_id
-    left join micromasters_users
-        on edx_users.user_username = micromasters_users.user_edxorg_username
     inner join programs
         on program_certificates_override_list.micromasters_program_id = programs.micromasters_program_id
     left join non_dedp_certificates

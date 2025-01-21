@@ -2,7 +2,22 @@
 
 with mitx_certificates as (
     --revoked certificates are already filtered
-    select * from {{ ref('int__mitx__courserun_certificates') }}
+    select
+        platform
+        , courseruncertificate_uuid
+        , courseruncertificate_url
+        , courseruncertificate_created_on
+        , courserun_title
+        , user_mitxonline_username
+        , user_edxorg_username
+        , user_email
+        , user_full_name
+        , if(
+            platform = '{{ var("edxorg") }}'
+            , replace(replace(courserun_readable_id, 'course-v1:', ''), '+', '/')
+            , courserun_readable_id
+        ) as courserun_readable_id
+    from {{ ref('int__mitx__courserun_certificates') }}
 )
 
 , mitxpro_certificates as (
@@ -17,6 +32,7 @@ with mitx_certificates as (
 
 select
     platform
+    , courseruncertificate_uuid
     , courseruncertificate_url
     , courseruncertificate_created_on
     , courserun_title
@@ -30,6 +46,7 @@ union all
 
 select
     '{{ var("mitxpro") }}' as platform
+    , courseruncertificate_uuid
     , courseruncertificate_url
     , courseruncertificate_created_on
     , courserun_title
@@ -43,6 +60,7 @@ union all
 
 select
     '{{ var("bootcamps") }}' as platform
+    , courseruncertificate_uuid
     , courseruncertificate_url
     , courseruncertificate_created_on
     , courserun_title

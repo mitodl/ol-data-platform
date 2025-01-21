@@ -1,9 +1,3 @@
---- This table captures the historical changes made to course structure. It does it by comparing to course content from
---- previous day. If no changes, then no new rows added to the table. If any changes to the course content, it adds all
---  the blocks including the updated/new ones to the table.
---- To get the course structure at any point in time, use course_id + block_id + the last retrieved_at that close to
---  that time
-
 with course_block_source as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__api__course_blocks') }}
 )
@@ -11,9 +5,15 @@ with course_block_source as (
 , course_block as (
     select * from (
         select
-            *
-            , lag(course_content_hash) over (partition by block_id, course_id order by retrieved_at asc)
-                as previous_content_hash
+            course_block_source.*
+            , lag(course_block_source.course_content_hash)
+                over (
+                    partition by
+                        course_block_source.block_id
+                        , course_block_source.course_id
+                    order by course_block_source.retrieved_at asc
+                )
+            as previous_content_hash
         from course_block_source
     )
     where previous_content_hash is null or previous_content_hash != course_content_hash
