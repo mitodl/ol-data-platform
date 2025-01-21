@@ -23,11 +23,13 @@ from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
     outs={
         "program_metadata": AssetOut(
             description="The metadata for programs extracted from edxorg program API",
+            io_manager_key="s3file_io_manager",
             key=AssetKey(("edxorg", "processed_data", "program_metadata")),
         ),
         "program_course_metadata": AssetOut(
             description="The metadata of all the associated program courses extracted "
             "from edxorg program API",
+            io_manager_key="s3file_io_manager",
             key=AssetKey(("edxorg", "processed_data", "program_course_metadata")),
         ),
     },
