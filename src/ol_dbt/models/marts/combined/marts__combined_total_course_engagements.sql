@@ -1,5 +1,5 @@
 with combined_engagements as (
-    select 
+    select
         platform
         , courserun_readable_id
         , count(
@@ -24,13 +24,13 @@ with combined_engagements as (
             end
         ) as total_courserun_problems
     from {{ ref('int__combined__course_structure') }}
-    group by 
+    group by
         platform
         , courserun_readable_id
 )
 
 , combined_runs as (
-    select * 
+    select *
     from {{ ref('int__combined__course_runs') }}
     where courserun_readable_id is not null
 )

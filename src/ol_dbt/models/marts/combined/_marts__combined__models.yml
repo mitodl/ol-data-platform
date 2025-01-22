@@ -678,8 +678,8 @@ models:
       is in the past and courserun_end_on is in the future.
 
 - name: marts__combined_total_course_engagements
-  description: Total courserun engagement statistics from MITx Online, xPro,
-    edX.org, Residential MITx.
+  description: Total courserun engagement statistics from MITx Online, xPro, edX.org,
+    Residential MITx.
   columns:
   - name: platform
     description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
