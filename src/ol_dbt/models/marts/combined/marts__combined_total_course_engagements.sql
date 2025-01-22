@@ -48,6 +48,6 @@ select
     , combined_runs.courserun_end_on
 from combined_runs
 inner join combined_engagements
-    on 
+    on
         combined_runs.courserun_readable_id = combined_engagements.courserun_readable_id
         and combined_runs.platform = combined_engagements.platform
