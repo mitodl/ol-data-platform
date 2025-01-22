@@ -562,7 +562,7 @@ def normalize_edxorg_tracking_log(
             """
         )
         conn.execute(
-            f"""COPY (SELECT {', '.join(columns)} FROM tracking_logs)
+            f"""COPY (SELECT {", ".join(columns)} FROM tracking_logs)
             TO '{transformed_logs}' (FORMAT JSON)
             """  # noqa: S608
         )

@@ -7,7 +7,10 @@ with users as (
         user_profile_id
         , user_education_degree
         , user_graduation_date
-        , row_number() over (partition by user_profile_id order by user_graduation_date desc) as row_num
+        , row_number() over (
+            partition by user_profile_id
+            order by user_graduation_date desc
+        ) as row_num
     from {{ ref('stg__micromasters__app__postgres__profiles_education') }}
 )
 
@@ -25,7 +28,10 @@ with users as (
         , user_company_name
         , user_job_position
         , user_company_industry
-        , row_number() over (partition by user_profile_id order by user_start_date desc) as row_num
+        , row_number() over (
+            partition by user_profile_id
+            order by user_start_date desc
+        ) as row_num
     from {{ ref('stg__micromasters__app__postgres__profiles_employment') }}
 )
 

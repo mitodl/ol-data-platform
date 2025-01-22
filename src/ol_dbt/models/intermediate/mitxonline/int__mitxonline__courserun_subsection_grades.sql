@@ -10,7 +10,8 @@ with subsection_grades as (
     select
         *
         , row_number() over (
-            partition by courserun_readable_id, coursestructure_block_id order by coursestructure_retrieved_at desc
+            partition by courserun_readable_id, coursestructure_block_id
+            order by coursestructure_retrieved_at desc
         ) as row_num
     from {{ ref('int__mitxonline__course_structure') }}
 )

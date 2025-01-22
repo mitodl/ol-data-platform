@@ -14,7 +14,10 @@ with completed_program_learners as (
 , completed_program_learners_sorted as (
     select
         *
-        , row_number() over (partition by user_id, program_uuid order by program_certificate_awarded_on desc) as row_num
+        , row_number() over (
+            partition by user_id, program_uuid
+            order by program_certificate_awarded_on desc
+        ) as row_num
     from completed_program_learners
 )
 

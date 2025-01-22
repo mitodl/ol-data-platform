@@ -12,7 +12,10 @@ with source as (
 , source_sorted as (
     select
         *
-        , row_number() over (partition by id order by _airbyte_emitted_at desc) as row_num
+        , row_number() over (
+            partition by id
+            order by _airbyte_emitted_at desc
+        ) as row_num
     from source
 )
 

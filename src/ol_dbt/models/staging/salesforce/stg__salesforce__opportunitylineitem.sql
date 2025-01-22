@@ -13,7 +13,8 @@ with source as (
     select
         *
         , row_number() over (
-            partition by id order by _airbyte_emitted_at desc
+            partition by id
+            order by _airbyte_emitted_at desc
         ) as row_num
     from source
 )

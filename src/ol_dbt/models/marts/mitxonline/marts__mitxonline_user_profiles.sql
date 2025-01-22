@@ -12,7 +12,10 @@ with users as (
         , flexiblepriceapplication_income_usd
         , flexiblepriceapplication_original_income
         , flexiblepriceapplication_original_currency
-        , rank() over (partition by user_id order by flexiblepriceapplication_updated_on desc) as rnk
+        , rank() over (
+            partition by user_id
+            order by flexiblepriceapplication_updated_on desc
+        ) as rnk
     from income
 )
 

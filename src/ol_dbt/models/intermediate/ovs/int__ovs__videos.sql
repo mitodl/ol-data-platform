@@ -2,7 +2,10 @@ with video_encodejobs as (
     select
         *
         --- there may be multiple encodejobs for the same video, but we only need the last one for video duration
-        , row_number() over (partition by video_id order by encodejob_created_on desc) as encodejob_rank
+        , row_number() over (
+            partition by video_id
+            order by encodejob_created_on desc
+        ) as encodejob_rank
     from {{ ref('stg__ovs__studio__postgres__dj_elastictranscoder_encodejob') }}
 )
 
