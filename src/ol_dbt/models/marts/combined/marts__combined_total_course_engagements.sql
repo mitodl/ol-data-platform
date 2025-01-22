@@ -119,7 +119,9 @@ with combined_problems as (
 )
 
 , combined_runs as (
-    select * from {{ ref('int__combined__course_runs') }}
+    select * 
+    from {{ ref('int__combined__course_runs') }}
+    where courserun_readable_id is not null
 )
 
 select
