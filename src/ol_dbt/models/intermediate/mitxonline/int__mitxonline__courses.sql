@@ -28,7 +28,8 @@ with courses as (
             , program_requirements.program_id
             , programs.program_certification_type
             , row_number() over (
-                partition by program_requirements.course_id order by programs.program_is_micromasters
+                partition by program_requirements.course_id
+                order by programs.program_is_micromasters
             ) as row_num
         from program_requirements
         inner join programs on program_requirements.program_id = programs.program_id

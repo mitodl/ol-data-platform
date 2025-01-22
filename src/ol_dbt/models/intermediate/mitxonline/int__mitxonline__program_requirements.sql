@@ -111,7 +111,8 @@ with program_requirements as (
         group by
             combined_requirements.program_id
             , combined_requirements.programrequirement_requirement_id
-    ) group by program_id
+    )
+    group by program_id
 
 )
 

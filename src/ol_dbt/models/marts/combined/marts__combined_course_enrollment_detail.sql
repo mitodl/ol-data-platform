@@ -18,7 +18,8 @@ with combined_enrollments as (
     select
         *
         , row_number() over (
-            partition by user_id, courserun_id order by order_created_on desc
+            partition by user_id, courserun_id
+            order by order_created_on desc
         ) as row_num
     from {{ ref('int__mitxonline__ecommerce_order') }}
     where order_state in ('fulfilled', 'refunded')
@@ -28,7 +29,8 @@ with combined_enrollments as (
     select
         *
         , row_number() over (
-            partition by user_id, courserun_readable_id order by order_created_on desc, order_id desc
+            partition by user_id, courserun_readable_id
+            order by order_created_on desc, order_id desc
         ) as row_num
     from {{ ref('int__micromasters__orders') }}
     where order_state in ('fulfilled', 'refunded', 'partially_refunded')

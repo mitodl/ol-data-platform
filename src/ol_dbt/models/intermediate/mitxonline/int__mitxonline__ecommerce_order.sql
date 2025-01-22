@@ -42,7 +42,10 @@ with lines as (
 , discountredemptions as (
     select
         *
-        , row_number() over (partition by order_id order by discountredemption_timestamp desc) as row_num
+        , row_number() over (
+            partition by order_id
+            order by discountredemption_timestamp desc
+        ) as row_num
     from {{ ref('stg__mitxonline__app__postgres__ecommerce_discountredemption') }}
 
 )
@@ -51,7 +54,10 @@ with lines as (
 , payments as (
     select
         *
-        , row_number() over (partition by order_id order by transaction_created_on desc) as row_num
+        , row_number() over (
+            partition by order_id
+            order by transaction_created_on desc
+        ) as row_num
     from {{ ref('int__mitxonline__ecommerce_transaction') }}
     where transaction_type = 'payment'
 )

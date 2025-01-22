@@ -10,7 +10,10 @@ with mitxpro_coursevideos as (
 , ovs_videos as (
     select
         *
-        , row_number() over (partition by video_title order by video_created_on desc) as video_rank
+        , row_number() over (
+            partition by video_title
+            order by video_created_on desc
+        ) as video_rank
     from {{ ref('int__ovs__videos') }}
     where platform = '{{ var("mitxpro") }}'
 )

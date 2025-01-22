@@ -7,7 +7,8 @@ with micromasters_program_certificates as (
     select
         *
         , row_number() over (
-            partition by user_id, micromasters_program_id order by program_title
+            partition by user_id, micromasters_program_id
+            order by program_title
         ) as row_num
     from {{ ref('int__edxorg__mitx_program_certificates') }}
     where program_type = 'MicroMasters'

@@ -17,7 +17,10 @@ with orders as (
 , receipts as (
     select
         *
-        , row_number() over (partition by order_id order by receipt_created_on desc) as row_num
+        , row_number() over (
+            partition by order_id
+            order by receipt_created_on desc
+        ) as row_num
     from {{ ref('stg__micromasters__app__postgres__ecommerce_receipt') }}
     where receipt_transaction_status != 'ERROR'
 )

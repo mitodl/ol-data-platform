@@ -15,7 +15,10 @@ with user_info_combo as (
         , user_email
         , user_username
         , user_full_name
-        , row_number() over (partition by user_id order by user_email_opt_in_updated_on desc) as row_num
+        , row_number() over (
+            partition by user_id
+            order by user_email_opt_in_updated_on desc
+        ) as row_num
     from {{ ref('stg__edxorg__bigquery__mitx_user_email_opt_in') }}
     where courserun_platform = '{{ var("edxorg") }}'
 )
@@ -47,7 +50,9 @@ with user_info_combo as (
         , coalesce(user_info_combo.user_email, most_recent_user_info.user_email) as user_email
         , coalesce(user_info_combo.user_username, most_recent_user_info.user_username) as user_username
         , row_number()
-            over (partition by user_info_combo.user_id order by user_info_combo.user_last_login desc
+            over (
+                partition by user_info_combo.user_id
+                order by user_info_combo.user_last_login desc
             )
         as row_num
     from user_info_combo
