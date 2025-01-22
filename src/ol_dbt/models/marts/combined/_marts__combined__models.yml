@@ -677,6 +677,44 @@ models:
       if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
       is in the past and courserun_end_on is in the future.
 
+- name: marts__combined_total_course_engagements
+  description: Total courserun engagement statistics from MITx Online, xPro,
+    edX.org, Residential MITx.
+  columns:
+  - name: platform
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline, xPro, Residential courses, {org}/{course}/{run_tag}
+      for edX.org courses.
+    tests:
+    - not_null
+  - name: total_courserun_problems
+    description: int, number of problems in a courserun
+  - name: total_courserun_videos
+    description: int, number of videos in a courserun
+  - name: total_courserun_discussions
+    description: int, number of discussions in a courserun
+  - name: courserun_title
+    description: str, title of the course run
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online, xPro or Residential courses, {org}/{course} for edX.org courses.
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "courserun_readable_id"]
+
 - name: marts__combined_course_engagements
   description: Learners daily course engagement statistics from MITx Online, xPro,
     edX.org, Residential MITx.
