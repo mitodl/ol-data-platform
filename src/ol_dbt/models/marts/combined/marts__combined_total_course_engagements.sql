@@ -1,5 +1,5 @@
 with combined_problems as (
-    select 
+    select
         '{{ var("mitxonline") }}' as platform
         , courserun_readable_id
         , count(distinct coursestructure_block_id) as problem_count
@@ -9,7 +9,7 @@ with combined_problems as (
 
     union all
 
-    select 
+    select
         '{{ var("edxorg") }}' as platform
         , courserun_readable_id
         , count(distinct coursestructure_block_id) as problem_count
@@ -49,7 +49,7 @@ with combined_problems as (
 
     union all
 
-    select 
+    select
         '{{ var("edxorg") }}' as platform
         , courserun_readable_id
         , count(distinct video_block_id) as total_course_videos
@@ -110,7 +110,7 @@ with combined_problems as (
     union all
 
     select
-        '{{ var("residential") }}' as platform 
+        '{{ var("residential") }}' as platform
         , courserun_readable_id
         , count(distinct useractivity_discussion_post_id) as total_discussions
     from {{ ref('int__mitxresidential__user_courseactivity_discussion') }}
@@ -119,7 +119,7 @@ with combined_problems as (
 )
 
 , combined_runs as (
-    select * 
+    select *
     from {{ ref('int__combined__course_runs') }}
     where courserun_readable_id is not null
 )
@@ -137,14 +137,14 @@ select
     , combined_runs.courserun_end_on
 from combined_runs
 left join combined_problems
-    on 
+    on
         combined_runs.courserun_readable_id = combined_problems.courserun_readable_id
         and combined_runs.platform = combined_problems.platform
 left join combined_videos
-    on 
+    on
         combined_runs.courserun_readable_id = combined_videos.courserun_readable_id
         and combined_runs.platform = combined_videos.platform
 left join combined_discussion
-    on 
+    on
         combined_runs.courserun_readable_id = combined_discussion.courserun_readable_id
         and combined_runs.platform = combined_discussion.platform
