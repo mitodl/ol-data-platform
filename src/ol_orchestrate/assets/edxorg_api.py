@@ -108,8 +108,8 @@ def edxorg_program_metadata(
         jsonlines.open(program_file, mode="w") as programs,
         jsonlines.open(program_course_file, mode="w") as program_courses,
     ):
-        programs.write(edxorg_programs)
-        program_courses.write(edxorg_program_courses)
+        programs.write_all(edxorg_programs)
+        program_courses.write_all(edxorg_program_courses)
 
     yield Output(
         (program_file, program_object_key),
