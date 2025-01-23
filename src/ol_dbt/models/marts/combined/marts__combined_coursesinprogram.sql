@@ -2,6 +2,10 @@ with mitx_programs as (
     select * from {{ ref('int__mitx__program_requirements') }}
 )
 
+, edxorg_mitx_program_courses as (
+    select * from {{ ref('int__edxorg__mitx_program_courses') }}
+)
+
 , mitx__courses as (
     select * from {{ ref('int__mitx__courses') }}
 )
@@ -47,6 +51,25 @@ from mitx_programs
 inner join mitx__courses
     on mitx_programs.course_number = mitx__courses.course_number
 where mitx__courses.is_on_mitxonline = false
+
+union all
+
+select
+    '{{ var("edxorg") }}' as platform
+    , edxorg_mitx_program_courses.course_title
+    , edxorg_mitx_program_courses.program_title
+    , edxorg_mitx_program_courses.program_name
+    , null as program_id
+    , coalesce(mitx__courses.course_readable_id, edxorg_mitx_program_courses.course_readable_id) as course_readable_id
+    , null as program_readable_id
+from edxorg_mitx_program_courses
+left join mitx_programs
+    on edxorg_mitx_program_courses.program_name = mitx_programs.program_title
+left join mitx__courses
+    on
+        replace(edxorg_mitx_program_courses.course_readable_id, 'MITx/', '')
+        = replace(mitx__courses.course_readable_id, 'course-v1:MITxT+', '')
+where mitx_programs.program_title is null
 
 union all
 

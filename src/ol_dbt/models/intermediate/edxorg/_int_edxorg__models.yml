@@ -836,3 +836,37 @@ models:
       8601 string
     tests:
     - not_null
+
+- name: int__edxorg__mitx_program_courses
+  description: MITx program and its courses on edX.org
+  columns:
+  - name: program_uuid
+    description: str, UUID of the program on edX.org.
+    tests:
+    - not_null
+  - name: program_title
+    description: str, title of the program on edX.org, including the specific track
+      if applicable. e.g., Statistics and Data Science (General Track)
+  - name: program_name
+    description: str, name of the program, which does not specify which track. e.g.,
+      Statistics and Data Science
+    tests:
+    - not_null
+  - name: program_subtitle
+    description: str, subtitle of the program on edX.org
+  - name: program_type
+    description: str, type of the program. e.g., MicroMasters, XSeries
+  - name: program_status
+    description: str, status of the program. Possible values are active, retired,
+      unpublished or deleted
+  - name: course_readable_id
+    description: str, readable ID for the course in {org}/{course} format. e.g., MITx/15.415.1x
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course
+  - name: course_type
+    description: str, type of the course. e.g., audit, verified, professional
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["program_uuid", "course_readable_id"]
