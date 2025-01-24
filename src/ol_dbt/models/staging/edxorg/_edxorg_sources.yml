@@ -961,3 +961,38 @@ sources:
         block.
     - name: duration
       description: float, the length of the video, in seconds. May be 0.0.
+
+  - name: raw__edxorg__s3__programs
+    description: this table includes all the programs running on edX.org
+    columns:
+    - name: uuid
+      description: str, UUID of the program on edX.org.
+    - name: title
+      description: str, title of the program on edX.org
+    - name: subtitle
+      description: str, subtitle of the program on edX.org
+    - name: type
+      description: str, type of the program. e.g., MicroMasters, XSeries
+    - name: status
+      description: str, status of the program. Possible values are active, retired,
+        unpublished or deleted
+    - name: authoring_organizations
+      description: str, name of the organization that authored the program. e.g.,
+        MITx , HarvardX
+    - name: data_modified_timestamp
+      description: str, timestamp when the data was last modified
+
+  - name: raw__edxorg__s3__program_courses
+    description: this table includes all the program courses running on edX.org
+    columns:
+    - name: program_uuid
+      description: str, UUID of the program on edX.org.
+    - name: course_key
+      description: str, readable ID for the course in {org}+{course} format. e.g.,
+        MITx+15.415.1x
+    - name: course_title
+      description: str, title of the course
+    - name: course_description
+      description: str, short description of the course
+    - name: course_type
+      description: str, type of the course. e.g., audit, verified, professional
