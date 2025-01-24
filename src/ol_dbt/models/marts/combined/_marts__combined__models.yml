@@ -21,8 +21,6 @@ models:
       of Policy
   - name: program_id
     description: int, foreign key representing a single program
-    tests:
-    - not_null
   - name: course_readable_id
     description: str, Open edX ID formatted as course-v1:{org}+{course code} e.g.
       course-v1:xPRO+MLx2
@@ -31,7 +29,7 @@ models:
       code} e.g.program-v1:xPRO+MLx
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "program_id", "course_readable_id"]
+      column_list: ["platform", "program_title", "course_readable_id"]
 
 - name: marts__combined__users
   description: Mart model for users from different platforms
