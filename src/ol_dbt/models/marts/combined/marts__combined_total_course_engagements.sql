@@ -41,6 +41,7 @@ with combined_engagements as (
         , courserun_readable_id
         , user_username
     from {{ ref('int__combined__courserun_enrollments') }}
+    where courserun_readable_id is not null
     group by
         platform
         , courserun_readable_id
@@ -234,7 +235,7 @@ inner join combined_engagements
     on
         combined_runs.courserun_readable_id = combined_engagements.courserun_readable_id
         and combined_runs.platform = combined_engagements.platform
-left join combined_enrollments
+inner join combined_enrollments
     on 
         combined_runs.courserun_readable_id = combined_enrollments.courserun_readable_id
         and combined_runs.platform = combined_enrollments.platform
