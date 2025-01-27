@@ -709,9 +709,17 @@ models:
     description: timestamp, datetime on when the course begins
   - name: courserun_end_on
     description: timestamp, datetime on when the course ends
+  - name: user_username
+    description: str, open edx username on the corresponding platform
+  - name: videos_user_watched
+    description: int, number of distinct videos watched by a user for a particular course run
+  - name: problems_user_submitted
+    description: int, number of distinct problems submitted by a user for a particular course run
+  - name: user_discussion_count
+    description: int, number of distinct discussions participated in by a user for a particular course run
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "courserun_readable_id"]
+      column_list: ["platform", "courserun_readable_id", "user_username"]
 
 - name: marts__combined_course_engagements
   description: Learners daily course engagement statistics from MITx Online, xPro,
