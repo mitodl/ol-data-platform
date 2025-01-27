@@ -226,7 +226,7 @@ select
     , combined_runs.courserun_is_current
     , combined_runs.courserun_start_on
     , combined_runs.courserun_end_on
-    , combined_user_video.user_username
+    , combined_enrollments.user_username
     , combined_user_video.videos_user_watched
     , combined_user_problem.problems_user_submitted
     , combined_user_discussion.user_discussion_count
