@@ -1,6 +1,9 @@
 ---
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
+ci:
+  skip:
+  - sqlfluff-fix
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v5.0.0
