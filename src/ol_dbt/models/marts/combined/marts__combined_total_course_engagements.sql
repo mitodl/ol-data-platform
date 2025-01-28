@@ -36,7 +36,7 @@ with combined_engagements as (
 )
 
 , combined_enrollments as (
-    select 
+    select
         platform
         , courserun_readable_id
         , user_username
@@ -195,7 +195,7 @@ with combined_engagements as (
         , count(distinct useractivity_discussion_post_id) as user_discussion_count
     from {{ ref('int__mitxpro__user_courseactivity_discussion') }}
     where useractivity_event_type like 'edx.forum.%.created'
-    group by 
+    group by
         '{{ var("mitxpro") }}'
         , user_username
         , courserun_readable_id
@@ -236,21 +236,21 @@ inner join combined_engagements
         combined_runs.courserun_readable_id = combined_engagements.courserun_readable_id
         and combined_runs.platform = combined_engagements.platform
 inner join combined_enrollments
-    on 
+    on
         combined_runs.courserun_readable_id = combined_enrollments.courserun_readable_id
         and combined_runs.platform = combined_enrollments.platform
 left join combined_user_video
-    on 
+    on
         combined_enrollments.courserun_readable_id = combined_user_video.courserun_readable_id
         and combined_enrollments.platform = combined_user_video.platform
         and combined_enrollments.user_username = combined_user_video.user_username
 left join combined_user_problem
-    on 
+    on
         combined_enrollments.courserun_readable_id = combined_user_problem.courserun_readable_id
         and combined_enrollments.platform = combined_user_problem.platform
         and combined_enrollments.user_username = combined_user_problem.user_username
 left join combined_user_discussion
-    on 
+    on
         combined_enrollments.courserun_readable_id = combined_user_discussion.courserun_readable_id
         and combined_enrollments.platform = combined_user_discussion.platform
         and combined_enrollments.user_username = combined_user_discussion.user_username
