@@ -127,7 +127,10 @@ with mitxpro__programenrollments as (
         , edx_program_enrollments.program_track
         , edx_program_enrollments.program_type
         , null as program_is_live
-        , null as program_readable_id
+        , {{ generate_micromasters_program_readable_id(
+              'edx_program_enrollments.micromasters_program_id'
+              ,'edx_program_enrollments.program_title')
+         }} as program_readable_id
         , edx_program_enrollments.user_id
         , edxorg__users.user_email
         , edx_program_enrollments.user_username

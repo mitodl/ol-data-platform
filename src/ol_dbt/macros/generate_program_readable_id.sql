@@ -9,7 +9,7 @@
         when {{ micromasters_program_id }} = 5
              --- Finance (active) and MIT Finance (retired) has the same readable ID
              then 'program-v1:MITx+FIN'
-        else
+         when {{ micromasters_program_id }} is not null then
               'program-v1:MITx+' || upper(array_join(
                   transform(split({{ program_title }}, ' '), -- noqa: PRS
                     x -> substring(x, 1, 1)
