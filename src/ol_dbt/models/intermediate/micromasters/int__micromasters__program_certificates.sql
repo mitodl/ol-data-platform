@@ -17,6 +17,11 @@ with program_certificates_dedp_from_micromasters as (
     select * from {{ ref('int__mitx__users') }}
 )
 
+, mitxonline_programs as (
+    select * from {{ ref('int__mitxonline__programs') }}
+)
+
+
 -- Some micromasters learners from previous semesters don't have mitxonline logins. The mitxonline
 -- database does not include the certificates for those users. However, for future semesters,
 -- the mitxonline  database will be the source for dedp program certificates and the table in
@@ -128,5 +133,12 @@ select
     , report.user_street_address
     , report.user_address_state_or_territory
     , report.program_is_dedp
+    , if(
+        mitxonline_programs.program_id is not null
+        , mitxonline_programs.program_readable_id
+        , {{ generate_micromasters_program_readable_id('report.micromasters_program_id','report.program_title') }}
+    ) as program_readable_id
 from report
+left join mitxonline_programs
+    on report.mitxonline_program_id = mitxonline_programs.program_id
 order by report.program_completion_timestamp desc

@@ -270,3 +270,8 @@ models:
     description: int, id of the program in the mitxonline database
   - name: user_mitxonline_username
     description: str, The username of the learner on the mitxonline platform
+  - name: program_readable_id
+    description: str, readable ID formatted as program-v1:{org}+{program code}, e.g.,
+      program-v1:MITx+DEDP
+    tests:
+    - not_null
