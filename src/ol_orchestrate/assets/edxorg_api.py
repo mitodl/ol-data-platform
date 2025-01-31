@@ -237,6 +237,7 @@ def edxorg_mitx_course_metadata(
                         "max_effort": course_run["max_effort"],
                         "estimated_hours": course_run["estimated_hours"],
                         "modified": course_run["modified"],
+                        "retrieved_at": data_retrieval_timestamp,
                     }
                 )
 
