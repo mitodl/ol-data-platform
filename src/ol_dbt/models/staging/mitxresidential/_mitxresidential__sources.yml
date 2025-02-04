@@ -1069,3 +1069,24 @@ sources:
     - name: retrieved_at
       description: timestamp, time indicating when this block was initially retrieved
         from REST API.
+
+  - name: raw__mitx__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended
+    description: history of studentmodule in Residential MITx open edx platform
+    columns:
+    - name: id
+      description: str, primary key in this table
+    - name: student_module_id
+      description: int, foreign key to courseware_studentmodule
+    - name: state
+      description: str, JSON text indicating the learner's state for the corresponding
+        module such as course, chapter, problemset, sequential, videosequence, etc.
+    - name: grade
+      description: str, floating point value indicating the total unweighted grade
+        for this problem that the learner has scored. e.g. how many responses they
+        got right within the problem. This data is also available in courseactivity_problemcheck
+    - name: max_grade
+      description: str, floating point value indicating the total possible unweighted
+        grade for this problem, or basically the number of responses that are in this
+        problem. This data is also available in courseactivity_problemcheck
+    - name: created
+      description: timestamp, datetime when this row was created
