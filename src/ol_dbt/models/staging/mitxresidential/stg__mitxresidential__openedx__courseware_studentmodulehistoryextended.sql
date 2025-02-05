@@ -1,7 +1,8 @@
 {{ config(
     materialized='incremental',
-    unique_key = ['studentmodulehistoryextended_id'],
+    unique_key = 'studentmodulehistoryextended_id',
     incremental_strategy='delete+insert',
+    views_enabled=false,
   )
 }}
 
@@ -17,6 +18,9 @@ with source as (
     {% endif %}
 )
 
+--- this is needed for the initial dbt run to deduplicate the data from raw table
+{{ deduplicate_query(cte_name1='source',cte_name2='most_recent_source', partition_columns = 'id') }}
+
 , cleaned as (
 
     select
@@ -26,7 +30,7 @@ with source as (
         , grade as studentmodule_problem_grade
         , max_grade as studentmodule_problem_max_grade
         , created as studentmodule_created_on
-    from source
+    from most_recent_source
 )
 
 select * from cleaned
