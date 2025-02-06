@@ -209,3 +209,32 @@ models:
     description: int, display_tag_filter_strategy
   - name: consecutive_days_visit_count
     description: int, consecutive_days_visit_count
+
+- name: irx__mitx__openedx__mysql__courseware_studentmodulehistoryextended
+  description: history of studentmodule in Residential MITx open edx platform
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: user_id
+    description: int, reference user id in auth_user
+  - name: course_id
+    description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
+  - name: module_id
+    description: str, block ID for a distinct piece of content in a course, referencing
+      course_structure
+  - name: module_type
+    description: str, category/type of the block, referencing course_structure.
+  - name: state_data
+    description: str, JSON text indicating the learner's state for the corresponding
+      module such as course, chapter, problemset, sequential, videosequence, etc.
+  - name: grade
+    description: str, floating point value indicating the total unweighted grade for
+      this problem that the learner has scored. e.g. how many responses they got right
+      within the problem.
+  - name: max_grade
+    description: str, floating point value indicating the total possible unweighted
+      grade for this problem, or basically the number of responses that are in this
+      problem.
+  - name: created
+    description: timestamp, datetime when this row was created
