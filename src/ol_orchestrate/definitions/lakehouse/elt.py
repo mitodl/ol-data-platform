@@ -69,7 +69,7 @@ airbyte_assets = load_assets_from_airbyte_instance(
     # sources, since they are defined as ol_warehouse_raw_data in the
     # sources.yml files. (TMM 2023-01-18)
     key_prefix="ol_warehouse_raw_data",
-    connection_filter=lambda conn: "S3 Glue Data Lake" in conn.name,
+    connection_filter=lambda conn: re.match(r"S3 (Glue )?Data Lake", conn.name),
     connection_to_group_fn=(
         # Airbyte uses the unicode "right arrow" (U+2192) in the connection names for
         # separating the source and destination. This selects the source name specifier
