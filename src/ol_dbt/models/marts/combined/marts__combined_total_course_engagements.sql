@@ -216,34 +216,34 @@ with combined_engagements as (
 )
 
 , user_video_correction as (
-    select 
+    select
         platform
         , courserun_readable_id
         , max(videos_user_watched) as max_videos_per_courserun
     from combined_user_video
-    group by 
+    group by
         platform
         , courserun_readable_id
 )
 
 , user_problem_correction as (
-    select 
+    select
         platform
         , courserun_readable_id
         , max(problems_user_submitted) as max_problems_per_courserun
     from combined_user_problem
-    group by 
+    group by
         platform
         , courserun_readable_id
 )
 
 , user_discussion_correction as (
-    select 
+    select
         platform
         , courserun_readable_id
         , max(user_discussion_count) as max_discussions_per_courserun
     from combined_user_discussion
-    group by 
+    group by
         platform
         , courserun_readable_id
 )
@@ -260,19 +260,19 @@ select
     , combined_user_video.videos_user_watched
     , combined_user_problem.problems_user_submitted
     , combined_user_discussion.user_discussion_count
-    , case 
+    , case
         when combined_engagements.total_courserun_problems >= user_problem_correction.max_problems_per_courserun
             then combined_engagements.total_courserun_problems
         else user_problem_correction.max_problems_per_courserun
     end as total_courserun_problems
-    , case 
+    , case
         when combined_engagements.total_courserun_videos >= user_video_correction.max_videos_per_courserun
             then combined_engagements.total_courserun_videos
         else user_video_correction.max_videos_per_courserun
     end as total_courserun_videos
-    , case 
+    , case
         when
-            combined_engagements.total_courserun_discussions 
+            combined_engagements.total_courserun_discussions
             >= user_discussion_correction.max_discussions_per_courserun
             then combined_engagements.total_courserun_discussions
         else user_discussion_correction.max_discussions_per_courserun
@@ -304,7 +304,7 @@ left join combined_user_discussion
 left join user_video_correction
     on
         combined_runs.courserun_readable_id = user_video_correction.courserun_readable_id
-        and combined_runs.platform = user_video_correction.platform 
+        and combined_runs.platform = user_video_correction.platform
 left join user_problem_correction
     on
         combined_runs.courserun_readable_id = user_problem_correction.courserun_readable_id
@@ -312,4 +312,4 @@ left join user_problem_correction
 left join user_discussion_correction
     on
         combined_runs.courserun_readable_id = user_discussion_correction.courserun_readable_id
-        and combined_runs.platform = user_discussion_correction.platform 
+        and combined_runs.platform = user_discussion_correction.platform
