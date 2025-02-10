@@ -133,13 +133,13 @@ def edxorg_program_metadata(
             description="The metadata for MITx courses extracted from the edxorg's "
             "course catalog API",
             io_manager_key="s3file_io_manager",
-            key=AssetKey(("edxorg", "processed_data", "course_metadata")),
+            key=AssetKey(("edxorg", "api_data", "course_metadata")),
         ),
         "course_run_metadata": AssetOut(
             description="The metadata for MITx course runs extracted from the edxorg's "
             "course catalog API",
             io_manager_key="s3file_io_manager",
-            key=AssetKey(("edxorg", "processed_data", "course_run_metadata")),
+            key=AssetKey(("edxorg", "api_data", "course_run_metadata")),
         ),
     },
 )
