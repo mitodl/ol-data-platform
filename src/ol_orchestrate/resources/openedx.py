@@ -226,6 +226,24 @@ class OpenEdxApiClient(ConfigurableResource):
             next_page = response_data["next"]
             yield response_data["results"]
 
+    def get_sloan_courses(self):
+        """
+        Retrieve the course data from their API as JSON
+
+        returns: JSON document representing an array of course objects
+        """
+        course_url = "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/courses"
+        return self._fetch_with_auth(course_url)
+
+    def get_sloan_course_offerings(self):
+        """
+        Retrieve the course offerings data from their API as JSON
+
+        returns: JSON document representing an array of course offering objects
+        """
+        course_offering_url = "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/course-offerings"
+        return self._fetch_with_auth(course_offering_url)
+
 
 class OpenEdxApiClientFactory(ConfigurableResource):
     deployment: str = Field(
