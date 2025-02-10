@@ -7,7 +7,10 @@ from dagster import (
 )
 from dagster_aws.s3 import S3Resource
 
-from ol_orchestrate.assets.edxorg_api import edxorg_program_metadata
+from ol_orchestrate.assets.edxorg_api import (
+    edxorg_mitx_course_metadata,
+    edxorg_program_metadata,
+)
 from ol_orchestrate.io_managers.filepath import S3FileObjectIOManager
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
@@ -40,12 +43,12 @@ def s3_uploads_bucket(
 
 edxorg_api_daily_schedule = ScheduleDefinition(
     name="edxorg_api_schedule",
-    target=AssetSelection.assets(edxorg_program_metadata),
+    target=AssetSelection.assets(edxorg_program_metadata, edxorg_mitx_course_metadata),
     cron_schedule="@daily",
     execution_timezone="Etc/UTC",
 )
 
-edxorg_program_metadata_extract = Definitions(
+edxorg_api_data = Definitions(
     resources={
         "io_manager": default_io_manager(DAGSTER_ENV),
         "s3file_io_manager": S3FileObjectIOManager(
@@ -56,6 +59,6 @@ edxorg_program_metadata_extract = Definitions(
         "s3": S3Resource(),
         "edxorg_api": OpenEdxApiClientFactory(deployment="edxorg", vault=vault),
     },
-    assets=[edxorg_program_metadata],
+    assets=[edxorg_program_metadata, edxorg_mitx_course_metadata],
     schedules=[edxorg_api_daily_schedule],
 )

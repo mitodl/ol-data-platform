@@ -206,6 +206,26 @@ class OpenEdxApiClient(ConfigurableResource):
             next_page = response_data["next"]
             yield response_data["results"]
 
+    def get_edxorg_mitx_courses(self):
+        """
+        Retrieve a list of all the active courses in MITx catalog by walking through the
+        paginated results
+
+        Yield: A generator for walking the paginated list of courses
+        """
+        course_catalog_url = "https://discovery.edx.org/api/v1/catalogs/10/courses/"
+        response_data = self._fetch_with_auth(course_catalog_url)
+        results = response_data["results"]
+        next_page = response_data["next"]
+        count = response_data["count"]
+        yield count, results
+        while next_page:
+            response_data = self._fetch_with_auth(
+                course_catalog_url, extra_params=parse_qs(next_page)
+            )
+            next_page = response_data["next"]
+            yield response_data["results"]
+
 
 class OpenEdxApiClientFactory(ConfigurableResource):
     deployment: str = Field(
