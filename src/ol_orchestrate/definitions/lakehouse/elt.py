@@ -68,6 +68,16 @@ airbyte_assets = load_assets_from_airbyte_instance(
     key_prefix="ol_warehouse_raw_data",
     connection_filter=lambda conn: re.search(r"S3 (Glue )?Data Lake", conn.name)
     is not None,
+    connection_to_group_fn=(
+        # Airbyte uses the unicode "right arrow" (U+2192) in the connection names for
+        # separating the source and destination. This selects the source name specifier
+        # and converts it to a lowercased, underscore separated string.
+        lambda conn_name: re.sub(
+            r"[^A-Za-z0-9_]", "", re.sub(r"[-\s]+", "_", conn_name)
+        )
+        .strip("_")
+        .lower()
+    ),
 )
 
 
