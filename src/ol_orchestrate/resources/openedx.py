@@ -213,7 +213,7 @@ class OpenEdxApiClient(ConfigurableResource):
 
         Yield: A generator for walking the paginated list of courses
         """
-        course_catalog_url = "https://api.edx.org/catalog/v1/catalogs/10/courses"
+        course_catalog_url = "https://discovery.edx.org/api/v1/catalogs/10/courses/"
         response_data = self._fetch_with_auth(course_catalog_url)
         results = response_data["results"]
         next_page = response_data["next"]
