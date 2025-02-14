@@ -13,7 +13,6 @@ with source as (
         , full_description as courserun_full_description
         , level_type as courserun_level
         , marketing_url as courserun_marketing_url
-        , staff as courserun_instructors
         , languages as courserun_languages
         , min_effort as courserun_min_weekly_hours
         , max_effort as courserun_max_weekly_hours
@@ -22,6 +21,7 @@ with source as (
         , enrollment_type as courserun_enrollment_mode
         , availability as courserun_availability
         , status as courserun_status
+        , if(staff = '[]', null, staff) as courserun_instructors
         , if(seats = '[]', null, seats) as courserun_enrollment_modes
         , json_query(image, 'lax $.url' omit quotes) as courserun_image_url
         , case
