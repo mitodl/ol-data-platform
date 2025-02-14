@@ -24,13 +24,13 @@ from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
         "program_metadata": AssetOut(
             description="The metadata for programs extracted from edxorg program API",
             io_manager_key="s3file_io_manager",
-            key=AssetKey(("edxorg", "processed_data", "program_metadata")),
+            key=AssetKey(("edxorg", "api_data", "program_metadata")),
         ),
         "program_course_metadata": AssetOut(
             description="The metadata of all the associated program courses extracted "
             "from edxorg program API",
             io_manager_key="s3file_io_manager",
-            key=AssetKey(("edxorg", "processed_data", "program_course_metadata")),
+            key=AssetKey(("edxorg", "api_data", "program_course_metadata")),
         ),
     },
 )
@@ -59,11 +59,8 @@ def edxorg_program_metadata(
         )
         for program in result_batch:
             program_uuid = program["uuid"]
-            org = (
-                program["authoring_organizations"][0].get("key", None)
-                if program["authoring_organizations"]
-                else None
-            )
+            org_keys = [org["key"] for org in program["authoring_organizations"]]
+            org = ", ".join(org_keys)
             edxorg_programs.append(
                 {
                     "uuid": program_uuid,
@@ -168,15 +165,13 @@ def edxorg_mitx_course_metadata(
         )
         for course in result_batch:
             course_key = course["key"]
+            owner_keys = [owner["key"] for owner in course["owners"]]
+            owner = ", ".join(owner_keys)
             mitx_courses.append(
                 {
                     "course_key": course_key,
                     "title": course["title"],
-                    "owner": (
-                        course["owners"][0].get("key", None)
-                        if course["owners"]
-                        else None
-                    ),
+                    "owner": owner,
                     "short_description": course["short_description"],
                     "full_description": course["full_description"],
                     "level_type": course["level_type"],
@@ -218,6 +213,7 @@ def edxorg_mitx_course_metadata(
                         "enrollment_type": course_run["type"],
                         "availability": course_run["availability"],
                         "status": course_run["status"],
+                        "is_enrollable": course_run["is_enrollable"],
                         "image": {
                             "url": course_run["image"].get("src"),
                             "description": course_run["image"].get("description"),
