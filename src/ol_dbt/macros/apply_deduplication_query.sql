@@ -20,3 +20,22 @@
     )
 
 {% endmacro %}
+
+{% macro deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') %}
+    /*
+        This dedupe applied to the raw tables via Incremental Sync from Airbyte. It will deduplicate the data based on
+        the partition_columns and order by columns.
+    */
+   , source_sorted as (
+        select
+            *
+            , row_number() over ( partition by {{ partition_columns }} order by {{ order_by }} desc) as row_num
+        from source
+    )
+
+    , most_recent_source as (
+        select * from source_sorted
+        where row_num = 1
+    )
+
+{% endmacro %}
