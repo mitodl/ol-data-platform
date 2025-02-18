@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__mitx_course_run') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__mitx_course_runs') }}
 )
 
 {{ deduplicate_raw_table(order_by='retrieved_at' , partition_columns = 'run_key') }}
@@ -21,7 +21,6 @@ with source as (
         , enrollment_type as courserun_enrollment_mode
         , availability as courserun_availability
         , status as courserun_status
-        , is_enrollable as courserun_is_enrollable
         , if(staff = '[]', null, staff) as courserun_instructors
         , if(seats = '[]', null, seats) as courserun_enrollment_modes
         , json_query(image, 'lax $.url' omit quotes) as courserun_image_url

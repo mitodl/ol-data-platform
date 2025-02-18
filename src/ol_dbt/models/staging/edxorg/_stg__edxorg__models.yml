@@ -1034,8 +1034,6 @@ models:
       'introductory', 'intermediate', or 'advanced'.
   - name: course_type
     description: str, audit, verified-audit, credit-verified-audit, or professional
-  - name: course_organizations
-    description: str, list of organizations associated with the course, e.g., MITx
   - name: course_marketing_url
     description: str, the URL for the course About page.
   - name: course_image_url
@@ -1077,8 +1075,6 @@ models:
   - name: courserun_level
     description: str, the course’s level of difficulty. Values can be 'high_school',
       'introductory', 'intermediate', or 'advanced'.
-  - name: courserun_is_enrollable
-    description: boolean, whether the course is currently open for enrollment
   - name: courserun_marketing_url
     description: str, the URL for the course About page.
   - name: courserun_languages
