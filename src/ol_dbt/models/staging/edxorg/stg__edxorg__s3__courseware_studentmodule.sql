@@ -2,12 +2,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__edxorg__s3__tables__courseware_studentmodule') }}
 )
 
-{{ deduplicate_query(
-   cte_name1='source',
-   cte_name2='most_recent_source' ,
-   partition_columns = 'course_id, student_id, module_id'
-   )
-}}
+
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'course_id, student_id, module_id') }}
 
 , cleaned as (
 
