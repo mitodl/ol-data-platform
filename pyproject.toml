@@ -16,7 +16,7 @@ classifiers = [
 requires-python = "~=3.12,<3.13"
 dependencies = [
 "PyPika ~= 0.48.9",
-"dagster ~= 1.9",
+"dagster ~= 1.10",
 "dagster-airbyte ~=0.26.1",
 "dagster-aws ~=0.26.1",
 "dagster-dbt ~=0.26.1",
@@ -24,7 +24,6 @@ dependencies = [
 "dagster-duckdb ~=0.26.1",
 "dagster-gcp ~=0.26.1",
 "dagster-postgres ~=0.26.1",
-"dagster-shell ~= 0.25.0",
 "dagster-slack ~=0.26.1",
 "dagster-webserver ~= 1.9",
 "dbt-duckdb ~= 1.9.0",
