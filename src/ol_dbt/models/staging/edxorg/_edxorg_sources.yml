@@ -666,7 +666,8 @@ sources:
         like category, children and metadata. Different block type may have different
         member fields inside metadata.
     - name: course_id
-      description: array, course ID in array with one element e.g. [MITx-7.05x-1T2024]
+      description: str, course ID wrapped in quotes, or it can be in an array. e.g.
+        ["MITx-CTL.SC1x_1-3T2022"]
     - name: course_title
       description: str, title of the course extracted from the metadata field of 'course'
         block

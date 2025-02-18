@@ -29,7 +29,11 @@ with course_block_source as (
         , block_title as coursestructure_block_title
         , course_content_hash as coursestructure_content_hash
         , block_content_hash as coursestructure_block_content_hash
-        , replace(element_at(course_id, 1), '-', '/') as courserun_readable_id
+        , case
+            when typeof(course_id) = 'array' then replace(element_at(course_id, 1), '-', '/')
+            else
+                replace(replace(replace(replace(course_id, '[', ''), ']', ''), '"', ''), '-', '/')
+        end as courserun_readable_id
         , json_query(block_details, 'lax $.metadata') as coursestructure_block_metadata
         , {{ cast_timestamp_to_iso8601('retrieved_at') }} as coursestructure_retrieved_at
     from course_block
