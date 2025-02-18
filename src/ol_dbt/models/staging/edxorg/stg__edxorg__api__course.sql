@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__mitx_courses') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__mitx_course') }}
 )
 
 {{ deduplicate_raw_table(order_by='retrieved_at' , partition_columns = 'course_key') }}
@@ -12,6 +12,7 @@ with source as (
         , full_description as course_full_description
         , level_type as course_level
         , course_type
+        , owner as course_organizations
         , marketing_url as course_marketing_url
         , json_query(image, 'lax $.url' omit quotes) as course_image_url
         , if(
