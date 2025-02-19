@@ -1,27 +1,64 @@
 ---
 # -*- mode: yaml -*-
-
 services:
+  dagster_init:
+    container_name: dagster_init
+    image: ol-dagster
+    depends_on:
+      postgres:
+        condition: service_healthy
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["uv", "run", "dagster", "instance", "migrate"]
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      DAGSTER_CURRENT_IMAGE: "dagster-daemon"
+      DAGSTER_PG_USERNAME: postgres
+      DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
+      DAGSTER_PG_HOST: postgres
+      DAGSTER_PG_DB: dagster
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./src/ol_orchestrate/dagster_local/:/opt/dagster/dagster_home/
+    - ./src/ol_orchestrate/dagster.dev.yaml:/opt/dagster/dagster_home/dagster.yaml
+    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
+    - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
+    - ./src/ol_dbt:/opt/dagster/code/ol_dbt
+
   # This service runs dagster-webserver, which loads your user code from the user code container.
   # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
   # a queue and later dequeued and launched by dagster-daemon.
   dagster_webserver:
     container_name: dagster_webserver
+    image: ol-dagster
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dagster_init:
+        condition: service_completed_successfully
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    entrypoint: ["poetry", "run", "dagster-webserver", "-w", "/opt/dagster/app/workspace.yaml",
+    entrypoint: ["uv", "run", "dagster-webserver", "-w", "/opt/dagster/dagster_home/workspace.yaml",
       "-h", "0.0.0.0", "-p", "3000"]
     ports:
     - "3000:3000"
     environment:
-    - GITHUB_TOKEN=${GITHUB_TOKEN}
-    - DAGSTER_CURRENT_IMAGE="dagster-webserver"
-    volumes: # Make docker client accessible so we can terminate containers from the webserver
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      DAGSTER_CURRENT_IMAGE: "ol-dagster"
+      DAGSTER_PG_USERNAME: postgres
+      DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
+      DAGSTER_PG_HOST: postgres
+      DAGSTER_PG_DB: dagster
+    volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/app/workspace.yaml
+    - ./src/ol_orchestrate/dagster_local/:/opt/dagster/dagster_home/
+    - ./src/ol_orchestrate/dagster.dev.yaml:/opt/dagster/dagster_home/dagster.yaml
+    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
     - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
     - ./src/ol_dbt:/opt/dagster/code/ol_dbt
 
@@ -29,19 +66,50 @@ services:
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
   dagster_daemon:
     container_name: dagster_daemon
+    image: ol-dagster
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dagster_init:
+        condition: service_completed_successfully
     build:
       context: .
       dockerfile: Dockerfile
-    image: dagster-daemon
     restart: on-failure
     # restart: unless-stopped
-    entrypoint: ["poetry", "run", "dagster-daemon", "run", "-w", "/opt/dagster/app/workspace.yaml"]
+    entrypoint: ["uv", "run", "dagster-daemon", "run", "-w", "/opt/dagster/dagster_home/workspace.yaml"]
     environment:
-    - GITHUB_TOKEN=${GITHUB_TOKEN}
-    - DAGSTER_CURRENT_IMAGE="dagster-daemon"
-    volumes: # Make docker client accessible so we can terminate containers from the webserver
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      DAGSTER_CURRENT_IMAGE: "ol-dagster"
+      DAGSTER_PG_USERNAME: postgres
+      DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
+      DAGSTER_PG_HOST: postgres
+      DAGSTER_PG_DB: dagster
+    volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/app/workspace.yaml
+    - ./src/ol_orchestrate/dagster_local/:/opt/dagster/dagster_home/
+    - ./src/ol_orchestrate/dagster.dev.yaml:/opt/dagster/dagster_home/dagster.yaml
+    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
     - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
     - ./src/ol_dbt:/opt/dagster/code/ol_dbt
+
+  postgres:
+    image: postgres
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    ports:
+    - 5432:5432
+    environment:
+      PGUSER: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres # pragma: allowlist secret
+      POSTGRES_DB: dagster
+    volumes:
+    - pgdata:/var/lib/postgresql
+
+volumes:
+  pgdata:

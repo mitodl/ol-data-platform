@@ -67,7 +67,7 @@ edx_gcs_courses = Definitions(
             name="edxorg_course_bundle_sensor",
             minimum_interval_seconds=86400,
             job=gcs_sync_job,
-            default_status=DefaultSensorStatus.RUNNING,
+            default_status=DefaultSensorStatus.STOPPED,
         )
     ],
     resources=resources,

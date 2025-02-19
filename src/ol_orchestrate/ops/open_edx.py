@@ -512,7 +512,7 @@ def export_edx_forum_database(
     command_array = [
         config.mongodump_path,
         "--uri",
-        f"'{mongo_uri}'",
+        mongo_uri,
         "--db",
         config.edx_mongodb_forum_database_name,
         "--authenticationDatabase",
@@ -536,9 +536,13 @@ def export_edx_forum_database(
         raise Failure(
             description="The mongodump command for exporting the Open edX forum database failed.",  # noqa: E501
             metadata={
-                "mongodump_output": MetadataValue.text(
-                    text=mongodump_result.stdout,
-                )
+                "mongodump_command": MetadataValue.text(" ".join(command_array)),
+                "mongodump_stdout": MetadataValue.text(
+                    text=mongodump_result.stdout.decode("utf8")
+                ),
+                "mongodump_stderr": MetadataValue.text(
+                    text=mongodump_result.stderr.decode("utf8")
+                ),
             },
         )
 

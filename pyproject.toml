@@ -2,63 +2,64 @@
 name = "ol-data-platform"
 version = "0.6.1"
 description = "Code and configuration for powering the MIT Open Learning data platform"
-authors = [{name = "MIT Open Learning Engineering", email = "ol-data@mit.edu"}]
-license = "BSD-3-Clause"
-readme = "README.md"
-repository = "https://github.com/mitodl/ol-data-platform"
-classifiers = [
-    'Framework :: Dagster',
-    'Operating System :: Linux',
-    'Programming Language :: Python',
-    'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.11',
-]
+authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
 requires-python = "~=3.12,<3.13"
+license = "BSD-3-Clause"
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+]
 dependencies = [
-"PyPika ~= 0.48.9",
-"dagster ~= 1.10",
-"dagster-airbyte ~=0.26.1",
-"dagster-aws ~=0.26.1",
-"dagster-dbt ~=0.26.1",
-"dagster-docker ~=0.26.1",
-"dagster-duckdb ~=0.26.1",
-"dagster-gcp ~=0.26.1",
-"dagster-postgres ~=0.26.1",
-"dagster-slack ~=0.26.1",
-"dagster-webserver ~= 1.10",
-"dbt-duckdb ~= 1.9.0",
-"dbt-trino ~= 1.9.0",
-"flatten-dict ~= 0.4.2",
-"fsspec ~=2025.2.0",
-"gcsfs (>=2025.2.0,<2025.3.0)",
-"httpx ~= 0.28.0",
-"hvac ~= 2.3.0",
-"jsonlines ~= 4.0.0",
-"polars ~= 1.19",
-"pyarrow ~=19.0.0",
-"pydantic ~= 2.10.0",
-"pymysql ~= 1.1",
-"s3fs (>=2025.2.0,<2025.3.0)",
-"universal-pathlib ~= 0.2.2",
+    "PyPika ~= 0.48.9",
+    "dagster ~= 1.10",
+    "dagster-airbyte ~=0.26.1",
+    "dagster-aws ~=0.26.1",
+    "dagster-dbt ~=0.26.1",
+    "dagster-docker ~=0.26.1",
+    "dagster-duckdb ~=0.26.1",
+    "dagster-gcp ~=0.26.1",
+    "dagster-postgres ~=0.26.1",
+    "dagster-slack ~=0.26.1",
+    "dagster-webserver ~= 1.10",
+    "dbt-duckdb ~= 1.9.0",
+    "dbt-trino ~= 1.9.0",
+    "flatten-dict ~= 0.4.2",
+    "fsspec ~=2025.2.0",
+    "gcsfs (>=2025.2.0,<2025.3.0)",
+    "httpx ~= 0.28.0",
+    "hvac ~= 2.3.0",
+    "jsonlines ~= 4.0.0",
+    "polars ~= 1.19",
+    "pyarrow ~=19.0.0",
+    "pydantic ~= 2.10.0",
+    "pymysql ~= 1.1",
+    "s3fs (>=2025.2.0,<2025.3.0)",
+    "universal-pathlib ~= 0.2.2",
+]
+repository = "https://github.com/mitodl/ol-data-platform"
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pre-commit>=4.0.0,<5",
+    "pytest>=8.0.0,<9",
+    "ruff",
+    "sqlfluff>=3.0.0,<4",
+    "typer[all]>=0.15.0,<0.16",
 ]
 
-[tool.poetry.group.dev.dependencies]
-mypy = "*"
-pre-commit = "^4.0.0"
-pytest = "^8.0.0"
-ruff = "*"
-sqlfluff = "^3.0.0"
-typer = {extras = ["all"], version = "^0.15.0"}
+[tool.hatch.build.targets.sdist]
+include = ["src/ol_orchestrate"]
 
-[tool.poetry]
-requires-poetry = ">=2.0"
-packages = [
-    { include = "ol_orchestrate", from = "src/" },
-]
+[tool.hatch.build.targets.wheel]
+include = ["src/ol_orchestrate"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src/ol_orchestrate" = "ol_orchestrate"
 
 [build-system]
-requires = ["poetry-core>=2.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.sqlfluff.core]
 templater = "jinja"
@@ -96,8 +97,6 @@ disallow_any_generics = true
 check_untyped_defs = true
 no_implicit_reexport = true
 ignore_missing_imports = true
-# for strict mypy: (this is the tricky one :-))
-# disallow_untyped_defs = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
