@@ -10,7 +10,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["poetry", "run", "dagster", "instance", "migrate"]
+    command: ["uv", "run", "dagster", "instance", "migrate"]
     environment:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       DAGSTER_CURRENT_IMAGE: "dagster-daemon"
@@ -42,7 +42,7 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    entrypoint: ["poetry", "run", "dagster-webserver", "-w", "/opt/dagster/dagster_home/workspace.yaml",
+    entrypoint: ["uv", "run", "dagster-webserver", "-w", "/opt/dagster/dagster_home/workspace.yaml",
       "-h", "0.0.0.0", "-p", "3000"]
     ports:
     - "3000:3000"
@@ -77,7 +77,7 @@ services:
       dockerfile: Dockerfile
     restart: on-failure
     # restart: unless-stopped
-    entrypoint: ["poetry", "run", "dagster-daemon", "run", "-w", "/opt/dagster/dagster_home/workspace.yaml"]
+    entrypoint: ["uv", "run", "dagster-daemon", "run", "-w", "/opt/dagster/dagster_home/workspace.yaml"]
     environment:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       DAGSTER_CURRENT_IMAGE: "ol-dagster"
