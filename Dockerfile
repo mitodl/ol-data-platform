@@ -1,7 +1,7 @@
 FROM --platform=linux/amd64 python:3.12-slim AS dagster-base
 
 # Docker run launcher example
-RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app
+RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app /opt/dagster/code
 
 # Install necessary dependencies
 RUN pip install dagster dagster-docker dagster-webserver dagster-postgres dagster-webserver
@@ -36,4 +36,4 @@ WORKDIR /opt/dagster/code
 # Copy poetry project to the $WORKDIR
 COPY pyproject.toml /opt/dagster/code
 
-RUN poetry install --without=dev --no-cache
+RUN poetry install --without=dev --no-cache --no-root

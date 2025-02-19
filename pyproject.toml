@@ -4,14 +4,12 @@ version = "0.6.1"
 description = "Code and configuration for powering the MIT Open Learning data platform"
 authors = [{name = "MIT Open Learning Engineering", email = "ol-data@mit.edu"}]
 license = "BSD-3-Clause"
-readme = "README.md"
 repository = "https://github.com/mitodl/ol-data-platform"
 classifiers = [
     'Framework :: Dagster',
     'Operating System :: Linux',
     'Programming Language :: Python',
     'Programming Language :: Python :: 3',
-    'Programming Language :: Python :: 3.11',
 ]
 requires-python = "~=3.12,<3.13"
 dependencies = [
