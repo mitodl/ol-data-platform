@@ -3,9 +3,6 @@ FROM --platform=linux/amd64 python:3.12-slim AS dagster-base
 # Docker run launcher example
 RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app /opt/dagster/code
 
-# Install necessary dependencies
-RUN pip install dagster dagster-docker dagster-webserver dagster-postgres dagster-webserver
-
 RUN mkdir -p /opt/dagster/dagster_home /opt/dagster/app && \
     useradd -s /bin/bash -d /opt/dagster/dagster_home/ dagster && \
     chown -R dagster: /opt/dagster
