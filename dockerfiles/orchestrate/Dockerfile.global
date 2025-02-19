@@ -36,8 +36,8 @@ WORKDIR /opt/dagster/code
 RUN uv sync --locked --no-dev
 
 RUN cd /opt/dbt && \
-    uv run --directory /opt/dagster/code dbt deps --project-dir /opt/dbt && \
-    uv run --directory /opt/dagster/code dbt ls --project-dir /opt/dbt --profiles-dir /opt/dbt --target dev
+    uv run --no-dev --directory /opt/dagster/code dbt deps --project-dir /opt/dbt && \
+    uv run --no-dev --directory /opt/dagster/code dbt ls --project-dir /opt/dbt --profiles-dir /opt/dbt --target dev
 
 # ENTRYPOINTS
 # Dagster Daemon
