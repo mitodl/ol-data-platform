@@ -537,7 +537,7 @@ def export_edx_forum_database(
             description="The mongodump command for exporting the Open edX forum database failed.",  # noqa: E501
             metadata={
                 "mongodump_output": MetadataValue.text(
-                    text=mongodump_result.stdout,
+                    text=mongodump_result.stdout.decode("utf8"),
                 )
             },
         )
