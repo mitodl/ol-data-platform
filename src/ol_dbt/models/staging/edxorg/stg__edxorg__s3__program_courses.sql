@@ -1,9 +1,8 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__program_courses') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__program_course') }}
 )
 
-{{ deduplicate_query(cte_name1='source', cte_name2='most_recent_source'
-, partition_columns = 'program_uuid, course_key') }}
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'program_uuid, course_key') }}
 
 , cleaned as (
     select

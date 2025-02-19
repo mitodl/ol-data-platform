@@ -666,7 +666,7 @@ sources:
         like category, children and metadata. Different block type may have different
         member fields inside metadata.
     - name: course_id
-      description: array, course ID in array with one element e.g. [MITx-7.05x-1T2024]
+      description: str, course ID wrapped in quotes. e.g., ["MITx-CTL.SC1x_1-3T2022"]
     - name: course_title
       description: str, title of the course extracted from the metadata field of 'course'
         block
@@ -962,7 +962,7 @@ sources:
     - name: duration
       description: float, the length of the video, in seconds. May be 0.0.
 
-  - name: raw__edxorg__s3__programs
+  - name: raw__edxorg__s3__program
     description: this table includes all the programs running on edX.org
     columns:
     - name: uuid
@@ -982,7 +982,7 @@ sources:
     - name: data_modified_timestamp
       description: str, timestamp when the data was last modified
 
-  - name: raw__edxorg__s3__program_courses
+  - name: raw__edxorg__s3__program_course
     description: this table includes all the program courses running on edX.org
     columns:
     - name: program_uuid
@@ -997,7 +997,7 @@ sources:
     - name: course_type
       description: str, type of the course. e.g., audit, verified, professional
 
-  - name: raw__edxorg__s3__mitx_courses
+  - name: raw__edxorg__s3__mitx_course
     description: MITx courses on edX.org, sourced from the discovery API
     columns:
     - name: course_key
@@ -1014,6 +1014,8 @@ sources:
         'introductory', 'intermediate', or 'advanced'.
     - name: course_type
       description: str, audit, verified-audit, credit-verified-audit, or professional
+    - name: owner
+      description: str, list of organizations associated with the course, e.g., MITx
     - name: marketing_url
       description: str, the URL for the course about page.
     - name: image
@@ -1029,7 +1031,7 @@ sources:
     - name: modified
       description: timestamp, the date and time the course was last modified.
 
-  - name: raw__edxorg__s3__mitx_course_runs
+  - name: raw__edxorg__s3__mitx_course_run
     description: MITx course runs on edX.org, sourced from the discovery API
     columns:
     - name: run_key
@@ -1053,6 +1055,8 @@ sources:
         or 'instructor-paced'.
     - name: enrollment_type
       description: str, audit, verified, credit, or professional.
+    - name: courserun_is_enrollable
+      description: boolean, whether the course is currently open for enrollment
     - name: availability
       description: str, the availability of the course run. Possible values are 'Upcoming',
         'Starting Soon', 'Current' or 'Archived'

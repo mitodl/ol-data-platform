@@ -1,5 +1,6 @@
 import hashlib
 import json
+import subprocess
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -20,7 +21,6 @@ from dagster import (
     op,
 )
 from dagster.core.definitions.input import In
-from dagster_shell.utils import execute as run_bash
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from pydantic import Field
@@ -525,19 +525,19 @@ def export_edx_forum_database(
     if username := config.edx_mongodb_username:
         command_array.extend(["--username", username])
 
-    mongodump_output, mongodump_retcode = run_bash(
-        " ".join(command_array),
-        output_logging="BUFFER",
-        log=context.log,
+    mongodump_result = subprocess.run(  # noqa: S603
+        command_array,
+        capture_output=True,
         cwd=str(context.resources.results_dir.root_dir),
+        check=False,
     )
 
-    if mongodump_retcode != 0:
+    if mongodump_result.returncode != 0:
         raise Failure(
             description="The mongodump command for exporting the Open edX forum database failed.",  # noqa: E501
             metadata={
                 "mongodump_output": MetadataValue.text(
-                    text=mongodump_output,
+                    text=mongodump_result.stdout,
                 )
             },
         )
