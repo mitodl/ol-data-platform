@@ -14,7 +14,7 @@ class Vault(ConfigurableResource):
     vault_auth_type: str = "aws-iam"  # can be one of ["github", "aws-iam", "token"]
     auth_mount: Optional[str] = None
     verify_tls: bool = True
-    _client: hvac.Client = PrivateAttr()
+    _client: hvac.Client = PrivateAttr(default=None)
 
     def _auth_aws_iam(self):
         session = boto3.Session()
@@ -39,5 +39,6 @@ class Vault(ConfigurableResource):
 
     @property
     def client(self) -> hvac.Client:
-        self._client = hvac.Client(url=self.vault_addr, verify=self.verify_tls)
+        if self._client is None:
+            self._client = hvac.Client(url=self.vault_addr, verify=self.verify_tls)
         return self._client

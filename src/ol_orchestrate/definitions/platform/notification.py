@@ -28,7 +28,7 @@ notifications = Definitions(
             slack_token=vault.client.secrets.kv.v1.read_secret(
                 path="dagster/slack", mount_point="secret-data"
             )["data"]["token"],
-            default_status=DefaultSensorStatus.RUNNING,
+            default_status=DefaultSensorStatus.STOPPED,
         )
     ]
 )
