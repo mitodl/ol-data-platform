@@ -20,6 +20,7 @@ with source as (
         , enrollment_type as courserun_enrollment_mode
         , availability as courserun_availability
         , status as courserun_status
+        , is_enrollable as courserun_is_enrollable
         , pacing_type as courserun_pace
         , if(staff = '[]', null, staff) as courserun_instructors
         , if(seats = '[]', null, seats) as courserun_enrollment_modes

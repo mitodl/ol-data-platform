@@ -1,8 +1,8 @@
 with source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__programs') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__program') }}
 )
 
-{{ deduplicate_query(cte_name1='source', cte_name2='most_recent_source' , partition_columns = 'uuid') }}
+{{ deduplicate_raw_table(order_by='retrieved_at' , partition_columns = 'uuid') }}
 
 , cleaned as (
     select
