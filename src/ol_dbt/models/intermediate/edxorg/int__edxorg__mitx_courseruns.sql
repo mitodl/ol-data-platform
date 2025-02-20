@@ -62,7 +62,8 @@ with runs_from_bigquery as (
         , runs_from_api.courserun_availability
         , runs_from_api.courserun_is_published
         , coalesce(
-            runs_from_api.courserun_readable_id, runs_from_bigquery.courserun_readable_id
+            replace(replace(runs_from_api.courserun_readable_id, 'course-v1:', ''), '+', '/')
+            , runs_from_bigquery.courserun_readable_id
         ) as courserun_readable_id
         , coalesce(
             runs_from_api.courserun_is_self_paced, runs_from_bigquery.courserun_is_self_paced
