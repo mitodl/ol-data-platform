@@ -1103,6 +1103,12 @@ models:
     description: array, list of instructors associated with the course
   - name: courserun_duration
     description: str, the number of weeks to complete the course. e.g. '4 weeks'
+  - name: courserun_time_commitment
+    description: str, short description indicating about the time commitments (e.g.
+      '5-7 hours per week')
+  - name: courserun_is_published
+    description: boolean, indicating whether the course run is published and open
+      for enrollment
   - name: courserun_min_weekly_hours
     description: int, the minimum number of estimated hours of effort per week.
   - name: courserun_max_weekly_hours

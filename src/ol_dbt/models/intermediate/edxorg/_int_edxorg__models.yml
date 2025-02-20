@@ -38,13 +38,13 @@ models:
   - name: courserun_instructors
     description: str, List of instructors associated with the course
   - name: course_topics
-    description: array, the academic subjects that this course covers.
+    description: str, List of the academic subjects that this course covers.
   - name: courserun_pace
     description: str, the pacing of the course. Possible values are 'self_paced' or
       'instructor_paced'.
-  - name: courserun_status
-    description: str, the status of the course run. Possible values are 'published',
-      'unpublished', or 'reviewed'
+  - name: courserun_is_published
+    description: boolean, indicating whether the course run is published and open
+      for enrollment
   - name: courserun_enrollment_mode
     description: str, audit, verified, credit, or professional.
   - name: courserun_availability
@@ -52,10 +52,9 @@ models:
       'Starting Soon', 'Current' or 'Archived'
   - name: courserun_duration
     description: str, the number of weeks to complete the course. e.g. '4 weeks'
-  - name: courserun_min_weekly_hours
-    description: int, the minimum number of estimated hours of effort per week.
-  - name: courserun_max_weekly_hours
-    description: int, the maximum number of estimated hours of effort per week.
+  - name: courserun_time_commitment
+    description: str, short description indicating about the time commitments (e.g.
+      '5-7 hours per week')
   - name: courserun_estimated_hours
     description: int, the estimated number of hours to complete the course.
   - name: micromasters_program_id
@@ -922,3 +921,5 @@ models:
   - name: credit_hours
     description: str, the number of credit hours that learners who pass the course
       earn.
+runs:
+  courserun_time_commitment:

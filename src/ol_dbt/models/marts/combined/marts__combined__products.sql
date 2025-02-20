@@ -173,11 +173,20 @@ with mitxonline_product as (
         , edxorg_runs.courserun_time_commitment as time_commitment
         , edxorg_runs.course_topics as topics
         , edxorg_runs.courserun_instructors as instructors
-        , if(edxorg_runs.courserun_status = 'published' and edxorg_runs.courserun_is_enrollable, true, false) as is_live
+        , if(edxorg_runs.courserun_is_published, true, false) as is_live
+        , if(
+            edxorg_runs.micromasters_program_id is not null
+            , 'MicroMasters Credential'
+            , 'Certificate of Completion'
+        ) as certification_type
     from edxorg_product
     inner join edxorg_runs
         on edxorg_product.courserun_readable_id = edxorg_runs.courserun_readable_id
-    where edxorg_product.courserun_mode = 'verified'
+    left join mitxonline_product_view
+        on edxorg_product.courserun_readable_id = mitxonline_product_view.product_readable_id
+    where
+        edxorg_product.courserun_mode = 'verified'
+        and mitxonline_product_view.product_readable_id is null
 
 )
 
@@ -252,7 +261,7 @@ select
     , 'course run' as product_type
     , product_description
     , list_price
-    , product_is_active
+    , null as product_is_active
     , false as product_is_private
     , null as product_created_on
     , start_on
@@ -263,7 +272,7 @@ select
     , pace
     , duration
     , time_commitment
-    , 'Professional Certificate' as certification_type
+    , certification_type
     , 'Online' as delivery
     , null as continuing_education_credits
     , topics

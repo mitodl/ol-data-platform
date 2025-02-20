@@ -38,8 +38,8 @@ with runs_from_bigquery as (
     select
         courseruns.*
         , courses.course_organizations
-        , courses.course_topics
         , instructors.instructor_names
+        , array_join(courses.course_topics, ', ') as course_topics
     from courseruns
     inner join courses
         on courseruns.course_readable_id = courses.course_readable_id
@@ -55,13 +55,12 @@ with runs_from_bigquery as (
         , runs_from_api.courserun_short_description as courserun_description
         , runs_from_api.course_topics
         , runs_from_api.courserun_pace
-        , runs_from_api.courserun_min_weekly_hours
-        , runs_from_api.courserun_max_weekly_hours
+        , runs_from_api.courserun_time_commitment
         , runs_from_api.courserun_estimated_hours
         , runs_from_api.courserun_duration
         , runs_from_api.courserun_enrollment_mode
         , runs_from_api.courserun_availability
-        , runs_from_api.courserun_status
+        , runs_from_api.courserun_is_published
         , coalesce(
             runs_from_api.courserun_readable_id, runs_from_bigquery.courserun_readable_id
         ) as courserun_readable_id
@@ -114,15 +113,13 @@ select
     , runs.courserun_is_self_paced
     , runs.courserun_description
     , runs.course_topics
-    , runs.courserun_is_enrollable
+    , runs.courserun_is_published
     , runs.courserun_pace
-    , runs.courserun_min_weekly_hours
-    , runs.courserun_max_weekly_hours
+    , runs.courserun_time_commitment
     , runs.courserun_estimated_hours
     , runs.courserun_duration
     , runs.courserun_enrollment_mode
     , runs.courserun_availability
-    , runs.courserun_status
     , micromasters_courses.program_id as micromasters_program_id
     , micromasters_courses.course_id as micromasters_course_id
 
