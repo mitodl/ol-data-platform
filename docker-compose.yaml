@@ -102,7 +102,7 @@ services:
       timeout: 3s
       retries: 10
     ports:
-    - 5432:5432
+    - 5432
     environment:
       PGUSER: postgres
       POSTGRES_USER: postgres
