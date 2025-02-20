@@ -12,7 +12,6 @@ with source as (
         , full_description as course_full_description
         , level_type as course_level
         , course_type
-        , owner as course_organizations
         , marketing_url as course_marketing_url
         , json_query(image, 'lax $.url' omit quotes) as course_image_url
         , if(

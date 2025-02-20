@@ -962,7 +962,7 @@ sources:
     - name: duration
       description: float, the length of the video, in seconds. May be 0.0.
 
-  - name: raw__edxorg__s3__program
+  - name: raw__edxorg__s3__programs
     description: this table includes all the programs running on edX.org
     columns:
     - name: uuid
@@ -982,7 +982,7 @@ sources:
     - name: data_modified_timestamp
       description: str, timestamp when the data was last modified
 
-  - name: raw__edxorg__s3__program_course
+  - name: raw__edxorg__s3__program_courses
     description: this table includes all the program courses running on edX.org
     columns:
     - name: program_uuid
@@ -1014,8 +1014,6 @@ sources:
         'introductory', 'intermediate', or 'advanced'.
     - name: course_type
       description: str, audit, verified-audit, credit-verified-audit, or professional
-    - name: owner
-      description: str, list of organizations associated with the course, e.g., MITx
     - name: marketing_url
       description: str, the URL for the course about page.
     - name: image
@@ -1055,8 +1053,6 @@ sources:
         or 'instructor-paced'.
     - name: enrollment_type
       description: str, audit, verified, credit, or professional.
-    - name: courserun_is_enrollable
-      description: boolean, whether the course is currently open for enrollment
     - name: availability
       description: str, the availability of the course run. Possible values are 'Upcoming',
         'Starting Soon', 'Current' or 'Archived'

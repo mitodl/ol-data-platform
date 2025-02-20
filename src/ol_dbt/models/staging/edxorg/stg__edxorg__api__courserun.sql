@@ -17,14 +17,17 @@ with source as (
         , min_effort as courserun_min_weekly_hours
         , max_effort as courserun_max_weekly_hours
         , estimated_hours as courserun_estimated_hours
-        , pacing_type as courserun_pace
         , enrollment_type as courserun_enrollment_mode
         , availability as courserun_availability
         , status as courserun_status
-        , is_enrollable as courserun_is_enrollable
+        , pacing_type as courserun_pace
         , if(staff = '[]', null, staff) as courserun_instructors
         , if(seats = '[]', null, seats) as courserun_enrollment_modes
         , json_query(image, 'lax $.url' omit quotes) as courserun_image_url
+        , case
+            when pacing_type = 'self_paced' then true
+            when pacing_type = 'instructor_paced' then false
+        end as courserun_is_self_paced
         , case
             when weeks_to_complete = 1 then cast(weeks_to_complete as varchar) || ' week'
             when weeks_to_complete > 1 then cast(weeks_to_complete as varchar) || ' weeks'
