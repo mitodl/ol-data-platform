@@ -3,7 +3,7 @@ with courseruns as (
 )
 
 select
-    courseruns.courserun_readable_id
+    {{ format_course_id('courseruns.courserun_readable_id') }} as courserun_readable_id
     , cast(json_extract_scalar(t.seat, '$.price') as decimal(38, 2)) as price
     , json_extract_scalar(t.seat, '$.type') as courserun_mode
     , json_extract_scalar(t.seat, '$.currency') as currency

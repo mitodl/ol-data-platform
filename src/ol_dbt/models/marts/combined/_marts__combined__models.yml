@@ -518,6 +518,7 @@ models:
   - name: product_readable_id
     description: str, unique open edX Course ID formatted as course-v1:{org}+{course
       code}+{run_tag} or program run ID formatted as program-v1:{org}+{program code}+{run_tag}
+      for MITx Online and xPro. For edX.org, the course ID is formatted as {org}/{course}/{run_tag}.
     tests:
     - not_null
     - unique
@@ -553,7 +554,7 @@ models:
     description: timestamp, date and time when the course or program enrollment ends
   - name: upgrade_deadline
     description: timestamp, date and time beyond which the learner can not enroll
-      in paid course mode. Only populated for MITx Online courses.
+      in paid course mode. Only populated for MITx courses.
   - name: duration
     description: str, a short description indicating how long the course or program
       takes to complete (e.g. '4 weeks')
@@ -562,16 +563,16 @@ models:
       '5-7 hours per week')
   - name: certification_type
     description: str, either 'MicroMasters Credential' or 'Certificate of Completion'
-      for MITx Online courses. 'Professional Certificate' for xPro courses.
+      for MITx courses. 'Professional Certificate' for xPro courses.
     tests:
     - not_null
   - name: delivery
-    description: str, 'Online' or 'Other' for xPro. 'Online' for MITx Online.
+    description: str, 'Online' or 'Other' for xPro. 'Online' for MITx.
   - name: continuing_education_credits
     description: str, number of continuing education units or credits offered. e.g.
-      4.5. NULL for MITx Online courses.
+      4.5. NULL for MITx courses.
   - name: pace
-    description: str, 'Self-paced' or 'Instructor-paced' for MITx Online courses.
+    description: str, 'Self-paced' or 'Instructor-paced'
   - name: topics
     description: str, list of topic names for a course.
   - name: instructors
