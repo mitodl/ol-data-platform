@@ -1084,8 +1084,10 @@ models:
   - name: courserun_languages
     description: str, the language for this course run.
   - name: courserun_pace
-    description: str, the pacing of the course. Possible values are 'self-paced' or
-      'instructor-paced'.
+    description: str, the pacing of the course. Possible values are 'self_paced' or
+      'instructor_paced'.
+  - name: courserun_is_self_paced
+    description: boolean, indicating whether or not the course is self paced
   - name: courserun_enrollment_mode
     description: str, audit, verified, credit, or professional.
   - name: courserun_status
@@ -1101,6 +1103,12 @@ models:
     description: array, list of instructors associated with the course
   - name: courserun_duration
     description: str, the number of weeks to complete the course. e.g. '4 weeks'
+  - name: courserun_time_commitment
+    description: str, short description indicating about the time commitments (e.g.
+      '5-7 hours per week')
+  - name: courserun_is_published
+    description: boolean, indicating whether the course run is published and open
+      for enrollment
   - name: courserun_min_weekly_hours
     description: int, the minimum number of estimated hours of effort per week.
   - name: courserun_max_weekly_hours

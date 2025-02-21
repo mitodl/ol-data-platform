@@ -503,15 +503,16 @@ models:
       row_condition: "program_id =2 and platform_name ='edX.org'"
 
 - name: marts__combined__products
-  description: combined course or program products from MITx Online and xPro
+  description: combined course or program products from MITx Online, xPro, or edX.org
   columns:
   - name: platform
-    description: str, application where data is from - MITx Online or xPro
+    description: str, application where data is from - MITx Online, xPro, or edX.org
     tests:
     - not_null
   - name: product_platform
     description: str, indicating the partners for course/program. The possible values
-      are Emeritus, xPRO, Simplilearn, Global Alumni, WHU, Susskind and MITx Online.
+      are Emeritus, xPRO, Simplilearn, Global Alumni, WHU, Susskind, MITx Online,
+      and edX.org
     tests:
     - not_null
   - name: product_readable_id

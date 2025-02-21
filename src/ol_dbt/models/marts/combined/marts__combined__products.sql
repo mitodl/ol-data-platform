@@ -34,6 +34,14 @@ with mitxonline_product as (
     select * from {{ ref('int__mitxpro__program_runs') }}
 )
 
+, edxorg_product as (
+    select * from {{ ref('int__edxorg__mitx_product') }}
+)
+
+, edxorg_runs as (
+    select * from {{ ref('int__edxorg__mitx_courseruns') }}
+)
+
 , mitxonline_product_view as (
     select
         mitxonline_product.product_id
@@ -149,6 +157,39 @@ with mitxonline_product as (
     where mitxpro_product.product_type in ('program', 'course run')
 )
 
+, edxorg_product_view as (
+    select
+        edxorg_runs.courserun_readable_id as product_readable_id
+        , edxorg_runs.courserun_title as product_name
+        , edxorg_runs.courserun_description as product_description
+        , edxorg_product.price as list_price
+        , edxorg_runs.courserun_start_date as start_on
+        , edxorg_runs.courserun_end_date as end_on
+        , edxorg_runs.courserun_enrollment_start_date as enrollment_start_on
+        , edxorg_runs.courserun_enrollment_end_date as enrollment_end_on
+        , edxorg_product.upgrade_deadline
+        , edxorg_runs.courserun_pace as pace
+        , edxorg_runs.courserun_duration as duration
+        , edxorg_runs.courserun_time_commitment as time_commitment
+        , edxorg_runs.course_topics as topics
+        , edxorg_runs.courserun_instructors as instructors
+        , if(edxorg_runs.courserun_is_published, true, false) as is_live
+        , if(
+            edxorg_runs.micromasters_program_id is not null
+            , 'MicroMasters Credential'
+            , 'Certificate of Completion'
+        ) as certification_type
+    from edxorg_product
+    inner join edxorg_runs
+        on edxorg_product.courserun_readable_id = edxorg_runs.courserun_readable_id
+    left join mitxonline_product_view
+        on edxorg_product.courserun_readable_id = mitxonline_product_view.product_readable_id
+    where
+        edxorg_product.courserun_mode = 'verified'
+        and mitxonline_product_view.product_readable_id is null
+
+)
+
 select
     '{{ var("mitxonline") }}' as platform
     , '{{ var("mitxonline") }}' as product_platform
@@ -208,3 +249,34 @@ select
     , 'xPro' as offered_by
     , is_live
 from mitxpro_product_view
+
+union all
+
+select
+    '{{ var("edxorg") }}' as platform
+    , '{{ var("edxorg") }}' as product_platform
+    , product_readable_id
+    , product_name
+    , null as product_id
+    , 'course run' as product_type
+    , product_description
+    , list_price
+    , null as product_is_active
+    , false as product_is_private
+    , null as product_created_on
+    , start_on
+    , end_on
+    , enrollment_start_on
+    , enrollment_end_on
+    , upgrade_deadline
+    , pace
+    , duration
+    , time_commitment
+    , certification_type
+    , 'Online' as delivery
+    , null as continuing_education_credits
+    , topics
+    , instructors
+    , 'MITx' as offered_by
+    , is_live
+from edxorg_product_view
