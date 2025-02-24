@@ -7,6 +7,6 @@ load_from:
 - python_module: ol_orchestrate.definitions.edx.edxorg_api_data_extract
 - python_module: ol_orchestrate.definitions.lakehouse.elt
 - python_module: ol_orchestrate.definitions.platform.notification
-- python_module: ol_orchestrate.definitions.openmetadata.openmetadata
+- python_module: ol_orchestrate.definitions.platform.openmetadata
 - python_module: ol_orchestrate.repositories.edx_gcs_courses
 - python_module: ol_orchestrate.repositories.open_edx

@@ -31,7 +31,7 @@ trino_config = {
     },
     "sink": {"type": "metadata-rest", "config": {}},
     "workflowConfig": {
-        "loggerLevel": "INFO",
+        "loggerLevel": "DEBUG",
         "openMetadataServerConfig": {
             "hostPort": "https://open-metadata-qa.ol.mit.edu/api",
             "authProvider": "openmetadata",

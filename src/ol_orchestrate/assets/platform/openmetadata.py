@@ -1,4 +1,3 @@
-import yaml
 from dagster import (
     AssetExecutionContext,
     AssetKey,
@@ -8,24 +7,19 @@ from dagster import (
 )
 from metadata.workflow.metadata import MetadataWorkflow
 
-from ol_orchestrate.partitions.openmetadta import TRINO_DAILY_PARTITIONS
+from ol_orchestrate.partitions.openmetadata import TRINO_DAILY_PARTITIONS
 from ol_orchestrate.resources.openmetadata.trino import trino_config
-
-# Specify your Trino configuration
-# yaml str -> dict
-trino_dict = yaml.safe_load(trino_config)
 
 
 @asset(
     description=("An instance of metadata from our Trino database."),
-    group_name="openmetadata",
-    key=AssetKey(["openmetadata", "trino"]),
+    group_name="platform",
+    key=AssetKey(["platform", "database", "trino", "metadata"]),
     partitions_def=TRINO_DAILY_PARTITIONS,
 )
 def trino_metadata(context: AssetExecutionContext):
     date = context.partition_key
-    workflow_config = yaml.safe_load(trino_dict)
-    workflow = MetadataWorkflow.create(workflow_config)
+    workflow = MetadataWorkflow.create(trino_config)
     workflow.execute()
     workflow.raise_from_status()
     workflow.print_status()

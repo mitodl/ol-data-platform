@@ -1,13 +1,8 @@
 from dagster import create_repository_using_definitions_args
 from dagster_aws.s3 import S3Resource
 
-from ol_orchestrate.assets.openmetadata import trino_metadata
-from ol_orchestrate.lib.assets_helper import (
-    add_prefix_to_asset_keys,
-    late_bind_partition_to_asset,
-)
+from ol_orchestrate.assets.platform.openmetadata import trino_metadata
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.partitions.openmetadata import TRINO_DAILY_PARTITIONS
 from ol_orchestrate.resources.secrets.vault import Vault
 
 if DAGSTER_ENV == "dev":
@@ -22,10 +17,7 @@ else:
 
 deployment_name = "openmetadata"
 deployment_assets = [
-    late_bind_partition_to_asset(
-        add_prefix_to_asset_keys(trino_metadata, deployment_name),
-        TRINO_DAILY_PARTITIONS,
-    ),
+    trino_metadata,
 ]
 
 create_repository_using_definitions_args(
