@@ -897,7 +897,7 @@ models:
   description: MITx course available modes and prices on edX.org
   columns:
   - name: courserun_readable_id
-    description: str, unique identifier for the course run in {org}+{course number}+{run}
+    description: str, unique identifier for the course run in {org}/{course number}/{run}
       format.
     tests:
     - not_null
@@ -921,5 +921,3 @@ models:
   - name: credit_hours
     description: str, the number of credit hours that learners who pass the course
       earn.
-runs:
-  courserun_time_commitment:

@@ -65,10 +65,15 @@ from typing import Any, Literal
 from dagster import (
     AssetSelection,
     Definitions,
+    ScheduleDefinition,
     define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
 
+from ol_orchestrate.assets.edxorg_api import (
+    edxorg_mitx_course_metadata,
+    edxorg_program_metadata,
+)
 from ol_orchestrate.assets.edxorg_archive import (
     dummy_edxorg_course_structure,
     edxorg_archive_partitions,
@@ -84,7 +89,6 @@ from ol_orchestrate.assets.openedx_course_archives import (
     extract_edxorg_courserun_metadata,
 )
 from ol_orchestrate.io_managers.filepath import (
-    FileObjectIOManager,
     S3FileObjectIOManager,
 )
 from ol_orchestrate.io_managers.gcs import GCSFileIOManager
@@ -92,7 +96,9 @@ from ol_orchestrate.jobs.retrieve_edx_exports import (
     retrieve_edx_course_exports,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.lib.dagster_helpers import default_io_manager
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
+from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir
 from ol_orchestrate.resources.secrets.vault import Vault
 
@@ -177,21 +183,26 @@ file_regex = {
     "logs": r"COLD/mitx-edx-events-\d{4}-\d{2}-\d{2}.log.gz$",
 }
 
+edxorg_api_daily_schedule = ScheduleDefinition(
+    name="edxorg_api_schedule",
+    target=AssetSelection.assets(edxorg_program_metadata, edxorg_mitx_course_metadata),
+    cron_schedule="@daily",
+    execution_timezone="Etc/UTC",
+)
+
 retrieve_edx_exports = Definitions(
     resources={
         "gcp_gcs": gcs_connection,
         "s3": S3Resource(),
         "exports_dir": DailyResultsDir.configure_at_launch(),
-        "io_manager": FileObjectIOManager(
-            vault=Vault(**vault_config),
-            vault_gcs_token_path="secret-data/pipelines/edx/org/gcp-oauth-client",  # noqa: S106
-        ),
+        "io_manager": default_io_manager(DAGSTER_ENV),
         "s3file_io_manager": S3FileObjectIOManager(
             bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
             path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
         ),
         "gcs_input": GCSFileIOManager(gcs=gcs_connection),
         "vault": vault,
+        "edxorg_api": OpenEdxApiClientFactory(deployment="edxorg", vault=vault),
     },
     sensors=[
         gcs_edxorg_archive_sensor.with_updated_job(edxorg_course_data_job),
@@ -206,5 +217,8 @@ retrieve_edx_exports = Definitions(
         flatten_edxorg_course_structure,
         extract_edxorg_courserun_metadata,
         dummy_edxorg_course_xml,
+        edxorg_program_metadata,
+        edxorg_mitx_course_metadata,
     ],
+    schedules=[edxorg_api_daily_schedule],
 )
