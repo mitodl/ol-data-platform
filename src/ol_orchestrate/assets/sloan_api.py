@@ -35,11 +35,11 @@ from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
     },
 )
 def sloan_course_metadata(
-    context: AssetExecutionContext, edxorg_api: OpenEdxApiClientFactory
+    context: AssetExecutionContext, sloan_api: OpenEdxApiClientFactory
 ):
     data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
 
-    sloan_courses = edxorg_api.client.get_sloan_courses()
+    sloan_courses = sloan_api.client.get_sloan_courses()
     courses = [
         {
             "course_id": course["Course_Id"],
@@ -58,7 +58,7 @@ def sloan_course_metadata(
 
     context.log.info("Total extracted %d Sloan courses....", len(courses))
 
-    sloan_course_offerings = edxorg_api.client.get_sloan_course_offerings()
+    sloan_course_offerings = sloan_api.client.get_sloan_course_offerings()
     course_offerings = [
         {
             "title": course_offering["CO_Title"],
