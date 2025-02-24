@@ -4,7 +4,7 @@ with source as (
 
 )
 
-{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'coupon_id, basket_id') }}
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'basket_id') }}
 
 , renamed as (
 
