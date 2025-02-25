@@ -8,6 +8,7 @@ from dagster import (
     Definitions,
     ScheduleDefinition,
     define_asset_job,
+    with_source_code_references,
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
 from dagster_dbt import (
@@ -114,7 +115,7 @@ for count, group_name in enumerate(group_names, start=1):
 
 
 elt = Definitions(
-    assets=[full_dbt_project, airbyte_assets],
+    assets=[with_source_code_references([full_dbt_project]), airbyte_assets],
     resources={"dbt": dbt_cli},
     sensors=[
         AutomationConditionSensorDefinition(
