@@ -15,7 +15,7 @@ from dagster import (
     multi_asset,
 )
 
-from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
+from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 
 
 @multi_asset(
@@ -35,7 +35,7 @@ from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
     },
 )
 def sloan_course_metadata(
-    context: AssetExecutionContext, sloan_api: OpenEdxApiClientFactory
+    context: AssetExecutionContext, sloan_api: OAuthApiClientFactory
 ):
     data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
 
