@@ -39,7 +39,9 @@ def sloan_course_metadata(
 ):
     data_retrieval_timestamp = datetime.now(tz=UTC).isoformat()
 
-    sloan_courses = sloan_api.client.get_sloan_courses()
+    sloan_courses = sloan_api.client.fetch_with_auth(
+        "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/courses"
+    )
     courses = [
         {
             "course_id": course["Course_Id"],
@@ -58,7 +60,9 @@ def sloan_course_metadata(
 
     context.log.info("Total extracted %d Sloan courses....", len(courses))
 
-    sloan_course_offerings = sloan_api.client.get_sloan_course_offerings()
+    sloan_course_offerings = sloan_api.client.fetch_with_auth(
+        "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/course-offerings"
+    )
     course_offerings = [
         {
             "title": course_offering["CO_Title"],

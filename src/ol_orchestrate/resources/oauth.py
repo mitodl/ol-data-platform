@@ -78,7 +78,7 @@ class OAuthApiClient(ConfigurableResource):
         response.raise_for_status()
         return response.json()["username"]
 
-    def _fetch_with_auth(
+    def fetch_with_auth(
         self,
         request_url: str,
         page_size: int = 100,
@@ -102,29 +102,11 @@ class OAuthApiClient(ConfigurableResource):
                 retry_after = error_response.response.headers.get("Retry-After", 60)
                 delay = int(retry_after) if retry_after.isdigit() else 60
                 time.sleep(delay)
-                return self._fetch_with_auth(
+                return self.fetch_with_auth(
                     request_url, page_size=page_size, extra_params=extra_params
                 )
             raise
         return response.json()
-
-    def get_sloan_courses(self):
-        """
-        Retrieve the course data from their API as JSON
-
-        returns: JSON document representing an array of course objects
-        """
-        course_url = "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/courses"
-        return self._fetch_with_auth(course_url)
-
-    def get_sloan_course_offerings(self):
-        """
-        Retrieve the course offerings data from their API as JSON
-
-        returns: JSON document representing an array of course offering objects
-        """
-        course_offering_url = "https://mit-unified-portal-prod-78eeds.43d8q2.usa-e2.cloudhub.io/api/course-offerings"
-        return self._fetch_with_auth(course_offering_url)
 
 
 class OAuthApiClientFactory(ConfigurableResource):

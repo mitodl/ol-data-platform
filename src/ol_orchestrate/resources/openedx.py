@@ -9,8 +9,6 @@ from pydantic import Field, PrivateAttr
 from ol_orchestrate.resources.oauth import OAuthApiClient
 from ol_orchestrate.resources.secrets.vault import Vault
 
-TOO_MANY_REQUESTS = 429
-
 
 class OpenEdxApiClient(OAuthApiClient):
     studio_url: Optional[str] = Field(
@@ -34,12 +32,12 @@ class OpenEdxApiClient(OAuthApiClient):
             the API
         """
         request_url = f"{self.base_url}/api/courses/v1/courses/"
-        response_data = self._fetch_with_auth(request_url, page_size=page_size)
+        response_data = self.fetch_with_auth(request_url, page_size=page_size)
         course_data = response_data["results"]
         next_page = response_data["pagination"].get("next")
         yield course_data
         while next_page:
-            response_data = self._fetch_with_auth(
+            response_data = self.fetch_with_auth(
                 request_url, page_size=page_size, extra_params=parse_qs(next_page)
             )
             next_page = response_data["pagination"].get("next")
@@ -68,7 +66,7 @@ class OpenEdxApiClient(OAuthApiClient):
         self, course_id: str, task_id: str
     ) -> dict[str, str]:
         request_url = f"{self.studio_url}/api/courses/v0/export/{course_id}/"
-        return self._fetch_with_auth(request_url, extra_params={"task_id": task_id})
+        return self.fetch_with_auth(request_url, extra_params={"task_id": task_id})
 
     def get_course_structure_document(self, course_id: str):
         """Retrieve the course structure for an active course as JSON.
@@ -79,13 +77,13 @@ class OpenEdxApiClient(OAuthApiClient):
                   course.
         """
         request_url = f"{self.base_url}/api/course-structure/v0/{course_id}/"
-        return self._fetch_with_auth(request_url)
+        return self.fetch_with_auth(request_url)
 
     def get_course_outline(self, course_id: str):
         request_url = (
             f"{self.base_url}/api/learning_sequences/v1/course_outline/{course_id}"
         )
-        return self._fetch_with_auth(request_url)
+        return self.fetch_with_auth(request_url)
 
     def get_edxorg_programs(self):
         """
@@ -97,13 +95,13 @@ class OpenEdxApiClient(OAuthApiClient):
 
         """
         request_url = "https://discovery.edx.org/api/v1/programs/"
-        response_data = self._fetch_with_auth(request_url)
+        response_data = self.fetch_with_auth(request_url)
         results = response_data["results"]
         next_page = response_data["next"]
         count = response_data["count"]
         yield count, results
         while next_page:
-            response_data = self._fetch_with_auth(
+            response_data = self.fetch_with_auth(
                 request_url, extra_params=parse_qs(next_page)
             )
             next_page = response_data["next"]
@@ -117,13 +115,13 @@ class OpenEdxApiClient(OAuthApiClient):
         Yield: A generator for walking the paginated list of courses
         """
         course_catalog_url = "https://discovery.edx.org/api/v1/catalogs/10/courses/"
-        response_data = self._fetch_with_auth(course_catalog_url)
+        response_data = self.fetch_with_auth(course_catalog_url)
         results = response_data["results"]
         next_page = response_data["next"]
         count = response_data["count"]
         yield count, results
         while next_page:
-            response_data = self._fetch_with_auth(
+            response_data = self.fetch_with_auth(
                 course_catalog_url, extra_params=parse_qs(next_page)
             )
             next_page = response_data["next"]
