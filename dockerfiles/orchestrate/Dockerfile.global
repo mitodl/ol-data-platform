@@ -35,10 +35,12 @@ USER dagster
 EXPOSE 3000
 WORKDIR /opt/dagster/code
 RUN uv sync --locked --no-dev
+
 RUN --mount=type=secret,id=dbt_trino_username,env=DBT_TRINO_USERNAME \
     --mount=type=secret,id=dbt_trino_password,env=DBT_TRINO_PASSWORD \
-    DAGSTER_ENVIRONMENT=production \
-    uv run --no-dev dagster-dbt project prepare-and-package --file /opt/dagster/code/src/ol_orchestrate/assets/lakehouse/dbt.py
+    cd /opt/dbt && \
+    uv run --no-dev --directory /opt/dagster/code dbt deps --project-dir /opt/dbt && \
+    uv run --no-dev --directory /opt/dagster/code dbt ls --project-dir /opt/dbt --profiles-dir /opt/dbt --target production
 
 # ENTRYPOINTS
 # Dagster Daemon
