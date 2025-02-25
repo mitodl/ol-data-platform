@@ -108,7 +108,7 @@ for count, group_name in enumerate(group_names, start=1):
             cron_schedule=f"0 {count % (group_count // 4)} * * *",
             job=job,
             execution_timezone="UTC",
-            default_status=DefaultScheduleStatus.RUNNING,
+            default_status=DefaultScheduleStatus.STOPPED,
         )
     )
     airbyte_asset_jobs.append(job)
