@@ -35,7 +35,6 @@ class OAuthApiClient(ConfigurableResource):
     _access_token: Optional[str] = PrivateAttr(default=None)
     _access_token_expires: Optional[datetime] = PrivateAttr(default=None)
     _http_client: httpx.Client = PrivateAttr(default=None)
-    _lms_url: Optional[str] = PrivateAttr(default=None)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
