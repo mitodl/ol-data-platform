@@ -115,7 +115,7 @@ for count, group_name in enumerate(group_names, start=1):
 
 
 elt = Definitions(
-    assets=[with_source_code_references([full_dbt_project]), airbyte_assets],
+    assets=[*with_source_code_references([full_dbt_project]), airbyte_assets],
     resources={"dbt": dbt_cli},
     sensors=[
         AutomationConditionSensorDefinition(
