@@ -53,6 +53,7 @@ services:
       DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
       DAGSTER_PG_HOST: postgres
       DAGSTER_PG_DB: dagster
+      DAGSTER_IS_DEV_CLI: true
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/io_manager_storage:/tmp/io_manager_storage
@@ -85,6 +86,7 @@ services:
       DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
       DAGSTER_PG_HOST: postgres
       DAGSTER_PG_DB: dagster
+      DAGSTER_IS_DEV_CLI: true
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/io_manager_storage:/tmp/io_manager_storage
