@@ -89,8 +89,6 @@ class OAuthApiClient(ConfigurableResource):
         else:
             request_params = {}
 
-        request_params.update(**(extra_params or {}))
-
         response = self._http_client.get(
             request_url,
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
