@@ -1,9 +1,8 @@
 {% macro cast_date_to_iso8601(column_name) %}
   case
-   -- If the column is already a date, convert to ISO 8601
-    when try_cast({{ column_name }} AS date) is not null
+    when try_cast({{ column_name }} AS date) is not null -- Use try_cast to check if the column is already a date
        then to_iso8601(try_cast({{ column_name }} AS date))
-    -- otherwise, convert to ISO 8601 from a string
-    else to_iso8601(from_iso8601_date(try_cast({{ column_name }} AS varchar)))
+
+    else to_iso8601(from_iso8601_date(try_cast({{ column_name }} AS varchar))) -- Convert to ISO 8601 from a string
 end
 {% endmacro %}
