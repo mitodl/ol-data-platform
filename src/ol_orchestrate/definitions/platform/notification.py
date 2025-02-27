@@ -1,4 +1,4 @@
-from dagster import DefaultSensorStatus, Definitions
+from dagster import DefaultSensorStatus, Definitions, RunFailureSensorContext
 from dagster_slack import make_slack_on_run_failure_sensor
 
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
@@ -19,6 +19,22 @@ else:
     )
     vault._auth_aws_iam()  # noqa: SLF001
 
+
+def error_message(context: RunFailureSensorContext) -> str:
+    error_strings_by_step_key = {
+        # includes the stack trace
+        event.step_key: event.event_specific_data.error.to_string()
+        # Get details on a failure due to an error inside a step
+        for event in context.get_step_failure_events()
+    }
+    return (
+        f"Job {context.dagster_run.job_name} failed!"
+        f"Run ID: {context.dagster_run.run_id}"
+        f"Error: {context.failure_event.message}"
+        f"Error details: {error_strings_by_step_key}"
+    )
+
+
 notifications = Definitions(
     sensors=[
         make_slack_on_run_failure_sensor(
@@ -29,6 +45,7 @@ notifications = Definitions(
                 path="dagster/slack", mount_point="secret-data"
             )["data"]["token"],
             default_status=DefaultSensorStatus.STOPPED,
+            text_fn=error_message,
         )
     ]
 )
