@@ -152,6 +152,10 @@ models:
   - name: coupon_id
     description: int, foreign key referencing ecommerce_coupon or the b2b coupon table.
       For edX.org, it refers to ecommerce_coupon table in MicroMasters application.
+  - name: b2bcoupon_id
+    description: int, foreign key to b2becommerce_b2bcoupon
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
   - name: coupon_name
     description: string, human readable name for the coupon payment
   - name: coupon_redeemed_on
