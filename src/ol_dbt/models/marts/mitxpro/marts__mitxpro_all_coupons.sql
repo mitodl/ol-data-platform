@@ -32,18 +32,18 @@ select
     , allcoupons.coupon_source_table
     , allcoupons.b2bcoupon_id
     , allcoupons.coupon_id
-    , case 
+    , case
         when
-            redeemed_coupons.coupon_id is not null 
-            or redeemed_coupons.b2bcoupon_id is not null 
+            redeemed_coupons.coupon_id is not null
+            or redeemed_coupons.b2bcoupon_id is not null
             then true
         when
-            redeemed_coupons.coupon_id is null 
+            redeemed_coupons.coupon_id is null
             and redeemed_coupons.b2bcoupon_id is null
-            then false 
+            then false
     end as redeemed
 from allcoupons
 left join redeemed_coupons
-    on 
+    on
         allcoupons.coupon_id = redeemed_coupons.coupon_id
         or allcoupons.b2bcoupon_id = redeemed_coupons.b2bcoupon_id
