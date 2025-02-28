@@ -1,9 +1,9 @@
-with certificates_generatedcertificate as (
+with source as (
     select *
     from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__mysql__certificates_generatedcertificate') }}
 )
 
-{{ deduplicate_query('certificates_generatedcertificate', 'most_recent_source') }}
+{{ deduplicate_raw_table(order_by='modified_date' , partition_columns = 'id') }}
 
 select
     id
