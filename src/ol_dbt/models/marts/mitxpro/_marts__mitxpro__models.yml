@@ -105,7 +105,7 @@ models:
     description: int, foreign key referencing ecommerce_coupon. This will be null
       for records sourced from b2b.
   - name: redeemed
-    description: boolean, set to true if the coupon has at least one redeemed order 
+    description: boolean, set to true if the coupon has at least one redeemed order
       otherwise it's false.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
