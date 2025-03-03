@@ -1183,23 +1183,6 @@ sources:
         the page. Currently always en (english) for xpro
     - name: alias_of_id
       description: int, always blank in xpro
-  - name: raw__xpro__app__postgres__wagtailcore_pagerevision
-    description: There is a record in this table for each revision of a wagtail page
-    columns:
-    - name: id
-      description: int, int primary key for this table.
-    - name: submitted_for_moderation
-      description: boolean, always blank in xpro
-    - name: created_at
-      description: timestamp, timestamp when the revision was created
-    - name: content_json
-      description: json, json of the page data
-    - name: approved_go_live_at
-      description: timestamp, always blank in xpro
-    - name: page_id
-      description: int, primary key in wagtail_page
-    - name: user_id
-      description: int, primary key in users_user of the author
 
 
   - name: raw__xpro__app__postgres__cms_programpage

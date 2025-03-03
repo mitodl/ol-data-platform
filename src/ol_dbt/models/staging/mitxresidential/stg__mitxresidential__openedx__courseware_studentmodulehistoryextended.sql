@@ -19,7 +19,7 @@ with source as (
 )
 
 --- this is needed for the initial dbt run to deduplicate the data from raw table
-{{ deduplicate_query(cte_name1='source',cte_name2='most_recent_source', partition_columns = 'id') }}
+{{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'id') }}
 
 , cleaned as (
 
