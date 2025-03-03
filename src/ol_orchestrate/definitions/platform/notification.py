@@ -1,3 +1,5 @@
+from typing import Any
+
 from dagster import DefaultSensorStatus, Definitions, RunFailureSensorContext
 from dagster_slack import make_slack_on_run_failure_sensor
 
@@ -20,19 +22,28 @@ else:
     vault._auth_aws_iam()  # noqa: SLF001
 
 
-def error_message(context: RunFailureSensorContext) -> str:
-    error_strings_by_step_key = {
-        # includes the stack trace
-        event.step_key: event.event_specific_data.error.to_string()
-        # Get details on a failure due to an error inside a step
+def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
+    error_details = [
+        {
+            "step_key": event.step_key,
+            "error": event.event_specific_data.error.to_string(),
+        }
         for event in context.get_step_failure_events()
-    }
-    return (
-        f"Job {context.dagster_run.job_name} failed!"
-        f"Run ID: {context.dagster_run.run_id}"
-        f"Error: {context.failure_event.message}"
-        f"Error details: {error_strings_by_step_key}"
-    )
+    ]
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f"*Job Name:* {context.dagster_run.job_name}\n"
+                    f"*Run ID:* {context.dagster_run.run_id}\n"
+                    f"*Error Message:* {context.failure_event.message}"
+                ),
+            },
+        },
+        *error_details,
+    ]
 
 
 notifications = Definitions(
@@ -45,7 +56,7 @@ notifications = Definitions(
                 path="dagster/slack", mount_point="secret-data"
             )["data"]["token"],
             default_status=DefaultSensorStatus.STOPPED,
-            text_fn=error_message,
+            blocks_fn=error_message,
         )
     ]
 )
