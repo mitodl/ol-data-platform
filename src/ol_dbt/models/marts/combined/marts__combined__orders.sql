@@ -170,6 +170,8 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_order.order_tax_amount
         , mitxpro__ecommerce_order.order_total_price_paid_plus_tax
         , mitxpro__ecommerce_allorders.coupon_id
+        , mitxpro__ecommerce_allorders.b2bcoupon_id
+        , mitxpro__ecommerce_allorders.b2border_contract_number
         , mitxpro__ecommerce_allorders.order_id
         , mitxpro__ecommerce_order.order_total_price_paid
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
@@ -209,6 +211,8 @@ with bootcamps__ecommerce_order as (
         , user_id
         , discount_code as coupon_code
         , null as coupon_id
+        , null as b2bcoupon_id
+        , null as b2border_contract_number
         , null as coupon_name
         , discount_redemption_type as coupon_type
         , discountredemption_timestamp as coupon_redeemed_on
@@ -265,6 +269,8 @@ with bootcamps__ecommerce_order as (
         , order_purchaser_user_id as user_id
         , coupon_code
         , coupon_id
+        , b2bcoupon_id
+        , b2border_contract_number
         , coupon_name
         , coupon_type
         , coupon_redeemed_on
@@ -312,6 +318,8 @@ with bootcamps__ecommerce_order as (
         , order_purchaser_user_id as user_id
         , null as coupon_code
         , null as coupon_id
+        , null as b2bcoupon_id
+        , null as b2border_contract_number
         , null as coupon_name
         , null as coupon_type
         , null as coupon_redeemed_on
@@ -359,6 +367,8 @@ with bootcamps__ecommerce_order as (
         , user_edxorg_id as user_id
         , coupon_code
         , coupon_id
+        , null as b2bcoupon_id
+        , null as b2border_contract_number
         , null as coupon_name
         , coupon_type
         , redeemedcoupon_created_on as coupon_redeemed_on
@@ -411,6 +421,8 @@ select
     , line_id
     , coupon_code
     , coupon_id
+    , b2bcoupon_id
+    , b2border_contract_number
     , coupon_name
     , coupon_redeemed_on
     , coupon_type

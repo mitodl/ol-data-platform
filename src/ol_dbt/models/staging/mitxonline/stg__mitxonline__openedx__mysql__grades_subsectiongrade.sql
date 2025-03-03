@@ -3,8 +3,7 @@ with source as (
     from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__openedx__mysql__grades_persistentsubsectiongrade') }}
 )
 
-
-{{ deduplicate_query('source', 'most_recent_source') }}
+{{ deduplicate_raw_table(order_by='modified' , partition_columns = 'id') }}
 
 , cleaned as (
 
@@ -18,9 +17,9 @@ with source as (
         , possible_graded as subsectiongrade_total_graded_score
         , earned_all as subsectiongrade_total_earned_score
         , earned_graded as subsectiongrade_total_earned_graded_score
-        , to_iso8601(from_iso8601_timestamp_nanos(first_attempted)) as subsectiongrade_first_attempted_on
-        , to_iso8601(from_iso8601_timestamp_nanos(created)) as subsectiongrade_created_on
-        , to_iso8601(from_iso8601_timestamp_nanos(modified)) as subsectiongrade_updated_on
+        , to_iso8601(first_attempted) as subsectiongrade_first_attempted_on
+        , to_iso8601(created) as subsectiongrade_created_on
+        , to_iso8601(modified) as subsectiongrade_updated_on
     from most_recent_source
 )
 
