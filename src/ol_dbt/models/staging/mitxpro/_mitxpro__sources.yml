@@ -1638,21 +1638,6 @@ sources:
     - name: criterion_id
       description: int, foreign key referencing criterion
 
-  - name: raw__xpro__openedx__mysql__assessment_aiclassifierset
-    description: MITx Pro open edX assessment ai classifier sets
-    columns:
-    - name: course_id
-      description: string, unique ID representing a single MITx Pro course run course
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: str, foreign key referencing item
-    - name: rubric_id
-      description: int, foreign key referencing rubric
-    - name: created_at
-      description: timestamp, the datetime the ai classifier set was created
-    - name: algorithm_id
-      description: str, foreign key referencing the algorithm
 
   - name: raw__xpro__openedx__mysql__user_api_usercoursetag
     description: MITx Pro open edX user api course tag
@@ -1840,25 +1825,6 @@ sources:
     - name: scored
       description: boolean, whether the peer workflow item has been scored
 
-  - name: raw__xpro__openedx__mysql__assessment_aitrainingworkflow
-    description: MITx Pro open edX ai training workflows
-    columns:
-    - name: course_id
-      description: string, unique ID representing a single MITx Pro course run
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: int, foreign key referencing student_item
-    - name: uuid
-      description: str, unique identifier for the ai training workflow
-    - name: scheduled_at
-      description: timestamp, specifying when the ai training workflows were scheduled
-    - name: classifier_set_id
-      description: int, foreign key referencing classifier_set
-    - name: completed_at
-      description: timestamp, specifying when the ai training workflows were completed
-    - name: algorithm_id
-      description: str, foreign key referencing the algorithm
 
   - name: raw__xpro__openedx__mysql__assessment_studenttrainingworkflowitem
     description: MITx Pro open edX ai training workflow items
@@ -1878,35 +1844,6 @@ sources:
       description: timestamp, specifying when the ai training workflows items was
         completed
 
-  - name: raw__xpro__openedx__mysql__assessment_aigradingworkflow
-    description: MITx Pro open edX ai grading workflows
-    columns:
-    - name: scheduled_at
-      description: timestamp, specifying when the ai training workflows were scheduled
-    - name: submission_uuid
-      description: str, unique identifier for the submission
-    - name: algorithm_id
-      description: str, foreign key referencing the algorithm
-    - name: student_id
-      description: int, reference user id in auth_user from open edX
-    - name: course_id
-      description: string, unique ID representing a single MITx Pro course run
-    - name: assessment_id
-      description: int, foreign key referencing the assessment
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: str, foreign key referencing item
-    - name: uuid
-      description: str, unique identifier for the ai training workflow
-    - name: rubric_id
-      description: int, foreign key to the unique identifier for the rubric
-    - name: classifier_set_id
-      description: int, foreign key referencing classifier_set
-    - name: completed_at
-      description: timestamp, specifying when the peer workflow was completed
-    - name: essay_text
-      description: str, the essay text of the assessment ai grading workflow
 
   - name: raw__xpro__openedx__mysql__assessment_rubric
     description: MITx Pro open edX assessment rubric
