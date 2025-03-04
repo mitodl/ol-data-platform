@@ -529,7 +529,7 @@ def normalize_edxorg_tracking_log(
             f"""
             CREATE TABLE tracking_logs AS
             SELECT * FROM read_ndjson_auto('{edxorg_raw_tracking_log}',
-            FILENAME=1, union_by_name=1, maximum_depth=1);
+            FILENAME=1, union_by_name=1, maximum_depth=1, ignore_errors=true);
             """  # noqa: S608
         )
         col_names = conn.execute(
