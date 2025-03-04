@@ -1,3 +1,5 @@
+from typing import Any
+
 from dagster import DefaultSensorStatus, Definitions, RunFailureSensorContext
 from dagster_slack import make_slack_on_run_failure_sensor
 
@@ -19,20 +21,57 @@ else:
     )
     vault._auth_aws_iam()  # noqa: SLF001
 
+MAX_SLACK_TEXT_LENGTH = 3000
 
-def error_message(context: RunFailureSensorContext) -> str:
-    error_strings_by_step_key = {
-        # includes the stack trace
-        event.step_key: event.event_specific_data.error.to_string()
-        # Get details on a failure due to an error inside a step
+
+def truncate_text(text: str, max_length: int = MAX_SLACK_TEXT_LENGTH) -> str:
+    if len(text) > max_length:
+        return text[: max_length - 3] + "..."
+    return text
+
+
+def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
+    error_details = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": truncate_text(
+                    f"Step: {event.step_key}"
+                    f"\nError: {event.event_specific_data.error.to_string()}"
+                ),
+            },
+            "expand": True,
+        }
         for event in context.get_step_failure_events()
-    }
-    return (
-        f"Job {context.dagster_run.job_name} failed!"
-        f"Run ID: {context.dagster_run.run_id}"
-        f"Error: {context.failure_event.message}"
-        f"Error details: {error_strings_by_step_key}"
-    )
+    ]
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": truncate_text(
+                    f'*Job "{context.dagster_run.job_name}" failed.'
+                    f"\n`{context.dagster_run.run_id.split('-')[0]}`*"
+                ),
+            },
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": truncate_text(f"*Error:*\n{context.failure_event.message}"),
+            },
+        },
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "Step Failure Events",
+            },
+        },
+        *error_details,
+    ]
 
 
 notifications = Definitions(
@@ -45,7 +84,7 @@ notifications = Definitions(
                 path="dagster/slack", mount_point="secret-data"
             )["data"]["token"],
             default_status=DefaultSensorStatus.STOPPED,
-            text_fn=error_message,
+            blocks_fn=error_message,
         )
     ]
 )
