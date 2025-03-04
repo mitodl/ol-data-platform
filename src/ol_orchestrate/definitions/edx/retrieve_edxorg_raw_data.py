@@ -89,6 +89,7 @@ from ol_orchestrate.assets.openedx_course_archives import (
     extract_edxorg_courserun_metadata,
 )
 from ol_orchestrate.io_managers.filepath import (
+    FileObjectIOManager,
     S3FileObjectIOManager,
 )
 from ol_orchestrate.io_managers.gcs import GCSFileIOManager
@@ -96,7 +97,6 @@ from ol_orchestrate.jobs.retrieve_edx_exports import (
     retrieve_edx_course_exports,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.dagster_helpers import default_io_manager
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir
@@ -195,7 +195,13 @@ retrieve_edx_exports = Definitions(
         "gcp_gcs": gcs_connection,
         "s3": S3Resource(),
         "exports_dir": DailyResultsDir.configure_at_launch(),
-        "io_manager": default_io_manager(DAGSTER_ENV),
+        # This is set as the default IO Manager so that the outputs of the
+        # 'process_edxorg_archive_bundle' op get handled properly. This is necessary
+        # because it is not possible to explicitly declare an IO Manager on an 'op'.
+        "io_manager": FileObjectIOManager(
+            vault=vault,
+            vault_gcs_token_path="secret-data/pipelines/edx/org/gcp-oauth-client",  # noqa: S106
+        ),
         "s3file_io_manager": S3FileObjectIOManager(
             bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
             path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
