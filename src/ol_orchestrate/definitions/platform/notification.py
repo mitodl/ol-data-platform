@@ -41,7 +41,7 @@ def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
                     f"\nError: {event.event_specific_data.error.to_string()}"
                 ),
             },
-            "expand": True
+            "expand": True,
         }
         for event in context.get_step_failure_events()
     ]
