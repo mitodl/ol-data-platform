@@ -2,8 +2,10 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__emeritus__bigquery__api_enrollments') }}
 )
 
-{{ deduplicate_query(cte_name1='source', cte_name2='most_recent_source'
-, partition_columns = 'batch_id, email, first_name, last_name') }}
+{{ deduplicate_raw_table(
+  order_by='opportunity_last_modified_date'
+  , partition_columns='batch_id, email, first_name, last_name'
+) }}
 
 , cleaned as (
     select
