@@ -37,22 +37,30 @@ def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
             "text": {
                 "type": "mrkdwn",
                 "text": truncate_text(
-                    f"Step: {event.step_key}"
-                    f"\nError: {event.event_specific_data.error.to_string()}"
+                    f"*Step:* {event.step_key}"
+                    f"\n*Full Error Message:*"
+                    f"\n```{event.event_specific_data.error.to_string()}```"
                 ),
             },
-            "expand": True,
+            "expand": False,
         }
         for event in context.get_step_failure_events()
     ]
     return [
         {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "Dagster Job Failure",
+            },
+        },
+        {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": truncate_text(
-                    f'*Job "{context.dagster_run.job_name}" failed.'
-                    f"\n`{context.dagster_run.run_id.split('-')[0]}`*"
+                "text": (
+                    f"*Job Name:* {context.dagster_run.job_name}"
+                    f"\n*Run ID:* `{context.dagster_run.run_id.split('-')[0]}`"
                 ),
             },
         },
@@ -60,7 +68,9 @@ def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": truncate_text(f"*Error:*\n{context.failure_event.message}"),
+                "text": truncate_text(
+                    f"*Error:*\n```{context.failure_event.message}```"
+                ),
             },
         },
         {
@@ -70,6 +80,7 @@ def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
                 "text": "Step Failure Events",
             },
         },
+        {"type": "divider"},
         *error_details,
     ]
 
