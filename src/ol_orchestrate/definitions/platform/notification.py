@@ -88,7 +88,7 @@ def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
 notifications = Definitions(
     sensors=[
         make_slack_on_run_failure_sensor(
-            channel="#data-platform-notifications",
+            channel="#notifications-data-platform",
             webserver_base_url=dagster_url,
             monitor_all_repositories=True,
             slack_token=vault.client.secrets.kv.v1.read_secret(
