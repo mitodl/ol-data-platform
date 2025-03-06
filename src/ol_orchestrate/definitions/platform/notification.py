@@ -37,7 +37,7 @@ def get_exception(text: str, substring: str = "\n\nStack Trace:") -> str:
     if dbt_error != -1:
         dbt_log_index = text.find("Errors parsed from dbt logs:\n\n") + 34
         dbt_log_msg = text[dbt_log_index:index] if index != -1 else text[dbt_log_index:]
-        # max_length to accommodate for the header string
+        # max_length to accommodate for the header string and step key
         return f"*DBT Error:*\n```{truncate_text(dbt_log_msg, 2900)}```"
     else:
         # Return full text if substring not found
