@@ -30,16 +30,32 @@ def truncate_text(text: str, max_length: int = MAX_SLACK_TEXT_LENGTH) -> str:
     return text
 
 
+def get_exception(text: str, substring: str = "\n\nStack Trace:") -> str:
+    index = text.find(substring)
+    # Pull out dbt errors
+    dbt_error = text.find("dagster_dbt.errors.DagsterDbtCliRuntimeError")
+    if dbt_error != -1:
+        dbt_log_index = text.find("Errors parsed from dbt logs:\n\n") + 34
+        dbt_log_msg = text[dbt_log_index:index] if index != -1 else text[dbt_log_index:]
+        # max_length to accommodate for the header string
+        return f"*DBT Error:*\n```{truncate_text(dbt_log_msg, 2900)}```"
+    else:
+        # Return full text if substring not found
+        return (
+            f"*Error:*"
+            f"\n```{truncate_text(text[:index] if index != -1 else text, 2900)}```"
+        )
+
+
 def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
     error_details = [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": truncate_text(
+                "text": (
                     f"*Step:* {event.step_key}"
-                    f"\n*Full Error Message:*"
-                    f"\n```{event.event_specific_data.error.to_string()}```"
+                    f"\n{get_exception(event.event_specific_data.error.to_string())}"
                 ),
             },
             "expand": False,
@@ -51,7 +67,7 @@ def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": "Dagster Job Failure",
+                "text": "Dagster Run Failure",
             },
         },
         {
@@ -64,23 +80,6 @@ def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
                 ),
             },
         },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": truncate_text(
-                    f"*Error:*\n```{context.failure_event.message}```"
-                ),
-            },
-        },
-        {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": "Step Failure Events",
-            },
-        },
-        {"type": "divider"},
         *error_details,
     ]
 
