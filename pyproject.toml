@@ -33,7 +33,7 @@ dependencies = [
     "pyarrow ~=19.0.0",
     "pydantic ~= 2.10.0",
     "pymysql ~= 1.1",
-    "s3fs (>=2025.2.0,<2025.3.0)",
+    "s3fs (>=2025.3.0,<2025.4.0)",
     "universal-pathlib ~= 0.2.2",
 ]
 repository = "https://github.com/mitodl/ol-data-platform"
