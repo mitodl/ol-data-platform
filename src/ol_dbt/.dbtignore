@@ -1,10 +1,1 @@
 # .dbtignore
-
-# ignore individual files
-int__salesforce__opportunitylineitem.sql
-int__salesforce__opportunity.sql
-stg__salesforce__opportunitylineitem.sql
-stg__salesforce__opportunity.sql
-_salesforce__sources.yml
-_stg_salesforce__models.yml
-_int_salesforce__models.yml
