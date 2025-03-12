@@ -67,7 +67,7 @@ def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": "Dagster Run Failure",
+                "text": f"Dagster {DAGSTER_ENV.capitalize()} Run Failure",
             },
         },
         {
