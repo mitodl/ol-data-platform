@@ -4,13 +4,11 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from dagster import (
     AssetKey,
-    AssetMaterialization,
-    DataVersion,
+    RunRequest,
     SensorEvaluationContext,
     SensorResult,
     sensor,
 )
-from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from pydantic import BaseModel
 
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
@@ -87,7 +85,7 @@ def course_version_sensor(
     # cursor dictionary with the results of the call to the get_course_outline method.
 
     cursor: dict[str, str] = json.loads(context.cursor or "{}")
-    asset_events = []
+    run_requests = []
     for course_run_id in course_run_ids:
         course_cursor = CourseCursor(
             **json.loads(
@@ -124,25 +122,15 @@ def course_version_sensor(
                 if response["course_end"]
                 else None,
             )
-            asset_events.append(
-                AssetMaterialization(
-                    asset_key=AssetKey((openedx.deployment, "openedx", "courseware")),
-                    partition=course_run_id,
-                    metadata={
-                        "source": f"{openedx.deployment} openedx",
-                        "materialization_time": datetime.fromisoformat(
-                            response["at_time"]
-                        ).isoformat(),
-                    },
-                    tags={
-                        DATA_VERSION_TAG: DataVersion(
-                            course_update.published_version
-                        ).value
-                    },
+            run_requests.append(
+                RunRequest(
+                    asset_selection=AssetKey(
+                        (openedx.deployment, "openedx", "courseware")
+                    ),
+                    partition_key=course_run_id,
                 )
             )
             cursor[course_run_id] = course_update.model_dump_json()
 
     context.update_cursor(json.dumps(cursor))
-
-    return SensorResult(asset_events=asset_events)
+    return SensorResult(run_requests=run_requests)
