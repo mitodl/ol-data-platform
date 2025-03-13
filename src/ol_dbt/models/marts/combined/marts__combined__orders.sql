@@ -173,6 +173,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_allorders.b2bcoupon_id
         , mitxpro__ecommerce_allorders.b2border_contract_number
         , mitxpro__ecommerce_allorders.order_id
+        , mitxpro__ecommerce_order.couponpaymentversion_payment_transaction
         , mitxpro__ecommerce_order.order_total_price_paid
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
         , concat('xpro-b2c-production-', cast(mitxpro__ecommerce_allorders.order_id as varchar))
@@ -239,6 +240,7 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_rate
         , null as order_tax_rate_name
         , null as order_tax_amount
+        , null as couponpaymentversion_payment_transaction
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
         , case
@@ -297,6 +299,7 @@ with bootcamps__ecommerce_order as (
         , order_tax_rate
         , order_tax_rate_name
         , order_tax_amount
+        , couponpaymentversion_payment_transaction
         , order_total_price_paid_plus_tax
         , order_total_price_paid
         , discount
@@ -346,6 +349,7 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_rate
         , null as order_tax_rate_name
         , null as order_tax_amount
+        , null as couponpaymentversion_payment_transaction
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
         , null as discount
@@ -395,6 +399,7 @@ with bootcamps__ecommerce_order as (
         , null as order_tax_rate
         , null as order_tax_rate_name
         , null as order_tax_amount
+        , null as couponpaymentversion_payment_transaction
         , order_total_price_paid as order_total_price_paid_plus_tax
         , order_total_price_paid
         , case
@@ -426,6 +431,7 @@ select
     , coupon_name
     , coupon_redeemed_on
     , coupon_type
+    , couponpaymentversion_payment_transaction
     , courserun_id
     , courserun_readable_id
     , discount

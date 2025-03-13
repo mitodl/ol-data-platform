@@ -81,7 +81,6 @@ airbyte_assets = load_assets_from_airbyte_instance(
     ),
 )
 
-
 # This section creates a separate job and schedule for each Airbyte connection that will
 # materialize the tables for that connection and any associated dbt staging models for
 # those tables. The eager auto materialize policy will then take effect for any
@@ -113,7 +112,6 @@ for count, group_name in enumerate(group_names, start=1):
     )
     airbyte_asset_jobs.append(job)
 
-
 elt = Definitions(
     assets=[*with_source_code_references([full_dbt_project]), airbyte_assets],
     resources={"dbt": dbt_cli},
@@ -121,7 +119,9 @@ elt = Definitions(
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=3600,
-            target=[full_dbt_project],
+            # exclude staging as they are already handled by "sync_and_stage_" job
+            target=AssetSelection.assets(full_dbt_project)
+            - AssetSelection.groups("staging"),
         )
     ],
     jobs=airbyte_asset_jobs,
