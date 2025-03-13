@@ -83,6 +83,9 @@ def course_version_sensor(
     # more than 3 months in the past, don't bother fetching their versions. For any
     # course_run_ids that don't have keys in the context cursor, create an entry in the
     # cursor dictionary with the results of the call to the get_course_outline method.
+    # Returning a SensorResult with a list of RunRequest objects for each course_run_id
+    # instead of AssetMaterialization objects should trigger pipeline runs for the
+    # updated course runs instead of recording asset events.
 
     cursor: dict[str, str] = json.loads(context.cursor or "{}")
     run_requests = []
