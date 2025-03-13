@@ -9,7 +9,6 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 
-import httpx
 import jsonlines
 from dagster import (
     AssetExecutionContext,
@@ -142,31 +141,34 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
     required_resource_keys={"openedx", "s3"},
 )
 def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
+    SUCCESS = 200
     NOT_FOUND = 404
     course_key = context.partition_key
-    try:
+    course_status = context.resources.openedx.client.get_course_status(course_key)
+    # if the course is found, trigger the XML export
+    if course_status == SUCCESS:
         exported_courses = context.resources.openedx.client.export_courses(
             course_ids=[course_key],
         )
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == NOT_FOUND:
-            context.log.exception(
-                "Course %s not found in the Open edX platform.", course_key
+    # if the course is not found, refer to the last successful materialization
+    elif course_status == NOT_FOUND:
+        context.log.exception(
+            "Course %s not found in the Open edX platform.", course_key
+        )
+        last_materialization = context.instance.get_latest_materialization(
+            context.asset_key, partition_key=context.partition_key
+        )
+        if last_materialization:
+            context.log.info("Using last good materialization for %s", course_key)
+            return Output(
+                last_materialization.metadata["object_key"],
+                data_version=last_materialization.data_version,
+                metadata=last_materialization.metadata,
             )
-            # Use the last good materialization if available
-            last_materialization = context.instance.get_latest_materialization(
-                context.asset_key
-            )
-            if last_materialization:
-                context.log.info("Using last good materialization for %s", course_key)
-                return Output(
-                    last_materialization.metadata["object_key"],
-                    data_version=last_materialization.data_version,
-                    metadata=last_materialization.metadata,
-                )
-            return None
-        else:
-            raise
+        return None
+    else:
+        errmsg = f"Unexpected course status: {course_status}"
+        raise Exception(errmsg)  # noqa: TRY002
     context.log.debug("Initiated export of course %s: %s", course_key, exported_courses)
     successful_exports: set[str] = set()
     failed_exports: set[str] = set()

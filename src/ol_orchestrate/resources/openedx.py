@@ -43,6 +43,17 @@ class OpenEdxApiClient(OAuthApiClient):
             next_page = response_data["pagination"].get("next")
             yield response_data["results"]
 
+    def check_course_status(self, course_id: str) -> int:
+        """Query the edX platform to determine if the course is active.
+        :param course_id: The unique identifier of the course.
+        :type course_id: str
+
+        :yield: A dictionary containing the course ID and the status of the course.
+        """
+        request_url = f"{self.base_url}/api/courses/v1/courses/{course_id}/"
+        response = self.fetch_with_auth(request_url)
+        return response.status_code
+
     def export_courses(self, course_ids: list[str]) -> dict[str, dict[str, str]]:
         """Trigger export of edX courses to an S3 bucket via an API request.
 
