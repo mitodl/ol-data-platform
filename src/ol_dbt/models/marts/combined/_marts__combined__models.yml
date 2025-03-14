@@ -164,6 +164,9 @@ models:
   - name: coupon_type
     description: string, type of the coupon which describes what circumstances the
       coupon can be redeemed.
+  - name: couponpaymentversion_payment_transaction
+    description: string, string that identifies the payment invoice for coupon purchases
+      by companies
   - name: courserun_id
     description: int, foreign key in courses_courserun. Null for edX.org.
   - name: courserun_readable_id
