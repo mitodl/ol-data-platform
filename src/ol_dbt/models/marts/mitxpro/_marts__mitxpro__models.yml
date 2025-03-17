@@ -90,9 +90,9 @@ models:
       for their employees to enroll in courses or programs. This will be null for
       records sourced from b2b.
   - name: activated_on
-    description: timestamp, activation timestamp for the coupon
+    description: timestamp, activation timestamp for the coupon payment version
   - name: expires_on
-    description: timestamp, expiration timestamp for the coupon
+    description: timestamp, expiration timestamp for the coupon payment version
   - name: coupon_source_table
     description: string, either "ecommerce_coupon", "b2bcoupon". "ecommerce_coupon"
       coupons are sourced from the int__mitxpro__ecommerce_coupon table and are used

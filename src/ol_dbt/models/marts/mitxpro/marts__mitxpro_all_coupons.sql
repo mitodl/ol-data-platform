@@ -31,14 +31,14 @@ with allcoupons as (
 )
 
 , redeemed_b2b_coupons as (
-    select
+    select 
         b2bcoupon_id
         , b2border_contract_number
     from allorders
     where
         redeemed = true
         and coupon_id is null
-    group by
+    group by 
         b2bcoupon_id
         , b2border_contract_number
 )
@@ -51,8 +51,8 @@ select
     , allcoupons.discount_amount
     , allcoupons.coupon_type
     , allcoupons.discount_source
-    , allcoupons.activated_on
-    , allcoupons.expires_on
+    , ecommerce_couponpaymentversion.couponpaymentversion_activated_on as activated_on
+    , ecommerce_couponpaymentversion.couponpaymentversion_expires_on as expires_on
     , allcoupons.coupon_source_table
     , allcoupons.b2bcoupon_id
     , allcoupons.coupon_id
