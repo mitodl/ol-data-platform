@@ -31,14 +31,14 @@ with allcoupons as (
 )
 
 , redeemed_b2b_coupons as (
-    select 
+    select
         b2bcoupon_id
         , b2border_contract_number
     from allorders
     where
         redeemed = true
         and coupon_id is null
-    group by 
+    group by
         b2bcoupon_id
         , b2border_contract_number
 )
