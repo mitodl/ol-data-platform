@@ -61,14 +61,6 @@ def course_run_sensor(
     )
 
 
-@sensor(
-    name="openedx_course_version_sensor",
-    description=(
-        "Monitor course runs in a running Open edX system for updates to their "
-        "published versions."
-    ),
-    minimum_interval_seconds=60 * 60,
-)
 def course_version_sensor(
     context: SensorEvaluationContext, openedx: OpenEdxApiClientFactory
 ):
@@ -127,9 +119,9 @@ def course_version_sensor(
             )
             run_requests.append(
                 RunRequest(
-                    asset_selection=AssetKey(
-                        (openedx.deployment, "openedx", "courseware")
-                    ),
+                    asset_selection=[
+                        AssetKey((openedx.deployment, "openedx", "courseware"))
+                    ],
                     partition_key=course_run_id,
                 )
             )
