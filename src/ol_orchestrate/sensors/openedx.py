@@ -4,13 +4,11 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from dagster import (
     AssetKey,
-    AssetMaterialization,
-    DataVersion,
+    RunRequest,
     SensorEvaluationContext,
     SensorResult,
     sensor,
 )
-from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from pydantic import BaseModel
 
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
@@ -63,14 +61,6 @@ def course_run_sensor(
     )
 
 
-@sensor(
-    name="openedx_course_version_sensor",
-    description=(
-        "Monitor course runs in a running Open edX system for updates to their "
-        "published versions."
-    ),
-    minimum_interval_seconds=60 * 60,
-)
 def course_version_sensor(
     context: SensorEvaluationContext, openedx: OpenEdxApiClientFactory
 ):
@@ -85,9 +75,12 @@ def course_version_sensor(
     # more than 3 months in the past, don't bother fetching their versions. For any
     # course_run_ids that don't have keys in the context cursor, create an entry in the
     # cursor dictionary with the results of the call to the get_course_outline method.
+    # Returning a SensorResult with a list of RunRequest objects for each course_run_id
+    # instead of AssetMaterialization objects should trigger pipeline runs for the
+    # updated course runs instead of recording asset events.
 
     cursor: dict[str, str] = json.loads(context.cursor or "{}")
-    asset_events = []
+    run_requests = []
     for course_run_id in course_run_ids:
         course_cursor = CourseCursor(
             **json.loads(
@@ -124,25 +117,16 @@ def course_version_sensor(
                 if response["course_end"]
                 else None,
             )
-            asset_events.append(
-                AssetMaterialization(
-                    asset_key=AssetKey((openedx.deployment, "openedx", "courseware")),
-                    partition=course_run_id,
-                    metadata={
-                        "source": f"{openedx.deployment} openedx",
-                        "materialization_time": datetime.fromisoformat(
-                            response["at_time"]
-                        ).isoformat(),
-                    },
-                    tags={
-                        DATA_VERSION_TAG: DataVersion(
-                            course_update.published_version
-                        ).value
-                    },
+            run_requests.append(
+                RunRequest(
+                    asset_selection=[
+                        AssetKey((openedx.deployment, "openedx", "courseware"))
+                    ],
+                    partition_key=course_run_id,
+                    tags={"published_version": response["published_version"]},
                 )
             )
             cursor[course_run_id] = course_update.model_dump_json()
 
     context.update_cursor(json.dumps(cursor))
-
-    return SensorResult(asset_events=asset_events)
+    return SensorResult(run_requests=run_requests)

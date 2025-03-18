@@ -2,6 +2,7 @@ from typing import Any, Literal
 
 from dagster import (
     AutomationConditionSensorDefinition,
+    SensorDefinition,
     create_repository_using_definitions_args,
 )
 from dagster_aws.s3 import S3Resource
@@ -51,11 +52,12 @@ def s3_uploads_bucket(
 
 
 for deployment_name in OPENEDX_DEPLOYMENTS:
+    course_version_asset = late_bind_partition_to_asset(
+        add_prefix_to_asset_keys(openedx_live_courseware, deployment_name),
+        OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
+    )
     deployment_assets = [
-        late_bind_partition_to_asset(
-            add_prefix_to_asset_keys(openedx_live_courseware, deployment_name),
-            OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
-        ),
+        course_version_asset,
         late_bind_partition_to_asset(
             add_prefix_to_asset_keys(course_structure, deployment_name),
             OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
@@ -69,6 +71,16 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
             OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
         ),
     ]
+    asset_bound_course_version_sensor = SensorDefinition(
+        asset_selection=[course_version_asset],
+        name="openedx_course_version_sensor",
+        description=(
+            "Monitor course runs in a running Open edX system for updates to their "
+            "published versions."
+        ),
+        minimum_interval_seconds=60 * 60,
+        evaluation_fn=course_version_sensor,
+    )
     locals()[f"{deployment_name}_openedx_assets_definition"] = (
         create_repository_using_definitions_args(
             name=f"{deployment_name}_openedx_assets",
@@ -87,10 +99,10 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
             assets=deployment_assets,
             sensors=[
                 course_run_sensor,
-                course_version_sensor,
+                asset_bound_course_version_sensor,
                 AutomationConditionSensorDefinition(
                     f"{deployment_name}_openedx_automation_sensor",
-                    minimum_interval_seconds=3600,
+                    minimum_interval_seconds=300 if DAGSTER_ENV == "dev" else 60 * 60,
                     target=deployment_assets,
                 ),
             ],
