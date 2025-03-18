@@ -123,6 +123,7 @@ def course_version_sensor(
                         AssetKey((openedx.deployment, "openedx", "courseware"))
                     ],
                     partition_key=course_run_id,
+                    tags={"published_version": response["published_version"]}
                 )
             )
             cursor[course_run_id] = course_update.model_dump_json()
