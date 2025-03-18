@@ -48,7 +48,7 @@ class OpenEdxApiClient(OAuthApiClient):
         :param course_id: The unique identifier of the course.
         :type course_id: str
 
-        :yield: A dictionary containing the course ID and the status of the course.
+        :return: A dictionary containing the course ID and the status of the course.
         """
         request_url = f"{self.base_url}/api/courses/v1/courses/{course_id}/"
         response = self.fetch_with_auth(request_url, include_status=True)

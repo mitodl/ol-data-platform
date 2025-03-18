@@ -167,7 +167,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
             )
         return None
     else:
-        errmsg = f"Unexpected course status: {course_status}"
+        errmsg = f"Unexpected course status: {course_status} for course: {course_key}"
         raise Exception(errmsg)  # noqa: TRY002
     context.log.debug("Initiated export of course %s: %s", course_key, exported_courses)
     successful_exports: set[str] = set()
