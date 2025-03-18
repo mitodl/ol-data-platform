@@ -102,7 +102,7 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
                 asset_bound_course_version_sensor,
                 AutomationConditionSensorDefinition(
                     f"{deployment_name}_openedx_automation_sensor",
-                    minimum_interval_seconds=3600,
+                    minimum_interval_seconds=300 if DAGSTER_ENV == "dev" else 60 * 60,
                     target=deployment_assets,
                 ),
             ],

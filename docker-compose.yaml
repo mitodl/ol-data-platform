@@ -62,6 +62,7 @@ services:
     - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
     - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
     - ./src/ol_dbt:/opt/dagster/code/ol_dbt
+    - ./src/ol_orchestrate/dagster_local/storage/:/opt/dagster/app/storage/
 
   # This service runs the dagster-daemon process, which is responsible for taking runs
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
@@ -95,6 +96,7 @@ services:
     - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
     - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
     - ./src/ol_dbt:/opt/dagster/code/ol_dbt
+    - ./src/ol_orchestrate/dagster_local/storage/:/opt/dagster/app/storage/
 
   postgres:
     image: postgres

@@ -144,7 +144,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
     SUCCESS = 200
     NOT_FOUND = 404
     course_key = context.partition_key
-    course_status = context.resources.openedx.client.get_course_status(course_key)
+    course_status = context.resources.openedx.client.check_course_status(course_key)
     # if the course is found, trigger the XML export
     if course_status == SUCCESS:
         exported_courses = context.resources.openedx.client.export_courses(
