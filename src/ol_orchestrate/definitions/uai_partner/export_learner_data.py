@@ -11,7 +11,7 @@ from ol_orchestrate.sensors.openedx import uai_partner_sensor
 
 vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
 
-partner_data_export = Definitions(
+export_learner_data = Definitions(
     assets=[learner_enrollment_data],
     sensors=[uai_partner_sensor],
     resources={
