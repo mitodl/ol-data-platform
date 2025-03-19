@@ -1,4 +1,5 @@
 import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from dagster_dbt.asset_utils import get_asset_key_for_model
 from ol_orchestrate.assets.lakehouse.dbt import full_dbt_project
 from ol_orchestrate.partitions.openedx import UAI_PARTNER_PARTITIONS
 
-# Sample partner course ids
+# Fetch partner course mapping from a table once we have the data
 partner_course_mapping = [
     {"partner_id": "partner1", "course_run_id": "course-v1:TestX+Test101+3T2022"},
     {"partner_id": "partner2", "course_run_id": "course-v1:DEMO+MLx1DEMO+DEMO"},
@@ -72,7 +73,12 @@ def learner_enrollment_data(context: AssetExecutionContext):
         )
 
         enrollment_data_version = hashlib.sha256(
-            partner_data_df.write_csv().encode("utf-8")
+            json.dumps(
+                {
+                    "columns": partner_data_df.columns,
+                    "row_count": num_rows,
+                }
+            ).encode("utf-8")
         ).hexdigest()
 
         enrollment_data_object_key = (
@@ -83,18 +89,14 @@ def learner_enrollment_data(context: AssetExecutionContext):
         yield ExpectationResult(
             success=not partner_data_df.is_empty(),
             label="learner_enrollment_data_not_empty",
-            metadata={
-                "number_of_enrollments": MetadataValue.text(
-                    text=str(partner_data_df.height)
-                )
-            },
+            metadata={"number_of_enrollments": MetadataValue.text(text=str(num_rows))},
         )
         yield Output(
             (enrollment_data_file, enrollment_data_object_key),
             metadata={
                 "partner_id": partner_id,
                 "object_key": enrollment_data_object_key,
-                "rows": num_rows,
+                "row_count": num_rows,
                 "file_size_in_bytes": enrollment_data_file.stat().st_size,
                 "materialization_time": datetime.now(tz=UTC).isoformat(),
             },

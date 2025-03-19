@@ -141,7 +141,7 @@ def course_version_sensor(
     minimum_interval_seconds=60 * 60 * 24,  # daily
 )
 def uai_partner_sensor():
-    # Simulate fetching the partners from a table or API
+    # Fetch partners from a table once we have the data
     partners = ["partner1", "partner2"]
     return SensorResult(
         dynamic_partitions_requests=[
