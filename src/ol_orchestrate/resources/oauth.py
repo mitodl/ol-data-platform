@@ -83,8 +83,7 @@ class OAuthApiClient(ConfigurableResource):
         request_url: str,
         page_size: int = 100,
         extra_params: dict[str, Any] | None = None,
-        include_status: bool = False,  # noqa: FBT001,FBT002
-    ) -> dict[Any, Any] | tuple[dict[Any, Any], int]:
+    ) -> dict[Any, Any]:
         if self.token_url == f"{self.base_url}/oauth2/access_token":
             request_params = {"username": self._username, "page_size": page_size}
         else:
@@ -109,10 +108,7 @@ class OAuthApiClient(ConfigurableResource):
                     request_url, page_size=page_size, extra_params=extra_params
                 )
             raise
-        if include_status:
-            return response.json(), response.status_code
-        else:
-            return response.json()
+        return response.json()
 
 
 class OAuthApiClientFactory(ConfigurableResource):
