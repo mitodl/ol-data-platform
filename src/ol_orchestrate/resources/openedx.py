@@ -4,6 +4,7 @@ from typing import Optional, Self
 from urllib.parse import parse_qs
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
+from httpx import HTTPStatusError
 from pydantic import Field, PrivateAttr
 
 from ol_orchestrate.resources.oauth import OAuthApiClient
@@ -50,9 +51,17 @@ class OpenEdxApiClient(OAuthApiClient):
 
         :return: A dictionary containing the course ID and the status of the course.
         """
+        NOT_FOUND = 404
         request_url = f"{self.base_url}/api/courses/v1/courses/{course_id}/"
-        response = self.fetch_with_auth(request_url, include_status=True)
-        return response[1]
+        try:
+            self.fetch_with_auth(request_url, include_status=True)
+        except HTTPStatusError as e:
+            if e.response.status_code != NOT_FOUND:
+                err_msg = f"Unexpected response from the edX API for course {course_id}"
+                raise ValueError(err_msg) from e
+            else:
+                return e.response.status_code
+        return 200
 
     def export_courses(self, course_ids: list[str]) -> dict[str, dict[str, str]]:
         """Trigger export of edX courses to an S3 bucket via an API request.
