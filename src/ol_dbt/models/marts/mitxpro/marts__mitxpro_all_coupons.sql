@@ -49,7 +49,7 @@ with allcoupons as (
 )
 
 , coupons_used_by_name as (
-    select 
+    select
         ecommerce_coupon.couponpayment_name
         , count(distinct ecommerce_order.order_id) as coupons_used_count
     from ecommerce_order
