@@ -3,7 +3,14 @@ from contextlib import contextmanager
 from typing import Optional, Self
 from urllib.parse import parse_qs
 
-from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
+from dagster import (
+    AssetExecutionContext,
+    AssetRecordsFilter,
+    ConfigurableResource,
+    InitResourceContext,
+    Output,
+    ResourceDependency,
+)
 from httpx import HTTPStatusError
 from pydantic import Field, PrivateAttr
 
@@ -51,17 +58,45 @@ class OpenEdxApiClient(OAuthApiClient):
 
         :return: A dictionary containing the course ID and the status of the course.
         """
-        NOT_FOUND = 404
         request_url = f"{self.base_url}/api/courses/v1/courses/{course_id}/"
         try:
             self.fetch_with_auth(request_url)
         except HTTPStatusError as e:
-            if e.response.status_code != NOT_FOUND:
-                err_msg = f"Unexpected response from the edX API for course {course_id}"
-                raise ValueError(err_msg) from e
-            else:
-                return e.response.status_code
+            return e.response.status_code
         return 200
+
+    def backfill_asset(
+        self, context: AssetExecutionContext, course_key: str
+    ) -> Optional[Output]:
+        """Query the edX platform to determine if the course is active.
+        :param context: Provides additional context specific to the asset.
+        :type context: AssetExecutionContext
+
+        :param course_key: The ID of the course for which to retrieve the asset.
+        :type course_key: str
+
+        :return: The last successfully materialized asset.
+        """
+        context.log.exception(
+            "Course %s not found in the Open edX platform.", course_key
+        )
+        try:
+            return (
+                context.instance.fetch_materializations(
+                    records_filter=AssetRecordsFilter(
+                        asset_key=context.asset_key,
+                        asset_partitions=context.partition_key,
+                    ),
+                    limt=1,
+                )
+                .records[0]
+                .asset_materialization
+            )
+        except IndexError:
+            context.log.exception(
+                "No previous materialization found for course %s", course_key
+            )
+            return None
 
     def export_courses(self, course_ids: list[str]) -> dict[str, dict[str, str]]:
         """Trigger export of edX courses to an S3 bucket via an API request.

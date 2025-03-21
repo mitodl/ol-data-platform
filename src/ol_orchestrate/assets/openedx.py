@@ -31,6 +31,9 @@ from ol_orchestrate.lib.openedx import (
     un_nest_course_structure,
 )
 
+SUCCESS = 200
+NOT_FOUND = 404
+
 
 @asset(
     description=("An instance of courseware running in an Open edX environment."),
@@ -80,9 +83,44 @@ def openedx_live_courseware(context: AssetExecutionContext):
 )
 def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG001
     course_id = context.partition_key
-    course_structure_document = (
-        context.resources.openedx.client.get_course_structure_document(course_id)
-    )
+    course_status = context.resources.openedx.client.check_course_status(course_id)
+    # if the course is found, trigger the XML export
+    if course_status == SUCCESS:
+        course_structure_document = (
+            context.resources.openedx.client.get_course_structure_document(course_id)
+        )
+    # if the course is not found, refer to the last successful materialization
+    elif course_status == NOT_FOUND:
+        last_materialization = context.resources.openedx.client.backfill_asset(
+            context, course_id
+        )
+    # if the course status query results in some other error, raise an exception
+    else:
+        err_msg = f"Unexpected course status: {course_status} for course: {course_id}"
+        context.log.exception(err_msg)
+        raise ValueError(err_msg)
+    if last_materialization:
+        context.log.info("Using last good materialization for %s", course_id)
+        data_version = last_materialization.data_version
+        structures_file = Path(f"course_structures_{data_version}.json")
+        blocks_file = Path(f"course_blocks_{data_version}.json")
+        structure_object_key = f"{'/'.join(context.asset_key_for_output('course_structure').path)}/{course_id}/{data_version}.json"  # noqa: E501
+        blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_blocks').path)}/{course_id}/{data_version}.json"  # noqa: E501
+        yield Output(
+            (structures_file, structure_object_key),
+            data_version=last_materialization.data_version,
+            metadata={"course_id": course_id, "object_key": structure_object_key},
+        )
+        yield Output(
+            (blocks_file, blocks_object_key),
+            data_version=last_materialization.data_version,
+            metadata={"course_id": course_id, "object_key": blocks_object_key},
+        )
+    else:
+        context.log.exception(
+            "No previous materialization found for course %s", course_id
+        )
+        return None
     data_version = hashlib.sha256(
         json.dumps(course_structure_document).encode("utf-8")
     ).hexdigest()
@@ -141,8 +179,6 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
     required_resource_keys={"openedx", "s3"},
 )
 def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
-    SUCCESS = 200
-    NOT_FOUND = 404
     course_key = context.partition_key
     course_status = context.resources.openedx.client.check_course_status(course_key)
     # if the course is found, trigger the XML export
@@ -152,23 +188,27 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
         )
     # if the course is not found, refer to the last successful materialization
     elif course_status == NOT_FOUND:
-        context.log.exception(
-            "Course %s not found in the Open edX platform.", course_key
+        last_materialization = context.resources.openedx.client.backfill_asset(
+            context, course_key
         )
-        last_materialization = context.instance.get_latest_materialization(
-            context.asset_key, partition_key=context.partition_key
-        )
-        if last_materialization:
-            context.log.info("Using last good materialization for %s", course_key)
-            return Output(
-                last_materialization.metadata["object_key"],
-                data_version=last_materialization.data_version,
-                metadata=last_materialization.metadata,
-            )
-        return None
+    # if the course status query results in some other error, raise an exception
     else:
-        errmsg = f"Unexpected course status: {course_status} for course: {course_key}"
-        raise Exception(errmsg)  # noqa: TRY002
+        err_msg = f"Unexpected course status: {course_status} for course: {course_key}"
+        context.log.exception(err_msg)
+        raise ValueError(err_msg)
+    if last_materialization:
+        course_file = Path(f"{course_key}.xml.tar.gz")
+        context.log.info("Using last good materialization for %s", course_key)
+        return Output(
+            (course_file, last_materialization.metadata["object_key"]),
+            data_version=last_materialization.data_version,
+            metadata=last_materialization.metadata,
+        )
+    else:
+        context.log.exception(
+            "No previous materialization found for course %s", course_key
+        )
+        return None
     context.log.debug("Initiated export of course %s: %s", course_key, exported_courses)
     successful_exports: set[str] = set()
     failed_exports: set[str] = set()
