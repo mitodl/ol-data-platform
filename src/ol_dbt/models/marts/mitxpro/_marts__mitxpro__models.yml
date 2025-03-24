@@ -123,6 +123,8 @@ models:
     description: string, company name
   - name: b2border_contract_number
     description: string, contract number used to identify the order
+  - name: coupons_used_count
+    description: int, count of coupons used by coupon payment name
   - name: redeemed
     description: boolean, set to true if the coupon has at least one redeemed order
       otherwise it's false.
