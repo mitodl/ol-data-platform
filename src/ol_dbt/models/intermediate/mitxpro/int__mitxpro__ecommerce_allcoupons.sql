@@ -64,7 +64,7 @@ with coupon as (
         , 'b2bcoupon' as coupon_source_table
         , b2bcoupon_id
         , null as coupon_id
-        , cast((b2bcoupon_discount_percent * 100) as varchar) || '% off' as discount_amount
+        , cast(cast((b2bcoupon_discount_percent * 100) as integer) as varchar) || '% off' as discount_amount
     from b2becommerce_b2bcoupon
 )
 

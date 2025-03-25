@@ -90,9 +90,9 @@ models:
       for their employees to enroll in courses or programs. This will be null for
       records sourced from b2b.
   - name: activated_on
-    description: timestamp, activation timestamp for the coupon
+    description: timestamp, activation timestamp for the coupon payment version
   - name: expires_on
-    description: timestamp, expiration timestamp for the coupon
+    description: timestamp, expiration timestamp for the coupon payment version
   - name: coupon_source_table
     description: string, either "ecommerce_coupon", "b2bcoupon". "ecommerce_coupon"
       coupons are sourced from the int__mitxpro__ecommerce_coupon table and are used
@@ -104,9 +104,30 @@ models:
   - name: coupon_id
     description: int, foreign key referencing ecommerce_coupon. This will be null
       for records sourced from b2b.
+  - name: couponpaymentversion_num_coupon_codes
+    description: int, number of coupon objects associated with the payment version
+  - name: couponpaymentversion_max_redemptions
+    description: int, maximum number of redemptions for the coupon payment version
+  - name: couponpayment_name
+    description: string, human readable name for the coupon payment
+  - name: couponpaymentversion_id
+    description: int, foreign key to ecommerce_couponpaymentversion for orders that
+      use a coupon
+  - name: couponpaymentversion_created_on
+    description: timestamp, specifying when the coupon payment version was initially
+      created
+  - name: couponpaymentversion_discount_amount_text
+    description: string, discount amount in readable format. It can be percent-off
+      which is <dollar amount * 100>% off, dollars-off which is $<dollar amount> off
+  - name: company_name
+    description: string, company name
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
+  - name: coupons_used_count
+    description: int, count of coupons used by coupon payment name
   - name: redeemed
     description: boolean, set to true if the coupon has at least one redeemed order
       otherwise it's false.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["b2bcoupon_id", "coupon_id"]
+      column_list: ["b2bcoupon_id", "coupon_id", "couponpaymentversion_id", "b2border_contract_number"]

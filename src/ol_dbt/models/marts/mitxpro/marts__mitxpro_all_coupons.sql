@@ -8,6 +8,26 @@ with allcoupons as (
     from {{ ref('int__mitxpro__ecommerce_allorders') }}
 )
 
+, ecommerce_coupon as (
+    select *
+    from {{ ref('int__mitxpro__ecommerce_coupon') }}
+)
+
+, ecommerce_couponpaymentversion as (
+    select *
+    from {{ ref('int__mitxpro__ecommerce_couponpaymentversion') }}
+)
+
+, ecommerce_company as (
+    select *
+    from {{ ref('int__mitxpro__ecommerce_company') }}
+)
+
+, ecommerce_order as (
+    select *
+    from {{ ref('int__mitxpro__ecommerce_order') }}
+)
+
 , redeemed_coupons as (
     select coupon_id
     from allorders
@@ -16,12 +36,27 @@ with allcoupons as (
 )
 
 , redeemed_b2b_coupons as (
-    select b2bcoupon_id
+    select
+        b2bcoupon_id
+        , b2border_contract_number
     from allorders
     where
         redeemed = true
         and coupon_id is null
-    group by b2bcoupon_id
+    group by
+        b2bcoupon_id
+        , b2border_contract_number
+)
+
+, coupons_used_by_name as (
+    select
+        ecommerce_coupon.couponpayment_name
+        , count(distinct ecommerce_order.order_id) as coupons_used_count
+    from ecommerce_order
+    inner join ecommerce_coupon
+        on ecommerce_order.coupon_id = ecommerce_coupon.coupon_id
+    where ecommerce_order.order_state = 'fulfilled'
+    group by ecommerce_coupon.couponpayment_name
 )
 
 select
@@ -32,11 +67,20 @@ select
     , allcoupons.discount_amount
     , allcoupons.coupon_type
     , allcoupons.discount_source
-    , allcoupons.activated_on
-    , allcoupons.expires_on
+    , ecommerce_couponpaymentversion.couponpaymentversion_activated_on as activated_on
+    , ecommerce_couponpaymentversion.couponpaymentversion_expires_on as expires_on
     , allcoupons.coupon_source_table
     , allcoupons.b2bcoupon_id
     , allcoupons.coupon_id
+    , ecommerce_couponpaymentversion.couponpaymentversion_num_coupon_codes
+    , ecommerce_couponpaymentversion.couponpaymentversion_max_redemptions
+    , ecommerce_couponpaymentversion.couponpayment_name
+    , ecommerce_couponpaymentversion.couponpaymentversion_id
+    , ecommerce_couponpaymentversion.couponpaymentversion_created_on
+    , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount_text
+    , ecommerce_company.company_name
+    , redeemed_b2b_coupons.b2border_contract_number
+    , coupons_used_by_name.coupons_used_count
     , case
         when
             redeemed_coupons.coupon_id is not null
@@ -52,3 +96,11 @@ left join redeemed_coupons
     on allcoupons.coupon_id = redeemed_coupons.coupon_id
 left join redeemed_b2b_coupons
     on allcoupons.b2bcoupon_id = redeemed_b2b_coupons.b2bcoupon_id
+left join ecommerce_coupon
+    on allcoupons.coupon_id = ecommerce_coupon.coupon_id
+left join ecommerce_couponpaymentversion
+    on ecommerce_coupon.couponpayment_name = ecommerce_couponpaymentversion.couponpayment_name
+left join ecommerce_company
+    on ecommerce_couponpaymentversion.company_id = ecommerce_company.company_id
+left join coupons_used_by_name
+    on ecommerce_couponpaymentversion.couponpayment_name = coupons_used_by_name.couponpayment_name
