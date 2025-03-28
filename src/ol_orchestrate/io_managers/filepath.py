@@ -126,9 +126,9 @@ class LocalFileObjectIOManager(FileObjectIOManager):
 
     def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
         if self.bucket:
-            dest_path = Path(f"{self.bucket}/{self.path_prefix or ''}/{obj[1]}".replace(
-                "//", "/"
-            ))
+            dest_path = Path(
+                f"{self.bucket}/{self.path_prefix or ''}/{obj[1]}".replace("//", "/")
+            )
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             obj = (obj[0], f"file://{dest_path}")
 
