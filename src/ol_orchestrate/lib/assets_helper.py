@@ -1,12 +1,8 @@
 from functools import partial
-from typing import Optional
 
 from dagster import (
-    AssetExecutionContext,
-    AssetRecordsFilter,
     AssetsDefinition,
     AssetSpec,
-    Output,
     PartitionsDefinition,
 )
 
@@ -35,25 +31,3 @@ def add_prefix_to_asset_keys(
     return asset_def.with_attributes(
         asset_key_replacements=key_map,
     )
-
-
-def get_last_materialized_partition(
-    context: AssetExecutionContext, course_key: str
-) -> Optional[Output]:
-    try:
-        return (
-            context.instance.fetch_materializations(
-                records_filter=AssetRecordsFilter(
-                    asset_key=context.asset_key,
-                    asset_partitions=context.partition_key,
-                ),
-                limit=1,
-            )
-            .records[0]
-            .asset_materialization
-        )
-    except IndexError:
-        context.log.exception(
-            "No previous materialization found for course %s", course_key
-        )
-        return None
