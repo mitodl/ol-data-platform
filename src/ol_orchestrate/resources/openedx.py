@@ -55,7 +55,7 @@ class OpenEdxApiClient(OAuthApiClient):
         try:
             self.fetch_with_auth(request_url)
         except HTTPStatusError as e:
-            return e.response.status_code
+            return e.response["status_code"]
         return 200
 
     def export_courses(self, course_ids: list[str]) -> dict[str, dict[str, str]]:

@@ -119,3 +119,16 @@ class DummyIOManager(ConfigurableIOManager):
         return DagsterPath(self.input_file_path)
 
     def handle_output(self, context: "OutputContext", obj: Any) -> None: ...
+
+
+class LocalFileObjectIOManager(FileObjectIOManager):
+    bucket: Optional[str] = None
+
+    def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
+        if self.bucket:
+            dest_path = f"{self.bucket}/{self.path_prefix or ''}/{obj[1]}".replace(
+                "//", "/"
+            )
+            obj = (obj[0], f"file://{dest_path}")
+
+        return super().handle_output(context, obj)
