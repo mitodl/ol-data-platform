@@ -86,6 +86,7 @@ def openedx_live_courseware(context: AssetExecutionContext):
 def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG001
     course_id = context.partition_key
     course_status = context.resources.openedx.client.check_course_status(course_id)
+    context.log.info("Course status for %s: %s", course_id, course_status)
     # if the course is found, trigger the XML export
     if course_status == SUCCESS:
         course_structure_document = (
@@ -136,7 +137,7 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
             },
         )
     # if the course is not found, refer to the last successful materialization
-    elif course_status == NOT_FOUND:
+    elif course_status in {None, NOT_FOUND}:
         context.log.info("Course %s not found in the Open edX platform.", course_id)
     # if the course status query results in some other error, raise an exception
     else:
@@ -204,7 +205,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
             metadata={"course_id": course_key, "object_key": target_path},
         )
     # if the course is not found, refer to the last successful materialization
-    elif course_status == NOT_FOUND:
+    elif course_status in {None, NOT_FOUND}:
         context.log.info("Course %s not found in the Open edX platform.", course_key)
     # if the course status query results in some other error, raise an exception
     else:

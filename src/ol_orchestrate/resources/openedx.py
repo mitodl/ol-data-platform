@@ -53,10 +53,9 @@ class OpenEdxApiClient(OAuthApiClient):
         """
         request_url = f"{self.base_url}/api/courses/v1/courses/{course_id}/"
         try:
-            self.fetch_with_auth(request_url)
+            return self.fetch_with_auth(request_url, include_status=True)[1]
         except HTTPStatusError as e:
-            return e.response["status_code"]
-        return 200
+            return e.response.status_code
 
     def export_courses(self, course_ids: list[str]) -> dict[str, dict[str, str]]:
         """Trigger export of edX courses to an S3 bucket via an API request.
