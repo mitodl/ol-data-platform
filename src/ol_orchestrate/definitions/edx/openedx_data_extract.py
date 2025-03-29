@@ -13,15 +13,15 @@ from ol_orchestrate.assets.openedx import (
     extract_courserun_details,
     openedx_live_courseware,
 )
-from ol_orchestrate.io_managers.filepath import (
-    S3FileObjectIOManager,
-)
 from ol_orchestrate.lib.assets_helper import (
     add_prefix_to_asset_keys,
     late_bind_partition_to_asset,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, OPENEDX_DEPLOYMENTS, VAULT_ADDRESS
-from ol_orchestrate.lib.dagster_helpers import default_io_manager
+from ol_orchestrate.lib.dagster_helpers import (
+    default_file_object_io_manager,
+    default_io_manager,
+)
 from ol_orchestrate.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -86,7 +86,8 @@ for deployment_name in OPENEDX_DEPLOYMENTS:
             name=f"{deployment_name}_openedx_assets",
             resources={
                 "io_manager": default_io_manager(DAGSTER_ENV),
-                "s3file_io_manager": S3FileObjectIOManager(
+                "s3file_io_manager": default_file_object_io_manager(
+                    dagster_env=DAGSTER_ENV,
                     bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
                     path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
                 ),

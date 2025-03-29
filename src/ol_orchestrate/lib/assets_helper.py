@@ -1,6 +1,10 @@
 from functools import partial
 
-from dagster import AssetsDefinition, AssetSpec, PartitionsDefinition
+from dagster import (
+    AssetsDefinition,
+    AssetSpec,
+    PartitionsDefinition,
+)
 
 
 def late_bind_partition_to_spec(
