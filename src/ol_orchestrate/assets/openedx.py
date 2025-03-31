@@ -31,8 +31,8 @@ from ol_orchestrate.lib.openedx import (
     un_nest_course_structure,
 )
 
-SUCCESS = 200
-NOT_FOUND = 404
+HTTP_SUCCESS = 200
+HTTP_NOT_FOUND = 404
 
 
 @asset(
@@ -88,7 +88,7 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
     course_status = context.resources.openedx.client.check_course_status(course_id)
     context.log.info("Course status for %s: %s", course_id, course_status)
     # if the course is found, trigger the XML export
-    if course_status == SUCCESS:
+    if course_status == HTTP_SUCCESS:
         course_structure_document = (
             context.resources.openedx.client.get_course_structure_document(course_id)
         )
@@ -137,7 +137,7 @@ def course_structure(context: AssetExecutionContext, courseware):  # noqa: ARG00
             },
         )
     # if the course is not found, refer to the last successful materialization
-    elif course_status in {None, NOT_FOUND}:
+    elif course_status == HTTP_NOT_FOUND:
         context.log.info("Course %s not found in the Open edX platform.", course_id)
     # if the course status query results in some other error, raise an exception
     else:
@@ -162,7 +162,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
     course_key = context.partition_key
     course_status = context.resources.openedx.client.check_course_status(course_key)
     # if the course is found, trigger the XML export
-    if course_status == SUCCESS:
+    if course_status == HTTP_SUCCESS:
         exported_courses = context.resources.openedx.client.export_courses(
             course_ids=[course_key],
         )
@@ -205,7 +205,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
             metadata={"course_id": course_key, "object_key": target_path},
         )
     # if the course is not found, refer to the last successful materialization
-    elif course_status in {None, NOT_FOUND}:
+    elif course_status in {None, HTTP_NOT_FOUND}:
         context.log.info("Course %s not found in the Open edX platform.", course_key)
     # if the course status query results in some other error, raise an exception
     else:
