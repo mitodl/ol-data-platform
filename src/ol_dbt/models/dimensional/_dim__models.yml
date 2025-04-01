@@ -77,12 +77,17 @@ models:
     tests:
     - not_null
 
-- name: fact_course_navigation_events
+- name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
   columns:
   - name: user_id
     description: string, foreign key to dim_user, referencing the user who navigated
-      the page
+      the course
+    tests:
+    - not_null
+  - name: platform_id
+    description: string, foreign key to dim_platform, referencing the platform where
+      the navigation event occurred
     tests:
     - not_null
   - name: courserun_readable_id
@@ -96,11 +101,20 @@ models:
       edx.ui.lms.sequence.previous_selected, edx.ui.lms.sequence.tab_selected, edx.ui.lms.video.played
     tests:
     - not_null
-  - name: vertical_block_id
-    description: string, foreign key to dim_course_content, referencing the vertical
-      block ID
-    tests:
-    - not_null
+  - name: block_id
+    description: string, foreign key to dim_course_content, referencing the block
+      ID of the subsection that is being navigated by the user. Populated only for
+      events that are related to course subsections.
+  - name: starting_position
+    description: string, the starting position where the user is navigating from,
+      either a page URL or the tab in the unit navigation bar.
+  - name: ending_position
+    description: string, the ending position where the user is navigating to, either
+      a page URL or the tab in the unit navigation bar. If ending_position is NULL
+      but starting_position is not NULL, it means the user navigates from the first
+      unit in one subsection to the last unit in the previous subsection using the
+      "previous" control, or from the last unit in one subsection to the first unit
+      in the next subsection using the "next" control.
   - name: event_timestamp
     description: timestamp, timestamp (with time zone) indicating the time at which
       the event occurred, formatted as timestamp(9)
