@@ -94,7 +94,7 @@ models:
     chapters, subsections, problems, videos, and other contents across the Open edX
     platforms.
   columns:
-  - name: content_block_pk
+  - name: content_id
     description: string, primary key for this table
     tests:
     - not_null
@@ -194,6 +194,14 @@ models:
     tests:
     - not_null
   - name: platform
+    description: string, foreign key to dim_platform, referencing the platform where
+      the navigation event occurred
+  - name: user_id
+    description: string, foreign key to dim_user, referencing the user who navigated
+      the course
+    tests:
+    - not_null
+  - name: platform_id
     description: string, foreign key to dim_platform, referencing the platform where
       the navigation event occurred
     tests:
