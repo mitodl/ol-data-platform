@@ -120,6 +120,9 @@ models:
       the event occurred, formatted as timestamp(9)
     tests:
     - not_null
+  - name: event_json
+    description: json, it includes member fields that identify specifics of each triggered
+      event. For less common/event-specific attributes.
 
 - name: tfact_video_events
   description: Transactional fact table for learner video events in a course
@@ -164,23 +167,14 @@ models:
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "event_type = 'seek_video'"
-  - name: new_speed
-    description: number, new speed that the user selected for the video to play for
-      speed_change_video event. e.g. 0.75, 1.0, 1.25, 1.50.
-    tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "event_type = 'speed_change_video'"
-  - name: old_speed
-    description: number, old speed at which the video was playing for speed_change_video
-      event.
-    tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "event_type = 'speed_change_video'"
   - name: event_timestamp
     description: timestamp, timestamp (with time zone) indicating the time at which
       the event occurred, formatted as timestamp(9)
     tests:
     - not_null
+  - name: event_json
+    description: json, it includes member fields that identify specifics of each triggered
+      event. For less common/event-specific attributes.
 
 - name: tfact_problem_events
   description: Transactional fact table for learner problem events in a course
@@ -226,3 +220,6 @@ models:
       the event occurred, formatted as timestamp(9)
     tests:
     - not_null
+  - name: event_json
+    description: json, it includes member fields that identify specifics of each triggered
+      event. For less common/event-specific attributes.

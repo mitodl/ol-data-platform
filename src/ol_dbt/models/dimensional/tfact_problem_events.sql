@@ -11,6 +11,7 @@ with mitxonline_problem_events as (
         , openedx_user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
         , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_id
         , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
@@ -32,6 +33,7 @@ with mitxonline_problem_events as (
         , openedx_user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
         , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_id
         , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
@@ -53,6 +55,7 @@ with mitxonline_problem_events as (
         , user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
         , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_id
         , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
@@ -74,6 +77,7 @@ with mitxonline_problem_events as (
         , user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
         , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_id
         , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
@@ -104,6 +108,7 @@ with mitxonline_problem_events as (
         , coalesce(mitxonline_users.user_id, mitxonline_problem_events.openedx_user_id) as user_id
         , mitxonline_problem_events.courserun_readable_id
         , mitxonline_problem_events.event_type
+        , mitxonline_problem_events.event_json
         , mitxonline_problem_events.problem_id
         , mitxonline_problem_events.answers
         , mitxonline_problem_events.attempt
@@ -121,6 +126,7 @@ with mitxonline_problem_events as (
         , coalesce(xpro_users.user_id, xpro_problem_events.openedx_user_id) as user_id
         , xpro_problem_events.courserun_readable_id
         , xpro_problem_events.event_type
+        , xpro_problem_events.event_json
         , xpro_problem_events.problem_id
         , xpro_problem_events.answers
         , xpro_problem_events.attempt
@@ -138,6 +144,7 @@ with mitxonline_problem_events as (
         , user_id
         , courserun_readable_id
         , event_type
+        , event_json
         , problem_id
         , answers
         , attempt
@@ -154,6 +161,7 @@ with mitxonline_problem_events as (
         , user_id
         , courserun_readable_id
         , event_type
+        , event_json
         , problem_id
         , answers
         , attempt
@@ -176,5 +184,6 @@ select
     , grade
     , max_grade
     , event_timestamp
+    , event_json
 
 from combined

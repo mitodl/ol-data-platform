@@ -20,6 +20,7 @@ with mitxonline_video_events as (
         , openedx_user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.id' omit quotes) as video_id
         , case
             when lower(json_query(useractivity_event_object, 'lax $.duration' omit quotes)) = 'null' then null
@@ -28,8 +29,6 @@ with mitxonline_video_events as (
         , json_query(useractivity_event_object, 'lax $.currentTime' omit quotes) as video_position
         , json_query(useractivity_event_object, 'lax $.old_time' omit quotes) as starting_position
         , json_query(useractivity_event_object, 'lax $.new_time' omit quotes) as ending_position
-        , json_query(useractivity_event_object, 'lax $.new_speed' omit quotes) as new_speed
-        , json_query(useractivity_event_object, 'lax $.old_speed' omit quotes) as old_speed
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
@@ -43,6 +42,7 @@ with mitxonline_video_events as (
         , openedx_user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.id' omit quotes) as video_id
         , case
             when lower(json_query(useractivity_event_object, 'lax $.duration' omit quotes)) = 'null' then null
@@ -51,8 +51,6 @@ with mitxonline_video_events as (
         , json_query(useractivity_event_object, 'lax $.currentTime' omit quotes) as video_position
         , json_query(useractivity_event_object, 'lax $.old_time' omit quotes) as starting_position
         , json_query(useractivity_event_object, 'lax $.new_time' omit quotes) as ending_position
-        , json_query(useractivity_event_object, 'lax $.new_speed' omit quotes) as new_speed
-        , json_query(useractivity_event_object, 'lax $.old_speed' omit quotes) as old_speed
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
@@ -66,6 +64,7 @@ with mitxonline_video_events as (
         , user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.id' omit quotes) as video_id
         , case
             when lower(json_query(useractivity_event_object, 'lax $.duration' omit quotes)) = 'null' then null
@@ -74,8 +73,6 @@ with mitxonline_video_events as (
         , json_query(useractivity_event_object, 'lax $.currentTime' omit quotes) as video_position
         , json_query(useractivity_event_object, 'lax $.old_time' omit quotes) as starting_position
         , json_query(useractivity_event_object, 'lax $.new_time' omit quotes) as ending_position
-        , json_query(useractivity_event_object, 'lax $.new_speed' omit quotes) as new_speed
-        , json_query(useractivity_event_object, 'lax $.old_speed' omit quotes) as old_speed
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
@@ -89,6 +86,7 @@ with mitxonline_video_events as (
         , user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.id' omit quotes) as video_id
         , case
             when lower(json_query(useractivity_event_object, 'lax $.duration' omit quotes)) = 'null' then null
@@ -97,8 +95,6 @@ with mitxonline_video_events as (
         , json_query(useractivity_event_object, 'lax $.currentTime' omit quotes) as video_position
         , json_query(useractivity_event_object, 'lax $.old_time' omit quotes) as starting_position
         , json_query(useractivity_event_object, 'lax $.new_time' omit quotes) as ending_position
-        , json_query(useractivity_event_object, 'lax $.new_speed' omit quotes) as new_speed
-        , json_query(useractivity_event_object, 'lax $.old_speed' omit quotes) as old_speed
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where
@@ -121,13 +117,12 @@ with mitxonline_video_events as (
         , coalesce(mitxonline_users.user_id, mitxonline_video_events.openedx_user_id) as user_id
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.event_type
+        , mitxonline_video_events.event_json
         , mitxonline_video_events.video_id
         , mitxonline_video_events.video_duration
         , mitxonline_video_events.video_position
         , mitxonline_video_events.starting_position
         , mitxonline_video_events.ending_position
-        , mitxonline_video_events.new_speed
-        , mitxonline_video_events.old_speed
         , mitxonline_video_events.event_timestamp
     from mitxonline_video_events
     left join mitxonline_users on mitxonline_video_events.user_username = mitxonline_users.user_username
@@ -139,13 +134,12 @@ with mitxonline_video_events as (
         , coalesce(xpro_users.user_id, xpro_video_events.openedx_user_id) as user_id
         , xpro_video_events.courserun_readable_id
         , xpro_video_events.event_type
+        , xpro_video_events.event_json
         , xpro_video_events.video_id
         , xpro_video_events.video_duration
         , xpro_video_events.video_position
         , xpro_video_events.starting_position
         , xpro_video_events.ending_position
-        , xpro_video_events.new_speed
-        , xpro_video_events.old_speed
         , xpro_video_events.event_timestamp
     from xpro_video_events
     left join xpro_users on xpro_video_events.user_username = xpro_users.user_username
@@ -157,13 +151,12 @@ with mitxonline_video_events as (
         , user_id
         , courserun_readable_id
         , event_type
+        , event_json
         , video_id
         , video_duration
         , video_position
         , starting_position
         , ending_position
-        , new_speed
-        , old_speed
         , event_timestamp
     from mitxresidential_video_events
 
@@ -174,13 +167,12 @@ with mitxonline_video_events as (
         , user_id
         , courserun_readable_id
         , event_type
+        , event_json
         , video_id
         , video_duration
         , video_position
         , starting_position
         , ending_position
-        , new_speed
-        , old_speed
         , event_timestamp
     from edxorg_video_events
 )
@@ -195,8 +187,7 @@ select
     , video_position
     , starting_position
     , ending_position
-    , new_speed
-    , old_speed
     , event_timestamp
+    , event_json
 
 from combined

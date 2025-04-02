@@ -15,6 +15,7 @@ with mitxonline_navigation_events as (
         , openedx_user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.old' omit quotes) as starting_tab
         , json_query(useractivity_event_object, 'lax $.new' omit quotes) as ending_tab
         , json_query(useractivity_event_object, 'lax $.current_url' omit quotes) as starting_url
@@ -35,6 +36,7 @@ with mitxonline_navigation_events as (
         , openedx_user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.old' omit quotes) as starting_tab
         , json_query(useractivity_event_object, 'lax $.new' omit quotes) as ending_tab
         , json_query(useractivity_event_object, 'lax $.current_url' omit quotes) as starting_url
@@ -55,6 +57,7 @@ with mitxonline_navigation_events as (
         , user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.old' omit quotes) as starting_tab
         , json_query(useractivity_event_object, 'lax $.new' omit quotes) as ending_tab
         , json_query(useractivity_event_object, 'lax $.current_url' omit quotes) as starting_url
@@ -75,6 +78,7 @@ with mitxonline_navigation_events as (
         , user_id
         , courserun_readable_id
         , useractivity_event_type as event_type
+        , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.old' omit quotes) as starting_tab
         , json_query(useractivity_event_object, 'lax $.new' omit quotes) as ending_tab
         , json_query(useractivity_event_object, 'lax $.current_url' omit quotes) as starting_url
@@ -104,6 +108,7 @@ with mitxonline_navigation_events as (
         , coalesce(mitxonline_users.user_id, mitxonline_navigation_events.openedx_user_id) as user_id
         , mitxonline_navigation_events.courserun_readable_id
         , mitxonline_navigation_events.event_type
+        , mitxonline_navigation_events.event_json
         , mitxonline_navigation_events.block_id
         , coalesce(
             mitxonline_navigation_events.current_tab
@@ -125,6 +130,7 @@ with mitxonline_navigation_events as (
         , coalesce(xpro_users.user_id, xpro_navigation_events.openedx_user_id) as user_id
         , xpro_navigation_events.courserun_readable_id
         , xpro_navigation_events.event_type
+        , xpro_navigation_events.event_json
         , xpro_navigation_events.block_id
         , coalesce(
             xpro_navigation_events.current_tab
@@ -145,6 +151,7 @@ with mitxonline_navigation_events as (
         , user_id
         , courserun_readable_id
         , event_type
+        , event_json
         , block_id
         , coalesce(current_tab, starting_tab, starting_url) as starting_position
         , coalesce(ending_tab, ending_url) as ending_position
@@ -160,6 +167,7 @@ with mitxonline_navigation_events as (
         , user_id
         , courserun_readable_id
         , event_type
+        , event_json
         , block_id
         , coalesce(current_tab, starting_tab, starting_url) as starting_position
         , coalesce(ending_tab, ending_url) as ending_position
@@ -178,5 +186,6 @@ select
     , starting_position
     , ending_position
     , event_timestamp
+    , event_json
 
 from combined
