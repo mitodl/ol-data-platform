@@ -533,7 +533,7 @@ def normalize_edxorg_tracking_log(
             """  # noqa: S608
         )
         col_names = conn.execute(
-            """SELECT column_name FROM temp.information_schema.columns
+            """SELECT column_name FROM information_schema.columns
             WHERE table_name = 'tracking_logs'
             """
         ).fetchall()
