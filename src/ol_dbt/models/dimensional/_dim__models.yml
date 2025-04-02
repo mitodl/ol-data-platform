@@ -120,3 +120,109 @@ models:
       the event occurred, formatted as timestamp(9)
     tests:
     - not_null
+
+- name: tfact_video_events
+  description: Transactional fact table for learner video events in a course
+  columns:
+  - name: user_id
+    description: string, foreign key to dim_user, referencing the user who interacted
+      with the video
+    tests:
+    - not_null
+  - name: platform_id
+    description: string, foreign key to dim_platform, referencing the platform where
+      the video event occurred
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, foreign key to dim_course_content, referencing the edX course
+      run ID
+    tests:
+    - not_null
+  - name: event_type
+    description: string, type of the video event. Possible values are load_video,
+      pause_video, play_video, seek_video, speed_change_video, stop_video, and video_hide_transcript.
+    tests:
+    - not_null
+  - name: video_id
+    description: string, foreign key referencing a substring of the video block ID
+      in the dim_course_content table.
+    tests:
+    - not_null
+  - name: video_duration
+    description: float, the length of the video, in seconds.
+  - name: video_position
+    description: number, the seconds into the video where the event occurred. May
+      be Null for `load_video` or `seek_video` events.
+  - name: starting_position
+    description: number, the seconds into the video where the user was before seeking
+      the video. For very small seek_video events, the `old_time` may not be recorded
+      in the residential dataset.
+  - name: ending_position
+    description: number, the seconds into the video where the user was after seeking
+      the video.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "event_type = 'seek_video'"
+  - name: new_speed
+    description: number, new speed that the user selected for the video to play for
+      speed_change_video event. e.g. 0.75, 1.0, 1.25, 1.50.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "event_type = 'speed_change_video'"
+  - name: old_speed
+    description: number, old speed at which the video was playing for speed_change_video
+      event.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "event_type = 'speed_change_video'"
+  - name: event_timestamp
+    description: timestamp, timestamp (with time zone) indicating the time at which
+      the event occurred, formatted as timestamp(9)
+    tests:
+    - not_null
+
+- name: tfact_problem_events
+  description: Transactional fact table for learner problem events in a course
+  columns:
+  - name: user_id
+    description: string, foreign key to dim_user, referencing the user who interacted
+      with the problem
+    tests:
+    - not_null
+  - name: platform_id
+    description: string, foreign key to dim_platform, referencing the platform where
+      the problem event occurred
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, foreign key to dim_course_content, referencing the edX course
+      run ID
+    tests:
+    - not_null
+  - name: event_type
+    description: string, type of the problem event. Possible values are problem_check,
+      , showanswer
+    tests:
+    - not_null
+  - name: problem_id
+    description: string, foreign key referencing the problem block ID in the dim_course_content
+      table.
+    tests:
+    - not_null
+  - name: attempt
+    description: number, number indicating which attempt this was
+  - name: answers
+    description: json, student answers to this problem in problem_id and internal
+      answer pair. For multiple questions, it lists every question and answer.
+  - name: success
+    description: str, It's either 'correct' or 'incorrect'
+  - name: current_grade
+    description: number, current grade value
+  - name: max_grade
+    description: number, maximum possible grade value for the problem
+  - name: event_timestamp
+    description: timestamp, timestamp (with time zone) indicating the time at which
+      the event occurred, formatted as timestamp(9)
+    tests:
+    - not_null
