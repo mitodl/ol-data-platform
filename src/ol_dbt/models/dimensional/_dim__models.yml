@@ -98,7 +98,9 @@ models:
   - name: event_type
     description: string, type of the navigation event, e.g. edx.ui.lms.jump_nav.selected,
       edx.ui.lms.link_clicked, edx.ui.lms.outline.selected, edx.ui.lms.sequence.next_selected,
-      edx.ui.lms.sequence.previous_selected, edx.ui.lms.sequence.tab_selected, edx.ui.lms.video.played
+      edx.ui.lms.sequence.previous_selected, edx.ui.lms.sequence.tab_selected, edx.ui.lms.video.played.
+      The open edx doc - https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/tracking_logs/
+      student_event_types.html#course-navigation-events
     tests:
     - not_null
   - name: block_id
@@ -145,24 +147,27 @@ models:
   - name: event_type
     description: string, type of the video event. Possible values are load_video,
       pause_video, play_video, seek_video, speed_change_video, stop_video, and video_hide_transcript.
+      The open edx doc - https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/
+      tracking_logs/student_event_types.html#video-interaction-events
     tests:
     - not_null
   - name: video_id
     description: string, foreign key referencing a substring of the video block ID
-      in the dim_course_content table.
+      in the dim_course_content table. This value is the hash code of the video block,
+      formatted as block-v1:{org}+{course}+{run}type@video@{hash code}.
     tests:
     - not_null
   - name: video_duration
     description: float, the length of the video, in seconds.
   - name: video_position
-    description: number, the seconds into the video where the event occurred. May
-      be Null for `load_video` or `seek_video` events.
+    description: float, the seconds into the video where the event occurred. May be
+      Null for `load_video` or `seek_video` events.
   - name: starting_position
-    description: number, the seconds into the video where the user was before seeking
-      the video. For very small seek_video events, the `old_time` may not be recorded
-      in the residential dataset.
+    description: float, the seconds into the video where the user was before seeking
+      the video. For very small seek_video events, the `starting_position` may not
+      be recorded in the residential dataset.
   - name: ending_position
-    description: number, the seconds into the video where the user was after seeking
+    description: float, the seconds into the video where the user was after seeking
       the video.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
@@ -196,19 +201,21 @@ models:
     - not_null
   - name: event_type
     description: string, type of the problem event. Possible values are problem_check,
-      , showanswer
+      , showanswer. The open edx doc - https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/
+      tracking_logs/student_event_types.html#video-interaction-events
     tests:
     - not_null
-  - name: problem_id
+  - name: problem_block_id
     description: string, foreign key referencing the problem block ID in the dim_course_content
-      table.
+      table, formatted as block-v1:{org}+{course}+{run}type@problem@{hash code}.
     tests:
     - not_null
   - name: attempt
-    description: number, number indicating which attempt this was
+    description: int, number indicating which attempt this was
   - name: answers
-    description: json, student answers to this problem in problem_id and internal
-      answer pair. For multiple questions, it lists every question and answer.
+    description: json, learner's answers to this problem in problem_id and internal
+      answer pair. For multiple questions, it lists every question and answer. e.g.
+      {"6a3f44c9265a44d6911996711fe4bafd_2_1":["choice_0","choice_2"]}
   - name: success
     description: str, It's either 'correct' or 'incorrect'
   - name: current_grade

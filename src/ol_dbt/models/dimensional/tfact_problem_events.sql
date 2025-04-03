@@ -13,7 +13,7 @@ with mitxonline_problem_events as (
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_id
+        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
         , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
         , json_query(useractivity_event_object, 'lax $.attempts' omit quotes) as attempt
         , json_query(useractivity_event_object, 'lax $.success' omit quotes) as success
@@ -35,7 +35,7 @@ with mitxonline_problem_events as (
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_id
+        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
         , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
         , json_query(useractivity_event_object, 'lax $.attempts' omit quotes) as attempt
         , json_query(useractivity_event_object, 'lax $.success' omit quotes) as success
@@ -57,7 +57,7 @@ with mitxonline_problem_events as (
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_id
+        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
         , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
         , json_query(useractivity_event_object, 'lax $.attempts' omit quotes) as attempt
         , json_query(useractivity_event_object, 'lax $.success' omit quotes) as success
@@ -79,7 +79,7 @@ with mitxonline_problem_events as (
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_id
+        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
         , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
         , json_query(useractivity_event_object, 'lax $.attempts' omit quotes) as attempt
         , json_query(useractivity_event_object, 'lax $.success' omit quotes) as success
@@ -109,7 +109,7 @@ with mitxonline_problem_events as (
         , mitxonline_problem_events.courserun_readable_id
         , mitxonline_problem_events.event_type
         , mitxonline_problem_events.event_json
-        , mitxonline_problem_events.problem_id
+        , mitxonline_problem_events.problem_block_id
         , mitxonline_problem_events.answers
         , mitxonline_problem_events.attempt
         , mitxonline_problem_events.success
@@ -127,7 +127,7 @@ with mitxonline_problem_events as (
         , xpro_problem_events.courserun_readable_id
         , xpro_problem_events.event_type
         , xpro_problem_events.event_json
-        , xpro_problem_events.problem_id
+        , xpro_problem_events.problem_block_id
         , xpro_problem_events.answers
         , xpro_problem_events.attempt
         , xpro_problem_events.success
@@ -145,7 +145,7 @@ with mitxonline_problem_events as (
         , courserun_readable_id
         , event_type
         , event_json
-        , problem_id
+        , problem_block_id
         , answers
         , attempt
         , success
@@ -162,7 +162,7 @@ with mitxonline_problem_events as (
         , courserun_readable_id
         , event_type
         , event_json
-        , problem_id
+        , problem_block_id
         , answers
         , attempt
         , success
@@ -177,7 +177,7 @@ select
     , platform as platform_id
     , courserun_readable_id
     , event_type
-    , problem_id
+    , problem_block_id
     , answers
     , attempt
     , success
