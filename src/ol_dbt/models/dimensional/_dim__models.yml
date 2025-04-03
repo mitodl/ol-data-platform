@@ -105,11 +105,13 @@ models:
     - not_null
   - name: block_id
     description: string, foreign key to dim_course_content, referencing the block
-      ID of the subsection that is being navigated by the user. Populated only for
-      events that are related to course subsections.
+      ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
+      code}.
   - name: starting_position
     description: string, the starting position where the user is navigating from,
-      either a page URL or the tab in the unit navigation bar.
+      either a page URL or the tab index in the unit navigation bar. Tabs correspond
+      to the unit in the subsection (or verticals) and are indexed starting from 1.
+      e.g. 1 for the first unit in the subsection.
   - name: ending_position
     description: string, the ending position where the user is navigating to, either
       a page URL or the tab in the unit navigation bar. If ending_position is NULL
@@ -125,6 +127,10 @@ models:
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event. For less common/event-specific attributes.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id", "event_type", "block_id",
+        "event_json", "event_timestamp"]
 
 - name: tfact_video_events
   description: Transactional fact table for learner video events in a course
@@ -180,6 +186,10 @@ models:
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event. For less common/event-specific attributes.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id", "video_id", "event_type",
+        "event_json", "event_timestamp"]
 
 - name: tfact_problem_events
   description: Transactional fact table for learner problem events in a course
@@ -230,3 +240,7 @@ models:
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event. For less common/event-specific attributes.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_id", "courserun_readable_id", "event_type", "problem_block_id",
+        "event_json", "event_timestamp"]

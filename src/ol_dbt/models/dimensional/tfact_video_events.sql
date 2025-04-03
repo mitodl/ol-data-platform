@@ -177,7 +177,7 @@ with mitxonline_video_events as (
     from edxorg_video_events
 )
 
-select
+select distinct
      {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_id
     , platform as platform_id
     , courserun_readable_id
