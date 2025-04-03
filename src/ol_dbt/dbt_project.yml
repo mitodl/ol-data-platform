@@ -77,6 +77,11 @@ models:
       +schema: staging
       +grants:
         select: ['read_only_production', 'reverse_etl']
+    dimensional:
+      +materialized: table
+      +schema: dimensional
+      +grants:
+        select: ['read_only_production', 'business_intelligence', 'reverse_etl']
     intermediate:
       +materialized: table
       +schema: intermediate
