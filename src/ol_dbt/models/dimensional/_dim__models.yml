@@ -24,7 +24,7 @@ models:
     description: string, domain name of the platform, e.g. mitxonline.mit.edu
     tests:
     - not_null
-    
+
 - name: dim_user
   description: Dimensional model for users from different platforms.
   columns:
