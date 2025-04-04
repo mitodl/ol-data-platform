@@ -30,6 +30,15 @@ with mitx_courses as (
     select * from {{ ref('stg__micromasters__app__postgres__courses_courserun') }}
 )
 
+, emeritus_runs as (
+    select distinct
+        courserun_external_readable_id
+        , courserun_title
+        , courserun_start_on
+        , courserun_end_on
+    from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
+)
+
 , residential_runs as (
     select
         *
@@ -119,6 +128,35 @@ with mitx_courses as (
         end as courserun_is_current
     from mitxpro_runs
     left join mitxpro_courses on mitxpro_runs.course_id = mitxpro_courses.course_id
+
+    union all
+
+    select
+        '{{ var("emeritus") }}' as platform
+        , emeritus_runs.courserun_title as course_title
+        , emeritus_runs.courserun_external_readable_id as course_readable_id
+        , emeritus_runs.courserun_title
+        , emeritus_runs.courserun_external_readable_id
+        , null as courserun_url
+        , emeritus_runs.courserun_start_on
+        , emeritus_runs.courserun_end_on
+        , null as courserun_upgrade_deadline
+        , null as courserun_is_live
+        , case
+            when
+                emeritus_runs.courserun_end_on is null
+                and from_iso8601_timestamp(mitxpro_runs.courserun_start_on) <= current_date
+                then true
+            when
+                from_iso8601_timestamp(emeritus_runs.courserun_start_on) <= current_date
+                and from_iso8601_timestamp(emeritus_runs.courserun_end_on) > current_date
+                then true
+            else false
+        end as courserun_is_current
+    from emeritus_runs
+    left join mitxpro_runs
+        on emeritus_runs.courserun_external_readable_id = mitxpro_runs.courserun_external_readable_id
+    where mitxpro_runs.courserun_external_readable_id is null
 
     union all
 

@@ -257,7 +257,7 @@ def process_edxorg_archive_bundle(
             # (TMM 2024-03-14)
             if table_name:
                 try:
-                    pl.read_csv(
+                    df = pl.read_csv(
                         archive_file,
                         has_header=True,
                         n_rows=2,
@@ -270,6 +270,9 @@ def process_edxorg_archive_bundle(
                     context.log.debug(
                         "Skipping further processing of empty CSV file %s", tinfo.name
                     )
+                    archive_file.unlink()
+                    continue
+                if df.is_empty():
                     archive_file.unlink()
                     continue
             data_version = hashlib.file_digest(
@@ -526,11 +529,11 @@ def normalize_edxorg_tracking_log(
             f"""
             CREATE TABLE tracking_logs AS
             SELECT * FROM read_ndjson_auto('{edxorg_raw_tracking_log}',
-            FILENAME=1, union_by_name=1, maximum_depth=1);
+            FILENAME=1, union_by_name=1, maximum_depth=1, ignore_errors=true);
             """  # noqa: S608
         )
         col_names = conn.execute(
-            """SELECT column_name FROM temp.information_schema.columns
+            """SELECT column_name FROM information_schema.columns
             WHERE table_name = 'tracking_logs'
             """
         ).fetchall()
@@ -559,7 +562,7 @@ def normalize_edxorg_tracking_log(
             """
         )
         conn.execute(
-            f"""COPY (SELECT {', '.join(columns)} FROM tracking_logs)
+            f"""COPY (SELECT {", ".join(columns)} FROM tracking_logs)
             TO '{transformed_logs}' (FORMAT JSON)
             """  # noqa: S608
         )

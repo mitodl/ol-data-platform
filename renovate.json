@@ -3,7 +3,7 @@
     ":automergeMinor",
     ":rebaseStalePrs",
     ":separateMajorReleases",
-    "config:base"
+    "config:recommended"
   ],
   "schedule": [
     "every weekend"
@@ -14,10 +14,10 @@
   },
   "packageRules": [
     {
-      "matchPackagePrefixes": [
-        "dagster"
-      ],
-      "groupName": "dagster-plugins"
+      "groupName": "dagster-plugins",
+      "matchPackageNames": [
+        "dagster{/,}**"
+      ]
     }
   ]
 }

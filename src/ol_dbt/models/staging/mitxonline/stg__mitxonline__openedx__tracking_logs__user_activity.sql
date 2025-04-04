@@ -21,21 +21,11 @@ with source as (
     {% endif %}
 )
 
-, source_sorted as (
-    select
-        *
-        , row_number() over (
-            partition by username, context, event_source, event_type, event, "time"  --noqa
-            order by _airbyte_emitted_at desc, _ab_source_file_last_modified desc, "time" desc
-        ) as row_num
-    from source
-)
+{{ deduplicate_raw_table(
+    order_by='_airbyte_extracted_at desc, _ab_source_file_last_modified desc, "time"'
+    , partition_columns = 'username, context, event_source, event_type, event, "time"'
+) }}
 
-, dedup_source as (
-    select *
-    from source_sorted
-    where row_num = 1
-)
 
 , cleaned as (
     select
@@ -61,7 +51,7 @@ with source as (
         , to_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace(time, '(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)', '$1T$2$3') -- noqa
         )) as useractivity_timestamp
-    from dedup_source
+    from most_recent_source
 )
 
 select * from cleaned

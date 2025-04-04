@@ -5,6 +5,11 @@ from dagster import FilesystemIOManager, IOManager
 from dagster._core.definitions.partition import INVALID_PARTITION_SUBSTRINGS
 from dagster_aws.s3 import S3PickleIOManager, S3Resource
 
+from ol_orchestrate.io_managers.filepath import (
+    LocalFileObjectIOManager,
+    S3FileObjectIOManager,
+)
+
 
 def sanitize_mapping_key(mapping_key: str, replacement: str = "__") -> str:
     return re.sub(r"[^A-Za-z0-9_]", replacement, mapping_key)
@@ -23,3 +28,16 @@ def default_io_manager(dagster_env) -> IOManager:
         )
     else:
         return FilesystemIOManager()
+
+
+def default_file_object_io_manager(dagster_env, bucket, path_prefix) -> IOManager:
+    if dagster_env != "dev":
+        return S3FileObjectIOManager(
+            bucket=bucket,
+            path_prefix=path_prefix,
+        )
+    else:
+        return LocalFileObjectIOManager(
+            bucket="/opt/dagster/app/storage",
+            path_prefix=path_prefix,
+        )

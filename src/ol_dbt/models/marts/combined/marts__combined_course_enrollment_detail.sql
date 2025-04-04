@@ -18,7 +18,8 @@ with combined_enrollments as (
     select
         *
         , row_number() over (
-            partition by user_id, courserun_id order by order_created_on desc
+            partition by user_id, courserun_id
+            order by order_created_on desc
         ) as row_num
     from {{ ref('int__mitxonline__ecommerce_order') }}
     where order_state in ('fulfilled', 'refunded')
@@ -28,7 +29,8 @@ with combined_enrollments as (
     select
         *
         , row_number() over (
-            partition by user_id, courserun_readable_id order by order_created_on desc, order_id desc
+            partition by user_id, courserun_readable_id
+            order by order_created_on desc, order_id desc
         ) as row_num
     from {{ ref('int__micromasters__orders') }}
     where order_state in ('fulfilled', 'refunded', 'partially_refunded')
@@ -100,7 +102,7 @@ with combined_enrollments as (
             and combined_enrollments.platform = combined_users.platform
     left join mitxonline_completed_orders
         on
-            combined_enrollments.user_id = mitxonline_completed_orders.user_id
+            combined_enrollments.user_username = mitxonline_completed_orders.user_username
             and combined_enrollments.courserun_id = mitxonline_completed_orders.courserun_id
             and mitxonline_completed_orders.row_num = 1
     left join combined_courseruns
@@ -134,11 +136,23 @@ with combined_enrollments as (
         , combined_users.user_highest_education
         , combined_users.user_company
         , combined_users.user_gender
-        , if(mitxonline_certificates.courseruncertificate_is_revoked = false, true, false)
-        as courseruncertificate_is_earned
-        , mitxonline_certificates.courseruncertificate_created_on
-        , mitxonline_certificates.courseruncertificate_url
-        , mitxonline_certificates.courseruncertificate_uuid
+        , case
+            when mitxonline_certificates.courseruncertificate_is_revoked = false then true
+            when combined_enrollments.courseruncertificate_created_on is not null then true
+            else false
+        end as courseruncertificate_is_earned
+        , coalesce(
+            mitxonline_certificates.courseruncertificate_created_on
+            , combined_enrollments.courseruncertificate_created_on
+        ) as courseruncertificate_created_on
+        , coalesce(
+            mitxonline_certificates.courseruncertificate_url
+            , combined_enrollments.courseruncertificate_url
+        ) as courseruncertificate_url
+        , coalesce(
+            mitxonline_certificates.courseruncertificate_uuid
+            , combined_enrollments.courseruncertificate_uuid
+        ) as courseruncertificate_uuid
         , micromasters_completed_orders.order_id
         , micromasters_completed_orders.line_id
         , micromasters_completed_orders.order_reference_number
@@ -228,6 +242,54 @@ with combined_enrollments as (
         on mitxpro_completed_orders.order_id = mitxpro__ecommerce_line.order_id
     where combined_enrollments.platform = '{{ var("mitxpro") }}'
 
+    union all
+
+    select
+        '{{ var("emeritus") }}' as platform
+        , combined_enrollments.courserunenrollment_id
+        , combined_enrollments.courserunenrollment_is_active
+        , combined_enrollments.courserunenrollment_created_on
+        , combined_enrollments.courserunenrollment_enrollment_mode
+        , combined_enrollments.courserunenrollment_enrollment_status
+        , combined_enrollments.courserunenrollment_is_edx_enrolled
+        , combined_enrollments.user_id
+        , combined_enrollments.courserun_id
+        , combined_enrollments.courserun_title
+        , combined_enrollments.courserun_readable_id
+        , combined_courseruns.courserun_start_on
+        , combined_courseruns.courserun_end_on
+        , combined_courseruns.courserun_is_current
+        , combined_enrollments.user_username
+        , combined_enrollments.user_email
+        , combined_enrollments.user_full_name
+        , combined_users.user_address_country as user_country_code
+        , combined_users.user_highest_education
+        , combined_users.user_company
+        , combined_users.user_gender
+        , combined_enrollments.courseruncertificate_is_earned
+        , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_url
+        , combined_enrollments.courseruncertificate_uuid
+        , null as order_id
+        , null as line_id
+        , null as order_reference_number
+        , combined_enrollments.courserungrade_grade
+        , combined_enrollments.courserungrade_is_passing
+        , combined_enrollments.course_title
+        , combined_enrollments.course_readable_id
+        , combined_enrollments.courserun_upgrade_deadline
+        , null as courserunenrollment_upgraded_on
+    from combined_enrollments
+    left join combined_users
+        on
+            (
+                combined_enrollments.user_email = combined_users.user_email
+                or combined_enrollments.user_full_name = combined_users.user_full_name
+            )
+            and combined_enrollments.platform = combined_users.platform
+    left join combined_courseruns
+        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    where combined_enrollments.platform = '{{ var("emeritus") }}'
 
     union all
 
@@ -274,7 +336,7 @@ with combined_enrollments as (
             and combined_enrollments.platform = combined_users.platform
     left join bootcamps_completed_orders
         on
-            combined_enrollments.user_id = bootcamps_completed_orders.order_purchaser_user_id
+            combined_enrollments.user_username = bootcamps_completed_orders.user_username
             and combined_enrollments.courserun_id = bootcamps_completed_orders.courserun_id
     left join combined_courseruns
         on
@@ -368,7 +430,14 @@ select
     , user_full_name
     , user_highest_education
     , user_gender
-    , {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_hashed_id
+    , case
+        when user_id is not null
+        then {{ generate_hash_id('user_id || platform') }}
+        when user_email is not null
+        then {{ generate_hash_id('user_email || platform') }}
+        else
+            {{ generate_hash_id('user_full_name || platform') }}
+    end as user_hashed_id
     , user_id
     , user_username
 from combined_enrollment_detail

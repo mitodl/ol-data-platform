@@ -4,7 +4,7 @@ with source as (
    }}
 )
 
-{{ deduplicate_query('source', 'most_recent_source') }}
+{{ deduplicate_raw_table(order_by='modified' , partition_columns = 'id') }}
 
 , cleaned as (
 
@@ -17,8 +17,8 @@ with source as (
         , earned_graded_override as subsectiongradeoverride_total_earned_graded_score
         , override_reason as subsectiongradeoverride_reason
         , system as subsectiongradeoverride_system
-        , to_iso8601(from_iso8601_timestamp_nanos(created)) as subsectiongradeoverride_created_on
-        , to_iso8601(from_iso8601_timestamp_nanos(modified)) as subsectiongradeoverride_updated_on
+        , to_iso8601(created) as subsectiongradeoverride_created_on
+        , to_iso8601(modified) as subsectiongradeoverride_updated_on
     from most_recent_source
 )
 

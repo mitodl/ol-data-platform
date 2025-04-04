@@ -63,9 +63,10 @@ def open_edx_export_irx_job_config(
     edx_resource_config = {
         "client_id": edx_creds["id"],
         "client_secret": edx_creds["secret"],
-        "lms_url": edx_creds["url"],
+        "base_url": edx_creds["url"],
         "studio_url": edx_creds["studio_url"],
         "token_type": "JWT",
+        "token_url": f"{edx_creds['url']}/oauth2/access_token",
     }
 
     db_creds = vault.client.secrets.database.generate_credentials(

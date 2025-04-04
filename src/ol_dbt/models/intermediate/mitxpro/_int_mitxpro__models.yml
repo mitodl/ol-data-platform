@@ -321,11 +321,12 @@ models:
     description: string, readable product type
     tests:
     - not_null
-#  - name: salesforce_opportunity_id
-#    description: string, ID of Salesforce Opportunity
+  - name: salesforce_opportunity_id
+    description: string, ID of Salesforce Opportunity
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxpro__app__postgres__b2becommerce_b2border')
+
 - name: int__mitxpro__b2becommerce_b2bcoupon
   description: B2B coupons are coupons that allow us to give a discount to companies
     buying bulk seats for their employees
@@ -1356,6 +1357,9 @@ models:
     tests:
     - unique
     - not_null
+  - name: courserun_external_readable_id
+    description: str, course run readable ID on the external platforms such as xPRO
+      Emeritus.
   - name: courserun_url
     description: str, url location for the course run on MITxPro website
   - name: courserun_start_on

@@ -15,10 +15,12 @@ models:
     description: str, title of the course
   - name: program_title
     description: str, title of the program
+  - name: program_name
+    description: str, name of the program. If program is split over multiple tracks,
+      the program name is the same for all tracks. e.g. Data, Economics, and Design
+      of Policy
   - name: program_id
     description: int, foreign key representing a single program
-    tests:
-    - not_null
   - name: course_readable_id
     description: str, Open edX ID formatted as course-v1:{org}+{course code} e.g.
       course-v1:xPRO+MLx2
@@ -27,13 +29,10 @@ models:
       code} e.g.program-v1:xPRO+MLx
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "program_id", "course_readable_id"]
+      column_list: ["platform", "program_title", "course_readable_id"]
 
 - name: marts__combined__users
   description: Mart model for users from different platforms
-  config:
-    grants:
-      select: ['finance']
   columns:
   - name: user_hashed_id
     description: str, primary key for the combined_users table.
@@ -43,9 +42,10 @@ models:
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx. If the user is on edX.org
       and MITx Online then the email will be chosen from the last platform they joined
-      if their account is active
+      if their account is active. May be null for some xPRO Emeritus learners.
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platforms != 'xPRO Emeritus'"
   - name: user_joined_on
     description: timestamp, user join timestamp on the corresponding platform including
       xpro, bootcamps, edX.org, MITx Online, and Residential MITx. If the user is
@@ -128,12 +128,10 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_mitxonline_username", "user_edxorg_username", "user_mitxpro_username",
         "user_bootcamps_username", "platforms"]
+      row_condition: "platforms != 'xPRO Emeritus'"
 
 - name: marts__combined__orders
   description: ecommerce regular b2c orders
-  config:
-    grants:
-      select: ['finance']
   columns:
   - name: combined_orders_hash_id
     description: int, primary key for this table. At the grain of order id, line id,
@@ -154,6 +152,10 @@ models:
   - name: coupon_id
     description: int, foreign key referencing ecommerce_coupon or the b2b coupon table.
       For edX.org, it refers to ecommerce_coupon table in MicroMasters application.
+  - name: b2bcoupon_id
+    description: int, foreign key to b2becommerce_b2bcoupon
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
   - name: coupon_name
     description: string, human readable name for the coupon payment
   - name: coupon_redeemed_on
@@ -162,6 +164,9 @@ models:
   - name: coupon_type
     description: string, type of the coupon which describes what circumstances the
       coupon can be redeemed.
+  - name: couponpaymentversion_payment_transaction
+    description: string, string that identifies the payment invoice for coupon purchases
+      by companies
   - name: courserun_id
     description: int, foreign key in courses_courserun. Null for edX.org.
   - name: courserun_readable_id
@@ -280,9 +285,6 @@ models:
 - name: marts__combined_course_enrollment_detail
   description: course enrollment detail with certificates, orders and coupons from
     OL platforms. No order data for edX.org course purchase.
-  config:
-    grants:
-      select: ['finance']
   columns:
   - name: platform
     description: string, application where the data is from
@@ -331,6 +333,9 @@ models:
   - name: courseruncertificate_created_on
     description: timestamp, date and time when the course certificate was initially
       created
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "courseruncertificate_is_earned = true"
   - name: courseruncertificate_is_earned
     description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
       edX.org or xpro.mit.edu.
@@ -385,9 +390,11 @@ models:
   - name: user_country_code
     description: str, country code on the platform user enrolled. May be blank.
   - name: user_email
-    description: string, user email that user registered on the corresponding platform
+    description: string, user email that user registered on the corresponding platform.
+      May be null for some xPRO Emeritus learners.
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Emeritus'"
   - name: user_full_name
     description: str, user full name on the platform user enrolled.
   - name: user_highest_education
@@ -396,17 +403,21 @@ models:
   - name: user_gender
     description: str, gender on the platform user enrolled
   - name: user_id
-    description: int, user ID on the corresponding platform
+    description: int, user ID on the corresponding platform. May be null for some
+      xPRO Emeritus learners.
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Emeritus'"
   - name: user_hashed_id
     description: str, foreign key to combined_users to identify the user
     tests:
     - not_null
   - name: user_username
-    description: string, username to identify a user on the corresponding platform
+    description: string, username to identify a user on the corresponding platform.
+      Null for all the xPRO Emeritus.
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Emeritus'"
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_hashed_id", "courserun_readable_id"]
@@ -438,8 +449,9 @@ models:
     description: str, title of the program, including the specific track if applicable.
       e.g., Statistics and Data Science (General Track)
   - name: program_name
-    description: str, name of the program, which does not specify which track. e.g.,
-      Statistics and Data Science
+    description: str, name of the program. If program is split over multiple tracks,
+      the program name is the same for all tracks. e.g. Data, Economics, and Design
+      of Policy
     tests:
     - not_null
   - name: program_track
@@ -469,6 +481,10 @@ models:
     description: string, username on the corresponding platform
   - name: user_full_name
     description: string, user full name on the corresponding platform
+  - name: user_has_completed_program
+    description: boolean, whether the learner has completed program to earn the certificate
+    tests:
+    - not_null
   - name: programenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the program
   - name: programenrollment_created_on
@@ -494,20 +510,22 @@ models:
       row_condition: "program_id =2 and platform_name ='edX.org'"
 
 - name: marts__combined__products
-  description: combined course or program products from MITx Online and xPro
+  description: combined course or program products from MITx Online, xPro, or edX.org
   columns:
   - name: platform
-    description: str, application where data is from - MITx Online or xPro
+    description: str, application where data is from - MITx Online, xPro, or edX.org
     tests:
     - not_null
   - name: product_platform
     description: str, indicating the partners for course/program. The possible values
-      are Emeritus, xPRO, Simplilearn, Global Alumni, WHU, Susskind and MITx Online.
+      are Emeritus, xPRO, Simplilearn, Global Alumni, WHU, Susskind, MITx Online,
+      and edX.org
     tests:
     - not_null
   - name: product_readable_id
     description: str, unique open edX Course ID formatted as course-v1:{org}+{course
       code}+{run_tag} or program run ID formatted as program-v1:{org}+{program code}+{run_tag}
+      for MITx Online and xPro. For edX.org, the course ID is formatted as {org}/{course}/{run_tag}.
     tests:
     - not_null
     - unique
@@ -543,7 +561,7 @@ models:
     description: timestamp, date and time when the course or program enrollment ends
   - name: upgrade_deadline
     description: timestamp, date and time beyond which the learner can not enroll
-      in paid course mode. Only populated for MITx Online courses.
+      in paid course mode. Only populated for MITx courses.
   - name: duration
     description: str, a short description indicating how long the course or program
       takes to complete (e.g. '4 weeks')
@@ -552,16 +570,16 @@ models:
       '5-7 hours per week')
   - name: certification_type
     description: str, either 'MicroMasters Credential' or 'Certificate of Completion'
-      for MITx Online courses. 'Professional Certificate' for xPro courses.
+      for MITx courses. 'Professional Certificate' for xPro courses.
     tests:
     - not_null
   - name: delivery
-    description: str, 'Online' or 'Other' for xPro. 'Online' for MITx Online.
+    description: str, 'Online' or 'Other' for xPro. 'Online' for MITx.
   - name: continuing_education_credits
     description: str, number of continuing education units or credits offered. e.g.
-      4.5. NULL for MITx Online courses.
+      4.5. NULL for MITx courses.
   - name: pace
-    description: str, 'Self-paced' or 'Instructor-paced' for MITx Online courses.
+    description: str, 'Self-paced' or 'Instructor-paced'
   - name: topics
     description: str, list of topic names for a course.
   - name: instructors
@@ -665,6 +683,55 @@ models:
     description: boolean, indicating if the course run is currently running. True
       if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
       is in the past and courserun_end_on is in the future.
+
+- name: marts__combined_total_course_engagements
+  description: Total courserun engagement statistics from MITx Online, xPro, edX.org,
+    Residential MITx.
+  columns:
+  - name: platform
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline, xPro, Residential courses, {org}/{course}/{run_tag}
+      for edX.org courses.
+    tests:
+    - not_null
+  - name: total_courserun_problems
+    description: int, number of problems in a courserun
+  - name: total_courserun_videos
+    description: int, number of videos in a courserun
+  - name: total_courserun_discussions
+    description: int, number of discussions in a courserun
+  - name: courserun_title
+    description: str, title of the course run
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online, xPro or Residential courses, {org}/{course} for edX.org courses.
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+  - name: courserun_start_on
+    description: timestamp, datetime on when the course begins
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: user_username
+    description: str, open edx username on the corresponding platform
+  - name: videos_user_watched
+    description: int, number of distinct videos watched by a user for a particular
+      course run
+  - name: problems_user_submitted
+    description: int, number of distinct problems submitted by a user for a particular
+      course run
+  - name: user_discussion_count
+    description: int, number of distinct discussions participated in by a user for
+      a particular course run
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "courserun_readable_id", "user_username"]
 
 - name: marts__combined_course_engagements
   description: Learners daily course engagement statistics from MITx Online, xPro,

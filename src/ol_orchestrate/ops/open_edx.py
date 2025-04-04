@@ -1,11 +1,12 @@
 import hashlib
 import json
+import subprocess
 import time
 from datetime import UTC, datetime, timedelta
 
+import httpx
 import jsonlines
 from dagster import (
-    AssetMaterialization,
     Config,
     DynamicOut,
     DynamicOutput,
@@ -20,7 +21,6 @@ from dagster import (
     op,
 )
 from dagster.core.definitions.input import In
-from dagster_shell.utils import execute as run_bash
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from pydantic import Field
@@ -238,14 +238,6 @@ def enrolled_users(
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
     enrollments_path = context.resources.results_dir.path.joinpath("users_query.csv")
     write_csv(query_fields, users_data, enrollments_path)
-    yield AssetMaterialization(
-        asset_key="users_query",
-        description="Information of users enrolled in available courses on Open edX installation",  # noqa: E501
-        metadata={
-            "enrolled_users_count": MetadataValue.int(len(users_data)),
-            "enrollment_query_csv_path": MetadataValue.path(enrollments_path.name),
-        },
-    )
     yield ExpectationResult(
         success=bool(users_data),
         label="enrolled_users_count_non_zero",
@@ -313,16 +305,6 @@ def student_submissions(
         )
         submissions_count += len(submission_data)
         write_csv(query_fields, submission_data, submissions_path)
-    yield AssetMaterialization(
-        asset_key="enrolled_students",
-        description="Students enrolled in edX courses",
-        metadata={
-            "student_submission_count": MetadataValue.int(
-                submissions_count,
-            ),
-            "student_submissions_path": MetadataValue.path(submissions_path.name),
-        },
-    )
 
     yield ExpectationResult(
         success=submissions_count > 0,
@@ -374,16 +356,6 @@ def course_enrollments(
         "enrollment_query.csv"
     )
     write_csv(query_fields, enrollment_data, enrollments_path)
-    yield AssetMaterialization(
-        asset_key="enrollment_query",
-        description="Course enrollment records from Open edX installation",
-        metadata={
-            "course_enrollment_count": MetadataValue.int(
-                len(enrollment_data),
-            ),
-            "enrollment_query_csv_path": MetadataValue.path(enrollments_path.name),
-        },
-    )
     yield ExpectationResult(
         success=bool(enrollment_data),
         label="enrollments_count_non_zero",
@@ -432,16 +404,6 @@ def course_roles(
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
     roles_path = context.resources.results_dir.path.joinpath("role_query.csv")
     write_csv(query_fields, roles_data, roles_path)
-    yield AssetMaterialization(
-        asset_key="role_query",
-        description="Course roles records from Open edX installation",
-        metadata={
-            "course_roles_count": MetadataValue.int(
-                len(roles_data),
-            ),
-            "role_query_csv_path": MetadataValue.path(roles_path.name),
-        },
-    )
     yield ExpectationResult(
         success=bool(roles_data),
         label="course_roles_count_non_zero",
@@ -506,16 +468,6 @@ def user_roles(
     query_fields, user_roles_data = context.resources.sqldb.run_query(user_roles_query)
     user_roles_path = context.resources.results_dir.path.joinpath("role_users.csv")
     write_csv(query_fields, user_roles_data, user_roles_path)
-    yield AssetMaterialization(
-        asset_key="user_roles_query",
-        description="User role records from Open edX installation",
-        metadata={
-            "user_roles_count": MetadataValue.int(
-                len(user_roles_data),
-            ),
-            "user_role_query_csv_path": MetadataValue.path(user_roles_path.name),
-        },
-    )
     yield ExpectationResult(
         success=bool(user_roles_data),
         label="user_roles_count_non_zero",
@@ -560,7 +512,7 @@ def export_edx_forum_database(
     command_array = [
         config.mongodump_path,
         "--uri",
-        f"'{mongo_uri}'",
+        mongo_uri,
         "--db",
         config.edx_mongodb_forum_database_name,
         "--authenticationDatabase",
@@ -573,30 +525,26 @@ def export_edx_forum_database(
     if username := config.edx_mongodb_username:
         command_array.extend(["--username", username])
 
-    mongodump_output, mongodump_retcode = run_bash(
-        " ".join(command_array),
-        output_logging="BUFFER",
-        log=context.log,
+    mongodump_result = subprocess.run(  # noqa: S603
+        command_array,
+        capture_output=True,
         cwd=str(context.resources.results_dir.root_dir),
+        check=False,
     )
 
-    if mongodump_retcode != 0:
+    if mongodump_result.returncode != 0:
         raise Failure(
             description="The mongodump command for exporting the Open edX forum database failed.",  # noqa: E501
             metadata={
-                "mongodump_output": MetadataValue.text(
-                    text=mongodump_output,
-                )
+                "mongodump_command": MetadataValue.text(" ".join(command_array)),
+                "mongodump_stdout": MetadataValue.text(
+                    text=mongodump_result.stdout.decode("utf8")
+                ),
+                "mongodump_stderr": MetadataValue.text(
+                    text=mongodump_result.stderr.decode("utf8")
+                ),
             },
         )
-
-    yield AssetMaterialization(
-        asset_key="edx_forum_database",
-        description="Exported Mongo database of forum data from Open edX installation",
-        metadata={
-            "edx_forum_database_export_path": MetadataValue.path(str(forum_data_path))
-        },
-    )
 
     yield Output(forum_data_path, "edx_forum_data_directory")
 
@@ -632,12 +580,16 @@ def export_edx_courses(
     # Possible status values found here:
     # https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
     while len(successful_exports.union(failed_exports)) < len(tasks):
-        time.sleep(timedelta(seconds=5).seconds)
+        time.sleep(timedelta(seconds=60).seconds)
         for course_id, task_id in tasks.items():
-            task_status = context.resources.openedx.check_course_export_status(
-                course_id,
-                task_id,
-            )
+            try:
+                task_status = context.resources.openedx.check_course_export_status(
+                    course_id,
+                    task_id,
+                )
+            except httpx.HTTPStatusError:
+                # Don't fail the whole job if one task status yields an error
+                continue
             if task_status["state"] == "Succeeded":
                 successful_exports.add(course_id)
             if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
@@ -723,15 +675,6 @@ def upload_extracted_data(
                 Bucket=results_bucket,
                 Key=file_key,
             )
-    yield AssetMaterialization(
-        asset_key="edx_daily_results",
-        description="Daily export directory for edX export pipeline",
-        metadata={
-            "results_s3_path": MetadataValue.path(
-                f"s3://{results_bucket}/{context.resources.results_dir.path.name}"
-            ),
-        },
-    )
     context.resources.results_dir.clean_dir()
     yield Output(
         f"{results_bucket}/{context.resources.results_dir.path.name}",

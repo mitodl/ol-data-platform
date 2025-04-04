@@ -8,6 +8,7 @@ from dagster import (
     Definitions,
     ScheduleDefinition,
     define_asset_job,
+    with_source_code_references,
 )
 from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
 from dagster_dbt import (
@@ -19,7 +20,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.secrets.vault import Vault
 
 airbyte_host_map = {
-    "dev": "config-airbyte-qa.odl.mit.edu",
+    "dev": "api-airbyte-qa.odl.mit.edu",
     "qa": "api-airbyte-qa.odl.mit.edu",
     "production": "api-airbyte.odl.mit.edu",
 }
@@ -50,9 +51,6 @@ configured_airbyte_resource = airbyte_resource.configured(
             path="dagster-http-auth-password", mount_point="secret-data"
         )["data"]["dagster_unhashed_password"],
         "request_timeout": 60,  # Allow up to a minute for Airbyte requests
-        "request_additional_params": {
-            "verify": False,
-        },
     }
 )
 
@@ -69,7 +67,8 @@ airbyte_assets = load_assets_from_airbyte_instance(
     # sources, since they are defined as ol_warehouse_raw_data in the
     # sources.yml files. (TMM 2023-01-18)
     key_prefix="ol_warehouse_raw_data",
-    connection_filter=lambda conn: "S3 Glue Data Lake" in conn.name,
+    connection_filter=lambda conn: re.search(r"S3 (Glue )?Data Lake", conn.name)
+    is not None,
     connection_to_group_fn=(
         # Airbyte uses the unicode "right arrow" (U+2192) in the connection names for
         # separating the source and destination. This selects the source name specifier
@@ -82,13 +81,13 @@ airbyte_assets = load_assets_from_airbyte_instance(
     ),
 )
 
-
 # This section creates a separate job and schedule for each Airbyte connection that will
 # materialize the tables for that connection and any associated dbt staging models for
 # those tables. The eager auto materialize policy will then take effect for any
 # downstream dbt models that are dependent on those staging models being completed.
 group_names = set()
-for asset in airbyte_assets.compute_cacheable_data():
+computed_assets = airbyte_assets.compute_cacheable_data()
+for asset in computed_assets:
     group_names.add(asset.group_name)
 
 airbyte_asset_jobs = []
@@ -108,20 +107,21 @@ for count, group_name in enumerate(group_names, start=1):
             cron_schedule=f"0 {count % (group_count // 4)} * * *",
             job=job,
             execution_timezone="UTC",
-            default_status=DefaultScheduleStatus.RUNNING,
+            default_status=DefaultScheduleStatus.STOPPED,
         )
     )
     airbyte_asset_jobs.append(job)
 
-
 elt = Definitions(
-    assets=[full_dbt_project, airbyte_assets],
+    assets=[*with_source_code_references([full_dbt_project]), airbyte_assets],
     resources={"dbt": dbt_cli},
     sensors=[
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=3600,
-            target=[full_dbt_project],
+            # exclude staging as they are already handled by "sync_and_stage_" job
+            target=AssetSelection.assets(full_dbt_project)
+            - AssetSelection.groups("staging"),
         )
     ],
     jobs=airbyte_asset_jobs,

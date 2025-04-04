@@ -24,7 +24,7 @@ models:
     description: string, domain name of the platform, e.g. mitxonline.mit.edu
     tests:
     - not_null
-
+    
 - name: dim_user
   description: Dimensional model for users from different platforms.
   columns:
@@ -62,3 +62,55 @@ models:
   - name: user_is_active
     description: boolean, indicating if user's account is active on the corresponding
       platform including xpro, bootcamps, edX.org, MITx Online, and Residential MITx.
+=======
+- name: dim_course_content
+  description: Slowly Changing Dimension model for course content, including courses,
+    chapters, subsections, problems, videos, and other contents across the Open edX
+    platforms.
+  columns:
+  - name: content_id
+    description: string, primary key for this table
+    tests:
+    - not_null
+    - unique
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for courses on MITxOnline, xPro and Residential platform, {org}/{course}/{run_tag}
+      for edX.org courses
+    tests:
+    - not_null
+  - name: block_index
+    description: int, sequence number giving order in which this block content appears
+      within the course
+    tests:
+    - not_null
+  - name: block_id
+    description: string, a unique identifier for each content block within the course,
+      formatted as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+    tests:
+    - not_null
+  - name: parent_block_id
+    description: string, parent content block ID, same format as content_block_id.
+  - name: block_category
+    description: string, category/type of the content block. Possible values are course,
+      chapter, sequential, vertical, discussion, html, problem, video, etc.
+    tests:
+    - not_null
+  - name: block_title
+    description: string, title of the course content block. It is the name field for
+      the section, subsection, or unit on the Studio 'Course Outline' page.
+  - name: block_metadata
+    description: string, a JSON string representing the metadata field of the course
+      content block. It provides additional information about this block, and different
+      block types may have different member fields within the metadata.
+    tests:
+    - not_null
+  - name: retrieved_at
+    description: timestamp, date and time indicating when the content block was last
+      retrieved from sources.
+    tests:
+    - not_null
+  - name: is_latest
+    description: boolean, indicating if the course content is the latest version
+    tests:
+    - not_null

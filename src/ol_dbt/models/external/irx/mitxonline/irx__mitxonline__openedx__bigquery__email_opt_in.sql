@@ -1,11 +1,13 @@
 with email_opt_in as (
-    select * from {{ source('ol_warehouse_raw_data','raw__irx__edxorg__bigquery__email_opt_in') }}
+    select * from {{ ref('int__mitxonline__bulk_email_optin') }}
 )
 
 select
-    is_opted_in_for_email
-    , course_id
-    , full_name
-    , preference_set_datetime
-    , user_id
+    openedx_user_id
+    , user_full_name
+    , user_username
+    , user_email
+    , courserun_readable_id
+    , courserun_title
+    , email_opted_in
 from email_opt_in

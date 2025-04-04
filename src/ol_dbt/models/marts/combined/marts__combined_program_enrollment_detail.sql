@@ -71,6 +71,8 @@ with mitxpro__programenrollments as (
         , mitxpro__program_certificates.programcertificate_is_revoked
         , mitxpro__program_certificates.programcertificate_uuid
         , mitxpro__program_certificates.programcertificate_url
+        , if(mitxpro__program_certificates.programcertificate_url is not null, true, false)
+        as user_has_completed_program
     from mitxpro__programenrollments
     inner join mitxpro__programs
         on mitxpro__programenrollments.program_id = mitxpro__programs.program_id
@@ -103,6 +105,8 @@ with mitxpro__programenrollments as (
         , mitxonline__program_certificates.programcertificate_is_revoked
         , mitxonline__program_certificates.programcertificate_uuid
         , mitxonline__program_certificates.programcertificate_url
+        , if(mitxonline__program_certificates.programcertificate_url is not null, true, false)
+        as user_has_completed_program
     from mitxonline__programenrollments
     inner join mitxonline__programs
         on mitxonline__programenrollments.program_id = mitxonline__programs.program_id
@@ -123,7 +127,10 @@ with mitxpro__programenrollments as (
         , edx_program_enrollments.program_track
         , edx_program_enrollments.program_type
         , null as program_is_live
-        , null as program_readable_id
+        , {{ generate_micromasters_program_readable_id(
+              'edx_program_enrollments.micromasters_program_id'
+              ,'edx_program_enrollments.program_title')
+         }} as program_readable_id
         , edx_program_enrollments.user_id
         , edxorg__users.user_email
         , edx_program_enrollments.user_username
@@ -135,6 +142,7 @@ with mitxpro__programenrollments as (
         , null as programcertificate_is_revoked
         , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
         , null as programcertificate_url
+        , if(edx_program_certificates.user_has_completed_program = true, true, false) as user_has_completed_program
     from edx_program_enrollments
     left join edxorg__users
         on edx_program_enrollments.user_id = edxorg__users.user_id
@@ -165,6 +173,7 @@ with mitxpro__programenrollments as (
         , null as programcertificate_is_revoked
         , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
         , null as programcertificate_url
+        , if(edx_program_certificates.user_has_completed_program = true, true, false) as user_has_completed_program
     from micromasters__program_enrollments
     left join mitx__programs
         on micromasters__program_enrollments.micromasters_program_id = mitx__programs.micromasters_program_id
@@ -199,6 +208,7 @@ select
     , combined_programs.user_email
     , combined_programs.user_username
     , combined_programs.user_full_name
+    , combined_programs.user_has_completed_program
     , combined_programs.programenrollment_is_active
     , combined_programs.programenrollment_created_on
     , combined_programs.programenrollment_enrollment_status

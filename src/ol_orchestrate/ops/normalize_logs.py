@@ -254,7 +254,7 @@ def write_file_to_s3(
             local_file_name = new_file_name.rsplit("/", maxsplit=1)[-1]
             context.log.info(new_file_name)
             conn.execute(
-                f"""COPY (SELECT {', '.join(columns)} FROM tracking_logs
+                f"""COPY (SELECT {", ".join(columns)} FROM tracking_logs
                         WHERE filename = '{file_name}')
                         TO '{local_file_name}' (FORMAT JSON)
                     """  # noqa: S608

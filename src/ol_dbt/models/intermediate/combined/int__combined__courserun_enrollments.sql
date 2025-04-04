@@ -6,6 +6,10 @@ with mitx_enrollments as (
     select * from {{ ref('int__mitxpro__courserunenrollments') }}
 )
 
+, emeritus_enrollments as (
+    select * from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
+)
+
 , bootcamps_enrollments as (
     select * from {{ ref('int__bootcamps__courserunenrollments') }}
 )
@@ -34,6 +38,9 @@ with mitx_enrollments as (
     select * from {{ ref('int__combined__course_runs') }}
 )
 
+, mitxpro_courseruns as (
+    select * from {{ ref('int__mitxpro__course_runs') }}
+)
 
 , combined_enrollments as (
     select
@@ -45,7 +52,7 @@ with mitx_enrollments as (
         , mitx_enrollments.courserunenrollment_enrollment_status
         , mitx_enrollments.courserunenrollment_is_edx_enrolled
         , mitx_enrollments.courserun_upgrade_deadline
-        , mitx_enrollments.user_id
+        , cast(mitx_enrollments.user_id as varchar) as user_id
         , mitx_enrollments.courserun_id
         , mitx_enrollments.courserun_title
         , mitx_enrollments.courserun_readable_id
@@ -72,7 +79,7 @@ with mitx_enrollments as (
         , mitx_enrollments.courserunenrollment_enrollment_status
         , mitx_enrollments.courserunenrollment_is_edx_enrolled
         , mitx_enrollments.courserun_upgrade_deadline
-        , mitx_enrollments.user_id
+        , cast(mitx_enrollments.user_id as varchar) as user_id
         , mitx_enrollments.courserun_id
         , mitx_enrollments.courserun_title
         , mitx_enrollments.courserun_readable_id
@@ -99,7 +106,7 @@ with mitx_enrollments as (
         , mitxpro_enrollments.courserunenrollment_enrollment_status
         , mitxpro_enrollments.courserunenrollment_is_edx_enrolled
         , null as courserun_upgrade_deadline
-        , mitxpro_enrollments.user_id
+        , cast(mitxpro_enrollments.user_id as varchar) as user_id
         , mitxpro_enrollments.courserun_id
         , mitxpro_enrollments.courserun_title
         , mitxpro_enrollments.courserun_readable_id
@@ -117,6 +124,32 @@ with mitx_enrollments as (
     union all
 
     select
+        '{{ var("emeritus") }}' as platform
+        , null as courserunenrollment_id
+        , emeritus_enrollments.is_enrolled as courserunenrollment_is_active
+        , emeritus_enrollments.enrollment_created_on as courserunenrollment_created_on
+        , null as courserunenrollment_enrollment_mode
+        , emeritus_enrollments.enrollment_status as courserunenrollment_enrollment_status
+        , null as courserunenrollment_is_edx_enrolled
+        , null as courserun_upgrade_deadline
+        , emeritus_enrollments.user_id
+        , mitxpro_courseruns.courserun_id
+        , coalesce(mitxpro_courseruns.courserun_title, emeritus_enrollments.courserun_title) as courserun_title
+        , coalesce(mitxpro_courseruns.courserun_readable_id, emeritus_enrollments.courserun_external_readable_id)
+        as courserun_readable_id
+        , null as user_username
+        , emeritus_enrollments.user_email
+        , emeritus_enrollments.user_full_name
+        , null as courserungrade_grade
+        , null as courserungrade_is_passing
+    from emeritus_enrollments
+    left join mitxpro_courseruns
+        on
+            emeritus_enrollments.courserun_external_readable_id = mitxpro_courseruns.courserun_external_readable_id
+
+    union all
+
+    select
         '{{ var("bootcamps") }}' as platform
         , courserunenrollment_id
         , courserunenrollment_is_active
@@ -125,7 +158,7 @@ with mitx_enrollments as (
         , courserunenrollment_enrollment_status
         , null as courserunenrollment_is_edx_enrolled
         , null as courserun_upgrade_deadline
-        , user_id
+        , cast(user_id as varchar) as user_id
         , courserun_id
         , courserun_title
         , courserun_readable_id
@@ -147,7 +180,7 @@ with mitx_enrollments as (
         , null as courserunenrollment_enrollment_status
         , true as courserunenrollment_is_edx_enrolled
         , null as courserun_upgrade_deadline
-        , residential_enrollments.user_id
+        , cast(residential_enrollments.user_id as varchar) as user_id
         , null as courserun_id
         , residential_enrollments.courserun_title
         , residential_enrollments.courserun_readable_id

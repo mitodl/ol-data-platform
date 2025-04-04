@@ -65,7 +65,7 @@ edxorg_program_reports = Definitions(
                 },
             ),
             job=sync_edxorg_program_reports,
-            default_status=DefaultSensorStatus.RUNNING,
+            default_status=DefaultSensorStatus.STOPPED,
             minimum_interval_seconds=86400,
         )
     ],

@@ -69,7 +69,7 @@ models:
       column_list: ["courserun_id", "user_id"]
   - dbt_utils.recency:
       datepart: day
-      field: from_iso8601_timestamp(courserunenrollment_created_on)
+      field: from_iso8601_timestamp_nanos(courserunenrollment_created_on)
       interval: 2
       config:
         severity: error

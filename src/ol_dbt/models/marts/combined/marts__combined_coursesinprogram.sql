@@ -2,6 +2,10 @@ with mitx_programs as (
     select * from {{ ref('int__mitx__program_requirements') }}
 )
 
+, edxorg_mitx_program_courses as (
+    select * from {{ ref('int__edxorg__mitx_program_courses') }}
+)
+
 , mitx__courses as (
     select * from {{ ref('int__mitx__courses') }}
 )
@@ -19,9 +23,10 @@ with mitx_programs as (
 )
 
 select
-    'MITx Online' as platform
+    '{{ var("mitxonline") }}' as platform
     , mitx__courses.course_title
     , mitx_programs.program_title
+    , mitxonline__programs.program_name
     , mitx_programs.mitxonline_program_id as program_id
     , mitx__courses.course_readable_id
     , mitxonline__programs.program_readable_id
@@ -35,9 +40,10 @@ where mitx__courses.is_on_mitxonline = true
 union all
 
 select
-    'edX.org' as platform
+    '{{ var("edxorg") }}' as platform
     , mitx__courses.course_title
     , mitx_programs.program_title
+    , mitx_programs.program_title as program_name
     , mitx_programs.micromasters_program_id as program_id
     , mitx__courses.course_readable_id
     , null as program_readable_id
@@ -49,9 +55,29 @@ where mitx__courses.is_on_mitxonline = false
 union all
 
 select
-    'xPro' as platform
+    '{{ var("edxorg") }}' as platform
+    , edxorg_mitx_program_courses.course_title
+    , edxorg_mitx_program_courses.program_title
+    , edxorg_mitx_program_courses.program_name
+    , null as program_id
+    , coalesce(mitx__courses.course_readable_id, edxorg_mitx_program_courses.course_readable_id) as course_readable_id
+    , null as program_readable_id
+from edxorg_mitx_program_courses
+left join mitx_programs
+    on edxorg_mitx_program_courses.program_name = mitx_programs.program_title
+left join mitx__courses
+    on
+        replace(edxorg_mitx_program_courses.course_readable_id, 'MITx/', '')
+        = replace(mitx__courses.course_readable_id, 'course-v1:MITxT+', '')
+where mitx_programs.program_title is null
+
+union all
+
+select
+    '{{ var("mitxpro") }}' as platform
     , mitxpro__courses.course_title
     , mitxpro__programs.program_title
+    , mitxpro__programs.program_title as program_name
     , mitxpro__courses.program_id
     , mitxpro__courses.course_readable_id
     , mitxpro__programs.program_readable_id

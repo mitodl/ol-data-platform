@@ -25,7 +25,10 @@ with users as (
     select
         user_id
         , ecommerce_company_id
-        , row_number() over (partition by user_id order by courserunenrollment_created_on desc) as enrollment_rank
+        , row_number() over (
+            partition by user_id
+            order by courserunenrollment_created_on desc
+        ) as enrollment_rank
     from {{ ref('stg__mitxpro__app__postgres__courses_courserunenrollment') }}
     where ecommerce_company_id is not null
 )

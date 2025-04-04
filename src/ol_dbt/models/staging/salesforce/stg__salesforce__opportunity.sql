@@ -1,26 +1,12 @@
---- source table contains duplicated rows per primary key. This means there could be multiple copies of the same record,
---- thus deduplicate records here using _airbyte_emitted_at
-
 with source as (
 
     select *
-    from {{ source('ol_warehouse_raw_data', 'raw__thirdparty__salesforce__Opportunity') }}
+    from {{ source('ol_warehouse_raw_data', 'raw__thirdparty__salesforce___destination_v2__Opportunity') }}
     where isdeleted = false
 
 )
 
-, source_sorted as (
-    select
-        *
-        , row_number() over (partition by id order by _airbyte_emitted_at desc) as row_num
-    from source
-)
-
-, most_recent_source as (
-    select *
-    from source_sorted
-    where row_num = 1
-)
+{{ deduplicate_raw_table(order_by='systemmodstamp', partition_columns = 'id') }}
 
 , renamed as (
 
