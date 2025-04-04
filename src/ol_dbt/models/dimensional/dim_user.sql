@@ -1,5 +1,7 @@
 with mitx_users as (
-    select *
+    select 
+        *
+        , "Micromasters" as platform
     from {{ ref('int__mitx__users') }}
 )
 
@@ -106,7 +108,7 @@ with mitx_users as (
 select
     coalesce(
         user_hashed_id
-        , {{ generate_hash_id('cast(user_micromasters_id as varchar) || "Micromasters"') }} )
+        , {{ generate_hash_id('cast(user_micromasters_id as varchar) || platform') }} )
     as user_id
     , user_mitxonline_username
     , user_edxorg_username
@@ -124,17 +126,17 @@ select
     , user_company as company
     , user_job_title as job_title
     , user_industry as industry
-    , case
-        when
-            user_is_active_on_mitxonline = true
-            or user_is_active_on_edxorg = true then true
+    , case 
+        when 
+            user_is_active_on_mitxonline = true 
+            or user_is_active_on_edxorg = true then true 
     end as user_is_active
-    , case
-        when user_joined_on_mitxonline >= user_joined_on_edxorg
+    , case 
+        when user_joined_on_mitxonline >= user_joined_on_edxorg 
             then user_joined_on_edxorg
-        when user_joined_on_mitxonline is null
+        when user_joined_on_mitxonline is null 
             then user_joined_on_edxorg
-        else user_joined_on_mitxonline
+        else user_joined_on_mitxonline 
     end as user_joined_on
 from mitx_users
 
