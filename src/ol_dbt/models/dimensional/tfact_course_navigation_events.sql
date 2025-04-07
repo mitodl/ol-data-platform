@@ -93,19 +93,10 @@ with mitxonline_navigation_events as (
         and useractivity_event_type in {{ navigation_events }}
 )
 
-, mitxonline_users as (
-    select * from {{ ref('stg__mitxonline__app__postgres__users_user') }}
-)
-
-, xpro_users as (
-    select * from {{ ref('stg__mitxpro__app__postgres__users_user') }}
-)
-
-
 , combined as (
     select
         'mitxonline' as platform
-        , coalesce(mitxonline_users.user_id, mitxonline_navigation_events.openedx_user_id) as user_id
+        , mitxonline_navigation_events.openedx_user_id
         , mitxonline_navigation_events.courserun_readable_id
         , mitxonline_navigation_events.event_type
         , mitxonline_navigation_events.event_json
@@ -121,13 +112,12 @@ with mitxonline_navigation_events as (
         , mitxonline_navigation_events.tab_count
         , mitxonline_navigation_events.event_timestamp
     from mitxonline_navigation_events
-    left join mitxonline_users on mitxonline_navigation_events.user_username = mitxonline_users.user_username
 
     union all
 
     select
         'mitxpro' as platform
-        , coalesce(xpro_users.user_id, xpro_navigation_events.openedx_user_id) as user_id
+        , xpro_navigation_events.openedx_user_id
         , xpro_navigation_events.courserun_readable_id
         , xpro_navigation_events.event_type
         , xpro_navigation_events.event_json
@@ -142,13 +132,12 @@ with mitxonline_navigation_events as (
         , xpro_navigation_events.tab_count
         , xpro_navigation_events.event_timestamp
     from xpro_navigation_events
-    left join xpro_users on xpro_navigation_events.user_username = xpro_users.user_username
 
     union all
 
     select
         'residential' as platform
-        , user_id
+        , user_id as openedx_user_id
         , courserun_readable_id
         , event_type
         , event_json
@@ -164,7 +153,7 @@ with mitxonline_navigation_events as (
 
     select
         'edxorg' as platform
-        , user_id
+        , user_id as openedx_user_id
         , courserun_readable_id
         , event_type
         , event_json
@@ -178,8 +167,8 @@ with mitxonline_navigation_events as (
 )
 
 select
-     {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_id
-    , platform as platform_id
+    platform
+    , openedx_user_id
     , courserun_readable_id
     , event_type
     , block_id
