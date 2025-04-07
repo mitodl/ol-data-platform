@@ -196,7 +196,7 @@ models:
     description: int, user ID on the corresponding open edX platform
     tests:
     - not_null
-  - name: platform_fk
+  - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the problem event occurred
     tests:
