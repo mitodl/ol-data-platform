@@ -196,11 +196,6 @@ models:
   - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the navigation event occurred
-  - name: user_id
-    description: string, foreign key to dim_user, referencing the user who navigated
-      the course
-    tests:
-    - not_null
   - name: platform_id
     description: string, foreign key to dim_platform, referencing the platform where
       the navigation event occurred
