@@ -94,7 +94,7 @@ models:
     chapters, subsections, problems, videos, and other contents across the Open edX
     platforms.
   columns:
-  - name: content_id
+  - name: content_block_pk
     description: string, primary key for this table
     tests:
     - not_null
