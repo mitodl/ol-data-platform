@@ -83,7 +83,7 @@ class OAuthApiClient(ConfigurableResource):
         request_url: str,
         page_size: int = 100,
         extra_params: dict[str, Any] | None = None,
-    ) -> dict[Any, Any]:
+    ) -> dict[Any, Any] | tuple[dict[Any, Any], int]:
         if self.token_url == f"{self.base_url}/oauth2/access_token":
             request_params = {"username": self._username, "page_size": page_size}
         else:

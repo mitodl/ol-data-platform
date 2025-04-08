@@ -93,19 +93,10 @@ with mitxonline_problem_events as (
         and useractivity_event_source = 'server'
 )
 
-, mitxonline_users as (
-    select * from {{ ref('stg__mitxonline__app__postgres__users_user') }}
-)
-
-, xpro_users as (
-    select * from {{ ref('stg__mitxpro__app__postgres__users_user') }}
-)
-
-
 , combined as (
     select
         'mitxonline' as platform
-        , coalesce(mitxonline_users.user_id, mitxonline_problem_events.openedx_user_id) as user_id
+        , mitxonline_problem_events.openedx_user_id
         , mitxonline_problem_events.courserun_readable_id
         , mitxonline_problem_events.event_type
         , mitxonline_problem_events.event_json
@@ -117,13 +108,12 @@ with mitxonline_problem_events as (
         , mitxonline_problem_events.max_grade
         , mitxonline_problem_events.event_timestamp
     from mitxonline_problem_events
-    left join mitxonline_users on mitxonline_problem_events.user_username = mitxonline_users.user_username
 
     union all
 
     select
         'mitxpro' as platform
-        , coalesce(xpro_users.user_id, xpro_problem_events.openedx_user_id) as user_id
+        , xpro_problem_events.openedx_user_id
         , xpro_problem_events.courserun_readable_id
         , xpro_problem_events.event_type
         , xpro_problem_events.event_json
@@ -135,7 +125,6 @@ with mitxonline_problem_events as (
         , xpro_problem_events.max_grade
         , xpro_problem_events.event_timestamp
     from xpro_problem_events
-    left join xpro_users on xpro_problem_events.user_username = xpro_users.user_username
 
     union all
 
@@ -173,11 +162,12 @@ with mitxonline_problem_events as (
 )
 
 select
-     {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_id
-    , platform as platform_id
+
+    platform
+    , openedx_user_id
     , courserun_readable_id
     , event_type
-    , problem_block_id
+    , problem_block_id as problem_block_fk
     , answers
     , attempt
     , success

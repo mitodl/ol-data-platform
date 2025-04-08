@@ -102,19 +102,10 @@ with mitxonline_video_events as (
         and useractivity_event_type in {{ video_events }}
 )
 
-, mitxonline_users as (
-    select * from {{ ref('stg__mitxonline__app__postgres__users_user') }}
-)
-
-, xpro_users as (
-    select * from {{ ref('stg__mitxpro__app__postgres__users_user') }}
-)
-
-
 , combined as (
     select
         'mitxonline' as platform
-        , coalesce(mitxonline_users.user_id, mitxonline_video_events.openedx_user_id) as user_id
+        , mitxonline_video_events.openedx_user_id
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.event_type
         , mitxonline_video_events.event_json
@@ -125,13 +116,12 @@ with mitxonline_video_events as (
         , mitxonline_video_events.ending_position
         , mitxonline_video_events.event_timestamp
     from mitxonline_video_events
-    left join mitxonline_users on mitxonline_video_events.user_username = mitxonline_users.user_username
 
     union all
 
     select
         'mitxpro' as platform
-        , coalesce(xpro_users.user_id, xpro_video_events.openedx_user_id) as user_id
+        , xpro_video_events.openedx_user_id
         , xpro_video_events.courserun_readable_id
         , xpro_video_events.event_type
         , xpro_video_events.event_json
@@ -142,13 +132,12 @@ with mitxonline_video_events as (
         , xpro_video_events.ending_position
         , xpro_video_events.event_timestamp
     from xpro_video_events
-    left join xpro_users on xpro_video_events.user_username = xpro_users.user_username
 
     union all
 
     select
         'residential' as platform
-        , user_id
+        , user_id as openedx_user_id
         , courserun_readable_id
         , event_type
         , event_json
@@ -164,7 +153,7 @@ with mitxonline_video_events as (
 
     select
         'edxorg' as platform
-        , user_id
+        , user_id as openedx_user_id
         , courserun_readable_id
         , event_type
         , event_json
@@ -178,11 +167,11 @@ with mitxonline_video_events as (
 )
 
 select distinct
-     {{ generate_hash_id('cast(user_id as varchar) || platform') }} as user_id
-    , platform as platform_id
+    platform
+    , openedx_user_id
     , courserun_readable_id
     , event_type
-    , video_id
+    , video_id as video_block_fk
     , video_duration
     , video_position
     , starting_position
