@@ -21,7 +21,7 @@ with mitxonline_users as (
     select
         mitxonline_users.user_username
         , mitxonline_users.user_email
-        , mitxonline_users.user_full_name 
+        , mitxonline_users.user_full_name
         , mitxonline_legaladdress.user_address_country
         , mitxonline_profile.user_highest_education
         , mitxonline_profile.user_gender
