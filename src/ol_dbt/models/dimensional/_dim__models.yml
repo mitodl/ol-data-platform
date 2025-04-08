@@ -28,21 +28,16 @@ models:
 - name: dim_video
   description: video metadata across the Open edX platforms
   columns:
-  - name: video_pk
-    description: string, primary key for this table
-    tests:
-    - not_null
-    - unique
-  - name: content_fk
-    description: string, foreign key to dim_course_content
-    tests:
-    - not_null
-  - name: video_block_id
-    description: string, video block ID formatted as block-v1:{org}+{course}+{run}type@video+block@{hash
+  - name: video_block_pk
+    description: string, primary key for this table, formatted as block-v1:{org}+{course}+{run}type@video+block@{hash
       code}
     tests:
     - not_null
     - unique
+  - name: content_block_fk
+    description: string, foreign key to dim_course_content
+    tests:
+    - not_null
   - name: courserun_readable_id
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
@@ -63,19 +58,16 @@ models:
 - name: dim_problem
   description: problem metadata across the Open edX platforms
   columns:
-  - name: problem_pk
-    description: string, primary key for this table
-    tests:
-    - not_null
-    - unique
-  - name: content_fk
-    description: string, foreign key to dim_course_content
-  - name: problem_block_id
-    description: string, problem block ID formatted as block-v1:{org}+{course}+{run}type@problem+block@{hash
+  - name: problem_block_pk
+    description: string, primary key for this table, formatted as block-v1:{org}+{course}+{run}type@problem+block@{hash
       code}
     tests:
     - not_null
     - unique
+  - name: content_block_fk
+    description: string, foreign key to dim_course_content
+    tests:
+    - not_null
   - name: courserun_readable_id
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
@@ -102,7 +94,7 @@ models:
     chapters, subsections, problems, videos, and other contents across the Open edX
     platforms.
   columns:
-  - name: content_pk
+  - name: content_block_pk
     description: string, primary key for this table
     tests:
     - not_null

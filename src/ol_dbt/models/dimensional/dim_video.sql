@@ -1,6 +1,6 @@
 with video_content as (
     select
-        content_id
+        content_block_pk
         , block_id
         , block_title
         , courserun_readable_id
@@ -67,10 +67,10 @@ with video_content as (
 
 
 , combined as (
-    select distinct
-        video_content.block_id as video_block_id
+    select
+        video_content.block_id as video_block_pk
         , video_content.video_id
-        , video_content.content_id as content_fk
+        , video_content.content_block_pk as content_block_fk
         , video_content.courserun_readable_id
         , video_content.video_edx_uuid
         , video_duration.video_duration
@@ -89,9 +89,8 @@ with video_content as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['video_block_id']) }} as video_pk
-    , content_fk
-    , video_block_id
+    video_block_pk
+    , content_block_fk
     , courserun_readable_id
     , video_edx_uuid
     , video_name

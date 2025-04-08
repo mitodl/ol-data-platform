@@ -1,6 +1,6 @@
 with problems as (
     select
-        content_id
+        content_block_pk
         , block_id
         , block_title
         , courserun_readable_id
@@ -69,7 +69,7 @@ with problems as (
         and json_query(useractivity_event_object, 'lax $.submission' omit quotes) is not null
 )
 
-, problem_metadata as (
+, problem_type_metadata as (
     select
         problem_events.courserun_readable_id
         , problem_events.problem_block_id
@@ -88,26 +88,25 @@ with problems as (
 
 , combined as (
     select
-        problems.content_id as content_fk
-        , problem_metadata.problem_types
+        problems.content_block_pk as content_block_fk
         , problems.markdown
         , problems.max_attempts
         , problems.start_date
         , problems.due_date
         , problems.weight
-        , coalesce(problems.block_id, problem_metadata.problem_block_id) as problem_block_id
-        , coalesce(problems.courserun_readable_id, problem_metadata.courserun_readable_id) as courserun_readable_id
-        , coalesce(problems.block_title, problem_metadata.problem_name) as problem_name
+        , problems.block_id as problem_block_pk
+        , problems.courserun_readable_id
+        , problems.block_title as problem_name
+        , problem_type_metadata.problem_types
     from problems
-    full outer join problem_metadata
-        on problems.block_id = problem_metadata.problem_block_id
-    where problems.row_num = 1 or problems.block_id is null
+    left join problem_type_metadata
+        on problems.block_id = problem_type_metadata.problem_block_id
+    where problems.row_num = 1
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['problem_block_id']) }} as problem_pk
-    , content_fk
-    , problem_block_id
+    problem_block_pk
+    , content_block_fk
     , courserun_readable_id
     , problem_name
     , markdown
