@@ -6,7 +6,7 @@ models:
   description: Platform information about the technical system that a given event
     is executed within the context of.
   columns:
-  - name: platform_id
+  - name: platform_pk
     description: string, primary key for this table
     tests:
     - not_null
@@ -25,12 +25,76 @@ models:
     tests:
     - not_null
 
+- name: dim_video
+  description: video metadata across the Open edX platforms
+  columns:
+  - name: video_block_pk
+    description: string, primary key for this table, formatted as block-v1:{org}+{course}+{run}type@video+block@{hash
+      code}
+    tests:
+    - not_null
+    - unique
+  - name: content_block_fk
+    description: string, foreign key to dim_course_content
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: video_name
+    description: string, name of the video
+  - name: start_date
+    description: timestamp, start date
+  - name: end_date
+    description: timestamp, end date
+  - name: edx_video_id
+    description: string, internal edx video ID on the open edX platform
+  - name: html5_sources
+    description: array, html5 video sources
+  - name: transcripts
+    description: json, video transcripts
+
+- name: dim_problem
+  description: problem metadata across the Open edX platforms
+  columns:
+  - name: problem_block_pk
+    description: string, primary key for this table, formatted as block-v1:{org}+{course}+{run}type@problem+block@{hash
+      code}
+    tests:
+    - not_null
+    - unique
+  - name: content_block_fk
+    description: string, foreign key to dim_course_content
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: problem_name
+    description: string, name of the problem
+  - name: markdown
+    description: string, markdown content of the problem
+  - name: max_attempts
+    description: int, maximum number of attempts allowed for this problem
+  - name: start_date
+    description: timestamp, start date of the problem
+  - name: end_date
+    description: timestamp, end date of the problem
+  - name: weight
+    description: int, weight of the problem in the course
+  - name: problem_types
+    description: array, the types of problem in the course. values are a combination
+      of numericalresponse, multiplechoiceresponse, customresponse, choiceresponse,
+      etc.
+
 - name: dim_course_content
   description: Slowly Changing Dimension model for course content, including courses,
     chapters, subsections, problems, videos, and other contents across the Open edX
     platforms.
   columns:
-  - name: content_id
+  - name: content_block_pk
     description: string, primary key for this table
     tests:
     - not_null
