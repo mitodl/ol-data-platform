@@ -171,7 +171,7 @@ select
     , openedx_user_id
     , courserun_readable_id
     , event_type
-    , block_id
+    , block_id as block_fk
     , starting_position
     , ending_position
     , event_timestamp

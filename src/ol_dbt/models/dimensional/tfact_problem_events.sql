@@ -167,7 +167,7 @@ select
     , openedx_user_id
     , courserun_readable_id
     , event_type
-    , problem_block_id
+    , problem_block_id as problem_block_fk
     , answers
     , attempt
     , success

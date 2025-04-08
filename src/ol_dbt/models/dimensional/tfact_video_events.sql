@@ -171,7 +171,7 @@ select distinct
     , openedx_user_id
     , courserun_readable_id
     , event_type
-    , video_id
+    , video_id as video_block_fk
     , video_duration
     , video_position
     , starting_position

@@ -102,7 +102,7 @@ models:
       student_event_types.html#course-navigation-events
     tests:
     - not_null
-  - name: block_id
+  - name: block_fk
     description: string, foreign key to dim_course_content, referencing the block
       ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
       code}.
@@ -128,7 +128,7 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "block_id",
+      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "block_fk",
         "event_json", "event_timestamp"]
 
 - name: tfact_video_events
@@ -155,7 +155,7 @@ models:
       tracking_logs/student_event_types.html#video-interaction-events
     tests:
     - not_null
-  - name: video_id
+  - name: video_block_fk
     description: string, foreign key referencing a substring of the video block ID
       in the dim_course_content table. This value is the hash code of the video block,
       formatted as block-v1:{org}+{course}+{run}type@video@{hash code}.
@@ -186,8 +186,8 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "video_id", "event_type",
-        "event_json", "event_timestamp"]
+      column_list: ["openedx_user_id", "courserun_readable_id", "video_block_fk",
+        "event_type", "event_json", "event_timestamp"]
 
 - name: tfact_problem_events
   description: Transactional fact table for learner problem events in a course
@@ -212,7 +212,7 @@ models:
       tracking_logs/student_event_types.html#video-interaction-events
     tests:
     - not_null
-  - name: problem_block_id
+  - name: problem_block_fk
     description: string, foreign key referencing the problem block ID in the dim_course_content
       table, formatted as block-v1:{org}+{course}+{run}type@problem@{hash code}.
     tests:
@@ -239,5 +239,5 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_id",
+      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
         "event_json", "event_timestamp"]
