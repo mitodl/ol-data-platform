@@ -78,18 +78,20 @@ models:
     - not_null
 
 - name: dim_user
-  description: Eventually a dimensional model for users from different platforms.
-    It will contain one record for a user that's potentially a part of different platforms
-    where we are able to see they are the same person. It currently only contains
-    mitxonline data though.
+  description: Eventually a dimensional model for users from different platforms. 
+    It will contain one record for a user that's potentially a part of different 
+    platforms where we are able to see they are the same person. 
+    It currently only contains mitxonline data though.
   columns:
   - name: user_pk
     description: string, primary key for this user dim table
     tests:
     - not_null
     - unique
-  - name: user_mitxonline_id
-    description: string, user id on MITxOnline
+  - name: mitxonline_openedx_user_id
+    description: string, openedx user id
+  - name: mitxonline_application_user_id
+    description: string, user id on MITxOnline application
   - name: user_mitxonline_username
     description: string, username on MITxOnline
   - name: email
