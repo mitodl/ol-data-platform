@@ -77,6 +77,51 @@ models:
     tests:
     - not_null
 
+- name: dim_user
+  description: Eventually a dimensional model for users from different platforms.
+    It will contain one record for a user that's potentially a part of different platforms
+    where we are able to see they are the same person. It currently only contains
+    mitxonline data though.
+  columns:
+  - name: user_pk
+    description: string, primary key for this user dim table
+    tests:
+    - not_null
+    - unique
+  - name: mitxonline_openedx_user_id
+    description: string, openedx user id
+  - name: mitxonline_application_user_id
+    description: string, user id on MITxOnline application
+  - name: user_mitxonline_username
+    description: string, username on MITxOnline
+  - name: email
+    description: string, user email on the corresponding platform including xpro,
+      bootcamps, edX.org, MITx Online, and Residential MITx.
+  - name: full_name
+    description: str, user full name. Very small number of edX.org users have blank
+      full name, their name couldn't be populated from other sources if they don't
+      have their accounts linked on MicroMasters.
+  - name: address_country
+    description: str, country code provided by the user on the corresponding platform
+  - name: highest_education
+    description: str, user's level of education
+  - name: gender
+    description: str, Gender selected by the user on their profile on the corresponding
+      platform
+  - name: birth_year
+    description: int, user's birth year
+  - name: company
+    description: str, user's company
+  - name: job_title
+    description: str, user's job title
+  - name: industry
+    description: str, user's job industry
+  - name: user_is_active
+    description: boolean, indicating if user's account is active on the corresponding
+      platform including xpro, bootcamps, edX.org, MITx Online, and Residential MITx.
+  - name: user_joined_on
+    description: str, when the user joined on
+
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
   columns:
