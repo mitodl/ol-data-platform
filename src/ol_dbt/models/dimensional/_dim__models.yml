@@ -78,10 +78,10 @@ models:
     - not_null
 
 - name: dim_user
-  description: Eventually a dimensional model for users from different platforms.
-    It will contain one record for a user that's potentially a part of different platforms
-    where we are able to see they are the same person. It currently only contains
-    mitxonline data though.
+  description: Eventually a dimensional model for users from different platforms. 
+    It will contain one record for a user that's potentially a part of different 
+    platforms where we are able to see they are the same person. 
+    It currently only contains mitxonline data though.
   columns:
   - name: user_pk
     description: string, primary key for this user dim table
@@ -92,14 +92,6 @@ models:
     description: string, user id on MITxOnline
   - name: user_mitxonline_username
     description: string, username on MITxOnline
-  - name: user_edxorg_username
-    description: string, username on edX.org
-  - name: user_mitxpro_username
-    description: string, username on MITxPRO
-  - name: user_bootcamps_username
-    description: string, username on bootcamps
-  - name: user_residential_username
-    description: string, username on residential
   - name: email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.

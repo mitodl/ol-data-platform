@@ -17,7 +17,7 @@ with mitxonline_users as (
     select
         mitxonline_users.user_username
         , mitxonline_users.user_email
-        , mitxonline_users.user_full_name
+        , mitxonline_users.user_full_name 
         , mitxonline_legaladdress.user_address_country
         , mitxonline_profile.user_highest_education
         , mitxonline_profile.user_gender
@@ -38,10 +38,6 @@ select
 {{ dbt_utils.generate_surrogate_key(['user_email']) }} as user_pk
     , user_id as user_mitxonline_id
     , user_username as user_mitxonline_username
-    , null as user_edxorg_username
-    , null as user_mitxpro_username
-    , null as user_bootcamps_username
-    , null as user_residential_username
     , user_email as email
     , user_full_name as full_name
     , user_address_country as address_country
