@@ -61,7 +61,7 @@ with pages_viewed as (
         , course_sections.subsection_block_id
         , course_sections.subsection_name
         , pages_viewed.num_of_pages,
-        , pages_viewed.num_of_pages_viewed
+        , pages_viewed.num_of_page_viewed
         , count(distinct course_sections.block_id) as num_of_sections
         , sections_viewed.num_of_sections_viewed
     from pages_viewed
@@ -86,7 +86,7 @@ select distinct
     subsection_block_id,
     subsection_name,
     num_of_pages,
-    num_of_pages_viewed,
+    num_of_page_viewed,
     -- todo: not sure if the tabs viewed or blocks navigated to count as "pages" in this context
     num_of_sections,
     num_of_sections_viewed

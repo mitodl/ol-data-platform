@@ -313,7 +313,6 @@ models:
   - name: video_engagement
     description: float, average percent engagement calculated from the video interaction
       events across all the videos in the course
-  tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id"]
 
@@ -340,13 +339,12 @@ models:
     description: string, name of the subsection
   - name: num_of_pages
     description: integer, total number of pages
-  - name: num_of_pages_viewed
+  - name: num_of_page_viewed
     description: integer, number of pages the learner viewed
   - name: num_of_sections
     description: integer, total number of course blocks
-  - name: num_of_sections_viewed
+  - name: num_of_page_viewed
     description: integer, number of course blocks the learner viewed
-  tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "subsection_block_id"]
 
@@ -381,6 +379,5 @@ models:
     description: float, the percentage of problems that the learner solved correctly
   - name: problem_attempts_grade
     description: float, the average grade of the problems attempted by the learner
-  tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "subsection_block_id"]
