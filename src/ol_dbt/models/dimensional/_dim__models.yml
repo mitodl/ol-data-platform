@@ -117,6 +117,14 @@ models:
     - not_null
   - name: parent_block_id
     description: string, parent content block ID, same format as content_block_id.
+  - name: chapter_block_id
+    description: str, block id of chapter within which this child block belongs to.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "block_category != 'course'"
+  - name: sequential_block_id
+    description: str, block id of sequential/unit within which this child block belongs
+      to.
   - name: block_category
     description: string, category/type of the content block. Possible values are course,
       chapter, sequential, vertical, discussion, html, problem, video, etc.
@@ -194,9 +202,6 @@ models:
     tests:
     - not_null
   - name: platform
-    description: string, foreign key to dim_platform, referencing the platform where
-      the navigation event occurred
-  - name: platform_id
     description: string, foreign key to dim_platform, referencing the platform where
       the navigation event occurred
     tests:
@@ -354,174 +359,6 @@ models:
       column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
         "event_json", "event_timestamp"]
 
-- name: tfact_course_navigation_events
-  description: Transactional fact table for learner navigation events in a course
-  columns:
-  - name: user_id
-    description: string, foreign key to dim_user, referencing the user who navigated
-      the course
-    tests:
-    - not_null
-  - name: platform_id
-    description: string, foreign key to dim_platform, referencing the platform where
-      the navigation event occurred
-    tests:
-    - not_null
-  - name: courserun_readable_id
-    description: string, foreign key to dim_course_content, referencing the edX course
-      run ID
-    tests:
-    - not_null
-  - name: event_type
-    description: string, type of the navigation event, e.g. edx.ui.lms.jump_nav.selected,
-      edx.ui.lms.link_clicked, edx.ui.lms.outline.selected, edx.ui.lms.sequence.next_selected,
-      edx.ui.lms.sequence.previous_selected, edx.ui.lms.sequence.tab_selected, edx.ui.lms.video.played.
-      The open edx doc - https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/tracking_logs/
-      student_event_types.html#course-navigation-events
-    tests:
-    - not_null
-  - name: block_id
-    description: string, foreign key to dim_course_content, referencing the block
-      ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
-      code}.
-  - name: starting_position
-    description: string, the starting position where the user is navigating from,
-      either a page URL or the tab index in the unit navigation bar. Tabs correspond
-      to the unit in the subsection (or verticals) and are indexed starting from 1.
-      e.g. 1 for the first unit in the subsection.
-  - name: ending_position
-    description: string, the ending position where the user is navigating to, either
-      a page URL or the tab in the unit navigation bar. If ending_position is NULL
-      but starting_position is not NULL, it means the user navigates from the first
-      unit in one subsection to the last unit in the previous subsection using the
-      "previous" control, or from the last unit in one subsection to the first unit
-      in the next subsection using the "next" control.
-  - name: event_timestamp
-    description: timestamp, timestamp (with time zone) indicating the time at which
-      the event occurred, formatted as timestamp(9)
-    tests:
-    - not_null
-  - name: event_json
-    description: json, it includes member fields that identify specifics of each triggered
-      event. For less common/event-specific attributes.
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id", "event_type", "block_id",
-        "event_json", "event_timestamp"]
-
-- name: tfact_video_events
-  description: Transactional fact table for learner video events in a course
-  columns:
-  - name: user_id
-    description: string, foreign key to dim_user, referencing the user who interacted
-      with the video
-    tests:
-    - not_null
-  - name: platform_id
-    description: string, foreign key to dim_platform, referencing the platform where
-      the video event occurred
-    tests:
-    - not_null
-  - name: courserun_readable_id
-    description: string, foreign key to dim_course_content, referencing the edX course
-      run ID
-    tests:
-    - not_null
-  - name: event_type
-    description: string, type of the video event. Possible values are load_video,
-      pause_video, play_video, seek_video, speed_change_video, stop_video, and video_hide_transcript.
-      The open edx doc - https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/
-      tracking_logs/student_event_types.html#video-interaction-events
-    tests:
-    - not_null
-  - name: video_id
-    description: string, foreign key referencing a substring of the video block ID
-      in the dim_course_content table. This value is the hash code of the video block,
-      formatted as block-v1:{org}+{course}+{run}type@video@{hash code}.
-    tests:
-    - not_null
-  - name: video_duration
-    description: float, the length of the video, in seconds.
-  - name: video_position
-    description: float, the seconds into the video where the event occurred. May be
-      Null for `load_video` or `seek_video` events.
-  - name: starting_position
-    description: float, the seconds into the video where the user was before seeking
-      the video. For very small seek_video events, the `starting_position` may not
-      be recorded in the residential dataset.
-  - name: ending_position
-    description: float, the seconds into the video where the user was after seeking
-      the video.
-    tests:
-    - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "event_type = 'seek_video'"
-  - name: event_timestamp
-    description: timestamp, timestamp (with time zone) indicating the time at which
-      the event occurred, formatted as timestamp(9)
-    tests:
-    - not_null
-  - name: event_json
-    description: json, it includes member fields that identify specifics of each triggered
-      event. For less common/event-specific attributes.
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id", "video_id", "event_type",
-        "event_json", "event_timestamp"]
-
-- name: tfact_problem_events
-  description: Transactional fact table for learner problem events in a course
-  columns:
-  - name: user_id
-    description: string, foreign key to dim_user, referencing the user who interacted
-      with the problem
-    tests:
-    - not_null
-  - name: platform_id
-    description: string, foreign key to dim_platform, referencing the platform where
-      the problem event occurred
-    tests:
-    - not_null
-  - name: courserun_readable_id
-    description: string, foreign key to dim_course_content, referencing the edX course
-      run ID
-    tests:
-    - not_null
-  - name: event_type
-    description: string, type of the problem event. Possible values are problem_check,
-      , showanswer. The open edx doc - https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/
-      tracking_logs/student_event_types.html#video-interaction-events
-    tests:
-    - not_null
-  - name: problem_block_id
-    description: string, foreign key referencing the problem block ID in the dim_course_content
-      table, formatted as block-v1:{org}+{course}+{run}type@problem@{hash code}.
-    tests:
-    - not_null
-  - name: attempt
-    description: int, number indicating which attempt this was
-  - name: answers
-    description: json, learner's answers to this problem in problem_id and internal
-      answer pair. For multiple questions, it lists every question and answer. e.g.
-      {"6a3f44c9265a44d6911996711fe4bafd_2_1":["choice_0","choice_2"]}
-  - name: success
-    description: str, It's either 'correct' or 'incorrect'
-  - name: current_grade
-    description: number, current grade value
-  - name: max_grade
-    description: number, maximum possible grade value for the problem
-  - name: event_timestamp
-    description: timestamp, timestamp (with time zone) indicating the time at which
-      the event occurred, formatted as timestamp(9)
-    tests:
-    - not_null
-  - name: event_json
-    description: json, it includes member fields that identify specifics of each triggered
-      event. For less common/event-specific attributes.
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id", "event_type", "problem_block_id",
-        "event_json", "event_timestamp"]
-
 - name: afact_video_watched
   description: Aggregate fact table summarizing a learner's video interaction events
     within a single video for a course.
@@ -631,33 +468,36 @@ models:
   description: Aggregate fact table summarizing problem engagement by learners within
     a course.
   columns:
-  - name: user_id
-    description: string, foreign key to dim_user, referencing the user who navigated
-      the course
+  - name: platform
+    description: string, foreign key to dim_platform, referencing the platform where
+      the video event occurred
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: integer, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: problem_block_fk
+    description: string, foreign key referencing the problem block ID in the dim_course_content
+      table, formatted as block-v1:{org}+{course}+{run}type@problem@{hash code}.
     tests:
     - not_null
   - name: courserun_readable_id
-    description: string, foreign key to dim_course_content, referencing the edX course
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
-  - name: section_block_id
-    description: string, block ID of the section
-  - name: section_name
-    description: string, name of the section
-  - name: subsection_block_id
-    description: string, block ID of the subsection
-  - name: subsection_name
-    description: string, name of the subsection
-  - name: num_of_problems
-    description: integer, number of problems available in the course
-  - name: num_of_problems_attempted
-    description: integer, number of problems attempted by the learner
-  - name: total_num_of_attempts
-    description: integer, total number of attempts made by the learner
-  - name: problem_attempts_correct
-    description: float, the percentage of problems that the learner solved correctly
-  - name: problem_attempts_grade
-    description: float, the average grade of the problems attempted by the learner
+  - name: chapter_block_fk
+    description: string, foreign key to dim_course_content, referencing the chapter
+      block ID within which this problem belongs to.
+  - name: sequential_block_fk
+    description: string, foreign key to dim_course_content, referencing sequential/unit
+      block ID within which this problem belongs to
+  - name: num_of_attempts
+    description: integer, number of attempts by the learner for this problem
+  - name: num_of_correct_attempts
+    description: integer, number of correct attempts by the learner for this problem
+  - name: last_attempt_timestamp
+    description: timestamp, last attempt timestamp for this problem
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "subsection_block_id"]
+      column_list: ["openedx_user_id", "problem_block_fk"]
