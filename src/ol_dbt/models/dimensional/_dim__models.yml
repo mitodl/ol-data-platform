@@ -119,12 +119,16 @@ models:
     description: string, parent content block ID, same format as content_block_id.
   - name: chapter_block_id
     description: str, block id of chapter within which this child block belongs to.
+      Null for course blocks.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "block_category != 'course'"
   - name: sequential_block_id
     description: str, block id of sequential/unit within which this child block belongs
-      to.
+      to. Null for course and chapter blocks.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "block_category not in ('course', 'chapter')"
   - name: block_category
     description: string, category/type of the content block. Possible values are course,
       chapter, sequential, vertical, discussion, html, problem, video, etc.
