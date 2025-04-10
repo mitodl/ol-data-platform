@@ -117,6 +117,18 @@ models:
     - not_null
   - name: parent_block_id
     description: string, parent content block ID, same format as content_block_id.
+  - name: chapter_block_id
+    description: str, block id of chapter within which this child block belongs to.
+      Null for course blocks.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "block_category != 'course'"
+  - name: sequential_block_id
+    description: str, block id of sequential/unit within which this child block belongs
+      to. Null for course and chapter blocks.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "block_category not in ('course', 'chapter')"
   - name: block_category
     description: string, category/type of the content block. Possible values are course,
       chapter, sequential, vertical, discussion, html, problem, video, etc.
@@ -350,3 +362,77 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
         "event_json", "event_timestamp"]
+
+- name: afact_course_page_engagement
+  description: Aggregate fact table summarizing course page engagement by learner
+    within a course.
+  columns:
+  - name: platform
+    description: string, foreign key to dim_platform
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: integer, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: block_fk
+    description: string, foreign key referencing the vertical or page block ID in
+      the dim_course_content table, formatted as block-v1:{org}+{course}+{run}type@vertical-block@{hash
+      code}.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: chapter_block_fk
+    description: string, foreign key to dim_course_content, referencing the chapter
+      block ID within which this vertical belongs to.
+  - name: sequential_block_fk
+    description: string, foreign key to dim_course_content, referencing sequential/unit
+      block ID within which this vertical belongs to
+  - name: num_of_views
+    description: integer, number of views by the learner for this vertical
+  - name: last_view_timestamp
+    description: timestamp, last view timestamp for this vertical
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "block_fk"]
+
+- name: afact_problem_engagement
+  description: Aggregate fact table summarizing problem engagement by learners within
+    a course.
+  columns:
+  - name: platform
+    description: string, foreign key to dim_platform, referencing the platform where
+      the video event occurred
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: integer, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: problem_block_fk
+    description: string, foreign key referencing the problem block ID in the dim_course_content
+      table, formatted as block-v1:{org}+{course}+{run}type@problem@{hash code}.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: chapter_block_fk
+    description: string, foreign key to dim_course_content, referencing the chapter
+      block ID within which this problem belongs to.
+  - name: sequential_block_fk
+    description: string, foreign key to dim_course_content, referencing sequential/unit
+      block ID within which this problem belongs to
+  - name: num_of_attempts
+    description: integer, number of attempts by the learner for this problem
+  - name: num_of_correct_attempts
+    description: integer, number of correct attempts by the learner for this problem
+  - name: last_attempt_timestamp
+    description: timestamp, last attempt timestamp for this problem
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_fk"]
