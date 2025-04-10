@@ -3,6 +3,42 @@ version: 2
 
 models:
 - name: afact_video_engagement
+  description: Aggregate fact table summarizing video engagement by video, learner, and
+    a courserun.
+  columns:
+  - name: video_id
+    description: string, id for the video
+  - name: user_username
+    description: string, username of the learner from the platform they used
+  - name: openedx_user_id
+    description: int, user ID on the corresponding open edX platform
+  - name: courserun_readable_id
+    description: string, foreign key to dim_course_content, referencing the edX course
+      run ID
+    tests:
+    - not_null
+  - name: video_title
+    description: string, title of the video
+  - name: subsection_title
+    description: string, name of the subsection
+  - name: subsection_content_fk
+    description: string, foreign key to the content dim for the subsection
+  - name: section_title
+    description: string, name of the section
+  - name: section_content_fk
+    description: string, foreign key to the content dim for the section
+  - name: estimated_time_played
+    description: string, estimated time the video was played
+  - name: latest_activity_timestamp
+    description: timestamp, date and time of the last video activity for this learner on this video
+  - name: video_played_count
+    description: integer, will be 1 if the learner played the video otherwise it will be 0
+  - name: video_completes
+    description: integer, will be 1 if the learner completed the video otherwise it will be 0
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "video_id"]
+- name: afact_video_engagement
   description: Aggregate fact table summarizing video engagement by video, learner,
     and a courserun.
   columns:
