@@ -14,7 +14,6 @@ with vertical_structure as (
 , page_navigation_events as (
     select
         platform
-        , user_fk
         , openedx_user_id
         , courserun_readable_id
         , block_fk
@@ -42,7 +41,6 @@ with vertical_structure as (
 
 select
     platform
-    , user_fk
     , openedx_user_id
     , courserun_readable_id
     , block_fk
