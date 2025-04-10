@@ -3,8 +3,8 @@ version: 2
 
 models:
 - name: afact_video_engagement
-  description: Aggregate fact table summarizing video engagement by video, learner,
-    and a courserun.
+  description: Aggregate fact table summarizing video engagement by video, learner, and
+    a courserun.
   columns:
   - name: video_id
     description: string, id for the video
@@ -30,14 +30,11 @@ models:
   - name: estimated_time_played
     description: string, estimated time the video was played
   - name: latest_activity_timestamp
-    description: timestamp, date and time of the last video activity for this learner
-      on this video
+    description: timestamp, date and time of the last video activity for this learner on this video
   - name: video_played_count
-    description: integer, will be 1 if the learner played the video otherwise it will
-      be 0
+    description: integer, will be 1 if the learner played the video otherwise it will be 0
   - name: video_completes
-    description: integer, will be 1 if the learner completed the video otherwise it
-      will be 0
+    description: integer, will be 1 if the learner completed the video otherwise it will be 0
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "video_id"]
