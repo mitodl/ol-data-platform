@@ -20,7 +20,11 @@ with mitxonline_navigation_events as (
         , json_query(useractivity_event_object, 'lax $.new' omit quotes) as ending_tab
         , json_query(useractivity_event_object, 'lax $.current_url' omit quotes) as starting_url
         , json_query(useractivity_event_object, 'lax $.target_url' omit quotes) as ending_url
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as block_id
+        , case
+            when json_query(useractivity_event_object, 'lax $.id' omit quotes) not like 'block-v1%'
+                then regexp_extract(json_query(useractivity_event_object, 'lax $.id' omit quotes), 'block-v1.*')
+            else json_query(useractivity_event_object, 'lax $.id' omit quotes)
+        end as block_id
         , json_query(useractivity_event_object, 'lax $.current_tab' omit quotes) as current_tab
         , json_query(useractivity_event_object, 'lax $.tab_count' omit quotes) as tab_count
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
@@ -41,7 +45,11 @@ with mitxonline_navigation_events as (
         , json_query(useractivity_event_object, 'lax $.new' omit quotes) as ending_tab
         , json_query(useractivity_event_object, 'lax $.current_url' omit quotes) as starting_url
         , json_query(useractivity_event_object, 'lax $.target_url' omit quotes) as ending_url
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as block_id
+        , case
+            when json_query(useractivity_event_object, 'lax $.id' omit quotes) not like 'block-v1%'
+                then regexp_extract(json_query(useractivity_event_object, 'lax $.id' omit quotes), 'block-v1.*')
+            else json_query(useractivity_event_object, 'lax $.id' omit quotes)
+        end as block_id
         , json_query(useractivity_event_object, 'lax $.current_tab' omit quotes) as current_tab
         , json_query(useractivity_event_object, 'lax $.tab_count' omit quotes) as tab_count
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
@@ -62,7 +70,11 @@ with mitxonline_navigation_events as (
         , json_query(useractivity_event_object, 'lax $.new' omit quotes) as ending_tab
         , json_query(useractivity_event_object, 'lax $.current_url' omit quotes) as starting_url
         , json_query(useractivity_event_object, 'lax $.target_url' omit quotes) as ending_url
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as block_id
+        , case
+            when json_query(useractivity_event_object, 'lax $.id' omit quotes) not like 'block-v1%'
+                then regexp_extract(json_query(useractivity_event_object, 'lax $.id' omit quotes), 'block-v1.*')
+            else json_query(useractivity_event_object, 'lax $.id' omit quotes)
+        end as block_id
         , json_query(useractivity_event_object, 'lax $.current_tab' omit quotes) as current_tab
         , json_query(useractivity_event_object, 'lax $.tab_count' omit quotes) as tab_count
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
@@ -83,7 +95,11 @@ with mitxonline_navigation_events as (
         , json_query(useractivity_event_object, 'lax $.new' omit quotes) as ending_tab
         , json_query(useractivity_event_object, 'lax $.current_url' omit quotes) as starting_url
         , json_query(useractivity_event_object, 'lax $.target_url' omit quotes) as ending_url
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as block_id
+        , case
+            when json_query(useractivity_event_object, 'lax $.id' omit quotes) not like 'block-v1%'
+                then regexp_extract(json_query(useractivity_event_object, 'lax $.id' omit quotes), 'block-v1.*')
+            else json_query(useractivity_event_object, 'lax $.id' omit quotes)
+        end as block_id
         , json_query(useractivity_event_object, 'lax $.current_tab' omit quotes) as current_tab
         , json_query(useractivity_event_object, 'lax $.tab_count' omit quotes) as tab_count
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp

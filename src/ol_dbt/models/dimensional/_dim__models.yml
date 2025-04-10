@@ -359,110 +359,41 @@ models:
       column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
         "event_json", "event_timestamp"]
 
-- name: afact_video_watched
-  description: Aggregate fact table summarizing a learner's video interaction events
-    within a single video for a course.
-  columns:
-  - name: user_id
-    description: string, foreign key to dim_user, referencing the user who navigated
-      the course
-    tests:
-    - not_null
-  - name: courserun_readable_id
-    description: string, foreign key to dim_course_content, referencing the edX course
-      run ID
-    tests:
-    - not_null
-  - name: video_id
-    description: string, foreign key referencing a substring of the video block ID
-      in the dim_course_content table. This value is the hash code of the video block,
-      formatted as block-v1:{org}+{course}+{run}type@video@{hash code}.
-    tests:
-    - not_null
-  - name: video_name
-    description: string, name of the video from the block_title field in the dim_course_content
-      table
-  - name: video_duration
-    description: float, the length of the video, in seconds.
-  - name: watched_time
-    description: float, total time watched, calculated from the positions in the events
-      data.
-  - name: video_completion
-    description: string, details on whether and how the learner completed the video
-  - name: video_engagement
-    description: float, percent engagement calculated from a learner's video interaction
-      events for a single video in a course
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "video_id"]
-
-- name: afact_video_engagement
-  description: Aggregate fact table summarizing video engagement by learners within
-    a course.
-  columns:
-  - name: user_id
-    description: string, foreign key to dim_user, referencing the user who navigated
-      the course
-    tests:
-    - not_null
-  - name: courserun_readable_id
-    description: string, foreign key to dim_course_content, referencing the edX course
-      run ID
-    tests:
-    - not_null
-  - name: section_block_id
-    description: string, block ID of the section
-  - name: section_name
-    description: string, name of the section
-  - name: subsection_block_id
-    description: string, block ID of the subsection
-  - name: subsection_name
-    description: string, name of the subsection
-  - name: num_of_video
-    description: integer, total number of videos in the course
-  - name: num_of_video_played
-    description: integer, number of videos the learner started watching
-  - name: num_of_video_completed
-    description: integer, number of videos the learner completed watching
-  - name: video_engagement
-    description: float, average percent engagement calculated from the video interaction
-      events across all the videos in the course
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id"]
-
 - name: afact_course_page_engagement
   description: Aggregate fact table summarizing course page engagement by learner
     within a course.
   columns:
-  - name: user_id
-    description: string, foreign key to dim_user, referencing the user who navigated
-      the course
+  - name: platform
+    description: string, foreign key to dim_platform
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: integer, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: block_fk
+    description: string, foreign key referencing the vertical or page block ID in
+      the dim_course_content table, formatted as block-v1:{org}+{course}+{run}type@vertical-block@{hash
+      code}.
     tests:
     - not_null
   - name: courserun_readable_id
-    description: string, foreign key to dim_course_content, referencing the edX course
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
-  - name: section_block_id
-    description: string, block ID of the section
-  - name: section_name
-    description: string, name of the section
-  - name: subsection_block_id
-    description: string, block ID of the subsection
-  - name: subsection_name
-    description: string, name of the subsection
-  - name: num_of_pages
-    description: integer, total number of pages
-  - name: num_of_pages_viewed
-    description: integer, number of pages the learner viewed
-  - name: num_of_sections
-    description: integer, total number of course blocks
-  - name: num_of_sections_viewed
-    description: integer, number of course blocks the learner viewed
+  - name: chapter_block_fk
+    description: string, foreign key to dim_course_content, referencing the chapter
+      block ID within which this vertical belongs to.
+  - name: sequential_block_fk
+    description: string, foreign key to dim_course_content, referencing sequential/unit
+      block ID within which this vertical belongs to
+  - name: num_of_views
+    description: integer, number of views by the learner for this vertical
+  - name: last_view_timestamp
+    description: timestamp, last view timestamp for this vertical
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "subsection_block_id"]
+      column_list: ["openedx_user_id", "courserun_readable_id", "block_fk"]
 
 - name: afact_problem_engagement
   description: Aggregate fact table summarizing problem engagement by learners within
@@ -500,4 +431,4 @@ models:
     description: timestamp, last attempt timestamp for this problem
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "problem_block_fk"]
+      column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_fk"]
