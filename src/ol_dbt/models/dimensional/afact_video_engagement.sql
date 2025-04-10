@@ -7,7 +7,7 @@ with course_content as (
 )
 
 , mitxonline_video_events as (
-    select
+    select 
         a.user_username
         , a.openedx_user_id
         , a.courserun_readable_id
@@ -21,30 +21,30 @@ with course_content as (
         , d.content_block_pk as section_content_fk
         , json_query(a.useractivity_event_object, 'lax $.id' omit quotes) as video_id
         , json_query(a.useractivity_event_object, 'lax $.currentTime' omit quotes) as currenttime
-        , lag(json_query(a.useractivity_event_object, 'lax $.currentTime' omit quotes), 1)
+        , lag(json_query(a.useractivity_event_object, 'lax $.currentTime' omit quotes), 1) 
             over (
-                partition by a.user_username, a.courserun_readable_id, json_query(a.useractivity_event_object, 'lax $.id' omit quotes)
+                partition by a.user_username, a.courserun_readable_id, json_query(a.useractivity_event_object, 'lax $.id' omit quotes)  
                 order by a.useractivity_timestamp desc
-        )
+        ) 
             as nextcurrenttime
     from video_events as a
     left join course_content as b
-        on
+        on 
             substring(b.block_id, regexp_position(b.block_id, 'block@')+6) = json_query(a.useractivity_event_object, 'lax $.id' omit quotes)
             and a.courserun_readable_id = b.courserun_readable_id
             and b.is_latest = true
             and b.block_category = 'video'
     left join course_content as c
-        on
+        on 
             b.parent_block_id = c.block_id
             and c.is_latest = true
             and c.block_category = 'vertical'
     left join course_content as d
-        on
+        on 
             c.parent_block_id = d.block_id
             and d.is_latest = true
             and d.block_category = 'sequential'
-    where
+    where 
         a.courserun_readable_id is not null
         and a.useractivity_event_type in (
             'load_video'
@@ -70,7 +70,7 @@ with course_content as (
         , max(useractivity_timestamp) as latest_activity_timestamp
         , sum(case when event_type = 'play_video' then 1 else 0 end) as video_plays
         , sum(case when event_type = 'complete_video' then 1 else 0 end) as video_completes
-        , sum(case when event_type = 'play_video' then nextcurrenttime-currenttime else 0 end) as time_played
+        , sum(case when event_type = 'play_video' then cast(nextcurrenttime as integer)-cast(currenttime as integer) else 0 end) as time_played
     from mitxonline_video_events
     group by
         video_id
