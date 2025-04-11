@@ -22,7 +22,7 @@ with course_content as (
         , f.block_title as section_title
         , f.content_block_pk as section_content_fk
         , replace(json_query(a.useractivity_event_object, 'lax $.id'), '"', '') as video_id
-        , json_query(a.useractivity_event_object, 'lax $.currentTime') as currenttime
+        , try_cast(json_query(a.useractivity_event_object, 'lax $.currentTime') as decimal(30, 10)) as currenttime
     from video_events as a
     left join course_content as b
         on
@@ -61,8 +61,8 @@ with course_content as (
         openedx_user_id
         , courserun_readable_id
         , video_id
+        , max(currenttime) as end_time
         , min(case when event_type = 'play_video' then currenttime end) as start_time
-        , max(case when event_type <> 'play_video' then currenttime end) as end_time
     from mitxonline_video_events
     group by
         openedx_user_id
@@ -83,10 +83,7 @@ with course_content as (
         , mitxonline_video_events.subsection_content_fk
         , mitxonline_video_events.section_title
         , mitxonline_video_events.section_content_fk
-        , (
-            cast(start_and_end_times.end_time as decimal(30, 10))
-            - cast(start_and_end_times.start_time as decimal(30, 10))
-        ) as time_played
+        , (start_and_end_times.end_time - start_and_end_times.start_time) as time_played
         , max(mitxonline_video_events.useractivity_timestamp) as latest_activity_timestamp
         , sum(case when mitxonline_video_events.event_type = 'play_video' then 1 else 0 end) as video_plays
         , sum(case when mitxonline_video_events.event_type = 'complete_video' then 1 else 0 end) as video_completes
@@ -109,10 +106,7 @@ with course_content as (
         , mitxonline_video_events.subsection_content_fk
         , mitxonline_video_events.section_title
         , mitxonline_video_events.section_content_fk
-        , (
-            cast(start_and_end_times.end_time as decimal(30, 10))
-            - cast(start_and_end_times.start_time as decimal(30, 10))
-        )
+        , (start_and_end_times.end_time - start_and_end_times.start_time)
 )
 
 select
