@@ -15,10 +15,12 @@ with course_content as (
         , a.useractivity_event_object as event_json
         , a.useractivity_timestamp
         , b.block_title as video_title
-        , c.block_title as subsection_title
-        , c.content_block_pk as subsection_content_fk
-        , d.block_title as section_title
-        , d.content_block_pk as section_content_fk
+        , c.block_title as unit_title
+        , c.content_block_pk as unit_content_fk
+        , d.block_title as subsection_title
+        , d.content_block_pk as subsection_content_fk
+        , f.block_title as section_title
+        , f.content_block_pk as section_content_fk
         , replace(json_query(a.useractivity_event_object, 'lax $.id'), '"', '') as video_id
         , json_query(a.useractivity_event_object, 'lax $.currentTime') as currenttime
     from video_events as a
@@ -39,6 +41,10 @@ with course_content as (
             c.parent_block_id = d.block_id
             and d.is_latest = true
             and d.block_category = 'sequential'
+    left join course_content as f
+        on
+            d.parent_block_id = f.block_id
+            and f.is_latest = true
     where
         a.courserun_readable_id is not null
         and a.useractivity_event_type in (
@@ -71,6 +77,8 @@ with course_content as (
         , mitxonline_video_events.openedx_user_id
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.video_title
+        , mitxonline_video_events.unit_title
+        , mitxonline_video_events.unit_content_fk
         , mitxonline_video_events.subsection_title
         , mitxonline_video_events.subsection_content_fk
         , mitxonline_video_events.section_title
@@ -95,6 +103,8 @@ with course_content as (
         , mitxonline_video_events.openedx_user_id
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.video_title
+        , mitxonline_video_events.unit_title
+        , mitxonline_video_events.unit_content_fk
         , mitxonline_video_events.subsection_title
         , mitxonline_video_events.subsection_content_fk
         , mitxonline_video_events.section_title
@@ -111,6 +121,8 @@ select
     , openedx_user_id
     , courserun_readable_id
     , video_title
+    , unit_title
+    , unit_content_fk
     , subsection_title
     , subsection_content_fk
     , section_title
