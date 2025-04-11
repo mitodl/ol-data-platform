@@ -22,7 +22,8 @@ with course_content as (
         , f.block_title as section_title
         , f.content_block_pk as section_content_fk
         , replace(json_query(a.useractivity_event_object, 'lax $.id'), '"', '') as video_id
-        , json_query(a.useractivity_event_object, 'lax $.currentTime') as currenttime
+        , coalesce(cast(json_query(a.useractivity_event_object, 'lax $.currentTime') as decimal(30, 10)), 0
+        ) as currenttime
     from video_events as a
     left join course_content as b
         on
@@ -61,9 +62,8 @@ with course_content as (
         openedx_user_id
         , courserun_readable_id
         , video_id
-        , max(cast(coalesce(currenttime, 0) as decimal(30, 10))) as end_time
-        , min(case when event_type = 'play_video' then cast(coalesce(currenttime, 0) as decimal(30, 10)) end
-        ) as start_time
+        , max(currenttime) as end_time
+        , min(case when event_type = 'play_video' then currenttime end) as start_time
     from mitxonline_video_events
     group by
         openedx_user_id
