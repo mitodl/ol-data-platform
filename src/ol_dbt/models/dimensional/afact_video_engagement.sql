@@ -22,8 +22,7 @@ with course_content as (
         , f.block_title as section_title
         , f.content_block_pk as section_content_fk
         , replace(json_query(a.useractivity_event_object, 'lax $.id'), '"', '') as video_id
-        , coalesce(cast(json_query(a.useractivity_event_object, 'lax $.currentTime') as decimal(30, 10)), 0
-        ) as currenttime
+        , try_cast(json_query(a.useractivity_event_object, 'lax $.currentTime') as decimal(30, 10)) as currenttime
     from video_events as a
     left join course_content as b
         on
