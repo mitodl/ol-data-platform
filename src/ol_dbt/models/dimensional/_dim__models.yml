@@ -19,6 +19,10 @@ models:
     - not_null
   - name: video_title
     description: string, title of the video
+  - name: unit_title
+    description: string, name of the unit
+  - name: unit_content_fk
+    description: string, foreign key to the content dim for the unit
   - name: subsection_title
     description: string, name of the subsection
   - name: subsection_content_fk
