@@ -34,17 +34,14 @@ class OAuthApiClient(ConfigurableResource):
     )
     _access_token: Optional[str] = PrivateAttr(default=None)
     _access_token_expires: Optional[datetime] = PrivateAttr(default=None)
-    _http_client: httpx.Client = PrivateAttr(default=None)
+    _http_client: Optional[httpx.Client] = PrivateAttr(default=None)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._initialize_client()
-
-    def _initialize_client(self) -> None:
-        if self._http_client is not None:
-            return
-        timeout = httpx.Timeout(self.http_timeout, connect=10)
-        self._http_client = httpx.Client(timeout=timeout)
+    @property
+    def http_client(self) -> httpx.Client:
+        if not self._http_client:
+            timeout = httpx.Timeout(self.http_timeout, connect=10)
+            self._http_client = httpx.Client(timeout=timeout)
+        return self._http_client
 
     @validator("token_type")
     def validate_token_type(cls, token_type):  # noqa: N805
@@ -61,7 +58,7 @@ class OAuthApiClient(ConfigurableResource):
                 "client_secret": self.client_secret,
                 "token_type": self.token_type,
             }
-            response = self._http_client.post(self.token_url, data=payload)
+            response = self.http_client.post(self.token_url, data=payload)
             response.raise_for_status()
             self._access_token = response.json()["access_token"]
             self._access_token_expires = now + timedelta(
@@ -71,7 +68,7 @@ class OAuthApiClient(ConfigurableResource):
 
     @property
     def _username(self) -> str:
-        response = self._http_client.get(
+        response = self.http_client.get(
             f"{self.base_url}/api/user/v1/me",
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
         )
@@ -91,7 +88,7 @@ class OAuthApiClient(ConfigurableResource):
 
         request_params.update(**(extra_params or {}))
 
-        response = self._http_client.get(
+        response = self.http_client.get(
             request_url,
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
             params=httpx.QueryParams(**request_params),
@@ -113,7 +110,7 @@ class OAuthApiClient(ConfigurableResource):
 
 class OAuthApiClientFactory(ConfigurableResource):
     deployment: str = Field(description="The name of the deployment")
-    _client: OAuthApiClient = PrivateAttr()
+    _client: Optional[OAuthApiClient] = PrivateAttr(default=None)
     vault: ResourceDependency[Vault]
 
     def _initialize_client(self) -> OAuthApiClient:
@@ -122,7 +119,7 @@ class OAuthApiClientFactory(ConfigurableResource):
             path=f"pipelines/{self.deployment}/oauth-client",
         )["data"]
 
-        self._client = OAuthApiClient(
+        return OAuthApiClient(
             client_id=client_secrets["id"],
             client_secret=client_secrets["secret"],
             base_url=client_secrets["url"],
@@ -130,13 +127,13 @@ class OAuthApiClientFactory(ConfigurableResource):
                 "token_url", f"{client_secrets['url']}/oauth2/access_token"
             ),
         )
-        return self._client
 
     @property
     def client(self) -> OAuthApiClient:
+        if not self._client:
+            self._client = self._initialize_client()
         return self._client
 
     @contextmanager
     def yield_for_execution(self, context: InitResourceContext) -> Generator[Self]:  # noqa: ARG002
-        self._initialize_client()
         yield self
