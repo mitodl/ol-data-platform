@@ -10,6 +10,26 @@ with problem_structure as (
         and is_latest = true
 )
 
+, pre_problem_attempt_aggregated as (
+    select
+        platform
+        , openedx_user_id
+        , problem_block_fk
+        , courserun_readable_id
+        , attempt
+        , event_timestamp
+        , success
+        , row_number() 
+            over 
+            (
+                partition by platform, openedx_user_id, courserun_readable_id, problem_block_fk, attempt 
+                order by event_timestamp desc
+            ) 
+        as rn
+    from {{ ref('tfact_problem_events') }}
+    where event_type = 'problem_check'
+)
+
 , problem_attempt_aggregated as (
     select
         platform
@@ -19,8 +39,8 @@ with problem_structure as (
         , max(attempt) as num_of_attempts
         , max(event_timestamp) as last_attempt_timestamp
         , count(case when success = 'correct' then 1 end) as num_of_correct_attempts
-    from {{ ref('tfact_problem_events') }}
-    where event_type = 'problem_check'
+    from pre_problem_attempt_aggregated
+    where rn = 1
     group by platform, courserun_readable_id, problem_block_fk, openedx_user_id
 )
 
