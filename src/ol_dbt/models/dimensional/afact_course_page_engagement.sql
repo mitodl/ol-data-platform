@@ -16,6 +16,7 @@ with vertical_structure as (
         platform
         , openedx_user_id
         , courserun_readable_id
+        , user_fk
         , block_fk
         , count(*) as num_of_views
         , max(event_timestamp) as last_view_timestamp
@@ -29,6 +30,7 @@ with vertical_structure as (
         page_navigation_events.platform
         , page_navigation_events.openedx_user_id
         , page_navigation_events.courserun_readable_id
+        , page_navigation_events.user_fk
         , page_navigation_events.block_fk
         , page_navigation_events.num_of_views
         , page_navigation_events.last_view_timestamp
@@ -43,6 +45,7 @@ select
     platform
     , openedx_user_id
     , courserun_readable_id
+    , user_fk
     , block_fk
     , num_of_views
     , sequential_block_fk

@@ -12,7 +12,8 @@ with problem_structure as (
 
 , problem_attempt_aggregated as (
     select
-        platform
+        user_fk
+        , platform
         , openedx_user_id
         , problem_block_fk
         , courserun_readable_id
@@ -26,7 +27,8 @@ with problem_structure as (
 
 , combined as (
     select
-        problem_attempt_aggregated.platform
+        problem_attempt_aggregated.user_fk
+        , problem_attempt_aggregated.platform
         , problem_attempt_aggregated.openedx_user_id
         , problem_attempt_aggregated.courserun_readable_id
         , problem_attempt_aggregated.problem_block_fk
@@ -41,7 +43,8 @@ with problem_structure as (
 )
 
 select
-    platform
+    user_fk
+    , platform
     , openedx_user_id
     , courserun_readable_id
     , problem_block_fk

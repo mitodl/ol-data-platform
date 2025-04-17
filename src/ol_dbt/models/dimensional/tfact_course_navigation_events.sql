@@ -109,9 +109,14 @@ with mitxonline_navigation_events as (
         and useractivity_event_type in {{ navigation_events }}
 )
 
+, users as (
+    select * from {{ ref('dim_user') }}
+)
+
 , combined as (
     select
-        'mitxonline' as platform
+        users.user_pk as user_fk
+        , 'mitxonline' as platform
         , mitxonline_navigation_events.openedx_user_id
         , mitxonline_navigation_events.courserun_readable_id
         , mitxonline_navigation_events.event_type
@@ -128,11 +133,14 @@ with mitxonline_navigation_events as (
         , mitxonline_navigation_events.tab_count
         , mitxonline_navigation_events.event_timestamp
     from mitxonline_navigation_events
+    left join users on mitxonline_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
+
 
     union all
 
     select
-        'mitxpro' as platform
+        users.user_pk as user_fk
+        , 'mitxpro' as platform
         , xpro_navigation_events.openedx_user_id
         , xpro_navigation_events.courserun_readable_id
         , xpro_navigation_events.event_type
@@ -148,42 +156,65 @@ with mitxonline_navigation_events as (
         , xpro_navigation_events.tab_count
         , xpro_navigation_events.event_timestamp
     from xpro_navigation_events
+    -- todo: add xpro user mapping to dim_user table and update this join
+    left join users on xpro_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
 
     union all
 
     select
-        'residential' as platform
-        , user_id as openedx_user_id
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , block_id
-        , coalesce(current_tab, starting_tab, starting_url) as starting_position
-        , coalesce(ending_tab, ending_url) as ending_position
-        , current_tab
-        , tab_count
-        , event_timestamp
+        users.user_pk as user_fk
+        , 'residential' as platform
+        , mitxresidential_navigation_events.user_id as openedx_user_id
+        , mitxresidential_navigation_events.courserun_readable_id
+        , mitxresidential_navigation_events.event_type
+        , mitxresidential_navigation_events.event_json
+        , mitxresidential_navigation_events.block_id
+        , coalesce(
+            mitxresidential_navigation_events.current_tab
+            , mitxresidential_navigation_events.starting_tab
+            , mitxresidential_navigation_events.starting_url
+        ) as starting_position
+        , coalesce(
+            mitxresidential_navigation_events.ending_tab
+            , mitxresidential_navigation_events.ending_url
+        ) as ending_position
+        , mitxresidential_navigation_events.current_tab
+        , mitxresidential_navigation_events.tab_count
+        , mitxresidential_navigation_events.event_timestamp
     from mitxresidential_navigation_events
+    -- todo: add mitxresidential user mapping to dim_user table and update this join
+    left join users on mitxresidential_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
 
     union all
 
     select
-        'edxorg' as platform
-        , user_id as openedx_user_id
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , block_id
-        , coalesce(current_tab, starting_tab, starting_url) as starting_position
-        , coalesce(ending_tab, ending_url) as ending_position
-        , current_tab
-        , tab_count
-        , event_timestamp
+        users.user_pk as user_fk
+        , 'edxorg' as platform
+        , edxorg_navigation_events.edxorg_navigation_events.user_id as openedx_user_id
+        , edxorg_navigation_events.courserun_readable_id
+        , edxorg_navigation_events.event_type
+        , edxorg_navigation_events.event_json
+        , edxorg_navigation_events.block_id
+        , coalesce(
+            edxorg_navigation_events.current_tab
+            , edxorg_navigation_events.starting_tab
+            , edxorg_navigation_events.starting_url
+        ) as starting_position
+        , coalesce(
+            edxorg_navigation_events.ending_tab
+            , edxorg_navigation_events.ending_url
+        ) as ending_position
+        , edxorg_navigation_events.current_tab
+        , edxorg_navigation_events.tab_count
+        , edxorg_navigation_events.event_timestamp
     from edxorg_navigation_events
+    -- todo: add edx.org user mapping to dim_user table and update this join...none of these records exist in dim_user
+    left join users on edxorg_navigation_events.user_id = users.mitxonline_openedx_user_id
 )
 
 select
-    platform
+    user_fk
+    , platform
     , openedx_user_id
     , courserun_readable_id
     , event_type
