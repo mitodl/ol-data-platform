@@ -2,6 +2,10 @@ with course_content as (
     select * from {{ ref('dim_course_content') }}
 )
 
+, users as (
+    select * from {{ ref('dim_course_content') }}
+)
+
 , video_events as (
     select * from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
 )
@@ -9,6 +13,7 @@ with course_content as (
 , mitxonline_video_events as (
     select
         a.user_username
+        , users.user_pk as user_fk
         , a.openedx_user_id
         , a.courserun_readable_id
         , a.useractivity_event_type as event_type
@@ -24,6 +29,8 @@ with course_content as (
         , replace(json_query(a.useractivity_event_object, 'lax $.id'), '"', '') as video_id
         , try_cast(json_query(a.useractivity_event_object, 'lax $.currentTime') as decimal(30, 10)) as currenttime
     from video_events as a
+    left join users
+        on video_events.openedx_user_id = users.mitxonline_openedx_user_id
     left join course_content as b
         on
             substring(b.block_id, regexp_position(b.block_id, 'block@') + 6)
@@ -112,6 +119,7 @@ with course_content as (
 select
     video_id
     , user_username
+    , user_fk
     , openedx_user_id
     , courserun_readable_id
     , video_title
