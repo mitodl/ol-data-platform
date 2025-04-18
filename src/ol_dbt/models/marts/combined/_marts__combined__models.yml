@@ -380,6 +380,8 @@ models:
   - name: order_reference_number
     description: string, order reference number to identify a fulfilled or refunded
       order on the corresponding platform, e.g. mitxonline-production-20
+  - name: coupon_code
+    description: string, discount code for the redeemed coupon if applicable
   - name: courserunenrollment_upgraded_on
     description: timestamp, date and time when the learner upgraded to the verified
       track course mode. May be the same as the date when the course enrollment was

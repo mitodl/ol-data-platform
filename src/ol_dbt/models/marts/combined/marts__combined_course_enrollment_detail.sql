@@ -88,6 +88,7 @@ with combined_enrollments as (
         , mitxonline_completed_orders.order_id
         , mitxonline_completed_orders.line_id
         , mitxonline_completed_orders.order_reference_number
+        , mitxonline_completed_orders.discount_code as coupon_code
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
         , combined_enrollments.course_title
@@ -156,6 +157,7 @@ with combined_enrollments as (
         , micromasters_completed_orders.order_id
         , micromasters_completed_orders.line_id
         , micromasters_completed_orders.order_reference_number
+        , micromasters_completed_orders.coupon_code
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
         , combined_enrollments.course_title
@@ -220,6 +222,7 @@ with combined_enrollments as (
         , mitxpro_completed_orders.order_id
         , mitxpro__ecommerce_line.line_id
         , mitxpro_completed_orders.receipt_reference_number as order_reference_number
+        , mitxpro_completed_orders.coupon_code
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
         , combined_enrollments.course_title
@@ -273,6 +276,7 @@ with combined_enrollments as (
         , null as order_id
         , null as line_id
         , null as order_reference_number
+        , null as coupon_code
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
         , combined_enrollments.course_title
@@ -322,6 +326,7 @@ with combined_enrollments as (
         , bootcamps_completed_orders.order_id
         , bootcamps_completed_orders.line_id
         , bootcamps_completed_orders.order_reference_number
+        , null as coupon_code
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
         , combined_enrollments.course_title
@@ -376,6 +381,7 @@ with combined_enrollments as (
         , null as order_id
         , null as line_id
         , null as order_reference_number
+        , null as coupon_code
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
         , combined_enrollments.course_title
@@ -424,6 +430,7 @@ select
     , line_id
     , order_id
     , order_reference_number
+    , coupon_code
     , user_company
     , user_country_code
     , user_email
