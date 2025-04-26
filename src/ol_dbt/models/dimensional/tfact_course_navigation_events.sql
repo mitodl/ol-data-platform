@@ -133,7 +133,7 @@ with mitxonline_navigation_events as (
         , mitxonline_navigation_events.tab_count
         , mitxonline_navigation_events.event_timestamp
     from mitxonline_navigation_events
-    left join users on mitxonline_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
+    inner join users on mitxonline_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
 
 
     union all
@@ -156,8 +156,7 @@ with mitxonline_navigation_events as (
         , xpro_navigation_events.tab_count
         , xpro_navigation_events.event_timestamp
     from xpro_navigation_events
-    -- todo: add xpro user mapping to dim_user table and update this join
-    left join users on xpro_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
+    inner join users on xpro_navigation_events.openedx_user_id = users.xpro_openedx_user_id
 
     union all
 
@@ -182,8 +181,7 @@ with mitxonline_navigation_events as (
         , mitxresidential_navigation_events.tab_count
         , mitxresidential_navigation_events.event_timestamp
     from mitxresidential_navigation_events
-    -- todo: add mitxresidential user mapping to dim_user table and update this join
-    left join users on mitxresidential_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
+    inner join users on mitxresidential_navigation_events.user_id = users.mitxresidential_openedx_user_id
 
     union all
 
@@ -208,8 +206,7 @@ with mitxonline_navigation_events as (
         , edxorg_navigation_events.tab_count
         , edxorg_navigation_events.event_timestamp
     from edxorg_navigation_events
-    -- todo: add edx.org user mapping to dim_user table and update this join...none of these records exist in dim_user
-    left join users on edxorg_navigation_events.user_id = users.mitxonline_openedx_user_id
+    inner join users on edxorg_navigation_events.user_id = users.edxorg_openedx_user_id
 )
 
 select

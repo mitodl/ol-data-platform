@@ -113,7 +113,7 @@ with mitxonline_problem_events as (
         , mitxonline_problem_events.max_grade
         , mitxonline_problem_events.event_timestamp
     from mitxonline_problem_events
-    left join users
+    inner join users
         on mitxonline_problem_events.openedx_user_id = users.mitxonline_openedx_user_id
 
     union all
@@ -133,8 +133,8 @@ with mitxonline_problem_events as (
         , xpro_problem_events.max_grade
         , xpro_problem_events.event_timestamp
     from xpro_problem_events
-    left join users
-        on xpro_problem_events.openedx_user_id = users.mitxonline_openedx_user_id
+    inner join users
+        on xpro_problem_events.openedx_user_id = users.xpro_openedx_user_id
 
     union all
 
@@ -153,8 +153,8 @@ with mitxonline_problem_events as (
         , mitxresidential_problem_events.max_grade
         , mitxresidential_problem_events.event_timestamp
     from mitxresidential_problem_events
-    left join users
-        on mitxresidential_problem_events.openedx_user_id = users.mitxonline_openedx_user_id
+    inner join users
+        on mitxresidential_problem_events.openedx_user_id = users.mitxresidential_openedx_user_id
 
     union all
 
@@ -173,8 +173,8 @@ with mitxonline_problem_events as (
         , edxorg_problem_events.max_grade
         , edxorg_problem_events.event_timestamp
     from edxorg_problem_events
-    left join users
-        on edxorg_problem_events.user_id = users.mitxonline_openedx_user_id
+    inner join users
+        on edxorg_problem_events.user_id = users.edxorg_openedx_user_id
 )
 
 select

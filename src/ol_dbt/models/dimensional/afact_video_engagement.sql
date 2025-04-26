@@ -3,7 +3,7 @@ with course_content as (
 )
 
 , users as (
-    select * from {{ ref('dim_course_content') }}
+    select * from {{ ref('dim_users') }}
 )
 
 , video_events as (
@@ -13,7 +13,6 @@ with course_content as (
 , mitxonline_video_events as (
     select
         a.user_username
-        , users.user_pk as user_fk
         , a.openedx_user_id
         , a.courserun_readable_id
         , a.useractivity_event_type as event_type
@@ -29,8 +28,6 @@ with course_content as (
         , replace(json_query(a.useractivity_event_object, 'lax $.id'), '"', '') as video_id
         , try_cast(json_query(a.useractivity_event_object, 'lax $.currentTime') as decimal(30, 10)) as currenttime
     from video_events as a
-    left join users
-        on video_events.openedx_user_id = users.mitxonline_openedx_user_id
     left join course_content as b
         on
             substring(b.block_id, regexp_position(b.block_id, 'block@') + 6)
@@ -81,6 +78,7 @@ with course_content as (
     select
         mitxonline_video_events.video_id
         , mitxonline_video_events.user_username
+        , users.user_pk as user_fk
         , mitxonline_video_events.openedx_user_id
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.video_title
@@ -95,6 +93,9 @@ with course_content as (
         , sum(case when mitxonline_video_events.event_type = 'play_video' then 1 else 0 end) as video_plays
         , sum(case when mitxonline_video_events.event_type = 'complete_video' then 1 else 0 end) as video_completes
     from mitxonline_video_events
+    inner join users
+        -- coalesce across the different openedx user ids based on the event origination platform
+        on mitxonline_video_events.openedx_user_id = users.mitxonline_openedx_user_id
     left join start_and_end_times
         on
             mitxonline_video_events.video_id = start_and_end_times.video_id
