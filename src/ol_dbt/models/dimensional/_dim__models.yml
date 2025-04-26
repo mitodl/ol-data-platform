@@ -258,7 +258,7 @@ models:
     description: int, user ID on the corresponding open edX platform
     tests:
     - not_null
-  - name: platform
+  - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
       the navigation event occurred
     tests:
@@ -317,9 +317,13 @@ models:
     description: int, user ID on the corresponding open edX platform
     tests:
     - not_null
-  - name: platform
+  - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
       the video event occurred
+    tests:
+    - not_null
+  - name: platform_name
+    description: string, name of the platform
     tests:
     - not_null
   - name: courserun_readable_id
@@ -380,7 +384,7 @@ models:
     description: int, user ID on the corresponding open edX platform
     tests:
     - not_null
-  - name: platform
+  - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
       the problem event occurred
     tests:
@@ -430,8 +434,12 @@ models:
   description: Aggregate fact table summarizing course page engagement by learner
     within a course.
   columns:
-  - name: platform
+  - name: platform_fk
     description: string, foreign key to dim_platform
+    tests:
+    - not_null
+  - name: platform_name
+    description: string, name of the platform
     tests:
     - not_null
   - name: openedx_user_id
@@ -471,9 +479,18 @@ models:
   description: Aggregate fact table summarizing problem engagement by learners within
     a course.
   columns:
-  - name: platform
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the learner on the corresponding
+      platform
+    tests:
+    - not_null
+  - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
       the video event occurred
+    tests:
+    - not_null
+  - name: platform_name
+    description: string, name of the platform
     tests:
     - not_null
   - name: openedx_user_id

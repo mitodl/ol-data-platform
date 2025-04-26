@@ -12,7 +12,8 @@ with problem_structure as (
 
 , pre_problem_attempt_aggregated as (
     select
-        platform
+        user_fk
+        , platform_fk
         , openedx_user_id
         , problem_block_fk
         , courserun_readable_id
@@ -33,7 +34,7 @@ with problem_structure as (
 , problem_attempt_aggregated as (
     select
         user_fk
-        , platform
+        , platform_fk
         , openedx_user_id
         , problem_block_fk
         , courserun_readable_id
@@ -45,10 +46,15 @@ with problem_structure as (
     group by platform, courserun_readable_id, problem_block_fk, openedx_user_id
 )
 
+, platforms as (
+    select * from {{ ref('dim_platform') }}
+)
+
 , combined as (
     select
         problem_attempt_aggregated.user_fk
-        , problem_attempt_aggregated.platform
+        , problem_attempt_aggregated.platform_fk
+        , platforms.platform_name
         , problem_attempt_aggregated.openedx_user_id
         , problem_attempt_aggregated.courserun_readable_id
         , problem_attempt_aggregated.problem_block_fk
@@ -58,13 +64,16 @@ with problem_structure as (
         , problem_structure.sequential_block_fk
         , problem_structure.chapter_block_fk
     from problem_attempt_aggregated
+    inner join platforms
+        on problem_attempt_aggregated.platform_fk = platforms.platform_pk
     left join problem_structure
         on problem_attempt_aggregated.problem_block_fk = problem_structure.problem_block_fk
 )
 
 select
     user_fk
-    , platform
+    , platform_fk
+    , platform_name
     , openedx_user_id
     , courserun_readable_id
     , problem_block_fk

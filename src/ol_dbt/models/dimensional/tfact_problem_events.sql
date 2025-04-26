@@ -180,8 +180,8 @@ with mitxonline_problem_events as (
 select
 
     user_fk
-    , platform
     , openedx_user_id
+    , {{ dbt_utils.generate_surrogate_key(platform) }} as platform_fk
     , courserun_readable_id
     , event_type
     , problem_block_id as problem_block_fk
