@@ -39,11 +39,6 @@ with mitxonline_users as (
 )
 
 -- MITx Pro Users
--- which user table to use?
--- stg__edxorg__bigquery__mitx_user_info_combo
--- stg__edxorg__bigquery__mitx_person_course
--- stg__edxorg__s3__user
-
 , mitxpro_users as (
     select * from {{ ref('stg__mitxpro__app__postgres__users_user') }}
 )
