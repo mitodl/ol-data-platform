@@ -197,7 +197,7 @@ union all
 
 select
     {{ dbt_utils.generate_surrogate_key(['mitxresidential_user_view.user_email']) }} as user_pk
-    , mitxresidential_users.user_id as mitxpro_openedx_user_id
+    , mitxresidential_user_view.user_id as mitxpro_openedx_user_id
     , mitxresidential_user_view.user_id as mitxonline_application_user_id
     , mitxresidential_user_view.user_username as user_mitxonline_username
     , mitxresidential_user_view.user_email as email
