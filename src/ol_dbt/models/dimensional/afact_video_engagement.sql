@@ -3,7 +3,7 @@ with course_content as (
 )
 
 , users as (
-    select * from {{ ref('dim_users') }}
+    select * from {{ ref('dim_user') }}
 )
 
 , platforms as (
@@ -11,14 +11,17 @@ with course_content as (
 )
 
 , video_events as (
-    select * from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
+    select
+        *
+        , 'mitxonline' as platform
+    from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
 )
 
 , mitxonline_video_events as (
     select
         a.user_username
         , a.openedx_user_id
-        , {{ dbt_utils.generate_surrogate_key('mitxonline') }} as platform_fk
+        , {{ dbt_utils.generate_surrogate_key(['platform']) }} as platform_fk
         , a.courserun_readable_id
         , a.useractivity_event_type as event_type
         , a.useractivity_event_object as event_json
@@ -114,7 +117,10 @@ with course_content as (
     group by
         mitxonline_video_events.video_id
         , mitxonline_video_events.user_username
+        , users.user_pk
         , mitxonline_video_events.openedx_user_id
+        , mitxonline_video_events.platform_fk
+        , platforms.platform_name
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.video_title
         , mitxonline_video_events.unit_title

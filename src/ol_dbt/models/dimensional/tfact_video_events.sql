@@ -180,7 +180,7 @@ with mitxonline_video_events as (
 
 select distinct
     user_fk
-    , {{ dbt_utils.generate_surrogate_key(platform) }} as platform_fk
+    , {{ dbt_utils.generate_surrogate_key(['platform']) }} as platform_fk
     , openedx_user_id
     , courserun_readable_id
     , event_type
