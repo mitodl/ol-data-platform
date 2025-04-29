@@ -126,7 +126,6 @@ with mitxonline_users as (
         , coalesce(user_info.user_highest_education, person_course.user_highest_education) as user_highest_education
         , coalesce(user_info.user_gender, person_course.user_gender) as user_gender
         , coalesce(user_info.user_birth_year, person_course.user_birth_year) as user_birth_year
-        -- int, bool,
         , coalesce(
             coalesce(user_info.courserunenrollment_is_active = 1, false)
             , person_course.courserunenrollment_is_active
@@ -201,6 +200,9 @@ select
     , mitxresidential_user_view.user_highest_education as highest_education
     , mitxresidential_user_view.user_gender as gender
     , mitxresidential_user_view.user_birth_year as birth_year
+    , '' as company
+    , '' as job_title
+    , '' as industry
     , mitxresidential_user_view.user_is_active
     , mitxresidential_user_view.user_joined_on
 from mitxresidential_user_view
@@ -218,6 +220,9 @@ select
     , edxorg_user_view.user_highest_education as highest_education
     , edxorg_user_view.user_gender as gender
     , edxorg_user_view.user_birth_year as birth_year
+    , '' as company
+    , '' as job_title
+    , '' as industry
     , edxorg_user_view.user_is_active
     , edxorg_user_view.user_joined_on
 from edxorg_user_view
