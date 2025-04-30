@@ -160,10 +160,10 @@ with mitxonline_discussion_events as (
         , event_type
         , event_json
         , post_id
+        , post_title
         , commentable_id
         , discussion_component_id
         , discussion_component_name
-        , post_title
         , page_url
         , user_forums_roles
         , event_timestamp
