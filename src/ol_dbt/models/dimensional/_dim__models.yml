@@ -15,6 +15,9 @@ models:
       platform
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
   - name: courserun_readable_id
@@ -213,11 +216,29 @@ models:
     - not_null
     - unique
   - name: mitxonline_openedx_user_id
-    description: string, openedx user id
+    description: string, openedx user id for MITxOnline
   - name: mitxonline_application_user_id
     description: string, user id on MITxOnline application
   - name: user_mitxonline_username
     description: string, username on MITxOnline
+  - name: mitxpro_openedx_user_id
+    description: string, openedx user id for MITx Pro
+  - name: mitxpro_application_user_id
+    description: string, user id on MITx Pro application
+  - name: user_mitxpro_username
+    description: string, username on MITx Pro
+  - name: residential_openedx_user_id
+    description: string, openedx user id for MITx Residential
+  - name: residential_application_user_id
+    description: string, user id on MITx Residential application
+  - name: user_residential_username
+    description: string, username on MITx Residential
+  - name: edxorg_openedx_user_id
+    description: string, openedx user id for edX.org
+  - name: edxorg_application_user_id
+    description: string, user id on edX.org application
+  - name: user_edxorg_username
+    description: string, username on edX.org
   - name: email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.
@@ -254,6 +275,9 @@ models:
       platform
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -263,6 +287,9 @@ models:
       the navigation event occurred
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: courserun_readable_id
     description: string, foreign key to dim_course_content, referencing the edX course
       run ID
@@ -313,6 +340,9 @@ models:
       platform
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -322,6 +352,9 @@ models:
       the video event occurred
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: platform_name
     description: string, name of the platform
     tests:
@@ -380,6 +413,9 @@ models:
       platform
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -389,6 +425,9 @@ models:
       the problem event occurred
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: courserun_readable_id
     description: string, foreign key to dim_course_content, referencing the edX course
       run ID
@@ -438,6 +477,9 @@ models:
     description: string, foreign key to dim_platform
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: platform_name
     description: string, name of the platform
     tests:
@@ -461,6 +503,9 @@ models:
       platform
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: chapter_block_fk
     description: string, foreign key to dim_course_content, referencing the chapter
       block ID within which this vertical belongs to.
@@ -484,11 +529,17 @@ models:
       platform
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
       the video event occurred
     tests:
     - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: platform_name
     description: string, name of the platform
     tests:

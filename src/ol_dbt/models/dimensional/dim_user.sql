@@ -79,7 +79,7 @@ with mitxonline_users as (
 )
 
 -- Residential Users
-, mitxresidential_users as (
+, mitxresidential_openedx_users as (
     select * from {{ ref('stg__mitxresidential__openedx__auth_user') }}
 )
 
@@ -89,19 +89,19 @@ with mitxonline_users as (
 
 , mitxresidential_user_view as (
     select
-        mitxresidential_users.user_username
-        , mitxresidential_users.user_email
-        , mitxresidential_users.user_full_name
+        mitxresidential_openedx_users.user_username
+        , mitxresidential_openedx_users.user_email
+        , mitxresidential_openedx_users.user_full_name
         , mitxresidential_profile.user_address_country
         , mitxresidential_profile.user_highest_education
         , mitxresidential_profile.user_gender
         , mitxresidential_profile.user_birth_year
-        , mitxresidential_users.user_is_active
+        , mitxresidential_openedx_users.user_is_active
         , 'residential' as platform
-        , mitxresidential_users.user_id
-        , mitxresidential_users.user_joined_on
-    from mitxresidential_users
-    left join mitxresidential_profile on mitxresidential_users.user_id = mitxresidential_profile.user_id
+        , mitxresidential_openedx_users.user_id
+        , mitxresidential_openedx_users.user_joined_on
+    from mitxresidential_openedx_users
+    left join mitxresidential_profile on mitxresidential_openedx_users.user_id = mitxresidential_profile.user_id
 )
 
 -- edXorg Users
@@ -139,90 +139,163 @@ with mitxonline_users as (
     left join edxorg_bigquery_s3_user as s3_user on user_info.user_email = s3_user.user_email
 )
 
-select
-    {{ dbt_utils.generate_surrogate_key(['mitxonline_user_view.user_email']) }} as user_pk
-    , mitxonline_openedx_users.openedx_user_id as mitxonline_openedx_user_id
-    , mitxonline_user_view.user_id as mitxonline_application_user_id
-    , mitxonline_user_view.user_username as user_mitxonline_username
-    , mitxonline_user_view.user_email as email
-    , mitxonline_user_view.user_full_name as full_name
-    , mitxonline_user_view.user_address_country as address_country
-    , mitxonline_user_view.user_highest_education as highest_education
-    , mitxonline_user_view.user_gender as gender
-    , mitxonline_user_view.user_birth_year as birth_year
-    , mitxonline_user_view.user_company as company
-    , mitxonline_user_view.user_job_title as job_title
-    , mitxonline_user_view.user_industry as industry
-    , mitxonline_user_view.user_is_active
-    , mitxonline_user_view.user_joined_on
-from mitxonline_user_view
-left join mitxonline_openedx_users
-    on (
-        mitxonline_user_view.user_username = mitxonline_openedx_users.user_username
-        or mitxonline_user_view.user_email = mitxonline_openedx_users.user_email
-    )
+, combined_users as (
+    select
+        {{ dbt_utils.generate_surrogate_key(['mitxonline_user_view.user_email']) }} as user_pk
+        , mitxonline_openedx_users.openedx_user_id as mitxonline_openedx_user_id
+        , mitxonline_user_view.user_id as mitxonline_application_user_id
+        , mitxonline_user_view.user_username as user_mitxonline_username
+        , null as mitxpro_openedx_user_id
+        , null as mitxpro_application_user_id
+        , null as user_mitxpro_username
+        , null as residential_openedx_user_id
+        , null as residential_application_user_id
+        , null as user_residential_username
+        , null as edxorg_openedx_user_id
+        , null as edxorg_application_user_id
+        , null as user_edxorg_username
+        , mitxonline_user_view.user_email as email
+        , mitxonline_user_view.user_full_name as full_name
+        , mitxonline_user_view.user_address_country as address_country
+        , mitxonline_user_view.user_highest_education as highest_education
+        , mitxonline_user_view.user_gender as gender
+        , mitxonline_user_view.user_birth_year as birth_year
+        , mitxonline_user_view.user_company as company
+        , mitxonline_user_view.user_job_title as job_title
+        , mitxonline_user_view.user_industry as industry
+        , mitxonline_user_view.user_is_active
+        , mitxonline_user_view.user_joined_on
+    from mitxonline_user_view
+    left join mitxonline_openedx_users
+        on (
+            mitxonline_user_view.user_username = mitxonline_openedx_users.user_username
+            or mitxonline_user_view.user_email = mitxonline_openedx_users.user_email
+        )
 
-union all
+    union all
 
-select
-    {{ dbt_utils.generate_surrogate_key(['mitxpro_user_view.user_email']) }} as user_pk
-    , mitxpro_openedx_users.openedx_user_id as mitxpro_openedx_user_id
-    , mitxpro_user_view.user_id as mitxonline_application_user_id
-    , mitxpro_user_view.user_username as user_mitxonline_username
-    , mitxpro_user_view.user_email as email
-    , mitxpro_user_view.user_full_name as full_name
-    , mitxpro_user_view.user_address_country as address_country
-    , mitxpro_user_view.user_highest_education as highest_education
-    , mitxpro_user_view.user_gender as gender
-    , mitxpro_user_view.user_birth_year as birth_year
-    , mitxpro_user_view.user_company as company
-    , mitxpro_user_view.user_job_title as job_title
-    , mitxpro_user_view.user_industry as industry
-    , mitxpro_user_view.user_is_active
-    , mitxpro_user_view.user_joined_on
-from mitxpro_user_view
-left join mitxpro_openedx_users
-    on (
-        mitxpro_user_view.user_username = mitxpro_openedx_users.user_username
-        or mitxpro_user_view.user_email = mitxpro_openedx_users.user_email
-    )
+    select
+        {{ dbt_utils.generate_surrogate_key(['mitxpro_user_view.user_email']) }} as user_pk
+        , mitxpro_openedx_users.openedx_user_id as mitxpro_openedx_user_id
+        , mitxpro_user_view.user_id as mitxpro_application_user_id
+        , mitxpro_user_view.user_username as user_mitxpro_username
+        , null as mitxonline_openedx_user_id
+        , null as mitxonline_application_user_id
+        , null as user_mitxonline_username
+        , null as residential_openedx_user_id
+        , null as residential_application_user_id
+        , null as user_residential_username
+        , null as edxorg_openedx_user_id
+        , null as edxorg_application_user_id
+        , null as user_edxorg_username
+        , mitxpro_user_view.user_email as email
+        , mitxpro_user_view.user_full_name as full_name
+        , mitxpro_user_view.user_address_country as address_country
+        , mitxpro_user_view.user_highest_education as highest_education
+        , mitxpro_user_view.user_gender as gender
+        , mitxpro_user_view.user_birth_year as birth_year
+        , mitxpro_user_view.user_company as company
+        , mitxpro_user_view.user_job_title as job_title
+        , mitxpro_user_view.user_industry as industry
+        , mitxpro_user_view.user_is_active
+        , mitxpro_user_view.user_joined_on
+    from mitxpro_user_view
+    left join mitxpro_openedx_users
+        on (
+            mitxpro_user_view.user_username = mitxpro_openedx_users.user_username
+            or mitxpro_user_view.user_email = mitxpro_openedx_users.user_email
+        )
 
-union all
+    union all
 
-select
-    {{ dbt_utils.generate_surrogate_key(['mitxresidential_user_view.user_email']) }} as user_pk
-    , mitxresidential_user_view.user_id as mitxpro_openedx_user_id
-    , mitxresidential_user_view.user_id as mitxonline_application_user_id
-    , mitxresidential_user_view.user_username as user_mitxonline_username
-    , mitxresidential_user_view.user_email as email
-    , mitxresidential_user_view.user_full_name as full_name
-    , mitxresidential_user_view.user_address_country as address_country
-    , mitxresidential_user_view.user_highest_education as highest_education
-    , mitxresidential_user_view.user_gender as gender
-    , mitxresidential_user_view.user_birth_year as birth_year
-    , '' as company
-    , '' as job_title
-    , '' as industry
-    , mitxresidential_user_view.user_is_active
-    , mitxresidential_user_view.user_joined_on
-from mitxresidential_user_view
+    select
+        {{ dbt_utils.generate_surrogate_key(['mitxresidential_user_view.user_email']) }} as user_pk
+        , mitxresidential_user_view.user_id as residential_openedx_user_id
+        , mitxresidential_user_view.user_id as residential_application_user_id
+        , mitxresidential_user_view.user_username as user_residential_username
+        , null as mitxonline_openedx_user_id
+        , null as mitxonline_application_user_id
+        , null as user_mitxonline_username
+        , null as mitxpro_openedx_user_id
+        , null as mitxpro_application_user_id
+        , null as user_mitxpro_username
+        , null as edxorg_openedx_user_id
+        , null as edxorg_application_user_id
+        , null as user_edxorg_username
+        , mitxresidential_user_view.user_email as email
+        , mitxresidential_user_view.user_full_name as full_name
+        , mitxresidential_user_view.user_address_country as address_country
+        , mitxresidential_user_view.user_highest_education as highest_education
+        , mitxresidential_user_view.user_gender as gender
+        , mitxresidential_user_view.user_birth_year as birth_year
+        , null as company
+        , null as job_title
+        , null as industry
+        , mitxresidential_user_view.user_is_active
+        , mitxresidential_user_view.user_joined_on
+    from mitxresidential_user_view
 
-union all
+    union all
 
-select
-    {{ dbt_utils.generate_surrogate_key(['edxorg_user_view.user_email']) }} as user_pk
-    , edxorg_user_view.user_id as mitxpro_openedx_user_id
-    , edxorg_user_view.user_id as mitxonline_application_user_id
-    , edxorg_user_view.user_username as user_mitxonline_username
-    , edxorg_user_view.user_email as email
-    , edxorg_user_view.user_full_name as full_name
-    , edxorg_user_view.user_address_country as address_country
-    , edxorg_user_view.user_highest_education as highest_education
-    , edxorg_user_view.user_gender as gender
-    , edxorg_user_view.user_birth_year as birth_year
-    , '' as company
-    , '' as job_title
-    , '' as industry
-    , edxorg_user_view.user_is_active
-    , edxorg_user_view.user_joined_on
-from edxorg_user_view
+    select
+        {{ dbt_utils.generate_surrogate_key(['edxorg_user_view.user_email']) }} as user_pk
+        , null as mitxonline_openedx_user_id
+        , null as mitxonline_application_user_id
+        , null as user_mitxonline_username
+        , null as mitxpro_openedx_user_id
+        , null as mitxpro_application_user_id
+        , null as user_mitxpro_username
+        , null as residential_openedx_user_id
+        , null as residential_application_user_id
+        , null as user_residential_username
+        , edxorg_user_view.user_id as edxorg_openedx_user_id
+        , edxorg_user_view.user_id as edxorg_application_user_id
+        , edxorg_user_view.user_username as user_edxorg_username
+        , edxorg_user_view.user_email as email
+        , edxorg_user_view.user_full_name as full_name
+        , edxorg_user_view.user_address_country as address_country
+        , edxorg_user_view.user_highest_education as highest_education
+        , edxorg_user_view.user_gender as gender
+        , edxorg_user_view.user_birth_year as birth_year
+        , null as company
+        , null as job_title
+        , null as industry
+        , edxorg_user_view.user_is_active
+        , edxorg_user_view.user_joined_on
+    from edxorg_user_view
+)
+
+, ranked_users as (
+    select
+        user_pk
+        , max(mitxonline_openedx_user_id) as mitxonline_openedx_user_id
+        , max(mitxonline_application_user_id) as mitxonline_application_user_id
+        , max(user_mitxonline_username) as user_mitxonline_username
+        , max(mitxpro_openedx_user_id) as mitxpro_openedx_user_id
+        , max(mitxpro_application_user_id) as mitxpro_application_user_id
+        , max(user_mitxpro_username) as user_mitxpro_username
+        , max(residential_openedx_user_id) as residential_openedx_user_id
+        , max(residential_application_user_id) as residential_application_user_id
+        , max(user_residential_username) as user_residential_username
+        , max(edxorg_openedx_user_id) as edxorg_openedx_user_id
+        , max(edxorg_application_user_id) as edxorg_application_user_id
+        , max(user_edxorg_username) as user_edxorg_username
+        , max(email) as email
+        , max(full_name) as full_name
+        , max(address_country) as address_country
+        , max(highest_education) as highest_education
+        , max(gender) as gender
+        , max(birth_year) as birth_year
+        , max(company) as company
+        , max(job_title) as job_title
+        , max(industry) as industry
+        , max(user_is_active) as user_is_active
+        , max(user_joined_on) as user_joined_on
+        , row_number() over (partition by user_pk order by max(user_joined_on) desc) as row_num
+    from combined_users
+    group by user_pk
+)
+
+select *
+from ranked_users
+where row_num = 1

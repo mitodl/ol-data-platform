@@ -139,7 +139,7 @@ with mitxonline_video_events as (
         , xpro_video_events.ending_position
         , xpro_video_events.event_timestamp
     from xpro_video_events
-    inner join users on xpro_video_events.openedx_user_id = users.xpro_openedx_user_id
+    inner join users on xpro_video_events.openedx_user_id = users.mitxpro_openedx_user_id
 
     union all
 
@@ -157,7 +157,7 @@ with mitxonline_video_events as (
         , mitxresidential_video_events.ending_position
         , mitxresidential_video_events.event_timestamp
     from mitxresidential_video_events
-    inner join users on mitxresidential_video_events.openedx_user_id = users.mitxresidential_openedx_user_id
+    inner join users on mitxresidential_video_events.openedx_user_id = users.residential_openedx_user_id
 
     union all
 
