@@ -404,6 +404,76 @@ models:
       column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
         "event_json", "event_timestamp"]
 
+- name: tfact_discussion_events
+  description: Transactional fact table for learner discussion events in a course
+  columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform, referencing the platform where
+      the discussion event occurred
+    tests:
+    - not_null
+  - name: platform
+    description: string, platform name
+    tests:
+    - not_null
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the user who triggered
+      the event
+  - name: openedx_user_id
+    description: int, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: event_type
+    description: string, type of the discussion event. e.g., edx.forum.comment.created,
+      edx.forum.comment.edited, edx.forum.comment.deleted, edx.forum.comment.reported,
+      edx.forum.comment.unreported, edx.forum.thread.created. The completed list is
+      available on https://docs.openedx.org/en/latest/developers/references /internal_data_formats/tracking_logs/student_event_types.html#discussion-forum-events
+    tests:
+    - not_null
+  - name: commentable_id
+    description: string, identifier for the specific discussion component or top-level,
+      course-wide discussion. Populated for all discussion events except for edx.forum.searched
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "event_type != 'edx.forum.searched'"
+  - name: post_id
+    description: string, a unique identifier for this discussion event. Populated
+      for all discussion events except for edx.forum.searched
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "event_type != 'edx.forum.searched'"
+  - name: post_title
+    description: string, title to identify the post.
+  - name: post_content
+    description: string, content of the post that the user created. Present for edx.forum.comment.created,
+      edx.forum.response.created, edx.forum.thread.created
+  - name: discussion_component_id
+    description: string, identifier for the specific discussion component or top-level,
+      course-wide discussion. Present for edx.forum.response.created, edx.forum.comment.created,
+      edx.forum.response.voted, edx.forum.thread.created, edx.forum.thread.viewed,
+      and edx.forum.thread.voted
+  - name: discussion_component_name
+    description: string, display name for the specific discussion component or top-level,
+      course-wide discussion. Present for edx.forum.response.created, edx.forum.comment.created,
+      edx.forum.response.voted, edx.forum.thread.created, edx.forum.thread.viewed,
+      and edx.forum.thread.voted
+  - name: event_timestamp
+    description: timestamp, timestamp (with time zone) indicating the time at which
+      the event occurred, formatted as timestamp(9)
+    tests:
+    - not_null
+  - name: event_json
+    description: json, it includes member fields that identify specifics of each triggered
+      event.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "openedx_user_id", "event_type", "event_json",
+        "event_timestamp"]
+
 - name: afact_course_page_engagement
   description: Aggregate fact table summarizing course page engagement by learner
     within a course.
