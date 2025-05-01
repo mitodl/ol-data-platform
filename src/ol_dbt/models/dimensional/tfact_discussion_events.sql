@@ -9,6 +9,7 @@ with mitxonline_discussion_events as (
         , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.id' omit quotes) as post_id
         , json_query(useractivity_event_object, 'lax $.title' omit quotes) as post_title
+        , json_query(useractivity_event_object, 'lax $.body' omit quotes) as post_content
         , json_query(useractivity_event_object, 'lax $.commentable_id' omit quotes) as commentable_id
         , json_query(useractivity_event_object, 'lax $.category_id' omit quotes) as discussion_component_id
         , json_query(useractivity_event_object, 'lax $.category_name' omit quotes) as discussion_component_name
@@ -31,6 +32,7 @@ with mitxonline_discussion_events as (
         , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.id' omit quotes) as post_id
         , json_query(useractivity_event_object, 'lax $.title' omit quotes) as post_title
+        , json_query(useractivity_event_object, 'lax $.body' omit quotes) as post_content
         , json_query(useractivity_event_object, 'lax $.commentable_id' omit quotes) as commentable_id
         , json_query(useractivity_event_object, 'lax $.category_id' omit quotes) as discussion_component_id
         , json_query(useractivity_event_object, 'lax $.category_name' omit quotes) as discussion_component_name
@@ -53,6 +55,7 @@ with mitxonline_discussion_events as (
         , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.id' omit quotes) as post_id
         , json_query(useractivity_event_object, 'lax $.title' omit quotes) as post_title
+        , json_query(useractivity_event_object, 'lax $.body' omit quotes) as post_content
         , json_query(useractivity_event_object, 'lax $.commentable_id' omit quotes) as commentable_id
         , json_query(useractivity_event_object, 'lax $.category_id' omit quotes) as discussion_component_id
         , json_query(useractivity_event_object, 'lax $.category_name' omit quotes) as discussion_component_name
@@ -74,6 +77,7 @@ with mitxonline_discussion_events as (
         , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.id' omit quotes) as post_id
         , json_query(useractivity_event_object, 'lax $.title' omit quotes) as post_title
+        , json_query(useractivity_event_object, 'lax $.body' omit quotes) as post_content
         , json_query(useractivity_event_object, 'lax $.commentable_id' omit quotes) as commentable_id
         , json_query(useractivity_event_object, 'lax $.category_id' omit quotes) as discussion_component_id
         , json_query(useractivity_event_object, 'lax $.category_name' omit quotes) as discussion_component_name
@@ -100,6 +104,7 @@ with mitxonline_discussion_events as (
         , mitxonline_discussion_events.event_json
         , mitxonline_discussion_events.post_id
         , mitxonline_discussion_events.post_title
+        , mitxonline_discussion_events.post_content
         , mitxonline_discussion_events.commentable_id
         , mitxonline_discussion_events.discussion_component_id
         , mitxonline_discussion_events.discussion_component_name
@@ -123,6 +128,7 @@ with mitxonline_discussion_events as (
         , event_json
         , post_id
         , post_title
+        , post_content
         , commentable_id
         , discussion_component_id
         , discussion_component_name
@@ -142,6 +148,7 @@ with mitxonline_discussion_events as (
         , event_json
         , post_id
         , post_title
+        , post_content
         , commentable_id
         , discussion_component_id
         , discussion_component_name
@@ -161,6 +168,7 @@ with mitxonline_discussion_events as (
         , event_json
         , post_id
         , post_title
+        , post_content
         , commentable_id
         , discussion_component_id
         , discussion_component_name
@@ -180,6 +188,7 @@ select
     , event_json
     , post_id
     , post_title
+    , post_content
     , commentable_id
     , discussion_component_id
     , discussion_component_name

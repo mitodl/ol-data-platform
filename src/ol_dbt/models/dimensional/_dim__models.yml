@@ -448,6 +448,9 @@ models:
         row_condition: "event_type != 'edx.forum.searched'"
   - name: post_title
     description: string, title to identify the post.
+  - name: post_content
+    description: string, content of the post that the user created. Present for edx.forum.comment.created,
+      edx.forum.response.created, edx.forum.thread.created
   - name: discussion_component_id
     description: string, identifier for the specific discussion component or top-level,
       course-wide discussion. Present for edx.forum.response.created, edx.forum.comment.created,
