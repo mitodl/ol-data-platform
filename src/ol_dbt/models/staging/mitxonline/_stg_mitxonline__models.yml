@@ -1850,7 +1850,7 @@ models:
     - not_null
 
 - name: stg__mitxonline__openedx__courseware_studentmodulehistoryextended
-  description: history of studentmodule in MITx Online open edx platform
+  description: History of studentmodule in MITx Online open edx platform
   columns:
   - name: studentmodulehistoryextended_id
     description: int, primary key in this table
@@ -1876,7 +1876,8 @@ models:
     description: timestamp, datetime when this row was created
 
 - name: stg__mitxonline__openedx__blockcompletion
-  description: history of studentmodule in MITx Online open edx platform
+  description: History of user block completion in a course such as video, problem,
+    survey on the MITx Online platform
   columns:
   - name: blockcompletion_id
     description: int, primary key in this table

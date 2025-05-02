@@ -1071,7 +1071,7 @@ sources:
         from REST API.
 
   - name: raw__mitx__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended
-    description: history of studentmodule in Residential MITx open edx platform
+    description: History of studentmodule in Residential MITx open edx platform
     columns:
     - name: id
       description: str, primary key in this table
@@ -1095,7 +1095,7 @@ sources:
 
   - name: raw__mitx__openedx__mysql__completion_blockcompletion
     description: History of user block completion in a course such as video, problem,
-      survey on the MITx platform
+      survey on the Residential MITx platform
     columns:
     - name: id
       description: int, primary key in this table
@@ -1117,4 +1117,5 @@ sources:
       description: integer, will be 1 if the learner completed the block otherwise
         it will be 0
     - name: course_key
-      description: str, foreign key referencing a course
+      description: string, unique string to identify a course run on the corresponding
+        platform.

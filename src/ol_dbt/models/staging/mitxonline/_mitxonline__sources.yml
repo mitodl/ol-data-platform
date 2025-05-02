@@ -1953,4 +1953,5 @@ sources:
       description: integer, will be 1 if the learner completed the block otherwise
         it will be 0
     - name: course_key
-      description: str, foreign key referencing a course
+      description: string, unique string to identify a course run on the corresponding
+        platform.

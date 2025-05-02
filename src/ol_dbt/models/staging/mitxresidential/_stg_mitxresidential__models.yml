@@ -486,7 +486,7 @@ models:
         "coursestructure_retrieved_at"]
 
 - name: stg__mitxresidential__openedx__courseware_studentmodulehistoryextended
-  description: history of studentmodule in Residential MITx open edx platform
+  description: History of studentmodule in Residential MITx open edx platform
   columns:
   - name: studentmodulehistoryextended_id
     description: int, primary key in this table
@@ -512,7 +512,8 @@ models:
     description: timestamp, datetime when this row was created
 
 - name: stg__mitxresidential__openedx__blockcompletion
-  description: history of studentmodule in Residential MITx open edx platform
+  description: History of user block completion in a course such as video, problem,
+    survey on the Residential MITx platform
   columns:
   - name: blockcompletion_id
     description: int, primary key in this table
