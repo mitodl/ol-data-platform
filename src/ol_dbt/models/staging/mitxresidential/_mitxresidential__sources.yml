@@ -1071,7 +1071,7 @@ sources:
         from REST API.
 
   - name: raw__mitx__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended
-    description: History of studentmodule in Residential MITx open edx platform
+    description: history of studentmodule in Residential MITx open edx platform
     columns:
     - name: id
       description: str, primary key in this table

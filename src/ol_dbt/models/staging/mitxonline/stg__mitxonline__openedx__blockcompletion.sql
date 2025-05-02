@@ -14,7 +14,7 @@ with source as (
     }}
 
     {% if is_incremental() %}
-        where created >= (select max(this.studentmodule_created_on) from {{ this }} as this)
+        where created >= (select max(this.blockcompletion_created_on) from {{ this }} as this)
     {% endif %}
 )
 
