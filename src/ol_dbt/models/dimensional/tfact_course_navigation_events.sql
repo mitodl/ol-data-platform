@@ -156,7 +156,7 @@ with mitxonline_navigation_events as (
         , xpro_navigation_events.tab_count
         , xpro_navigation_events.event_timestamp
     from xpro_navigation_events
-    inner join users on xpro_navigation_events.openedx_user_id = users.xpro_openedx_user_id
+    inner join users on xpro_navigation_events.openedx_user_id = users.mitxpro_openedx_user_id
 
     union all
 

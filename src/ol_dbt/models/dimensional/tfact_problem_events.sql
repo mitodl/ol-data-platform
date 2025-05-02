@@ -134,7 +134,7 @@ with mitxonline_problem_events as (
         , xpro_problem_events.event_timestamp
     from xpro_problem_events
     inner join users
-        on xpro_problem_events.openedx_user_id = users.xpro_openedx_user_id
+        on xpro_problem_events.openedx_user_id = users.mitxpro_openedx_user_id
 
     union all
 

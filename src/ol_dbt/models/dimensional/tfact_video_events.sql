@@ -157,7 +157,7 @@ with mitxonline_video_events as (
         , mitxresidential_video_events.ending_position
         , mitxresidential_video_events.event_timestamp
     from mitxresidential_video_events
-    inner join users on mitxresidential_video_events.openedx_user_id = users.residential_openedx_user_id
+    inner join users on mitxresidential_video_events.user_id = users.residential_openedx_user_id
 
     union all
 
@@ -175,7 +175,7 @@ with mitxonline_video_events as (
         , edxorg_video_events.ending_position
         , edxorg_video_events.event_timestamp
     from edxorg_video_events
-    inner join users on edxorg_video_events.openedx_user_id = users.edxorg_openedx_user_id
+    inner join users on edxorg_video_events.user_id = users.edxorg_openedx_user_id
 )
 
 select distinct

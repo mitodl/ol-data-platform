@@ -43,15 +43,15 @@ select
     , openedx_users.openedx_user_id as mitxonline_openedx_user_id
     , mitxonline_user_view.user_id as mitxonline_application_user_id
     , mitxonline_user_view.user_username as user_mitxonline_username
-    , null as mitxpro_openedx_user_id
-    , null as mitxpro_application_user_id
-    , null as user_mitxpro_username
-    , null as residential_openedx_user_id
-    , null as residential_application_user_id
-    , null as user_residential_username
-    , null as edxorg_openedx_user_id
-    , null as edxorg_application_user_id
-    , null as user_edxorg_username
+    , cast(null as bigint) as mitxpro_openedx_user_id
+    , cast(null as bigint) as mitxpro_application_user_id
+    , cast(null as varchar) as user_mitxpro_username
+    , cast(null as bigint) as residential_openedx_user_id
+    , cast(null as bigint) as residential_application_user_id
+    , cast(null as varchar) as user_residential_username
+    , cast(null as bigint) as edxorg_openedx_user_id
+    , cast(null as bigint) as edxorg_application_user_id
+    , cast(null as varchar) as user_edxorg_username
     , mitxonline_user_view.user_email as email
     , mitxonline_user_view.user_full_name as full_name
     , mitxonline_user_view.user_address_country as address_country
