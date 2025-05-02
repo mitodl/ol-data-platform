@@ -1071,7 +1071,7 @@ sources:
         from REST API.
 
   - name: raw__mitx__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended
-    description: history of studentmodule in Residential MITx open edx platform
+    description: History of studentmodule in Residential MITx open edx platform
     columns:
     - name: id
       description: str, primary key in this table
@@ -1090,3 +1090,31 @@ sources:
         problem. This data is also available in courseactivity_problemcheck
     - name: created
       description: timestamp, datetime when this row was created
+    - name: version
+      description: str, the version of the student module history extended
+
+  - name: raw__mitx__openedx__mysql__completion_blockcompletion
+    description: History of user block completion in a course such as video, problem,
+      survey on the MITx platform
+    columns:
+    - name: id
+      description: int, primary key in this table
+    - name: created
+      description: timestamp, datetime when this row was created
+    - name: user_id
+      description: int, foreign key to the users_user table
+    - name: modified
+      description: timestamp, datetime when this row was last updated. A change in
+        this field implies that there was a state change.
+    - name: block_key
+      description: string, foreign key to dim_course_content, referencing the block
+        ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
+        code}.
+    - name: block_type
+      description: string, category/type of the content block. Possible values are
+        course, chapter, sequential, vertical, discussion, html, problem, video, etc.
+    - name: completion
+      description: integer, will be 1 if the learner completed the block otherwise
+        it will be 0
+    - name: course_key
+      description: str, foreign key referencing a course
