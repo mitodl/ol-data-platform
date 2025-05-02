@@ -2237,3 +2237,53 @@ sources:
     - name: opportunity_last_modified_date
       description: str, date and time when the enrolment was last updated in Emeritus's
         CRM.
+
+  - name: raw__xpro__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended
+    description: History of studentmodule in xPro Platform
+    columns:
+    - name: id
+      description: int, primary key in this table
+    - name: student_module_id
+      description: int, foreign key to courseware_studentmodule
+    - name: state
+      description: str, JSON text indicating the learner's state for the corresponding
+        module such as course, chapter, problemset, sequential, videosequence, etc.
+    - name: grade
+      description: str, floating point value indicating the total unweighted grade
+        for this problem that the learner has scored. e.g. how many responses they
+        got right within the problem. This data is also available in courseactivity_problemcheck
+    - name: max_grade
+      description: str, floating point value indicating the total possible unweighted
+        grade for this problem, or basically the number of responses that are in this
+        problem. This data is also available in courseactivity_problemcheck
+    - name: created
+      description: timestamp, datetime when this row was created
+    - name: version
+      description: str, the version of the student module history extended
+
+  - name: raw__xpro__openedx__mysql__completion_blockcompletion
+    description: History of user block completion in a course such as video, problem,
+      survey on the MIT xPro platform
+    columns:
+    - name: id
+      description: int, primary key in this table
+    - name: created
+      description: timestamp, datetime when this row was created
+    - name: user_id
+      description: int, foreign key to the users_user table
+    - name: modified
+      description: timestamp, datetime when this row was last updated. A change in
+        this field implies that there was a state change.
+    - name: block_key
+      description: string, foreign key to dim_course_content, referencing the block
+        ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
+        code}.
+    - name: block_type
+      description: string, category/type of the content block. Possible values are
+        course, chapter, sequential, vertical, discussion, html, problem, video, etc.
+    - name: completion
+      description: integer, will be 1 if the learner completed the block otherwise
+        it will be 0
+    - name: course_key
+      description: string, unique string to identify a course run on the corresponding
+        platform.
