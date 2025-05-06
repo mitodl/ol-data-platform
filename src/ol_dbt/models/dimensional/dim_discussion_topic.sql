@@ -21,7 +21,7 @@ with discussion_component_topics as (
         ) as row_num
     from {{ ref('dim_course_content') }} as course
     cross join unnest(cast(json_extract(course.block_metadata, '$.discussion_topics') as map(varchar, json))) AS t(key, topic) -- noqa
-    where course.course.block_category = 'course'
+    where course.block_category = 'course'
     and course.is_latest = true
 
 )
