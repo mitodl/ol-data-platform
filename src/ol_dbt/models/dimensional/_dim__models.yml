@@ -130,6 +130,35 @@ models:
       of numericalresponse, multiplechoiceresponse, customresponse, choiceresponse,
       etc.
 
+- name: dim_discussion_topic
+  description: discussion topics across the Open edX platforms
+  columns:
+  - name: discussion_topic_pk
+    description: string, primary key for this table
+    tests:
+    - not_null
+    - unique
+  - name: commentable_id
+    description: string, identifier for the specific discussion component or top-level,
+      course-wide discussion
+    tests:
+    - not_null
+  - name: content_block_fk
+    description: string, foreign key to dim_course_content
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: topic_name
+    description: string, topic name
+  - name: category_name
+    description: string, topic category name
+  - name: discussion_type
+    description: string, indicates whether the topic is a course-wide discussion or
+      a component-specific discussion. Possible values are course-wide and component-specific.
+
 - name: dim_course_content
   description: Slowly Changing Dimension model for course content, including courses,
     chapters, subsections, problems, videos, and other contents across the Open edX
@@ -547,3 +576,60 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_fk"]
+
+- name: afact_discussion_engagement
+  description: Aggregate fact table summarizing learner engagement in discussion posts
+    within a course.
+  columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform, referencing the platform where
+      the discussion event occurred
+    tests:
+    - not_null
+  - name: platform
+    description: string, platform name
+    tests:
+    - not_null
+  - name: user_fk
+    description: string, foreign key to dim_user
+  - name: openedx_user_id
+    description: int, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: commentable_id
+    description: string, identifier for the specific discussion component or top-level,
+      course-wide discussion.
+  - name: post_id
+    description: string, a unique identifier for the discussion post.
+  - name: post_title
+    description: string, title to identify the post.
+  - name: post_created
+    description: integer, indicating if learner created this post/thread
+  - name: post_viewed
+    description: integer, indicating if learner viewed this post/thread
+  - name: post_voted
+    description: integer, indicating if learner voted for this post/thread
+  - name: post_replied
+    description: integer, indicating if learner replied to this post/thread
+  - name: response_voted
+    description: integer, indicating if learner voted for the response to this post/thread
+  - name: post_commented
+    description: integer, indicating if learner commented on this post/thread
+  - name: discussion_topic_fk
+    description: string, foreign key to dim_discussion_topic.
+  - name: content_block_fk
+    description: string, foreign key to dim_course_content
+  - name: chapter_block_fk
+    description: string, foreign key to dim_course_content, referencing the chapter
+      block ID within which this problem belongs to.
+  - name: sequential_block_fk
+    description: string, foreign key to dim_course_content, referencing sequential/unit
+      block ID within which this problem belongs to
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "discussion_topic_fk",
+        "commentable_id", 'post_id']
