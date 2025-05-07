@@ -1011,3 +1011,121 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_uuid", "course_readable_id"]
+
+- name: stg__edxorg__api__course
+  description: MITx courses on edX.org, sourced from the discovery API
+  columns:
+  - name: course_readable_id
+    description: str, unique identifier for the course in {org}+{course number} format.
+      e.g., MITx+15.415.1x
+    tests:
+    - unique
+    - not_null
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+  - name: course_description
+    description: str, the short description of the course and its content
+  - name: course_full_description
+    description: str, the long description of the course and its content.
+  - name: course_level
+    description: str, the course’s level of difficulty. Values can be 'high_school',
+      'introductory', 'intermediate', or 'advanced'.
+  - name: course_type
+    description: str, audit, verified-audit, credit-verified-audit, or professional
+  - name: course_organizations
+    description: str, list of organizations associated with the course, e.g., MITx
+  - name: course_marketing_url
+    description: str, the URL for the course About page.
+  - name: course_image_url
+    description: str, the URL for the course image
+  - name: course_topics
+    description: array, the academic subjects that this course covers.
+  - name: course_prerequisites_text
+    description: text, any courses a learner must complete before enrolling in the
+      current course
+  - name: course_updated_at
+    description: timestamp, the date and time the course was last modified.
+    tests:
+    - not_null
+
+- name: stg__edxorg__api__courserun
+  description: MITx course runs on edX.org, sourced from the discovery API
+  columns:
+  - name: courserun_readable_id
+    description: str, unique identifier for the course run in {org}+{course number}+{run}
+      format.
+    tests:
+    - unique
+    - not_null
+  - name: course_readable_id
+    description: str, unique identifier for the course in {org}+{course number} format.
+      e.g., MITx+15.415.1x
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, title of the course
+    tests:
+    - not_null
+  - name: courserun_short_description
+    description: str, the short description of the course and its content
+  - name: courserun_full_description
+    description: str, the long description of the course and its content.
+  - name: courserun_image_url
+    description: str, the URL for the course image
+  - name: courserun_level
+    description: str, the course’s level of difficulty. Values can be 'high_school',
+      'introductory', 'intermediate', or 'advanced'.
+  - name: courserun_is_enrollable
+    description: boolean, whether the course is currently open for enrollment
+  - name: courserun_marketing_url
+    description: str, the URL for the course About page.
+  - name: courserun_languages
+    description: str, the language for this course run.
+  - name: courserun_pace
+    description: str, the pacing of the course. Possible values are 'self_paced' or
+      'instructor_paced'.
+  - name: courserun_is_self_paced
+    description: boolean, indicating whether or not the course is self paced
+  - name: courserun_enrollment_mode
+    description: str, audit, verified, credit, or professional.
+  - name: courserun_status
+    description: str, the status of the course run. Possible values are 'published',
+      'unpublished', or 'reviewed'
+  - name: courserun_availability
+    description: str, the availability of the course run. Possible values are 'Upcoming',
+      'Starting Soon', 'Current' or 'Archived'
+  - name: courserun_enrollment_modes
+    description: array, list of the available modes for this course. The member field
+      includes type, price, currency, upgrade_deadline, credit_provider and credit_hours
+  - name: courserun_instructors
+    description: array, list of instructors associated with the course
+  - name: courserun_duration
+    description: str, the number of weeks to complete the course. e.g. '4 weeks'
+  - name: courserun_time_commitment
+    description: str, short description indicating about the time commitments (e.g.
+      '5-7 hours per week')
+  - name: courserun_is_published
+    description: boolean, indicating whether the course run is published and open
+      for enrollment
+  - name: courserun_min_weekly_hours
+    description: int, the minimum number of estimated hours of effort per week.
+  - name: courserun_max_weekly_hours
+    description: int, the maximum number of estimated hours of effort per week.
+  - name: courserun_estimated_hours
+    description: int, the estimated number of hours to complete the course.
+  - name: courserun_start_on
+    description: timestamp, the course start date.
+  - name: courserun_end_on
+    description: datetime, the course end date.
+  - name: courserun_enrollment_start_on
+    description: timestamp, the course enrollment start date.
+  - name: courserun_enrollment_end_on
+    description: timestamp, the course enrollment end date.
+  - name: courserun_announce_on
+    description: timestamp, date and time when the course will be announced and visible.
+  - name: courserun_updated_at
+    description: timestamp, the date and time the course was last modified.
+    tests:
+    - not_null

@@ -8,7 +8,7 @@ with source as (
         , user_id as openedx_user_id
         , is_active as courserunenrollment_is_active
         , mode as courserunenrollment_enrollment_mode
-        , to_iso8601(from_iso8601_timestamp_nanos(created)) as courserunenrollment_created_on
+        , to_iso8601(created) as courserunenrollment_created_on
     from source
 )
 

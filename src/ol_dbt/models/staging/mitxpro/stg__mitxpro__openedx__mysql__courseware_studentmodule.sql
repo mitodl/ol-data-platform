@@ -2,7 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__xpro__openedx__mysql__courseware_studentmodule') }}
 )
 
-{{ deduplicate_query('source', 'most_recent_source') }}
+{{ deduplicate_raw_table(order_by='modified' , partition_columns = 'course_id, module_id, student_id') }}
 
 , cleaned as (
 
@@ -15,8 +15,8 @@ with source as (
         , state as studentmodule_state_data
         , grade as studentmodule_problem_grade
         , max_grade as studentmodule_problem_max_grade
-        , to_iso8601(from_iso8601_timestamp_nanos(created)) as studentmodule_created_on
-        , to_iso8601(from_iso8601_timestamp_nanos(modified)) as studentmodule_updated_on
+        , to_iso8601(created) as studentmodule_created_on
+        , to_iso8601(modified) as studentmodule_updated_on
     from most_recent_source
 )
 

@@ -24,7 +24,9 @@ models:
   - name: courserun_semester
     description: str, The semester during which the course was launched e.g Fall 2020
   - name: courserun_enrollment_start_date
-    description: date, registration open date for the course
+    description: timestamp, the course enrollment start date.
+  - name: courserun_enrollment_end_date
+    description: timestamp, the course enrollment end date.
   - name: courserun_start_date
     description: date, The date on which the course starts
   - name: courserun_end_date
@@ -35,6 +37,26 @@ models:
     description: str, The institution that is linked to the course. Values are currently
   - name: courserun_instructors
     description: str, List of instructors associated with the course
+  - name: course_topics
+    description: str, List of the academic subjects that this course covers.
+  - name: courserun_pace
+    description: str, the pacing of the course. Possible values are 'self_paced' or
+      'instructor_paced'.
+  - name: courserun_is_published
+    description: boolean, indicating whether the course run is published and open
+      for enrollment
+  - name: courserun_enrollment_mode
+    description: str, audit, verified, credit, or professional.
+  - name: courserun_availability
+    description: str, the availability of the course run. Possible values are 'Upcoming',
+      'Starting Soon', 'Current' or 'Archived'
+  - name: courserun_duration
+    description: str, the number of weeks to complete the course. e.g. '4 weeks'
+  - name: courserun_time_commitment
+    description: str, short description indicating about the time commitments (e.g.
+      '5-7 hours per week')
+  - name: courserun_estimated_hours
+    description: int, the estimated number of hours to complete the course.
   - name: micromasters_program_id
     description: int, foreign key to int__micromasters__programs
     tests:
@@ -870,3 +892,32 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_uuid", "course_readable_id"]
+
+- name: int__edxorg__mitx_product
+  description: MITx course available modes and prices on edX.org
+  columns:
+  - name: courserun_readable_id
+    description: str, unique identifier for the course run in {org}/{course number}/{run}
+      format.
+    tests:
+    - not_null
+  - name: courserun_mode
+    description: str, The course mode that the course offers. Possible values are
+      audit, credit, honor, professional education, or verified.
+    tests:
+    - not_null
+  - name: price
+    description: float, the cost in USD of a verified certificate, a professional
+      education certificate, or academic credit for the course.
+  - name: currency
+    description: str, the currency in which the course accepts payment. This value
+      is USD.
+  - name: upgrade_deadline
+    description: timestamp, the deadline for learners to upgrade from the audit track
+      to the verified certificate track.
+  - name: credit_provider
+    description: str, the institution that offers academic credit for learners who
+      pass the course.
+  - name: credit_hours
+    description: str, the number of credit hours that learners who pass the course
+      earn.

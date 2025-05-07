@@ -666,7 +666,7 @@ sources:
         like category, children and metadata. Different block type may have different
         member fields inside metadata.
     - name: course_id
-      description: array, course ID in array with one element e.g. [MITx-7.05x-1T2024]
+      description: str, course ID wrapped in quotes. e.g., ["MITx-CTL.SC1x_1-3T2022"]
     - name: course_title
       description: str, title of the course extracted from the metadata field of 'course'
         block
@@ -962,7 +962,7 @@ sources:
     - name: duration
       description: float, the length of the video, in seconds. May be 0.0.
 
-  - name: raw__edxorg__s3__programs
+  - name: raw__edxorg__s3__program
     description: this table includes all the programs running on edX.org
     columns:
     - name: uuid
@@ -982,7 +982,7 @@ sources:
     - name: data_modified_timestamp
       description: str, timestamp when the data was last modified
 
-  - name: raw__edxorg__s3__program_courses
+  - name: raw__edxorg__s3__program_course
     description: this table includes all the program courses running on edX.org
     columns:
     - name: program_uuid
@@ -996,3 +996,97 @@ sources:
       description: str, short description of the course
     - name: course_type
       description: str, type of the course. e.g., audit, verified, professional
+
+  - name: raw__edxorg__s3__mitx_course
+    description: MITx courses on edX.org, sourced from the discovery API
+    columns:
+    - name: course_key
+      description: str, unique identifier for the course in {org}+{course number}
+        format. e.g., MITx+15.415.1x
+    - name: title
+      description: str, title of the course
+    - name: short_description
+      description: str, the short description of the course and its content
+    - name: full_description
+      description: str, the long description of the course and its content.
+    - name: level_type
+      description: str, the course’s level of difficulty. Values can be 'high_school',
+        'introductory', 'intermediate', or 'advanced'.
+    - name: course_type
+      description: str, audit, verified-audit, credit-verified-audit, or professional
+    - name: owner
+      description: str, list of organizations associated with the course, e.g., MITx
+    - name: marketing_url
+      description: str, the URL for the course about page.
+    - name: image
+      description: json, course image
+    - name: subjects
+      description: json, the academic subjects that this course covers.
+    - name: prerequisites
+      description: array, array of courses a learner must complete before enrolling
+        in the current course. May be empty.
+    - name: prerequisites_raw
+      description: text, any courses a learner must complete before enrolling in the
+        current course
+    - name: modified
+      description: timestamp, the date and time the course was last modified.
+
+  - name: raw__edxorg__s3__mitx_course_run
+    description: MITx course runs on edX.org, sourced from the discovery API
+    columns:
+    - name: run_key
+      description: str, unique identifier for the course run in {org}+{course number}+{run}
+        format.
+    - name: title
+      description: str, title of the course
+    - name: short_description
+      description: str, the short description of the course and its content
+    - name: full_description
+      description: str, the long description of the course and its content.
+    - name: level_type
+      description: str, the course’s level of difficulty. Possible values are 'high_school',
+        'introductory', 'intermediate', or 'advanced'.
+    - name: languages
+      description: str, the language for this course run.
+    - name: image
+      description: array, course image
+    - name: pacing_type
+      description: str, the pacing of the course. Possible values are 'self-paced'
+        or 'instructor-paced'.
+    - name: enrollment_type
+      description: str, audit, verified, credit, or professional.
+    - name: courserun_is_enrollable
+      description: boolean, whether the course is currently open for enrollment
+    - name: availability
+      description: str, the availability of the course run. Possible values are 'Upcoming',
+        'Starting Soon', 'Current' or 'Archived'
+    - name: status
+      description: str, the status of the course run. Possible values are 'published',
+        'unpublished', or 'reviewed'
+    - name: seats
+      description: array, list of the available modes for this course. The member
+        field includes type, price, currency, upgrade_deadline, credit_provider and
+        credit_hours
+    - name: staff
+      description: array, list of instructors associated with the course
+    - name: weeks_to_complete
+      description: int, the number of weeks to complete the course.
+    - name: min_effort
+      description: int, the minimum number of estimated hours of effort per week.
+    - name: max_effort
+      description: int, the maximum number of estimated hours of effort per week.
+    - name: estimated_hours
+      description: int, the estimated number of hours to complete the course.
+    - name: start_on
+      description: timestamp, the course start date.
+    - name: end_on
+      description: datetime, the course end date.
+    - name: enrollment_start
+      description: timestamp, the course enrollment start date.
+    - name: enrollment_end
+      description: timestamp, the course enrollment end date.
+    - name: announcement
+      description: timestamp, date and time when the course will be announced and
+        visible.
+    - name: modified
+      description: timestamp, the date and time the course was last modified.

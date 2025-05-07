@@ -152,6 +152,10 @@ models:
   - name: coupon_id
     description: int, foreign key referencing ecommerce_coupon or the b2b coupon table.
       For edX.org, it refers to ecommerce_coupon table in MicroMasters application.
+  - name: b2bcoupon_id
+    description: int, foreign key to b2becommerce_b2bcoupon
+  - name: b2border_contract_number
+    description: string, contract number used to identify the order
   - name: coupon_name
     description: string, human readable name for the coupon payment
   - name: coupon_redeemed_on
@@ -160,6 +164,9 @@ models:
   - name: coupon_type
     description: string, type of the coupon which describes what circumstances the
       coupon can be redeemed.
+  - name: couponpaymentversion_payment_transaction
+    description: string, string that identifies the payment invoice for coupon purchases
+      by companies
   - name: courserun_id
     description: int, foreign key in courses_courserun. Null for edX.org.
   - name: courserun_readable_id
@@ -373,6 +380,8 @@ models:
   - name: order_reference_number
     description: string, order reference number to identify a fulfilled or refunded
       order on the corresponding platform, e.g. mitxonline-production-20
+  - name: coupon_code
+    description: string, discount code for the redeemed coupon if applicable
   - name: courserunenrollment_upgraded_on
     description: timestamp, date and time when the learner upgraded to the verified
       track course mode. May be the same as the date when the course enrollment was
@@ -503,20 +512,22 @@ models:
       row_condition: "program_id =2 and platform_name ='edX.org'"
 
 - name: marts__combined__products
-  description: combined course or program products from MITx Online and xPro
+  description: combined course or program products from MITx Online, xPro, or edX.org
   columns:
   - name: platform
-    description: str, application where data is from - MITx Online or xPro
+    description: str, application where data is from - MITx Online, xPro, or edX.org
     tests:
     - not_null
   - name: product_platform
     description: str, indicating the partners for course/program. The possible values
-      are Emeritus, xPRO, Simplilearn, Global Alumni, WHU, Susskind and MITx Online.
+      are Emeritus, xPRO, Simplilearn, Global Alumni, WHU, Susskind, MITx Online,
+      and edX.org
     tests:
     - not_null
   - name: product_readable_id
     description: str, unique open edX Course ID formatted as course-v1:{org}+{course
       code}+{run_tag} or program run ID formatted as program-v1:{org}+{program code}+{run_tag}
+      for MITx Online and xPro. For edX.org, the course ID is formatted as {org}/{course}/{run_tag}.
     tests:
     - not_null
     - unique
@@ -552,7 +563,7 @@ models:
     description: timestamp, date and time when the course or program enrollment ends
   - name: upgrade_deadline
     description: timestamp, date and time beyond which the learner can not enroll
-      in paid course mode. Only populated for MITx Online courses.
+      in paid course mode. Only populated for MITx courses.
   - name: duration
     description: str, a short description indicating how long the course or program
       takes to complete (e.g. '4 weeks')
@@ -561,16 +572,16 @@ models:
       '5-7 hours per week')
   - name: certification_type
     description: str, either 'MicroMasters Credential' or 'Certificate of Completion'
-      for MITx Online courses. 'Professional Certificate' for xPro courses.
+      for MITx courses. 'Professional Certificate' for xPro courses.
     tests:
     - not_null
   - name: delivery
-    description: str, 'Online' or 'Other' for xPro. 'Online' for MITx Online.
+    description: str, 'Online' or 'Other' for xPro. 'Online' for MITx.
   - name: continuing_education_credits
     description: str, number of continuing education units or credits offered. e.g.
-      4.5. NULL for MITx Online courses.
+      4.5. NULL for MITx courses.
   - name: pace
-    description: str, 'Self-paced' or 'Instructor-paced' for MITx Online courses.
+    description: str, 'Self-paced' or 'Instructor-paced'
   - name: topics
     description: str, list of topic names for a course.
   - name: instructors

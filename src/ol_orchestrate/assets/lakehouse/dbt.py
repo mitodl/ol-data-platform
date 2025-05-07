@@ -34,6 +34,13 @@ class DbtAutomationTranslator(DagsterDbtTranslator):
     ) -> Optional[AutomationCondition]:
         return upstream_or_code_changes()
 
+    def get_group_name(self, dbt_resource_props: Mapping[str, Any]) -> Optional[str]:
+        """
+        Extract the group name from the schema configuration in the dbt resource
+        properties.
+        """
+        return dbt_resource_props.get("config", {}).get("schema", None)
+
 
 @dbt_assets(
     manifest=dbt_project.manifest_path,

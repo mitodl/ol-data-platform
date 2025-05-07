@@ -17,7 +17,7 @@ with source as (
         end as program_certificate_awarded_at
         , row_number() over (
             partition by "user id", "course run key", "program uuid"
-            order by _airbyte_emitted_at desc, _ab_source_file_last_modified desc
+            order by _airbyte_extracted_at desc, _ab_source_file_last_modified desc
         ) as row_num
     from source
 )

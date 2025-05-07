@@ -65,10 +65,15 @@ from typing import Any, Literal
 from dagster import (
     AssetSelection,
     Definitions,
+    ScheduleDefinition,
     define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
 
+from ol_orchestrate.assets.edxorg_api import (
+    edxorg_mitx_course_metadata,
+    edxorg_program_metadata,
+)
 from ol_orchestrate.assets.edxorg_archive import (
     dummy_edxorg_course_structure,
     edxorg_archive_partitions,
@@ -93,6 +98,7 @@ from ol_orchestrate.jobs.retrieve_edx_exports import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
+from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir
 from ol_orchestrate.resources.secrets.vault import Vault
 
@@ -177,13 +183,23 @@ file_regex = {
     "logs": r"COLD/mitx-edx-events-\d{4}-\d{2}-\d{2}.log.gz$",
 }
 
+edxorg_api_daily_schedule = ScheduleDefinition(
+    name="edxorg_api_schedule",
+    target=AssetSelection.assets(edxorg_program_metadata, edxorg_mitx_course_metadata),
+    cron_schedule="@daily",
+    execution_timezone="Etc/UTC",
+)
+
 retrieve_edx_exports = Definitions(
     resources={
         "gcp_gcs": gcs_connection,
         "s3": S3Resource(),
         "exports_dir": DailyResultsDir.configure_at_launch(),
+        # This is set as the default IO Manager so that the outputs of the
+        # 'process_edxorg_archive_bundle' op get handled properly. This is necessary
+        # because it is not possible to explicitly declare an IO Manager on an 'op'.
         "io_manager": FileObjectIOManager(
-            vault=Vault(**vault_config),
+            vault=vault,
             vault_gcs_token_path="secret-data/pipelines/edx/org/gcp-oauth-client",  # noqa: S106
         ),
         "s3file_io_manager": S3FileObjectIOManager(
@@ -192,6 +208,7 @@ retrieve_edx_exports = Definitions(
         ),
         "gcs_input": GCSFileIOManager(gcs=gcs_connection),
         "vault": vault,
+        "edxorg_api": OpenEdxApiClientFactory(deployment="edxorg", vault=vault),
     },
     sensors=[
         gcs_edxorg_archive_sensor.with_updated_job(edxorg_course_data_job),
@@ -206,5 +223,8 @@ retrieve_edx_exports = Definitions(
         flatten_edxorg_course_structure,
         extract_edxorg_courserun_metadata,
         dummy_edxorg_course_xml,
+        edxorg_program_metadata,
+        edxorg_mitx_course_metadata,
     ],
+    schedules=[edxorg_api_daily_schedule],
 )

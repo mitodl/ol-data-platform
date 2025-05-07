@@ -3,7 +3,7 @@ with platforms as (
 )
 
 select
-    {{ generate_hash_id('id') }} as platform_id
+    {{ dbt_utils.generate_surrogate_key(['id']) }} as platform_pk
     , platform_name
     , platform_description
     , platform_domain

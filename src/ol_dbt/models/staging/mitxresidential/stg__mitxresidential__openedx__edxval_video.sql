@@ -10,7 +10,7 @@ with source as (
         , client_video_id as video_client_id
         , status as video_status
         , duration as video_duration
-        , to_iso8601(from_iso8601_timestamp_nanos(created)) as video_created_on
+        , to_iso8601(created) as video_created_on
     from source
 )
 

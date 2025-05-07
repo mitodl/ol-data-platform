@@ -4,6 +4,8 @@ with source as (
 
 )
 
+{{ deduplicate_raw_table(order_by='id' , partition_columns = 'user_id') }}
+
 , renamed as (
 
     select
@@ -12,7 +14,7 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('created_on') }} as basket_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as basket_updated_on
 
-    from source
+    from most_recent_source
 
 )
 

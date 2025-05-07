@@ -8,3 +8,5 @@
 bin/pants
 **/*.db
 **/*.duckdb
+**/dagster_local/*
+.aider*

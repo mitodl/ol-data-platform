@@ -269,9 +269,14 @@ models:
       MicroMasters
   - name: program_is_dedp
     description: boolean, specifying if the program is DEDP
+  - name: program_readable_id
+    description: str, readable ID formatted as program-v1:{org}+{program code}, e.g.,
+      program-v1:MITx+DEDP
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "micromasters_program_id", "mitxonline_program_id"]
+      column_list: ["user_email", "program_readable_id"]
 
 - name: int__micromasters__course_certificates
   description: course certificates earned for MicroMasters programs. This include

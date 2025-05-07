@@ -1,8 +1,8 @@
-with grades_persistentcoursegrade as (
+with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__mitxonline__openedx__mysql__grades_persistentcoursegrade') }}
 )
 
-{{ deduplicate_query('grades_persistentcoursegrade', 'most_recent_source') }}
+{{ deduplicate_raw_table(order_by='modified' , partition_columns = 'id') }}
 
 select
     course_id

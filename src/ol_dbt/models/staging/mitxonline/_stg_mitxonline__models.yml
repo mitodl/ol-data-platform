@@ -69,7 +69,7 @@ models:
       column_list: ["courserun_id", "user_id"]
   - dbt_utils.recency:
       datepart: day
-      field: from_iso8601_timestamp(courserunenrollment_created_on)
+      field: from_iso8601_timestamp_nanos(courserunenrollment_created_on)
       interval: 2
       config:
         severity: error
@@ -1846,5 +1846,57 @@ models:
   - name: instructor_wagtail_page_id
     description: int, foreign key to wagtail_page referring to the linked instructor
       page
+    tests:
+    - not_null
+
+- name: stg__mitxonline__openedx__courseware_studentmodulehistoryextended
+  description: History of studentmodule in MITx Online open edx platform
+  columns:
+  - name: studentmodulehistoryextended_id
+    description: int, primary key in this table
+    tests:
+    - not_null
+    - unique
+  - name: studentmodule_id
+    description: int, foreign key to courseware_studentmodule
+    tests:
+    - not_null
+  - name: studentmodule_state_data
+    description: str, JSON text indicating the learner's state for the corresponding
+      module such as course, chapter, problemset, sequential, videosequence, etc.
+  - name: studentmodule_problem_grade
+    description: str, floating point value indicating the total unweighted grade for
+      this problem that the learner has scored. e.g. how many responses they got right
+      within the problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_problem_max_grade
+    description: str, floating point value indicating the total possible unweighted
+      grade for this problem, or basically the number of responses that are in this
+      problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_created_on
+    description: timestamp, datetime when this row was created
+
+- name: stg__mitxonline__openedx__blockcompletion
+  description: History of user block completion in a course such as video, problem,
+    survey on the MITx Online platform
+  columns:
+  - name: blockcompletion_id
+    description: int, primary key in this table
+  - name: user_id
+    description: int, foreign key to the users_user table
+  - name: blockcompletion_created_on
+    description: timestamp, datetime when this row was created
+  - name: blockcompletion_updated_on
+    description: timestamp, datetime when this row was last updated
+  - name: block_key
+    description: string, foreign key to dim_course_content, referencing the block
+      ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
+      code}.
+  - name: block_category
+    description: string, category/type of the content block. Possible values are course,
+      chapter, sequential, vertical, discussion, html, problem, video, etc.
+  - name: block_completed
+    description: integer, will be 1 if the learner completed the block
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
