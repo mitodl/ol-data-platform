@@ -3,11 +3,17 @@ with course_content as (
 )
 
 , users as (
-    select * from {{ ref('dim_user') }}
+    select
+        user_pk
+        , mitxonline_openedx_user_id
+    from {{ ref('dim_user') }}
 )
 
 , platforms as (
-    select * from {{ ref('dim_platform') }}
+    select
+        platform_pk
+        , platform_name
+    from {{ ref('dim_platform') }}
 )
 
 , video_events as (

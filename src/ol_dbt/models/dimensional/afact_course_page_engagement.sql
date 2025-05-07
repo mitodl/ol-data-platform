@@ -22,11 +22,14 @@ with vertical_structure as (
         , max(event_timestamp) as last_view_timestamp
     from {{ ref('tfact_course_navigation_events') }}
     where block_fk is not null
-    group by platform, courserun_readable_id, openedx_user_id, block_fk
+    group by platform_fk, openedx_user_id, courserun_readable_id, user_fk, block_fk
 )
 
 , platforms as (
-    select * from {{ ref('dim_platform') }}
+    select
+        platform_pk
+        , platform_name
+    from {{ ref('dim_platform') }}
 )
 
 , combined as (

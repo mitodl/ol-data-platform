@@ -355,10 +355,6 @@ models:
     - relationships:
         to: ref('dim_platform')
         field: platform_pk
-  - name: platform_name
-    description: string, name of the platform
-    tests:
-    - not_null
   - name: courserun_readable_id
     description: string, foreign key to dim_course_content, referencing the edX course
       run ID

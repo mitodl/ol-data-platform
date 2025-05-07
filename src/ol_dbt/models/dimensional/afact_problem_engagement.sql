@@ -23,7 +23,7 @@ with problem_structure as (
         , row_number()
             over
             (
-                partition by platform, openedx_user_id, courserun_readable_id, problem_block_fk, attempt
+                partition by platform_fk, openedx_user_id, courserun_readable_id, problem_block_fk, attempt
                 order by event_timestamp desc
             )
         as rn
@@ -43,7 +43,7 @@ with problem_structure as (
         , count(case when success = 'correct' then 1 end) as num_of_correct_attempts
     from pre_problem_attempt_aggregated
     where rn = 1
-    group by platform, courserun_readable_id, problem_block_fk, openedx_user_id
+    group by platform_fk, courserun_readable_id, problem_block_fk, openedx_user_id
 )
 
 , platforms as (
