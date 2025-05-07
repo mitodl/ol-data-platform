@@ -5,7 +5,6 @@ with source as (
 )
 
 {{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'user_id') }}
-
 , renamed as (
 
     select

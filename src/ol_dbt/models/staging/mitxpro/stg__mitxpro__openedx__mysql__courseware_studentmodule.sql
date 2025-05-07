@@ -3,7 +3,6 @@ with source as (
 )
 
 {{ deduplicate_raw_table(order_by='modified' , partition_columns = 'course_id, module_id, student_id') }}
-
 , cleaned as (
 
     select

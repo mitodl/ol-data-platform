@@ -14,7 +14,6 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('created_on') }} as coursegrade_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as coursegrade_updated_on
 
-
     from source
 )
 

@@ -3,6 +3,5 @@ with program_certificates as (
     from {{ ref('int__micromasters__program_certificates') }}
 )
 
-
 select *
 from program_certificates

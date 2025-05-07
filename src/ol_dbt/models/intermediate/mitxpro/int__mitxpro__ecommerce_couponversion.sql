@@ -11,7 +11,6 @@ with ecommerce_couponversion as (
     group by coupon_id
 )
 
-
 select
     ecommerce_couponversion.couponversion_id
     , ecommerce_couponversion.coupon_id

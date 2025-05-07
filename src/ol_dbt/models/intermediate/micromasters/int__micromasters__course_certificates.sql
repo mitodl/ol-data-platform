@@ -23,7 +23,6 @@ with course_certificates_dedp_from_micromasters as (
 -- for old DEDP courses on edx.org, then we use certificates from MicroMasters
 -- for new DEDP course on MITx Online, then we use certificates from MITx Online
 
-
 , dedp_course_certificates_combined as (
     select
         course_certificates_dedp_from_micromasters.program_title
@@ -102,7 +101,6 @@ with course_certificates_dedp_from_micromasters as (
     from dedp_course_certificates_combined
 )
 
-
 , dedp_course_certificates as (
     select *
     from dedp_course_certificates_sorted
@@ -130,7 +128,6 @@ with course_certificates_dedp_from_micromasters as (
     left join mitx_users
         on course_certificates_non_dedp_program.user_edxorg_id = mitx_users.user_edxorg_id
 )
-
 
 , course_certificates as (
     select

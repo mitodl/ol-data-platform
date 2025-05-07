@@ -6,7 +6,6 @@ with source as (
   order_by='opportunity_last_modified_date'
   , partition_columns='batch_id, email, first_name, last_name'
 ) }}
-
 , cleaned as (
     select
         ---course run

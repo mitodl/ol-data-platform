@@ -8,7 +8,6 @@ with productcouponassignment as (
     from {{ ref('stg__mitxpro__app__postgres__ecommerce_couponproduct') }}
 )
 
-
 select
     productcouponassignment.productcouponassignment_id
     , productcouponassignment.productcouponassignment_message_status_updated_on

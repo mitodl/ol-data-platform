@@ -13,7 +13,6 @@ with edx_enrollments as (
     from {{ ref('int__mitxonline__courserunenrollments_with_programs') }}
 )
 
-
 , program_requirements as (
     select * from {{ ref('int__mitx__program_requirements') }}
 )

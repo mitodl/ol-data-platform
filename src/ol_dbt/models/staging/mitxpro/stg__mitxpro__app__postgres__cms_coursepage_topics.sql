@@ -6,7 +6,6 @@ with coursepage_topics as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__cms_externalcoursepage_topics') }}
 )
 
-
 select
     coursepage_id as wagtail_page_id
     , coursetopic_id

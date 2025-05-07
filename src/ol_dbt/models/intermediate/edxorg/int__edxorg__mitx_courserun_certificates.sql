@@ -137,7 +137,6 @@ with person_courses as (
         or runs.micromasters_program_id is null
 )
 
-
 select
     courserun_readable_id
     , courseruncertificate_mode

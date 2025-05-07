@@ -5,7 +5,6 @@ with source as (
 )
 
 {{ deduplicate_raw_table(order_by='modified' , partition_columns = 'id') }}
-
 , cleaned as (
 
     select
