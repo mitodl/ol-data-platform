@@ -94,7 +94,13 @@ with mitxonline_problem_events as (
 )
 
 , users as (
-    select * from {{ ref('dim_user') }}
+    select
+        user_pk
+        , mitxonline_openedx_user_id
+        , mitxpro_openedx_user_id
+        , residential_openedx_user_id
+        , edxorg_openedx_user_id
+    from {{ ref('dim_user') }}
 )
 
 , combined as (
@@ -154,7 +160,7 @@ with mitxonline_problem_events as (
         , mitxresidential_problem_events.event_timestamp
     from mitxresidential_problem_events
     inner join users
-        on mitxresidential_problem_events.openedx_user_id = users.mitxresidential_openedx_user_id
+        on mitxresidential_problem_events.user_id = users.residential_openedx_user_id
 
     union all
 
