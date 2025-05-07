@@ -189,9 +189,7 @@ with combined_enrollments as (
         = replace(replace(mitxonline_certificates.courserun_readable_id, 'course-v1:', ''), '+', '/')
     where combined_enrollments.platform = '{{ var("edxorg") }}'
 
-
     union all
-
 
     select
         '{{ var("mitxpro") }}' as platform

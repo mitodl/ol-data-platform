@@ -10,7 +10,6 @@ with mm_program_certificates as (
     from {{ ref('int__mitx__programs') }}
 )
 
-
 select
     programs.micromasters_program_id
     , programs.program_title
