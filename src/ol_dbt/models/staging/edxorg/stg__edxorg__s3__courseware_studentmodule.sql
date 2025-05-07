@@ -2,9 +2,7 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data', 'raw__edxorg__s3__tables__courseware_studentmodule') }}
 )
 
-
 {{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'course_id, student_id, module_id') }}
-
 , cleaned as (
 
     select

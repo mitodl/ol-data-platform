@@ -47,7 +47,6 @@ with applications as (
     group by application_id
 )
 
-
 , courserun_last_steps as (
     select
         courserun_applicationstep.courserun_applicationstep_id

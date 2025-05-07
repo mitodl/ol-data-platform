@@ -77,7 +77,6 @@ with mitxonline_product as (
     left join mitxonline_product
         on mitxonline_course_runs.courserun_id = mitxonline_product.courserun_id
 
-
     union all
 
     select

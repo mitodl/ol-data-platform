@@ -18,7 +18,6 @@ with mitxonline_coursevideos as (
     where platform = '{{ var("mitxonline") }}'
 )
 
-
 select
     mitxonline_coursevideos.courserun_readable_id
     , mitxonline_coursevideos.coursevideo_is_hidden

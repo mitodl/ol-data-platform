@@ -190,7 +190,6 @@ with enrollments as (
     from program_certificates_total
 )
 
-
 select
     enrollments_combined.program_title
     , enrollments_combined.total_enrollments

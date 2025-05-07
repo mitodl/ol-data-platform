@@ -13,7 +13,6 @@ with coursesinprogram as (
     from {{ ref('stg__mitxpro__app__postgres__cms_programpage') }}
 )
 
-
 , wagtailpages as (
     select *
     from {{ ref('stg__mitxpro__app__postgres__wagtail_page') }}

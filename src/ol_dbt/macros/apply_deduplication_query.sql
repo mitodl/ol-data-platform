@@ -32,10 +32,8 @@
             , row_number() over ( partition by {{ partition_columns }} order by {{ order_by }} desc) as row_num
         from source
     )
-
     , most_recent_source as (
         select * from source_sorted
         where row_num = 1
     )
-
 {% endmacro %}

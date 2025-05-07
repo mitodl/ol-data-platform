@@ -20,8 +20,6 @@ with program_certificates_dedp_from_micromasters as (
 , mitxonline_programs as (
     select * from {{ ref('int__mitxonline__programs') }}
 )
-
-
 -- Some micromasters learners from previous semesters don't have mitxonline logins. The mitxonline
 -- database does not include the certificates for those users. However, for future semesters,
 -- the mitxonline  database will be the source for dedp program certificates and the table in
@@ -110,7 +108,6 @@ with program_certificates_dedp_from_micromasters as (
     left join mitx_users
         on program_certificates_non_dedp.user_edxorg_id = mitx_users.user_edxorg_id
 )
-
 
 select
     report.program_certificate_hashed_id

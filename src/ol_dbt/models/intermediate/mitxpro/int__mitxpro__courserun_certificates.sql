@@ -34,5 +34,4 @@ with certificates as (
     inner join users on certificates.user_id = users.user_id
 )
 
-
 select * from courserun_certificates

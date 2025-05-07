@@ -47,7 +47,6 @@ with users as (
     where row_num = 1
 )
 
-
 select
     users.user_id
     , users.user_username
