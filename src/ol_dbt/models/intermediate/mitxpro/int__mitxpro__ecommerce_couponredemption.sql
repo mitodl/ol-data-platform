@@ -3,7 +3,6 @@ with ecommerce_couponredemption as (
     from {{ ref('stg__mitxpro__app__postgres__ecommerce_couponredemption') }}
 )
 
-
 select
     couponredemption_id
     , order_id

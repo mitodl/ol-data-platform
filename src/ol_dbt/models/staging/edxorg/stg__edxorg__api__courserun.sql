@@ -3,7 +3,6 @@ with source as (
 )
 
 {{ deduplicate_raw_table(order_by='retrieved_at' , partition_columns = 'run_key') }}
-
 , cleaned as (
     select
         run_key as courserun_readable_id

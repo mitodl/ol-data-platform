@@ -10,12 +10,10 @@ with coursepages as (
     from {{ ref('stg__mitxpro__app__postgres__cms_facultymemberspage') }}
 )
 
-
 , wagtailpages as (
     select *
     from {{ ref('stg__mitxpro__app__postgres__wagtail_page') }}
 )
-
 
 , unnestedfacultymemberspage as (
     select

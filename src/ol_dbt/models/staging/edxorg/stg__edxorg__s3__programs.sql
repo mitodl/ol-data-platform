@@ -3,7 +3,6 @@ with source as (
 )
 
 {{ deduplicate_raw_table(order_by='retrieved_at' , partition_columns = 'uuid') }}
-
 , cleaned as (
     select
         uuid as program_uuid

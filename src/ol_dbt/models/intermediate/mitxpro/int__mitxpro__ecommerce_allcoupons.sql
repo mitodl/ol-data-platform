@@ -68,7 +68,6 @@ with coupon as (
     from b2becommerce_b2bcoupon
 )
 
-
 select
     coupon_code
     , coupon_name

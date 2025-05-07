@@ -4,7 +4,6 @@ with source as (
 )
 
 {{ deduplicate_raw_table(order_by='modified_date' , partition_columns = 'id') }}
-
 select
     id
     , user_id

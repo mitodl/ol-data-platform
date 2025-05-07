@@ -46,7 +46,6 @@ with mitx_courses as (
     from {{ ref('int__mitxresidential__courseruns') }}
 )
 
-
 , combined_runs as (
     select
         '{{ var("mitxonline") }}' as platform

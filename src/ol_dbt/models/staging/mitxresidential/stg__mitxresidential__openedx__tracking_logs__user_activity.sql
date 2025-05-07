@@ -22,7 +22,6 @@ with source as (
     order_by='_airbyte_extracted_at desc, _ab_source_file_last_modified desc, "time"'
     , partition_columns = 'username, context, event_source, event_type, event, "time"'
 ) }}
-
 , cleaned as (
     select
         username as user_username

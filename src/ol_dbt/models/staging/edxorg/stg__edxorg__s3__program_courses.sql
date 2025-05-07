@@ -3,7 +3,6 @@ with source as (
 )
 
 {{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'program_uuid, course_key') }}
-
 , cleaned as (
     select
         program_uuid

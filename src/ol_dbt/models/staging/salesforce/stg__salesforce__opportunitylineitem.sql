@@ -7,8 +7,6 @@ with source as (
 )
 
 {{ deduplicate_raw_table(order_by='systemmodstamp', partition_columns = 'id') }}
-
-
 , renamed as (
 
     select

@@ -35,7 +35,6 @@ with dedp_course_certificates as (
 
 )
 
-
 , highest_courserun_grades as (
     select *
     from courserun_grades_sorted

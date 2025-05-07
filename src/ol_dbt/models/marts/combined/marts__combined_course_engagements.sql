@@ -185,7 +185,6 @@ with combined_course_activities_daily as (
         , courseactivity_date
 )
 
-
 , combined_problem_submitted_daily as (
     select
         platform

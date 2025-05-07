@@ -20,7 +20,6 @@ with source as (
 
 --- this is needed for the initial dbt run to deduplicate the data from raw table
 {{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'id') }}
-
 , cleaned as (
 
     select
