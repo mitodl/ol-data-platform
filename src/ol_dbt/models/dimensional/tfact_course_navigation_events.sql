@@ -135,7 +135,6 @@ with mitxonline_navigation_events as (
     from mitxonline_navigation_events
     inner join users on mitxonline_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
 
-
     union all
 
     select
