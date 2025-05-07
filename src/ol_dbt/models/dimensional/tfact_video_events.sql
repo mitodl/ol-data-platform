@@ -103,7 +103,13 @@ with mitxonline_video_events as (
 )
 
 , users as (
-    select * from {{ ref('dim_user') }}
+    select
+        user_pk
+        , mitxonline_openedx_user_id
+        , mitxpro_openedx_user_id
+        , residential_openedx_user_id
+        , edxorg_openedx_user_id
+    from {{ ref('dim_user') }}
 )
 
 , combined as (

@@ -181,14 +181,14 @@ with mitxonline_navigation_events as (
         , mitxresidential_navigation_events.tab_count
         , mitxresidential_navigation_events.event_timestamp
     from mitxresidential_navigation_events
-    inner join users on mitxresidential_navigation_events.user_id = users.mitxresidential_openedx_user_id
+    inner join users on mitxresidential_navigation_events.user_id = users.residential_openedx_user_id
 
     union all
 
     select
         users.user_pk as user_fk
         , 'edxorg' as platform
-        , edxorg_navigation_events.edxorg_navigation_events.user_id as openedx_user_id
+        , edxorg_navigation_events.user_id as openedx_user_id
         , edxorg_navigation_events.courserun_readable_id
         , edxorg_navigation_events.event_type
         , edxorg_navigation_events.event_json

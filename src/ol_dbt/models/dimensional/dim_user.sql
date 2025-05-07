@@ -1,20 +1,39 @@
 with mitxonline_users as (
-    select *
+    select
+        user_id
+        , user_username
+        , user_email
+        , user_full_name
+        , user_is_active
+        , user_joined_on
     from {{ ref('stg__mitxonline__app__postgres__users_user') }}
 )
 
 , mitxonline_legaladdress as (
-    select *
+    select
+        user_id
+        , user_address_country
     from {{ ref('stg__mitxonline__app__postgres__users_legaladdress') }}
 )
 
 , mitxonline_profile as (
-    select *
+    select
+        user_id
+        , user_highest_education
+        , user_gender
+        , user_birth_year
+        , user_company
+        , user_job_title
+        , user_industry
     from {{ ref('stg__mitxonline__app__postgres__users_userprofile') }}
 )
 
 , openedx_users as (
-    select * from {{ ref('stg__mitxonline__openedx__mysql__auth_user') }}
+    select
+        openedx_user_id
+        , user_username
+        , user_email
+    from {{ ref('stg__mitxonline__openedx__mysql__auth_user') }}
 )
 
 , mitxonline_user_view as (
