@@ -23,6 +23,16 @@ with allcoupons as (
     from {{ ref('int__mitxpro__ecommerce_company') }}
 )
 
+, ecommerce_line as (
+    select *
+    from {{ ref('int__mitxpro__ecommerce_line') }}
+)
+
+, mitxpro__programruns as (
+    select *
+    from {{ ref('int__mitxpro__program_runs') }}
+)
+
 , ecommerce_order as (
     select *
     from {{ ref('int__mitxpro__ecommerce_order') }}
@@ -59,6 +69,39 @@ with allcoupons as (
     group by ecommerce_coupon.couponpayment_name
 )
 
+, pull_product_readable_id as (
+    select
+        allorders.coupon_id
+        , allorders.b2bcoupon_id
+        , ecommerce_couponpaymentversion.couponpaymentversion_id
+        , allorders.b2border_contract_number
+        , coalesce(
+            allorders.courserun_readable_id
+            , mitxpro__programruns.programrun_readable_id
+            , allorders.program_readable_id
+        ) as product_readable_id
+    from allorders
+    left join ecommerce_line
+        on allorders.line_id = ecommerce_line.line_id
+    left join mitxpro__programruns
+        on ecommerce_line.programrun_id = mitxpro__programruns.programrun_id
+    left join ecommerce_couponpaymentversion
+        on
+            allorders.couponpaymentversion_payment_transaction
+            = ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
+    where allorders.order_id is not null
+    group by
+        allorders.coupon_id
+        , allorders.b2bcoupon_id
+        , ecommerce_couponpaymentversion.couponpaymentversion_id
+        , allorders.b2border_contract_number
+        , coalesce(
+            allorders.courserun_readable_id
+            , mitxpro__programruns.programrun_readable_id
+            , allorders.program_readable_id
+        )
+)
+
 select
     allcoupons.coupon_code
     , allcoupons.coupon_name
@@ -80,6 +123,7 @@ select
     , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount_text
     , ecommerce_company.company_name
     , redeemed_b2b_coupons.b2border_contract_number
+    , pull_product_readable_id.product_readable_id
     , coupons_used_by_name.coupons_used_count
     , case
         when
@@ -104,3 +148,15 @@ left join ecommerce_company
     on ecommerce_couponpaymentversion.company_id = ecommerce_company.company_id
 left join coupons_used_by_name
     on ecommerce_couponpaymentversion.couponpayment_name = coupons_used_by_name.couponpayment_name
+left join pull_product_readable_id
+    on
+        (allcoupons.coupon_id is null or allcoupons.coupon_id = pull_product_readable_id.coupon_id)
+        and (allcoupons.b2bcoupon_id is null or allcoupons.b2bcoupon_id = pull_product_readable_id.b2bcoupon_id)
+        and (
+            ecommerce_couponpaymentversion.couponpaymentversion_id is null
+            or ecommerce_couponpaymentversion.couponpaymentversion_id = pull_product_readable_id.couponpaymentversion_id
+        )
+        and (
+            redeemed_b2b_coupons.b2border_contract_number is null
+            or redeemed_b2b_coupons.b2border_contract_number = pull_product_readable_id.b2border_contract_number
+        )
