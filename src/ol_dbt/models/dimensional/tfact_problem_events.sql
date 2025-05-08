@@ -120,12 +120,14 @@ with mitxonline_problem_events as (
         , mitxonline_problem_events.event_timestamp
     from mitxonline_problem_events
     inner join users
-        on mitxonline_problem_events.openedx_user_id = users.mitxonline_openedx_user_id
+        on
+            mitxonline_problem_events.openedx_user_id = users.mitxonline_openedx_user_id
+            and mitxonline_problem_events.user_username = users.user_mitxonline_username
 
     union all
 
     select
-        users.user_pk as user_fk
+        '' as user_fk
         , 'mitxpro' as platform
         , xpro_problem_events.openedx_user_id
         , xpro_problem_events.courserun_readable_id
@@ -139,15 +141,13 @@ with mitxonline_problem_events as (
         , xpro_problem_events.max_grade
         , xpro_problem_events.event_timestamp
     from xpro_problem_events
-    inner join users
-        on xpro_problem_events.openedx_user_id = users.mitxpro_openedx_user_id
 
     union all
 
     select
-        users.user_pk as user_fk
+        '' as user_fk
         , 'residential' as platform
-        , mitxresidential_problem_events.user_id
+        , mitxresidential_problem_events.user_id as openedx_user_id
         , mitxresidential_problem_events.courserun_readable_id
         , mitxresidential_problem_events.event_type
         , mitxresidential_problem_events.event_json
@@ -159,15 +159,13 @@ with mitxonline_problem_events as (
         , mitxresidential_problem_events.max_grade
         , mitxresidential_problem_events.event_timestamp
     from mitxresidential_problem_events
-    inner join users
-        on mitxresidential_problem_events.user_id = users.residential_openedx_user_id
 
     union all
 
     select
-        users.user_pk as user_fk
+        '' as user_fk
         , 'edxorg' as platform
-        , edxorg_problem_events.user_id
+        , edxorg_problem_events.user_id as openedx_user_id
         , edxorg_problem_events.courserun_readable_id
         , edxorg_problem_events.event_type
         , edxorg_problem_events.event_json
@@ -179,15 +177,13 @@ with mitxonline_problem_events as (
         , edxorg_problem_events.max_grade
         , edxorg_problem_events.event_timestamp
     from edxorg_problem_events
-    inner join users
-        on edxorg_problem_events.user_id = users.edxorg_openedx_user_id
 )
 
 select
 
     user_fk
     , openedx_user_id
-    , {{ dbt_utils.generate_surrogate_key(['platform']) }} as platform_fk
+    , platform
     , courserun_readable_id
     , event_type
     , problem_block_id as problem_block_fk

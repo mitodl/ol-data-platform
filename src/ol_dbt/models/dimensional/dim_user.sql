@@ -66,10 +66,8 @@ select
     , cast(null as bigint) as mitxpro_application_user_id
     , cast(null as varchar) as user_mitxpro_username
     , cast(null as bigint) as residential_openedx_user_id
-    , cast(null as bigint) as residential_application_user_id
     , cast(null as varchar) as user_residential_username
     , cast(null as bigint) as edxorg_openedx_user_id
-    , cast(null as bigint) as edxorg_application_user_id
     , cast(null as varchar) as user_edxorg_username
     , mitxonline_user_view.user_email as email
     , mitxonline_user_view.user_full_name as full_name

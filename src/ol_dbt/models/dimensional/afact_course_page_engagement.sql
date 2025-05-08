@@ -13,7 +13,7 @@ with vertical_structure as (
 
 , page_navigation_events as (
     select
-        platform_fk
+        platform
         , openedx_user_id
         , courserun_readable_id
         , user_fk
@@ -25,17 +25,9 @@ with vertical_structure as (
     group by platform_fk, openedx_user_id, courserun_readable_id, user_fk, block_fk
 )
 
-, platforms as (
-    select
-        platform_pk
-        , platform_name
-    from {{ ref('dim_platform') }}
-)
-
 , combined as (
     select
-        page_navigation_events.platform_fk
-        , platforms.platform_name
+        page_navigation_events.platform
         , page_navigation_events.openedx_user_id
         , page_navigation_events.courserun_readable_id
         , page_navigation_events.user_fk
@@ -47,13 +39,10 @@ with vertical_structure as (
     from page_navigation_events
     left join vertical_structure
         on page_navigation_events.block_fk = vertical_structure.block_id
-    inner join platforms
-        on page_navigation_events.platform_fk = platforms.platform_pk
 )
 
 select
-    platform_fk
-    , platform_name
+    platform
     , openedx_user_id
     , courserun_readable_id
     , user_fk

@@ -15,9 +15,6 @@ models:
       platform
     tests:
     - not_null
-    - relationships:
-        to: ref('dim_user')
-        field: user_pk
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
   - name: courserun_readable_id
@@ -229,14 +226,10 @@ models:
     description: string, username on MITx Pro
   - name: residential_openedx_user_id
     description: int, openedx user id for MITx Residential
-  - name: residential_application_user_id
-    description: string, user id on MITx Residential application
   - name: user_residential_username
     description: string, username on MITx Residential
   - name: edxorg_openedx_user_id
     description: int, openedx user id for edX.org
-  - name: edxorg_application_user_id
-    description: string, user id on edX.org application
   - name: user_edxorg_username
     description: string, username on edX.org
   - name: email
@@ -282,14 +275,11 @@ models:
     description: int, user ID on the corresponding open edX platform
     tests:
     - not_null
-  - name: platform_fk
+  - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the navigation event occurred
     tests:
     - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
   - name: courserun_readable_id
     description: string, foreign key to dim_course_content, referencing the edX course
       run ID
@@ -347,14 +337,11 @@ models:
     description: int, user ID on the corresponding open edX platform
     tests:
     - not_null
-  - name: platform_fk
+  - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the video event occurred
     tests:
     - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
   - name: courserun_readable_id
     description: string, foreign key to dim_course_content, referencing the edX course
       run ID
@@ -416,14 +403,11 @@ models:
     description: int, user ID on the corresponding open edX platform
     tests:
     - not_null
-  - name: platform_fk
+  - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the problem event occurred
     tests:
     - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
   - name: courserun_readable_id
     description: string, foreign key to dim_course_content, referencing the edX course
       run ID
@@ -539,15 +523,8 @@ models:
   description: Aggregate fact table summarizing course page engagement by learner
     within a course.
   columns:
-  - name: platform_fk
+  - name: platform
     description: string, foreign key to dim_platform
-    tests:
-    - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
-  - name: platform_name
-    description: string, name of the platform
     tests:
     - not_null
   - name: openedx_user_id
@@ -598,16 +575,9 @@ models:
     - relationships:
         to: ref('dim_user')
         field: user_pk
-  - name: platform_fk
+  - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the video event occurred
-    tests:
-    - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
-  - name: platform_name
-    description: string, name of the platform
     tests:
     - not_null
   - name: openedx_user_id

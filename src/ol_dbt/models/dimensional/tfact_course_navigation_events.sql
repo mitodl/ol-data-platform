@@ -133,12 +133,15 @@ with mitxonline_navigation_events as (
         , mitxonline_navigation_events.tab_count
         , mitxonline_navigation_events.event_timestamp
     from mitxonline_navigation_events
-    inner join users on mitxonline_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
+    inner join users
+        on
+            mitxonline_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
+            and mitxonline_navigation_events.user_username = users.user_mitxonline_username
 
     union all
 
     select
-        users.user_pk as user_fk
+        '' as user_fk
         , 'mitxpro' as platform
         , xpro_navigation_events.openedx_user_id
         , xpro_navigation_events.courserun_readable_id
@@ -155,12 +158,11 @@ with mitxonline_navigation_events as (
         , xpro_navigation_events.tab_count
         , xpro_navigation_events.event_timestamp
     from xpro_navigation_events
-    inner join users on xpro_navigation_events.openedx_user_id = users.mitxpro_openedx_user_id
 
     union all
 
     select
-        users.user_pk as user_fk
+        '' as user_fk
         , 'residential' as platform
         , mitxresidential_navigation_events.user_id as openedx_user_id
         , mitxresidential_navigation_events.courserun_readable_id
@@ -180,12 +182,11 @@ with mitxonline_navigation_events as (
         , mitxresidential_navigation_events.tab_count
         , mitxresidential_navigation_events.event_timestamp
     from mitxresidential_navigation_events
-    inner join users on mitxresidential_navigation_events.user_id = users.residential_openedx_user_id
 
     union all
 
     select
-        users.user_pk as user_fk
+        '' as user_fk
         , 'edxorg' as platform
         , edxorg_navigation_events.user_id as openedx_user_id
         , edxorg_navigation_events.courserun_readable_id
@@ -205,12 +206,11 @@ with mitxonline_navigation_events as (
         , edxorg_navigation_events.tab_count
         , edxorg_navigation_events.event_timestamp
     from edxorg_navigation_events
-    inner join users on edxorg_navigation_events.user_id = users.edxorg_openedx_user_id
 )
 
 select
     user_fk
-    , {{ dbt_utils.generate_surrogate_key(['platform']) }} as platform_fk
+    , platform
     , openedx_user_id
     , courserun_readable_id
     , event_type

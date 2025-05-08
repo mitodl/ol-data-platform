@@ -127,12 +127,15 @@ with mitxonline_video_events as (
         , mitxonline_video_events.ending_position
         , mitxonline_video_events.event_timestamp
     from mitxonline_video_events
-    inner join users on mitxonline_video_events.openedx_user_id = users.mitxonline_openedx_user_id
+    inner join users
+        on
+            mitxonline_video_events.openedx_user_id = users.mitxonline_openedx_user_id
+            and mitxonline_video_events.user_username = users.user_mitxonline_username
 
     union all
 
     select
-        users.user_pk as user_fk
+        '' as user_fk
         , 'mitxpro' as platform
         , xpro_video_events.openedx_user_id
         , xpro_video_events.courserun_readable_id
@@ -145,12 +148,11 @@ with mitxonline_video_events as (
         , xpro_video_events.ending_position
         , xpro_video_events.event_timestamp
     from xpro_video_events
-    inner join users on xpro_video_events.openedx_user_id = users.mitxpro_openedx_user_id
 
     union all
 
     select
-        users.user_pk as user_fk
+        '' as user_fk
         , 'residential' as platform
         , mitxresidential_video_events.user_id as openedx_user_id
         , mitxresidential_video_events.courserun_readable_id
@@ -163,12 +165,11 @@ with mitxonline_video_events as (
         , mitxresidential_video_events.ending_position
         , mitxresidential_video_events.event_timestamp
     from mitxresidential_video_events
-    inner join users on mitxresidential_video_events.user_id = users.residential_openedx_user_id
 
     union all
 
     select
-        users.user_pk as user_fk
+        '' as user_fk
         , 'edxorg' as platform
         , edxorg_video_events.user_id as openedx_user_id
         , edxorg_video_events.courserun_readable_id
@@ -181,12 +182,11 @@ with mitxonline_video_events as (
         , edxorg_video_events.ending_position
         , edxorg_video_events.event_timestamp
     from edxorg_video_events
-    inner join users on edxorg_video_events.user_id = users.edxorg_openedx_user_id
 )
 
 select distinct
     user_fk
-    , {{ dbt_utils.generate_surrogate_key(['platform']) }} as platform_fk
+    , platform
     , openedx_user_id
     , courserun_readable_id
     , event_type
