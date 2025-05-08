@@ -70,7 +70,7 @@ with allcoupons as (
 )
 
 , pull_product_readable_id as (
-    select 
+    select
         allorders.coupon_id
         , allorders.b2bcoupon_id
         , ecommerce_couponpaymentversion.couponpaymentversion_id
@@ -86,11 +86,11 @@ with allcoupons as (
     left join mitxpro__programruns
         on ecommerce_line.programrun_id = mitxpro__programruns.programrun_id
     left join ecommerce_couponpaymentversion
-        on 
-            allorders.couponpaymentversion_payment_transaction 
+        on
+            allorders.couponpaymentversion_payment_transaction
             = ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
     where allorders.order_id is not null
-    group by 
+    group by
         allorders.coupon_id
         , allorders.b2bcoupon_id
         , ecommerce_couponpaymentversion.couponpaymentversion_id
@@ -149,7 +149,7 @@ left join ecommerce_company
 left join coupons_used_by_name
     on ecommerce_couponpaymentversion.couponpayment_name = coupons_used_by_name.couponpayment_name
 left join pull_product_readable_id
-    on 
+    on
         (allcoupons.coupon_id is null or allcoupons.coupon_id = pull_product_readable_id.coupon_id)
         and (allcoupons.b2bcoupon_id is null or allcoupons.b2bcoupon_id = pull_product_readable_id.b2bcoupon_id)
         and (
