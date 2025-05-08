@@ -93,9 +93,20 @@ with mitxonline_problem_events as (
         and useractivity_event_source = 'server'
 )
 
+, users as (
+    select
+        user_pk
+        , mitxonline_openedx_user_id
+        , mitxpro_openedx_user_id
+        , residential_openedx_user_id
+        , edxorg_openedx_user_id
+    from {{ ref('dim_user') }}
+)
+
 , combined as (
     select
-        'mitxonline' as platform
+        users.user_pk as user_fk
+        , 'mitxonline' as platform
         , mitxonline_problem_events.openedx_user_id
         , mitxonline_problem_events.courserun_readable_id
         , mitxonline_problem_events.event_type
@@ -108,11 +119,16 @@ with mitxonline_problem_events as (
         , mitxonline_problem_events.max_grade
         , mitxonline_problem_events.event_timestamp
     from mitxonline_problem_events
+    inner join users
+        on
+            mitxonline_problem_events.openedx_user_id = users.mitxonline_openedx_user_id
+            and mitxonline_problem_events.user_username = users.user_mitxonline_username
 
     union all
 
     select
-        'mitxpro' as platform
+        '' as user_fk
+        , 'mitxpro' as platform
         , xpro_problem_events.openedx_user_id
         , xpro_problem_events.courserun_readable_id
         , xpro_problem_events.event_type
@@ -129,42 +145,45 @@ with mitxonline_problem_events as (
     union all
 
     select
-        'residential' as platform
-        , user_id
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , problem_block_id
-        , answers
-        , attempt
-        , success
-        , grade
-        , max_grade
-        , event_timestamp
+        '' as user_fk
+        , 'residential' as platform
+        , mitxresidential_problem_events.user_id as openedx_user_id
+        , mitxresidential_problem_events.courserun_readable_id
+        , mitxresidential_problem_events.event_type
+        , mitxresidential_problem_events.event_json
+        , mitxresidential_problem_events.problem_block_id
+        , mitxresidential_problem_events.answers
+        , mitxresidential_problem_events.attempt
+        , mitxresidential_problem_events.success
+        , mitxresidential_problem_events.grade
+        , mitxresidential_problem_events.max_grade
+        , mitxresidential_problem_events.event_timestamp
     from mitxresidential_problem_events
 
     union all
 
     select
-        'edxorg' as platform
-        , user_id
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , problem_block_id
-        , answers
-        , attempt
-        , success
-        , grade
-        , max_grade
-        , event_timestamp
+        '' as user_fk
+        , 'edxorg' as platform
+        , edxorg_problem_events.user_id as openedx_user_id
+        , edxorg_problem_events.courserun_readable_id
+        , edxorg_problem_events.event_type
+        , edxorg_problem_events.event_json
+        , edxorg_problem_events.problem_block_id
+        , edxorg_problem_events.answers
+        , edxorg_problem_events.attempt
+        , edxorg_problem_events.success
+        , edxorg_problem_events.grade
+        , edxorg_problem_events.max_grade
+        , edxorg_problem_events.event_timestamp
     from edxorg_problem_events
 )
 
 select
 
-    platform
+    user_fk
     , openedx_user_id
+    , platform
     , courserun_readable_id
     , event_type
     , problem_block_id as problem_block_fk

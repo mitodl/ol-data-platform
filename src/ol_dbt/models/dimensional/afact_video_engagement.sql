@@ -2,14 +2,25 @@ with course_content as (
     select * from {{ ref('dim_course_content') }}
 )
 
+, users as (
+    select
+        user_pk
+        , mitxonline_openedx_user_id
+    from {{ ref('dim_user') }}
+)
+
 , video_events as (
-    select * from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
+    select
+        *
+        , 'mitxonline' as platform
+    from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
 )
 
 , mitxonline_video_events as (
     select
         a.user_username
         , a.openedx_user_id
+        , a.platform
         , a.courserun_readable_id
         , a.useractivity_event_type as event_type
         , a.useractivity_event_object as event_json
@@ -74,7 +85,9 @@ with course_content as (
     select
         mitxonline_video_events.video_id
         , mitxonline_video_events.user_username
+        , users.user_pk as user_fk
         , mitxonline_video_events.openedx_user_id
+        , mitxonline_video_events.platform
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.video_title
         , mitxonline_video_events.unit_title
@@ -88,6 +101,11 @@ with course_content as (
         , sum(case when mitxonline_video_events.event_type = 'play_video' then 1 else 0 end) as video_plays
         , sum(case when mitxonline_video_events.event_type = 'complete_video' then 1 else 0 end) as video_completes
     from mitxonline_video_events
+    inner join users
+        -- coalesce across the different openedx user ids based on the event origination platform
+        on
+            mitxonline_video_events.openedx_user_id = users.mitxonline_openedx_user_id
+            and mitxonline_video_events.user_username = users.user_mitxonline_username
     left join start_and_end_times
         on
             mitxonline_video_events.video_id = start_and_end_times.video_id
@@ -97,7 +115,9 @@ with course_content as (
     group by
         mitxonline_video_events.video_id
         , mitxonline_video_events.user_username
+        , users.user_pk
         , mitxonline_video_events.openedx_user_id
+        , mitxonline_video_events.platform
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.video_title
         , mitxonline_video_events.unit_title
@@ -112,7 +132,9 @@ with course_content as (
 select
     video_id
     , user_username
+    , user_fk
     , openedx_user_id
+    , platform
     , courserun_readable_id
     , video_title
     , unit_title
