@@ -70,35 +70,35 @@ with allcoupons as (
 )
 
 , pull_product_readable_id as (
-    select
-        mitxpro__ecommerce_allorders.coupon_id
-        , mitxpro__ecommerce_allorders.b2bcoupon_id
+    select 
+        allorders.coupon_id
+        , allorders.b2bcoupon_id
         , ecommerce_couponpaymentversion.couponpaymentversion_id
-        , mitxpro__ecommerce_allorders.b2border_contract_number
+        , allorders.b2border_contract_number
         , coalesce(
-            mitxpro__ecommerce_allorders.courserun_readable_id
+            allorders.courserun_readable_id
             , mitxpro__programruns.programrun_readable_id
-            , mitxpro__ecommerce_allorders.program_readable_id
+            , allorders.program_readable_id
         ) as product_readable_id
-    from mitxpro__ecommerce_allorders
+    from allorders
     left join ecommerce_line
-        on mitxpro__ecommerce_allorders.line_id = ecommerce_line.line_id
+        on allorders.line_id = ecommerce_line.line_id
     left join mitxpro__programruns
         on ecommerce_line.programrun_id = mitxpro__programruns.programrun_id
     left join ecommerce_couponpaymentversion
-        on
-            mitxpro__ecommerce_allorders.couponpaymentversion_payment_transaction
+        on 
+            allorders.couponpaymentversion_payment_transaction 
             = ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction
-    where mitxpro__ecommerce_allorders.order_id is not null
-    group by
-        mitxpro__ecommerce_allorders.coupon_id
-        , mitxpro__ecommerce_allorders.b2bcoupon_id
+    where allorders.order_id is not null
+    group by 
+        allorders.coupon_id
+        , allorders.b2bcoupon_id
         , ecommerce_couponpaymentversion.couponpaymentversion_id
-        , mitxpro__ecommerce_allorders.b2border_contract_number
+        , allorders.b2border_contract_number
         , coalesce(
-            mitxpro__ecommerce_allorders.courserun_readable_id
+            allorders.courserun_readable_id
             , mitxpro__programruns.programrun_readable_id
-            , mitxpro__ecommerce_allorders.program_readable_id
+            , allorders.program_readable_id
         )
 )
 
@@ -149,7 +149,7 @@ left join ecommerce_company
 left join coupons_used_by_name
     on ecommerce_couponpaymentversion.couponpayment_name = coupons_used_by_name.couponpayment_name
 left join pull_product_readable_id
-    on
+    on 
         (allcoupons.coupon_id is null or allcoupons.coupon_id = pull_product_readable_id.coupon_id)
         and (allcoupons.b2bcoupon_id is null or allcoupons.b2bcoupon_id = pull_product_readable_id.b2bcoupon_id)
         and (
