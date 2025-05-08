@@ -123,6 +123,10 @@ models:
     description: string, company name
   - name: b2border_contract_number
     description: string, contract number used to identify the order
+  - name: product_readable_id
+    description: string, the product identifier either referring to courserun_readable_id,
+      programrun_readable_id, or program_readable_id. May be null for bootcamps and
+      edX.org.
   - name: coupons_used_count
     description: int, count of coupons used by coupon payment name
   - name: redeemed
@@ -130,4 +134,4 @@ models:
       otherwise it's false.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["b2bcoupon_id", "coupon_id", "couponpaymentversion_id", "b2border_contract_number"]
+      column_list: ["b2bcoupon_id", "coupon_id", "couponpaymentversion_id", "b2border_contract_number", "product_readable_id"]
