@@ -134,5 +134,4 @@ models:
       otherwise it's false.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["b2bcoupon_id", "coupon_id", "couponpaymentversion_id", "b2border_contract_number",
-        "product_readable_id"]
+      column_list: ["b2bcoupon_id", "coupon_id", "couponpaymentversion_id", "b2border_contract_number", "product_readable_id"]
