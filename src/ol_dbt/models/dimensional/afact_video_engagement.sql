@@ -85,9 +85,7 @@ with course_content as (
     select
         mitxonline_video_events.video_id
         , mitxonline_video_events.user_username
-        , users.user_pk as user_fk
         , mitxonline_video_events.openedx_user_id
-        , mitxonline_video_events.platform
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.video_title
         , mitxonline_video_events.unit_title
@@ -96,6 +94,8 @@ with course_content as (
         , mitxonline_video_events.subsection_content_fk
         , mitxonline_video_events.section_title
         , mitxonline_video_events.section_content_fk
+        , arbitrary(users.user_pk) as user_fk
+        , arbitrary(mitxonline_video_events.platform) as platform
         , (start_and_end_times.end_time - start_and_end_times.start_time) as time_played
         , max(mitxonline_video_events.useractivity_timestamp) as latest_activity_timestamp
         , sum(case when mitxonline_video_events.event_type = 'play_video' then 1 else 0 end) as video_plays
@@ -115,9 +115,7 @@ with course_content as (
     group by
         mitxonline_video_events.video_id
         , mitxonline_video_events.user_username
-        , users.user_pk
         , mitxonline_video_events.openedx_user_id
-        , mitxonline_video_events.platform
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.video_title
         , mitxonline_video_events.unit_title
