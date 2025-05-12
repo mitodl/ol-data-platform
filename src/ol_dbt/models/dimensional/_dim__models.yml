@@ -240,6 +240,20 @@ models:
     description: string, user id on MITxOnline application
   - name: user_mitxonline_username
     description: string, username on MITxOnline
+  - name: mitxpro_openedx_user_id
+    description: int, openedx user id for MITx Pro
+  - name: mitxpro_application_user_id
+    description: string, user id on MITx Pro application
+  - name: user_mitxpro_username
+    description: string, username on MITx Pro
+  - name: residential_openedx_user_id
+    description: int, openedx user id for MITx Residential
+  - name: user_residential_username
+    description: string, username on MITx Residential
+  - name: edxorg_openedx_user_id
+    description: int, openedx user id for edX.org
+  - name: user_edxorg_username
+    description: string, username on edX.org
   - name: email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.
