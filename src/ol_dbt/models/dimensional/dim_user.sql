@@ -158,6 +158,7 @@ with mitxonline_users as (
 )
 
 -- edXorg Users
+--- this table contains multiple records per user, use a window function to pick one per user_id
 , edxorg_bigquery_user_info as (
     select
         user_full_name
@@ -171,7 +172,29 @@ with mitxonline_users as (
         , courserun_platform
         , user_id
         , user_joined_on
+        , row_number() over (
+            partition by user_id
+            order by user_joined_on desc
+        ) as row_num
     from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
+    where courserun_platform = '{{ var("edxorg") }}'
+)
+
+, most_recent_edxorg_bigquery_user_info as (
+    select
+        user_full_name
+        , user_username
+        , user_email
+        , user_country
+        , user_highest_education
+        , user_gender
+        , user_birth_year
+        , courserunenrollment_is_active
+        , courserun_platform
+        , user_id
+        , user_joined_on
+    from edxorg_bigquery_user_info
+    where row_num = 1
 )
 
 , edxorg_bigquery_person_course as (
@@ -184,24 +207,34 @@ with mitxonline_users as (
         , courserunenrollment_is_active
         , courserun_platform
         , user_id
+        , row_number() over (
+            partition by user_id
+            order by courseactivitiy_last_event_timestamp desc
+        ) as row_num
     from {{ ref('stg__edxorg__bigquery__mitx_person_course') }}
+    where courserun_platform = '{{ var("edxorg") }}'
 )
 
-, edxorg_bigquery_s3_user as (
+, most_recent_edxorg_bigquery_person_course as (
     select
-        user_id
-        , user_username
-        , user_email
-        , user_is_active
-        , user_joined_on
-    from {{ ref('stg__edxorg__s3__user') }}
+        user_username
+        , user_profile_country
+        , user_highest_education
+        , user_gender
+        , user_birth_year
+        , courserunenrollment_is_active
+        , courserun_platform
+        , user_id
+    from edxorg_bigquery_person_course
+    where row_num = 1
 )
 
 , edxorg_user_view as (
     select
         user_info.user_full_name
-        , coalesce(user_info.user_username, person_course.user_username, s3_user.user_username) as user_username
-        , coalesce(user_info.user_email, s3_user.user_email) as user_email
+        , user_info.user_email
+        , user_info.user_joined_on
+        , coalesce(user_info.user_username, person_course.user_username) as user_username
         , coalesce(user_info.user_country, person_course.user_profile_country) as user_address_country
         , coalesce(user_info.user_highest_education, person_course.user_highest_education) as user_highest_education
         , coalesce(user_info.user_gender, person_course.user_gender) as user_gender
@@ -209,14 +242,11 @@ with mitxonline_users as (
         , coalesce(
             coalesce(user_info.courserunenrollment_is_active = 1, false)
             , person_course.courserunenrollment_is_active
-            , s3_user.user_is_active
         ) as user_is_active
         , coalesce(user_info.courserun_platform, person_course.courserun_platform) as platform
-        , coalesce(user_info.user_id, person_course.user_id, s3_user.user_id) as user_id
-        , coalesce(user_info.user_joined_on, s3_user.user_joined_on) as user_joined_on
-    from edxorg_bigquery_user_info as user_info
-    left join edxorg_bigquery_person_course as person_course on user_info.user_id = person_course.user_id
-    left join edxorg_bigquery_s3_user as s3_user on user_info.user_email = s3_user.user_email
+        , coalesce(user_info.user_id, person_course.user_id) as user_id
+    from most_recent_edxorg_bigquery_user_info as user_info
+    left join most_recent_edxorg_bigquery_person_course as person_course on user_info.user_id = person_course.user_id
 )
 
 , combined_users as (
@@ -340,33 +370,32 @@ with mitxonline_users as (
 , ranked_users as (
     select
         user_pk
-        , max(mitxonline_openedx_user_id) as mitxonline_openedx_user_id
-        , max(mitxonline_application_user_id) as mitxonline_application_user_id
-        , max(user_mitxonline_username) as user_mitxonline_username
-        , max(mitxpro_openedx_user_id) as mitxpro_openedx_user_id
-        , max(mitxpro_application_user_id) as mitxpro_application_user_id
-        , max(user_mitxpro_username) as user_mitxpro_username
-        , max(residential_openedx_user_id) as residential_openedx_user_id
-        , max(user_residential_username) as user_residential_username
-        , max(edxorg_openedx_user_id) as edxorg_openedx_user_id
-        , max(user_edxorg_username) as user_edxorg_username
-        , max(email) as email
-        , max(full_name) as full_name
-        , max(address_country) as address_country
-        , max(highest_education) as highest_education
-        , max(gender) as gender
-        , max(birth_year) as birth_year
-        , max(company) as company
-        , max(job_title) as job_title
-        , max(industry) as industry
-        , max(user_is_active) as user_is_active
-        , max(user_joined_on) as user_joined_on
+        , mitxonline_openedx_user_id
+        , mitxonline_application_user_id
+        , user_mitxonline_username
+        , mitxpro_openedx_user_id
+        , mitxpro_application_user_id
+        , user_mitxpro_username
+        , residential_openedx_user_id
+        , user_residential_username
+        , edxorg_openedx_user_id
+        , user_edxorg_username
+        , email
+        , full_name
+        , address_country
+        , highest_education
+        , gender
+        , birth_year
+        , company
+        , job_title
+        , industry
+        , user_is_active
+        , user_joined_on
         , row_number() over (
             partition by user_pk
-            order by max(user_joined_on) desc
+            order by user_joined_on desc
         ) as row_num
     from combined_users
-    group by user_pk
 )
 
 select *
