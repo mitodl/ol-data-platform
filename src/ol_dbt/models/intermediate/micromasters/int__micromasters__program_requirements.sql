@@ -13,8 +13,6 @@
 --  4	           28	      Core                                                5
 
 
-
-
 with programs as (
     select * from {{ ref('stg__micromasters__app__postgres__courses_program') }}
 )

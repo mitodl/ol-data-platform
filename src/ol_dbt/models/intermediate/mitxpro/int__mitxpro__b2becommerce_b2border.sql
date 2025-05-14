@@ -33,7 +33,6 @@ with b2borders as (
         on b2borders.b2border_contract_number like '%' || salesforce_opportunity.opportunity_id
 )
 
-
 select
     b2borders.b2border_id
     , b2borders.b2border_updated_on

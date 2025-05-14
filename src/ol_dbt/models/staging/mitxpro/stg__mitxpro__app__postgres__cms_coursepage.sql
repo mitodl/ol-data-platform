@@ -6,7 +6,6 @@ with coursepage as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__app__postgres__cms_externalcoursepage') }}
 )
 
-
 select
     page_ptr_id as wagtail_page_id
     , description as cms_coursepage_description

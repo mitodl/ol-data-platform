@@ -20,7 +20,6 @@ with orders as (
     select * from {{ ref('stg__bootcamps__app__postgres__courses_courserun') }}
 )
 
-
 select
     orders.order_id
     , orders.order_reference_number

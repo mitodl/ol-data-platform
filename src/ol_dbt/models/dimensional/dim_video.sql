@@ -65,7 +65,6 @@ with video_content as (
     from video
 )
 
-
 , combined as (
     select
         video_content.block_id as video_block_pk

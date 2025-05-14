@@ -7,7 +7,6 @@ with mitxonline_programenrollments as (
     select * from {{ ref('int__mitxonline__programenrollments') }}
 )
 
-
 , mitxonline_courserunenrollments as (
     select * from {{ ref('int__mitxonline__courserunenrollments') }}
 )

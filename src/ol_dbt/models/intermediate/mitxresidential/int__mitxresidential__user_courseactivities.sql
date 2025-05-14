@@ -32,7 +32,6 @@ with course_activities as (
     group by user_username, courserun_readable_id
 )
 
-
 , all_course_activities_stats as (
     select
         course_activities.user_username

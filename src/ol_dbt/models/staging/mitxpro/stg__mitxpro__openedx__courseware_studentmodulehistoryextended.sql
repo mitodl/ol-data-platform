@@ -10,7 +10,7 @@ with source as (
     select * from
     {{
       source('ol_warehouse_raw_data'
-      ,'raw__mitx__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended')
+      ,'raw__xpro__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended')
     }}
 
     {% if is_incremental() %}

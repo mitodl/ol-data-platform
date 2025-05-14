@@ -37,7 +37,6 @@ with exam_unit_grades as (
     select * from {{ ref('int__mitxonline__users') }}
 )
 
-
 select
     courses_from_mitxonline.course_number
     , courses_from_mitxonline.course_title

@@ -37,7 +37,6 @@ with course_activities as (
     group by student_module.openedx_user_id, student_module.courserun_readable_id
 )
 
-
 , play_video_stats as (
     select
         user_username

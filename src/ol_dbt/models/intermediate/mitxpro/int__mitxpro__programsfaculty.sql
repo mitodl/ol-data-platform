@@ -10,12 +10,10 @@ with programpages as (
     from {{ ref('stg__mitxpro__app__postgres__cms_facultymemberspage') }}
 )
 
-
 , wagtailpages as (
     select *
     from {{ ref('stg__mitxpro__app__postgres__wagtail_page') }}
 )
-
 
 , unnestedfacultymemberspage as (
     select
@@ -45,7 +43,6 @@ select
     as cms_facultymemberspage_facultymember_name
     , json_query(unnestedfacultymemberspage.cms_facultymemberspage_facultymember, 'lax $.value.description')
     as cms_facultymemberspage_facultymember_description
-
 
 from unnestedfacultymemberspage
 inner join wagtailpages

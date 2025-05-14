@@ -9,7 +9,6 @@ with runs as (
     select * from {{ ref('stg__mitxonline__app__postgres__courses_course') }}
 )
 
-
 select
     runs.courserun_id
     , runs.course_id

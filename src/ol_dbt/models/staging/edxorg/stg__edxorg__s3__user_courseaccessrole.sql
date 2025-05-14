@@ -3,8 +3,6 @@ with source as (
 )
 
 {{ deduplicate_raw_table(order_by='_airbyte_extracted_at' , partition_columns = 'course_id, user_id, role') }}
-
-
 , cleaned as (
     select
         course_id as courserun_readable_id

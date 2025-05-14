@@ -19,7 +19,6 @@ with users as (
     from income
 )
 
-
 select
     users.user_username
     , users.user_full_name
