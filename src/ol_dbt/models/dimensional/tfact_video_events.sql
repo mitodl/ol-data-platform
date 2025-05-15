@@ -106,9 +106,13 @@ with mitxonline_video_events as (
     select
         user_pk
         , mitxonline_openedx_user_id
+        , user_mitxonline_username
         , mitxpro_openedx_user_id
+        , user_mitxpro_username
         , residential_openedx_user_id
+        , user_residential_username
         , edxorg_openedx_user_id
+        , user_edxorg_username
     from {{ ref('dim_user') }}
 )
 
@@ -135,7 +139,7 @@ with mitxonline_video_events as (
     union all
 
     select
-        '' as user_fk
+        users.user_pk as user_fk
         , 'mitxpro' as platform
         , xpro_video_events.openedx_user_id
         , xpro_video_events.courserun_readable_id
@@ -148,11 +152,15 @@ with mitxonline_video_events as (
         , xpro_video_events.ending_position
         , xpro_video_events.event_timestamp
     from xpro_video_events
+    inner join users
+        on
+            xpro_video_events.openedx_user_id = users.mitxpro_openedx_user_id
+            and xpro_video_events.user_username = users.user_mitxpro_username
 
     union all
 
     select
-        '' as user_fk
+        users.user_pk as user_fk
         , 'residential' as platform
         , mitxresidential_video_events.user_id as openedx_user_id
         , mitxresidential_video_events.courserun_readable_id
@@ -165,11 +173,15 @@ with mitxonline_video_events as (
         , mitxresidential_video_events.ending_position
         , mitxresidential_video_events.event_timestamp
     from mitxresidential_video_events
+    inner join users
+        on
+            mitxresidential_video_events.user_id = users.residential_openedx_user_id
+            and mitxresidential_video_events.user_username = users.user_residential_username
 
     union all
 
     select
-        '' as user_fk
+        users.user_pk as user_fk
         , 'edxorg' as platform
         , edxorg_video_events.user_id as openedx_user_id
         , edxorg_video_events.courserun_readable_id
@@ -182,6 +194,10 @@ with mitxonline_video_events as (
         , edxorg_video_events.ending_position
         , edxorg_video_events.event_timestamp
     from edxorg_video_events
+    inner join users
+        on
+            edxorg_video_events.user_id = users.edxorg_openedx_user_id
+            and edxorg_video_events.user_username = users.user_edxorg_username
 )
 
 select distinct
