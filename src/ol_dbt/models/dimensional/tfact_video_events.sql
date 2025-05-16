@@ -102,9 +102,24 @@ with mitxonline_video_events as (
         and useractivity_event_type in {{ video_events }}
 )
 
+, users as (
+    select
+        user_pk
+        , mitxonline_openedx_user_id
+        , user_mitxonline_username
+        , mitxpro_openedx_user_id
+        , user_mitxpro_username
+        , residential_openedx_user_id
+        , user_residential_username
+        , edxorg_openedx_user_id
+        , user_edxorg_username
+    from {{ ref('dim_user') }}
+)
+
 , combined as (
     select
-        'mitxonline' as platform
+        users.user_pk as user_fk
+        , 'mitxonline' as platform
         , mitxonline_video_events.openedx_user_id
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.event_type
@@ -116,11 +131,16 @@ with mitxonline_video_events as (
         , mitxonline_video_events.ending_position
         , mitxonline_video_events.event_timestamp
     from mitxonline_video_events
+    inner join users
+        on
+            mitxonline_video_events.openedx_user_id = users.mitxonline_openedx_user_id
+            and mitxonline_video_events.user_username = users.user_mitxonline_username
 
     union all
 
     select
-        'mitxpro' as platform
+        users.user_pk as user_fk
+        , 'mitxpro' as platform
         , xpro_video_events.openedx_user_id
         , xpro_video_events.courserun_readable_id
         , xpro_video_events.event_type
@@ -132,42 +152,57 @@ with mitxonline_video_events as (
         , xpro_video_events.ending_position
         , xpro_video_events.event_timestamp
     from xpro_video_events
+    inner join users
+        on
+            xpro_video_events.openedx_user_id = users.mitxpro_openedx_user_id
+            and xpro_video_events.user_username = users.user_mitxpro_username
 
     union all
 
     select
-        'residential' as platform
-        , user_id as openedx_user_id
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , video_id
-        , video_duration
-        , video_position
-        , starting_position
-        , ending_position
-        , event_timestamp
+        users.user_pk as user_fk
+        , 'residential' as platform
+        , mitxresidential_video_events.user_id as openedx_user_id
+        , mitxresidential_video_events.courserun_readable_id
+        , mitxresidential_video_events.event_type
+        , mitxresidential_video_events.event_json
+        , mitxresidential_video_events.video_id
+        , mitxresidential_video_events.video_duration
+        , mitxresidential_video_events.video_position
+        , mitxresidential_video_events.starting_position
+        , mitxresidential_video_events.ending_position
+        , mitxresidential_video_events.event_timestamp
     from mitxresidential_video_events
+    inner join users
+        on
+            mitxresidential_video_events.user_id = users.residential_openedx_user_id
+            and mitxresidential_video_events.user_username = users.user_residential_username
 
     union all
 
     select
-        'edxorg' as platform
-        , user_id as openedx_user_id
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , video_id
-        , video_duration
-        , video_position
-        , starting_position
-        , ending_position
-        , event_timestamp
+        users.user_pk as user_fk
+        , 'edxorg' as platform
+        , edxorg_video_events.user_id as openedx_user_id
+        , edxorg_video_events.courserun_readable_id
+        , edxorg_video_events.event_type
+        , edxorg_video_events.event_json
+        , edxorg_video_events.video_id
+        , edxorg_video_events.video_duration
+        , edxorg_video_events.video_position
+        , edxorg_video_events.starting_position
+        , edxorg_video_events.ending_position
+        , edxorg_video_events.event_timestamp
     from edxorg_video_events
+    inner join users
+        on
+            edxorg_video_events.user_id = users.edxorg_openedx_user_id
+            and edxorg_video_events.user_username = users.user_edxorg_username
 )
 
 select distinct
-    platform
+    user_fk
+    , platform
     , openedx_user_id
     , courserun_readable_id
     , event_type

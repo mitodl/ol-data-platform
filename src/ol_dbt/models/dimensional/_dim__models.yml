@@ -10,6 +10,11 @@ models:
     description: string, id for the video
   - name: user_username
     description: string, username of the learner from the platform they used
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the learner on the corresponding
+      platform
+    tests:
+    - not_null
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
   - name: courserun_readable_id
@@ -48,7 +53,7 @@ models:
     is executed within the context of.
   columns:
   - name: platform_pk
-    description: string, primary key for this table
+    description: string, primary key for this table id
     tests:
     - not_null
     - unique
@@ -234,7 +239,7 @@ models:
     - not_null
     - unique
   - name: mitxonline_openedx_user_id
-    description: string, openedx user id
+    description: int, openedx user id for MITxOnline
   - name: mitxonline_application_user_id
     description: string, user id on MITxOnline application
   - name: user_mitxonline_username
@@ -295,6 +300,14 @@ models:
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
   columns:
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the learner on the corresponding
+      platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -343,12 +356,20 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "block_fk",
+      column_list: ["user_fk", "courserun_readable_id", "event_type", "block_fk",
         "event_json", "event_timestamp"]
 
 - name: tfact_video_events
   description: Transactional fact table for learner video events in a course
   columns:
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the learner on the corresponding
+      platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -401,12 +422,20 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "video_block_fk",
-        "event_type", "event_json", "event_timestamp"]
+      column_list: ["user_fk", "courserun_readable_id", "video_block_fk", "event_type",
+        "event_json", "event_timestamp"]
 
 - name: tfact_problem_events
   description: Transactional fact table for learner problem events in a course
   columns:
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the learner on the corresponding
+      platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -454,7 +483,7 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
+      column_list: ["user_fk", "courserun_readable_id", "event_type", "problem_block_fk",
         "event_json", "event_timestamp"]
 
 - name: tfact_discussion_events
@@ -549,6 +578,14 @@ models:
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the learner on the corresponding
+      platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: chapter_block_fk
     description: string, foreign key to dim_course_content, referencing the chapter
       block ID within which this vertical belongs to.
@@ -561,12 +598,20 @@ models:
     description: timestamp, last view timestamp for this vertical
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "block_fk"]
+      column_list: ["user_fk", "courserun_readable_id", "block_fk"]
 
 - name: afact_problem_engagement
   description: Aggregate fact table summarizing problem engagement by learners within
     a course.
   columns:
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the learner on the corresponding
+      platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
   - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the video event occurred
