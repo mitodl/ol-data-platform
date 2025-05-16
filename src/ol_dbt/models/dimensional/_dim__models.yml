@@ -226,8 +226,7 @@ models:
 - name: dim_user
   description: Eventually a dimensional model for users from different platforms.
     It will contain one record for a user that's potentially a part of different platforms
-    where we are able to see they are the same person. It currently only contains
-    mitxonline data though.
+    where we are able to see they are the same person.
   columns:
   - name: user_pk
     description: string, primary key for this user dim table
