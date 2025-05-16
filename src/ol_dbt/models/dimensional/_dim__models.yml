@@ -53,8 +53,7 @@ models:
     is executed within the context of.
   columns:
   - name: platform_pk
-    description: string, primary key for this table, a hash generated using the platform
-      id
+    description: string, primary key for this table id
     tests:
     - not_null
     - unique
@@ -235,8 +234,7 @@ models:
     where we are able to see they are the same person.
   columns:
   - name: user_pk
-    description: string, primary key for this user dim table, a hash generated using
-      user_email
+    description: string, primary key for this user dim table
     tests:
     - not_null
     - unique
