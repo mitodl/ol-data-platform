@@ -226,8 +226,7 @@ models:
 - name: dim_user
   description: Eventually a dimensional model for users from different platforms.
     It will contain one record for a user that's potentially a part of different platforms
-    where we are able to see they are the same person. It currently only contains
-    mitxonline data though.
+    where we are able to see they are the same person.
   columns:
   - name: user_pk
     description: string, primary key for this user dim table
@@ -240,6 +239,20 @@ models:
     description: string, user id on MITxOnline application
   - name: user_mitxonline_username
     description: string, username on MITxOnline
+  - name: mitxpro_openedx_user_id
+    description: int, openedx user id for MITx Pro
+  - name: mitxpro_application_user_id
+    description: string, user id on MITx Pro application
+  - name: user_mitxpro_username
+    description: string, username on MITx Pro
+  - name: residential_openedx_user_id
+    description: int, openedx user id for MITx Residential
+  - name: user_residential_username
+    description: string, username on MITx Residential
+  - name: edxorg_openedx_user_id
+    description: int, openedx user id for edX.org
+  - name: user_edxorg_username
+    description: string, username on edX.org
   - name: email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.
@@ -262,11 +275,22 @@ models:
     description: str, user's job title
   - name: industry
     description: str, user's job industry
-  - name: user_is_active
-    description: boolean, indicating if user's account is active on the corresponding
-      platform including xpro, bootcamps, edX.org, MITx Online, and Residential MITx.
-  - name: user_joined_on
-    description: str, when the user joined on
+  - name: user_is_active_on_mitxonline
+    description: boolean, indicating if user's account is active on MITx Online.
+  - name: user_is_active_on_edxorg
+    description: boolean, indicating if user's account is active on edX.org.
+  - name: user_is_active_on_mitxpro
+    description: boolean, indicating if user's account is active on MITx Pro.
+  - name: user_is_active_on_residential
+    description: boolean, indicating if user's account is active on Residential MITx.
+  - name: user_joined_on_mitxonline
+    description: str, when the user joined on MITx Online.
+  - name: user_joined_on_edxorg
+    description: str, when the user joined on edX.org.
+  - name: user_joined_on_mitxpro
+    description: str, when the user joined on MITx Pro.
+  - name: user_joined_on_residential
+    description: str, when the user joined on Residential MITx.
 
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course

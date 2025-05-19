@@ -90,6 +90,43 @@ computed_assets = airbyte_assets.compute_cacheable_data()
 for asset in computed_assets:
     group_names.add(asset.group_name)
 
+# Define a mapping of group_name to interval (6, 12 or 24 hours) on production
+group_name_to_interval: dict[str, int] = {}
+if DAGSTER_ENV == "production":
+    group_name_to_interval = {
+        "bootcamps_production_app_db__s3_data_lake": 24,
+        "edxorg_production_course_structure__s3_data_lake": 24,
+        "edxorg_production_course_tables__s3_data_lake": 24,
+        "edxorg_tracking_logs__s3_data_lake": 24,
+        "emeritus_bigquery__s3_data_lake": 24,
+        "irx_bigquery__s3_data_lake": 24,
+        "irx_bigquery_email_opt_in__s3_data_lake": 24,
+        "mailgun__s3_data_lake": 24,
+        "micromasters_production_app_db__s3_data_lake": 24,
+        "mit_learn_production__s3_data_lake": 24,
+        "ol_salesforce__s3_data_lake": 24,
+        "s3_edxorg_course_and_program__s3_data_lake": 24,
+        "s3_edxorg_program_credentials__s3_data_lake": 24,
+        "mitx_forum_production__s3_data_lake": 12,
+        "mitx_online_open_edx_db__s3_data_lake": 12,
+        "mitx_online_production_open_edx_student_module_history__s3_data_lake": 12,
+        "mitx_online_tracking_logs__s3_data_lake": 12,
+        "mitxonline_forum_production__s3_data_lake": 12,
+        "mitx_residential_open_edx_db__s3_data_lake": 12,
+        "mitx_residential_open_edx_db_studentmodule_history__s3_data_lake": 12,
+        "mitx_tracking_logs__s3_data_lake": 12,
+        "s3_mitx_online_open_edx_extracts__s3_data_lake": 12,
+        "s3_mitx_open_edx_extracts__s3_data_lake": 12,
+        "s3_xpro_open_edx_extracts__s3_data_lake": 12,
+        "xpro_forum_production__s3_data_lake": 12,
+        "xpro_open_edx_db__s3_data_lake": 12,
+        "xpro_tracking_logs__s3_data_lake": 12,
+        "xpro_production_app_db__s3_data_lake": 6,
+        "mitx_online_production_app_db__s3_data_lake": 6,
+        "ocw_studio_app_db__s3_data_lake": 6,
+        "odl_video_service__s3_data_lake": 6,
+    }
+
 airbyte_asset_jobs = []
 airbyte_update_schedules = []
 group_count = len(group_names)
@@ -100,11 +137,17 @@ for count, group_name in enumerate(group_names, start=1):
         .downstream(depth=1, include_self=True)
         .required_multi_asset_neighbors(),
     )
+    interval = group_name_to_interval.get(group_name, 24)  # default to 24 hours
+    start_hour = count % max(1, len(group_names) // 4)
+
+    # Compute explicit run hours (e.g. [1, 13] for 12-hour interval starting at 1)
+    hours = [(start_hour + i * interval) % 24 for i in range(24 // interval)]
+    hours_str = ",".join(str(h) for h in sorted(hours))
+
     airbyte_update_schedules.append(
         ScheduleDefinition(
             name=f"daily_sync_and_stage_{group_name}",
-            # Offset schedule starts by an hour for groupings of ~4 connections
-            cron_schedule=f"0 {count % (group_count // 4)} * * *",
+            cron_schedule=f"0 {hours_str} * * *",
             job=job,
             execution_timezone="UTC",
             default_status=DefaultScheduleStatus.STOPPED,
