@@ -160,14 +160,17 @@ with mitxonline_discussion_events as (
         , mitxresidential_discussion_events.user_forums_roles
         , mitxresidential_discussion_events.event_timestamp
     from mitxresidential_discussion_events
-    left join users on mitxresidential_discussion_events.user_id = users.residential_openedx_user_id
+    left join users
+        on
+            mitxresidential_discussion_events.openedx_user_id = users.residential_openedx_user_id
+            and mitxresidential_discussion_events.user_username = users.user_residential_username
 
     union all
 
     select
         'edxorg' as platform
         , edxorg_discussion_events.openedx_user_id
-        , edxorg_discussion_events.users.user_pk as user_fk
+        , users.user_pk as user_fk
         , edxorg_discussion_events.courserun_readable_id
         , edxorg_discussion_events.event_type
         , edxorg_discussion_events.event_json
@@ -181,7 +184,10 @@ with mitxonline_discussion_events as (
         , edxorg_discussion_events.user_forums_roles
         , edxorg_discussion_events.event_timestamp
     from edxorg_discussion_events
-    left join users on edxorg_discussion_events.user_id = users.edxorg_openedx_user_id
+    left join users
+        on
+            edxorg_discussion_events.openedx_user_id = users.edxorg_openedx_user_id
+            and edxorg_discussion_events.user_username = users.user_edxorg_username
 )
 
 select

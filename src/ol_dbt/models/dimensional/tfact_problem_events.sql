@@ -162,7 +162,9 @@ with mitxonline_problem_events as (
         , mitxresidential_problem_events.event_timestamp
     from mitxresidential_problem_events
     left join users
-        on mitxresidential_problem_events.user_id = users.residential_openedx_user_id
+        on
+            mitxresidential_problem_events.user_id = users.residential_openedx_user_id
+            and mitxresidential_problem_events.user_username = users.user_residential_username
 
     union all
 
@@ -182,7 +184,9 @@ with mitxonline_problem_events as (
         , edxorg_problem_events.event_timestamp
     from edxorg_problem_events
     left join users
-        on edxorg_problem_events.user_id = users.residential_openedx_user_id
+        on
+            edxorg_problem_events.user_id = users.edxorg_openedx_user_id
+            and edxorg_problem_events.user_username = users.user_edxorg_username
 )
 
 select
