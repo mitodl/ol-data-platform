@@ -121,61 +121,67 @@ with mitxonline_discussion_events as (
 
     select
         'mitxpro' as platform
-        , openedx_user_id
-        , null as user_fk --to be filled in later once we have all users in dim_users
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , post_id
-        , post_title
-        , post_content
-        , commentable_id
-        , discussion_component_id
-        , discussion_component_name
-        , page_url
-        , user_forums_roles
-        , event_timestamp
+        , xpro_discussion_events.openedx_user_id
+        , users.user_pk as user_fk
+        , xpro_discussion_events.courserun_readable_id
+        , xpro_discussion_events.event_type
+        , xpro_discussion_events.event_json
+        , xpro_discussion_events.post_id
+        , xpro_discussion_events.post_title
+        , xpro_discussion_events.post_content
+        , xpro_discussion_events.commentable_id
+        , xpro_discussion_events.discussion_component_id
+        , xpro_discussion_events.discussion_component_name
+        , xpro_discussion_events.page_url
+        , xpro_discussion_events.user_forums_roles
+        , xpro_discussion_events.event_timestamp
     from xpro_discussion_events
+    left join users
+        on
+            xpro_discussion_events.openedx_user_id = users.mitxonline_openedx_user_id
+            and xpro_discussion_events.user_username = users.user_mitxonline_username
 
     union all
 
     select
         'residential' as platform
-        , openedx_user_id
-        , null as user_fk --to be filled in later once we have all users in dim_users
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , post_id
-        , post_title
-        , post_content
-        , commentable_id
-        , discussion_component_id
-        , discussion_component_name
-        , page_url
-        , user_forums_roles
-        , event_timestamp
+        , mitxresidential_discussion_events.openedx_user_id
+        , users.user_pk as user_fk
+        , mitxresidential_discussion_events.courserun_readable_id
+        , mitxresidential_discussion_events.event_type
+        , mitxresidential_discussion_events.event_json
+        , mitxresidential_discussion_events.post_id
+        , mitxresidential_discussion_events.post_title
+        , mitxresidential_discussion_events.post_content
+        , mitxresidential_discussion_events.commentable_id
+        , mitxresidential_discussion_events.discussion_component_id
+        , mitxresidential_discussion_events.discussion_component_name
+        , mitxresidential_discussion_events.page_url
+        , mitxresidential_discussion_events.user_forums_roles
+        , mitxresidential_discussion_events.event_timestamp
     from mitxresidential_discussion_events
+    left join users on mitxresidential_discussion_events.user_id = users.residential_openedx_user_id
 
     union all
 
     select
         'edxorg' as platform
-        , openedx_user_id
-        , null as user_fk --to be filled in later once we have all users in dim_users
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , post_id
-        , post_title
-        , post_content
-        , commentable_id
-        , discussion_component_id
-        , discussion_component_name
-        , page_url
-        , user_forums_roles
-        , event_timestamp
+        , edxorg_discussion_events.openedx_user_id
+        , edxorg_discussion_events.users.user_pk as user_fk
+        , edxorg_discussion_events.courserun_readable_id
+        , edxorg_discussion_events.event_type
+        , edxorg_discussion_events.event_json
+        , edxorg_discussion_events.post_id
+        , edxorg_discussion_events.post_title
+        , edxorg_discussion_events.post_content
+        , edxorg_discussion_events.commentable_id
+        , edxorg_discussion_events.discussion_component_id
+        , edxorg_discussion_events.discussion_component_name
+        , edxorg_discussion_events.page_url
+        , edxorg_discussion_events.user_forums_roles
+        , edxorg_discussion_events.event_timestamp
     from edxorg_discussion_events
+    left join users on edxorg_discussion_events.user_id = users.edxorg_openedx_user_id
 )
 
 select

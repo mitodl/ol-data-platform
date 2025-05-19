@@ -52,6 +52,12 @@ models:
     tests:
     - not_null
     - unique
+  - name: platform_readable_id
+    description: string, readable id of the platform. e.g. mitxonline, mitxpro, edxorg,
+      residential.
+    tests:
+    - not_null
+    - unique
   - name: platform_name
     description: string, name of the platform
     tests:
@@ -407,6 +413,11 @@ models:
 - name: tfact_problem_events
   description: Transactional fact table for learner problem events in a course
   columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the user who triggered
+      the event
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
