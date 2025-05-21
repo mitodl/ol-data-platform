@@ -50,6 +50,26 @@ with mitxpro__programenrollments as (
     select * from {{ ref('int__micromasters__program_enrollments') }}
 )
 
+, edxorg_mitx_program_courses as (
+    select * from {{ ref('int__edxorg__mitx_program_courses') }}
+)
+
+, mitx__courses as (
+    select * from {{ ref('int__mitx__courses') }}
+)
+
+, mitxpro__courses as (
+    select * from {{ ref('int__mitxpro__courses') }}
+)
+
+, combined_enrollments as (
+    select * from {{ ref('int__combined__courserun_enrollments') }}
+)
+
+, combined_courseruns as (
+    select * from {{ ref('int__combined__course_runs') }}
+)
+
 , combined_programs as (
     select
         mitxpro__programs.platform_name
@@ -193,27 +213,135 @@ with mitxpro__programenrollments as (
         and edx_program_enrollments.micromasters_program_id is null
 )
 
+, courses_in_programs as (
+    select
+        mitx__courses.course_readable_id
+        , mitxonline__programs.program_readable_id
+    from mitx__programs
+    inner join mitx__courses
+        on mitx__programs.course_number = mitx__courses.course_number
+    left join mitxonline__programs
+        on mitx__programs.mitxonline_program_id = mitxonline__programs.program_id
+    where mitx__courses.is_on_mitxonline = true
+
+    union all
+
+    select
+        mitx__courses.course_readable_id
+        , null as program_readable_id
+    from mitx__programs
+    inner join mitx__courses
+        on mitx__programs.course_number = mitx__courses.course_number
+    where mitx__courses.is_on_mitxonline = false
+
+    union all
+
+    select
+        coalesce(mitx__courses.course_readable_id, edxorg_mitx_program_courses.course_readable_id) as course_readable_id
+        , null as program_readable_id
+    from edxorg_mitx_program_courses
+    left join mitx__programs
+        on edxorg_mitx_program_courses.program_name = mitx__programs.program_title
+    left join mitx__courses
+        on
+            replace(edxorg_mitx_program_courses.course_readable_id, 'MITx/', '')
+            = replace(mitx__courses.course_readable_id, 'course-v1:MITxT+', '')
+    where mitx__programs.program_title is null
+
+    union all
+
+    select
+        mitxpro__courses.course_readable_id
+        , mitxpro__programs.program_readable_id
+    from mitxpro__courses
+    inner join mitxpro__programs
+        on mitxpro__courses.program_id = mitxpro__programs.program_id
+)
+
+, final_combined_programs as (
+    select
+        combined_programs.platform_name
+        , combined_programs.program_id
+        , combined_programs.program_title
+        , combined_programs.program_name
+        , combined_programs.program_track
+        , combined_programs.program_type
+        , combined_programs.program_is_live
+        , combined_programs.program_readable_id
+        , {{ generate_hash_id('cast(combined_programs.user_id as varchar) || combined_programs.platform_name') }}
+        as user_hashed_id
+        , combined_programs.user_id
+        , combined_programs.user_email
+        , combined_programs.user_username
+        , combined_programs.user_full_name
+        , combined_programs.user_has_completed_program
+        , combined_programs.programenrollment_is_active
+        , combined_programs.programenrollment_created_on
+        , combined_programs.programenrollment_enrollment_status
+        , combined_programs.programcertificate_created_on
+        , combined_programs.programcertificate_is_revoked
+        , combined_programs.programcertificate_uuid
+        , combined_programs.programcertificate_url
+        , cast(substring(combined_programs.programcertificate_created_on, 1, 10) as date)
+        as programcertificate_created_on_date
+        , min(cast(substring(combined_courseruns.courserun_start_on, 1, 10) as date))
+        as first_courserun_start_on_date
+    from combined_programs
+    left join courses_in_programs
+        on combined_programs.program_readable_id = courses_in_programs.program_readable_id
+    left join combined_enrollments
+        on 
+            cast(combined_programs.user_id as varchar) = combined_enrollments.user_id
+            and courses_in_programs.course_readable_id = combined_enrollments.course_readable_id
+    left join combined_courseruns
+        on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
+    group by 
+        combined_programs.platform_name
+        , combined_programs.program_id
+        , combined_programs.program_title
+        , combined_programs.program_name
+        , combined_programs.program_track
+        , combined_programs.program_type
+        , combined_programs.program_is_live
+        , combined_programs.program_readable_id
+        , {{ generate_hash_id('cast(combined_programs.user_id as varchar) || combined_programs.platform_name') }}
+        , combined_programs.user_id
+        , combined_programs.user_email
+        , combined_programs.user_username
+        , combined_programs.user_full_name
+        , combined_programs.user_has_completed_program
+        , combined_programs.programenrollment_is_active
+        , combined_programs.programenrollment_created_on
+        , combined_programs.programenrollment_enrollment_status
+        , combined_programs.programcertificate_created_on
+        , combined_programs.programcertificate_is_revoked
+        , combined_programs.programcertificate_uuid
+        , combined_programs.programcertificate_url
+        , cast(substring(combined_programs.programcertificate_created_on, 1, 10) as date)
+)
+
 select
-    combined_programs.platform_name
-    , combined_programs.program_id
-    , combined_programs.program_title
-    , combined_programs.program_name
-    , combined_programs.program_track
-    , combined_programs.program_type
-    , combined_programs.program_is_live
-    , combined_programs.program_readable_id
-    , {{ generate_hash_id('cast(combined_programs.user_id as varchar) || combined_programs.platform_name') }}
-    as user_hashed_id
-    , combined_programs.user_id
-    , combined_programs.user_email
-    , combined_programs.user_username
-    , combined_programs.user_full_name
-    , combined_programs.user_has_completed_program
-    , combined_programs.programenrollment_is_active
-    , combined_programs.programenrollment_created_on
-    , combined_programs.programenrollment_enrollment_status
-    , combined_programs.programcertificate_created_on
-    , combined_programs.programcertificate_is_revoked
-    , combined_programs.programcertificate_uuid
-    , combined_programs.programcertificate_url
-from combined_programs
+    final_combined_programs.platform_name
+    , final_combined_programs.program_id
+    , final_combined_programs.program_title
+    , final_combined_programs.program_name
+    , final_combined_programs.program_track
+    , final_combined_programs.program_type
+    , final_combined_programs.program_is_live
+    , final_combined_programs.program_readable_id
+    , final_combined_programs.user_hashed_id
+    , final_combined_programs.user_id
+    , final_combined_programs.user_email
+    , final_combined_programs.user_username
+    , final_combined_programs.user_full_name
+    , final_combined_programs.user_has_completed_program
+    , final_combined_programs.programenrollment_is_active
+    , final_combined_programs.programenrollment_created_on
+    , final_combined_programs.programenrollment_enrollment_status
+    , final_combined_programs.programcertificate_created_on
+    , final_combined_programs.programcertificate_is_revoked
+    , final_combined_programs.programcertificate_uuid
+    , final_combined_programs.programcertificate_url
+    , final_combined_programs.programcertificate_created_on_date 
+    - final_combined_programs.first_courserun_start_on_date as program_completion_days
+from final_combined_programs
