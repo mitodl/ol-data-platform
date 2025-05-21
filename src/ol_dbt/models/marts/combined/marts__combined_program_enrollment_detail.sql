@@ -294,12 +294,12 @@ with mitxpro__programenrollments as (
     left join courses_in_programs
         on combined_programs.program_readable_id = courses_in_programs.program_readable_id
     left join combined_enrollments
-        on 
+        on
             cast(combined_programs.user_id as varchar) = combined_enrollments.user_id
             and courses_in_programs.course_readable_id = combined_enrollments.course_readable_id
     left join combined_courseruns
         on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    group by 
+    group by
         combined_programs.platform_name
         , combined_programs.program_id
         , combined_programs.program_title
