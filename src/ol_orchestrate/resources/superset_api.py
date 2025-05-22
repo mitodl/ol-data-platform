@@ -51,7 +51,9 @@ class SupersetApiClient(OAuthApiClient):
     def _get_csrf_token(self) -> str:
         response = self.http_client.get(
             f"{self.base_url}/api/v1/security/csrf_token/",
-            headers={"Authorization": f"Bearer {self._fetch_access_token()}"},
+            headers={
+                "Authorization": f"{self.token_type} {self._fetch_access_token()}"
+            },
         )
         response.raise_for_status()
         return response.json().get("result")
@@ -113,7 +115,7 @@ class SupersetApiClient(OAuthApiClient):
             request_url,
             json=payload,
             headers={
-                "Authorization": f"Bearer {self._fetch_access_token()}",
+                "Authorization": f"{self.token_type} {self._fetch_access_token()}",
                 "X-CSRFToken": csrf_token,
                 "Referer": f"{self.base_url}/api/v1/security/csrf_token/",
                 "Content-Type": "application/json",
@@ -154,5 +156,4 @@ class SupersetApiClientFactory(ConfigurableResource):
 
     @contextmanager
     def yield_for_execution(self, context: InitResourceContext) -> Generator[Self]:  # noqa: ARG002
-        self._initialize_client()
         yield self
