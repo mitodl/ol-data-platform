@@ -97,10 +97,8 @@ class SupersetApiClient(OAuthApiClient):
         Create a dataset in Superset.
 
         Args:
+            schema_suffix (str): The schema suffix. e.g. mart, reporting
             table_name (str): The name of the table to create a dataset for.
-            schema (str): The schema of the table.
-            database_id (int): The ID of the database in Superset.
-
         Returns:
             Dict[str, Any]: The response from the Superset API.
         """

@@ -17,7 +17,6 @@ from dagster import Array, OpExecutionContext, Shape, job, op
     required_resource_keys={"vault", "superset_api"},
 )
 def create_superset_datasets(context: OpExecutionContext):
-    context.log.info("Publishing Superset create_superset_datasets")
     models = context.op_config["models"]
     for model in models:
         schema_suffix = model["schema_suffix"]
