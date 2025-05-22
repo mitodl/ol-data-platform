@@ -16,8 +16,11 @@ from dagster_dbt import (
 )
 
 from ol_orchestrate.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
+from ol_orchestrate.jobs.superset_api import superset_sync_job
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
+from ol_orchestrate.sensors.dbt import sync_superset_datasets_from_dbt
 
 airbyte_host_map = {
     "dev": "api-airbyte-qa.odl.mit.edu",
@@ -157,16 +160,21 @@ for count, group_name in enumerate(group_names, start=1):
 
 elt = Definitions(
     assets=[*with_source_code_references([full_dbt_project]), airbyte_assets],
-    resources={"dbt": dbt_cli},
+    resources={
+        "dbt": dbt_cli,
+        "vault": vault,
+        "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
+    },
     sensors=[
+        sync_superset_datasets_from_dbt,
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=3600,
             # exclude staging as they are already handled by "sync_and_stage_" job
             target=AssetSelection.assets(full_dbt_project)
             - AssetSelection.groups("staging"),
-        )
+        ),
     ],
-    jobs=airbyte_asset_jobs,
+    jobs=[*airbyte_asset_jobs, superset_sync_job],
     schedules=airbyte_update_schedules,
 )
