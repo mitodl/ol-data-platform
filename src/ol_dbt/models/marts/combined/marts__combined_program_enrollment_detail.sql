@@ -288,18 +288,21 @@ with mitxpro__programenrollments as (
         , combined_programs.programcertificate_url
         , cast(substring(combined_programs.programcertificate_created_on, 1, 10) as date)
         as programcertificate_created_on_date
+        , sum(case when upper(combined_enrollments.course_title) like '%CAPSTONE%' then 1 else 0 end)
+        as capstone_sum
         , min(cast(substring(combined_courseruns.courserun_start_on, 1, 10) as date))
         as first_courserun_start_on_date
+        , count(distinct combined_enrollments.course_readable_id) as unique_courses_taken_in_program
     from combined_programs
     left join courses_in_programs
         on combined_programs.program_readable_id = courses_in_programs.program_readable_id
     left join combined_enrollments
-        on
+        on 
             cast(combined_programs.user_id as varchar) = combined_enrollments.user_id
             and courses_in_programs.course_readable_id = combined_enrollments.course_readable_id
     left join combined_courseruns
         on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    group by
+    group by 
         combined_programs.platform_name
         , combined_programs.program_id
         , combined_programs.program_title
@@ -346,6 +349,9 @@ select
     , final_combined_programs.programcertificate_is_revoked
     , final_combined_programs.programcertificate_uuid
     , final_combined_programs.programcertificate_url
+    , final_combined_programs.unique_courses_taken_in_program
+    , case when final_combined_programs.capstone_sum > 0 then 'Y' else 'N' end
+    as capstone_indicator
     , date_diff(
         'day'
         , final_combined_programs.programcertificate_created_on_date

@@ -503,6 +503,12 @@ models:
     description: str, URL to the program certificate for users who earned the certificate
       on either mitxonline.mit.edu or xpro.mit.edu. Null for certificate earned on
       edX.org or certificates that have been revoked.
+  - name: unique_courses_taken_in_program
+    description: int, count of unique course readable ids the learner enrolled
+      in within that program
+  - name: capstone_indicator
+    description: str, if the learner has taken a course with the word capstone in the title 
+      then it will be Y otherwise the value will be N
   - name: program_completion_days
     description: int, number of days between the first course start date and the program
       completion certificate date
