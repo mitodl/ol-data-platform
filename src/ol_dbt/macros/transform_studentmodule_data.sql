@@ -1,5 +1,4 @@
 {% macro generate_studentmodule_problem_events(studentmodule_table, studentmodulehistory_table, user_id_field) %}
-(
   with studentmodule as (
     select
       studentmodule_id
@@ -83,14 +82,14 @@
       , studentmodule_problem_max_grade
       , studentmodule_updated_on
       , attempt
-      , map_keys(cast(correct_item as map(varchar, json)))[1] as problem_id
+      , map_keys(cast(correct_item as map(varchar, json)))[1] as problem_id -- noqa: PRS
       , json_extract_scalar(
           cast(correct_item as map(varchar, json))[map_keys(cast(correct_item as map(varchar, json)))[1]],
           '$.correctness'
-        ) as correctness
+        ) as correctness -- noqa: PRS
       , json_format(
           cast(answer_item as map(varchar, json))[map_keys(cast(answer_item as map(varchar, json)))[1]]
-        ) as answers_json
+        ) as answers_json -- noqa: PRS
     from indexed
   )
 
@@ -108,5 +107,4 @@
     , correctness
     , answers_json
   from exploded
-)
 {% endmacro %}
