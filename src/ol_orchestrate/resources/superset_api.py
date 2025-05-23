@@ -108,7 +108,7 @@ class SupersetApiClient(OAuthApiClient):
         Returns:
             Dict[str, Any]: The response from the Superset API.
         """
-        request_url = f"{self.base_url}/api/v1/dataset/get_or_create"
+        request_url = f"{self.base_url}/api/v1/dataset/get_or_create/"
         payload = {
             "database_id": 1,  # Trino database ID
             "schema": f"{self.schema_prefix}_{schema_suffix}",
@@ -169,6 +169,7 @@ class SupersetApiClientFactory(ConfigurableResource):
             username=client_secrets["service_account_username"],
             password=client_secrets["service_account_password"],
             scope=client_secrets.get("scope", "openid profile email roles"),
+            schema_prefix=self.schema_prefix,
         )
 
     @property

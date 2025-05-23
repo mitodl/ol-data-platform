@@ -6,16 +6,18 @@ from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
 
 def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
     @asset(
-        name=f"superset_dataset__{dbt_asset_group_name}__{dbt_model_name}",
+        key=AssetKey(("superset", "dataset", dbt_model_name)),
         ins={
-            f"{dbt_model_name}": AssetIn(
-                key=AssetKey((dbt_asset_group_name, dbt_model_name))
+            "dbt_asset": AssetIn(
+                key=AssetKey((dbt_asset_group_name, dbt_model_name)),
             )
         },
         group_name="superset_dataset",
     )
     def _superset_dataset(
-        context: AssetExecutionContext, superset_api: SupersetApiClientFactory
+        context: AssetExecutionContext,
+        superset_api: SupersetApiClientFactory,
+        dbt_asset,  # noqa: ARG001
     ):
         dataset_id = superset_api.client.get_or_create_dataset(
             schema_suffix=dbt_asset_group_name,
