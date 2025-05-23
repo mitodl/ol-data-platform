@@ -25,8 +25,15 @@ class SupersetApiClient(OAuthApiClient):
         default="openid profile email roles",
         description="scope to request from the token endpoint",
     )
+    schema_prefix: str = Field(
+        description="The schema prefix to use for Superset datasets.",
+    )
     _access_token: Optional[str] = PrivateAttr(default=None)
     _access_token_expires: Optional[datetime] = PrivateAttr(default=None)
+
+    @property
+    def _csrf_token_url(self) -> str:
+        return f"{self.base_url}/api/v1/security/csrf_token/"
 
     def _fetch_access_token(self) -> Optional[str]:
         now = datetime.now(tz=UTC)
@@ -91,10 +98,9 @@ class SupersetApiClient(OAuthApiClient):
 
             page += 1
 
-    def create_dataset(self, schema_suffix: str, table_name: str) -> dict[str, Any]:
+    def get_or_create_dataset(self, schema_suffix: str, table_name: str) -> str:
         """
-
-        Create a dataset in Superset.
+        Retrieve a dataset by name, or create it if it doesn't exist
 
         Args:
             schema_suffix (str): The schema suffix. e.g. mart, reporting
@@ -102,11 +108,10 @@ class SupersetApiClient(OAuthApiClient):
         Returns:
             Dict[str, Any]: The response from the Superset API.
         """
-        csrf_token = self._get_csrf_token()
-        request_url = f"{self.base_url}/api/v1/dataset/"
+        request_url = f"{self.base_url}/api/v1/dataset/get_or_create"
         payload = {
-            "database": 1,  # Trino database ID
-            "schema": f"ol_warehouse_production_{schema_suffix}",
+            "database_id": 1,  # Trino database ID
+            "schema": f"{self.schema_prefix}_{schema_suffix}",
             "table_name": table_name,
         }
         response = self.http_client.post(
@@ -114,19 +119,39 @@ class SupersetApiClient(OAuthApiClient):
             json=payload,
             headers={
                 "Authorization": f"{self.token_type} {self._fetch_access_token()}",
-                "X-CSRFToken": csrf_token,
-                "Referer": f"{self.base_url}/api/v1/security/csrf_token/",
-                "Content-Type": "application/json",
+                "X-CSRFToken": self._get_csrf_token(),
+                "Referer": self._csrf_token_url,
             },
             timeout=60,
         )
 
+        response.raise_for_status()
+        response_data = response.json()
+
+        return response_data.get("result", {}).get("table_id")
+
+    def refresh_dataset(self, dataset_id: int) -> dict[str, Any]:
+        """
+        Refresh or update metadata for a dataset in Superset.
+        """
+        request_url = f"{self.base_url}/api/v1/dataset/{dataset_id}/"
+        response = self.http_client.put(
+            request_url,
+            headers={
+                "Authorization": f"{self.token_type} {self._fetch_access_token()}",
+                "X-CSRFToken": self._get_csrf_token(),
+                "Referer": self._csrf_token_url,
+                "Content-Type": "application/json",
+            },
+            timeout=60,
+        )
         response.raise_for_status()
         return response.json()
 
 
 class SupersetApiClientFactory(ConfigurableResource):
     deployment: str = Field(description="The name of the deployment")
+    schema_prefix: str = Field(description="The schema prefix to use for Superset")
     _client: Optional[SupersetApiClient] = PrivateAttr(default=None)
     vault: ResourceDependency[Vault]
 

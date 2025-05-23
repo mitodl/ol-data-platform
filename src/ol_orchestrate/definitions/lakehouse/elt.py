@@ -16,11 +16,10 @@ from dagster_dbt import (
 )
 
 from ol_orchestrate.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
-from ol_orchestrate.jobs.superset_api import superset_sync_job
+from ol_orchestrate.assets.superset import create_superset_asset
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
-from ol_orchestrate.sensors.dbt import sync_superset_datasets_from_dbt
 
 airbyte_host_map = {
     "dev": "api-airbyte-qa.odl.mit.edu",
@@ -33,6 +32,7 @@ if DAGSTER_ENV == "dev":
     dagster_url = "http://localhost:3000"
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
     vault._auth_github()  # noqa: SLF001
+    schema_prefix = "ol_warehouse_qa"
 else:
     dagster_url = (
         "https://pipelines.odl.mit.edu"
@@ -43,6 +43,7 @@ else:
         vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
     )
     vault._auth_aws_iam()  # noqa: SLF001
+    schema_prefix = "ol_warehouse_production"
 
 configured_airbyte_resource = airbyte_resource.configured(
     {
@@ -158,15 +159,32 @@ for count, group_name in enumerate(group_names, start=1):
     )
     airbyte_asset_jobs.append(job)
 
+dbt_models_for_superset_datasets = {
+    "mart",
+    "reporting",
+}  # relevant dbt models to sync with superset
+dbt_model_keys = full_dbt_project.keys
+
+superset_assets = [
+    create_superset_asset(dbt_asset_group_name=key.path[0], dbt_model_name=key.path[1])
+    for key in dbt_model_keys
+    if key.path[0] in dbt_models_for_superset_datasets
+]
+
 elt = Definitions(
-    assets=[*with_source_code_references([full_dbt_project]), airbyte_assets],
+    assets=[
+        *with_source_code_references([full_dbt_project]),
+        airbyte_assets,
+        *superset_assets,
+    ],
     resources={
         "dbt": dbt_cli,
         "vault": vault,
-        "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
+        "superset_api": SupersetApiClientFactory(
+            deployment="superset", schema_prefix=schema_prefix, vault=vault
+        ),
     },
     sensors=[
-        sync_superset_datasets_from_dbt,
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=3600,
@@ -175,6 +193,6 @@ elt = Definitions(
             - AssetSelection.groups("staging"),
         ),
     ],
-    jobs=[*airbyte_asset_jobs, superset_sync_job],
+    jobs=[*airbyte_asset_jobs],
     schedules=airbyte_update_schedules,
 )
