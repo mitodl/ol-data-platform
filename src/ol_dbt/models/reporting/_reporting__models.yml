@@ -6,12 +6,24 @@ models:
     (audit and verified), certificates and program credentials aggregated for each
     program.
   columns:
+  - name: platform
+    description: str, name of the platform
   - name: program_name
     description: str, name of the program. If program is split over multiple tracks,
       the program name is the same for all tracks. e.g. Data, Economics, and Design
       of Policy
     tests:
     - not_null
+  - name: program_type
+    description: str,  the type of the program. Possible values are 'MicroMasters',
+      'XSeries' and 'Professional Certificate'
+  - name: program_track
+    description: str, name of the specific track for MicroMasters programs. For example,
+      Statistics and Data Science program has multiple tracks - General Track, Methods
+      Track, Social Sciences Track, and 'Time Series and Social Sciences Track'.
+  - name: program_readable_id
+    description: str, readable ID from xpro or mitxonline formatted as program-v1:{org}+{program
+      code} e.g.program-v1:xPRO+MLx
   - name: total_enrollments
     description: int, count of course enrollments in the program, aggregated by user_email
       and courserun_readable_id
