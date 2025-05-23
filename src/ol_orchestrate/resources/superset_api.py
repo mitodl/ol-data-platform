@@ -134,7 +134,7 @@ class SupersetApiClient(OAuthApiClient):
         """
         Refresh or update metadata for a dataset in Superset.
         """
-        request_url = f"{self.base_url}/api/v1/dataset/{dataset_id}/"
+        request_url = f"{self.base_url}/api/v1/dataset/{dataset_id}/refresh"
         response = self.http_client.put(
             request_url,
             headers={
