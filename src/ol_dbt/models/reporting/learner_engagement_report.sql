@@ -8,7 +8,7 @@ with video_pre_query as (
         , max(video_position) as end_time
         , min(case when event_type = 'play_video' then video_position end) as start_time
     from ol_warehouse_production_dimensional.tfact_video_events
-    where
+    where 
         event_type in (
             'play_video'
             , 'seek_video'
@@ -16,7 +16,7 @@ with video_pre_query as (
             , 'stop_video'
             , 'complete_video'
         )
-    group by
+    group by 
         platform
         , openedx_user_id
         , courserun_readable_id
@@ -41,11 +41,11 @@ with video_pre_query as (
     inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
         on a.courserun_readable_id = h.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as c
-        on
+        on 
             a.sequential_block_fk = c.block_id
             and c.is_latest = true
     inner join ol_warehouse_production_dimensional.dim_course_content as d
-        on
+        on 
             a.chapter_block_fk = d.block_id
             and d.is_latest = true
     where c.block_title is not null
@@ -59,7 +59,7 @@ with video_pre_query as (
 )
 
 , page_views_table as (
-    select
+    select 
         a.platform
         , h.course_title
         , a.courserun_readable_id
@@ -69,28 +69,28 @@ with video_pre_query as (
         , sum(a.num_of_views) as num_of_page_views
     from ol_warehouse_production_dimensional.afact_course_page_engagement as a
     inner join ol_warehouse_production_dimensional.dim_course_content as b
-        on
+        on 
             a.block_fk = b.block_id
             and b.is_latest = true
     inner join ol_warehouse_production_dimensional.dim_course_content as c
-        on
+        on 
             a.sequential_block_fk = c.block_id
             and c.is_latest = true
     inner join ol_warehouse_production_dimensional.dim_course_content as d
-        on
+        on 
             a.chapter_block_fk = d.block_id
             and d.is_latest = true
     left join ol_warehouse_production_dimensional.dim_user as u
-        on
-            a.platform = 'mitxonline'
+        on 
+            a.platform = 'mitxonline' 
             and a.openedx_user_id = u.mitxonline_openedx_user_id
     left join ol_warehouse_production_dimensional.dim_user as ou
-        on
-            a.platform = 'edxorg'
+        on 
+            a.platform = 'edxorg' 
             and a.openedx_user_id = ou.edxorg_openedx_user_id
     inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
         on a.courserun_readable_id = h.courserun_readable_id
-    where
+    where 
         b.block_category = 'vertical'
         and c.block_title is not null
     group by
@@ -111,23 +111,23 @@ with video_pre_query as (
         , cc_subsection.block_title as subsection_title
         , coalesce(b.email, ob.email) as email
         , sum(
-            cast(case when a.end_time = 'null' then '0' else a.end_time end as decimal(30, 10))
+            cast(case when a.end_time = 'null' then '0' else a.end_time end as decimal(30, 10)) 
             - cast(case when a.start_time = 'null' then '0' else a.start_time end as decimal(30, 10))
-        )
+        ) 
         as estimated_time_played
         , sum(a.video_duration) as video_duration
     from video_pre_query as a
     inner join ol_warehouse_production_dimensional.dim_video as c
-        on
+        on 
             a.courserun_readable_id = c.courserun_readable_id
             and a.video_block_fk = substring(c.video_block_pk, regexp_position(c.video_block_pk, 'block@') + 6)
     left join ol_warehouse_production_dimensional.dim_user as b
-        on
-            a.platform = 'mitxonline'
+        on 
+            a.platform = 'mitxonline' 
             and a.openedx_user_id = b.mitxonline_openedx_user_id
     left join ol_warehouse_production_dimensional.dim_user as ob
-        on
-            a.platform = 'edxorg'
+        on 
+            a.platform = 'edxorg' 
             and a.openedx_user_id = ob.edxorg_openedx_user_id
     inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
         on a.courserun_readable_id = h.courserun_readable_id
@@ -147,7 +147,7 @@ with video_pre_query as (
 )
 
 , pre_problems_table as (
-    select
+    select 
         c.sequential_block_id
         , count(p.problem_block_pk) as problem_numb
     from ol_warehouse_production_dimensional.dim_problem as p
@@ -157,25 +157,25 @@ with video_pre_query as (
 )
 
 , problems_events as (
-    select
+    select 
         problem_block_fk
         , courserun_readable_id
         , openedx_user_id
         , avg(
-            case when max_grade = '0' then
+            case when max_grade = '0' then 
                 0 else (cast(grade as decimal(30, 10))
             / cast(max_grade as decimal(30, 10))) end
         )
         as avg_percent_grade
-    from ol_warehouse_production_dimensional.tfact_problem_events
-    group by
+    from ol_warehouse_production_dimensional.tfact_problem_events 
+    group by 
         problem_block_fk
         , courserun_readable_id
         , openedx_user_id
 )
 
 , problems_table as (
-    select
+    select 
         a.platform
         , h.course_title
         , a.courserun_readable_id
@@ -184,36 +184,36 @@ with video_pre_query as (
         , coalesce(u.email, ou.email) as email
         , avg(g.avg_percent_grade) as avg_percent_grade
         , count(distinct case when cast(a.num_of_attempts as int) > 0 then a.problem_block_fk end) as problems_attempted
-        , max(pre_problems_table.problem_numb) as number_of_problems
+        , max(c.problem_numb) as number_of_problems
         , cast(count(distinct case
-            when cast(a.num_of_attempts as int) > 0
-                then a.problem_block_fk
+            when cast(a.num_of_attempts as int) > 0 
+                then a.problem_block_fk 
         end) as decimal(30, 10))
-        / cast(max(pre_problems_table.problem_numb) as decimal(30, 10)
+        / cast(max(c.problem_numb) as decimal(30, 10)
         ) as percetage_problems_attempted
     from ol_warehouse_production_dimensional.afact_problem_engagement as a
     inner join pre_problems_table as c
         on a.sequential_block_fk = c.sequential_block_id
     left join ol_warehouse_production_dimensional.dim_user as u
-        on
-            a.platform = 'mitxonline'
+        on 
+            a.platform = 'mitxonline' 
             and a.openedx_user_id = u.mitxonline_openedx_user_id
     left join ol_warehouse_production_dimensional.dim_user as ou
-        on
-            a.platform = 'edxorg'
+        on 
+            a.platform = 'edxorg' 
             and a.openedx_user_id = ou.edxorg_openedx_user_id
     inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
         on a.courserun_readable_id = h.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as d
-        on
+        on 
             a.sequential_block_fk = d.block_id
             and d.is_latest = true
     inner join ol_warehouse_production_dimensional.dim_course_content as sec
-        on
+        on 
             a.chapter_block_fk = sec.block_id
             and sec.is_latest = true
     inner join problems_events as g
-        on
+        on 
             a.problem_block_fk = g.problem_block_fk
             and a.courserun_readable_id = g.courserun_readable_id
             and a.openedx_user_id = g.openedx_user_id
@@ -224,10 +224,10 @@ with video_pre_query as (
         , sec.block_title
         , d.block_title
         , coalesce(u.email, ou.email)
-)
+) 
 
 , page_and_video as (
-    select
+    select 
         page_views_table.num_of_page_views
         , video_views_table.estimated_time_played
         , video_views_table.video_duration
@@ -240,15 +240,15 @@ with video_pre_query as (
         , coalesce(video_views_table.subsection_title, page_views_table.subsection_title) as subsection_title
     from page_views_table
     full outer join video_views_table
-        on
-            page_views_table.email = video_views_table.email
+        on 
+            page_views_table.email = video_views_table.email 
             and page_views_table.courserun_readable_id = video_views_table.courserun_readable_id
             and page_views_table.section_title = video_views_table.section_title
             and page_views_table.subsection_title = video_views_table.subsection_title
 )
 
 , page_video_problems as (
-    select
+    select 
         page_and_video.num_of_page_views
         , page_and_video.estimated_time_played
         , page_and_video.video_duration
@@ -264,14 +264,14 @@ with video_pre_query as (
         , coalesce(page_and_video.subsection_title, problems_table.subsection_title) as subsection_title
     from page_and_video
     full outer join problems_table
-        on
+        on 
             page_and_video.email = problems_table.email
             and page_and_video.courserun_readable_id = problems_table.courserun_readable_id
             and page_and_video.section_title = problems_table.section_title
             and page_and_video.subsection_title = problems_table.subsection_title
 )
-
-select
+ 
+select 
     page_video_problems.num_of_page_views
     , page_video_problems.estimated_time_played
     , page_video_problems.video_duration
@@ -289,8 +289,8 @@ select
     , coalesce(page_video_problems.subsection_title, discuss_table.subsection_title) as subsection_title
 from page_video_problems
 full outer join discuss_table
-    on
+    on 
         page_video_problems.email = discuss_table.email
         and page_video_problems.courserun_readable_id = discuss_table.courserun_readable_id
         and page_video_problems.section_title = discuss_table.section_title
-        and page_video_problems.subsection_title = discuss_table.subsection_title
+        and page_video_problems.subsection_title = discuss_table.subsection_title 
