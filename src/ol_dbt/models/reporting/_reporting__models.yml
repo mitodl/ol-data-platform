@@ -51,3 +51,42 @@ models:
       by user_email. If a user gets the Statistics and Data Science program certificate
       in both the General and Social Sciences tracks, it would be counted as one program
       certificate.
+
+- name: learner_engagement_report
+  description: Engagement report by learner, course, courserun, section and subsection. 
+    A count of posts replied, posts created, average percent grade, 
+    percent problems attempted, number of problems, problems attempted,
+    video duration, estimated time played, and number of page views.
+  columns:
+  - name: platform
+    description: str, name of the platform
+  - name: user_email
+    description: str, user email associated with their account on the corresponding
+      platform
+  - name: course_title
+    description: str, title of the course.
+  - name: courserun_readable_id
+    description: string, unique string to identify a course run on the corresponding
+      platform.
+  - name: section_title
+    description: str, title of the section within the course
+  - name: subsection_title
+    description: str, title of the subsection within the course
+  - name: num_of_page_views
+    description: int, num of times the user viewed a page
+  - name: estimated_time_played
+    description: int, seconds that a user played a video
+  - name: video_duration
+    description: int, duration of the video in seconds
+  - name: problems_attempted
+    description: int, count of problems attempted
+  - name: number_of_problems
+    description: int, total number of problems regardless of whether they were attempted
+  - name: percetage_problems_attempted
+    description: str, count of problems attempted/ total number of problems
+  - name: avg_percent_grade
+    description: str, average grade the learner recieved
+  - name: posts_created
+    description: int, count of discussion posts created
+  - name: posts_replied
+    description: int, count of discussion posts replied to
