@@ -25,9 +25,6 @@ class SupersetApiClient(OAuthApiClient):
         default="openid profile email roles",
         description="scope to request from the token endpoint",
     )
-    schema_prefix: str = Field(
-        description="The schema prefix to use for Superset datasets.",
-    )
     _access_token: Optional[str] = PrivateAttr(default=None)
     _access_token_expires: Optional[datetime] = PrivateAttr(default=None)
 
@@ -111,7 +108,7 @@ class SupersetApiClient(OAuthApiClient):
         request_url = f"{self.base_url}/api/v1/dataset/get_or_create/"
         payload = {
             "database_id": 1,  # Trino database ID
-            "schema": f"{self.schema_prefix}_{schema_suffix}",
+            "schema": f"ol_warehouse_production_{schema_suffix}",
             "table_name": table_name,
         }
         response = self.http_client.post(
@@ -151,7 +148,6 @@ class SupersetApiClient(OAuthApiClient):
 
 class SupersetApiClientFactory(ConfigurableResource):
     deployment: str = Field(description="The name of the deployment")
-    schema_prefix: str = Field(description="The schema prefix to use for Superset")
     _client: Optional[SupersetApiClient] = PrivateAttr(default=None)
     vault: ResourceDependency[Vault]
 
@@ -169,7 +165,6 @@ class SupersetApiClientFactory(ConfigurableResource):
             username=client_secrets["service_account_username"],
             password=client_secrets["service_account_password"],
             scope=client_secrets.get("scope", "openid profile email roles"),
-            schema_prefix=self.schema_prefix,
         )
 
     @property

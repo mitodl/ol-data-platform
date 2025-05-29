@@ -32,7 +32,7 @@ if DAGSTER_ENV == "dev":
     dagster_url = "http://localhost:3000"
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
     vault._auth_github()  # noqa: SLF001
-    schema_prefix = "ol_warehouse_qa"
+    dbt_target = "dev_production"
 else:
     dagster_url = (
         "https://pipelines.odl.mit.edu"
@@ -43,7 +43,7 @@ else:
         vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
     )
     vault._auth_aws_iam()  # noqa: SLF001
-    schema_prefix = "ol_warehouse_production"
+    dbt_target = "production"
 
 configured_airbyte_resource = airbyte_resource.configured(
     {
@@ -61,7 +61,7 @@ configured_airbyte_resource = airbyte_resource.configured(
 dbt_config = {
     "project_dir": str(DBT_REPO_DIR),
     "profiles_dir": str(DBT_REPO_DIR),
-    "target": os.environ.get("DAGSTER_DBT_TARGET", DAGSTER_ENV),
+    "target": dbt_target,
 }
 dbt_cli = DbtCliResource(**dbt_config)
 
@@ -180,9 +180,7 @@ elt = Definitions(
     resources={
         "dbt": dbt_cli,
         "vault": vault,
-        "superset_api": SupersetApiClientFactory(
-            deployment="superset", schema_prefix=schema_prefix, vault=vault
-        ),
+        "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
     },
     sensors=[
         AutomationConditionSensorDefinition(

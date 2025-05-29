@@ -1,23 +1,26 @@
 import httpx
-from dagster import AssetExecutionContext, AssetIn, AssetKey, asset
+from dagster import (
+    AssetExecutionContext,
+    AssetKey,
+    AutomationCondition,
+    asset,
+)
+from dagster_dbt import get_asset_key_for_model
 
+from ol_orchestrate.assets.lakehouse.dbt import full_dbt_project
 from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
 
 
 def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
     @asset(
         key=AssetKey(("superset", "dataset", dbt_model_name)),
-        ins={
-            "dbt_asset": AssetIn(
-                key=AssetKey((dbt_asset_group_name, dbt_model_name)),
-            )
-        },
+        deps=[get_asset_key_for_model([full_dbt_project], dbt_model_name)],
+        automation_condition=AutomationCondition.eager(),
         group_name="superset_dataset",
     )
     def _superset_dataset(
         context: AssetExecutionContext,
         superset_api: SupersetApiClientFactory,
-        dbt_asset,  # noqa: ARG001
     ):
         dataset_id = superset_api.client.get_or_create_dataset(
             schema_suffix=dbt_asset_group_name,
