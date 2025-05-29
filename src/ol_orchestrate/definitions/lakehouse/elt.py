@@ -187,8 +187,11 @@ elt = Definitions(
             "dbt_automation_sensor",
             minimum_interval_seconds=3600,
             # exclude staging as they are already handled by "sync_and_stage_" job
-            target=AssetSelection.assets(full_dbt_project)
-            - AssetSelection.groups("staging"),
+            target=(
+                AssetSelection.assets(full_dbt_project)
+                - AssetSelection.groups("staging")
+            )
+            | AssetSelection.groups("superset_dataset"),
         ),
     ],
     jobs=[*airbyte_asset_jobs],
