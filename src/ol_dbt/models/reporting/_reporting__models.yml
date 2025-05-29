@@ -53,10 +53,10 @@ models:
       certificate.
 
 - name: learner_engagement_report
-  description: Engagement report by learner, course, courserun, section and subsection. 
-    A count of posts replied, posts created, average percent grade, 
-    percent problems attempted, number of problems, problems attempted,
-    video duration, estimated time played, and number of page views.
+  description: Engagement report by learner, course, courserun, section and subsection.
+    A count of posts replied, posts created, average percent grade, percent problems
+    attempted, number of problems, problems attempted, video duration, estimated time
+    played, and number of page views.
   columns:
   - name: platform
     description: str, name of the platform
