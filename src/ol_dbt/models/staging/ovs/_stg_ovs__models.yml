@@ -113,7 +113,7 @@ models:
     tests:
     - not_null
 
-- name: stg__ovs__studio__postgres__dj_elastictranscoder_encodejob
+- name: stg__ovs__studio__postgres__ui_encodejob
   description: AWS Elastic Transcoder's EncodeJob objects for videos uploaded on OVS
   columns:
   - name: encodejob_id
