@@ -6,10 +6,10 @@ models:
   description: Aggregate fact table summarizing video engagement by video, learner,
     and a courserun.
   columns:
+  - name: platform
+    description: string, name of the platform
   - name: video_id
     description: string, id for the video
-  - name: user_username
-    description: string, username of the learner from the platform they used
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
   - name: courserun_readable_id
