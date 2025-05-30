@@ -12,6 +12,9 @@ services:
       dockerfile: Dockerfile
     command: ["uv", "run", "--no-dev", "dagster", "instance", "migrate"]
     environment:
+      DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
+      DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
+      DBT_TRINO_PASSWORD: ${DBT_TRINO_PASSWORD}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       DAGSTER_CURRENT_IMAGE: "dagster-daemon"
       DAGSTER_PG_USERNAME: postgres
@@ -47,6 +50,9 @@ services:
     ports:
     - "3000:3000"
     environment:
+      DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
+      DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
+      DBT_TRINO_PASSWORD: ${DBT_TRINO_PASSWORD}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       DAGSTER_CURRENT_IMAGE: "ol-dagster"
       DAGSTER_PG_USERNAME: postgres
@@ -81,6 +87,9 @@ services:
     # restart: unless-stopped
     entrypoint: ["uv", "run", "--no-dev", "dagster-daemon", "run", "-w", "/opt/dagster/dagster_home/workspace.yaml"]
     environment:
+      DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
+      DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
+      DBT_TRINO_PASSWORD: ${DBT_TRINO_PASSWORD}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       DAGSTER_CURRENT_IMAGE: "ol-dagster"
       DAGSTER_PG_USERNAME: postgres

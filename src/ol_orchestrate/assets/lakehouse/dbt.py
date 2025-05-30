@@ -50,8 +50,13 @@ class DbtAutomationTranslator(DagsterDbtTranslator):
     ),
 )
 def full_dbt_project(context: AssetExecutionContext, dbt: DbtCliResource):
+    dbt_build_args = ["build"]
+    if DAGSTER_ENV == "dev":
+        schema_suffix = os.getenv("DBT_SCHEMA_SUFFIX", "dev")
+        dbt_build_args += ["--vars", f"schema_suffix: {schema_suffix}"]
+
     yield from (
-        dbt.cli(["build"], context=context)
+        dbt.cli(dbt_build_args, context=context)
         .stream()
         .fetch_column_metadata()
         .fetch_row_counts()
