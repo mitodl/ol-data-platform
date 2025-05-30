@@ -19,7 +19,7 @@ with course_content as (
         , min(case when event_type = 'play_video' then (case when video_position = 'null' then '0' end) end)
         as start_time
     from tfact_video_events
-    where  
+    where
         event_type in (
             'play_video'
             , 'seek_video'
@@ -33,7 +33,7 @@ with course_content as (
         , video_block_fk
 )
 
-select 
+select
     tfact_video_events.platform
     , tfact_video_events.video_block_fk as video_id
     , tfact_video_events.openedx_user_id
@@ -55,43 +55,43 @@ select
     , sum(case when tfact_video_events.event_type = 'complete_video' then 1 else 0 end) as video_completed_count
 from tfact_video_events
 inner join d_video
-    on 
-        tfact_video_events.video_block_fk 
+    on
+        tfact_video_events.video_block_fk
         = substring(d_video.video_block_pk, regexp_position(d_video.video_block_pk, 'block@') + 6)
         and tfact_video_events.courserun_readable_id = d_video.courserun_readable_id
 inner join course_content as c
-    on 
+    on
         d_video.content_block_fk = c.content_block_pk
         and c.is_latest = true
 left join course_content as d
-    on 
+    on
         c.parent_block_id = d.block_id
         and d.is_latest = true
 left join course_content as f
-    on 
+    on
         d.parent_block_id = f.block_id
         and f.is_latest = true
 left join course_content as g
-    on 
+    on
         f.parent_block_id = g.block_id
         and g.is_latest = true
 left join start_and_end_times
-    on 
+    on
         tfact_video_events.video_block_fk = start_and_end_times.video_block_fk
         and tfact_video_events.courserun_readable_id = start_and_end_times.courserun_readable_id
         and tfact_video_events.openedx_user_id = start_and_end_times.openedx_user_id
-group by 
+group by
     tfact_video_events.platform
     , tfact_video_events.video_block_fk
     , tfact_video_events.openedx_user_id
     , tfact_video_events.courserun_readable_id
-    , c.block_title 
-    , d.block_title 
-    , d.content_block_pk 
+    , c.block_title
+    , d.block_title
+    , d.content_block_pk
     , f.block_title
-    , f.content_block_pk 
-    , g.block_title 
-    , g.content_block_pk 
+    , f.content_block_pk
+    , g.block_title
+    , g.content_block_pk
     , (
         cast(start_and_end_times.end_time as decimal(30, 10))
         - cast(start_and_end_times.start_time as decimal(30, 10))
