@@ -162,6 +162,7 @@ for count, group_name in enumerate(group_names, start=1):
 dbt_models_for_superset_datasets = {
     "mart",
     "reporting",
+    "dimensional",
 }  # relevant dbt models to sync with superset
 dbt_model_keys = full_dbt_project.keys
 
