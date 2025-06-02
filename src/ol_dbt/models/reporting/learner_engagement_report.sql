@@ -130,15 +130,15 @@ with video_pre_query as (
     inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
         on replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = h.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as v
-        on 
+        on
             c.content_block_fk = v.content_block_pk
             and replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = v.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as cc_subsection
-        on 
+        on
             v.parent_block_id = cc_subsection.block_id
             and cc_subsection.is_latest = true
     inner join ol_warehouse_production_dimensional.dim_course_content as cc_section
-        on 
+        on
             cc_subsection.parent_block_id = cc_section.block_id
             and replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = cc_section.courserun_readable_id
             and cc_section.is_latest = true
