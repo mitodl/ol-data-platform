@@ -39,16 +39,15 @@ with video_pre_query as (
     left join ol_warehouse_production_dimensional.dim_user as ou
         on a.platform = 'edxorg' and a.openedx_user_id = ou.edxorg_openedx_user_id
     inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
-        on a.courserun_readable_id = h.courserun_readable_id
-    inner join ol_warehouse_production_dimensional.dim_course_content as c
+        on replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = h.courserun_readable_id
+    left join ol_warehouse_production_dimensional.dim_course_content as c
         on
             a.sequential_block_fk = c.block_id
             and c.is_latest = true
-    inner join ol_warehouse_production_dimensional.dim_course_content as d
+    left join ol_warehouse_production_dimensional.dim_course_content as d
         on
             a.chapter_block_fk = d.block_id
             and d.is_latest = true
-    where c.block_title is not null
     group by
         a.platform
         , h.course_title
@@ -74,11 +73,13 @@ with video_pre_query as (
             and b.is_latest = true
     inner join ol_warehouse_production_dimensional.dim_course_content as c
         on
-            a.sequential_block_fk = c.block_id
+            b.parent_block_id = c.block_id
             and c.is_latest = true
+            and replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = c.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as d
         on
-            a.chapter_block_fk = d.block_id
+            c.parent_block_id = d.block_id
+            and replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = d.courserun_readable_id
             and d.is_latest = true
     left join ol_warehouse_production_dimensional.dim_user as u
         on
@@ -89,10 +90,7 @@ with video_pre_query as (
             a.platform = 'edxorg'
             and a.openedx_user_id = ou.edxorg_openedx_user_id
     inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
-        on a.courserun_readable_id = h.courserun_readable_id
-    where
-        b.block_category = 'vertical'
-        and c.block_title is not null
+        on replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = h.courserun_readable_id
     group by
         a.platform
         , h.course_title
@@ -119,7 +117,7 @@ with video_pre_query as (
     from video_pre_query as a
     inner join ol_warehouse_production_dimensional.dim_video as c
         on
-            a.courserun_readable_id = c.courserun_readable_id
+            replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = c.courserun_readable_id
             and a.video_block_fk = substring(c.video_block_pk, regexp_position(c.video_block_pk, 'block@') + 6)
     left join ol_warehouse_production_dimensional.dim_user as b
         on
@@ -130,13 +128,20 @@ with video_pre_query as (
             a.platform = 'edxorg'
             and a.openedx_user_id = ob.edxorg_openedx_user_id
     inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
-        on a.courserun_readable_id = h.courserun_readable_id
+        on replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = h.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as v
-        on c.content_block_fk = v.content_block_pk
+        on 
+            c.content_block_fk = v.content_block_pk
+            and replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = v.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as cc_subsection
-        on v.parent_block_id = cc_subsection.block_id
+        on 
+            v.parent_block_id = cc_subsection.block_id
+            and cc_subsection.is_latest = true
     inner join ol_warehouse_production_dimensional.dim_course_content as cc_section
-        on cc_subsection.parent_block_id = cc_section.block_id
+        on 
+            cc_subsection.parent_block_id = cc_section.block_id
+            and replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = cc_section.courserun_readable_id
+            and cc_section.is_latest = true
     group by
         h.platform
         , h.course_title
@@ -203,7 +208,7 @@ with video_pre_query as (
             a.platform = 'edxorg'
             and a.openedx_user_id = ou.edxorg_openedx_user_id
     inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
-        on a.courserun_readable_id = h.courserun_readable_id
+        on replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = h.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as d
         on
             a.sequential_block_fk = d.block_id
