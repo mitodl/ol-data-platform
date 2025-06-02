@@ -2,6 +2,7 @@ import httpx
 from dagster import (
     AssetExecutionContext,
     AssetKey,
+    Output,
     asset,
 )
 from dagster_dbt import get_asset_key_for_model
@@ -33,7 +34,15 @@ def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
                 dbt_asset_group_name,
                 dbt_model_name,
             )
-            return
+            return Output(
+                value=None,
+                metadata={
+                    "status": "skipped",
+                    "reason": "Superset Dataset ID not found",
+                    "dbt_asset_group_name": dbt_asset_group_name,
+                    "dbt_model_name": dbt_model_name,
+                },
+            )
 
         try:
             superset_api.client.refresh_dataset(dataset_id)
@@ -42,11 +51,29 @@ def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
                 dbt_asset_group_name,
                 dbt_model_name,
             )
-        except httpx.HTTPStatusError:
+            return Output(
+                value={"superset_dataset_id": dataset_id},
+                metadata={
+                    "status": "refreshed",
+                    "superset_dataset_id": dataset_id,
+                    "dbt_asset_group_name": dbt_asset_group_name,
+                    "dbt_model_name": dbt_model_name,
+                },
+            )
+        except httpx.HTTPStatusError as e:
             context.log.exception(
                 "HTTPStatusError while refreshing dataset for %s.%s",
                 dbt_asset_group_name,
                 dbt_model_name,
+            )
+            return Output(
+                value=None,
+                metadata={
+                    "status": "error",
+                    "error": str(e),
+                    "dbt_asset_group_name": dbt_asset_group_name,
+                    "dbt_model_name": dbt_model_name,
+                },
             )
 
     return _superset_dataset

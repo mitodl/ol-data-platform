@@ -96,8 +96,7 @@ class SupersetApiClient(OAuthApiClient):
             page += 1
 
     def get_or_create_dataset(self, schema_suffix: str, table_name: str) -> str:
-        """
-        Retrieve a dataset by name, or create it if it doesn't exist
+        """Retrieve a dataset by name, or create it if it doesn't exist
 
         Args:
             schema_suffix (str): The schema suffix. e.g. mart, reporting
@@ -128,9 +127,7 @@ class SupersetApiClient(OAuthApiClient):
         return response_data.get("result", {}).get("table_id")
 
     def refresh_dataset(self, dataset_id: int) -> dict[str, Any]:
-        """
-        Refresh or update metadata for a dataset in Superset.
-        """
+        """Refresh or update metadata for a dataset in Superset."""
         request_url = f"{self.base_url}/api/v1/dataset/{dataset_id}/refresh"
         response = self.http_client.put(
             request_url,
