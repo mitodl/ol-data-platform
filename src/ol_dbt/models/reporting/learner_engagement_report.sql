@@ -26,10 +26,10 @@ with video_pre_query as (
 , discuss_table as (
     select
         a.platform
-        , h.course_title
         , a.courserun_readable_id
         , d.block_title as section_title
         , c.block_title as subsection_title
+        , coalesce(h.course_title, h2.course_title) as course_title
         , coalesce(u.email, ou.email) as email
         , sum(a.post_created) as posts_created
         , sum(a.post_replied) as posts_replied
@@ -38,8 +38,10 @@ with video_pre_query as (
         on a.platform = 'mitxonline' and a.openedx_user_id = u.mitxonline_openedx_user_id
     left join ol_warehouse_production_dimensional.dim_user as ou
         on a.platform = 'edxorg' and a.openedx_user_id = ou.edxorg_openedx_user_id
-    inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
+    left join ol_warehouse_production_intermediate.int__combined__course_runs as h
         on replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = h.courserun_readable_id
+    left join ol_warehouse_production_intermediate.int__combined__course_runs as h2
+        on a.courserun_readable_id = h2.courserun_readable_id
     left join ol_warehouse_production_dimensional.dim_course_content as c
         on
             a.sequential_block_fk = c.block_id
@@ -50,20 +52,20 @@ with video_pre_query as (
             and d.is_latest = true
     group by
         a.platform
-        , h.course_title
         , a.courserun_readable_id
         , d.block_title
         , c.block_title
+        , coalesce(h.course_title, h2.course_title)
         , coalesce(u.email, ou.email)
 )
 
 , page_views_table as (
     select
         a.platform
-        , h.course_title
         , a.courserun_readable_id
         , d.block_title as section_title
         , c.block_title as subsection_title
+        , coalesce(h.course_title, h2.course_title) as course_title
         , coalesce(u.email, ou.email) as email
         , sum(a.num_of_views) as num_of_page_views
     from ol_warehouse_production_dimensional.afact_course_page_engagement as a
@@ -89,24 +91,26 @@ with video_pre_query as (
         on
             a.platform = 'edxorg'
             and a.openedx_user_id = ou.edxorg_openedx_user_id
-    inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
+    left join ol_warehouse_production_intermediate.int__combined__course_runs as h
         on replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = h.courserun_readable_id
+    left join ol_warehouse_production_intermediate.int__combined__course_runs as h2
+        on a.courserun_readable_id = h2.courserun_readable_id
     group by
         a.platform
-        , h.course_title
         , a.courserun_readable_id
         , d.block_title
         , c.block_title
+        , coalesce(h.course_title, h2.course_title)
         , coalesce(u.email, ou.email)
 )
 
 , video_views_table as (
     select
-        h.platform
-        , h.course_title
+        a.platform
         , a.courserun_readable_id
         , cc_section.block_title as section_title
         , cc_subsection.block_title as subsection_title
+        , coalesce(h.course_title, h2.course_title) as course_title
         , coalesce(b.email, ob.email) as email
         , sum(
             cast(case when a.end_time = 'null' then '0' else a.end_time end as decimal(30, 10))
@@ -127,27 +131,31 @@ with video_pre_query as (
         on
             a.platform = 'edxorg'
             and a.openedx_user_id = ob.edxorg_openedx_user_id
-    inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
+    left join ol_warehouse_production_intermediate.int__combined__course_runs as h
         on replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = h.courserun_readable_id
+    left join ol_warehouse_production_intermediate.int__combined__course_runs as h2
+        on a.courserun_readable_id = h2.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as v
         on
             c.content_block_fk = v.content_block_pk
             and replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = v.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as cc_subsection
-        on
+        on 
             v.parent_block_id = cc_subsection.block_id
+            and replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/')
+            = cc_subsection.courserun_readable_id
             and cc_subsection.is_latest = true
     inner join ol_warehouse_production_dimensional.dim_course_content as cc_section
-        on
+        on 
             cc_subsection.parent_block_id = cc_section.block_id
             and replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = cc_section.courserun_readable_id
             and cc_section.is_latest = true
     group by
-        h.platform
-        , h.course_title
+        a.platform
         , a.courserun_readable_id
         , cc_section.block_title
         , cc_subsection.block_title
+        , coalesce(h.course_title, h2.course_title)
         , coalesce(b.email, ob.email)
 )
 
@@ -182,10 +190,10 @@ with video_pre_query as (
 , problems_table as (
     select
         a.platform
-        , h.course_title
         , a.courserun_readable_id
         , sec.block_title as section_title
         , d.block_title as subsection_title
+        , coalesce(h.course_title, h2.course_title) as course_title
         , coalesce(u.email, ou.email) as email
         , avg(g.avg_percent_grade) as avg_percent_grade
         , count(distinct case when cast(a.num_of_attempts as int) > 0 then a.problem_block_fk end) as problems_attempted
@@ -207,8 +215,10 @@ with video_pre_query as (
         on
             a.platform = 'edxorg'
             and a.openedx_user_id = ou.edxorg_openedx_user_id
-    inner join ol_warehouse_production_intermediate.int__combined__course_runs as h
+    left join ol_warehouse_production_intermediate.int__combined__course_runs as h
         on replace(replace(a.courserun_readable_id, 'course-v1:', ''), '+', '/') = h.courserun_readable_id
+    left join ol_warehouse_production_intermediate.int__combined__course_runs as h2
+        on a.courserun_readable_id = h2.courserun_readable_id
     inner join ol_warehouse_production_dimensional.dim_course_content as d
         on
             a.sequential_block_fk = d.block_id
@@ -224,10 +234,10 @@ with video_pre_query as (
             and a.openedx_user_id = g.openedx_user_id
     group by
         a.platform
-        , h.course_title
         , a.courserun_readable_id
         , sec.block_title
         , d.block_title
+        , coalesce(h.course_title, h2.course_title)
         , coalesce(u.email, ou.email)
 )
 
