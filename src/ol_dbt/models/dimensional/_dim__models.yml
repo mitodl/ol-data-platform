@@ -465,48 +465,55 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
-        "event_json", "event_timestamp"]
+      column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_fk",
+        "event_timestamp"] # check with rachel
 
 - name: tfact_studentmodule_problems
   description: Transactional fact table for studentmodule problem events flattened
     out into individual submissions
   columns:
-  - name: user_id
+  - name: user_fk
+    description: string, foreign key to dim_user
+  - name: platform
+    description: string, platform name
+  - name: event_type
+    description: string, type of the discussion event.
+  - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
   - name: courserun_readable_id
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
   - name: studentmodule_id
     description: int, primary key in courseware_studentmodule
-  - name: studentmodule_state_data
+  - name: event_type
+    description: string, type of the problem event.
+  - name: event_json
     description: json, JSON object indicating the user’s last known state in the course.
       It may contain any attributes for different module types - course, chapter,
       sequential, etc.
-  - name: coursestructure_block_id
+  - name: problem_name
+    description: string, name of the problem
+  - name: problem_block_id
     description: str, Unique ID for a distinct piece of content in a course, formatted
       as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
-  - name: studentmodule_problem_grade
+  - name: answers
+    description: str, the answers submitted by the learner for this attempt
+  - name: attempt
+    description: int, incremental attempt number generated when parsing answer submissions
+  - name: success
+    description: str, indicating whether an answer is correct or incorrect
+  - name: grade
     description: float, floating point value indicating the total unweighted grade
       for this problem that the learner has scored. e.g. how many responses they got
       right within the problem. This data is also available in courseactivity_problemcheck
-  - name: studentmodule_problem_max_grade
+  - name: max_grade
     description: float, floating point value indicating the total possible unweighted
       grade for this problem, or basically the number of responses that are in this
       problem. This data is also available in courseactivity_problemcheck
-  - name: studentmodule_updated_on
+  - name: event_timestamp
     description: timestamp, datetime when this row was last updated. A change in this
       field implies that there was a state change.
-  - name: attempt
-    description: int, incremental attempt number generated when parsing answers submissions
   - name: problem_id
     description: str, unique identifier for a problem in the studentmodule state data
-  - name: correctness
-    description: str, indicating whether an answer is correct, partially-correct,
-      or incorrect
-  - name: answers_json
-    description: str, the answers submitted by the learner for this attempt
-  - name: platform
-    description: string, platform name
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id", "problem_id", "attempt"]

@@ -11,6 +11,7 @@
       , studentmodule_problem_max_grade
       , from_iso8601_timestamp_nanos(studentmodule_created_on) as studentmodule_created_on
       , from_iso8601_timestamp_nanos(studentmodule_updated_on) as studentmodule_updated_on
+      , cast(json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as int) as attempts
     from {{ studentmodule_table }}
     where coursestructure_block_category = 'problem'
   )
@@ -24,6 +25,7 @@
       , studentmodule_problem_grade
       , studentmodule_problem_max_grade
       , from_iso8601_timestamp_nanos(cast(studentmodule_created_on as varchar)) as studentmodule_created_on
+      , cast(json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as int) as attempts
     from {{ studentmodulehistory_table }}
   )
   {% endif %}
@@ -34,27 +36,30 @@
       , sm.courserun_readable_id
       , sm.studentmodule_id
       , sm.coursestructure_block_id
-      , sm.studentmodule_updated_on
       {% if studentmodulehistory_table != 'null' %}
+      , coalesce(smhe.studentmodule_created_on, sm.studentmodule_updated_on) as studentmodule_updated_on
       , coalesce(smhe.studentmodule_state_data, sm.studentmodule_state_data) as studentmodule_state_data
       , coalesce(smhe.studentmodule_problem_grade, sm.studentmodule_problem_grade) as studentmodule_problem_grade
       , coalesce(smhe.studentmodule_problem_max_grade, sm.studentmodule_problem_max_grade) as studentmodule_problem_max_grade
       , cast(json_parse(json_query(coalesce(smhe.studentmodule_state_data, sm.studentmodule_state_data), 'lax $.correct_map_history')) as array(json)) as correct_history
       , cast(json_parse(json_query(coalesce(smhe.studentmodule_state_data, sm.studentmodule_state_data), 'lax $.student_answers_history')) as array(json)) as answer_history
+      , coalesce(smhe.attempts, 1) - 1 as recent_attempt_index
       from studentmodule sm
       left join studentmodulehistoryextended smhe
         on sm.studentmodule_id = smhe.studentmodule_id
       {% else %}
+      , sm.studentmodule_updated_on
       , sm.studentmodule_state_data
       , sm.studentmodule_problem_grade
       , sm.studentmodule_problem_max_grade
       , cast(json_parse(json_query(sm.studentmodule_state_data, 'lax $.correct_map_history')) as array(json)) as correct_history
       , cast(json_parse(json_query(sm.studentmodule_state_data, 'lax $.student_answers_history')) as array(json)) as answer_history
+      , coalesce(sm.attempts, 1) - 1 as recent_attempt_index
       from studentmodule sm
       {% endif %}
   )
 
-  , indexed as (
+  , processed as (
     select
       user_id
       , courserun_readable_id
@@ -64,11 +69,10 @@
       , studentmodule_problem_grade
       , studentmodule_problem_max_grade
       , studentmodule_updated_on
-      , correct_history[idx] as correct_item
-      , answer_history[idx] as answer_item
-      , idx as attempt
+      , correct_history[recent_attempt_index] as correct_item
+      , answer_history[recent_attempt_index] as answer_item
+      , recent_attempt_index + 1 as attempt
     from base
-    cross join unnest(sequence(1, cardinality(correct_history))) as t(idx)
   )
 
   , exploded as (
@@ -90,7 +94,7 @@
       , json_format(
           cast(answer_item as map(varchar, json))[map_keys(cast(answer_item as map(varchar, json)))[1]]
         ) as answers_json -- noqa: PRS
-    from indexed
+    from processed
   )
 
   select
