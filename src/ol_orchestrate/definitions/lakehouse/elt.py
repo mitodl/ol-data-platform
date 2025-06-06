@@ -16,8 +16,10 @@ from dagster_dbt import (
 )
 
 from ol_orchestrate.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
+from ol_orchestrate.assets.superset import create_superset_asset
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
 
 airbyte_host_map = {
     "dev": "api-airbyte-qa.odl.mit.edu",
@@ -30,6 +32,7 @@ if DAGSTER_ENV == "dev":
     dagster_url = "http://localhost:3000"
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
     vault._auth_github()  # noqa: SLF001
+    dbt_target = "dev_production"
 else:
     dagster_url = (
         "https://pipelines.odl.mit.edu"
@@ -40,6 +43,7 @@ else:
         vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
     )
     vault._auth_aws_iam()  # noqa: SLF001
+    dbt_target = "production"
 
 configured_airbyte_resource = airbyte_resource.configured(
     {
@@ -57,7 +61,7 @@ configured_airbyte_resource = airbyte_resource.configured(
 dbt_config = {
     "project_dir": str(DBT_REPO_DIR),
     "profiles_dir": str(DBT_REPO_DIR),
-    "target": os.environ.get("DAGSTER_DBT_TARGET", DAGSTER_ENV),
+    "target": dbt_target,
 }
 dbt_cli = DbtCliResource(**dbt_config)
 
@@ -155,18 +159,42 @@ for count, group_name in enumerate(group_names, start=1):
     )
     airbyte_asset_jobs.append(job)
 
+dbt_models_for_superset_datasets = {
+    "mart",
+    "reporting",
+    "dimensional",
+}  # relevant dbt models to sync with superset
+dbt_model_keys = full_dbt_project.keys
+
+superset_assets = [
+    create_superset_asset(dbt_asset_group_name=key.path[0], dbt_model_name=key.path[1])
+    for key in dbt_model_keys
+    if key.path[0] in dbt_models_for_superset_datasets
+]
+
 elt = Definitions(
-    assets=[*with_source_code_references([full_dbt_project]), airbyte_assets],
-    resources={"dbt": dbt_cli},
+    assets=[
+        *with_source_code_references([full_dbt_project]),
+        airbyte_assets,
+        *superset_assets,
+    ],
+    resources={
+        "dbt": dbt_cli,
+        "vault": vault,
+        "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
+    },
     sensors=[
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
             minimum_interval_seconds=3600,
             # exclude staging as they are already handled by "sync_and_stage_" job
-            target=AssetSelection.assets(full_dbt_project)
-            - AssetSelection.groups("staging"),
-        )
+            target=(
+                AssetSelection.assets(full_dbt_project)
+                - AssetSelection.groups("staging")
+            )
+            | AssetSelection.groups("superset_dataset"),
+        ),
     ],
-    jobs=airbyte_asset_jobs,
+    jobs=[*airbyte_asset_jobs],
     schedules=airbyte_update_schedules,
 )
