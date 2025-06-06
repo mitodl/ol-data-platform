@@ -28,11 +28,18 @@ course_ids = [7023]
     required_resource_keys={"canvas_api"},
 )
 def export_courses(context: AssetExecutionContext):
+    # only export common cartridge for now
+    export_type = "common_cartridge"
+
+    extension = "imscc" if export_type == "common_cartridge" else export_type
+
     for course_id in course_ids:
         course = context.resources.canvas_api.client.get_course(course_id)
 
         export_course_response = (
-            context.resources.canvas_api.client.export_course_content(course_id)
+            context.resources.canvas_api.client.export_course_content(
+                course_id, export_type
+            )
         )
         context.log.info(
             "Initiated export of course ID %s: %s", course_id, export_course_response
@@ -64,7 +71,7 @@ def export_courses(context: AssetExecutionContext):
                 )
                 time.sleep(30)
 
-        course_export_path = Path(f"{course_id}_course_export.imscc")
+        course_export_path = Path(f"{course_id}_course_export.{extension}")
         response = requests.get(download_url, timeout=20)
         response.raise_for_status()
 
@@ -73,7 +80,7 @@ def export_courses(context: AssetExecutionContext):
         with course_export_path.open("rb") as f:
             data_version = hashlib.file_digest(f, "sha256").hexdigest()
 
-        target_path = f"canvas/course_export/{course_id}/{data_version}.imscc"
+        target_path = f"canvas/course_export/{course_id}/{data_version}.{extension}"
 
         context.log.info("Downloading %s file to %s", download_url, target_path)
 

@@ -44,11 +44,17 @@ class CanvasApiClient(ConfigurableResource):
         response.raise_for_status()
         return response.json()
 
-    def export_course_content(self, course_id: int) -> dict[str, str]:
+    def export_course_content(
+        self, course_id: int, export_type: str = "common_cartridge"
+    ) -> dict[str, str]:
         """Trigger export of canvas courses via an API request.
 
-        param course_id: The unique identifier of the course to be exported.
-        type course_id: str
+        :param course_id: The unique identifier of the course to be exported.
+        :type course_id: int
+
+        :param export_type: either "common_cartridge", "zip" or "qti"
+        :type export_type: str
+
 
         returns: A dictionary containing information about the export, including
         the export ID.
@@ -56,7 +62,7 @@ class CanvasApiClient(ConfigurableResource):
         request_url = f"{self.base_url}/api/v1/courses/{course_id}/content_exports"
         response = self.http_client.post(
             request_url,
-            json={"export_type": "common_cartridge"},
+            json={"export_type": export_type},
             headers={"Authorization": f"{self.token_type} {self.access_token}"},
         )
         response.raise_for_status()
@@ -68,7 +74,7 @@ class CanvasApiClient(ConfigurableResource):
         """Trigger export of canvas courses via an API request.
 
         param course_id: The unique identifier of the course to be exported.
-        type course_id: str
+        type course_id: int
 
         returns: A dictionary containing information about the export, including
         the export ID.
