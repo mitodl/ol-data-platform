@@ -15,14 +15,8 @@ building data applications.
     `vault login -address=https://vault-qa.odl.mit.edu -method=github`
     https://vault-production.odl.mit.edu/v1/auth/github/login
     `vault login -address=https://vault-production.odl.mit.edu -method=github`
-- Export
-    ```
-      export GITHUB_TOKEN=[YOUR_GITHUB_TOKEN]
-      # If you are working with dbt models, set the following:
-      export DBT_TRINO_USERNAME=[YOUR_DBT_TRINO_USERNAME]
-      export DBT_TRINO_PASSWORD=[YOUR_DBT_TRINO_PASSWORD]
-      export DBT_SCHEMA_SUFFIX=[YOUR_DBT_SCHEMA_SUFFIX]
-    ```
+- Ensure you create your .env file and populate it with the environment variables.
+    `cp .env.example .env`
 - Call docker compose up
     `docker compose up --build`
 - Navigate to localhost:3000 to access the Dagster UI
