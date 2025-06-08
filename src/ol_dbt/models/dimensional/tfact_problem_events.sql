@@ -4,7 +4,7 @@
     , 'showanswer'
     )
 %}
-
+-- data from tracking logs
 with mitxonline_problem_events as (
     select
         user_username
@@ -101,6 +101,11 @@ with mitxonline_problem_events as (
     select * from {{ ref('dim_platform') }}
 )
 
+-- data from studentmodule and studentmodulehistoryextended
+, combined_studentmodule as (
+    select * from {{ ref('tfact_studentmodule_problems') }}
+)
+
 , combined as (
     select
         'mitxonline' as platform
@@ -187,6 +192,24 @@ with mitxonline_problem_events as (
         on
             edxorg_problem_events.user_id = users.edxorg_openedx_user_id
             and edxorg_problem_events.user_username = users.user_edxorg_username
+
+    union all
+
+    select
+        platform
+        , user_fk
+        , openedx_user_id
+        , courserun_readable_id
+        , event_type
+        , event_json
+        , problem_block_id
+        , answers
+        , attempt
+        , success
+        , grade
+        , max_grade
+        , event_timestamp
+    from combined_studentmodule
 )
 
 select
