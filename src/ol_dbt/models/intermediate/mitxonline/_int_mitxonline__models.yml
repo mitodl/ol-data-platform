@@ -907,9 +907,8 @@ models:
     - not_null
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
-      or periods. e.g. 18.03.1x
+      or periods. e.g. 18.03.1x. May not be unique for UAI course.
     tests:
-    - unique
     - not_null
   - name: course_description
     description: text, the description shown on the home page and product page.
