@@ -70,7 +70,7 @@ with mitx_courses as (
             else false
         end as courserun_is_current
     from mitxonline_runs
-    left join mitx_courses on mitxonline_runs.course_number = mitx_courses.course_number
+    left join mitx_courses on mitxonline_runs.course_id = mitx_courses.mitxonline_course_id
     where mitxonline_runs.courserun_platform = '{{ var("mitxonline") }}'
 
     union all
