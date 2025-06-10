@@ -90,7 +90,7 @@ class CanvasApiClient(ConfigurableResource):
         response.raise_for_status()
         return response.json()
 
-    def download_course_export(self, url: str, output_path: Path) -> None:
+    def download_course_export(self, url: str, output_path: Path) -> Path:
         """Download a file from a URL to a local path, following redirects and streaming
         to disk.
 
@@ -107,6 +107,7 @@ class CanvasApiClient(ConfigurableResource):
                 for chunk in response.iter_bytes():
                     if chunk:
                         f.write(chunk)
+        return output_path
 
 
 class CanvasApiClientFactory(ConfigurableResource):

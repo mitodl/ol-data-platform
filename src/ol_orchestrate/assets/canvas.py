@@ -1,4 +1,3 @@
-import hashlib
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,8 +11,14 @@ from dagster import (
     asset,
 )
 
+from ol_orchestrate.lib.constants import (
+    EXPORT_TYPE_COMMON_CARTRIDGE,
+    EXPORT_TYPE_EXTENSIONS,
+)
+from ol_orchestrate.lib.utils import compute_zip_content_hash
+
 # predefined course IDs to export
-course_partitions = StaticPartitionsDefinition(["7023"])
+canvas_course_ids = StaticPartitionsDefinition(["7023"])
 
 
 @asset(
@@ -21,14 +26,14 @@ course_partitions = StaticPartitionsDefinition(["7023"])
     group_name="canvas",
     required_resource_keys={"canvas_api"},
     io_manager_key="s3file_io_manager",
-    partitions_def=course_partitions,
+    partitions_def=canvas_course_ids,
 )
 def export_courses(context: AssetExecutionContext):
     course_id = int(context.partition_key)
     export_date = datetime.now(tz=UTC).strftime("%Y%m%d")
     # only export common cartridge for now
-    export_type = "common_cartridge"
-    extension = "imscc" if export_type == "common_cartridge" else export_type
+    export_type = EXPORT_TYPE_COMMON_CARTRIDGE
+    extension = EXPORT_TYPE_EXTENSIONS[export_type]
 
     course = context.resources.canvas_api.client.get_course(course_id)
     export_course_response = context.resources.canvas_api.client.export_course_content(
@@ -70,12 +75,13 @@ def export_courses(context: AssetExecutionContext):
         raise Exception(message)  # noqa: TRY002
 
     course_export_path = Path(f"{course_id}_course_export.{extension}")
-    context.resources.canvas_api.client.download_course_export(
+    downloaded_path = context.resources.canvas_api.client.download_course_export(
         download_url, course_export_path
     )
 
-    with course_export_path.open("rb") as f:
-        data_version = hashlib.file_digest(f, "sha256").hexdigest()
+    data_version = compute_zip_content_hash(
+        downloaded_path, skip_filename="imsmanifest.xml"
+    )
 
     target_path = f"canvas/{export_date}/course_{course_id}/{data_version}.{extension}"
 
