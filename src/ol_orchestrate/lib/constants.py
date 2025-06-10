@@ -11,3 +11,13 @@ else:
     VAULT_ADDRESS = os.getenv("VAULT_ADDR", f"https://vault-{DAGSTER_ENV}.odl.mit.edu")
 
 OPENEDX_DEPLOYMENTS = ["mitx", "mitxonline", "xpro"]
+
+EXPORT_TYPE_COMMON_CARTRIDGE = "common_cartridge"
+EXPORT_TYPE_ZIP = "zip"
+EXPORT_TYPE_QTI = "qti"
+
+EXPORT_TYPE_EXTENSIONS = {
+    EXPORT_TYPE_COMMON_CARTRIDGE: "imscc",
+    EXPORT_TYPE_ZIP: EXPORT_TYPE_ZIP,  # Extension matches the type
+    EXPORT_TYPE_QTI: EXPORT_TYPE_QTI,  # Extension matches the type
+}
