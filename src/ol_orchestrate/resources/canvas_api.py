@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Optional, Self
 
 import httpx
@@ -88,6 +89,24 @@ class CanvasApiClient(ConfigurableResource):
         )
         response.raise_for_status()
         return response.json()
+
+    def download_course_export(self, url: str, output_path: Path) -> None:
+        """Download a file from a URL to a local path, following redirects and streaming
+        to disk.
+
+        :param url: The URL to download the file from.
+        :type url: str
+        :param output_path: The local path where the file will be saved.
+        :type output_path: Path
+        """
+        with self.http_client.stream(
+            "GET", url, follow_redirects=True, timeout=60
+        ) as response:
+            response.raise_for_status()
+            with output_path.open("wb") as f:
+                for chunk in response.iter_bytes():
+                    if chunk:
+                        f.write(chunk)
 
 
 class CanvasApiClientFactory(ConfigurableResource):
