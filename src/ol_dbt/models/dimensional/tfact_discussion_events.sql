@@ -72,7 +72,7 @@ with mitxonline_discussion_events as (
     select
         user_username
         , user_id as openedx_user_id
-        , courserun_readable_id
+        , {{ format_course_id('courserun_readable_id') }} as courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
         , json_query(useractivity_event_object, 'lax $.id' omit quotes) as post_id
