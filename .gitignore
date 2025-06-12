@@ -10,3 +10,4 @@ bin/pants
 **/*.duckdb
 **/dagster_local/*
 .aider*
+.env

@@ -90,7 +90,9 @@ class OAuthApiClient(ConfigurableResource):
 
         response = self.http_client.get(
             request_url,
-            headers={"Authorization": f"JWT {self._fetch_access_token()}"},
+            headers={
+                "Authorization": f"{self.token_type} {self._fetch_access_token()}"
+            },
             params=httpx.QueryParams(**request_params),
         )
 

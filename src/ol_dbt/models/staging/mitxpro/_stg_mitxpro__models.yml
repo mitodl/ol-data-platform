@@ -1551,11 +1551,11 @@ models:
     description: str, a short description indicating how long the course takes to
       complete (e.g. '4 weeks')
   - name: cms_coursepage_format
-    description: str, format of the course (Online, Other)
+    description: str, format of the course (Online, Other, Hybrid)
     tests:
     - not_null
     - accepted_values:
-        values: ['Online', 'Other']
+        values: ['Online', 'Other', 'Hybrid']
   - name: cms_coursepage_subhead
     description: str, short subheading to appear below the title on the course page
     tests:

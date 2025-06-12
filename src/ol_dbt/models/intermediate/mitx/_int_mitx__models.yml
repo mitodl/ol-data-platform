@@ -34,10 +34,7 @@ models:
   columns:
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
-      or periods. e.g. 6.002.1x
-    tests:
-    - unique
-    - not_null
+      or periods. e.g. 6.002.1x. May not be unique for UAI course.
   - name: course_readable_id
     description: str, Open edX ID for the course formatted as course-v1:{org}+{course
       code} for MITx Online and {org}/{course} for edX.org
