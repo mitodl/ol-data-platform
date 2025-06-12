@@ -118,7 +118,7 @@ class SupersetApiClient(OAuthApiClient):
                 "X-CSRFToken": self._get_csrf_token(),
                 "Referer": self._csrf_token_url,
             },
-            timeout=60,
+            timeout=300,
         )
 
         response.raise_for_status()
@@ -137,7 +137,7 @@ class SupersetApiClient(OAuthApiClient):
                 "Referer": self._csrf_token_url,
                 "Content-Type": "application/json",
             },
-            timeout=60,
+            timeout=300,
         )
         response.raise_for_status()
         return response.json()
