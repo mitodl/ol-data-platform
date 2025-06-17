@@ -212,20 +212,34 @@ with mitxonline_problem_events as (
     from combined_studentmodule
 )
 
+, deduped_combined as (
+    select *
+    from (
+        select
+            *
+            , row_number() over (
+                partition by openedx_user_id, courserun_readable_id, problem_block_id, event_timestamp
+                order by event_timestamp
+            ) as rn
+        from combined
+    )
+    where rn = 1
+)
+
 select
     platform.platform_pk as platform_fk
-    , combined.user_fk
-    , combined.platform
-    , combined.openedx_user_id
-    , combined.courserun_readable_id
-    , combined.event_type
-    , combined.problem_block_id as problem_block_fk
-    , combined.answers
-    , combined.attempt
-    , combined.success
-    , combined.grade
-    , combined.max_grade
-    , combined.event_timestamp
-    , combined.event_json
-from combined
-left join platform on combined.platform = platform.platform_readable_id
+    , deduped_combined.user_fk
+    , deduped_combined.platform
+    , deduped_combined.openedx_user_id
+    , deduped_combined.courserun_readable_id
+    , deduped_combined.event_type
+    , deduped_combined.problem_block_id as problem_block_fk
+    , deduped_combined.answers
+    , deduped_combined.attempt
+    , deduped_combined.success
+    , deduped_combined.grade
+    , deduped_combined.max_grade
+    , deduped_combined.event_timestamp
+    , deduped_combined.event_json
+from deduped_combined
+left join platform on deduped_combined.platform = platform.platform_readable_id
