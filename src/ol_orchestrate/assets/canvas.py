@@ -1,9 +1,10 @@
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 from dagster import (
     AssetExecutionContext,
+    AssetIn,
     AssetKey,
     DataVersion,
     Output,
@@ -11,6 +12,7 @@ from dagster import (
     asset,
 )
 
+from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import (
     EXPORT_TYPE_COMMON_CARTRIDGE,
     EXPORT_TYPE_EXTENSIONS,
@@ -30,7 +32,6 @@ canvas_course_ids = StaticPartitionsDefinition(["7023"])
 )
 def export_courses(context: AssetExecutionContext):
     course_id = int(context.partition_key)
-    export_date = datetime.now(tz=UTC).strftime("%Y%m%d")
     # only export common cartridge for now
     export_type = EXPORT_TYPE_COMMON_CARTRIDGE
     extension = EXPORT_TYPE_EXTENSIONS[export_type]
@@ -83,7 +84,7 @@ def export_courses(context: AssetExecutionContext):
         downloaded_path, skip_filename="imsmanifest.xml"
     )
 
-    target_path = f"canvas/{export_date}/course_{course_id}/{data_version}.{extension}"
+    target_path = f"canvas/course_{course_id}/{data_version}.{extension}"
 
     context.log.info("Downloading %s file to %s", download_url, target_path)
 
@@ -98,3 +99,63 @@ def export_courses(context: AssetExecutionContext):
             "object_key": target_path,
         },
     )
+
+
+@asset(
+    key=AssetKey(["canvas", "course_export_metadata"]),
+    group_name="course_export_metadata",
+    description="Notify Learn API via webhook after canvas course export.",
+    automation_condition=upstream_or_code_changes(),
+    partitions_def=canvas_course_ids,
+    ins={"canvas_export": AssetIn(key=AssetKey(["canvas", "course_export"]))},
+    required_resource_keys={"canvas_api", "learn_api"},
+)
+def course_export_metadata(context: AssetExecutionContext, canvas_export):
+    course_id = int(context.partition_key)
+    metadata = context.resources.canvas_api.client.get_course(course_id)
+
+    relative_path = str(canvas_export).split("canvas/course_", 1)[-1]
+    content_url = f"canvas/course_{relative_path}"
+
+    data = {
+        "course_id": course_id,
+        "course_name": metadata["name"],
+        "course_code": metadata["course_code"],
+        "course_readable_id": metadata["sis_course_id"],
+        "content_url": content_url,
+        "source": "canvas",
+    }
+    context.log.info(
+        "Sending webhook notification to Learn API for course_id=%s and data=%s",
+        course_id,
+        data,
+    )
+
+    try:
+        response = context.resources.learn_api.client.notify_course_export(data)
+        context.log.info(
+            "Learn API webhook notification succeeded for course_id=%s, response=%s",
+            course_id,
+            response.text if hasattr(response, "text") else str(response),
+        )
+        return Output(
+            value={"course_id": course_id},
+            metadata={
+                "status": "success",
+                "course_id": course_id,
+                "response": response,
+            },
+        )
+
+    except httpx.HTTPStatusError as e:
+        context.log.exception(
+            "Learn API webhook notification failed for course_id=%s", course_id
+        )
+        return Output(
+            value={"course_id": course_id},
+            metadata={
+                "status": "error",
+                "course_id": course_id,
+                "error_message": str(e),
+            },
+        )
