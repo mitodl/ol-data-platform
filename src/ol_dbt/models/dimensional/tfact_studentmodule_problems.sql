@@ -1,4 +1,3 @@
-{{ config(materialized='view') }}
 with mitxonline_studentmodule_problems as (
     {{ generate_studentmodule_problem_events(
         ref('stg__mitxonline__openedx__mysql__courseware_studentmodule'),

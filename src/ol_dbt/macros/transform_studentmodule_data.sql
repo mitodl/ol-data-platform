@@ -24,7 +24,7 @@
       , studentmodule_state_data
       , studentmodule_problem_grade
       , studentmodule_problem_max_grade
-      , from_iso8601_timestamp_nanos(cast(studentmodule_created_on as varchar)) as studentmodule_created_on
+      , from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) as studentmodule_created_on
       , cast(json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as int) as attempts
     from {{ studentmodulehistory_table }}
   )
@@ -43,7 +43,7 @@
       , coalesce(smhe.studentmodule_problem_max_grade, sm.studentmodule_problem_max_grade) as studentmodule_problem_max_grade
       , cast(json_parse(json_query(coalesce(smhe.studentmodule_state_data, sm.studentmodule_state_data), 'lax $.correct_map_history')) as array(json)) as correct_history
       , cast(json_parse(json_query(coalesce(smhe.studentmodule_state_data, sm.studentmodule_state_data), 'lax $.student_answers_history')) as array(json)) as answer_history
-      , coalesce(smhe.attempts, 1) - 1 as recent_attempt_index
+      , coalesce(smhe.attempts, 1) as recent_attempt_index
       from studentmodule sm
       left join studentmodulehistoryextended smhe
         on sm.studentmodule_id = smhe.studentmodule_id
@@ -54,7 +54,7 @@
       , sm.studentmodule_problem_max_grade
       , cast(json_parse(json_query(sm.studentmodule_state_data, 'lax $.correct_map_history')) as array(json)) as correct_history
       , cast(json_parse(json_query(sm.studentmodule_state_data, 'lax $.student_answers_history')) as array(json)) as answer_history
-      , coalesce(sm.attempts, 1) - 1 as recent_attempt_index
+      , coalesce(sm.attempts, 1) as recent_attempt_index
       from studentmodule sm
       {% endif %}
   )
@@ -69,9 +69,25 @@
       , studentmodule_problem_grade
       , studentmodule_problem_max_grade
       , studentmodule_updated_on
-      , correct_history[recent_attempt_index] as correct_item
-      , answer_history[recent_attempt_index] as answer_item
-      , recent_attempt_index + 1 as attempt
+      , try(
+          case
+            when correct_history is not null
+              and recent_attempt_index >= 1
+              and cardinality(correct_history) >= recent_attempt_index
+              then correct_history[recent_attempt_index]
+            else null
+          end
+      ) as correct_item
+      , try(
+          case
+            when answer_history is not null
+              and recent_attempt_index >= 1
+              and cardinality(answer_history) >= recent_attempt_index
+              then answer_history[recent_attempt_index]
+            else null
+          end
+      ) as answer_item
+      , recent_attempt_index as attempt
     from base
   )
 
@@ -85,15 +101,27 @@
       , studentmodule_problem_grade
       , studentmodule_problem_max_grade
       , studentmodule_updated_on
-      , attempt
-      , map_keys(cast(correct_item as map(varchar, json)))[1] as problem_id -- noqa: PRS
-      , json_extract_scalar(
-          cast(correct_item as map(varchar, json))[map_keys(cast(correct_item as map(varchar, json)))[1]],
-          '$.correctness'
-        ) as correctness -- noqa: PRS
-      , json_format(
-          cast(answer_item as map(varchar, json))[map_keys(cast(answer_item as map(varchar, json)))[1]]
-        ) as answers_json -- noqa: PRS
+      , cast(attempt as varchar) as attempt
+      , case
+          when correct_item is not null and cardinality(map_keys(cast(correct_item as map(varchar, json)))) >= 1
+            then map_keys(cast(correct_item as map(varchar, json)))[1]
+          else null
+        end as problem_id
+      , case
+          when correct_item is not null and cardinality(map_keys(cast(correct_item as map(varchar, json)))) >= 1
+            then json_extract_scalar(
+              cast(correct_item as map(varchar, json))[map_keys(cast(correct_item as map(varchar, json)))[1]],
+              '$.correctness'
+            )
+          else null
+      end as correctness -- noqa: PRS
+      , case
+        when answer_item is not null and cardinality(map_keys(cast(answer_item as map(varchar, json)))) >= 1
+          then json_format(
+            cast(answer_item as map(varchar, json))[map_keys(cast(answer_item as map(varchar, json)))[1]]
+          )
+        else null
+      end as answers_json -- noqa: PRS
     from processed
   )
 
