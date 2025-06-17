@@ -22,7 +22,7 @@ class MITLearnApiClient(BaseApiClient):
         headers = {"X-Signature": signature, "Content-Type": "application/json"}
 
         response = self.http_client.post(
-            f"{self.base_url}/webhooks/content_files",
+            f"{self.base_url}/webhooks/content_files/",
             content=payload_bytes,
             headers=headers,
         )
