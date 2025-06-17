@@ -136,7 +136,7 @@ def course_export_metadata(context: AssetExecutionContext, canvas_export):
         context.log.info(
             "Learn API webhook notification succeeded for course_id=%s, response=%s",
             course_id,
-            response.text if hasattr(response, "text") else str(response),
+            response,
         )
         return Output(
             value={"course_id": course_id},
@@ -147,15 +147,10 @@ def course_export_metadata(context: AssetExecutionContext, canvas_export):
             },
         )
 
-    except httpx.HTTPStatusError as e:
-        context.log.exception(
-            "Learn API webhook notification failed for course_id=%s", course_id
+    except httpx.HTTPStatusError as error:
+        error_message = (
+            f"Learn API webhook notification failed for course_id={course_id} "
+            f"with status code {error.response.status_code} and error: {error!s}"
         )
-        return Output(
-            value={"course_id": course_id},
-            metadata={
-                "status": "error",
-                "course_id": course_id,
-                "error_message": str(e),
-            },
-        )
+        context.log.exception(error_message)
+        raise Exception(error_message) from error  # noqa: TRY002
