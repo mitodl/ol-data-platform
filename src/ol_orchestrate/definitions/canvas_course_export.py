@@ -5,20 +5,20 @@ from dagster import (
 )
 from dagster_aws.s3 import S3Resource
 
-from ol_orchestrate.assets.canvas import export_courses
+from ol_orchestrate.assets.canvas import course_export_metadata, export_courses
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
 from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
-from ol_orchestrate.resources.canvas_api import CanvasApiClientFactory
+from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
 vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
 
 canvas_course_export_schedule = ScheduleDefinition(
     name="canvas_course_export_schedule",
-    target=AssetSelection.assets(export_courses),
+    target=AssetSelection.assets(export_courses, course_export_metadata),
     cron_schedule="@daily",
     execution_timezone="Etc/UTC",
 )
@@ -33,8 +33,21 @@ canvas_course_export = Definitions(
         ),
         "vault": vault,
         "s3": S3Resource(),
-        "canvas_api": CanvasApiClientFactory(vault=vault),
+        "canvas_api": ApiClientFactory(
+            deployment="canvas",
+            client_class="CanvasApiClient",
+            mount_point="secret-data",
+            config_path="pipelines/canvas",
+            vault=vault,
+        ),
+        "learn_api": ApiClientFactory(
+            deployment="mit-learn",
+            client_class="MITLearnApiClient",
+            mount_point="secret-data",
+            config_path="pipelines/mit-learn",
+            vault=vault,
+        ),
     },
-    assets=[export_courses],
+    assets=[export_courses, course_export_metadata],
     schedules=[canvas_course_export_schedule],
 )
