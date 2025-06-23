@@ -94,9 +94,7 @@ class OLAirbyteTranslator(DagsterAirbyteTranslator):
 airbyte_assets = build_airbyte_assets_definitions(
     workspace=airbyte_workspace,
     dagster_airbyte_translator=OLAirbyteTranslator(),
-    connection_selector_fn=(
-        lambda conn: re.search(r"S3 Data Lake", conn.name) is not None
-    ),
+    connection_selector_fn=(lambda conn: conn.name.lower().endswith("s3 data lake")),
 )
 
 # This section creates a separate job and schedule for each Airbyte connection that will
