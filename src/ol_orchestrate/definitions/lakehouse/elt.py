@@ -95,7 +95,7 @@ airbyte_assets = build_airbyte_assets_definitions(
     workspace=airbyte_workspace,
     dagster_airbyte_translator=OLAirbyteTranslator(),
     connection_selector_fn=(
-        lambda conn: re.search(r"S3 (Glue )?Data Lake", conn.name) is not None
+        lambda conn: re.search(r"S3 Data Lake", conn.name) is not None
     ),
 )
 
