@@ -125,14 +125,13 @@ def parse_course_id(course_xml: str | Path) -> tuple[str, str, str, str]:
     :param course_xml: The file path to course.xml file
 
     :return: A list containing the formatted course_id string, course_number,
-     and the course run_tag
-    :rtype: tuple[str, str, str]
+     the course run_tag, and the org of the course
     """
     with Path(course_xml).open("r") as course:
         tree = ElementTree()
         tree.parse(course)
         course_root = tree.getroot()
-        if not course_root:
+        if course_root is None:
             msg = (
                 "Unable to locate the root of the XML file. "
                 "Please verify that it is properly constructed and not malformed."
@@ -148,7 +147,7 @@ def parse_video_xml(video_file: IO[bytes]) -> dict[str, Any]:
     tree = ElementTree()
     tree.parse(video_file)
     video_root = tree.getroot()
-    if not video_root:
+    if video_root is None:
         msg = (
             "Unable to locate the root of the XML file. "
             "Please verify that it is properly constructed and not malformed."
