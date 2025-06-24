@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Any
 
 from pydantic import Field
 
@@ -10,10 +9,6 @@ class CanvasApiClient(BaseApiClient):
     access_token: str = Field(
         description="Access token for the Canvas API",
     )
-
-    @classmethod
-    def from_secret(cls, raw_secret: dict[str, Any]) -> "CanvasApiClient":
-        return cls(**raw_secret)
 
     def get_course(self, course_id: int):
         request_url = f"{self.base_url}/api/v1/courses/{course_id}"

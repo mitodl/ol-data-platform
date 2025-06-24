@@ -24,6 +24,10 @@ class BaseApiClient(ConfigurableResource):
             self._http_client = httpx.Client(timeout=timeout)
         return self._http_client
 
+    @classmethod
+    def from_secret(cls, raw_secret: dict[str, Any]) -> "BaseApiClient":
+        return cls(**raw_secret)
+
     def get_request(
         self, endpoint: str, headers: Optional[dict[str, str]] = None
     ) -> httpx.Response:

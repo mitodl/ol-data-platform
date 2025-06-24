@@ -84,7 +84,7 @@ def export_courses(context: AssetExecutionContext):
         downloaded_path, skip_filename="imsmanifest.xml"
     )
 
-    target_path = f"canvas/course_{course_id}/{data_version}.{extension}"
+    target_path = f"canvas/course_content/{course_id}/{data_version}.{extension}"
 
     context.log.info("Downloading %s file to %s", download_url, target_path)
 
@@ -113,9 +113,9 @@ def export_courses(context: AssetExecutionContext):
 def course_export_metadata(context: AssetExecutionContext, canvas_export):
     course_id = int(context.partition_key)
     metadata = context.resources.canvas_api.client.get_course(course_id)
-
-    relative_path = str(canvas_export).split("canvas/course_", 1)[-1]
-    content_url = f"canvas/course_{relative_path}"
+    # canvas_export is a full path to the exported course content file
+    relative_path = str(canvas_export).split("canvas/course_content/", 1)[-1]
+    content_url = f"canvas/course_content/{relative_path}"
 
     data = {
         "course_id": course_id,
