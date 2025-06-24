@@ -124,6 +124,7 @@ def course_export_metadata(context: AssetExecutionContext, canvas_export):
         "course_readable_id": metadata["sis_course_id"],
         "content_url": content_url,
         "source": "canvas",
+        "time": time.time(),
     }
     context.log.info(
         "Sending webhook notification to Learn API for course_id=%s and data=%s",

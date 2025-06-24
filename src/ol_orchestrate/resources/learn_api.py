@@ -20,19 +20,18 @@ class MITLearnApiClient(BaseApiClient):
         return cls(**learn)
 
     def notify_course_export(self, data: dict[str, Any]) -> dict[str, Any]:
-        payload_bytes = json.dumps(data, indent=None, separators=(", ", ": "))
+        payload_string = json.dumps(data, separators=(",", ":"))  # remove extra spaces
         signature = hmac.new(
-            self.token.encode(), bytes(payload_bytes, "utf-8"), hashlib.sha256
+            self.token.encode(), payload_string.encode(), hashlib.sha256
         ).hexdigest()
 
         headers = {
             "X-MITLearn-Signature": signature,
-            "Content-Type": "application/json",
         }
 
         response = self.http_client.post(
             f"{self.base_url}/webhooks/content_files/",
-            json=data,
+            content=payload_string,
             headers=headers,
         )
         response.raise_for_status()
