@@ -5,7 +5,7 @@ from dagster import (
 )
 from dagster_aws.s3 import S3Resource
 
-from ol_orchestrate.assets.canvas import course_export_metadata, export_courses
+from ol_orchestrate.assets.canvas import course_content_metadata, export_course_content
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -18,7 +18,7 @@ vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
 
 canvas_course_export_schedule = ScheduleDefinition(
     name="canvas_course_export_schedule",
-    target=AssetSelection.assets(export_courses, course_export_metadata),
+    target=AssetSelection.assets(export_course_content, course_content_metadata),
     cron_schedule="@daily",
     execution_timezone="Etc/UTC",
 )
@@ -50,6 +50,6 @@ canvas_course_export = Definitions(
             vault=vault,
         ),
     },
-    assets=[export_courses, course_export_metadata],
+    assets=[export_course_content, course_content_metadata],
     schedules=[canvas_course_export_schedule],
 )

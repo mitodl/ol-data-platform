@@ -24,13 +24,13 @@ canvas_course_ids = StaticPartitionsDefinition(["7023"])
 
 
 @asset(
-    key=AssetKey(["canvas", "course_export"]),
+    key=AssetKey(["canvas", "course_content"]),
     group_name="canvas",
     required_resource_keys={"canvas_api"},
     io_manager_key="s3file_io_manager",
     partitions_def=canvas_course_ids,
 )
-def export_courses(context: AssetExecutionContext):
+def export_course_content(context: AssetExecutionContext):
     course_id = int(context.partition_key)
     # only export common cartridge for now
     export_type = EXPORT_TYPE_COMMON_CARTRIDGE
@@ -65,19 +65,19 @@ def export_courses(context: AssetExecutionContext):
             raise Exception(message)  # noqa: TRY002
         else:
             context.log.info(
-                "Waiting for course export (state: %s)",
+                "Waiting for course content export (state: %s)",
                 export_status["workflow_state"],
             )
             retry_count += 1
             time.sleep(30)
     else:
-        message = f"Course export timed out for {course_id}"
+        message = f"Course content export timed out for {course_id}"
         context.log.error(message)
         raise Exception(message)  # noqa: TRY002
 
-    course_export_path = Path(f"{course_id}_course_export.{extension}")
+    course_content_path = Path(f"{course_id}_course_content.{extension}")
     downloaded_path = context.resources.canvas_api.client.download_course_export(
-        download_url, course_export_path
+        download_url, course_content_path
     )
 
     data_version = compute_zip_content_hash(
@@ -89,7 +89,7 @@ def export_courses(context: AssetExecutionContext):
     context.log.info("Downloading %s file to %s", download_url, target_path)
 
     yield Output(
-        value=(course_export_path, target_path),
+        value=(course_content_path, target_path),
         data_version=DataVersion(data_version),
         metadata={
             "course_id": course_id,
@@ -102,19 +102,19 @@ def export_courses(context: AssetExecutionContext):
 
 
 @asset(
-    key=AssetKey(["canvas", "course_export_metadata"]),
-    group_name="course_export_metadata",
+    key=AssetKey(["canvas", "course_content_metadata"]),
+    group_name="course_content_metadata",
     description="Notify Learn API via webhook after canvas course export.",
     automation_condition=upstream_or_code_changes(),
     partitions_def=canvas_course_ids,
-    ins={"canvas_export": AssetIn(key=AssetKey(["canvas", "course_export"]))},
+    ins={"canvas_content_export": AssetIn(key=AssetKey(["canvas", "course_content"]))},
     required_resource_keys={"canvas_api", "learn_api"},
 )
-def course_export_metadata(context: AssetExecutionContext, canvas_export):
+def course_content_metadata(context: AssetExecutionContext, canvas_content_export):
     course_id = int(context.partition_key)
     metadata = context.resources.canvas_api.client.get_course(course_id)
-    # canvas_export is a full path to the exported course content file
-    relative_path = str(canvas_export).split("canvas/course_content/", 1)[-1]
+    # canvas_content_export is a full path to the exported course content file
+    relative_path = str(canvas_content_export).split("canvas/course_content/", 1)[-1]
     content_url = f"canvas/course_content/{relative_path}"
 
     data = {
