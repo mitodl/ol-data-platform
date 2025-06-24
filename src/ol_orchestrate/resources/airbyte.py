@@ -1,6 +1,7 @@
 import base64
 from collections.abc import Mapping
 from typing import Any, Self
+from urllib.parse import parse_qs, urlparse
 
 from dagster._annotations import beta
 from dagster_airbyte.resources import AirbyteCloudClient, AirbyteCloudWorkspace
@@ -50,6 +51,12 @@ class AirbyteOSSClient(AirbyteCloudClient):
         description=(
             "Time (in seconds) after which the requests to Airbyte "
             "are declared timed out."
+        ),
+    )
+    request_page_size: int = Field(
+        default=15,
+        description=(
+            "The number of records to include in paginated requests to the Airbyte API"
         ),
     )
 
@@ -103,6 +110,21 @@ class AirbyteOSSClient(AirbyteCloudClient):
             }
         return auth_param
 
+    def get_connections(self) -> Mapping[str, Any]:
+        """Fetch all connections of an Airbyte workspace from the Airbyte REST API."""
+        all_connections = []
+        next_params: dict[str, Any] = {"limit": self.request_page_size, "offset": 0}
+        while next_params:
+            resp = self._make_request(
+                method="GET",
+                endpoint="connections",
+                base_url=self.rest_api_base_url,
+                params={"workspaceIds": self.workspace_id, **next_params},
+            )
+            next_params = parse_qs(urlparse(resp["next"]).query)
+            all_connections += resp["data"]
+        return {"data": all_connections}
+
 
 @beta
 class AirbyteOSSWorkspace(AirbyteCloudWorkspace):
@@ -142,6 +164,12 @@ class AirbyteOSSWorkspace(AirbyteCloudWorkspace):
         description=(
             "Time (in seconds) after which the requests to Airbyte "
             "are declared timed out."
+        ),
+    )
+    request_page_size: int = Field(
+        default=15,
+        description=(
+            "The number of records to include in paginated requests to the Airbyte API"
         ),
     )
     _client: AirbyteOSSClient = PrivateAttr(default=None)  # type: ignore[assignment]
