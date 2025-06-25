@@ -6,10 +6,10 @@ models:
   description: Aggregate fact table summarizing video engagement by video, learner,
     and a courserun.
   columns:
+  - name: platform
+    description: string, name of the platform
   - name: video_id
     description: string, id for the video
-  - name: user_username
-    description: string, username of the learner from the platform they used
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
   - name: courserun_readable_id
@@ -49,6 +49,12 @@ models:
   columns:
   - name: platform_pk
     description: string, primary key for this table
+    tests:
+    - not_null
+    - unique
+  - name: platform_readable_id
+    description: string, readable id of the platform. e.g. mitxonline, mitxpro, edxorg,
+      residential.
     tests:
     - not_null
     - unique
@@ -130,6 +136,35 @@ models:
       of numericalresponse, multiplechoiceresponse, customresponse, choiceresponse,
       etc.
 
+- name: dim_discussion_topic
+  description: discussion topics across the Open edX platforms
+  columns:
+  - name: discussion_topic_pk
+    description: string, primary key for this table
+    tests:
+    - not_null
+    - unique
+  - name: commentable_id
+    description: string, identifier for the specific discussion component or top-level,
+      course-wide discussion
+    tests:
+    - not_null
+  - name: content_block_fk
+    description: string, foreign key to dim_course_content
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: topic_name
+    description: string, topic name
+  - name: category_name
+    description: string, topic category name
+  - name: discussion_type
+    description: string, indicates whether the topic is a course-wide discussion or
+      a component-specific discussion. Possible values are course-wide and component-specific.
+
 - name: dim_course_content
   description: Slowly Changing Dimension model for course content, including courses,
     chapters, subsections, problems, videos, and other contents across the Open edX
@@ -197,8 +232,7 @@ models:
 - name: dim_user
   description: Eventually a dimensional model for users from different platforms.
     It will contain one record for a user that's potentially a part of different platforms
-    where we are able to see they are the same person. It currently only contains
-    mitxonline data though.
+    where we are able to see they are the same person.
   columns:
   - name: user_pk
     description: string, primary key for this user dim table
@@ -211,6 +245,20 @@ models:
     description: string, user id on MITxOnline application
   - name: user_mitxonline_username
     description: string, username on MITxOnline
+  - name: mitxpro_openedx_user_id
+    description: int, openedx user id for MITx Pro
+  - name: mitxpro_application_user_id
+    description: string, user id on MITx Pro application
+  - name: user_mitxpro_username
+    description: string, username on MITx Pro
+  - name: residential_openedx_user_id
+    description: int, openedx user id for MITx Residential
+  - name: user_residential_username
+    description: string, username on MITx Residential
+  - name: edxorg_openedx_user_id
+    description: int, openedx user id for edX.org
+  - name: user_edxorg_username
+    description: string, username on edX.org
   - name: email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.
@@ -233,11 +281,22 @@ models:
     description: str, user's job title
   - name: industry
     description: str, user's job industry
-  - name: user_is_active
-    description: boolean, indicating if user's account is active on the corresponding
-      platform including xpro, bootcamps, edX.org, MITx Online, and Residential MITx.
-  - name: user_joined_on
-    description: str, when the user joined on
+  - name: user_is_active_on_mitxonline
+    description: boolean, indicating if user's account is active on MITx Online.
+  - name: user_is_active_on_edxorg
+    description: boolean, indicating if user's account is active on edX.org.
+  - name: user_is_active_on_mitxpro
+    description: boolean, indicating if user's account is active on MITx Pro.
+  - name: user_is_active_on_residential
+    description: boolean, indicating if user's account is active on Residential MITx.
+  - name: user_joined_on_mitxonline
+    description: str, when the user joined on MITx Online.
+  - name: user_joined_on_edxorg
+    description: str, when the user joined on edX.org.
+  - name: user_joined_on_mitxpro
+    description: str, when the user joined on MITx Pro.
+  - name: user_joined_on_residential
+    description: str, when the user joined on Residential MITx.
 
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
@@ -354,6 +413,11 @@ models:
 - name: tfact_problem_events
   description: Transactional fact table for learner problem events in a course
   columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the user who triggered
+      the event
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -547,3 +611,60 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_fk"]
+
+- name: afact_discussion_engagement
+  description: Aggregate fact table summarizing learner engagement in discussion posts
+    within a course.
+  columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform, referencing the platform where
+      the discussion event occurred
+    tests:
+    - not_null
+  - name: platform
+    description: string, platform name
+    tests:
+    - not_null
+  - name: user_fk
+    description: string, foreign key to dim_user
+  - name: openedx_user_id
+    description: int, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: commentable_id
+    description: string, identifier for the specific discussion component or top-level,
+      course-wide discussion.
+  - name: post_id
+    description: string, a unique identifier for the discussion post.
+  - name: post_title
+    description: string, title to identify the post.
+  - name: post_created
+    description: integer, indicating if learner created this post/thread
+  - name: post_viewed
+    description: integer, indicating if learner viewed this post/thread
+  - name: post_voted
+    description: integer, indicating if learner voted for this post/thread
+  - name: post_replied
+    description: integer, indicating if learner replied to this post/thread
+  - name: response_voted
+    description: integer, indicating if learner voted for the response to this post/thread
+  - name: post_commented
+    description: integer, indicating if learner commented on this post/thread
+  - name: discussion_topic_fk
+    description: string, foreign key to dim_discussion_topic.
+  - name: content_block_fk
+    description: string, foreign key to dim_course_content
+  - name: chapter_block_fk
+    description: string, foreign key to dim_course_content, referencing the chapter
+      block ID within which this problem belongs to.
+  - name: sequential_block_fk
+    description: string, foreign key to dim_course_content, referencing sequential/unit
+      block ID within which this problem belongs to
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "discussion_topic_fk",
+        "commentable_id", 'post_id']

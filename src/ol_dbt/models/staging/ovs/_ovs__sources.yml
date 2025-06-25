@@ -99,6 +99,27 @@ sources:
     - name: last_modified
       description: timestamp, date and time when the record was last updated.
 
+  - name: raw__ovs__postgres__ui_encodejob
+    description: AWS Elastic Transcoder's EncodeJob objects for videos uploaded on
+      OVS
+    columns:
+    - name: id
+      description: str, unique string to identify the EncodeJob object.
+    - name: object_id
+      description: int, foreign key to ui_video.
+    - name: contenttype_id
+      description: int, foreign key to django_content_type that refers to the video
+        model.
+    - name: message
+      description: str, json string for the transcoder message.
+    - name: state
+      description: int, 0 - Submitted, 1 - Progressing, 2 - Error, 3 - Warning, 4,
+        Complete.
+    - name: created_at
+      description: timestamp, date and time when the record was created.
+    - name: last_modified
+      description: timestamp, date and time when the record was last updated.
+
   - name: raw__ovs__postgres__ui_edxendpoint
     description: edx endpoint configuration used for posting videos
     columns:

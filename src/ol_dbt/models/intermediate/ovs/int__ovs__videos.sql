@@ -6,7 +6,7 @@ with video_encodejobs as (
             partition by video_id
             order by encodejob_created_on desc
         ) as encodejob_rank
-    from {{ ref('stg__ovs__studio__postgres__dj_elastictranscoder_encodejob') }}
+    from {{ ref('stg__ovs__studio__postgres__ui_encodejob') }}
 )
 
 , videos as (

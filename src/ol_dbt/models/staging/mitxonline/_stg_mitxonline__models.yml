@@ -797,9 +797,9 @@ models:
     - unique
     - not_null
   - name: course_number
-    description: str, unique string for the course e.g. 14.009x
+    description: str, unique string for the course e.g. 14.009x. May not be unique
+      for UAI course.
     tests:
-    - unique
     - not_null
   - name: course_created_on
     description: timestamp, specifying when a course was initially created
