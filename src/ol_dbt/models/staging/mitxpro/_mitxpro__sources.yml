@@ -2238,6 +2238,61 @@ sources:
       description: str, date and time when the enrolment was last updated in Emeritus's
         CRM.
 
+  - name: raw__global_alumni__bigquery__api_enrollments
+    description: xPro course enrollments that are offered on the Global Alumni platform
+    columns:
+    - name: batch_id
+      description: str, course run ID on the Global Alumni platform, e.g. B-33210
+    - name: batch
+      description: str, course title (Batch Start Month – Batch Start Year), e.g.
+        Leading Teams (Nov-2024)
+    - name: batch_start_date
+      description: str, course run start date and time in ISO 8601 format
+    - name: batch_end_date
+      description: str, course run end date and time in ISO 8601 format
+    - name: wrike_run_code
+      description: str, course run readable ID on the Global Alumni platform, e.g.
+        MXP-GAD-25-04#1 It maps to external_course_run_id in xPro app.
+    - name: student_id
+      description: str, user ID on the Global Alumni platform
+    - name: first_name
+      description: str, user's first name
+    - name: last_name
+      description: str, user's last name
+    - name: email
+      description: str, user's email
+    - name: gender
+      description: str, user's gender
+    - name: work_exp_slab
+      description: str, user's years experience. Options are <5 Years, 5-9 Years,
+        10-14 Years, 15-19 Years, 20+ Years, and unknown.
+    - name: company_name
+      description: str, user's company
+    - name: function
+      description: str, user's job function, e.g. Consulting, General Management
+    - name: industry
+      description: str, user's job industry
+    - name: job_title
+      description: str, user's job title
+    - name: residential_address
+      description: str, user's residential address
+    - name: residential_city
+      description: str, user's residential city
+    - name: residential_state
+      description: str, user's residential state
+    - name: residential_zip_code
+      description: str, user's residential zip code
+    - name: country
+      description: str, user's residential country
+    - name: gdpr_agree
+      description: str, same as user's country
+    - name: gdpr_consent_date
+      description: str, date and time when the user provided consent to the GDPR
+    - name: status
+      description: str, Enrolled
+    - name: deferred
+      description: str, indicating whether enrollment is deferred
+
   - name: raw__xpro__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended
     description: History of studentmodule in xPro Platform
     columns:
