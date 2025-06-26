@@ -10,6 +10,10 @@ with mitx_enrollments as (
     select * from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
 )
 
+, global_alumni_enrollments as (
+    select * from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
+)
+
 , bootcamps_enrollments as (
     select * from {{ ref('int__bootcamps__courserunenrollments') }}
 )
@@ -146,6 +150,32 @@ with mitx_enrollments as (
     left join mitxpro_courseruns
         on
             emeritus_enrollments.courserun_external_readable_id = mitxpro_courseruns.courserun_external_readable_id
+
+    union all
+
+    select
+        '{{ var("global_alumni") }}' as platform
+        , null as courserunenrollment_id
+        , global_alumni_enrollments.is_enrolled as courserunenrollment_is_active
+        , null as courserunenrollment_created_on
+        , null as courserunenrollment_enrollment_mode
+        , global_alumni_enrollments.enrollment_status as courserunenrollment_enrollment_status
+        , null as courserunenrollment_is_edx_enrolled
+        , null as courserun_upgrade_deadline
+        , global_alumni_enrollments.user_id
+        , mitxpro_courseruns.courserun_id
+        , coalesce(mitxpro_courseruns.courserun_title, global_alumni_enrollments.courserun_title) as courserun_title
+        , coalesce(mitxpro_courseruns.courserun_readable_id, global_alumni_enrollments.courserun_external_readable_id)
+        as courserun_readable_id
+        , null as user_username
+        , global_alumni_enrollments.user_email
+        , global_alumni_enrollments.user_full_name
+        , null as courserungrade_grade
+        , null as courserungrade_is_passing
+    from global_alumni_enrollments
+    left join mitxpro_courseruns
+        on
+            global_alumni_enrollments.courserun_external_readable_id = mitxpro_courseruns.courserun_external_readable_id
 
     union all
 

@@ -39,6 +39,15 @@ with mitx_courses as (
     from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
 )
 
+, global_alumni_runs as (
+    select distinct
+        courserun_external_readable_id
+        , courserun_title
+        , courserun_start_on
+        , courserun_end_on
+    from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
+)
+
 , residential_runs as (
     select
         *
@@ -104,7 +113,10 @@ with mitx_courses as (
     union all
 
     select
-        '{{ var("mitxpro") }}' as platform
+        case
+            when mitxpro_runs.platform_id = 2 then '{{ var("mitxpro") }}'
+            else 'xPRO' || mitxpro_runs.platform_name
+        end as platform_name
         , mitxpro_courses.course_title
         , mitxpro_courses.course_readable_id
         , mitxpro_runs.courserun_title
@@ -155,6 +167,35 @@ with mitx_courses as (
     from emeritus_runs
     left join mitxpro_runs
         on emeritus_runs.courserun_external_readable_id = mitxpro_runs.courserun_external_readable_id
+    where mitxpro_runs.courserun_external_readable_id is null
+
+    union all
+    -- any remaining global alumni runs that are not in mitxpro
+    select
+        '{{ var("global_alumni") }}' as platform
+        , global_alumni_runs.courserun_title as course_title
+        , global_alumni_runs.courserun_external_readable_id as course_readable_id
+        , global_alumni_runs.courserun_title
+        , global_alumni_runs.courserun_external_readable_id
+        , null as courserun_url
+        , global_alumni_runs.courserun_start_on
+        , global_alumni_runs.courserun_end_on
+        , null as courserun_upgrade_deadline
+        , null as courserun_is_live
+        , case
+            when
+                global_alumni_runs.courserun_end_on is null
+                and from_iso8601_timestamp(global_alumni_runs.courserun_start_on) <= current_date
+                then true
+            when
+                from_iso8601_timestamp(global_alumni_runs.courserun_start_on) <= current_date
+                and from_iso8601_timestamp(global_alumni_runs.courserun_end_on) > current_date
+                then true
+            else false
+        end as courserun_is_current
+    from global_alumni_runs
+    left join mitxpro_runs
+        on global_alumni_runs.courserun_external_readable_id = mitxpro_runs.courserun_external_readable_id
     where mitxpro_runs.courserun_external_readable_id is null
 
     union all
