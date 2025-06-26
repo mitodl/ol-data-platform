@@ -2,6 +2,8 @@ id,platform_name,platform_description,platform_domain
 mitxonline,MITx Online,Online courses from MIT faculty and instructors,mitxonline.mit.edu
 edxorg,edX.org,MIT Online courses on edX.org,www.edx.org
 mitxpro,MIT xPRO,MIT Professional development courses and programs that build skills and augment careers,xpro.mit.edu
+emeritus,xPRO Emeritus,xPro course offered on Emeritus platform,emeritus.org
+global_alumni,xPRO Global Alumni,xPro course offered on Global Alumni platform,globalalumni.org
 residential,MITx Residential,MITx Residential,lms.mitx.mit.edu
 bootcamps,MIT Bootcamps,MIT Bootcamps,bootcamp.odl.mit.edu
 ocw,OCW,MIT Open Course Ware,ocw.mit.edu

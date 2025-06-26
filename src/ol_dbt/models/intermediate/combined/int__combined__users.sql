@@ -55,7 +55,7 @@ with mitxonline_users as (
         , user_industry
         , row_number() over (
             partition by coalesce(user_id, user_email)
-            order by user_gdpr_consent_date desc
+            order by coalesce(user_gdpr_consent_date, courserun_start_on) desc
         ) as row_num
     from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
 )

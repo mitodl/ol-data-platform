@@ -246,7 +246,7 @@ with combined_enrollments as (
     union all
 
     select
-        '{{ var("emeritus") }}' as platform
+        combined_enrollments.platform
         , combined_enrollments.courserunenrollment_id
         , combined_enrollments.courserunenrollment_is_active
         , combined_enrollments.courserunenrollment_created_on
@@ -291,7 +291,7 @@ with combined_enrollments as (
             and combined_enrollments.platform = combined_users.platform
     left join combined_courseruns
         on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
-    where combined_enrollments.platform = '{{ var("emeritus") }}'
+    where combined_enrollments.platform in ('{{ var("emeritus") }}', '{{ var("global_alumni") }}')
 
     union all
 

@@ -78,7 +78,8 @@ models:
     description: timestamp, specifying when an enrollment was initially created on
       the corresponding platform
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Global Alumni'"
   - name: courserunenrollment_enrollment_mode
     description: string, enrollment mode for user on the corresponding platform
   - name: courserunenrollment_enrollment_status
