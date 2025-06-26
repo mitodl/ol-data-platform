@@ -198,7 +198,7 @@ with mitx__users as (
         , user_joined_on
         , user_last_login
         , user_is_active
-        , '{{ var("emeritus") }}' as platforms
+        , platform as platforms
         , user_full_name
         , user_address_country
         , user_highest_education
@@ -208,35 +208,8 @@ with mitx__users as (
         , user_job_title
         , user_industry
     from non_mitx_users
-    where platform = '{{ var("emeritus") }}'
+    where platform in ('{{ var("emeritus") }}', '{{ var("global_alumni") }}')
 
-    union all
-
-    select
-        user_hashed_id
-        , null as user_mitxonline_id
-        , null as user_edxorg_id
-        , null as user_mitxpro_id
-        , null as user_bootcamps_id
-        , null as user_mitxonline_username
-        , null as user_edxorg_username
-        , null as user_mitxpro_username
-        , null as user_bootcamps_username
-        , user_email
-        , user_joined_on
-        , user_last_login
-        , user_is_active
-        , '{{ var("global_alumni") }}' as platforms
-        , user_full_name
-        , user_address_country
-        , user_highest_education
-        , user_gender
-        , user_birth_year
-        , user_company
-        , user_job_title
-        , user_industry
-    from non_mitx_users
-    where platform = '{{ var("global_alumni") }}'
 )
 
 select

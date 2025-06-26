@@ -128,7 +128,7 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_mitxonline_username", "user_edxorg_username", "user_mitxpro_username",
         "user_bootcamps_username", "platforms"]
-      row_condition: "platforms != 'xPRO Emeritus'"
+      row_condition: "platforms not in ('xPRO Emeritus', 'xPRO Global Alumni')"
 
 - name: marts__combined__orders
   description: ecommerce regular b2c orders
@@ -349,7 +349,8 @@ models:
   - name: courserunenrollment_created_on
     description: timestamp, specifying when the enrollment was initially
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Global Alumni'"
   - name: courserunenrollment_enrollment_mode
     description: string, enrollment mode for user on the corresponding platform
   - name: courserunenrollment_enrollment_status
@@ -406,20 +407,20 @@ models:
     description: str, gender on the platform user enrolled
   - name: user_id
     description: int, user ID on the corresponding platform. May be null for some
-      xPRO Emeritus learners.
+      xPRO Emeritus and Global Alumni learners.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'xPRO Emeritus'"
+        row_condition: "platform not in ('xPRO Emeritus', 'xPRO Global Alumni')'"
   - name: user_hashed_id
     description: str, foreign key to combined_users to identify the user
     tests:
     - not_null
   - name: user_username
     description: string, username to identify a user on the corresponding platform.
-      Null for all the xPRO Emeritus.
+      Null for xPRO Emeritus and Global Alumni learners.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'xPRO Emeritus'"
+        row_condition: "platform not in ('xPRO Emeritus', 'xPRO Global Alumni')"
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_hashed_id", "courserun_readable_id"]
@@ -430,6 +431,9 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id", "combined_orders_hash_id"]
       row_condition: "platform ='xPro'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "courserun_readable_id"]
+      row_condition: "platform ='xPRO Global Alumni'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id", "order_reference_number"]
       row_condition: "platform='Bootcamps'"
