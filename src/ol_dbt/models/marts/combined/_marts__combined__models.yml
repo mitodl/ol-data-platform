@@ -410,7 +410,7 @@ models:
       xPRO Emeritus and Global Alumni learners.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform not in ('xPRO Emeritus', 'xPRO Global Alumni')'"
+        row_condition: "platform not in ('xPRO Emeritus', 'xPRO Global Alumni')"
   - name: user_hashed_id
     description: str, foreign key to combined_users to identify the user
     tests:
