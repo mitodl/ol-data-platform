@@ -466,7 +466,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_fk",
-        "event_timestamp"] # check with rachel
+        "event_timestamp"]
 
 - name: tfact_studentmodule_problems
   description: Transactional fact table for studentmodule problem events flattened
@@ -476,8 +476,6 @@ models:
     description: string, foreign key to dim_user
   - name: platform
     description: string, platform name
-  - name: event_type
-    description: string, type of the discussion event.
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
   - name: courserun_readable_id
@@ -502,11 +500,11 @@ models:
   - name: success
     description: str, indicating whether an answer is correct or incorrect
   - name: grade
-    description: float, floating point value indicating the total unweighted grade
-      for this problem that the learner has scored. e.g. how many responses they got
-      right within the problem. This data is also available in courseactivity_problemcheck
+    description: number, current value indicating the total unweighted grade for this
+      problem that the learner has scored. e.g. how many responses they got right
+      within the problem. This data is also available in courseactivity_problemcheck
   - name: max_grade
-    description: float, floating point value indicating the total possible unweighted
+    description: number, maximum possible number indicating the total possible unweighted
       grade for this problem, or basically the number of responses that are in this
       problem. This data is also available in courseactivity_problemcheck
   - name: event_timestamp
@@ -516,7 +514,8 @@ models:
     description: str, unique identifier for a problem in the studentmodule state data
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id", "problem_id", "attempt"]
+      column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_id",
+        "event_timestamp"]
 
 - name: tfact_discussion_events
   description: Transactional fact table for learner discussion events in a course

@@ -212,6 +212,8 @@ with mitxonline_problem_events as (
     from combined_studentmodule
 )
 
+-- dedupe the tracking log and student module data based on user_id, course_run, problem, and time
+-- The dbt model definition has a test against the same composite unique key.
 , deduped_combined as (
     select *
     from (
