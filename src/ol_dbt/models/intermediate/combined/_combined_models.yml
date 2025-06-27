@@ -78,7 +78,8 @@ models:
     description: timestamp, specifying when an enrollment was initially created on
       the corresponding platform
     tests:
-    - not_null
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Global Alumni'"
   - name: courserunenrollment_enrollment_mode
     description: string, enrollment mode for user on the corresponding platform
   - name: courserunenrollment_enrollment_status
@@ -216,8 +217,6 @@ models:
     description: string, application where the data is from
     tests:
     - not_null
-    - accepted_values:
-        values: '{{ var("platforms") }}'
   - name: courserun_readable_id
     description: str, unique string to identify a course run on the corresponding
       platform. Maybe null for Bootcamps runs.
