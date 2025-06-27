@@ -31,21 +31,35 @@ with mitx_courses as (
 )
 
 , emeritus_runs as (
-    select distinct
-        courserun_external_readable_id
-        , courserun_title
-        , courserun_start_on
-        , courserun_end_on
-    from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
+    select * from (
+        select
+            courserun_external_readable_id
+            , courserun_title
+            , courserun_start_on
+            , courserun_end_on
+            , row_number() over (
+                partition by courserun_external_readable_id
+                order by courserun_start_on desc, courserun_end_on desc, enrollment_created_on desc
+            ) as row_num
+        from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
+    )
+    where row_num = 1
 )
 
 , global_alumni_runs as (
-    select distinct
-        courserun_external_readable_id
-        , courserun_title
-        , courserun_start_on
-        , courserun_end_on
-    from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
+    select * from (
+        select
+            courserun_external_readable_id
+            , courserun_title
+            , courserun_start_on
+            , courserun_end_on
+            , row_number() over (
+                partition by courserun_external_readable_id
+                order by courserun_start_on desc, courserun_end_on desc, user_gdpr_consent_date desc
+            ) as row_num
+        from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
+    )
+    where row_num = 1
 )
 
 , residential_runs as (

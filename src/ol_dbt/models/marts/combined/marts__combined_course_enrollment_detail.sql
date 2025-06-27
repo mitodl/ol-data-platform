@@ -284,7 +284,8 @@ with combined_enrollments as (
     from combined_enrollments
     left join combined_users
         on
-            combined_enrollments.user_email = combined_users.user_email
+            combined_enrollments.user_id = combined_users.user_id
+            and combined_enrollments.user_email = combined_users.user_email
             and combined_enrollments.platform = combined_users.platform
     left join combined_courseruns
         on combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
