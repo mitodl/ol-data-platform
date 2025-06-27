@@ -30,7 +30,7 @@ class MITLearnApiClient(BaseApiClient):
         }
 
         response = self.http_client.post(
-            f"{self.base_url}/webhooks/content_files/",
+            f"{self.base_url}/api/v1/webhooks/content_files/",
             content=payload_string,
             headers=headers,
         )

@@ -115,14 +115,14 @@ def course_content_metadata(context: AssetExecutionContext, canvas_content_expor
     metadata = context.resources.canvas_api.client.get_course(course_id)
     # canvas_content_export is a full path to the exported course content file
     relative_path = str(canvas_content_export).split("canvas/course_content/", 1)[-1]
-    content_url = f"canvas/course_content/{relative_path}"
+    content_path = f"canvas/course_content/{relative_path}"
 
     data = {
         "course_id": course_id,
         "course_name": metadata["name"],
         "course_code": metadata["course_code"],
         "course_readable_id": metadata["sis_course_id"],
-        "content_url": content_url,
+        "content_path": content_path,
         "source": "canvas",
         "time": time.time(),
     }
