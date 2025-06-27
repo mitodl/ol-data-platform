@@ -129,7 +129,7 @@ with mitx_courses as (
     select
         case
             when mitxpro_runs.platform_id = 2 then '{{ var("mitxpro") }}'
-            else 'xPRO' || mitxpro_runs.platform_name
+            else 'xPRO ' || mitxpro_runs.platform_name
         end as platform
         , mitxpro_courses.course_title
         , mitxpro_courses.course_readable_id
