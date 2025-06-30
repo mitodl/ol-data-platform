@@ -11,7 +11,7 @@ chunked by date.
 
 import sys
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from boto3 import client, resource
@@ -35,7 +35,7 @@ def date_chunk_files(  # noqa: PLR0913
         ),
     ] = "2017-01-01",
     end_date: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             help="The date of the last tracking log to process "
             "(based on the formatted file name). In %Y-%m-%d format"

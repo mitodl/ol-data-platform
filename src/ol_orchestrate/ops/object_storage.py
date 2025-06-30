@@ -6,7 +6,6 @@ src/ol_orchstrate/io_managers/filepath.py
 """
 
 from pathlib import Path
-from typing import Optional
 
 from dagster import Config, In, OpExecutionContext, Out, op
 from pydantic import Field
@@ -17,7 +16,7 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
 class SyncS3ObjectsConfig(Config):
     source_bucket: str = Field(description="S3 bucket to sync from")
     destination_bucket: str = Field(description="S3 bucket to sync to")
-    object_keys: Optional[list[str]] = Field(
+    object_keys: list[str] | None = Field(
         description="List of S3 object keys to sync"
     )
     destination_prefix: str = Field(
@@ -47,7 +46,7 @@ def sync_files_to_s3(context, config: SyncS3ObjectsConfig) -> None:
 
 class S3DownloadConfig(Config):
     source_bucket: str = Field(description="S3 bucket to sync from")
-    object_keys: Optional[list[str]] = Field(
+    object_keys: list[str] | None = Field(
         description="List of S3 object keys to sync"
     )
 
@@ -83,7 +82,7 @@ class S3UploadConfig(Config):
     destination_prefix: str = Field(
         default="", description="S3 object key prefix to sync to"
     )
-    destination_key: Optional[str] = Field(description="S3 object key to sync to")
+    destination_key: str | None = Field(description="S3 object key to sync to")
 
 
 @op(required_resource_keys={"s3_upload"}, ins={"downloaded_objects": In()})
