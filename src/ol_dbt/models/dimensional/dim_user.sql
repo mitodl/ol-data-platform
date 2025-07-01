@@ -96,6 +96,46 @@ with mitx_users as (
     left join mitxpro_profile on mitxpro_users.user_id = mitxpro_profile.user_id
 )
 
+, emeritus_users as (
+    select * from (
+        select
+            user_id
+            , user_email
+            , user_full_name
+            , user_address_country
+            , user_gender
+            , user_company
+            , user_job_title
+            , user_industry
+            , row_number() over (
+                partition by coalesce(user_id, user_email, user_full_name)
+                order by user_gdpr_consent_date desc, enrollment_created_on desc
+            ) as row_num
+        from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
+    )
+    where row_num = 1
+)
+
+, global_alumni_users as (
+    select * from (
+        select
+            user_id
+            , user_email
+            , user_full_name
+            , user_address_country
+            , user_gender
+            , user_company
+            , user_job_title
+            , user_industry
+            , row_number() over (
+                partition by user_email
+                order by user_gdpr_consent_date desc, courserun_start_on desc
+            ) as row_num
+        from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
+    )
+    where row_num = 1
+)
+
 -- Residential Users
 , mitxresidential_openedx_users as (
     select
@@ -150,6 +190,8 @@ with mitx_users as (
         , null as user_residential_username
         , mitx_users.edxorg_openedx_user_id
         , mitx_users.user_edxorg_username
+        , null as emeritus_user_id
+        , null as global_alumni_user_id
         , mitx_users.user_email as email
         , mitx_users.full_name
         , mitx_users.address_country
@@ -189,6 +231,8 @@ with mitx_users as (
         , null as user_residential_username
         , null as edxorg_openedx_user_id
         , null as user_edxorg_username
+        , null as emeritus_user_id
+        , null as global_alumni_user_id
         , mitxpro_user_view.user_email as email
         , mitxpro_user_view.user_full_name as full_name
         , mitxpro_user_view.user_address_country as address_country
@@ -215,6 +259,78 @@ with mitx_users as (
     union all
 
     select
+        {{ dbt_utils.generate_surrogate_key(['user_email']) }} as user_pk
+        , null as mitxonline_openedx_user_id
+        , null as mitxonline_application_user_id
+        , null as user_mitxonline_username
+        , null as mitxpro_openedx_user_id
+        , null as mitxpro_application_user_id
+        , null as user_mitxpro_username
+        , null as residential_openedx_user_id
+        , null as user_residential_username
+        , null as edxorg_openedx_user_id
+        , null as user_edxorg_username
+        , user_id as emeritus_user_id
+        , null as global_alumni_user_id
+        , user_email as email
+        , user_full_name as full_name
+        , user_address_country as address_country
+        , null as highest_education
+        , user_gender as gender
+        , null as birth_year
+        , user_company as company
+        , user_job_title as job_title
+        , user_industry as industry
+        , null as user_is_active_on_mitxonline
+        , null as user_joined_on_mitxonline
+        , null as user_is_active_on_edxorg
+        , null as user_joined_on_edxorg
+        , null as user_is_active_on_mitxpro
+        , null as user_joined_on_mitxpro
+        , null as user_is_active_on_residential
+        , null as user_joined_on_residential
+    from emeritus_users
+    where user_email is not null
+
+    union all
+
+    select
+        {{ dbt_utils.generate_surrogate_key(['user_email']) }} as user_pk
+        , null as mitxonline_openedx_user_id
+        , null as mitxonline_application_user_id
+        , null as user_mitxonline_username
+        , null as mitxpro_openedx_user_id
+        , null as mitxpro_application_user_id
+        , null as user_mitxpro_username
+        , null as residential_openedx_user_id
+        , null as user_residential_username
+        , null as edxorg_openedx_user_id
+        , null as user_edxorg_username
+        , null as emeritus_user_id
+        , user_id as global_alumni_user_id
+        , user_email as email
+        , user_full_name as full_name
+        , user_address_country as address_country
+        , null as highest_education
+        , user_gender as gender
+        , null as birth_year
+        , user_company as company
+        , user_job_title as job_title
+        , user_industry as industry
+        , null as user_is_active_on_mitxonline
+        , null as user_joined_on_mitxonline
+        , null as user_is_active_on_edxorg
+        , null as user_joined_on_edxorg
+        , null as user_is_active_on_mitxpro
+        , null as user_joined_on_mitxpro
+        , null as user_is_active_on_residential
+        , null as user_joined_on_residential
+    from global_alumni_users
+    where user_email is not null
+
+    union all
+
+    select
         {{ dbt_utils.generate_surrogate_key(['mitxresidential_user_view.user_email']) }} as user_pk
         , null as mitxonline_openedx_user_id
         , null as mitxonline_application_user_id
@@ -226,6 +342,8 @@ with mitx_users as (
         , mitxresidential_user_view.user_username as user_residential_username
         , null as edxorg_openedx_user_id
         , null as user_edxorg_username
+        , null as emeritus_user_id
+        , null as global_alumni_user_id
         , mitxresidential_user_view.user_email as email
         , mitxresidential_user_view.user_full_name as full_name
         , mitxresidential_user_view.user_address_country as address_country
@@ -280,6 +398,8 @@ with mitx_users as (
         , max(residential_openedx_user_id) as residential_openedx_user_id
         , max(user_residential_username) as user_residential_username
         , max(edxorg_openedx_user_id) as edxorg_openedx_user_id
+        , max(emeritus_user_id) as emeritus_user_id
+        , max(global_alumni_user_id) as global_alumni_user_id
         , max(user_edxorg_username) as user_edxorg_username
         , max(user_is_active_on_mitxonline) as user_is_active_on_mitxonline
         , max(user_joined_on_mitxonline) as user_joined_on_mitxonline
@@ -305,6 +425,8 @@ select
     , agg.user_residential_username
     , agg.edxorg_openedx_user_id
     , agg.user_edxorg_username
+    , agg.emeritus_user_id
+    , agg.global_alumni_user_id
     , base.email
     , base.full_name
     , base.address_country
