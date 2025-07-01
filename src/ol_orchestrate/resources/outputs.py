@@ -1,7 +1,6 @@
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from dagster import ConfigurableResource, InitResourceContext
 from pydantic import Field
@@ -21,7 +20,7 @@ class BaseResultsDir(ConfigurableResource):
             " allow writing by the Dagster user"
         ),
     )
-    dir_prefix: Optional[str] = Field(
+    dir_prefix: str | None = Field(
         default=None,
         description=(
             "An optional directory name to nest the resource directory within. "
@@ -68,7 +67,7 @@ class DailyResultsDir(BaseResultsDir):
         description="Format string for structuring the name of the daily outputs "
         "directory",
     )
-    date_override: Optional[str] = Field(
+    date_override: str | None = Field(
         default=None,
         description=(
             "Specified date object to override the default of using the current"

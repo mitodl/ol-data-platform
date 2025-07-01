@@ -1,7 +1,7 @@
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from dagster import AssetExecutionContext, AutomationCondition
 from dagster_dbt import (
@@ -31,10 +31,10 @@ class DbtAutomationTranslator(DagsterDbtTranslator):
     def get_automation_condition(
         self,
         dbt_resource_props: Mapping[str, Any],  # noqa: ARG002
-    ) -> Optional[AutomationCondition]:
+    ) -> AutomationCondition | None:
         return upstream_or_code_changes()
 
-    def get_group_name(self, dbt_resource_props: Mapping[str, Any]) -> Optional[str]:
+    def get_group_name(self, dbt_resource_props: Mapping[str, Any]) -> str | None:
         """
         Extract the group name from the schema configuration in the dbt resource
         properties.

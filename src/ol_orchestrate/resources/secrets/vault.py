@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 
 import boto3
 import hvac
@@ -9,10 +8,10 @@ from pydantic import PrivateAttr
 
 class Vault(ConfigurableResource):
     vault_addr: str
-    vault_token: Optional[str]
-    vault_role: Optional[str]
+    vault_token: str | None
+    vault_role: str | None
     vault_auth_type: str = "aws-iam"  # can be one of ["github", "aws-iam", "token"]
-    auth_mount: Optional[str] = None
+    auth_mount: str | None = None
     verify_tls: bool = True
     _client: hvac.Client = PrivateAttr(default=None)
 

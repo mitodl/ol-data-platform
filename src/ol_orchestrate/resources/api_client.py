@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from dagster import ConfigurableResource
@@ -15,7 +15,7 @@ class BaseApiClient(ConfigurableResource):
         default=60,
         description="seconds to allow for requests to complete before timing out",
     )
-    _http_client: Optional[httpx.Client] = PrivateAttr(default=None)
+    _http_client: httpx.Client | None = PrivateAttr(default=None)
 
     @property
     def http_client(self) -> httpx.Client:
@@ -29,7 +29,7 @@ class BaseApiClient(ConfigurableResource):
         return cls(**raw_secret)
 
     def get_request(
-        self, endpoint: str, headers: Optional[dict[str, str]] = None
+        self, endpoint: str, headers: dict[str, str] | None = None
     ) -> httpx.Response:
         url = f"{self.base_url}/{endpoint}"
         response = self.http_client.get(url, headers=headers)
@@ -40,7 +40,7 @@ class BaseApiClient(ConfigurableResource):
         self,
         endpoint: str,
         data: dict[str, Any],
-        headers: Optional[dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
     ) -> httpx.Response:
         url = f"{self.base_url}/{endpoint}"
         response = self.http_client.post(url, json=data, headers=headers)

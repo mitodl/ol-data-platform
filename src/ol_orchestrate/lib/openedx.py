@@ -4,7 +4,7 @@ import tarfile
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import IO, Any, Optional
+from typing import IO, Any
 from xml.etree.ElementTree import ElementTree
 
 
@@ -31,7 +31,7 @@ def generate_block_indexes(
 
 
 def un_nest_course_structure(
-    course_id: str, course_structure: dict[str, Any], retrieval_time: Optional[str]
+    course_id: str, course_structure: dict[str, Any], retrieval_time: str | None
 ) -> list[dict[str, Any]]:
     """
     Recursively unnest the course structure

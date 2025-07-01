@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 import pymysql
 from dagster import Field, InitResourceContext, Int, String, resource
@@ -14,7 +14,7 @@ class MySQLClient:
         hostname: str,
         username: str,
         password: str,
-        db_name: Optional[str] = None,
+        db_name: str | None = None,
         port: Int = 3306,
     ):
         """Instantiate a connection to a MySQL database.

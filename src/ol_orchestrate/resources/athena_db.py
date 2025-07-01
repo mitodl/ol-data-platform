@@ -1,6 +1,5 @@
 """Resource for connection to athena."""
 
-from typing import Optional
 
 import pyathena
 from dagster import Field, InitResourceContext, Noneable, String, resource
@@ -14,8 +13,8 @@ class AthenaClient:
         work_group: str,
         schema_name: str,
         region_name: str = "us-east-1",
-        aws_access_key_id: Optional[str] = None,
-        aws_secret_access_key: Optional[str] = None,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
     ):
         """Instantiate a connection to a Athena database.
 
