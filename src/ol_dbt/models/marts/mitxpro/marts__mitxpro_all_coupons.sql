@@ -38,6 +38,32 @@ with allcoupons as (
     from {{ ref('int__mitxpro__ecommerce_order') }}
 )
 
+, b2b_order as (
+    select *
+    from {{ ref('int__mitxpro__b2becommerce_b2border') }}
+)
+
+, b2b_receipt as (
+    select *
+    from {{ ref('int__mitxpro__b2becommerce_b2breceipt') }}
+)
+
+, pull_req_ref_num as (
+    select
+        ecommerce_coupon.coupon_id
+        , b2b_receipt.b2breceipt_reference_number
+    from b2b_order
+    inner join b2b_receipt
+        on b2b_order.b2border_id = b2b_receipt.b2border_id
+    inner join ecommerce_couponpaymentversion
+        on b2b_order.couponpaymentversion_id = ecommerce_couponpaymentversion.couponpaymentversion_id
+    inner join ecommerce_coupon
+        on ecommerce_couponpaymentversion.couponpayment_name = ecommerce_coupon.couponpayment_name
+    group by
+        ecommerce_coupon.coupon_id
+        , b2b_receipt.b2breceipt_reference_number
+)
+
 , redeemed_coupons as (
     select coupon_id
     from allorders
@@ -148,6 +174,7 @@ select
     , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount_text
     , ecommerce_company.company_name
     , redeemed_b2b_coupons.b2border_contract_number
+    , pull_req_ref_num.b2breceipt_reference_number
     , coupons_used_by_name.coupons_used_count
     , coalesce(
         pull_product_regular.product_readable_id
@@ -184,3 +211,5 @@ left join pull_product_b2b
     on
         allcoupons.b2bcoupon_id = pull_product_b2b.b2bcoupon_id
         and redeemed_b2b_coupons.b2border_contract_number = pull_product_b2b.b2border_contract_number
+left join pull_req_ref_num
+    on allcoupons.coupon_id = pull_req_ref_num.coupon_id
