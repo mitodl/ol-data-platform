@@ -123,6 +123,8 @@ models:
     description: string, company name
   - name: b2border_contract_number
     description: string, contract number used to identify the order
+  - name: b2breceipt_reference_number
+    description: str, transaction reference number from cybersource payment
   - name: coupons_used_count
     description: int, count of coupons used by coupon payment name
   - name: product_readable_id
