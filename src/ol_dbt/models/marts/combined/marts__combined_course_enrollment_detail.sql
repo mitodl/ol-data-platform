@@ -14,6 +14,15 @@ with combined_enrollments as (
     select * from {{ ref('int__combined__users') }}
 )
 
+, mitxonline_transactions as (
+    select
+        order_id
+        , max(transaction_timestamp) as payment_timestamp
+    from {{ ref('int__mitxonline__ecommerce_transaction') }}
+    where transaction_type= 'payment'
+    group by order_id
+)
+
 , mitxonline_completed_orders as (
     select
         *
@@ -45,9 +54,26 @@ with combined_enrollments as (
     where order_state in ('fulfilled', 'refunded')
 )
 
+, mitxpro_receipts as (
+    select 
+        order_id
+        , max(receipt_payment_timestamp) as payment_timestamp
+    from {{ ref('int__mitxpro__ecommerce_receipt') }}
+    where receipt_transaction_status != 'ERROR'
+    group by order_id
+)
+
 , bootcamps_completed_orders as (
     select * from {{ ref('int__bootcamps__ecommerce_order') }}
     where order_state in ('fulfilled', 'refunded')
+)
+
+, bootcamps_receipts as (
+    select 
+        order_id
+        , max(receipt_payment_timestamp) as receipt_payment_timestamp
+    from {{ ref('int__bootcamps__ecommerce_receipt') }}
+    group by order_id
 )
 
 , mitxpro__ecommerce_line as (
@@ -94,7 +120,8 @@ with combined_enrollments as (
         , combined_enrollments.course_title
         , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
-        , if(mitxonline_completed_orders.order_id is not null, mitxonline_completed_orders.order_created_on, null)
+        , if(mitxonline_completed_orders.order_id is not null
+            , coalesce(mitxonline_transactions.payment_timestamp, mitxonline_completed_orders.order_created_on), null)
         as courserunenrollment_upgraded_on
     from combined_enrollments
     left join combined_users
@@ -110,6 +137,8 @@ with combined_enrollments as (
         on
             combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
             and combined_enrollments.platform = combined_courseruns.platform
+    left join mitxonline_transactions
+        on mitxonline_completed_orders.order_id = mitxonline_transactions.order_id
     where combined_enrollments.platform = '{{ var("mitxonline") }}'
 
     union all
@@ -163,8 +192,10 @@ with combined_enrollments as (
         , combined_enrollments.course_title
         , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
-        , if(micromasters_completed_orders.order_id is not null, micromasters_completed_orders.order_created_on, null)
-        as courserunenrollment_upgraded_on
+        , if(micromasters_completed_orders.order_id is not null
+            , coalesce(micromasters_completed_orders.receipt_payment_timestamp, micromasters_completed_orders.order_created_on)
+            , null
+        ) as courserunenrollment_upgraded_on
     from combined_enrollments
     left join combined_users
         on
@@ -226,8 +257,10 @@ with combined_enrollments as (
         , combined_enrollments.course_title
         , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
-        , if(mitxpro_completed_orders.order_id is not null, mitxpro_completed_orders.order_created_on, null)
-        as courserunenrollment_upgraded_on
+        , if(mitxpro_completed_orders.order_id is not null
+            , coalesce(mitxpro_receipts.payment_timestamp, mitxpro_completed_orders.order_created_on)
+            , null
+        ) as courserunenrollment_upgraded_on
     from mitxpro_enrollments
     inner join combined_enrollments
         on mitxpro_enrollments.courserunenrollment_id = combined_enrollments.courserunenrollment_id
@@ -241,6 +274,8 @@ with combined_enrollments as (
         on mitxpro_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
     left join mitxpro__ecommerce_line
         on mitxpro_completed_orders.order_id = mitxpro__ecommerce_line.order_id
+    left join mitxpro_receipts
+        on mitxpro_completed_orders.order_id = mitxpro_receipts.order_id
     where combined_enrollments.platform = '{{ var("mitxpro") }}'
 
     union all
@@ -328,8 +363,10 @@ with combined_enrollments as (
         , combined_enrollments.course_title
         , combined_enrollments.course_readable_id
         , combined_enrollments.courserun_upgrade_deadline
-        , if(bootcamps_completed_orders.order_id is not null, bootcamps_completed_orders.order_created_on, null)
-        as courserunenrollment_upgraded_on
+        , if(bootcamps_completed_orders.order_id is not null
+            , coalesce(bootcamps_receipts.receipt_payment_timestamp, bootcamps_completed_orders.order_created_on)
+            , null
+        ) as courserunenrollment_upgraded_on
     from combined_enrollments
     left join combined_users
         on
@@ -343,6 +380,8 @@ with combined_enrollments as (
         on
             combined_enrollments.courserun_readable_id = combined_courseruns.courserun_readable_id
             and combined_enrollments.platform = combined_courseruns.platform
+    left join bootcamps_receipts
+        on bootcamps_completed_orders.order_id = bootcamps_receipts.order_id
     where combined_enrollments.platform = '{{ var("bootcamps") }}'
 
     union all
