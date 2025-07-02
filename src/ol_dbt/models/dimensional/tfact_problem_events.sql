@@ -220,7 +220,7 @@ with mitxonline_problem_events as (
         select
             *
             , row_number() over (
-                partition by openedx_user_id, courserun_readable_id, problem_block_id, event_timestamp
+                partition by openedx_user_id, courserun_readable_id, problem_block_id
                 order by event_timestamp
             ) as rn
         from combined
