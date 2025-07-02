@@ -55,7 +55,7 @@ with combined_enrollments as (
 )
 
 , mitxpro_receipts as (
-    select 
+    select
         order_id
         , max(receipt_payment_timestamp) as payment_timestamp
     from {{ ref('int__mitxpro__ecommerce_receipt') }}
@@ -69,7 +69,7 @@ with combined_enrollments as (
 )
 
 , bootcamps_receipts as (
-    select 
+    select
         order_id
         , max(receipt_payment_timestamp) as receipt_payment_timestamp
     from {{ ref('int__bootcamps__ecommerce_receipt') }}
