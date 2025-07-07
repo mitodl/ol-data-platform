@@ -2,7 +2,7 @@ import os
 import re
 
 from dagster import FilesystemIOManager, IOManager
-from dagster._core.definitions.partition import INVALID_PARTITION_SUBSTRINGS
+from dagster._core.definitions.partitions.utils.base import INVALID_PARTITION_SUBSTRINGS
 from dagster_aws.s3 import S3PickleIOManager, S3Resource
 
 from ol_orchestrate.io_managers.filepath import (
