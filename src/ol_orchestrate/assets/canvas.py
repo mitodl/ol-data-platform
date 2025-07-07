@@ -20,7 +20,13 @@ from ol_orchestrate.lib.constants import (
 from ol_orchestrate.lib.utils import compute_zip_content_hash
 
 # predefined course IDs to export
-canvas_course_ids = StaticPartitionsDefinition(["7023"])
+canvas_course_ids = StaticPartitionsDefinition(
+    [
+        "155",
+        "7023",
+        "14566",
+    ]
+)
 
 
 @asset(
