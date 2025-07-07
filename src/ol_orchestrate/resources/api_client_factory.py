@@ -1,6 +1,6 @@
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import ClassVar, Optional, Self
+from typing import ClassVar, Self
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from pydantic import Field, PrivateAttr
@@ -33,7 +33,7 @@ class ApiClientFactory(ConfigurableResource):
         description="The version of the KV secrets engine to use. "
         "Either '1' for KV v1 or '2' for KV v2.",
     )
-    _client: Optional[BaseApiClient] = PrivateAttr(default=None)
+    _client: BaseApiClient | None = PrivateAttr(default=None)
 
     supported_client_class: ClassVar[dict[str, type[BaseApiClient]]] = {
         "CanvasApiClient": CanvasApiClient,

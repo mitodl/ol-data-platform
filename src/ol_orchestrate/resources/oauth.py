@@ -2,7 +2,7 @@ import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional, Self
+from typing import Any, Self
 
 import httpx
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
@@ -32,9 +32,9 @@ class OAuthApiClient(ConfigurableResource):
             "Time (in seconds) to allow for requests to complete before timing out."
         ),
     )
-    _access_token: Optional[str] = PrivateAttr(default=None)
-    _access_token_expires: Optional[datetime] = PrivateAttr(default=None)
-    _http_client: Optional[httpx.Client] = PrivateAttr(default=None)
+    _access_token: str | None = PrivateAttr(default=None)
+    _access_token_expires: datetime | None = PrivateAttr(default=None)
+    _http_client: httpx.Client | None = PrivateAttr(default=None)
 
     @property
     def http_client(self) -> httpx.Client:
@@ -49,7 +49,7 @@ class OAuthApiClient(ConfigurableResource):
             raise ValidationError
         return token_type
 
-    def _fetch_access_token(self) -> Optional[str]:
+    def _fetch_access_token(self) -> str | None:
         now = datetime.now(tz=UTC)
         if self._access_token is None or (self._access_token_expires or now) <= now:
             payload = {
@@ -112,7 +112,7 @@ class OAuthApiClient(ConfigurableResource):
 
 class OAuthApiClientFactory(ConfigurableResource):
     deployment: str = Field(description="The name of the deployment")
-    _client: Optional[OAuthApiClient] = PrivateAttr(default=None)
+    _client: OAuthApiClient | None = PrivateAttr(default=None)
     vault: ResourceDependency[Vault]
 
     def _initialize_client(self) -> OAuthApiClient:

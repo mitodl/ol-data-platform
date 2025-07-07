@@ -1,4 +1,3 @@
-from typing import Optional
 
 from dagster import (
     ConfigurableIOManager,
@@ -14,8 +13,8 @@ from ol_orchestrate.resources.gcp_gcs import GCSConnection
 
 
 class GCSFileIOManager(ConfigurableIOManager):
-    gcs_bucket: Optional[str] = None
-    gcs_prefix: Optional[str] = None
+    gcs_bucket: str | None = None
+    gcs_prefix: str | None = None
     gcs: GCSConnection = None
 
     def load_input(self, context: InputContext) -> DagsterPath:
