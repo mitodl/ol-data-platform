@@ -125,7 +125,7 @@ with mitx__users as (
         , user_industry
         , user_street_address
         , user_address_city
-        , user_address_state
+        , user_address_state as user_address_state_or_territory
         , user_address_postal_code
     from mitx__users
     where is_mitxonline_user = true or is_edxorg_user = true
