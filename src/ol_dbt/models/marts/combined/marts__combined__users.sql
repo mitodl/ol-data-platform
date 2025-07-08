@@ -123,6 +123,10 @@ with mitx__users as (
         , user_company
         , user_job_title
         , user_industry
+        , user_street_address
+        , user_address_city
+        , user_address_state
+        , user_address_postal_code
     from mitx__users
     where is_mitxonline_user = true or is_edxorg_user = true
 
@@ -151,6 +155,10 @@ with mitx__users as (
         , user_company
         , user_job_title
         , user_industry
+        , user_street_address
+        , user_address_city
+        , user_address_state_or_territory
+        , user_address_postal_code
     from non_mitx_users
     where platform = '{{ var("mitxpro") }}'
 
@@ -179,6 +187,10 @@ with mitx__users as (
         , user_company
         , user_job_title
         , user_industry
+        , user_street_address
+        , user_address_city
+        , user_address_state_or_territory
+        , user_address_postal_code
     from non_mitx_users
     where platform = '{{ var("bootcamps") }}'
 
@@ -207,6 +219,10 @@ with mitx__users as (
         , user_company
         , user_job_title
         , user_industry
+        , user_street_address
+        , user_address_city
+        , user_address_state_or_territory
+        , user_address_postal_code
     from non_mitx_users
     where platform in ('{{ var("emeritus") }}', '{{ var("global_alumni") }}')
 
@@ -227,6 +243,10 @@ select
     , combined_users.user_company
     , combined_users.user_job_title
     , combined_users.user_industry
+    , combined_users.user_street_address
+    , combined_users.user_address_city
+    , combined_users.user_address_state_or_territory
+    , combined_users.user_address_postal_code
     , combined_users.user_mitxonline_id
     , combined_users.user_edxorg_id
     , combined_users.user_mitxpro_id
