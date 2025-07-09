@@ -50,6 +50,14 @@ models:
       edX.org, or MITx Online. Note that we do export compliance checks for all users
       in xPro and Bootcamps, so users didn't pass export compliance will remain user_is_active=false
       in xPro and Bootcamps. That doesn't apply for edx.org and MITx Online.
+  - name: user_street_address
+    description: str, street address on user's profile
+  - name: user_address_city
+    description: str, address city on user's profile
+  - name: user_address_state_or_territory
+    description: str,  state code or territory on user's profile
+  - name: user_address_postal_code
+    description: str, postal code on user's profile
 
 - name: int__combined__courserun_enrollments
   description: Intermediate model for user course enrollments from different platforms

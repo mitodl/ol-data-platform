@@ -36,6 +36,10 @@ with mitxonline_users as (
         , user_company
         , user_job_title
         , user_industry
+        , user_address_street
+        , user_address_city
+        , user_address_state
+        , user_address_postal_code
         , row_number() over (
             partition by coalesce(user_id, user_email, user_full_name)
             order by user_gdpr_consent_date desc, enrollment_created_on desc
@@ -53,6 +57,10 @@ with mitxonline_users as (
         , user_company
         , user_job_title
         , user_industry
+        , user_address_street
+        , user_address_city
+        , user_address_state
+        , user_address_postal_code
         , row_number() over (
             partition by user_email
             order by user_gdpr_consent_date desc, courserun_start_on desc
@@ -77,6 +85,10 @@ with mitxonline_users as (
         , user_joined_on
         , user_last_login
         , user_is_active
+        , null as user_street_address
+        , null as user_address_city
+        , user_address_state as user_address_state_or_territory
+        , null as user_address_postal_code
     from mitxonline_users
 
     union all
@@ -97,6 +109,10 @@ with mitxonline_users as (
         , user_joined_on
         , user_last_login
         , user_is_active
+        , user_street_address
+        , user_address_city
+        , user_address_state_or_territory
+        , user_address_postal_code
     from mitxpro_users
 
     union all
@@ -117,6 +133,10 @@ with mitxonline_users as (
         , null as user_joined_on
         , null as user_last_login
         , null as user_is_active
+        , user_address_street as user_street_address
+        , user_address_city
+        , user_address_state as user_address_state_or_territory
+        , user_address_postal_code
     from emeritus_users
     where row_num = 1
 
@@ -138,6 +158,10 @@ with mitxonline_users as (
         , null as user_joined_on
         , null as user_last_login
         , null as user_is_active
+        , user_address_street as user_street_address
+        , user_address_city
+        , user_address_state as user_address_state_or_territory
+        , user_address_postal_code
     from global_alumni_users
     where row_num = 1
 
@@ -159,6 +183,10 @@ with mitxonline_users as (
         , user_joined_on
         , user_last_login
         , user_is_active
+        , user_street_address
+        , user_address_city
+        , user_address_state_or_territory
+        , user_address_postal_code
     from bootcamps_users
 
     union all
@@ -179,6 +207,10 @@ with mitxonline_users as (
         , edxorg_users.user_joined_on
         , edxorg_users.user_last_login
         , edxorg_users.user_is_active
+        , micromasters_users.user_street_address
+        , micromasters_users.user_address_city
+        , micromasters_users.user_address_state_or_territory
+        , micromasters_users.user_address_postal_code
     from edxorg_users
     left join micromasters_users on edxorg_users.user_username = micromasters_users.user_edxorg_username
 
@@ -200,6 +232,10 @@ with mitxonline_users as (
         , user_joined_on
         , user_last_login
         , user_is_active
+        , null as user_street_address
+        , user_address_city
+        , null as user_address_state_or_territory
+        , null as user_address_postal_code
     from residential_users
 )
 
