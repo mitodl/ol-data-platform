@@ -224,9 +224,8 @@ with mitxonline_problem_events as (
                 order by event_timestamp
             ) as rn
         from combined
-        where event_type = 'problem_check' -- We only want to dedupe 'problem_check' events
     )
-    where rn = 1
+    where rn = 1 or event_type != 'problem_check'
 )
 
 select
