@@ -2126,6 +2126,76 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_external_readable_id", "user_email", "user_full_name"]
 
+- name: stg__global_alumni__api__bigquery__user_enrollments
+  description: xPro course enrollments that are offered on the Global Alumni platform
+  columns:
+  - name: courserun_id
+    description: str, course run ID on the Global Alumni platform, e.g. B-35944
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, course title (Start Month – Start Year), e.g. AI-Driven Computational
+      Design (Dec-2024)
+    tests:
+    - not_null
+  - name: courserun_start_on
+    description: timestamp, course run start date and time in ISO 8601 format
+  - name: courserun_end_on
+    description: timestamp, course run end date and time in ISO 8601 format
+  - name: courserun_external_readable_id
+    description: str, course run readable ID on the Global Alumni platform, e.g. MXP-GAD-25-04#1
+      It maps to external_course_run_id in xPro app.
+    tests:
+    - not_null
+  - name: user_id
+    description: str, user ID on the Global Alumni platform. May be null.
+  - name: user_first_name
+    description: str, user's first name
+  - name: user_last_name
+    description: str, user's last name
+  - name: user_full_name
+    description: str, user's full name
+  - name: user_email
+    description: str, user's email.
+    tests:
+    - not_null
+  - name: user_gender
+    description: str, user's gender
+  - name: user_years_experience
+    description: str, user's years experience. Options are <5 Years, 5-9 Years, 10-14
+      Years, 15-19 Years, 20+ Years, and unknown.
+  - name: user_company
+    description: str, user's company
+  - name: user_job_function
+    description: str, user's job function, e.g. Consulting, General Management
+  - name: user_industry
+    description: str, user's job industry
+  - name: user_job_title
+    description: str, user's job title
+  - name: user_address_street
+    description: str, user's residential address
+  - name: user_address_city
+    description: str, user's residential city
+  - name: user_address_state
+    description: str, user's residential state
+  - name: user_address_postal_code
+    description: str, user's residential zip code
+  - name: user_address_country
+    description: str, user's residential country
+  - name: user_gdpr_degree
+    description: str, same as user's country
+  - name: user_gdpr_consent_date
+    description: timestamp, date and time when the user provided consent to the GDPR
+  - name: is_enrolled
+    description: boolean, indicating whether the user is enrolled in the course.
+    tests:
+    - not_null
+  - name: enrollment_status
+    description: str, user's enrollment status change, e.g. deferred
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_external_readable_id", "user_email"]
+
 - name: stg__mitxpro__openedx__courseware_studentmodulehistoryextended
   description: History of studentmodule in MIT xPro open edx platform
   columns:

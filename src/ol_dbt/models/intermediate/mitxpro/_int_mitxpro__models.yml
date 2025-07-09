@@ -1358,8 +1358,16 @@ models:
     - unique
     - not_null
   - name: courserun_external_readable_id
-    description: str, course run readable ID on the external platforms such as xPRO
-      Emeritus.
+    description: str, course run readable ID on the external platforms such as Emeritus,
+      Global Alumni, etc.
+  - name: platform_id
+    description: int, foreign key to int__mitxpro__platforms
+    tests:
+    - not_null
+  - name: platform_name
+    description: str, name of the platform for xPro courses
+    tests:
+    - not_null
   - name: courserun_url
     description: str, url location for the course run on MITxPro website
   - name: courserun_start_on

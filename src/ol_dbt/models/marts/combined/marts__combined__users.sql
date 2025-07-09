@@ -198,7 +198,7 @@ with mitx__users as (
         , user_joined_on
         , user_last_login
         , user_is_active
-        , '{{ var("emeritus") }}' as platforms
+        , platform as platforms
         , user_full_name
         , user_address_country
         , user_highest_education
@@ -208,7 +208,8 @@ with mitx__users as (
         , user_job_title
         , user_industry
     from non_mitx_users
-    where platform = '{{ var("emeritus") }}'
+    where platform in ('{{ var("emeritus") }}', '{{ var("global_alumni") }}')
+
 )
 
 select

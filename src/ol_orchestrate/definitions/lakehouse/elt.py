@@ -1,8 +1,11 @@
+"""ELT assets for the data lakehouse."""
+
 import os
 import re
 
 from dagster import (
     AssetSelection,
+    AssetSpec,
     AutomationConditionSensorDefinition,
     DefaultScheduleStatus,
     Definitions,
@@ -10,7 +13,11 @@ from dagster import (
     define_asset_job,
     with_source_code_references,
 )
-from dagster_airbyte import airbyte_resource, load_assets_from_airbyte_instance
+from dagster_airbyte import (
+    AirbyteConnectionTableProps,
+    DagsterAirbyteTranslator,
+    build_airbyte_assets_definitions,
+)
 from dagster_dbt import (
     DbtCliResource,
 )
@@ -18,13 +25,14 @@ from dagster_dbt import (
 from ol_orchestrate.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
 from ol_orchestrate.assets.superset import create_superset_asset
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.resources.airbyte import AirbyteOSSWorkspace
 from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
 
 airbyte_host_map = {
-    "dev": "api-airbyte-qa.odl.mit.edu",
-    "qa": "api-airbyte-qa.odl.mit.edu",
-    "production": "api-airbyte.odl.mit.edu",
+    "dev": "https://api-airbyte-qa.odl.mit.edu",
+    "qa": "https://api-airbyte-qa.odl.mit.edu",
+    "production": "https://api-airbyte.odl.mit.edu",
 }
 
 airbyte_host = os.environ.get("DAGSTER_AIRBYTE_HOST", airbyte_host_map[DAGSTER_ENV])
@@ -45,17 +53,13 @@ else:
     vault._auth_aws_iam()  # noqa: SLF001
     dbt_target = "production"
 
-configured_airbyte_resource = airbyte_resource.configured(
-    {
-        "host": airbyte_host,
-        "port": os.environ.get("DAGSTER_AIRBYTE_PORT", "443"),
-        "use_https": True,
-        "username": "dagster",
-        "password": vault.client.secrets.kv.v1.read_secret(
-            path="dagster-http-auth-password", mount_point="secret-data"
-        )["data"]["dagster_unhashed_password"],
-        "request_timeout": 60,  # Allow up to a minute for Airbyte requests
-    }
+airbyte_workspace = AirbyteOSSWorkspace(
+    api_server=airbyte_host,
+    username="dagster",
+    password=vault.client.secrets.kv.v1.read_secret(
+        path="dagster-http-auth-password", mount_point="secret-data"
+    )["data"]["dagster_unhashed_password"],
+    request_timeout=60,  # Allow up to a minute for Airbyte requests
 )
 
 dbt_config = {
@@ -65,34 +69,41 @@ dbt_config = {
 }
 dbt_cli = DbtCliResource(**dbt_config)
 
-airbyte_assets = load_assets_from_airbyte_instance(
-    configured_airbyte_resource,
-    # This key_prefix is how Dagster knows to map the Airbyte outputs to the dbt
-    # sources, since they are defined as ol_warehouse_raw_data in the
-    # sources.yml files. (TMM 2023-01-18)
-    key_prefix="ol_warehouse_raw_data",
-    connection_filter=lambda conn: re.search(r"S3 (Glue )?Data Lake", conn.name)
-    is not None,
-    connection_to_group_fn=(
-        # Airbyte uses the unicode "right arrow" (U+2192) in the connection names for
-        # separating the source and destination. This selects the source name specifier
-        # and converts it to a lowercased, underscore separated string.
-        lambda conn_name: re.sub(
-            r"[^A-Za-z0-9_]", "", re.sub(r"[-\s]+", "_", conn_name)
+
+class OLAirbyteTranslator(DagsterAirbyteTranslator):
+    """A custom Dagster-Airbyte translator for OL's data platform."""
+
+    def get_asset_spec(self, props: AirbyteConnectionTableProps) -> AssetSpec:
+        default_spec = super().get_asset_spec(props)
+        return default_spec.replace_attributes(
+            # This key_prefix is how Dagster knows to map the Airbyte outputs to the dbt
+            # sources, since they are defined as ol_warehouse_raw_data in the
+            # sources.yml files. (TMM 2023-01-18)
+            key=default_spec.key.with_prefix("ol_warehouse_raw_data"),
+            # Airbyte uses the unicode "right arrow" (U+2192) in the connection names
+            # for separating the source and destination. This selects the source name
+            # specifier and converts it to a lowercased, underscore separated string.
+            group_name=re.sub(
+                r"[^A-Za-z0-9_]", "", re.sub(r"[-\s]+", "_", props.connection_name)
+            )
+            .strip("_")
+            .lower(),
         )
-        .strip("_")
-        .lower()
-    ),
+
+
+airbyte_assets = build_airbyte_assets_definitions(
+    workspace=airbyte_workspace,
+    dagster_airbyte_translator=OLAirbyteTranslator(),
+    connection_selector_fn=(lambda conn: conn.name.lower().endswith("s3 data lake")),
 )
 
 # This section creates a separate job and schedule for each Airbyte connection that will
 # materialize the tables for that connection and any associated dbt staging models for
 # those tables. The eager auto materialize policy will then take effect for any
 # downstream dbt models that are dependent on those staging models being completed.
-group_names = set()
-computed_assets = airbyte_assets.compute_cacheable_data()
-for asset in computed_assets:
-    group_names.add(asset.group_name)
+group_names: set[str] = set()
+for assets_def in airbyte_assets:
+    group_names.update(g for g in assets_def.group_names_by_key.values())
 
 # Define a mapping of group_name to interval (6, 12 or 24 hours) on production
 group_name_to_interval: dict[str, int] = {}
@@ -175,10 +186,11 @@ superset_assets = [
 elt = Definitions(
     assets=[
         *with_source_code_references([full_dbt_project]),
-        airbyte_assets,
+        *airbyte_assets,
         *superset_assets,
     ],
     resources={
+        "airbyte": airbyte_workspace,
         "dbt": dbt_cli,
         "vault": vault,
         "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),

@@ -14,7 +14,7 @@ from dagster import (
     asset,
     multi_asset,
 )
-from dagster._core.definitions.multi_dimensional_partitions import (
+from dagster._core.definitions.partitions.utils.multi import (
     MULTIPARTITION_KEY_DELIMITER,
 )
 from upath import UPath

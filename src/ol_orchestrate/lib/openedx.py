@@ -125,13 +125,18 @@ def parse_course_id(course_xml: str | Path) -> tuple[str, str, str, str]:
     :param course_xml: The file path to course.xml file
 
     :return: A list containing the formatted course_id string, course_number,
-     and the course run_tag
-    :rtype: tuple[str, str, str]
+     the course run_tag, and the org of the course
     """
     with Path(course_xml).open("r") as course:
         tree = ElementTree()
         tree.parse(course)
         course_root = tree.getroot()
+        if course_root is None:
+            msg = (
+                "Unable to locate the root of the XML file. "
+                "Please verify that it is properly constructed and not malformed."
+            )
+            raise ValueError(msg)
         run_tag = str(course_root.attrib.get("url_name", None))
         org = str(course_root.attrib.get("org", None))
         course_number = str(course_root.attrib.get("course", None))
@@ -142,6 +147,12 @@ def parse_video_xml(video_file: IO[bytes]) -> dict[str, Any]:
     tree = ElementTree()
     tree.parse(video_file)
     video_root = tree.getroot()
+    if video_root is None:
+        msg = (
+            "Unable to locate the root of the XML file. "
+            "Please verify that it is properly constructed and not malformed."
+        )
+        raise ValueError(msg)
     video_block_id = video_root.attrib.get("url_name", None)
     edx_video_id = video_root.attrib.get("edx_video_id", None)
     video_asset = video_root.find("video_asset", None)
@@ -217,6 +228,12 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
         tree = ElementTree()
         tree.parse(metadata)
         metadata_root = tree.getroot()
+    if not metadata_root:
+        msg = (
+            "Unable to locate the root of the XML file. "
+            "Please verify that it is properly constructed and not malformed."
+        )
+        raise ValueError(msg)
     enrollment_start = metadata_root.attrib.get("enrollment_start")
     enrollment_end = metadata_root.attrib.get("enrollment_end")
     # Default value as defined in edx-platform code

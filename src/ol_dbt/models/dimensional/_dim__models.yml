@@ -259,6 +259,10 @@ models:
     description: int, openedx user id for edX.org
   - name: user_edxorg_username
     description: string, username on edX.org
+  - name: emeritus_user_id
+    description: string, user id on Emeritus platform
+  - name: global_alumni_user_id
+    description: string, user id on Global Alumni platform
   - name: email
     description: string, user email on the corresponding platform including xpro,
       bootcamps, edX.org, MITx Online, and Residential MITx.

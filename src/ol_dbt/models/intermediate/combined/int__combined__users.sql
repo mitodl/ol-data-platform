@@ -38,9 +38,26 @@ with mitxonline_users as (
         , user_industry
         , row_number() over (
             partition by coalesce(user_id, user_email, user_full_name)
-            order by coalesce(user_gdpr_consent_date, enrollment_created_on) desc
+            order by user_gdpr_consent_date desc, enrollment_created_on desc
         ) as row_num
     from {{ ref('stg__emeritus__api__bigquery__user_enrollments') }}
+)
+
+, global_alumni_users as (
+    select
+        user_id
+        , user_email
+        , user_full_name
+        , user_address_country
+        , user_gender
+        , user_company
+        , user_job_title
+        , user_industry
+        , row_number() over (
+            partition by user_email
+            order by user_gdpr_consent_date desc, courserun_start_on desc
+        ) as row_num
+    from {{ ref('stg__global_alumni__api__bigquery__user_enrollments') }}
 )
 
 , combined_users as (
@@ -101,6 +118,27 @@ with mitxonline_users as (
         , null as user_last_login
         , null as user_is_active
     from emeritus_users
+    where row_num = 1
+
+    union all
+
+    select
+        '{{ var("global_alumni") }}' as platform
+        , user_id
+        , null as user_username
+        , user_email
+        , user_full_name
+        , user_address_country
+        , null as user_highest_education
+        , user_gender
+        , null as user_birth_year
+        , user_company
+        , user_job_title
+        , user_industry
+        , null as user_joined_on
+        , null as user_last_login
+        , null as user_is_active
+    from global_alumni_users
     where row_num = 1
 
     union all
