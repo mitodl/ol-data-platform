@@ -469,8 +469,8 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_fk",
-        "event_timestamp"]
+      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
+        "event_json", "event_timestamp"]
 
 - name: tfact_studentmodule_problems
   description: Transactional fact table for studentmodule problem events flattened
@@ -492,8 +492,6 @@ models:
     description: json, JSON object indicating the user’s last known state in the course.
       It may contain any attributes for different module types - course, chapter,
       sequential, etc.
-  - name: problem_name
-    description: string, name of the problem
   - name: problem_block_id
     description: str, Unique ID for a distinct piece of content in a course, formatted
       as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
@@ -519,7 +517,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_id",
-        "event_timestamp"]
+        "attempt"]
 
 - name: tfact_discussion_events
   description: Transactional fact table for learner discussion events in a course

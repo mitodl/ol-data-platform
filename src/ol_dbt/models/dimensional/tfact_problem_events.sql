@@ -220,10 +220,11 @@ with mitxonline_problem_events as (
         select
             *
             , row_number() over (
-                partition by openedx_user_id, courserun_readable_id, problem_block_id, event_timestamp
+                partition by openedx_user_id, courserun_readable_id, problem_block_id, attempt
                 order by event_timestamp
             ) as rn
         from combined
+        where event_type = 'problem_check' -- We only want to dedupe 'problem_check' events
     )
     where rn = 1
 )
