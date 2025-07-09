@@ -6,6 +6,11 @@ models:
   description: Aggregate fact table summarizing video engagement by video, learner,
     and a courserun.
   columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the user who triggered
+      the event
   - name: platform
     description: string, name of the platform
   - name: video_id
@@ -305,6 +310,11 @@ models:
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
   columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the user who triggered
+      the event
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -359,6 +369,11 @@ models:
 - name: tfact_video_events
   description: Transactional fact table for learner video events in a course
   columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the user who triggered
+      the event
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
     tests:
@@ -546,6 +561,11 @@ models:
   description: Aggregate fact table summarizing course page engagement by learner
     within a course.
   columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the user who triggered
+      the event
   - name: platform
     description: string, foreign key to dim_platform
     tests:
@@ -582,6 +602,11 @@ models:
   description: Aggregate fact table summarizing problem engagement by learners within
     a course.
   columns:
+  - name: platform_fk
+    description: string, foreign key to dim_platform
+  - name: user_fk
+    description: string, foreign key to dim_user, referencing the user who triggered
+      the event
   - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the video event occurred

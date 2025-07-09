@@ -15,6 +15,8 @@ with course_content as (
         openedx_user_id
         , courserun_readable_id
         , video_block_fk
+        , arbitrary(platform_fk) as platform_fk
+        , arbitrary(user_fk) as user_fk
         , max(case when video_position = 'null' then '0' end) as end_time
         , min(case when event_type = 'play_video' then (case when video_position = 'null' then '0' end) end)
         as start_time
@@ -45,6 +47,8 @@ select
     , f.content_block_pk as subsection_content_fk
     , g.block_title as section_title
     , g.content_block_pk as section_content_fk
+    , arbitrary(tfact_video_events.platform_fk) as platform_fk
+    , arbitrary(tfact_video_events.user_fk) as user_fk
     , (
         cast(start_and_end_times.end_time as decimal(30, 10))
         - cast(start_and_end_times.start_time as decimal(30, 10))
