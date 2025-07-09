@@ -96,15 +96,51 @@ with mitxonline_studentmodule_problems as (
     left join content on sm.coursestructure_block_id = content.block_id
 )
 
-select *
-from mitxonline_studentmodule_combined
+, combined as (
+    select *
+    from mitxonline_studentmodule_combined
 
-union all
+    union all
 
-select *
-from mitxpro_studentmodule_combined
+    select *
+    from mitxpro_studentmodule_combined
 
-union all
+    union all
 
-select *
-from residential_studentmodule_combined
+    select *
+    from residential_studentmodule_combined
+)
+
+-- dedupe the tracking log and student module data based on user_id, course_run, problem, and time
+-- The dbt model definition has a test against the same composite unique key.
+, deduped_combined as (
+    select *
+    from (
+        select
+            *
+            , row_number() over (
+                partition by openedx_user_id, courserun_readable_id, problem_block_id, attempt
+                order by event_timestamp
+            ) as rn
+        from combined
+    )
+    where rn = 1
+)
+
+select
+    user_fk
+    , platform
+    , openedx_user_id
+    , courserun_readable_id
+    , studentmodule_id
+    , event_type
+    , event_json
+    , problem_name
+    , problem_block_id
+    , answers
+    , attempt
+    , event_timestamp
+    , grade
+    , max_grade
+    , success
+from deduped_combined
