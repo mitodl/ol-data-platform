@@ -487,6 +487,53 @@ models:
       column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
         "event_json", "event_timestamp"]
 
+- name: tfact_studentmodule_problems
+  description: Transactional fact table for studentmodule problem events flattened
+    out into individual submissions
+  columns:
+  - name: user_fk
+    description: string, foreign key to dim_user
+  - name: platform
+    description: string, platform name
+  - name: openedx_user_id
+    description: int, user ID on the corresponding open edX platform
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+  - name: studentmodule_id
+    description: int, primary key in courseware_studentmodule
+  - name: event_type
+    description: string, type of the problem event.
+  - name: event_json
+    description: json, JSON object indicating the user’s last known state in the course.
+      It may contain any attributes for different module types - course, chapter,
+      sequential, etc.
+  - name: problem_block_id
+    description: str, Unique ID for a distinct piece of content in a course, formatted
+      as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+  - name: answers
+    description: str, the answers submitted by the learner for this attempt
+  - name: attempt
+    description: int, incremental attempt number generated when parsing answer submissions
+  - name: success
+    description: str, indicating whether an answer is correct or incorrect
+  - name: grade
+    description: number, current value indicating the total unweighted grade for this
+      problem that the learner has scored. e.g. how many responses they got right
+      within the problem. This data is also available in courseactivity_problemcheck
+  - name: max_grade
+    description: number, maximum possible number indicating the total possible unweighted
+      grade for this problem, or basically the number of responses that are in this
+      problem. This data is also available in courseactivity_problemcheck
+  - name: event_timestamp
+    description: timestamp, datetime when this row was last updated. A change in this
+      field implies that there was a state change.
+  - name: problem_id
+    description: str, unique identifier for a problem in the studentmodule state data
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_id",
+        "attempt"]
+
 - name: tfact_discussion_events
   description: Transactional fact table for learner discussion events in a course
   columns:

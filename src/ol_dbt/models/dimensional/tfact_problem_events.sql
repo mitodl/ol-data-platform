@@ -4,7 +4,7 @@
     , 'showanswer'
     )
 %}
-
+-- data from tracking logs
 with mitxonline_problem_events as (
     select
         user_username
@@ -101,6 +101,11 @@ with mitxonline_problem_events as (
     select * from {{ ref('dim_platform') }}
 )
 
+-- data from studentmodule and studentmodulehistoryextended
+, combined_studentmodule as (
+    select * from {{ ref('tfact_studentmodule_problems') }}
+)
+
 , combined as (
     select
         'mitxonline' as platform
@@ -187,22 +192,56 @@ with mitxonline_problem_events as (
         on
             edxorg_problem_events.user_id = users.edxorg_openedx_user_id
             and edxorg_problem_events.user_username = users.user_edxorg_username
+
+    union all
+
+    select
+        platform
+        , user_fk
+        , openedx_user_id
+        , courserun_readable_id
+        , event_type
+        , event_json
+        , problem_block_id
+        , answers
+        , attempt
+        , success
+        , grade
+        , max_grade
+        , event_timestamp
+    from combined_studentmodule
+)
+
+-- dedupe the tracking log and student module data based on user_id, course_run, problem, and time
+-- The dbt model definition has a test against the same composite unique key.
+, deduped_combined as (
+    select *
+    from (
+        select
+            *
+            , row_number() over (
+                partition by platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
+                order by event_timestamp
+            ) as rn
+        from combined
+    )
+    where rn = 1 or event_type != 'problem_check'
 )
 
 select
     platform.platform_pk as platform_fk
-    , combined.user_fk
-    , combined.platform
-    , combined.openedx_user_id
-    , combined.courserun_readable_id
-    , combined.event_type
-    , combined.problem_block_id as problem_block_fk
-    , combined.answers
-    , combined.attempt
-    , combined.success
-    , combined.grade
-    , combined.max_grade
-    , combined.event_timestamp
-    , combined.event_json
-from combined
-left join platform on combined.platform = platform.platform_readable_id
+    , deduped_combined.user_fk
+    , deduped_combined.platform
+    , deduped_combined.openedx_user_id
+    , deduped_combined.courserun_readable_id
+    , deduped_combined.event_type
+    , deduped_combined.problem_block_id as problem_block_fk
+    , deduped_combined.answers
+    , deduped_combined.attempt
+    , deduped_combined.success
+    , deduped_combined.grade
+    , deduped_combined.max_grade
+    , deduped_combined.event_timestamp
+    , deduped_combined.event_json
+from deduped_combined
+left join platform on deduped_combined.platform = platform.platform_readable_id

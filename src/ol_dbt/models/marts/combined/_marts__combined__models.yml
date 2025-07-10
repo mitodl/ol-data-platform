@@ -85,6 +85,14 @@ models:
     description: str, user's job title
   - name: user_industry
     description: str, user's job industry
+  - name: user_street_address
+    description: str, street address on user's profile
+  - name: user_address_city
+    description: str, address city on user's profile
+  - name: user_address_state_or_territory
+    description: str,  state code or territory on user's profile
+  - name: user_address_postal_code
+    description: str, postal code on user's profile
   - name: user_mitxonline_id
     description: int, user ID on MITxOnline
   - name: user_edxorg_id
