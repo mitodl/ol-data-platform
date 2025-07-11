@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any, Optional, Self
+from typing import Any, Self
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from pydantic import Field, PrivateAttr
@@ -25,14 +25,14 @@ class SupersetApiClient(OAuthApiClient):
         default="openid profile email roles",
         description="scope to request from the token endpoint",
     )
-    _access_token: Optional[str] = PrivateAttr(default=None)
-    _access_token_expires: Optional[datetime] = PrivateAttr(default=None)
+    _access_token: str | None = PrivateAttr(default=None)
+    _access_token_expires: datetime | None = PrivateAttr(default=None)
 
     @property
     def _csrf_token_url(self) -> str:
         return f"{self.base_url}/api/v1/security/csrf_token/"
 
-    def _fetch_access_token(self) -> Optional[str]:
+    def _fetch_access_token(self) -> str | None:
         now = datetime.now(tz=UTC)
         if self._access_token is None or (self._access_token_expires or now) <= now:
             payload = {
@@ -145,7 +145,7 @@ class SupersetApiClient(OAuthApiClient):
 
 class SupersetApiClientFactory(ConfigurableResource):
     deployment: str = Field(description="The name of the deployment")
-    _client: Optional[SupersetApiClient] = PrivateAttr(default=None)
+    _client: SupersetApiClient | None = PrivateAttr(default=None)
     vault: ResourceDependency[Vault]
 
     def _initialize_client(self) -> SupersetApiClient:

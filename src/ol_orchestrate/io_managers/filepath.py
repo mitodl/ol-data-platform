@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from dagster import (
     ConfigurableIOManager,
@@ -21,11 +21,11 @@ from ol_orchestrate.resources.secrets.vault import Vault
 
 
 class FileObjectIOManager(ConfigurableIOManager):
-    path_prefix: Optional[str] = None
-    gcs_credentials: Optional[str] = None
-    gcs_project_id: Optional[str] = None
-    vault: Optional[Vault] = None
-    vault_gcs_token_path: Optional[str] = None
+    path_prefix: str | None = None
+    gcs_credentials: str | None = None
+    gcs_project_id: str | None = None
+    vault: Vault | None = None
+    vault_gcs_token_path: str | None = None
     _gcs_fs: GCSFileSystem = PrivateAttr(default=None)
     _s3_fs: S3FileSystem = PrivateAttr(default=None)
 
@@ -100,7 +100,7 @@ class FileObjectIOManager(ConfigurableIOManager):
 
 
 class S3FileObjectIOManager(FileObjectIOManager):
-    bucket: Optional[str] = None
+    bucket: str | None = None
 
     def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
         if self.bucket:
@@ -113,7 +113,7 @@ class S3FileObjectIOManager(FileObjectIOManager):
 
 
 class DummyIOManager(ConfigurableIOManager):
-    input_file_path: Optional[str]
+    input_file_path: str | None
 
     def load_input(self, context: InputContext) -> DagsterPath:  # noqa: ARG002
         return DagsterPath(self.input_file_path)
@@ -122,7 +122,7 @@ class DummyIOManager(ConfigurableIOManager):
 
 
 class LocalFileObjectIOManager(FileObjectIOManager):
-    bucket: Optional[str] = None
+    bucket: str | None = None
 
     def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
         if self.bucket:

@@ -1,6 +1,6 @@
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Optional, Self
+from typing import Self
 from urllib.parse import parse_qs
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
@@ -12,7 +12,7 @@ from ol_orchestrate.resources.secrets.vault import Vault
 
 
 class OpenEdxApiClient(OAuthApiClient):
-    studio_url: Optional[str] = Field(
+    studio_url: str | None = Field(
         default=None,
         description="Base URL of edx instance Studio being queried, including protocol."
         " e.g. https://studio.mitx.mit.edu",
@@ -145,7 +145,7 @@ class OpenEdxApiClientFactory(ConfigurableResource):
         description="The canonical name of the Ope edX deployment managed by "
         "Open Learning engineering. Refer to https://github.com/mitodl/ol-infrastructure/blob/main/src/bridge/settings/openedx/types.py#L73"
     )
-    _client: Optional[OpenEdxApiClient] = PrivateAttr(default=None)
+    _client: OpenEdxApiClient | None = PrivateAttr(default=None)
     vault: ResourceDependency[Vault]
 
     def _initialize_client(self) -> OpenEdxApiClient:

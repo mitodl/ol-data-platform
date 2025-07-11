@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 
 from dagster import (
     Config,
@@ -25,7 +24,7 @@ class LoadFilesConfig(Config):
     s3_secret: str = Field(
         description="S3 secret key for accessing tracking log bucket",
     )
-    s3_token: Optional[str] = Field(
+    s3_token: str | None = Field(
         default=None,
         description="STS token indicating the role assumed for the IAM credentials",
     )

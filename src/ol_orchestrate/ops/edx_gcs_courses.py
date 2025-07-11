@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 
 from dagster import (
     AssetMaterialization,
@@ -25,7 +24,7 @@ class DownloadEdxGcsCourseConfig(Config):
 
 
 class UploadEdxGcsCourseConfig(Config):
-    edx_etl_results_bucket: Optional[str] = Field(
+    edx_etl_results_bucket: str | None = Field(
         "odl-developer-testing-sandbox",
         description="S3 bucket to use for uploading results of pipeline execution.",
     )
