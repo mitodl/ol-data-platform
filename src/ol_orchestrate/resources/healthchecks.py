@@ -1,5 +1,5 @@
 import urllib.parse
-from typing import Literal, Optional
+from typing import Literal
 
 import httpx
 from dagster import (
@@ -10,7 +10,7 @@ from pydantic import Field
 
 
 class HealthchecksIO(ConfigurableResource):
-    check_id: Optional[str] = Field(
+    check_id: str | None = Field(
         default=None,
         description=(
             "UUID to identify the specific check in the Healthchecks "
@@ -32,7 +32,7 @@ class HealthchecksIO(ConfigurableResource):
     def host(self) -> str:
         return self.ping_host
 
-    def send_update(self, method: Optional[Literal["start", "fail"]] = None):
+    def send_update(self, method: Literal["start", "fail"] | None = None):
         httpx.post(urllib.parse.urljoin(self.host, self.check_id, method))  # type: ignore[arg-type]
 
     def setup_for_execution(self, context: InitResourceContext) -> None:  # noqa: ARG002
