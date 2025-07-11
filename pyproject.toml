@@ -20,6 +20,7 @@ dependencies = [
     "dagster-gcp ~=0.27.0",
     "dagster-postgres ~=0.27.0",
     "dagster-slack ~=0.27.0",
+    "dagster-sling>=0.27.1",
     "dagster-webserver ~= 1.10",
     "dbt-duckdb ~= 1.9.0",
     "dbt-trino ~= 1.9.0",
