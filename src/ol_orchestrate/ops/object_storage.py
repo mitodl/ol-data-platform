@@ -16,9 +16,7 @@ from ol_orchestrate.lib.dagster_types.files import DagsterPath
 class SyncS3ObjectsConfig(Config):
     source_bucket: str = Field(description="S3 bucket to sync from")
     destination_bucket: str = Field(description="S3 bucket to sync to")
-    object_keys: list[str] | None = Field(
-        description="List of S3 object keys to sync"
-    )
+    object_keys: list[str] | None = Field(description="List of S3 object keys to sync")
     destination_prefix: str = Field(
         default="", description="S3 object key prefix to sync to"
     )
@@ -46,9 +44,7 @@ def sync_files_to_s3(context, config: SyncS3ObjectsConfig) -> None:
 
 class S3DownloadConfig(Config):
     source_bucket: str = Field(description="S3 bucket to sync from")
-    object_keys: list[str] | None = Field(
-        description="List of S3 object keys to sync"
-    )
+    object_keys: list[str] | None = Field(description="List of S3 object keys to sync")
 
 
 @op(

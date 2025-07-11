@@ -1,6 +1,5 @@
 """Resource for connection to athena."""
 
-
 import pyathena
 from dagster import Field, InitResourceContext, Noneable, String, resource
 from pyathena.cursor import DictCursor
