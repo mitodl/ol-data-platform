@@ -12,7 +12,9 @@ with problem_structure as (
 
 , pre_problem_attempt_aggregated as (
     select
-        platform
+        platform_fk
+        , user_fk
+        , platform
         , openedx_user_id
         , problem_block_fk
         , courserun_readable_id
@@ -36,6 +38,8 @@ with problem_structure as (
         , openedx_user_id
         , problem_block_fk
         , courserun_readable_id
+        , arbitrary(platform_fk) as platform_fk
+        , arbitrary(user_fk) as user_fk
         , max(attempt) as num_of_attempts
         , max(event_timestamp) as last_attempt_timestamp
         , count(case when success = 'correct' then 1 end) as num_of_correct_attempts
@@ -46,7 +50,9 @@ with problem_structure as (
 
 , combined as (
     select
-        problem_attempt_aggregated.platform
+        problem_attempt_aggregated.platform_fk
+        , problem_attempt_aggregated.user_fk
+        , problem_attempt_aggregated.platform
         , problem_attempt_aggregated.openedx_user_id
         , problem_attempt_aggregated.courserun_readable_id
         , problem_attempt_aggregated.problem_block_fk
@@ -61,7 +67,9 @@ with problem_structure as (
 )
 
 select
-    platform
+    platform_fk
+    , user_fk
+    , platform
     , openedx_user_id
     , courserun_readable_id
     , problem_block_fk

@@ -109,9 +109,18 @@ with mitxonline_navigation_events as (
         and useractivity_event_type in {{ navigation_events }}
 )
 
+, users as (
+    select * from {{ ref('dim_user') }}
+)
+
+, platform as (
+    select * from {{ ref('dim_platform') }}
+)
+
 , combined as (
     select
         'mitxonline' as platform
+        , users.user_pk as user_fk
         , mitxonline_navigation_events.openedx_user_id
         , mitxonline_navigation_events.courserun_readable_id
         , mitxonline_navigation_events.event_type
@@ -128,11 +137,16 @@ with mitxonline_navigation_events as (
         , mitxonline_navigation_events.tab_count
         , mitxonline_navigation_events.event_timestamp
     from mitxonline_navigation_events
+    left join users
+        on
+            mitxonline_navigation_events.openedx_user_id = users.mitxonline_openedx_user_id
+            and mitxonline_navigation_events.user_username = users.user_mitxonline_username
 
     union all
 
     select
         'mitxpro' as platform
+        , users.user_pk as user_fk
         , xpro_navigation_events.openedx_user_id
         , xpro_navigation_events.courserun_readable_id
         , xpro_navigation_events.event_type
@@ -148,49 +162,81 @@ with mitxonline_navigation_events as (
         , xpro_navigation_events.tab_count
         , xpro_navigation_events.event_timestamp
     from xpro_navigation_events
+    left join users
+        on
+            xpro_navigation_events.openedx_user_id = users.mitxpro_openedx_user_id
+            and xpro_navigation_events.user_username = users.user_mitxpro_username
 
     union all
 
     select
         'residential' as platform
-        , user_id as openedx_user_id
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , block_id
-        , coalesce(current_tab, starting_tab, starting_url) as starting_position
-        , coalesce(ending_tab, ending_url) as ending_position
-        , current_tab
-        , tab_count
-        , event_timestamp
+        , users.user_pk as user_fk
+        , mitxresidential_navigation_events.user_id as openedx_user_id
+        , mitxresidential_navigation_events.courserun_readable_id
+        , mitxresidential_navigation_events.event_type
+        , mitxresidential_navigation_events.event_json
+        , mitxresidential_navigation_events.block_id
+        , coalesce(
+            mitxresidential_navigation_events.current_tab
+            , mitxresidential_navigation_events.starting_tab
+            , mitxresidential_navigation_events.starting_url
+        ) as starting_position
+        , coalesce(
+            mitxresidential_navigation_events.ending_tab
+            , mitxresidential_navigation_events.ending_url
+        ) as ending_position
+        , mitxresidential_navigation_events.current_tab
+        , mitxresidential_navigation_events.tab_count
+        , mitxresidential_navigation_events.event_timestamp
     from mitxresidential_navigation_events
+    left join users
+        on
+            mitxresidential_navigation_events.user_id = users.residential_openedx_user_id
+            and mitxresidential_navigation_events.user_username = users.user_residential_username
 
     union all
 
     select
         'edxorg' as platform
-        , user_id as openedx_user_id
-        , courserun_readable_id
-        , event_type
-        , event_json
-        , block_id
-        , coalesce(current_tab, starting_tab, starting_url) as starting_position
-        , coalesce(ending_tab, ending_url) as ending_position
-        , current_tab
-        , tab_count
-        , event_timestamp
+        , users.user_pk as user_fk
+        , edxorg_navigation_events.user_id as openedx_user_id
+        , edxorg_navigation_events.courserun_readable_id
+        , edxorg_navigation_events.event_type
+        , edxorg_navigation_events.event_json
+        , edxorg_navigation_events.block_id
+        , coalesce(
+            edxorg_navigation_events.current_tab
+            , edxorg_navigation_events.starting_tab
+            , edxorg_navigation_events.starting_url
+        ) as starting_position
+        , coalesce(
+            edxorg_navigation_events.ending_tab
+            , edxorg_navigation_events.ending_url
+        ) as ending_position
+        , edxorg_navigation_events.current_tab
+        , edxorg_navigation_events.tab_count
+        , edxorg_navigation_events.event_timestamp
     from edxorg_navigation_events
+    left join users
+        on
+            edxorg_navigation_events.user_id = users.edxorg_openedx_user_id
+            and edxorg_navigation_events.user_username = users.user_edxorg_username
 )
 
 select
-    platform
-    , openedx_user_id
-    , courserun_readable_id
-    , event_type
-    , block_id as block_fk
-    , starting_position
-    , ending_position
-    , event_timestamp
-    , event_json
+    platform.platform_pk as platform_fk
+    , combined.user_fk
+    , combined.platform
+    , combined.openedx_user_id
+    , combined.courserun_readable_id
+    , combined.event_type
+    , combined.block_id as block_fk
+    , combined.starting_position
+    , combined.ending_position
+    , combined.event_timestamp
+    , combined.event_json
 
 from combined
+left join platform
+    on combined.platform = platform.platform_readable_id

@@ -17,6 +17,8 @@ with vertical_structure as (
         , openedx_user_id
         , courserun_readable_id
         , block_fk
+        , arbitrary(platform_fk) as platform_fk
+        , arbitrary(user_fk) as user_fk
         , count(*) as num_of_views
         , max(event_timestamp) as last_view_timestamp
     from {{ ref('tfact_course_navigation_events') }}
@@ -26,7 +28,9 @@ with vertical_structure as (
 
 , combined as (
     select
-        page_navigation_events.platform
+        page_navigation_events.platform_fk
+        , page_navigation_events.user_fk
+        , page_navigation_events.platform
         , page_navigation_events.openedx_user_id
         , page_navigation_events.courserun_readable_id
         , page_navigation_events.block_fk
@@ -40,7 +44,9 @@ with vertical_structure as (
 )
 
 select
-    platform
+    platform_fk
+    , user_fk
+    , platform
     , openedx_user_id
     , courserun_readable_id
     , block_fk
