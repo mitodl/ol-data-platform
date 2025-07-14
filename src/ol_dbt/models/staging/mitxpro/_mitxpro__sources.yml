@@ -2316,7 +2316,7 @@ sources:
     - name: version
       description: str, the version of the student module history extended
 
-  - name: raw__mitxpro__openedx__mysql__courseware_studentmodulehistory
+  - name: raw__xpro__openedx__mysql__courseware_studentmodulehistory
     description: Legacy history of studentmodule in xPro Platform
     columns:
     - name: id

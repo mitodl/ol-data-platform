@@ -18,7 +18,7 @@ with source as (
     select * from
     {{
       source('ol_warehouse_raw_data'
-      ,'raw__mitxresidential__openedx__mysql__courseware_studentmodulehistory')
+      ,'raw__mitx__openedx__mysql__courseware_studentmodulehistory')
     }}
 
     {% if is_incremental() %}

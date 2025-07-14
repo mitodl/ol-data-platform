@@ -1093,7 +1093,7 @@ sources:
     - name: version
       description: str, the version of the student module history extended
 
-  - name: raw__mitxresidential__openedx__mysql__courseware_studentmodulehistory
+  - name: raw__mitx__openedx__mysql__courseware_studentmodulehistory
     description: Legacy history of studentmodule in Residential MITx open edx platform
     columns:
     - name: id
