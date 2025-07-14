@@ -3,6 +3,7 @@ with source as (
     from {{ source('ol_warehouse_raw_data', 'raw__bootcamps__app__postgres__applications_applicationstepsubmission') }}
 )
 
+{{ deduplicate_raw_table(order_by='id' , partition_columns = 'bootcamp_application_id, run_application_step_id') }}
 , cleaned as (
 
     select
@@ -17,7 +18,7 @@ with source as (
         , {{ cast_timestamp_to_iso8601('review_status_date') }} as submission_reviewed_on
         , {{ cast_timestamp_to_iso8601('created_on') }} as submission_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as submission_updated_on
-    from source
+    from most_recent_source
 )
 
 select * from cleaned
