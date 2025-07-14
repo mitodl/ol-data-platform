@@ -13,6 +13,14 @@ with source as (
       ,'raw__xpro__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended')
     }}
 
+    union all
+
+    select * from
+    {{
+      source('ol_warehouse_raw_data'
+      ,'raw__mitxpro__openedx__mysql__courseware_studentmodulehistory')
+    }}
+
     {% if is_incremental() %}
         where created >= (select max(this.studentmodule_created_on) from {{ this }} as this)
     {% endif %}

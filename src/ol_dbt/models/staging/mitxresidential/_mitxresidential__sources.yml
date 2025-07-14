@@ -1093,6 +1093,29 @@ sources:
     - name: version
       description: str, the version of the student module history extended
 
+  - name: raw__mitxresidential__openedx__mysql__courseware_studentmodulehistory
+    description: Legacy history of studentmodule in Residential MITx open edx platform
+    columns:
+    - name: id
+      description: int, primary key in this table
+    - name: student_module_id
+      description: int, foreign key to courseware_studentmodule
+    - name: state
+      description: str, JSON text indicating the learner's state for the corresponding
+        module such as course, chapter, problemset, sequential, videosequence, etc.
+    - name: grade
+      description: str, floating point value indicating the total unweighted grade
+        for this problem that the learner has scored. e.g. how many responses they
+        got right within the problem. This data is also available in courseactivity_problemcheck
+    - name: max_grade
+      description: str, floating point value indicating the total possible unweighted
+        grade for this problem, or basically the number of responses that are in this
+        problem. This data is also available in courseactivity_problemcheck
+    - name: created
+      description: timestamp, datetime when this row was created
+    - name: version
+      description: str, the version of the student module history extended
+
   - name: raw__mitx__openedx__mysql__completion_blockcompletion
     description: History of user block completion in a course such as video, problem,
       survey on the Residential MITx platform
