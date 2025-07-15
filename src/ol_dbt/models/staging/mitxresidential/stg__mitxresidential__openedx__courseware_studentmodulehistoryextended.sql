@@ -10,6 +10,14 @@ with source as (
     select * from
     {{
       source('ol_warehouse_raw_data'
+      ,'raw__mitx__openedx__mysql__courseware_studentmodulehistory')
+    }}
+
+    union all
+
+    select * from
+    {{
+      source('ol_warehouse_raw_data'
       ,'raw__mitx__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended')
     }}
 

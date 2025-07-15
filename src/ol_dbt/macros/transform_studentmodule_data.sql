@@ -1,7 +1,4 @@
-{% macro generate_studentmodule_problem_events(
-    studentmodule_table, studentmodulehistory_table, user_id_field, studentmodule_legacy=None
-) %}
-
+{% macro generate_studentmodule_problem_events(studentmodule_table, studentmodulehistory_table, user_id_field) %}
   with studentmodule as (
     select
       studentmodule_id
@@ -19,34 +16,6 @@
     where coursestructure_block_category = 'problem'
   )
 
-  {% if studentmodule_legacy %}
-  -- mitxresidential has legacy student module history data
-  , studentmodulehistoryextended as (
-    select
-      studentmodulehistory_id as studentmodulehistoryextended_id
-      , studentmodule_id
-      , studentmodule_state_data
-      , cast(studentmodule_problem_grade as varchar) as grade
-      , cast(studentmodule_problem_max_grade as varchar) as max_grade
-      , from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) as studentmodule_created_on
-      , cast(json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as int) as attempt
-    from {{ studentmodule_legacy }}
-
-    union all
-
-    select
-      studentmodulehistoryextended_id
-      , studentmodule_id
-      , studentmodule_state_data
-      , cast(studentmodule_problem_grade as varchar) as grade
-      , cast(studentmodule_problem_max_grade as varchar) as max_grade
-      , from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) as studentmodule_created_on
-      , cast(json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as int) as attempt
-    from {{ studentmodulehistory_table }}
-  )
-
-  {% else %}
-
   , studentmodulehistoryextended as (
     select
       studentmodulehistoryextended_id
@@ -58,8 +27,6 @@
       , cast(json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as int) as attempt
     from {{ studentmodulehistory_table }}
   )
-
-  {% endif %}
 
     -- Pull out arrays from the state data
     -- Exclude rows without an attempt number, as these are not valid problem events
@@ -107,7 +74,4 @@
     , success
     , answers
   from history_joined
-
-
-
 {% endmacro %}

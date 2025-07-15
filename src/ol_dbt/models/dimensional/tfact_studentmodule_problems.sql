@@ -3,22 +3,24 @@ with mitxonline_studentmodule_problems as (
         ref('stg__mitxonline__openedx__mysql__courseware_studentmodule'),
         ref('stg__mitxonline__openedx__courseware_studentmodulehistoryextended'),
         'openedx_user_id'
-    ) }})
+    ) }}
+)
 
 , mitxpro_studentmodule_problems as (
     {{ generate_studentmodule_problem_events(
         ref('stg__mitxpro__openedx__mysql__courseware_studentmodule'),
         ref('stg__mitxpro__openedx__courseware_studentmodulehistoryextended'),
         'openedx_user_id'
-    ) }})
+    ) }}
+)
 
 , mitxresidential_studentmodule_problems as (
     {{ generate_studentmodule_problem_events(
         ref('stg__mitxresidential__openedx__courseware_studentmodule'),
         ref('stg__mitxresidential__openedx__courseware_studentmodulehistoryextended'),
-        'user_id',
-        ref('stg__mitxresidential__openedx__courseware_studentmodulehistory')
-    ) }})
+        'user_id'
+    ) }}
+)
 
 , users as (
     select * from {{ ref('dim_user') }}
