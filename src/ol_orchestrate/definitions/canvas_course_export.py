@@ -1,11 +1,15 @@
 from dagster import (
-    AssetSelection,
     Definitions,
-    ScheduleDefinition,
+    build_schedule_from_partitioned_job,
+    define_asset_job,
 )
 from dagster_aws.s3 import S3Resource
 
-from ol_orchestrate.assets.canvas import course_content_metadata, export_course_content
+from ol_orchestrate.assets.canvas import (
+    canvas_course_ids,
+    course_content_metadata,
+    export_course_content,
+)
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -16,9 +20,16 @@ from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
 vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
 
-canvas_course_export_schedule = ScheduleDefinition(
+
+canvas_course_content_job = define_asset_job(
+    name="canvas_course_export_job",
+    selection=[export_course_content, course_content_metadata],
+    partitions_def=canvas_course_ids,
+)
+
+canvas_course_export_schedule = build_schedule_from_partitioned_job(
     name="canvas_course_export_schedule",
-    target=AssetSelection.assets(export_course_content, course_content_metadata),
+    job=canvas_course_content_job,
     cron_schedule="@daily",
     execution_timezone="Etc/UTC",
 )
