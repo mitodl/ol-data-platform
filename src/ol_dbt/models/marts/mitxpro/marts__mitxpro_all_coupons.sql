@@ -48,6 +48,16 @@ with allcoupons as (
     from {{ ref('int__mitxpro__b2becommerce_b2breceipt') }}
 )
 
+, product as (
+    select *
+    from {{ ref('int__mitxpro__ecommerce_product') }}
+)
+
+, couponproduct as (
+    select *
+    from {{ ref('int__mitxpro__ecommerce_couponproduct') }}
+)
+
 , pull_req_ref_num as (
     select
         ecommerce_coupon.coupon_id
@@ -153,6 +163,24 @@ with allcoupons as (
         )
 )
 
+, pull_product_nonorders as (
+    select
+        cp.coupon_id
+        , coalesce(
+            p.courserun_readable_id
+            , p.program_readable_id
+        ) as product_readable_id
+    from couponproduct as cp
+    inner join product as p
+        on cp.product_id = p.product_id
+    group by
+        cp.coupon_id
+        , coalesce(
+            p.courserun_readable_id
+            , p.program_readable_id
+        )
+)
+
 select
     allcoupons.coupon_code
     , allcoupons.coupon_name
@@ -179,6 +207,7 @@ select
     , coalesce(
         pull_product_regular.product_readable_id
         , pull_product_b2b.product_readable_id
+        , pull_product_nonorders.product_readable_id
     ) as product_readable_id
     , case
         when
@@ -213,3 +242,5 @@ left join pull_product_b2b
         and redeemed_b2b_coupons.b2border_contract_number = pull_product_b2b.b2border_contract_number
 left join pull_req_ref_num
     on allcoupons.coupon_id = pull_req_ref_num.coupon_id
+left join pull_product_nonorders
+    on allcoupons.coupon_id = pull_product_nonorders.coupon_id
