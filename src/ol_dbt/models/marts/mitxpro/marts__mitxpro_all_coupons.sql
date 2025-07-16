@@ -244,5 +244,5 @@ left join pull_req_ref_num
     on allcoupons.coupon_id = pull_req_ref_num.coupon_id
 left join pull_product_nonorders
     on allcoupons.coupon_id = pull_product_nonorders.coupon_id
-    and pull_product_regular.product_readable_id is null 
+    and pull_product_regular.product_readable_id is null
     and pull_product_b2b.product_readable_id is null
