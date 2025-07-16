@@ -166,9 +166,8 @@ with video_pre_query as (
         , courserun_readable_id
         , openedx_user_id
         , avg(
-            case when max_grade = '0' then
-                0 else (cast(grade as decimal(30, 10))
-            / cast(max_grade as decimal(30, 10))) end
+            cast(grade as decimal(30, 10))
+            / nullif(cast(max_grade as decimal(30, 10)), 0)
         )
         as avg_percent_grade
     from ol_warehouse_production_dimensional.tfact_problem_events
