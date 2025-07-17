@@ -213,3 +213,39 @@ models:
     description: string, name of the program the course belongs to
   - name: receipt_url
     description: string, URL to the receipt for the order on the MITx Online application
+
+- name: combined_video_engagements_report
+  description: Learners video engagements - play, pause, seek, or stop video actions
+    from MITx Online, xPro, edX.org, Residential MITx with calculated counts for total
+    video events, distinct videos watched, and max video index.
+  columns:
+  - name: user_email
+    description: str, user email on the corresponding platform
+  - name: chapter_title
+    description: str, title of chapter this video belongs to. Null for Residential
+      MITx until we populate the course structure data.
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline, xPro, Residential courses, {org}/{course}/{run_tag}
+      for edX.org courses.
+    tests:
+    - not_null
+  - name: total_video_count
+    description: int, the total number of distinct videos for a chapter and courserun.
+  - name: platform
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+    tests:
+    - not_null
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online, xPro or Residential courses, {org}/{course} for edX.org courses.
+  - name: user_watched_video_count
+    description: int, The number of distinct videos the user watched in the course
+  - name: max_video_index
+    description: int, The maximum sequence number giving order in which this block
+      content appears within the course.
