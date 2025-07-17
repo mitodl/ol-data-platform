@@ -59,6 +59,7 @@ select
     , enrollments.courserungrade_grade
     , enrollments.courserungrade_is_passing
     , enrollments.user_country_code
+    , enrollments.user_highest_education
     , enrollments.user_full_name
     , enrollments.user_username
     , lower(enrollments.user_email) as user_email
