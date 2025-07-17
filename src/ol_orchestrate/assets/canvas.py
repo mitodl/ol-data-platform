@@ -37,6 +37,7 @@ canvas_course_ids = StaticPartitionsDefinition(
         "28759",
         "28765",
         "28767",
+        "28685",
     ]
 )
 
