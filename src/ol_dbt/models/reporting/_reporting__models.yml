@@ -159,6 +159,8 @@ models:
       set for this course on edX.org or MITxOnline or xPro
   - name: user_country_code
     description: str, country code on the platform user enrolled. May be blank.
+  - name: user_highest_education
+    description: str, user's level of education
   - name: user_full_name
     description: str, user full name on the platform user enrolled.
   - name: user_username
