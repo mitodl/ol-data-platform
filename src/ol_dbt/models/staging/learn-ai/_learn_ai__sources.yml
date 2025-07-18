@@ -1,0 +1,91 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__learn_ai__app__postgres__users_user
+    description: Learn AI user information
+    columns:
+    - name: id
+      description: int, primary key in users_user
+    - name: global_id
+      description: str, global SSO ID for the user across all platforms.
+    - name: name
+      description: str, name of the user.
+    - name: email
+      description: str, email address of the user.
+    - name: username
+      description: str, username of the user.
+    - name: password
+      description: str, hashed password of the user.
+    - name: last_login
+      description: timestamp, date and time of the user's last login.
+    - name: is_staff
+      description: boolean, indicates if the user is a staff member.
+    - name: is_superuser
+      description: boolean, used for django admin access.
+    - name: is_active
+      description: bool, indicates if the user account is active.
+    - name: created_at
+      description: timestamp, date and time when the record was created.
+    - name: updated_at
+      description: timestamp, date and time when the record was last updated.
+
+  - name: raw__learn_ai__app__postgres__ai_chatbots_userchatsession
+    description: Learn AI chat session associate LangGraph threads with users
+    columns:
+    - name: id
+      description: int, primary key in ai_chatbots_userchatsession.
+    - name: agent
+      description: str, TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot
+    - name: title
+      description: str, the initial question of the chat session.
+    - name: user_id
+      description: id, foreign key to auth_user in learn AI application. Null if the
+        user is not logged in.
+    - name: thread_id
+      description: str, unique identifier for the chat thread.
+    - name: object_id
+      description: str, course ID, video transcript asset ID, or edX module ID depending
+        on the agent type.
+    - name: dj_session_key
+      description: str, Django session key for the chat session.
+    - name: created_at
+      description: timestamp, date and time when the record was created.
+    - name: updated_at
+      description: timestamp, date and time when the record was last updated.
+
+  - name: raw__learn_ai__app__postgres__ai_chatbots_djangocheckpoint
+    description: Chatbot messages for RecommendationBot, SyllabusBot and VideoGPTBot
+    columns:
+    - name: id
+      description: int, primary key in ai_chatbots_djangocheckpoint
+    - name: type
+      description: str, msgpack
+    - name: session_id
+      description: int, foreign key to ai_chatbots_userchatsession
+    - name: thread_id
+      description: str, unique identifier for the chat thread.
+    - name: checkpoint
+      description: json, the checkpoint metadata for the chat session
+    - name: checkpoint_id
+      description: str, unique identifier for the checkpoint.
+    - name: checkpoint_ns
+      description: str, checkpoint namespace, used to group checkpoints in a thread.
+    - name: parent_checkpoint_id
+      description: str, checkpoint ID of the parent checkpoint. Null if this is the
+        first checkpoint in the thread.
+
+  - name: raw__learn_ai__app__postgres__ai_chatbots_tutorbotoutput
+    description: TutorBot chat history
+    columns:
+    - name: id
+      description: int, primary key in ai_chatbots_tutorbotoutput
+    - name: thread_id
+      description: str, unique identifier for the chat thread.
+    - name: chat_json
+      description: json string, the chat history and internal state of the TutorBot.

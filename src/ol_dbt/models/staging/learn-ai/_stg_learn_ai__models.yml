@@ -1,0 +1,130 @@
+---
+version: 2
+
+models:
+- name: stg__learn_ai__app__postgres__users_user
+  description: Learn AI user information
+  columns:
+  - name: user_id
+    description: int, primary key in users_user
+    tests:
+    - not_null
+    - unique
+  - name: user_global_id
+    description: str, global SSO ID for the user across all platforms.
+  - name: user_username
+    description: str, username of the user.
+    tests:
+    - not_null
+    - unique
+  - name: user_full_name
+    description: str, name of the user.
+    tests:
+    - not_null
+  - name: user_email
+    description: str, email address of the user.
+    tests:
+    - not_null
+  - name: user_last_login
+    description: timestamp, date and time of the user's last login.
+  - name: user_is_staff
+    description: boolean, indicates if the user is a staff member.
+    tests:
+    - not_null
+  - name: user_is_superuser
+    description: boolean, used for django admin access.
+    tests:
+    - not_null
+  - name: user_is_active
+    description: bool, indicates if the user account is active.
+    tests:
+    - not_null
+  - name: user_created_on
+    description: timestamp, date and time when the record was created.
+    tests:
+    - not_null
+  - name: user_updated_on
+    description: timestamp, date and time when the record was last updated.
+    tests:
+    - not_null
+
+- name: stg__learn_ai__app__postgres__chatbots_userchatsession
+  description: Learn AI chat session associate LangGraph threads with users
+  columns:
+  - name: chatsession_id
+    description: int, primary key in ai_chatbots_userchatsession.
+    tests:
+    - not_null
+    - unique
+  - name: chatsession_thread_id
+    description: str, unique identifier for the chat thread.
+    tests:
+    - not_null
+    - unique
+  - name: chatsession_agent
+    description: str, indicates the type of chatbot agent used in the session. Possible
+      values - TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot
+  - name: chatsession_title
+    description: str, the initial question of the chat session.
+  - name: user_id
+    description: id, foreign key to auth_user in learn AI application. Null if the
+      user is not logged in.
+  - name: chatsession_object_id
+    description: str, course ID, video transcript asset ID, or edX module ID depending
+      on the chatsession_agent. May be blank for ResourceRecommendationBot.
+  - name: chatsession_django_session_key
+    description: str, Django session key for the chat session.
+  - name: chatsession_created_on
+    description: timestamp, date and time when the record was created.
+    tests:
+    - not_null
+  - name: chatsession_updated_on
+    description: timestamp, date and time when the record was last updated.
+    tests:
+    - not_null
+
+- name: stg__learn_ai__app__postgres__chatbots_djangocheckpoint
+  description: Chatbot messages for RecommendationBot, SyllabusBot and VideoGPTBot
+  columns:
+  - name: djangocheckpoint_id
+    description: int, primary key in chatbots_djangocheckpoint
+    tests:
+    - not_null
+    - unique
+  - name: checkpoint_type
+    description: str, type of the checkpoint, e.g. msgpack
+  - name: chatsession_id
+    description: int, foreign key to chatbots_userchatsession
+  - name: chatsession_thread_id
+    description: str, unique identifier for the chat thread.
+    tests:
+    - not_null
+  - name: checkpoint_json
+    description: json, the checkpoint metadata for the chat session
+  - name: checkpoint_namespace
+    description: str, checkpoint namespace, used to group checkpoints in a thread.
+  - name: checkpoint_id
+    description: str, unique identifier for the checkpoint.
+    tests:
+    - not_null
+  - name: parent_checkpoint_id
+    description: str, checkpoint ID of the parent checkpoint. Null if this is the
+      first checkpoint in the thread.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["checkpoint_namespace", "chatsession_thread_id", "checkpoint_id"]
+
+- name: stg__learn_ai__app__postgres__chatbots_turorbotoutput
+  description: TutorBot chat history
+  columns:
+  - name: turorbotoutput_id
+    description: int, primary key in ai_chatbots_tutorbotoutput
+    tests:
+    - not_null
+    - unique
+  - name: chatsession_thread_id
+    description: str, unique identifier for the chat thread.
+    tests:
+    - not_null
+  - name: turorbot_chat_json
+    description: json string, the chat history and internal state of the TutorBot.
