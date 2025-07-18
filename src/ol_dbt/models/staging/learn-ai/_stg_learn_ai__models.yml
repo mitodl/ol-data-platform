@@ -62,7 +62,8 @@ models:
     - not_null
     - unique
   - name: chatsession_agent
-    description: str, TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot
+    description: str, indicates the type of chatbot agent used in the session. Possible
+      values - TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot
   - name: chatsession_title
     description: str, the initial question of the chat session.
   - name: user_id
@@ -70,7 +71,7 @@ models:
       user is not logged in.
   - name: chatsession_object_id
     description: str, course ID, video transcript asset ID, or edX module ID depending
-      on the agent type. May be blank for ResourceRecommendationBot.
+      on the chatsession_agent. May be blank for ResourceRecommendationBot.
   - name: chatsession_django_session_key
     description: str, Django session key for the chat session.
   - name: chatsession_created_on
@@ -91,7 +92,7 @@ models:
     - not_null
     - unique
   - name: checkpoint_type
-    description: str, msgpack
+    description: str, type of the checkpoint, e.g. msgpack
   - name: chatsession_id
     description: int, foreign key to chatbots_userchatsession
   - name: chatsession_thread_id
