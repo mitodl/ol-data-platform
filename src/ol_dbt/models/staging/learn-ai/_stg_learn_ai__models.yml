@@ -114,10 +114,10 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["checkpoint_namespace", "chatsession_thread_id", "checkpoint_id"]
 
-- name: stg__learn_ai__app__postgres__chatbots_turorbotoutput
+- name: stg__learn_ai__app__postgres__chatbots_tutorbotoutput
   description: TutorBot chat history
   columns:
-  - name: turorbotoutput_id
+  - name: tutorbotoutput_id
     description: int, primary key in ai_chatbots_tutorbotoutput
     tests:
     - not_null
@@ -126,5 +126,5 @@ models:
     description: str, unique identifier for the chat thread.
     tests:
     - not_null
-  - name: turorbot_chat_json
+  - name: tutorbot_chat_json
     description: json string, the chat history and internal state of the TutorBot.
