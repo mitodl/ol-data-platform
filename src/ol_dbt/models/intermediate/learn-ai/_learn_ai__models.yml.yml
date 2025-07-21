@@ -1,0 +1,118 @@
+---
+version: 2
+
+models:
+- name: int__learn_ai__chatbots_tutorbot
+  description: Intermediate model for TutorBot chat history
+  columns:
+  - name: tutorbotoutput_id
+    description: int, primary key in ai_chatbots_tutorbotoutput
+    tests:
+    - not_null
+    - unique
+  - name: chatsession_thread_id
+    description: str, unique identifier for the chat thread.
+    tests:
+    - not_null
+  - name: tutorbot_chat_json
+    description: json string, the chat history and internal state of the TutorBot.
+  - name: chatsession_id
+    description: int, foreign key to ai_chatbots_userchatsession in learn AI application.
+    tests:
+    - not_null
+  - name: chatsession_agent
+    description: str, indicates the type of chatbot agent used in the session. Only
+      TutorBot for this table.
+  - name: chatsession_title
+    description: str, the initial question of the chat session.
+  - name: edx_module_id
+    description: str, edX module ID for the chat session
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, the edX course ID for the chat session
+    tests:
+    - not_null
+  - name: user_id
+    description: int, user ID in learn AI application. Null if the user is not logged
+      in.
+  - name: user_global_id
+    description: str, global SSO ID for the user across all platforms.
+  - name: user_username
+    description: str, username of the user.
+  - name: user_full_name
+    description: str, name of the user.
+  - name: user_email
+    description: str, email address of the user.
+  - name: chatsession_django_session_key
+    description: str, Django session key for the chat session.
+  - name: chatsession_created_on
+    description: timestamp, date and time when the record was created.
+    tests:
+    - not_null
+  - name: chatsession_updated_on
+    description: timestamp, date and time when the record was last updated.
+    tests:
+    - not_null
+
+- name: int__learn_ai__chatbots
+  description: Intermediate model for Learn AI RecommendationBot, SyllabusBot and
+    VideoGPTBot
+  columns:
+  - name: checkpoint_id
+    description: str, unique identifier for the chatbots checkpoint.
+    tests:
+    - not_null
+  - name: chatsession_thread_id
+    description: str, unique identifier for the chat thread.
+    tests:
+    - not_null
+  - name: chatsession_id
+    description: int, foreign key to ai_chatbots_userchatsession in learn AI application.
+    tests:
+    - not_null
+  - name: chatsession_agent
+    description: str, indicates the type of chatbot agent used in the session. Possible
+      values - ResourceRecommendationBot, VideoGPTBot, SyllabusBot
+  - name: chatsession_title
+    description: str, the initial question of the chat session.
+  - name: chatsession_object_id
+    description: str, course ID or video transcript asset ID. May be blank for ResourceRecommendationBot.
+  - name: courserun_readable_id
+    description: str, the course readable ID for the chat session. Populated for VideoGPTBot.
+  - name: user_id
+    description: int, user ID in learn AI application. Null if the user is not logged
+      in.
+  - name: user_email
+    description: str, email address of the user.
+  - name: user_global_id
+    description: str, global SSO ID for the user across all platforms.
+  - name: user_username
+    description: str, username of the user.
+  - name: user_full_name
+    description: str, name of the user.
+  - name: checkpoint_json
+    description: json, json checkpoint for the chat session. This contains the chat
+      message and internal state of the chatbot.
+  - name: checkpoint_metadata
+    description: json, json metadata for the chat session checkpoint
+  - name: checkpoint_type
+    description: str, type of the checkpoint, e.g. msgpack
+  - name: checkpoint_namespace
+    description: str, checkpoint namespace, used to group checkpoints in a thread.
+  - name: parent_checkpoint_id
+    description: str, checkpoint ID of the parent checkpoint. Null if this is the
+      first checkpoint in the thread.
+  - name: chatsession_django_session_key
+    description: str, Django session key for the chat session.
+  - name: chatsession_created_on
+    description: timestamp, date and time when the record was created.
+    tests:
+    - not_null
+  - name: chatsession_updated_on
+    description: timestamp, date and time when the record was last updated.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["checkpoint_namespace", "checkpoint_id", "chatsession_thread_id"]
