@@ -2,7 +2,7 @@
 version: 2
 
 models:
-- name: int__learn_ai__chatbots_tutorbot
+- name: int__learn_ai__tutorbot
   description: Intermediate model for TutorBot chat history
   columns:
   - name: tutorbotoutput_id
@@ -55,7 +55,7 @@ models:
     tests:
     - not_null
 
-- name: int__learn_ai__chatbots
+- name: int__learn_ai__chatbot
   description: Intermediate model for Learn AI RecommendationBot, SyllabusBot and
     VideoGPTBot
   columns:

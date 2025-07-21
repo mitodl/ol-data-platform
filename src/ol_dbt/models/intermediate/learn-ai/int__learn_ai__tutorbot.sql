@@ -17,7 +17,7 @@ with chatsession as (
 select
     tutorbotoutput.tutorbotoutput_id
     , tutorbotoutput.chatsession_thread_id
-    , tutorbotoutput.turorbot_chat_json
+    , tutorbotoutput.tutorbot_chat_json
     , chatsession.chatsession_id
     , chatsession.chatsession_agent
     , chatsession.chatsession_title

@@ -14,7 +14,7 @@ with chatsession as (
     select distinct
         courserun_readable_id
         , retrieved_at
-        , json_query(transcripts, 'lax $.en' omit quotes) as transcript_id
+        , json_query(block_metadata, 'lax $.transcripts.en' omit quotes) as transcript_id
     from {{ ref('dim_course_content') }}
     where block_category = 'video'
 )
@@ -24,13 +24,18 @@ with chatsession as (
         video.courserun_readable_id
         , chatsession.chatsession_object_id
         , row_number() over (
-            partition by chatsession.chatsession_thread_id
+            partition by chatsession.chatsession_object_id
             order by video.retrieved_at asc
         ) as row_num
     from chatsession
-    left join video
+    inner join video
         on
             chatsession.chatsession_object_id like '%' || video.transcript_id
+            and video.courserun_readable_id like '%'
+            || substring(
+                replace(chatsession.chatsession_object_id, 'asset-v1:', ''), 1
+                , strpos(replace(chatsession.chatsession_object_id, 'asset-v1:', ''), '+type@asset+block@') - 1
+            )
             and chatsession.chatsession_created_on < video.retrieved_at
 )
 
