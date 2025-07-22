@@ -13,7 +13,7 @@ with course_block_source as (
                         , course_block_source.course_id
                     order by course_block_source.retrieved_at asc
                 )
-            as previous_content_hash
+                as previous_content_hash
         from course_block_source
     )
     where previous_content_hash is null or previous_content_hash != course_content_hash

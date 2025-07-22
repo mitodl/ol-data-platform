@@ -76,7 +76,7 @@ with runs_from_bigquery as (
         ) as courserun_institution
         , coalesce(runs_from_api.instructor_names, runs_from_bigquery.courserun_instructors) as courserun_instructors
         , coalesce(runs_from_api.courserun_enrollment_start_on, runs_from_bigquery.courserun_enrollment_start_date)
-        as courserun_enrollment_start_date
+            as courserun_enrollment_start_date
         , coalesce(runs_from_api.courserun_start_on, runs_from_bigquery.courserun_start_date) as courserun_start_date
         , coalesce(runs_from_api.courserun_end_on, runs_from_bigquery.courserun_end_date) as courserun_end_date
     from runs_from_api

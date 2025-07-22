@@ -65,7 +65,7 @@ with mitxonline_product as (
         , mitxonline_courses.course_topics as topics
         , mitxonline_courses.course_instructors as instructors
         , if(mitxonline_course_runs.courserun_is_self_paced = true, 'Self-paced', 'Instructor-paced')
-        as pace
+            as pace
         , if(
             mitxonline_courses.course_page_is_live = true and mitxonline_courses.course_is_live = true
             , true
@@ -127,7 +127,7 @@ with mitxonline_product as (
         ) as time_commitment
         , coalesce(mitxpro_courses.cms_coursepage_format, mitxpro_programs.cms_programpage_format) as delivery
         , coalesce(mitxpro_courses.cms_certificate_ceus, mitxpro_programs.cms_certificate_ceus)
-        as continuing_education_credits
+            as continuing_education_credits
         , coalesce(mitxpro_courses.course_instructors, mitxpro_programs.program_instructors) as instructors
         , if(mitxpro_product.product_type = 'program', 'program run', mitxpro_product.product_type) as product_type
         , coalesce(mitxpro_courses.platform_name, mitxpro_programs.platform_name) as product_platform

@@ -19,7 +19,7 @@ with course_content as (
         , arbitrary(user_fk) as user_fk
         , max(case when video_position = 'null' then '0' end) as end_time
         , min(case when event_type = 'play_video' then (case when video_position = 'null' then '0' end) end)
-        as start_time
+            as start_time
     from tfact_video_events
     where
         event_type in (
@@ -53,7 +53,7 @@ select
         cast(start_and_end_times.end_time as decimal(30, 10))
         - cast(start_and_end_times.start_time as decimal(30, 10))
     )
-    as estimated_time_played
+        as estimated_time_played
     , max(tfact_video_events.event_timestamp) as latest_activity_timestamp
     , sum(case when tfact_video_events.event_type = 'play_video' then 1 else 0 end) as video_played_count
     , sum(case when tfact_video_events.event_type = 'complete_video' then 1 else 0 end) as video_completed_count

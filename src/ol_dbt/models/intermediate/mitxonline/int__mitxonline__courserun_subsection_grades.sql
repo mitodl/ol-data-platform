@@ -43,7 +43,7 @@ with subsection_grades as (
             , subsection_grades.subsectiongrade_total_earned_graded_score
         ) as subsectiongrade_total_earned_graded_score
         , if(subsection_grade_overrides.subsectiongradeoverride_id is not null, true, false)
-        as subsectiongrade_is_overridden
+            as subsectiongrade_is_overridden
     from subsection_grades
     inner join course_structure
         on subsection_grades.coursestructure_block_id = course_structure.coursestructure_block_id

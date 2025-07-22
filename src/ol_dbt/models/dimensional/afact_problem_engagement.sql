@@ -27,7 +27,7 @@ with problem_structure as (
                 partition by platform, openedx_user_id, courserun_readable_id, problem_block_fk, attempt
                 order by event_timestamp desc
             )
-        as rn
+            as rn
     from {{ ref('tfact_problem_events') }}
     where event_type = 'problem_check'
 )

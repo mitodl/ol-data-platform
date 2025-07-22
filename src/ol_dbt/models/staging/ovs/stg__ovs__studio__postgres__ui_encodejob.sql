@@ -9,7 +9,7 @@ with source as (
         , created_at
         , last_modified
         , cast(json_query(replace(message, '''', '"'), 'lax $.Output.Duration' omit quotes) as decimal(38, 4))
-        as video_duration
+            as video_duration
     from {{ source('ol_warehouse_raw_data', 'raw__ovs__postgres__dj_elastictranscoder_encodejob') }}
 
     union all
