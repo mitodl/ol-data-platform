@@ -18,7 +18,6 @@ select
     tutorbotoutput.tutorbotoutput_id
     , tutorbotoutput.chatsession_thread_id
     , tutorbotoutput.tutorbot_chat_json
-    , chatsession.chatsession_id
     , chatsession.chatsession_agent
     , chatsession.chatsession_title
     , chatsession.chatsession_object_id as edx_module_id

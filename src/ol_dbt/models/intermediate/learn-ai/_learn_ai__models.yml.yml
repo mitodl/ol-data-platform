@@ -16,10 +16,6 @@ models:
     - not_null
   - name: tutorbot_chat_json
     description: json string, the chat history and internal state of the TutorBot.
-  - name: chatsession_id
-    description: int, foreign key to ai_chatbots_userchatsession in learn AI application.
-    tests:
-    - not_null
   - name: chatsession_agent
     description: str, indicates the type of chatbot agent used in the session. Only
       TutorBot for this table.
@@ -65,10 +61,6 @@ models:
     - not_null
   - name: chatsession_thread_id
     description: str, unique identifier for the chat thread.
-    tests:
-    - not_null
-  - name: chatsession_id
-    description: int, foreign key to ai_chatbots_userchatsession in learn AI application.
     tests:
     - not_null
   - name: chatsession_agent
