@@ -27,7 +27,6 @@ select
     , users.user_full_name
     , users.user_username
     , users.user_global_id
-    , chatsession.chatsession_django_session_key
     , chatsession.chatsession_created_on
     , chatsession.chatsession_updated_on
 from tutorbotoutput

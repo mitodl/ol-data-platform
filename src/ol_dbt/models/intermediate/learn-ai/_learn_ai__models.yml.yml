@@ -40,8 +40,6 @@ models:
     description: str, name of the user.
   - name: user_email
     description: str, email address of the user.
-  - name: chatsession_django_session_key
-    description: str, Django session key for the chat session.
   - name: chatsession_created_on
     description: timestamp, date and time when the record was created.
     tests:
@@ -95,8 +93,6 @@ models:
   - name: parent_checkpoint_id
     description: str, checkpoint ID of the parent checkpoint. Null if this is the
       first checkpoint in the thread.
-  - name: chatsession_django_session_key
-    description: str, Django session key for the chat session.
   - name: chatsession_created_on
     description: timestamp, date and time when the record was created.
     tests:

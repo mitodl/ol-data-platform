@@ -56,7 +56,6 @@ select
     , djangocheckpoint.parent_checkpoint_id
     , djangocheckpoint.checkpoint_namespace
     , djangocheckpoint.checkpoint_type
-    , chatsession.chatsession_django_session_key
     , chatsession.chatsession_created_on
     , chatsession.chatsession_updated_on
 from djangocheckpoint
