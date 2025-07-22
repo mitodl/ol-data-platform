@@ -177,7 +177,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_order.order_total_price_paid
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
         , concat('xpro-b2c-production-', cast(mitxpro__ecommerce_allorders.order_id as varchar))
-        as order_reference_number
+            as order_reference_number
         , coalesce(
             mitxpro__ecommerce_allorders.courserun_readable_id
             , mitxpro__programruns.programrun_readable_id

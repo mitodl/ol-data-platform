@@ -13,7 +13,7 @@ with source as (
         , semester as courserun_tag
         , self_paced as courserun_is_self_paced
         , cast(json_parse(json_query(instructor_info, 'lax $.instructors.name' with array wrapper)) as array(varchar)) --noqa
-        as courserun_instructors
+            as courserun_instructors
         , case
             when lower(course_start) = 'null' then null
             else {{ cast_timestamp_to_iso8601('course_start') }}

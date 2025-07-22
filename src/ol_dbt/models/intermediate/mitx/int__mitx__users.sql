@@ -105,11 +105,11 @@ with mitxonline_users as (
         , coalesce(mitxonline_users_view.user_first_name, edxorg_users_view.user_first_name) as user_first_name
         , coalesce(mitxonline_users_view.user_last_name, edxorg_users_view.user_last_name) as user_last_name
         , coalesce(mitxonline_users_view.user_address_country, edxorg_users_view.user_address_country)
-        as user_address_country
+            as user_address_country
         , coalesce(mitxonline_users_view.user_address_state, edxorg_users_view.user_address_state_or_territory)
-        as user_address_state
+            as user_address_state
         , coalesce(mitxonline_users_view.user_highest_education, edxorg_users_view.user_highest_education)
-        as user_highest_education
+            as user_highest_education
         , coalesce(mitxonline_users_view.user_gender, edxorg_users_view.user_gender) as user_gender
         , coalesce(mitxonline_users_view.user_birth_year, edxorg_users_view.user_birth_year) as user_birth_year
         , coalesce(mitxonline_users_view.user_company, edxorg_users_view.user_company_name) as user_company
