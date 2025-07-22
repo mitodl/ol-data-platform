@@ -96,7 +96,7 @@ with mitxpro__programenrollments as (
         , mitxpro__program_certificates.programcertificate_uuid
         , mitxpro__program_certificates.programcertificate_url
         , if(mitxpro__program_certificates.programcertificate_url is not null, true, false)
-        as user_has_completed_program
+            as user_has_completed_program
     from mitxpro__programenrollments
     inner join mitxpro__programs
         on mitxpro__programenrollments.program_id = mitxpro__programs.program_id
@@ -130,7 +130,7 @@ with mitxpro__programenrollments as (
         , mitxonline__program_certificates.programcertificate_uuid
         , mitxonline__program_certificates.programcertificate_url
         , if(mitxonline__program_certificates.programcertificate_url is not null, true, false)
-        as user_has_completed_program
+            as user_has_completed_program
     from mitxonline__programenrollments
     inner join mitxonline__programs
         on mitxonline__programenrollments.program_id = mitxonline__programs.program_id
@@ -273,7 +273,7 @@ with mitxpro__programenrollments as (
         , combined_programs.program_is_live
         , combined_programs.program_readable_id
         , {{ generate_hash_id('cast(combined_programs.user_id as varchar) || combined_programs.platform_name') }}
-        as user_hashed_id
+            as user_hashed_id
         , combined_programs.user_id
         , combined_programs.user_email
         , combined_programs.user_username
@@ -287,11 +287,11 @@ with mitxpro__programenrollments as (
         , combined_programs.programcertificate_uuid
         , combined_programs.programcertificate_url
         , cast(substring(combined_programs.programcertificate_created_on, 1, 10) as date)
-        as programcertificate_created_on_date
+            as programcertificate_created_on_date
         , sum(case when upper(combined_enrollments.course_title) like '%CAPSTONE%' then 1 else 0 end)
-        as capstone_sum
+            as capstone_sum
         , min(cast(substring(combined_courseruns.courserun_start_on, 1, 10) as date))
-        as first_courserun_start_on_date
+            as first_courserun_start_on_date
         , count(distinct combined_enrollments.course_readable_id) as unique_courses_taken_in_program
     from combined_programs
     left join courses_in_programs
@@ -351,7 +351,7 @@ select
     , final_combined_programs.programcertificate_url
     , final_combined_programs.unique_courses_taken_in_program
     , case when final_combined_programs.capstone_sum > 0 then 'Y' else 'N' end
-    as capstone_indicator
+        as capstone_indicator
     , date_diff(
         'day'
         , final_combined_programs.programcertificate_created_on_date

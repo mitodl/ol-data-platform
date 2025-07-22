@@ -73,7 +73,7 @@ select
     , users.user_email
     , null as proctoredexamgrade_passing_grade
     , exam_unit_grades.subsectiongrade_total_earned_graded_score / exam_unit_grades.subsectiongrade_total_graded_score
-    as proctoredexamgrade_grade
+        as proctoredexamgrade_grade
     , exam_unit_grades.subsectiongrade_created_on as proctoredexamgrade_created_on
 from exam_unit_grades
 inner join users on exam_unit_grades.openedx_user_id = users.openedx_user_id

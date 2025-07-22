@@ -132,7 +132,7 @@ with mitxonline_navigation_events as (
             , mitxonline_navigation_events.starting_url
         ) as starting_position
         , coalesce(mitxonline_navigation_events.ending_tab, mitxonline_navigation_events.ending_url)
-        as ending_position
+            as ending_position
         , mitxonline_navigation_events.current_tab
         , mitxonline_navigation_events.tab_count
         , mitxonline_navigation_events.event_timestamp

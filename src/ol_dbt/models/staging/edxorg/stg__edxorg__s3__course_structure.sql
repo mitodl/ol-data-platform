@@ -13,7 +13,7 @@ with course_block_source as (
                     partition by course_block_source.block_id, course_block_source.course_id
                     order by course_block_source.retrieved_at asc
                 )
-            as previous_content_hash
+                as previous_content_hash
         from course_block_source
     )
     where previous_content_hash is null or previous_content_hash != course_content_hash
@@ -30,7 +30,7 @@ with course_block_source as (
         , course_content_hash as coursestructure_content_hash
         , block_content_hash as coursestructure_block_content_hash
         , replace(replace(replace(replace(course_id, '[', ''), ']', ''), '"', ''), '-', '/')
-        as courserun_readable_id
+            as courserun_readable_id
         , json_query(block_details, 'lax $.metadata') as coursestructure_block_metadata
         , {{ cast_timestamp_to_iso8601('retrieved_at') }} as coursestructure_retrieved_at
     from course_block

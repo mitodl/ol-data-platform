@@ -27,7 +27,7 @@ select
     , mitxonline_program_requirements.programrequirement_is_a_nested_requirement
 
     , mitxonline_program_requirements.programrequirement_parent_requirement_id
-    as mitxonline_programrequirement_parent_requirement_id
+        as mitxonline_programrequirement_parent_requirement_id
     , mitxonline_program_requirements.program_num_required_courses
 from programs
 inner join mitxonline_program_requirements

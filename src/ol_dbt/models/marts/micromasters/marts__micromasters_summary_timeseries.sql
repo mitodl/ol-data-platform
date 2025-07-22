@@ -35,7 +35,7 @@ with enrollments as (
                 when enrollments.courserunenrollment_enrollment_mode = 'verified' then enrollments.user_email
             end
         )
-        as unique_verified_users
+            as unique_verified_users
     from enrollments
     inner join timeseries on from_iso8601_timestamp(enrollments.courserunenrollment_created_on) < timeseries.end_date
     group by enrollments.micromasters_program_id, enrollments.mitxonline_program_id, timeseries.end_date
@@ -52,7 +52,7 @@ with enrollments as (
                 ',', cast(enrollments.user_id as varchar), enrollments.platform, enrollments.courserun_readable_id
             )
         )
-        as total_enrollments
+            as total_enrollments
         , count(distinct enrollments.user_email) as unique_users
         , count(distinct enrollments.user_address_country) as unique_countries
         , count_if(enrollments.courserunenrollment_enrollment_mode = 'verified') as verified_enrollments
@@ -61,7 +61,7 @@ with enrollments as (
                 when enrollments.courserunenrollment_enrollment_mode = 'verified' then enrollments.user_email
             end
         )
-        as unique_verified_users
+            as unique_verified_users
     from enrollments
     inner join timeseries on from_iso8601_timestamp(enrollments.courserunenrollment_created_on) < timeseries.end_date
     group by timeseries.end_date
@@ -120,7 +120,7 @@ with enrollments as (
                 , course_certificates.user_mitxonline_username
             )
         )
-        as course_certificates
+            as course_certificates
         , count(distinct course_certificates.user_email) as unique_course_certificate_earners
     from course_certificates
     inner join

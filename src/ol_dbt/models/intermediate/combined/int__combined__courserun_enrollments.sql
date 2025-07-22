@@ -140,7 +140,7 @@ with mitx_enrollments as (
         , mitxpro_courseruns.courserun_id
         , coalesce(mitxpro_courseruns.courserun_title, emeritus_enrollments.courserun_title) as courserun_title
         , coalesce(mitxpro_courseruns.courserun_readable_id, emeritus_enrollments.courserun_external_readable_id)
-        as courserun_readable_id
+            as courserun_readable_id
         , null as user_username
         , emeritus_enrollments.user_email
         , emeritus_enrollments.user_full_name
@@ -166,7 +166,7 @@ with mitx_enrollments as (
         , mitxpro_courseruns.courserun_id
         , coalesce(mitxpro_courseruns.courserun_title, global_alumni_enrollments.courserun_title) as courserun_title
         , coalesce(mitxpro_courseruns.courserun_readable_id, global_alumni_enrollments.courserun_external_readable_id)
-        as courserun_readable_id
+            as courserun_readable_id
         , null as user_username
         , global_alumni_enrollments.user_email
         , global_alumni_enrollments.user_full_name

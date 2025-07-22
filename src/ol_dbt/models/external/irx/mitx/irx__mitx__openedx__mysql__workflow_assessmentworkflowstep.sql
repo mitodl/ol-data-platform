@@ -8,5 +8,5 @@ where workflow_id in (
     select assessmentworkflow.id
     from
         {{ source('ol_warehouse_raw_data','raw__mitx__openedx__mysql__workflow_assessmentworkflow') }}
-        as assessmentworkflow
+            as assessmentworkflow
 )

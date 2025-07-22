@@ -12,7 +12,7 @@ with source as (
         ,{{ cast_timestamp_to_iso8601('assignments_started_date') }} as bulkcouponassignment_assignments_started_on
         ,{{ cast_timestamp_to_iso8601('last_assignment_date') }} as bulkcouponassignment_last_assignment_on
         ,{{ cast_timestamp_to_iso8601('message_delivery_completed_date') }}
-        as bulkcouponassignment_message_delivery_completed_on
+            as bulkcouponassignment_message_delivery_completed_on
         ,{{ cast_timestamp_to_iso8601('sheet_last_modified_date') }} as bulkcouponassignment_sheet_last_modified_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as bulkcouponassignment_updated_on
         ,{{ cast_timestamp_to_iso8601('created_on') }} as bulkcouponassignment_created_on

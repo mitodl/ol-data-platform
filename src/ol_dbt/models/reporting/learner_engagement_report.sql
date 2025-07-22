@@ -110,7 +110,7 @@ with video_pre_query as (
             cast(case when a.end_time = 'null' then '0' else a.end_time end as decimal(30, 10))
             - cast(case when a.start_time = 'null' then '0' else a.start_time end as decimal(30, 10))
         )
-        as estimated_time_played
+            as estimated_time_played
         , sum(a.video_duration) as video_duration
     from video_pre_query as a
     inner join ol_warehouse_production_dimensional.dim_video as c
@@ -169,7 +169,7 @@ with video_pre_query as (
             cast(grade as decimal(30, 10))
             / nullif(cast(max_grade as decimal(30, 10)), 0)
         )
-        as avg_percent_grade
+            as avg_percent_grade
     from ol_warehouse_production_dimensional.tfact_problem_events
     group by
         problem_block_fk
@@ -238,7 +238,7 @@ with video_pre_query as (
         , coalesce(video_views_table.email, page_views_table.email) as email
         , coalesce(video_views_table.course_title, page_views_table.course_title) as course_title
         , coalesce(video_views_table.courserun_readable_id, page_views_table.courserun_readable_id)
-        as courserun_readable_id
+            as courserun_readable_id
         , coalesce(video_views_table.section_title, page_views_table.section_title) as section_title
         , coalesce(video_views_table.subsection_title, page_views_table.subsection_title) as subsection_title
     from page_views_table
