@@ -17,6 +17,8 @@ models:
     description: string, id for the video
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
   - name: courserun_readable_id
     description: string, foreign key to dim_course_content, referencing the edX course
       run ID
@@ -637,6 +639,10 @@ models:
     description: integer, user ID on the corresponding open edX platform
     tests:
     - not_null
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
   - name: block_fk
     description: string, foreign key referencing the vertical or page block ID in
       the dim_course_content table, formatted as block-v1:{org}+{course}+{run}type@vertical-block@{hash
@@ -679,6 +685,8 @@ models:
     description: integer, user ID on the corresponding open edX platform
     tests:
     - not_null
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
   - name: problem_block_fk
     description: string, foreign key referencing the problem block ID in the dim_course_content
       table, formatted as block-v1:{org}+{course}+{run}type@problem@{hash code}.
@@ -721,6 +729,10 @@ models:
     description: string, foreign key to dim_user
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
     tests:
     - not_null
   - name: courserun_readable_id

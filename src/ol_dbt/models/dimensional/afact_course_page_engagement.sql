@@ -17,6 +17,7 @@ with vertical_structure as (
         , openedx_user_id
         , courserun_readable_id
         , block_fk
+        , arbitrary(user_username) as user_username
         , arbitrary(platform_fk) as platform_fk
         , arbitrary(user_fk) as user_fk
         , count(*) as num_of_views
@@ -32,6 +33,7 @@ with vertical_structure as (
         , page_navigation_events.user_fk
         , page_navigation_events.platform
         , page_navigation_events.openedx_user_id
+        , page_navigation_events.user_username
         , page_navigation_events.courserun_readable_id
         , page_navigation_events.block_fk
         , page_navigation_events.num_of_views
@@ -48,6 +50,7 @@ select
     , user_fk
     , platform
     , openedx_user_id
+    , user_username
     , courserun_readable_id
     , block_fk
     , num_of_views
