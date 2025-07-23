@@ -122,6 +122,7 @@ with mitxonline_navigation_events as (
         'mitxonline' as platform
         , users.user_pk as user_fk
         , mitxonline_navigation_events.openedx_user_id
+        , mitxonline_navigation_events.user_username
         , mitxonline_navigation_events.courserun_readable_id
         , mitxonline_navigation_events.event_type
         , mitxonline_navigation_events.event_json
@@ -148,6 +149,7 @@ with mitxonline_navigation_events as (
         'mitxpro' as platform
         , users.user_pk as user_fk
         , xpro_navigation_events.openedx_user_id
+        , xpro_navigation_events.user_username
         , xpro_navigation_events.courserun_readable_id
         , xpro_navigation_events.event_type
         , xpro_navigation_events.event_json
@@ -173,6 +175,7 @@ with mitxonline_navigation_events as (
         'residential' as platform
         , users.user_pk as user_fk
         , mitxresidential_navigation_events.user_id as openedx_user_id
+        , mitxresidential_navigation_events.user_username
         , mitxresidential_navigation_events.courserun_readable_id
         , mitxresidential_navigation_events.event_type
         , mitxresidential_navigation_events.event_json
@@ -201,6 +204,7 @@ with mitxonline_navigation_events as (
         'edxorg' as platform
         , users.user_pk as user_fk
         , edxorg_navigation_events.user_id as openedx_user_id
+        , edxorg_navigation_events.user_username
         , edxorg_navigation_events.courserun_readable_id
         , edxorg_navigation_events.event_type
         , edxorg_navigation_events.event_json
@@ -229,6 +233,7 @@ select
     , combined.user_fk
     , combined.platform
     , combined.openedx_user_id
+    , combined.user_username
     , combined.courserun_readable_id
     , combined.event_type
     , combined.block_id as block_fk

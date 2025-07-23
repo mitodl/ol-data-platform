@@ -111,6 +111,7 @@ with mitxonline_problem_events as (
         'mitxonline' as platform
         , users.user_pk as user_fk
         , mitxonline_problem_events.openedx_user_id
+        , mitxonline_problem_events.user_username
         , mitxonline_problem_events.courserun_readable_id
         , mitxonline_problem_events.event_type
         , mitxonline_problem_events.event_json
@@ -133,6 +134,7 @@ with mitxonline_problem_events as (
         'mitxpro' as platform
         , users.user_pk as user_fk
         , xpro_problem_events.openedx_user_id
+        , xpro_problem_events.user_username
         , xpro_problem_events.courserun_readable_id
         , xpro_problem_events.event_type
         , xpro_problem_events.event_json
@@ -155,6 +157,7 @@ with mitxonline_problem_events as (
         'residential' as platform
         , users.user_pk as user_fk
         , mitxresidential_problem_events.user_id
+        , mitxresidential_problem_events.user_username
         , mitxresidential_problem_events.courserun_readable_id
         , mitxresidential_problem_events.event_type
         , mitxresidential_problem_events.event_json
@@ -177,6 +180,7 @@ with mitxonline_problem_events as (
         'edxorg' as platform
         , users.user_pk as user_fk
         , edxorg_problem_events.user_id
+        , edxorg_problem_events.user_username
         , edxorg_problem_events.courserun_readable_id
         , edxorg_problem_events.event_type
         , edxorg_problem_events.event_json
@@ -199,6 +203,7 @@ with mitxonline_problem_events as (
         platform
         , user_fk
         , openedx_user_id
+        , user_username
         , courserun_readable_id
         , event_type
         , event_json
@@ -233,6 +238,7 @@ select
     , deduped_combined.user_fk
     , deduped_combined.platform
     , deduped_combined.openedx_user_id
+    , deduped_combined.user_username
     , deduped_combined.courserun_readable_id
     , deduped_combined.event_type
     , deduped_combined.problem_block_id as problem_block_fk
