@@ -954,6 +954,14 @@ models:
   - name: discount_type
     description: string, one of 'single-use' or 'promo'. Promo coupon codes can be
       used multiple times. This will be null for records sourced from b2b.
+  - name: b2bcoupon_id
+    description: int, foreign key to b2becommerce_b2bcoupon.
+  - name: discount_id
+    description: int, foreign key referencing ecommerce_coupon from xpro 
+      or foreign key to ecommerce_discount for mitxonline.
+      This will be null for records sourced from xpro b2b.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["discount_code", "platform", "b2border_contract_number", "product_readable_id"]
+      column_list: ["b2bcoupon_id", "discount_id", "platform", "couponpaymentversion_id", "b2border_contract_number",
+        "product_readable_id"]
+
