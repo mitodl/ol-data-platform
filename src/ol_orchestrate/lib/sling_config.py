@@ -36,8 +36,7 @@ def edxorg_replication_config(source_bucket_prefix, glue_namespace):
     """Generate the Sling replication configuration for edxorg data streams.
 
     Args:
-        source_bucket_name (str): The name of the S3 source bucket.
-          e.g., "ol-data-lake-landing-zone-qa".
+        source_bucket_prefix (str): The S3 bucket prefix for edxorg raw data.
         glue_warehouse (str): The Destination Glue warehouse location.
           e.g., "s3://ol-data-lake-raw-qa/".
 
