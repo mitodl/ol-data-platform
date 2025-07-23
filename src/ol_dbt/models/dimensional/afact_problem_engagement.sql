@@ -16,6 +16,7 @@ with problem_structure as (
         , user_fk
         , platform
         , openedx_user_id
+        , user_username
         , problem_block_fk
         , courserun_readable_id
         , cast(attempt as int) as attempt
@@ -38,6 +39,7 @@ with problem_structure as (
         , openedx_user_id
         , problem_block_fk
         , courserun_readable_id
+        , arbitrary(user_username) as user_username
         , arbitrary(platform_fk) as platform_fk
         , arbitrary(user_fk) as user_fk
         , max(attempt) as num_of_attempts
@@ -54,6 +56,7 @@ with problem_structure as (
         , problem_attempt_aggregated.user_fk
         , problem_attempt_aggregated.platform
         , problem_attempt_aggregated.openedx_user_id
+        , problem_attempt_aggregated.user_username
         , problem_attempt_aggregated.courserun_readable_id
         , problem_attempt_aggregated.problem_block_fk
         , problem_attempt_aggregated.num_of_attempts
@@ -71,6 +74,7 @@ select
     , user_fk
     , platform
     , openedx_user_id
+    , user_username
     , courserun_readable_id
     , problem_block_fk
     , num_of_attempts

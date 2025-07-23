@@ -17,6 +17,7 @@ with discussion_events as (
         , discussion_events.openedx_user_id
         , discussion_events.commentable_id
         , discussion_events.post_id
+        , arbitrary(discussion_events.user_username) as user_username
         , arbitrary(discussion_events.platform) as platform
         , arbitrary(discussion_events.user_fk) as user_fk
         , arbitrary(discussion_events.post_title) as post_title
@@ -40,6 +41,7 @@ select
     aggregated.platform_fk
     , aggregated.courserun_readable_id
     , aggregated.openedx_user_id
+    , aggregated.user_username
     , aggregated.commentable_id
     , aggregated.post_id
     , aggregated.platform
