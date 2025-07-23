@@ -26,7 +26,25 @@ with mitxonline_discount as (
     group by discount_code
 )
 
-select
+, mitxonline_product_joins as (
+    select
+        b.discount_id
+        , coalesce(
+            c.courserun_readable_id
+            , c.program_readable_id
+        ) as product_readable_id
+    from mitxonline_discountproduct as b
+    left join mitxonline_product as c
+        on b.product_id = c.product_id
+    group by 
+        b.discount_id
+        , coalesce(
+            c.courserun_readable_id
+            , c.program_readable_id
+        )
+)
+
+select 
     'MITx Online' as platform
     , a.discount_code
     , null as discount_name
@@ -41,16 +59,13 @@ select
     , null as b2border_contract_number
     , null as b2breceipt_reference_number
     , d.coupons_used_count as discounts_used_count
-    , coalesce(
-        c.courserun_readable_id
-        , c.program_readable_id
-    ) as product_readable_id
+    , c.product_readable_id
     , coalesce(case when d.discount_code is not null then true end, false) as redeemed
-    , case
-        when discount_type = 'percent-off' then cast(a.discount_amount as varchar) || '%'
-        when discount_type = 'dollars-off' then '$' || cast(a.discount_amount as varchar) || ' off'
-        when discount_type = 'fixed-price' then '$' || cast(a.discount_amount as varchar) || ' fixed price'
-    end
+    , case 
+        when a.discount_type = 'percent-off' then cast(a.discount_amount as varchar) || '%'
+        when a.discount_type = 'dollars-off' then '$' || cast(a.discount_amount as varchar) || ' off'
+        when a.discount_type = 'fixed-price' then '$' || cast(a.discount_amount as varchar) || ' fixed price' 
+    end 
         as discount_amount_text
     , null as company_name
     , null as discount_type
@@ -58,16 +73,14 @@ select
     , a.discount_id
     , null as couponpaymentversion_id
 from mitxonline_discount as a
-left join mitxonline_discountproduct as b
-    on a.discount_id = b.discount_id
-left join mitxonline_product as c
-    on b.product_id = c.product_id
+left join mitxonline_product_joins as c
+    on a.discount_id = c.discount_id
 left join mitxonline_order_sum as d
     on a.discount_code = d.discount_code
 
 union all
 
-select
+select 
     'xPro' as platform
     , coupon_code as discount_code
     , coupon_name as discount_name
