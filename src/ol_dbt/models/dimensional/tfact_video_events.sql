@@ -115,6 +115,7 @@ with mitxonline_video_events as (
         'mitxonline' as platform
         , users.user_pk as user_fk
         , mitxonline_video_events.openedx_user_id
+        , mitxonline_video_events.user_username
         , mitxonline_video_events.courserun_readable_id
         , mitxonline_video_events.event_type
         , mitxonline_video_events.event_json
@@ -136,6 +137,7 @@ with mitxonline_video_events as (
         'mitxpro' as platform
         , users.user_pk as user_fk
         , xpro_video_events.openedx_user_id
+        , xpro_video_events.user_username
         , xpro_video_events.courserun_readable_id
         , xpro_video_events.event_type
         , xpro_video_events.event_json
@@ -157,6 +159,7 @@ with mitxonline_video_events as (
         'residential' as platform
         , users.user_pk as user_fk
         , mitxresidential_video_events.user_id as openedx_user_id
+        , mitxresidential_video_events.user_username
         , mitxresidential_video_events.courserun_readable_id
         , mitxresidential_video_events.event_type
         , mitxresidential_video_events.event_json
@@ -178,6 +181,7 @@ with mitxonline_video_events as (
         'edxorg' as platform
         , users.user_pk as user_fk
         , edxorg_video_events.user_id as openedx_user_id
+        , edxorg_video_events.user_username
         , edxorg_video_events.courserun_readable_id
         , edxorg_video_events.event_type
         , edxorg_video_events.event_json
@@ -199,6 +203,7 @@ select distinct
     , combined.user_fk
     , combined.platform
     , combined.openedx_user_id
+    , combined.user_username
     , combined.courserun_readable_id
     , combined.event_type
     , combined.video_id as video_block_fk

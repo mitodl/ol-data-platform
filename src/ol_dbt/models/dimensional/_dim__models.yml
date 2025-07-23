@@ -319,6 +319,10 @@ models:
     description: int, user ID on the corresponding open edX platform
     tests:
     - not_null
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
+    tests:
+    - not_null
   - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the navigation event occurred
@@ -376,6 +380,10 @@ models:
       the event
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
     tests:
     - not_null
   - name: platform
@@ -441,6 +449,8 @@ models:
     description: int, user ID on the corresponding open edX platform
     tests:
     - not_null
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
   - name: platform
     description: string, foreign key to dim_platform, referencing the platform where
       the problem event occurred
@@ -497,6 +507,8 @@ models:
     description: string, platform name
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
+  - name: user_username
+    description: str, username of the open edX user
   - name: courserun_readable_id
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
   - name: studentmodule_id
@@ -551,6 +563,10 @@ models:
       the event
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
     tests:
     - not_null
   - name: courserun_readable_id

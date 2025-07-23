@@ -31,6 +31,7 @@ with mitxonline_studentmodule_problems as (
         users.user_pk as user_fk
         , 'mitxonline' as platform
         , sm.user_id as openedx_user_id
+        , users.user_mitxonline_username as user_username
         , sm.courserun_readable_id
         , sm.studentmodule_id
         , 'problem_check' as event_type
@@ -51,6 +52,7 @@ with mitxonline_studentmodule_problems as (
         users.user_pk as user_fk
         , 'mitxpro' as platform
         , sm.user_id as openedx_user_id
+        , users.user_mitxpro_username as user_username
         , sm.courserun_readable_id
         , sm.studentmodule_id
         , 'problem_check' as event_type
@@ -71,6 +73,7 @@ with mitxonline_studentmodule_problems as (
         users.user_pk as user_fk
         , 'residential' as platform
         , sm.user_id as openedx_user_id
+        , users.user_residential_username as user_username
         , sm.courserun_readable_id
         , sm.studentmodule_id
         , 'problem_check' as event_type
@@ -121,6 +124,7 @@ select
     user_fk
     , platform
     , openedx_user_id
+    , user_username
     , courserun_readable_id
     , studentmodule_id
     , event_type

@@ -98,6 +98,7 @@ with mitxonline_discussion_events as (
     select
         'mitxonline' as platform
         , mitxonline_discussion_events.openedx_user_id
+        , mitxonline_discussion_events.user_username
         , users.user_pk as user_fk
         , mitxonline_discussion_events.courserun_readable_id
         , mitxonline_discussion_events.event_type
@@ -122,6 +123,7 @@ with mitxonline_discussion_events as (
     select
         'mitxpro' as platform
         , xpro_discussion_events.openedx_user_id
+        , xpro_discussion_events.user_username
         , users.user_pk as user_fk
         , xpro_discussion_events.courserun_readable_id
         , xpro_discussion_events.event_type
@@ -146,6 +148,7 @@ with mitxonline_discussion_events as (
     select
         'residential' as platform
         , mitxresidential_discussion_events.openedx_user_id
+        , mitxresidential_discussion_events.user_username
         , users.user_pk as user_fk
         , mitxresidential_discussion_events.courserun_readable_id
         , mitxresidential_discussion_events.event_type
@@ -170,6 +173,7 @@ with mitxonline_discussion_events as (
     select
         'edxorg' as platform
         , edxorg_discussion_events.openedx_user_id
+        , edxorg_discussion_events.user_username
         , users.user_pk as user_fk
         , edxorg_discussion_events.courserun_readable_id
         , edxorg_discussion_events.event_type
@@ -195,6 +199,7 @@ select
     , platform
     , user_fk
     , openedx_user_id
+    , user_username
     , courserun_readable_id
     , event_type
     , event_json
