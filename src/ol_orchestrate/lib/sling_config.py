@@ -37,8 +37,7 @@ def edxorg_replication_config(source_bucket_prefix, glue_namespace):
 
     Args:
         source_bucket_prefix (str): The S3 bucket prefix for edxorg raw data.
-        glue_warehouse (str): The Destination Glue warehouse location.
-          e.g., "s3://ol-data-lake-raw-qa/".
+        glue_namespace (str): The Destination Glue namespace for the raw data.
 
     Returns:
         dict: Replication configuration dictionary for edxorg streams.
