@@ -956,6 +956,4 @@ models:
       used multiple times. This will be null for records sourced from b2b.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["discount_code", "platform", "b2border_contract_number",
-        "product_readable_id"]
-
+      column_list: ["discount_code", "platform", "b2border_contract_number", "product_readable_id"]

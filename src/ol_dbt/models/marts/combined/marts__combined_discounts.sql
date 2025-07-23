@@ -26,7 +26,7 @@ with mitxonline_discount as (
     group by discount_code
 )
 
-select 
+select
     'MITx Online' as platform
     , a.discount_code
     , null as discount_name
@@ -46,11 +46,11 @@ select
         , c.program_readable_id
     ) as product_readable_id
     , coalesce(case when d.discount_code is not null then true end, false) as redeemed
-    , case 
+    , case
         when discount_type = 'percent-off' then cast(a.discount_amount as varchar) || '%'
         when discount_type = 'dollars-off' then '$' || cast(a.discount_amount as varchar) || ' off'
-        when discount_type = 'fixed-price' then '$' || cast(a.discount_amount as varchar) || ' fixed price' 
-    end 
+        when discount_type = 'fixed-price' then '$' || cast(a.discount_amount as varchar) || ' fixed price'
+    end
         as discount_amount_text
     , null as company_name
     , null as discount_type
@@ -64,7 +64,7 @@ left join mitxonline_order_sum as d
 
 union all
 
-select 
+select
     'xPro' as platform
     , coupon_code as discount_code
     , coupon_name as discount_name
