@@ -36,7 +36,7 @@ with mitxonline_discount as (
     from mitxonline_discountproduct
     left join mitxonline_product
         on mitxonline_discountproduct.product_id = mitxonline_product.product_id
-    group by
+    group by 
         mitxonline_discountproduct.discount_id
         , coalesce(
             mitxonline_product.courserun_readable_id
@@ -44,7 +44,7 @@ with mitxonline_discount as (
         )
 )
 
-select
+select 
     'MITx Online' as platform
     , mitxonline_discount.discount_code
     , null as discount_name
@@ -82,13 +82,13 @@ left join mitxonline_order_sum
 
 union all
 
-select
+select 
     'xPro' as platform
     , coupon_code as discount_code
     , coupon_name as discount_name
     , coupon_created_on as discount_created_on
     , payment_transaction
-    , case when discount_id is null then 'b2b' else discount_source end as discount_source
+    , case when coupon_id is null then 'b2b' else discount_source end as discount_source
     , activated_on as discount_activated_on
     , expires_on as discount_expires_on
     , couponpaymentversion_num_coupon_codes as num_discount_codes
