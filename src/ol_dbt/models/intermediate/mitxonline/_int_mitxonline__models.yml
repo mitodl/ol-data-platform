@@ -2144,3 +2144,21 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_id", "instructor_name"]
+
+- name: int__mitxonline__uai_customer_courserun_mapping
+  description: This table maps UAI customer organizations to their respective course
+    runs.
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:UAI_{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: organization
+    description: str, UAI customer organization. For example, "HCCC" represents Hartford
+      Health Care, "ET" represents Emerging Talent.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "organization"]
