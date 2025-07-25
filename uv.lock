@@ -539,6 +539,20 @@ wheels = [
 ]
 
 [[package]]
+name = "dagster-sling"
+version = "0.27.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dagster" },
+    { name = "sling" },
+    { name = "sling-mac-arm64", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d0/3f/e4c28e25820fc981facd152a730ad2ede753b9b2a9b62931977b2d78638e/dagster_sling-0.27.2.tar.gz", hash = "sha256:d218cca299a6a16946c72555b5cf0321c13f716e6371b7780765c77cfffaa796", size = 22566, upload-time = "2025-07-10T19:27:18.943Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/b4/aa0c5c404351192f6d7b9df066e8df7e45a25b6b6007e27575379557b99b/dagster_sling-0.27.2-py3-none-any.whl", hash = "sha256:9f03e7165f41dbf04ee37c310ea3f66af0a4d2412c0718bb7a5bf701287dd0a7", size = 25618, upload-time = "2025-07-10T19:27:18.07Z" },
+]
+
+[[package]]
 name = "dagster-webserver"
 version = "1.11.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1689,6 +1703,7 @@ dependencies = [
     { name = "dagster-gcp" },
     { name = "dagster-postgres" },
     { name = "dagster-slack" },
+    { name = "dagster-sling" },
     { name = "dagster-webserver" },
     { name = "dbt-duckdb" },
     { name = "dbt-trino" },
@@ -1728,6 +1743,7 @@ requires-dist = [
     { name = "dagster-gcp", specifier = "~=0.27.0" },
     { name = "dagster-postgres", specifier = "~=0.27.0" },
     { name = "dagster-slack", specifier = "~=0.27.0" },
+    { name = "dagster-sling", specifier = ">=0.27.1" },
     { name = "dagster-webserver", specifier = "~=1.10" },
     { name = "dbt-duckdb", specifier = "~=1.9.0" },
     { name = "dbt-trino", specifier = "~=1.9.0" },
@@ -2442,6 +2458,24 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/73/1e/bbf7fdd00306f097ddb839c23628b7e271128cc8f584b9cae8f704b3924e/slack_sdk-3.36.0.tar.gz", hash = "sha256:8586022bdbdf9f8f8d32f394540436c53b1e7c8da9d21e1eab4560ba70cfcffa", size = 233382, upload-time = "2025-07-09T20:58:22.838Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/70/9a/380d20856d9ea39fbc4d3bb66f076b0d72035ebe873eb05fc88ebee4125f/slack_sdk-3.36.0-py2.py3-none-any.whl", hash = "sha256:6c96887d7175fc1b0b2777b73bb65f39b5b8bee9bd8acfec071d64014f9e2d10", size = 293949, upload-time = "2025-07-09T20:58:21.233Z" },
+]
+
+[[package]]
+name = "sling"
+version = "1.4.14"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/25/43fc394357878a7ace086394ae806f4a6bc4580c7c4c1326c13644568788/sling-1.4.14.tar.gz", hash = "sha256:626e9120421891caa4b4d0497e53c6eb580f6d620894dee1d6d8a8d71ef7971d", size = 40321, upload-time = "2025-07-23T21:54:55.296Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1e/66/8d9938e53b9a6078cceb96db8e5bd07f0b50fa1cc5334708c274f6e6d027/sling-1.4.14-py3-none-any.whl", hash = "sha256:26ea2c5851996719071fea05663a9e190df7d8e2af44758ef0b62454accb6bde", size = 24576, upload-time = "2025-07-23T21:54:53.952Z" },
+]
+
+[[package]]
+name = "sling-mac-arm64"
+version = "1.4.10.post2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c5/48/153f94bbb1fd6eb5812fbc2269ef89d93fdea15802b626e88c20b2f1edc4/sling_mac_arm64-1.4.10.post2.tar.gz", hash = "sha256:52cbfa689b621fff1a7d1c9a8b8ab0c6b89c5a5bd86921a725496160d38849a8", size = 92866186, upload-time = "2025-06-19T21:45:04.595Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0a/1f/12ac71c65e45a34181cf5916a43b37dcac8712d9105971e4c04bdf74999c/sling_mac_arm64-1.4.10.post2-py3-none-any.whl", hash = "sha256:d66b2d2119a01c8d38c25725c04044ee477762c6993dc13debcbd605c0429891", size = 93154303, upload-time = "2025-06-19T21:44:59.917Z" },
 ]
 
 [[package]]
