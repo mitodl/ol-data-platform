@@ -771,6 +771,9 @@ models:
       for edX.org courses.
     tests:
     - not_null
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x
   - name: user_hashed_id
     description: str, foreign key to combined_users to identify the user.
   - name: user_username

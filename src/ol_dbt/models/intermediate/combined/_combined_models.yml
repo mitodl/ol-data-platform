@@ -232,6 +232,9 @@ models:
     - unique
     - dbt_expectations.expect_column_values_to_not_be_null:
         row_condition: "platform != 'Bootcamps'"
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x
   - name: courserun_url
     description: str, url for the course run in MITx Online, xPro or edX.org. Null
       for Bootcamps.

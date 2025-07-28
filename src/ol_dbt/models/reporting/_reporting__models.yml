@@ -214,8 +214,8 @@ models:
   - name: receipt_url
     description: string, URL to the receipt for the order on the MITx Online application
 
-- name: video_engagements_report
-  description: Learners video engagements - play, pause, seek, or stop video actions
+- name: video_engagement_report
+  description: Learners video engagement - play, pause, seek, or stop video actions
     from MITx Online, xPro, edX.org, Residential MITx with calculated counts for total
     video events, distinct videos watched, and max video index.
   columns:
