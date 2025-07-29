@@ -1,0 +1,260 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__thirdparty__zendesk_support__tickets
+    description: Support tickets from Zendesk
+    columns:
+    - name: id
+      description: int, primary key for the ticket
+    - name: external_id
+      description: str, an ID you can use to link Zendesk Support tickets to local
+        records
+    - name: via
+      description: object, the via object describes how or why the ticket object was
+        created.
+    - name: url
+      description: str, the API url of the ticket
+    - name: tags
+      description: array, the array of tags applied to this ticket.
+    - name: type
+      description: str, the type of this ticket. Possible values are "problem", "incident",
+        "question", or "task".
+    - name: status
+      description: str, the state of the ticket. Possible values are "new", "open",
+        "pending", "hold", "solved", or "closed".
+    - name: description
+      description: str, first comment on the ticket
+    - name: subject
+      description: str, the subject/title of the ticket
+    - name: raw_subject
+      description: str, the dynamic content placeholder, if present, or the "subject"
+        value, if not.
+    - name: brand_id
+      description: int, foreign key to the brand associated with the ticket
+    - name: group_id
+      description: int, foreign key to the group associated with the ticket
+    - name: priority
+      description: str, the urgency with which the ticket should be addressed. Possible
+        values are "urgent", "high", "normal", or "low".
+    - name: is_public
+      description: bool, whether this ticket is publicly visible
+    - name: recipient
+      description: str, the original recipient e-mail address of the ticket.
+    - name: problem_id
+      description: int, the ID of the problem ticket this links to
+    - name: requester_id
+      description: int, foreign key to zendesk user who requested the ticket
+    - name: submitter_id
+      description: int, foreign key to zendesk user who submitted the ticket.
+    - name: assignee_id
+      description: int, foreign key to zendesk user assigned to the ticket
+    - name: email_cc_ids
+      description: array, array of IDs agent or end users email CC to the ticket.
+    - name: follower_ids
+      description: array, the IDs of users currently following this ticket
+    - name: forum_topic_id
+      description: int, the topic in the Zendesk Web portal this ticket originated
+        from, if any. The Web portal is deprecated
+    - name: ticket_form_id
+      description: int, the ID of the ticket form to render for the ticket
+    - name: organization_id
+      description: int, foreign key to the organization associated with the ticket
+    - name: collaborator_ids
+      description: array, The IDs of users currently CC'ed on the ticket
+    - name: custom_status_id
+      description: int, foreign key to custom_statuses in ticket_fields table
+    - name: sharing_agreement_ids
+      description: array, the IDs of sharing agreements associated with the ticket
+    - name: deleted_ticket_form_id
+      description: int, the ID of the deleted ticket form, if the ticket was deleted
+    - name: has_incidents
+      description: bool, true if a ticket is a problem type and has one or more incidents
+        linked to it. Otherwise, the value is false.
+    - name: allow_attachments
+      description: bool, permission for agents to add add attachments to a comment.
+        Defaults to true
+    - name: allow_channelback
+      description: bool, false if channelback is disabled, true otherwise. Only applicable
+        for channels framework ticket
+    - name: satisfaction_rating
+      description: object, the satisfaction rating of the ticket, if it exists, or
+        the state of satisfaction, "offered" or "unoffered".
+    - name: from_messaging_channel
+      description: bool, true if the ticket's via type is a messaging channel.
+    - name: fields
+      description: array, fields for the ticket
+    - name: custom_fields
+      description: array, custom fields for the ticket
+    - name: due_at
+      description: timestamp, if this is a ticket of type "task" it has a due date.
+    - name: generated_timestamp
+      description: int, a unix timestamp that represents the most accurate reading
+        of when this record was last updated. It is updated for all ticket updates,
+        including system updates.
+    - name: created_at
+      description: str, the time the ticket was created
+    - name: updated_at
+      description: str, the time the ticket was last updated
+
+  - name: raw__thirdparty__zendesk_support__ticket_comments
+    description: Comments associated with Zendesk tickets
+    columns:
+    - name: id
+      description: int, primary key for the ticket comment
+    - name: via
+      description: object, the via object describes how or why the object was created.
+    - name: type
+      description: string, type of the comment. Possible values are "comment" or "VoiceComment".
+    - name: public
+      description: boolean, true if a public comment; false if an internal note.
+    - name: uploads
+      description: array, list of tokens received from uploading files for comment
+        attachments.
+    - name: audit_id
+      description: int, foreign key to the ticket audit record
+    - name: metadata
+      description: json, system information (web client, IP address, etc.) and comment
+        flags, if any.
+    - name: ticket_id
+      description: int, foreign key to the ticket
+    - name: author_id
+      description: int, foreign key to the user who created the comment
+    - name: html_body
+      description: text, the comment formatted as HTML
+    - name: plain_body
+      description: text, The comment presented as plain text.
+    - name: attachments
+      description: array, array of attachments, if any.
+    - name: via_reference_id
+      description: int, foreign key to the reference ticket
+    - name: created_at
+      description: str, the time comment was created
+
+  - name: raw__thirdparty__zendesk_support__brands
+    description: Brands in Zendesk system
+    columns:
+    - name: id
+      description: int, primary key for the brand
+    - name: url
+      description: str, the API url of the brand
+    - name: brand_url
+      description: str, the url of the brand
+    - name: logo
+      description: str, a file represented as an Attachment object
+    - name: name
+      description: str, the name of the brand
+    - name: active
+      description: bool, if the brand is set as active
+    - name: default
+      description: bool, is the brand the default brand for this account
+    - name: subdomain
+      description: str, the subdomain of the brand
+    - name: is_deleted
+      description: bool, if the brand object is deleted or not
+    - name: has_help_center
+      description: bool, whether the brand has a help center
+    - name: help_center_state
+      description: str, the state of the Help Center. Possible values are "enabled",
+        "disabled", or "restricted".
+    - name: host_mapping
+      description: str, the host mapping to the brand, if any.
+    - name: ticket_form_ids
+      description: array, the ids of ticket forms that are available for use by a
+        brand
+    - name: signature_template
+      description: str, the signature template for the brand
+    - name: created_at
+      description: str, the time the brand was created
+    - name: updated_at
+      description: str, the time of the last update of the brand
+
+  - name: raw__zendesk__user
+    description: Users in Zendesk system
+    columns:
+    - name: id
+      description: int, primary key for the user
+    - name: url
+      description: str, the API url of the user
+    - name: name
+      description: str, the name of the user
+    - name: role
+      description: str, the user's role. Possible values are "end-user", "agent",
+        or "admin"
+    - name: role_type
+      description: int, the role type of the user. 0 for a custom agent, 1 for a light
+        agent, 2 for a chat agent, 3 for a chat agent added to the Support account
+        as a contributor, 4 for an admin
+    - name: tags
+      description: array, user tags. e.g. [ staff ]
+    - name: alias
+      description: str, an alias displayed to end users
+    - name: email
+      description: str, the user's primary email address
+    - name: phone
+      description: str, the user's primary phone number
+    - name: shared_phone_number
+      description: bool, whether the phone number is shared or not.
+    - name: photo
+      description: object, the user's profile picture represented as an attachment
+        object
+    - name: active
+      description: bool, true if the user is active; false if the user has been deleted
+    - name: locale
+      description: str, the user's locale. e.g. en-US
+    - name: locale_id
+      description: int, the ID of the user's locale
+    - name: shared
+      description: bool, if the user is shared from a different Zendesk Support instance.
+    - name: details
+      description: str, any details about the user, such as an address
+    - name: verified
+      description: bool, any of the user's identities is verified.
+    - name: chat_only
+      description: bool, whether or not the user is a chat-only agent
+    - name: moderator
+      description: bool, designates whether the user has forum moderation capabilities
+    - name: signature
+      description: str, the user's signature. Only agents and admins can have signatures
+    - name: suspended
+      description: bool, if the agent is suspended. Tickets from suspended users are
+        also suspended, and these users cannot sign in to the end user portal
+    - name: time_zone
+      description: str, the user's time zone. e.g. Eastern Time (US & Canada)
+    - name: iana_time_zone
+      description: str, the user's IANA time zone. e.g. America/New_York
+    - name: organization_id
+      description: int, foreign key to the organization associated with the user
+    - name: default_group_id
+      description: int, foreign key to the default group associated with the user
+    - name: external_id
+      description: str, an ID you can use to link Zendesk Support users to local records
+    - name: user_fields
+      description: array, custom fields in the user's profile
+    - name: shared_agent
+      description: bool, if the user is a shared agent from a different Zendesk Support
+        instance.
+    - name: restricted_agent
+      description: bool, if the agent has any restrictions; false for admins and unrestricted
+        agents, true for other agents
+    - name: ticket_restriction
+      description: str, specifies which tickets the user has access to. Possible values
+        are "organization", "groups", "assigned", "requested", null.
+    - name: permanently_deleted
+      description: bool, if the user is permanently deleted
+    - name: only_private_comments
+      description: bool, true if the user can only create private comments
+    - name: two_factor_auth_enabled
+      description: bool, if the user has two-factor authentication enabled
+    - name: last_login_at
+      description: str, Last time the user signed in to Zendesk Support or made an
+        API request using an API token or basic authentication
+    - name: created_at
+      description: str, the time the user was created
+    - name: updated_at
+      description: str, the time the user was last updated
