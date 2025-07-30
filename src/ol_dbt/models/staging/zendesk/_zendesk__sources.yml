@@ -125,6 +125,8 @@ sources:
       description: int, foreign key to the ticket
     - name: author_id
       description: int, foreign key to the user who created the comment
+    - name: body
+      description: text, the comment string.
     - name: html_body
       description: text, the comment formatted as HTML
     - name: plain_body
@@ -174,7 +176,7 @@ sources:
     - name: updated_at
       description: str, the time of the last update of the brand
 
-  - name: raw__zendesk__user
+  - name: raw__thirdparty__zendesk_support__users
     description: Users in Zendesk system
     columns:
     - name: id
