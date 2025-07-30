@@ -41,7 +41,7 @@ with source as (
             when role_type = 1 then 'light agent'
             when role_type = 3 then 'chat agent'
             when role_type = 4 then 'admin'
-            else role_type
+            else cast(role_type as varchar)
         end as user_role_type
         , {{ cast_timestamp_to_iso8601('last_login_at') }} as user_last_login_at
         , {{ cast_timestamp_to_iso8601('created_at') }} as user_created_at
