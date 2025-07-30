@@ -38,6 +38,28 @@ canvas_course_ids = StaticPartitionsDefinition(
         "28765",
         "28767",
         "28785",
+        "28760",
+        "28761",
+        "28762",
+        "28803",
+        "28805",
+        "28807",
+        "28808",
+        "28811",
+        "28813",
+        "28815",
+        "28816",
+        "28818",
+        "28821",
+        "28822",
+        "28824",
+        "28839",
+        "28841",
+        "28842",
+        "28845",
+        "28847",
+        "28849",
+        "34545",
     ]
 )
 
@@ -65,7 +87,7 @@ def export_course_content(context: AssetExecutionContext):
     export_id = export_course_response["id"]
 
     # Poll until the export is ready
-    max_retries = 20  # 10 minutes with 30 seconds interval
+    max_retries = 35  # 70 minutes with 120 seconds interval
     retry_count = 0
     while retry_count < max_retries:
         export_status = context.resources.canvas_api.client.check_course_export_status(
@@ -88,7 +110,7 @@ def export_course_content(context: AssetExecutionContext):
                 export_status["workflow_state"],
             )
             retry_count += 1
-            time.sleep(30)
+            time.sleep(120)
     else:
         message = f"Course content export timed out for {course_id}"
         context.log.error(message)

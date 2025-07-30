@@ -1809,7 +1809,7 @@ models:
     - not_null
   - name: openedx_user_id
     description: int, either reference openedx_user_id in open edX users table, or
-      from tracking logs if no reference found.
+      pulled from tracking logs if no reference found.
     tests:
     - not_null
   - name: courserun_readable_id
@@ -1845,7 +1845,7 @@ models:
       course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id"]
+      column_list: ["user_username", "openedx_user_id", "courserun_readable_id"]
 
 - name: int__mitxonline__user_courseactivities_daily
   description: MITx Online daily aggregate learner activities within a course
@@ -2144,3 +2144,21 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_id", "instructor_name"]
+
+- name: int__mitxonline__uai_customer_courserun_mapping
+  description: This table maps UAI customer organizations to their respective course
+    runs.
+  columns:
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:UAI_{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: organization
+    description: str, UAI customer organization. For example, "HCCC" represents Hartford
+      Health Care, "ET" represents Emerging Talent.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "organization"]
