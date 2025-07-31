@@ -195,7 +195,8 @@ models:
   - name: brand_url
     description: str, the url of the brand
   - name: brand_name
-    description: str, the name of the brand
+    description: str, the name of the brand. e.g. "MIT Open Learning", "MIT OpenCourseWare",
+      "MITx"
     tests:
     - not_null
   - name: brand_is_active
@@ -231,7 +232,8 @@ models:
   - name: organization_api_url
     description: str, the API url of the organization
   - name: organization_name
-    description: str, the name of the organization
+    description: str, the name of the organization. e.g. "MIT Open Learning", "edX",
+      "Sloan", etc.
     tests:
     - not_null
   - name: organization_tags
