@@ -294,3 +294,41 @@ sources:
       description: str, the time the user was created
     - name: updated_at
       description: str, the time the user was last updated
+
+  - name: raw__thirdparty__zendesk_support__groups
+    description: Groups in Zendesk system
+    columns:
+    - name: id
+      description: int, primary key for the group
+    - name: url
+      description: str, the API url of the group
+    - name: name
+      description: str, the name of the group. e.g. "Admin", "Finance"
+    - name: description
+      description: str, the description of the group
+    - name: default
+      description: bool, if the group is the default one for the account
+    - name: deleted
+      description: bool, if the group has been deleted
+    - name: is_public
+      description: bool, if the group is public or private
+    - name: created_at
+      description: str, the time the group was created
+    - name: updated_at
+      description: str, the time of the last update of the group
+
+  - name: raw__thirdparty__zendesk_support__ticket_fields
+    description: Custom fields for Zendesk tickets
+    columns:
+    - name: id
+      description: int, primary key for the ticket field
+    - name: url
+      description: str, the API url of the ticket field
+    - name: title
+      description: str, the title of the ticket field. e.g. MIT xPRO Course or Program
+    - name: description
+      description: str, the description of the ticket field
+    - name: created_at
+      description: str, the time the field was created
+    - name: updated_at
+      description: str, the time of the last update of the field

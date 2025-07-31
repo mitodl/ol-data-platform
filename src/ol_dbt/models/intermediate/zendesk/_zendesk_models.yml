@@ -1,0 +1,105 @@
+---
+version: 2
+
+models:
+- name: int__zendesk__ticket
+  description: Intermediate model for Zendesk tickets
+  columns:
+  - name: ticket_id
+    description: int, primary key for the ticket
+    tests:
+    - not_null
+    - unique
+  - name: ticket_api_url
+    description: str, the API url of the ticket
+  - name: ticket_tags
+    description: array, the array of tags applied to this ticket.
+  - name: ticket_type
+    description: str, the type of this ticket. Possible values are "problem", "incident",
+      "question", or "task".
+  - name: ticket_status
+    description: str, the state of the ticket. Possible values are "new", "open",
+      "pending", "hold", "solved", or "closed".
+  - name: ticket_description
+    description: str, first comment on the ticket
+  - name: ticket_priority
+    description: str, the urgency with which the ticket should be addressed. Possible
+      values are "urgent", "high", "normal", or "low".
+  - name: ticket_subject
+    description: str, the subject/title of the ticket
+    tests:
+    - not_null
+  - name: ticket_source_channel
+    description: str, the channel through which the ticket was created. e.g. "web",
+      "email"
+    tests:
+    - not_null
+  - name: ticket_source_email
+    description: str, source email address of the ticket
+  - name: ticket_source_rel
+    description: str, the relationship of the source channel to the ticket. e.g. "follow_up"
+  - name: ticket_source_ticket_id
+    description: str, the ID of the source ticket, if this ticket is a follow-up to
+      another ticket.
+  - name: brand_name
+    description: str, the name of the brand associated with the ticket
+  - name: group_name
+    description: str, the name of the group associated with the ticket
+  - name: ticket_is_public
+    description: bool, whether this ticket is publicly visible
+  - name: ticket_recipient_email
+    description: str, the original recipient e-mail address of the ticket.
+  - name: ticket_requester
+    description: str, the name of the requester of the ticket.
+    tests:
+    - not_null
+  - name: ticket_submitter
+    description: str, the name of the submitter of the ticket.
+    tests:
+    - not_null
+  - name: ticket_assignee
+    description: str, the name of the assignee of the ticket.
+  - name: ticket_email_cc_user_ids
+    description: array, array of IDs agent or end users email CC to the ticket.
+  - name: ticket_follower_user_ids
+    description: array, the IDs of users currently following this ticket
+  - name: ticket_collaborator_user_ids
+    description: array, The IDs of users currently CC'ed on the ticket
+  - name: ticket_form_id
+    description: int, the ID of the ticket form to render for the ticket
+  - name: organization_id
+    description: int, foreign key to the organization associated with the ticket
+  - name: ticket_has_incidents
+    description: bool, true if a ticket is a problem type and has one or more incidents
+      linked to it. Otherwise, the value is false.
+  - name: ticket_satisfaction_rating_object
+    description: object, the satisfaction rating of the ticket, if it exists, or the
+      state of satisfaction
+  - name: ticket_satisfaction_rating_score
+    description: str, the satisfaction rating score of the ticket. e.g. "good", "bad",
+      "offered".
+  - name: ticket_satisfaction_rating_comment
+    description: str, the satisfaction rating comment of the ticket
+  - name: ticket_satisfaction_rating_reason
+    description: str, the satisfaction rating reason
+  - name: ticket_is_from_messaging_channel
+    description: bool, true if the ticket's via type is a messaging channel.
+  - name: ticket_custom_fields
+    description: array, custom fields for the ticket. e.g. {"id":360028099972,"value":"course_information"}
+      indicates this ticket is related to course information.
+  - name: ticket_due_at
+    description: timestamp, if this is a ticket of type "task" it has a due date.
+  - name: ticket_unix_timestamp
+    description: int, a unix timestamp that represents the most accurate reading of
+      when this record was last updated. It is updated for all ticket updates, including
+      system updates.
+    tests:
+    - not_null
+  - name: ticket_created_at
+    description: timestamp, the time when the ticket was created
+    tests:
+    - not_null
+  - name: ticket_updated_at
+    description: timestamp, the time when the ticket was last updated
+    tests:
+    - not_null

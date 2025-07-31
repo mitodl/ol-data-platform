@@ -351,3 +351,61 @@ models:
     description: timestamp, the time the user was last updated
     tests:
     - not_null
+
+- name: stg__zendesk__group
+  description: Groups in Zendesk system
+  columns:
+  - name: group_id
+    description: int, primary key for the group
+    tests:
+    - not_null
+    - unique
+  - name: group_api_url
+    description: str, the API url of the group
+  - name: group_name
+    description: str, the name of the group. e.g. "Admin", "Finance"
+    tests:
+    - not_null
+  - name: group_description
+    description: str, the description of the group
+  - name: group_is_default
+    description: bool, if the group is the default one for the account
+  - name: group_is_deleted
+    description: bool, if the group has been deleted
+  - name: group_is_public
+    description: bool, if the group is public or private
+  - name: group_created_at
+    description: timestamp, the time the group was created
+    tests:
+    - not_null
+  - name: group_updated_at
+    description: timestamp, the time of the last update of the group
+    tests:
+    - not_null
+
+- name: stg__zendesk__ticket_field
+  description: Custom fields for Zendesk tickets
+  columns:
+  - name: field_id
+    description: int, primary key for the ticket field
+    tests:
+    - not_null
+    - unique
+  - name: field_api_url
+    description: str, the API url of the ticket field
+  - name: field_title
+    description: str, the title of the ticket field. e.g. MIT xPRO Course or Program
+    tests:
+    - not_null
+  - name: field_is_active
+    description: bool, if the field is active or not
+  - name: field_description
+    description: str, the description of the ticket field
+  - name: field_created_at
+    description: timestamp, the time the field was created
+    tests:
+    - not_null
+  - name: field_updated_at
+    description: timestamp, the time of the last update of the field
+    tests:
+    - not_null
