@@ -222,6 +222,46 @@ models:
     tests:
     - not_null
 
+- name: stg__zendesk__organization
+  description: Organizations in Zendesk system
+  columns:
+  - name: organization_id
+    description: int, primary key for the organization
+    tests:
+    - not_null
+    - unique
+  - name: organization_api_url
+    description: str, the API url of the organization
+  - name: organization_name
+    description: str, the name of the organization
+    tests:
+    - not_null
+  - name: organization_tags
+    description: array, the tags applied to this organization
+  - name: organization_notes
+    description: str, any notes about the organization
+  - name: group_id
+    description: int, new tickets from users in this organization are automatically
+      put in this group
+  - name: organization_domain_names
+    description: array, an array of domain names associated with this organization
+  - name: organization_has_shared_tickets
+    description: bool,end users in this organization are able to see each other's
+      tickets
+  - name: organization_has_shared_comments
+    description: bool, end users in this organization are able to comment on each
+      other's tickets
+  - name: organization_deleted_at
+    description: timestamp, the time the organization was deleted, if it was deleted
+  - name: organization_created_at
+    description: timestamp, the time the organization was created
+    tests:
+    - not_null
+  - name: organization_updated_at
+    description: timestamp, the time of the last update of the organization
+    tests:
+    - not_null
+
 - name: stg__zendesk__user
   columns:
   - name: user_id
