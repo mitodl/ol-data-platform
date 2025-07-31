@@ -81,6 +81,18 @@ models:
     description: str, username of the user.
   - name: user_full_name
     description: str, name of the user.
+  - name: human_message
+    description: str, the human message extracted from the metadata.
+  - name: agent_message
+    description: str, the agent message extracted from the metadata.
+  - name: checkpoint_step
+    description: int, the step number of the checkpoint in the chat session extracted
+      from the metadata.
+    tests:
+    - not_null
+  - name: checkpoint_source
+    description: str, the source of the checkpoint extracted from the metadata. e.g.
+      'input', 'loop'
   - name: checkpoint_json
     description: json, json checkpoint for the chat session. This contains the chat
       message and internal state of the chatbot.
