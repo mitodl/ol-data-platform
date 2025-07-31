@@ -69,9 +69,6 @@ models:
     description: array, the IDs of users currently following this ticket
   - name: ticket_collaborator_user_ids
     description: array, The IDs of users currently CC'ed on the ticket
-  - name: forum_topic_id
-    description: int, the topic in the Zendesk Web portal this ticket originated from,
-      if any. The Web portal is deprecated
   - name: ticket_form_id
     description: int, the ID of the ticket form to render for the ticket
   - name: organization_id
@@ -102,7 +99,8 @@ models:
   - name: ticket_is_from_messaging_channel
     description: bool, true if the ticket's via type is a messaging channel.
   - name: ticket_custom_fields
-    description: array, custom fields for the ticket
+    description: array, custom fields for the ticket. e.g. {"id":360028099972,"value":"course_information"}
+      indicates this ticket is related to course information.
   - name: ticket_source_channel
     description: str, the channel through which the ticket was created. e.g. "web",
       "email"

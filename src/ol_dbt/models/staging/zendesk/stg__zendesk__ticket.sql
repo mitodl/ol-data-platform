@@ -22,7 +22,6 @@ with source as (
         , requester_id as ticket_requester_user_id
         , submitter_id as ticket_submitter_user_id
         , assignee_id as ticket_assignee_user_id
-        , forum_topic_id
         , ticket_form_id
         , organization_id
         , custom_status_id
