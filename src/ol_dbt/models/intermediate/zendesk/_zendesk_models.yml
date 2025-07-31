@@ -85,7 +85,7 @@ models:
   - name: ticket_is_from_messaging_channel
     description: bool, true if the ticket's via type is a messaging channel.
   - name: ticket_custom_fields
-    description: array, custom fields for the ticket. e.g. {"id":360028099972,"value":"course_information"}
+    description: array, custom fields for the ticket. e.g. {"name":"Ticket Type","value":"course_information"}
       indicates this ticket is related to course information.
   - name: ticket_due_at
     description: timestamp, if this is a ticket of type "task" it has a due date.
