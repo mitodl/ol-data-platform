@@ -59,22 +59,17 @@ models:
     - not_null
   - name: ticket_assignee
     description: str, the name of the assignee of the ticket.
-  - name: ticket_email_cc_user_ids
-    description: array, array of IDs agent or end users email CC to the ticket.
-  - name: ticket_follower_user_ids
-    description: array, the IDs of users currently following this ticket
-  - name: ticket_collaborator_user_ids
-    description: array, The IDs of users currently CC'ed on the ticket
-  - name: ticket_form_id
-    description: int, the ID of the ticket form to render for the ticket
-  - name: organization_id
-    description: int, foreign key to the organization associated with the ticket
+  - name: ticket_email_cc_users
+    description: array, array of agents who were CC'ed on the ticket.
+  - name: ticket_followers
+    description: array, the name of users currently following this ticket
+  - name: ticket_collaborators
+    description: array, The name of users who are collaborators on this ticket.
+  - name: organization_name
+    description: str, the name of the organization associated with the ticket
   - name: ticket_has_incidents
     description: bool, true if a ticket is a problem type and has one or more incidents
       linked to it. Otherwise, the value is false.
-  - name: ticket_satisfaction_rating_object
-    description: object, the satisfaction rating of the ticket, if it exists, or the
-      state of satisfaction
   - name: ticket_satisfaction_rating_score
     description: str, the satisfaction rating score of the ticket. e.g. "good", "bad",
       "offered".
@@ -85,8 +80,8 @@ models:
   - name: ticket_is_from_messaging_channel
     description: bool, true if the ticket's via type is a messaging channel.
   - name: ticket_custom_fields
-    description: array, custom fields for the ticket. e.g. {"name":"Ticket Type","value":"course_information"}
-      indicates this ticket is related to course information.
+    description: array, custom fields for the ticket. e.g. [{"MicroMasters Program":"supply_chain_management"},{"Ticket
+      Type":"course_information"}]
   - name: ticket_due_at
     description: timestamp, if this is a ticket of type "task" it has a due date.
   - name: ticket_unix_timestamp
@@ -101,5 +96,55 @@ models:
     - not_null
   - name: ticket_updated_at
     description: timestamp, the time when the ticket was last updated
+    tests:
+    - not_null
+
+- name: int__zendesk__ticket_comment
+  description: Comments associated with Zendesk tickets
+  columns:
+  - name: comment_id
+    description: int, primary key for the ticket comment
+    tests:
+    - not_null
+    - unique
+  - name: ticket_id
+    description: int, foreign key to the ticket
+    tests:
+    - not_null
+  - name: comment_type
+    description: string, type of the comment. Possible values are "comment" or "VoiceComment".
+  - name: comment_is_public
+    description: boolean, true if a public comment; false if an internal note.
+  - name: comment_uploads
+    description: array, list of tokens received from uploading files for comment attachments.
+  - name: audit_id
+    description: int, foreign key to the ticket audit record
+  - name: comment_author
+    description: str, the name of the author of the comment.
+  - name: comment_html_body
+    description: text, the comment formatted as HTML
+  - name: comment_plain_body
+    description: text, The comment presented as plain text.
+  - name: comment_attachments
+    description: array, array of attachments, if any.
+  - name: comment_source_channel
+    description: str, the channel through which the comment was created. e.g. "web",
+      "email"
+    tests:
+    - not_null
+  - name: comment_source_email
+    description: str, source email address of the ticket
+  - name: comment_source_rel
+    description: str, comment relationship to the ticket.
+  - name: comment_via_object
+    description: object, the via object describes how or why the object was created.
+    tests:
+    - not_null
+  - name: comment_unix_timestamp
+    description: int, the unix time comment was created
+    tests:
+    - not_null
+  - name: comment_created_at
+    description: timestamp, the time comment was created
     tests:
     - not_null

@@ -22,16 +22,51 @@ with ticket as (  -- noqa: PRS
     select * from {{ ref('stg__zendesk__group') }}
 )
 
+, email_cc_users as (
+    select
+      ticket.ticket_id,
+      json_format(
+        cast(array_agg(user.user_name) AS json)
+      ) as email_cc_users
+    from ticket
+    cross join unnest(ticket.ticket_email_cc_user_ids) AS t(user_id)
+    join user on t.user_id = user.user_id
+    group by ticket.ticket_id
+)
+
+, followers as (
+    select
+      ticket.ticket_id,
+      json_format(
+        cast(array_agg(user.user_name) AS json)
+      ) as followers
+    from ticket
+    cross join unnest(ticket.ticket_follower_user_ids) AS t(user_id)
+    join user on t.user_id = user.user_id
+    group by ticket.ticket_id
+)
+
+, collaborators as (
+    select
+      ticket.ticket_id,
+      json_format(
+        cast(array_agg(user.user_name) AS json)
+      ) as collaborators
+    from ticket
+    cross join unnest(ticket.ticket_collaborator_user_ids) AS t(user_id)
+    join user on t.user_id = user.user_id
+    group by ticket.ticket_id
+)
+
 , named_custom_fields as (
-    SELECT
+    select
       ticket.ticket_id
       , json_format(
          cast(
           array_agg(
             json_parse(
               json_object(
-                'name' : field.field_title,
-                'value' : value
+                field.field_title : value
               )
             )
           ) as json
@@ -66,12 +101,11 @@ select
     , assignee.user_name as ticket_assignee
     , submitter.user_name as ticket_submitter
     , ticket.ticket_recipient_email
-    , ticket.ticket_email_cc_user_ids
-    , ticket.ticket_follower_user_ids
-    , ticket.ticket_collaborator_user_ids
+    , email_cc_users.email_cc_users as ticket_email_cc_users
+    , followers.followers as ticket_followers
+    , collaborators.collaborators as ticket_collaborators
     , brand.brand_name
     , groups.group_name
-    , ticket.organization_id
     , organization.organization_name
     , named_custom_fields.custom_fields
     , ticket.ticket_due_at
@@ -80,7 +114,7 @@ select
     , ticket.ticket_satisfaction_rating_score
     , ticket.ticket_satisfaction_rating_comment
     , ticket.ticket_satisfaction_rating_reason
-    , ticket.ticket_satisfaction_rating_object
+    , ticket.ticket_via_object
     , ticket.ticket_unix_timestamp
     , ticket.ticket_created_at
     , ticket.ticket_updated_at
@@ -99,3 +133,9 @@ left join user as assignee
     on ticket.ticket_assignee_user_id = assignee.user_id
 left join named_custom_fields
     on ticket.ticket_id = named_custom_fields.ticket_id
+left join email_cc_users
+    on ticket.ticket_id = email_cc_users.ticket_id
+left join followers
+    on ticket.ticket_id = followers.ticket_id
+left join collaborators
+    on ticket.ticket_id = collaborators.ticket_id
