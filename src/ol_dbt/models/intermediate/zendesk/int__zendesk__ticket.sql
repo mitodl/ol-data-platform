@@ -22,18 +22,6 @@ with ticket as (  -- noqa: PRS
     select * from {{ ref('stg__zendesk__group') }}
 )
 
-, email_cc_users as (
-    select
-      ticket.ticket_id,
-      json_format(
-        cast(array_agg(user.user_name) AS json)
-      ) as email_cc_users
-    from ticket
-    cross join unnest(ticket.ticket_email_cc_user_ids) AS t(user_id)
-    join user on t.user_id = user.user_id
-    group by ticket.ticket_id
-)
-
 , followers as (
     select
       ticket.ticket_id,
@@ -101,7 +89,6 @@ select
     , assignee.user_name as ticket_assignee
     , submitter.user_name as ticket_submitter
     , ticket.ticket_recipient_email
-    , email_cc_users.email_cc_users as ticket_email_cc_users
     , followers.followers as ticket_followers
     , collaborators.collaborators as ticket_collaborators
     , brand.brand_name
@@ -133,8 +120,6 @@ left join user as assignee
     on ticket.ticket_assignee_user_id = assignee.user_id
 left join named_custom_fields
     on ticket.ticket_id = named_custom_fields.ticket_id
-left join email_cc_users
-    on ticket.ticket_id = email_cc_users.ticket_id
 left join followers
     on ticket.ticket_id = followers.ticket_id
 left join collaborators

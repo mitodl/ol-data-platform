@@ -59,8 +59,6 @@ models:
     - not_null
   - name: ticket_assignee
     description: str, the name of the assignee of the ticket.
-  - name: ticket_email_cc_users
-    description: array, array of agents who were CC'ed on the ticket.
   - name: ticket_followers
     description: array, the name of users currently following this ticket
   - name: ticket_collaborators
