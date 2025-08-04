@@ -4,7 +4,6 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from dagster import (
     AssetKey,
-    DefaultSensorStatus,
     RunRequest,
     SensorEvaluationContext,
     SensorResult,
@@ -16,7 +15,6 @@ from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_string
 from ol_orchestrate.lib.magic_numbers import HTTP_NOT_FOUND
 from ol_orchestrate.partitions.openedx import (
     OPENEDX_COURSE_RUN_PARTITIONS,
-    UAI_PARTNER_PARTITIONS,
 )
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 
@@ -132,19 +130,3 @@ def course_version_sensor(
 
     context.update_cursor(json.dumps(cursor))
     return SensorResult(run_requests=run_requests)
-
-
-@sensor(
-    name="uai_partner_sensor",
-    description="Query a list of Universal AI partners",
-    default_status=DefaultSensorStatus.STOPPED,
-    minimum_interval_seconds=60 * 60 * 24,  # daily
-)
-def uai_partner_sensor():
-    # Fetch partners from a table once we have the data
-    partners = ["partner1", "partner2"]
-    return SensorResult(
-        dynamic_partitions_requests=[
-            UAI_PARTNER_PARTITIONS.build_add_request(partition_keys=partners)
-        ],
-    )
