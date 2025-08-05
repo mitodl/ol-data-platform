@@ -80,6 +80,19 @@ models:
     - relationships:
         to: ref('stg_mitlearn__users_user')
         field: user_id
+  - name: user_email_optin
+    description: boolean, indicating whether the user has opted in to receive email
+      communications
+  - name: user_toc_optin
+    description: boolean, indicating whether the user has accepted terms and conditions
+  - name: user_certificate_desired
+    description: boolean, indicating whether the user wants to receive certificates
+      upon course completion
+    tests:
+    - not_null
+  - name: user_completed_onboarding
+    description: boolean, indicating whether the user has completed the platform onboarding
+      process
   - name: user_name
     description: str, display name for the user
   - name: user_bio
@@ -97,19 +110,6 @@ models:
     description: str, current educational status or institution
   - name: user_time_commitment
     description: str, amount of time the user can commit to learning activities
-  - name: user_email_optin
-    description: boolean, indicating whether the user has opted in to receive email
-      communications
-  - name: user_toc_optin
-    description: boolean, indicating whether the user has accepted terms and conditions
-  - name: user_certificate_desired
-    description: boolean, indicating whether the user wants to receive certificates
-      upon course completion
-    tests:
-    - not_null
-  - name: user_completed_onboarding
-    description: boolean, indicating whether the user has completed the platform onboarding
-      process
   - name: user_image_url
     description: str, URL to the user's profile image
   - name: user_image_small_url
