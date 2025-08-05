@@ -11,6 +11,7 @@ classifiers = [
 ]
 dependencies = [
     "PyPika ~= 0.48.9",
+    "cyclopts~=1.0.0",
     "dagster ~= 1.10",
     "dagster-airbyte ~=0.27.0",
     "dagster-aws ~=0.27.0",

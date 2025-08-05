@@ -292,6 +292,21 @@ wheels = [
 ]
 
 [[package]]
+name = "cyclopts"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "docstring-parser" },
+    { name = "rich" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/39/22/6482353414d69675d4ad2671b88761b0b1ead175da9c811110733a9c1600/cyclopts-1.0.2.tar.gz", hash = "sha256:8059b917eadc32556b4a7eacc1bbedcb959e6d8cf609219202c5e8647bd7f89c", size = 27329, upload-time = "2023-12-13T04:34:49.225Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/c4/062586512fd5994ace1de7e40611fb80fe781e7c615abad290437ec06d8a/cyclopts-1.0.2-py3-none-any.whl", hash = "sha256:59b24a403205e87059b1b36f245f108143c628341eca17b85311b38a381e4955", size = 28638, upload-time = "2023-12-13T04:34:47.436Z" },
+]
+
+[[package]]
 name = "daff"
 version = "1.4.2"
 source = { registry = "https://pypi.org/simple" }
@@ -778,11 +793,11 @@ wheels = [
 
 [[package]]
 name = "docstring-parser"
-version = "0.17.0"
+version = "0.15"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b2/9d/c3b43da9515bd270df0f80548d9944e389870713cc1fe2b8fb35fe2bcefd/docstring_parser-0.17.0.tar.gz", hash = "sha256:583de4a309722b3315439bb31d64ba3eebada841f2e2cee23b99df001434c912", size = 27442, upload-time = "2025-07-21T07:35:01.868Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/2d/ea1dfc15b909cc660f657a3a9d698a2916b7f3b05535a2d72e8d7ea3ad5b/docstring_parser-0.15.tar.gz", hash = "sha256:48ddc093e8b1865899956fcc03b03e66bb7240c310fac5af81814580c55bf682", size = 26768, upload-time = "2022-09-05T07:36:08.139Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/55/e2/2537ebcff11c1ee1ff17d8d0b6f4db75873e3b0fb32c2d4a2ee31ecb310a/docstring_parser-0.17.0-py3-none-any.whl", hash = "sha256:cf2569abd23dce8099b300f9b4fa8191e9582dda731fd533daf54c4551658708", size = 36896, upload-time = "2025-07-21T07:35:00.684Z" },
+    { url = "https://files.pythonhosted.org/packages/89/e3/32e272db7adcf90e93f73e9a98fd763049ed7c641fb57ab26cb8f3e7e79c/docstring_parser-0.15-py3-none-any.whl", hash = "sha256:d1679b86250d269d06a99670924d6bce45adc00b08069dae8c47d98e89b667a9", size = 36093, upload-time = "2022-09-05T07:36:05.303Z" },
 ]
 
 [[package]]
@@ -1658,6 +1673,7 @@ name = "ol-data-platform"
 version = "0.6.1"
 source = { editable = "." }
 dependencies = [
+    { name = "cyclopts" },
     { name = "dagster" },
     { name = "dagster-airbyte" },
     { name = "dagster-aws" },
@@ -1697,6 +1713,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cyclopts", specifier = "~=1.0.0" },
     { name = "dagster", specifier = "~=1.10" },
     { name = "dagster-airbyte", specifier = "~=0.27.0" },
     { name = "dagster-aws", specifier = "~=0.27.0" },
