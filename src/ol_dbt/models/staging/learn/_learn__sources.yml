@@ -54,8 +54,8 @@ sources:
       description: Global unique identifier across MIT Learning platforms
 
   - name: raw__mitlearn__app__postgres__profiles_profile
-    description: MIT Learn user profile information including preferences and
-      personal details
+    description: MIT Learn user profile information including preferences and personal
+      details
     columns:
     - name: _airbyte_raw_id
       description: Unique identifier for this Airbyte record
