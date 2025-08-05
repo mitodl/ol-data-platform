@@ -1,0 +1,129 @@
+---
+version: 2
+
+models:
+- name: stg_mitlearn__users_user
+  description: MIT Learn user account information and authentication details
+  columns:
+  - name: user_id
+    description: int, unique identifier for each user on the MIT Learn platform
+    tests:
+    - unique
+    - not_null
+  - name: user_global_id
+    description: str, global identifier that can be used across all MIT Learning platforms
+      to uniquely identify a user
+    tests:
+    - unique
+  - name: user_username
+    description: str, username chosen by the user
+    tests:
+    - not_null
+  - name: user_email
+    description: str, user email associated with their account
+    tests:
+    - not_null
+  - name: user_is_active
+    description: boolean, used to soft delete user accounts, indicates if the user
+      account is active
+    tests:
+    - not_null
+  - name: user_is_staff
+    description: boolean, indicating whether user can log into admin site
+    tests:
+    - not_null
+  - name: user_is_superuser
+    description: boolean, indicating whether user has all permissions on MIT Learn
+      platform
+    tests:
+    - not_null
+  - name: user_first_name
+    description: str, user's first name
+  - name: user_last_name
+    description: str, user's last name
+  - name: user_scim_id
+    description: str, SCIM (System for Cross-domain Identity Management) identifier
+      for the user
+  - name: user_scim_username
+    description: str, SCIM username for identity management integration
+  - name: user_scim_external_id
+    description: str, external SCIM identifier used for identity synchronization
+  - name: user_created_on
+    description: timestamp, date and time when the user account was initially created
+    tests:
+    - not_null
+  - name: user_updated_on
+    description: timestamp, date and time when the user account was most recently
+      updated
+    tests:
+    - not_null
+  - name: user_joined_on
+    description: timestamp, date and time when the user first joined the platform
+    tests:
+    - not_null
+  - name: user_last_login
+    description: timestamp, date and time when the user last logged in
+
+- name: stg_mitlearn__profiles_profile
+  description: MIT Learn user profile information and preferences
+  columns:
+  - name: profile_id
+    description: int, unique identifier for each user profile on the MIT Learn platform
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int, foreign key to users_user representing the associated user
+    tests:
+    - unique
+    - not_null
+    - relationships:
+        to: ref('stg_mitlearn__users_user')
+        field: user_id
+  - name: user_name
+    description: str, display name for the user
+  - name: user_bio
+    description: str, biographical information or personal description provided by
+      the user
+  - name: user_goals
+    description: array, learning goals or objectives set by the user
+  - name: user_headline
+    description: str, professional or personal headline displayed on the user's profile
+  - name: user_location
+    description: str, geographic location information provided by the user
+  - name: user_delivery_preference
+    description: array, preferred method of content delivery or communication
+  - name: user_current_education
+    description: str, current educational status or institution
+  - name: user_time_commitment
+    description: str, amount of time the user can commit to learning activities
+  - name: user_email_optin
+    description: boolean, indicating whether the user has opted in to receive email
+      communications
+  - name: user_toc_optin
+    description: boolean, indicating whether the user has accepted terms and conditions
+  - name: user_certificate_desired
+    description: boolean, indicating whether the user wants to receive certificates
+      upon course completion
+    tests:
+    - not_null
+  - name: user_completed_onboarding
+    description: boolean, indicating whether the user has completed the platform onboarding
+      process
+  - name: user_image_url
+    description: str, URL to the user's profile image
+  - name: user_image_small_url
+    description: str, URL to a small version of the user's profile image
+  - name: user_image_medium_url
+    description: str, URL to a medium-sized version of the user's profile image
+  - name: user_image_file
+    description: str, file reference for the user's profile image
+  - name: user_image_small_file
+    description: str, file reference for the small version of the user's profile image
+  - name: user_image_medium_file
+    description: str, file reference for the medium-sized version of the user's profile
+      image
+  - name: profile_updated_on
+    description: timestamp, date and time when the profile was most recently updated
+    tests:
+    - not_null
