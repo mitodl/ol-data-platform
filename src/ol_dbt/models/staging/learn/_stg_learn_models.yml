@@ -2,7 +2,7 @@
 version: 2
 
 models:
-- name: stg_mitlearn__users_user
+- name: stg__mitlearn__app__postgres__users_user
   description: MIT Learn user account information and authentication details
   columns:
   - name: user_id
@@ -64,7 +64,7 @@ models:
   - name: user_last_login
     description: timestamp, date and time when the user last logged in
 
-- name: stg_mitlearn__profiles_profile
+- name: stg__mitlearn__app__postgres__profiles_profile
   description: MIT Learn user profile information and preferences
   columns:
   - name: profile_id
@@ -78,7 +78,7 @@ models:
     - unique
     - not_null
     - relationships:
-        to: ref('stg_mitlearn__users_user')
+        to: ref('stg__mitlearn__app__postgres__users_user')
         field: user_id
   - name: user_name
     description: str, display name for the user
