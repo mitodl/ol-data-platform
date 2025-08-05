@@ -7,102 +7,103 @@ sources:
   database: '{{ target.database }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
-      - name: raw__mitlearn__app__postgres__users_user
-        description: "MIT Learn user account information and authentication details"
-        columns:
-          - name: _airbyte_raw_id
-            description: "Unique identifier for this Airbyte record"
-          - name: _airbyte_extracted_at
-            description: "Timestamp when this record was extracted by Airbyte"
-          - name: _airbyte_meta
-            description: "Airbyte metadata for this record"
-          - name: _airbyte_generation_id
-            description: "Airbyte generation identifier for this record"
-          - name: id
-            description: "Primary key, unique identifier for the user"
-          - name: email
-            description: "User's email address, used for login and notifications"
-          - name: is_staff
-            description: "Boolean flag indicating if user has staff privileges"
-          - name: password
-            description: "Hashed password for user authentication"
-          - name: username
-            description: "Unique username chosen by the user for login"
-          - name: is_active
-            description: "Boolean flag indicating if the user account is active"
-          - name: last_name
-            description: "User's last name/family name"
-          - name: first_name
-            description: "User's first name/given name"
-          - name: last_login
-            description: "Timestamp of the user's most recent login"
-          - name: date_joined
-            description: "Timestamp when the user account was initially created"
-          - name: is_superuser
-            description: "Boolean flag indicating if user has superuser/admin privileges"
-          - name: scim_id
-            description: "SCIM (System for Cross-domain Identity Management) identifier"
-          - name: created_on
-            description: "Timestamp when this user record was created"
-          - name: updated_on
-            description: "Timestamp when this user record was last updated"
-          - name: scim_username
-            description: "Username as managed by SCIM identity provider"
-          - name: scim_external_id
-            description: "External identifier from SCIM identity provider"
-          - name: global_id
-            description: "Global unique identifier across MIT Learning platforms"
+  - name: raw__mitlearn__app__postgres__users_user
+    description: MIT Learn user account information and authentication details
+    columns:
+    - name: _airbyte_raw_id
+      description: Unique identifier for this Airbyte record
+    - name: _airbyte_extracted_at
+      description: Timestamp when this record was extracted by Airbyte
+    - name: _airbyte_meta
+      description: Airbyte metadata for this record
+    - name: _airbyte_generation_id
+      description: Airbyte generation identifier for this record
+    - name: id
+      description: Primary key, unique identifier for the user
+    - name: email
+      description: User's email address, used for login and notifications
+    - name: is_staff
+      description: Boolean flag indicating if user has staff privileges
+    - name: password
+      description: Hashed password for user authentication
+    - name: username
+      description: Unique username chosen by the user for login
+    - name: is_active
+      description: Boolean flag indicating if the user account is active
+    - name: last_name
+      description: User's last name/family name
+    - name: first_name
+      description: User's first name/given name
+    - name: last_login
+      description: Timestamp of the user's most recent login
+    - name: date_joined
+      description: Timestamp when the user account was initially created
+    - name: is_superuser
+      description: Boolean flag indicating if user has superuser/admin privileges
+    - name: scim_id
+      description: SCIM (System for Cross-domain Identity Management) identifier
+    - name: created_on
+      description: Timestamp when this user record was created
+    - name: updated_on
+      description: Timestamp when this user record was last updated
+    - name: scim_username
+      description: Username as managed by SCIM identity provider
+    - name: scim_external_id
+      description: External identifier from SCIM identity provider
+    - name: global_id
+      description: Global unique identifier across MIT Learning platforms
 
-      - name: raw__mitlearn__app__postgres__profiles_profile
-        description: "MIT Learn user profile information including preferences and personal details"
-        columns:
-          - name: _airbyte_raw_id
-            description: "Unique identifier for this Airbyte record"
-          - name: _airbyte_extracted_at
-            description: "Timestamp when this record was extracted by Airbyte"
-          - name: _airbyte_meta
-            description: "Airbyte metadata for this record"
-          - name: _airbyte_generation_id
-            description: "Airbyte generation identifier for this record"
-          - name: id
-            description: "Primary key, unique identifier for the profile"
-          - name: bio
-            description: "User's biographical information or description"
-          - name: name
-            description: "User's display name or full name"
-          - name: goals
-            description: "User's learning goals and objectives"
-          - name: image
-            description: "URL or path to user's profile image"
-          - name: user_id
-            description: "Foreign key referencing the users_user table"
-          - name: delivery
-            description: "User's preferred content delivery method or format"
-          - name: headline
-            description: "User's professional headline or tagline"
-          - name: location
-            description: "User's geographic location"
-          - name: toc_optin
-            description: "Boolean flag for terms of conditions opt-in status"
-          - name: image_file
-            description: "File reference for user's profile image"
-          - name: updated_at
-            description: "Timestamp when this profile was last updated"
-          - name: email_optin
-            description: "Boolean flag indicating user's email communication preferences"
-          - name: image_small
-            description: "URL or path to small version of user's profile image"
-          - name: image_medium
-            description: "URL or path to medium version of user's profile image"
-          - name: time_commitment
-            description: "User's available time commitment for learning activities"
-          - name: image_small_file
-            description: "File reference for small version of profile image"
-          - name: current_education
-            description: "User's current educational status or level"
-          - name: image_medium_file
-            description: "File reference for medium version of profile image"
-          - name: certificate_desired
-            description: "Boolean flag indicating if user wants to earn certificates"
-          - name: completed_onboarding
-            description: "Boolean flag indicating if user has completed onboarding process"
+  - name: raw__mitlearn__app__postgres__profiles_profile
+    description: MIT Learn user profile information including preferences and
+      personal details
+    columns:
+    - name: _airbyte_raw_id
+      description: Unique identifier for this Airbyte record
+    - name: _airbyte_extracted_at
+      description: Timestamp when this record was extracted by Airbyte
+    - name: _airbyte_meta
+      description: Airbyte metadata for this record
+    - name: _airbyte_generation_id
+      description: Airbyte generation identifier for this record
+    - name: id
+      description: Primary key, unique identifier for the profile
+    - name: bio
+      description: User's biographical information or description
+    - name: name
+      description: User's display name or full name
+    - name: goals
+      description: User's learning goals and objectives
+    - name: image
+      description: URL or path to user's profile image
+    - name: user_id
+      description: Foreign key referencing the users_user table
+    - name: delivery
+      description: User's preferred content delivery method or format
+    - name: headline
+      description: User's professional headline or tagline
+    - name: location
+      description: User's geographic location
+    - name: toc_optin
+      description: Boolean flag for terms of conditions opt-in status
+    - name: image_file
+      description: File reference for user's profile image
+    - name: updated_at
+      description: Timestamp when this profile was last updated
+    - name: email_optin
+      description: Boolean flag indicating user's email communication preferences
+    - name: image_small
+      description: URL or path to small version of user's profile image
+    - name: image_medium
+      description: URL or path to medium version of user's profile image
+    - name: time_commitment
+      description: User's available time commitment for learning activities
+    - name: image_small_file
+      description: File reference for small version of profile image
+    - name: current_education
+      description: User's current educational status or level
+    - name: image_medium_file
+      description: File reference for medium version of profile image
+    - name: certificate_desired
+      description: Boolean flag indicating if user wants to earn certificates
+    - name: completed_onboarding
+      description: Boolean flag indicating if user has completed onboarding process
