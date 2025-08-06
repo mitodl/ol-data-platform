@@ -111,8 +111,8 @@ The system auto-detects entity types from table names:
 - **Merging**: Automatically merges with existing source definitions
 
 ### Staging Models
-- **SQL Files**: `stg_{domain}__{table_name}.sql` - Generated base models with enhanced transformations
-- **YAML Files**: `stg_{domain}__{table_name}.yml` - Basic model schema definitions
+- **SQL Files**: `stg_{domain}__{table_name}.sql` - Generated base models with enhanced transformations and explicit column selections
+- **YAML File**: `_stg_{domain}__models.yml` - Consolidated model schema definitions for all staging models in the domain
 
 ## Examples
 
@@ -151,10 +151,10 @@ python bin/dbt-create-staging-models.py generate-all \
 ```
 
 This creates:
-- `src/ol_dbt/models/staging/mitlearn/_mitlearn__sources.yml`
-- `src/ol_dbt/models/staging/mitlearn/stg_mitlearn__raw__mitlearn__app__postgres__users_user.sql`
-- `src/ol_dbt/models/staging/mitlearn/stg_mitlearn__raw__mitlearn__app__postgres__users_user.yml`
-- Additional files for other discovered user-related tables
+- `src/ol_dbt/models/staging/mitlearn/_mitlearn__sources.yml` - Source definitions
+- `src/ol_dbt/models/staging/mitlearn/_stg_mitlearn__models.yml` - Consolidated model definitions
+- `src/ol_dbt/models/staging/mitlearn/stg_mitlearn__raw__mitlearn__app__postgres__users_user.sql` - Individual SQL files
+- Additional SQL files for other discovered user-related tables
 
 ### Add Additional Tables to Existing Sources
 ```bash

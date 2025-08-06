@@ -34,8 +34,23 @@
 ) %}
 
     {%- set source_relation = source(source_name, table_name) -%}
+
+    {# Try to get columns from the database relation first #}
     {%- set columns = adapter.get_columns_in_relation(source_relation) -%}
-    {% set column_names = columns | map(attribute="name") %}
+    {% set column_names = columns | map(attribute="name") | list %}
+
+    {# If we got no columns from the database, try to get them from the graph/sources.yml #}
+    {%- if column_names | length == 0 -%}
+        {%- set source_node = (
+            graph.sources.values()
+            | selectattr("source_name", "equalto", source_name)
+            | selectattr("name", "equalto", table_name)
+            | first
+        ) -%}
+        {%- if source_node and source_node.columns -%}
+            {%- set column_names = source_node.columns.keys() | list -%}
+        {%- endif -%}
+    {%- endif -%}
 
     {# Auto-detect entity type from table name if not provided #}
     {%- if entity_type is none -%}
@@ -149,43 +164,37 @@ with source as (
 {{ "{{ deduplicate_raw_table(order_by='_airbyte_extracted_at', partition_columns='id') }}" }}
 {%- endif %}
 
-, cleaned as (
-    select
-{%- if leading_commas -%}
+{# Build non-airbyte columns list #}
+{%- set non_airbyte_columns = [] -%}
 {%- for column in column_names -%}
 {%- if not column.startswith('_airbyte') -%}
-{{ ", " if not loop.first }}{% if column in timestamp_columns and apply_transformations -%}
-        {{ "{{ cast_timestamp_to_iso8601('" ~ column ~ "') }}" }} as {{ column_mappings[column] }}
-        {%- elif column == 'name' and entity_type == 'user' and apply_transformations -%}
-        replace(replace(replace({{ column }}, ' ', '<>'), '><', ''), '<>', ' ') as {{ column_mappings[column] }}
-        {%- elif column in boolean_columns and 'edxorg' in table_name and apply_transformations -%}
-        cast({{ column }} as boolean) as {{ column_mappings[column] }}
-        {%- else -%}
-{% if not case_sensitive_cols %}{{ column | lower }}{% else %}{{ adapter.quote(column) }}{% endif %} as {{ column_mappings[column] }}
-        {%- endif -%}
-        {%- endif -%}
-        {%- endfor -%}
-        {%- else -%}
-{%- for column in column_names -%}
-{%- if not column.startswith('_airbyte') -%}
-{% if column in timestamp_columns and apply_transformations -%}
-        {{ "{{ cast_timestamp_to_iso8601('" ~ column ~ "') }}" }} as {{ column_mappings[column] }}
-        {%- elif column == 'name' and entity_type == 'user' and apply_transformations -%}
-        replace(replace(replace({{ column }}, ' ', '<>'), '><', ''), '<>', ' ') as {{ column_mappings[column] }}
-        {%- elif column in boolean_columns and 'edxorg' in table_name and apply_transformations -%}
-        cast({{ column }} as boolean) as {{ column_mappings[column] }}
-        {%- else -%}
-{% if not case_sensitive_cols %}{{ column | lower }}{% else %}{{ adapter.quote(column) }}{% endif %} as {{ column_mappings[column] }}
-{%- endif -%}
-{%- if not loop.last and not columns[loop.index0+1:] | map(attribute='name') | select('match', '^(?!_airbyte).*') | list | length == 0 -%},{%- endif -%}
+{%- set _ = non_airbyte_columns.append(column) -%}
 {%- endif -%}
 {%- endfor -%}
-{%- endif %}
+
+, cleaned as (
+    select
+{%- for column in non_airbyte_columns %}
+        {% if column in timestamp_columns and apply_transformations -%}
+{{ "{{ cast_timestamp_to_iso8601('" ~ column ~ "') }}" }} as {{ column_mappings[column] }}
+        {%- elif column == 'name' and entity_type == 'user' and apply_transformations -%}
+replace(replace(replace({{ column }}, ' ', '<>'), '><', ''), '<>', ' ') as {{ column_mappings[column] }}
+        {%- elif column in boolean_columns and 'edxorg' in table_name and apply_transformations -%}
+cast({{ column }} as boolean) as {{ column_mappings[column] }}
+        {%- else -%}
+{% if not case_sensitive_cols %}{{ column | lower }}{% else %}{{ adapter.quote(column) }}{% endif %} as {{ column_mappings[column] }}
+        {%- endif -%}
+{%- if not loop.last -%}
+        ,{%- endif %}
+{%- endfor %}
     from {% if needs_deduplication %}most_recent_source{% else %}source{% endif %}
 )
 
-select * from cleaned
+select
+{%- for column in non_airbyte_columns %}
+    {{ column_mappings[column] }}{{ "," if not loop.last }}
+{%- endfor %}
+from cleaned
     {% endset %}
-
     {% if execute %} {{ print(base_model_sql) }} {% do return(base_model_sql) %} {% endif %}
 {% endmacro %}
