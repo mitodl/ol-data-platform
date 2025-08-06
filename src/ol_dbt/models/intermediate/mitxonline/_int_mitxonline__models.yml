@@ -1102,9 +1102,6 @@ models:
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxonline__users')
-        field: user_id
   - name: user_username
     description: string, username
     tests:
@@ -1413,6 +1410,11 @@ models:
     tests:
     - unique
     - not_null
+  - name: user_global_id
+    description: str, str, The SSO ID (usually a Keycloak UUID) for the user across
+      all platforms.
+    tests:
+    - unique
   - name: openedx_user_id
     description: int, foreign key to open edX users. Not all app users have openedx_user_id
       due to username or email mismatch between app and open edX. Also, there may

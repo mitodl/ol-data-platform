@@ -16,6 +16,7 @@ with mitxonline_users as (
 , mitxonline_users_view as (
     select
         mitxonline_users.user_id as user_mitxonline_id
+        , mitxonline_users.user_global_id
         , mitxonline_users.user_username as user_mitxonline_username
         , mitxonline_users.user_edxorg_username
         , mitxonline_users.user_email as user_mitxonline_email
@@ -86,6 +87,7 @@ with mitxonline_users as (
     select
         mitxonline_users_view.user_mitxonline_id
         , edxorg_users_view.user_edxorg_id
+        , mitxonline_users_view.user_global_id
         , mitxonline_users_view.user_mitxonline_username
         , edxorg_users_view.user_edxorg_username
         , mitxonline_users_view.user_mitxonline_email

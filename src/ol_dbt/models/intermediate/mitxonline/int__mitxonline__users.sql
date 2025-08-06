@@ -42,6 +42,7 @@ with users as (
 
 select
     users.user_id
+    , users.user_global_id
     , openedx_users.openedx_user_id
     , users.user_username
     , users.user_full_name
