@@ -47,13 +47,26 @@ def run_dbt_command(
     Returns:
         A CompletedProcess object containing the result of the dbt command.
     """
-    dbt_cmd = [
-        "dbt",
-        "--quiet",
-        "--no-write-json",
-        "run-operation",
-    ]
-    dbt_cmd.extend(command)
+    # Check if this is a regular dbt command or a run-operation command
+    if len(command) == 1 and command[0] in [
+        "parse",
+        "compile",
+        "run",
+        "test",
+        "snapshot",
+    ]:
+        # Regular dbt command
+        dbt_cmd = ["dbt", "--quiet", "--no-write-json", *command]
+    else:
+        # run-operation command (legacy behavior)
+        dbt_cmd = [
+            "dbt",
+            "--quiet",
+            "--no-write-json",
+            "run-operation",
+        ]
+        dbt_cmd.extend(command)
+
     dbt_cmd.extend(
         [
             "--project-dir",
@@ -199,7 +212,7 @@ def generate_sources(  # noqa: C901, PLR0915
     return discovered_tables
 
 
-def merge_sources_content(
+def merge_sources_content(  # noqa: C901, PLR0912, PLR0915
     existing_content: str,
     new_content: str,
     original_schema: Optional[str] = None,
@@ -255,16 +268,65 @@ def merge_sources_content(
                 break
 
         if existing_source:
-            # Merge tables, avoiding duplicates
+            # Merge tables, preserving existing table data and only adding new columns
             existing_tables = {
                 table["name"]: table for table in existing_source.get("tables", [])
             }
             new_tables = new_source.get("tables", [])
 
-            # Add new tables, updating any existing ones
-            for table in new_tables:
-                table_name = table["name"]
-                existing_tables[table_name] = table  # This will overwrite if duplicate
+            # Add new tables or merge with existing ones
+            for new_table in new_tables:
+                table_name = new_table["name"]
+
+                if table_name in existing_tables:
+                    # Table already exists - merge columns while preserving existing
+                    # data
+                    existing_table = existing_tables[table_name]
+
+                    # Preserve existing table-level properties (description, meta, etc.)
+                    # Only update columns by merging new columns with existing ones
+                    existing_columns = {}
+                    for col in existing_table.get("columns", []):
+                        existing_columns[col["name"]] = col
+
+                    new_columns = new_table.get("columns", [])
+
+                    # Add or update columns, preserving existing column data
+                    for new_col in new_columns:
+                        col_name = new_col["name"]
+                        if col_name in existing_columns:
+                            # Column exists - preserve existing description, meta, etc.
+                            # Only update data_type if it wasn't manually set
+                            existing_col = existing_columns[col_name]
+
+                            # Update data_type only if existing description is empty or
+                            # default (indicating it wasn't manually edited)
+                            if (
+                                not existing_col.get("description")
+                                or existing_col.get("description").strip() == ""
+                            ):
+                                existing_col["data_type"] = new_col.get("data_type", "")
+
+                            # Keep the existing column with its preserved data
+                        else:
+                            # New column - add it
+                            existing_columns[col_name] = new_col
+
+                    # Update the existing table's columns
+                    existing_table["columns"] = sorted(
+                        existing_columns.values(), key=lambda x: x["name"]
+                    )
+
+                    # Update table-level description only if it's empty
+                    if (
+                        not existing_table.get("description")
+                        or existing_table.get("description").strip() == ""
+                    ):
+                        existing_table["description"] = new_table.get("description", "")
+
+                else:
+                    # New table - add it completely
+                    existing_tables[table_name] = new_table
 
             # Sort tables by name for consistency
             existing_source["tables"] = sorted(
@@ -372,7 +434,7 @@ def adjust_source_schema_pattern(
 def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
     schema: str,
     prefix: str,
-    tables: list[str] | None = None,
+    tables: Optional[list[str]] = None,
     directory: Optional[str] = None,
     target: Optional[str] = None,
     apply_transformations: bool = True,  # noqa: FBT001, FBT002
@@ -435,8 +497,8 @@ def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
     if not discovered_tables:
         return
 
-    # Collect model information for consolidated YAML
-    model_definitions = []
+    # Collect model names for YAML generation
+    generated_models = []
 
     for table_name in discovered_tables:
         # Extract the source (second section) from table name like
@@ -447,7 +509,8 @@ def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
         source = source_match.group(1)
 
         # Create file paths within the staging directory
-        sql_file_path = staging_dir / f"stg_{source}__{table_name}.sql"
+        model_name = f"stg_{source}__{table_name}"
+        sql_file_path = staging_dir / f"{model_name}.sql"
 
         try:
             # Generate SQL file first using enhanced macro
@@ -472,14 +535,8 @@ def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
                 sql_file_path.write_text(sql_content)
                 print(f"Generated SQL for {table_name}")
 
-                # Add model definition for consolidated YAML
-                model_definitions.append(
-                    {
-                        "name": f"stg_{source}__{table_name}",
-                        "description": "",
-                        "columns": [],
-                    }
-                )
+                # Track the model name for YAML generation
+                generated_models.append(model_name)
             else:
                 print(f"Could not extract SQL content for {table_name}")
                 continue
@@ -488,63 +545,151 @@ def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
             print(f"Error processing table {table_name}: {e}")
             continue
 
-    # Generate consolidated YAML file for all models
-    if model_definitions:
+    # Generate consolidated YAML file using dbt-codegen generate_model_yaml
+    if generated_models:
         domain = extract_domain_from_prefix(prefix)
-        consolidated_yaml_path = staging_dir / f"_stg_{domain}__models.yml"
+        consolidated_yaml_path = staging_dir / f"_stg_{domain}_models.yml"
 
-        # Check if consolidated YAML already exists and merge
-        if consolidated_yaml_path.exists():
-            print(f"Merging with existing consolidated YAML: {consolidated_yaml_path}")
-            existing_content = consolidated_yaml_path.read_text()
+        try:
+            # First, parse the project to make dbt aware of the new models
+            print("Parsing dbt project to register new models...")
             try:
-                existing_yaml = yaml.safe_load(existing_content)
-                existing_models = {
-                    model["name"]: model for model in existing_yaml.get("models", [])
-                }
-
-                # Add or update models
-                for model_def in model_definitions:
-                    existing_models[model_def["name"]] = model_def
-
-                existing_yaml["models"] = sorted(
-                    existing_models.values(), key=lambda x: x["name"]
+                run_dbt_command(
+                    str(dbt_project_dir),
+                    ["parse"],
+                    target,
                 )
+                print("dbt parse completed successfully")
+            except Exception as parse_error:
+                print(f"Warning: dbt parse failed: {parse_error}")
+                print("Proceeding with YAML generation anyway...")
 
-                consolidated_content = yaml.dump(
-                    existing_yaml,
-                    default_flow_style=False,
-                    sort_keys=False,
-                    width=1000,
-                    indent=2,
-                )
-            except yaml.YAMLError as e:
-                print(f"Error parsing existing YAML: {e}, creating new file")
-                consolidated_content = yaml.dump(
-                    {
-                        "version": 2,
-                        "models": sorted(model_definitions, key=lambda x: x["name"]),  # type: ignore[arg-type, return-value]
-                    },
-                    default_flow_style=False,
-                    sort_keys=False,
-                    width=1000,
-                    indent=2,
-                )
-        else:
-            print(f"Creating new consolidated YAML: {consolidated_yaml_path}")
-            consolidated_content = yaml.dump(
+            # Use dbt-codegen's generate_model_yaml macro
+            model_yaml_args = json.dumps(
                 {
-                    "version": 2,
-                    "models": sorted(model_definitions, key=lambda x: x["name"]),  # type: ignore[arg-type, return-value]
-                },
+                    "model_names": generated_models,
+                    "upstream_descriptions": True,
+                    "include_data_types": True,
+                }
+            )
+
+            result_yaml = run_dbt_command(
+                str(dbt_project_dir),
+                ["generate_model_yaml", "--args", model_yaml_args],
+                target,
+            )
+
+            # Extract the YAML content from the output
+            yaml_content_match = re.search(
+                r"(version:.*)", result_yaml.stdout.strip(), re.DOTALL
+            )
+
+            if yaml_content_match:
+                generated_yaml_content = yaml_content_match.group(1)
+
+                # Check if consolidated YAML already exists and merge
+                if consolidated_yaml_path.exists():
+                    print(
+                        "Merging with existing consolidated YAML: "
+                        f"{consolidated_yaml_path}"
+                    )
+                    existing_content = consolidated_yaml_path.read_text()
+                    try:
+                        existing_yaml = yaml.safe_load(existing_content)
+                        new_yaml = yaml.safe_load(generated_yaml_content)
+
+                        # Merge models, preserving existing model data where possible
+                        existing_models = {
+                            model["name"]: model
+                            for model in existing_yaml.get("models", [])
+                        }
+                        new_models = new_yaml.get("models", [])
+
+                        # Add or update models, preserving manual descriptions
+                        for new_model in new_models:
+                            model_name = new_model["name"]
+                            if model_name in existing_models:
+                                existing_model = existing_models[model_name]
+                                # Preserve existing model description if it's not empty
+                                if (
+                                    existing_model.get("description")
+                                    and existing_model.get("description").strip()
+                                ):
+                                    new_model["description"] = existing_model[
+                                        "description"
+                                    ]
+
+                                # Preserve existing column descriptions
+                                existing_columns = {
+                                    col["name"]: col
+                                    for col in existing_model.get("columns", [])
+                                }
+                                new_columns = new_model.get("columns", [])
+
+                                for new_col in new_columns:
+                                    col_name = new_col["name"]
+                                    if (
+                                        col_name in existing_columns
+                                        and existing_columns[col_name].get(
+                                            "description"
+                                        )
+                                        and existing_columns[col_name]
+                                        .get("description")
+                                        .strip()
+                                    ):
+                                        new_col["description"] = existing_columns[
+                                            col_name
+                                        ]["description"]
+
+                            existing_models[model_name] = new_model
+
+                        existing_yaml["models"] = sorted(
+                            existing_models.values(), key=lambda x: x["name"]
+                        )
+
+                        consolidated_content = yaml.dump(
+                            existing_yaml,
+                            default_flow_style=False,
+                            sort_keys=False,
+                            width=1000,
+                            indent=2,
+                        )
+                    except yaml.YAMLError as e:
+                        print(f"Error parsing existing YAML: {e}, using new content")
+                        consolidated_content = generated_yaml_content
+                else:
+                    print(f"Creating new consolidated YAML: {consolidated_yaml_path}")
+                    consolidated_content = generated_yaml_content
+
+                consolidated_yaml_path.write_text(consolidated_content)
+                print(
+                    f"Generated consolidated YAML with {len(generated_models)} "
+                    "models using dbt-codegen"
+                )
+            else:
+                print("Could not extract YAML content from generate_model_yaml output")
+                msg = "Failed to extract YAML content"
+                raise Exception(msg)  # noqa: TRY002, TRY301
+
+        except Exception as e:
+            print(f"Error generating model YAML with dbt-codegen: {e}")
+            print("Falling back to basic YAML structure")
+            # Fallback to basic structure if generate_model_yaml fails
+            basic_models = [
+                {"name": model_name, "description": "", "columns": []}
+                for model_name in generated_models
+            ]
+            consolidated_content = yaml.dump(
+                {"version": 2, "models": basic_models},
                 default_flow_style=False,
                 sort_keys=False,
                 width=1000,
                 indent=2,
             )
-
-        consolidated_yaml_path.write_text(consolidated_content)
-        print(f"Generated consolidated YAML with {len(model_definitions)} models")
+            consolidated_yaml_path.write_text(consolidated_content)
+            print(
+                f"Generated basic consolidated YAML with {len(generated_models)} models"
+            )
 
 
 @app.command
