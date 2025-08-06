@@ -69,10 +69,35 @@ python bin/dbt-create-staging-models.py generate-all \
 - `--target`: The dbt target environment to use (`production`, `qa`, `dev`, etc.)
 - `--database`: (Optional) Specify the database name if different from target default
 - `--directory`: (Optional) Override the subdirectory within `models/staging/`
+- `--apply-transformations`: (Optional) Apply semantic transformations (default: True)
+- `--entity-type`: (Optional) Override auto-detection of entity type (user, course, courserun, etc.)
 
 ## How It Works
 
 1. **Domain Detection**: Extracts the domain from the prefix (e.g., `mitlearn` from `raw__mitlearn__app__postgres__`)
+2. **Entity Detection**: Automatically detects entity type from table name for semantic transformations
+3. **File Organization**: Creates files in `src/ol_dbt/models/staging/{domain}/`
+4. **Source Generation**: Uses dbt-codegen to discover matching tables and generate source definitions
+5. **Enhanced Staging Models**: Creates SQL and YAML files with automatic transformations applied
+6. **Merging**: Automatically merges new tables with existing source files
+
+## Enhanced Staging Model Generation
+
+The script now includes an enhanced macro that automatically applies common transformation patterns:
+
+### Automatic Transformations
+- **Semantic Column Renaming**: `id` → `{entity}_id`, `title` → `{entity}_title`
+- **Timestamp Standardization**: Converts all timestamps to ISO8601 format
+- **Boolean Normalization**: Ensures consistent boolean field naming
+- **Data Quality**: Automatic deduplication for Airbyte sync issues
+- **String Cleaning**: Handles multiple spaces in user names
+
+### Entity Type Detection
+The system auto-detects entity types from table names:
+- `user` tables → User-specific transformations
+- `course` tables → Course-specific transformations
+- `courserun` tables → Course run transformations
+- `video`, `program`, `website` → Respective entity transformations
 2. **File Organization**: Creates files in `src/ol_dbt/models/staging/{domain}/`
 3. **Source Generation**: Uses dbt-codegen to discover matching tables and generate source definitions
 4. **Staging Models**: Creates SQL and YAML files for each discovered table
@@ -86,12 +111,38 @@ python bin/dbt-create-staging-models.py generate-all \
 - **Merging**: Automatically merges with existing source definitions
 
 ### Staging Models
-- **SQL Files**: `stg_{domain}__{table_name}.sql` - Generated base models using dbt-codegen
+- **SQL Files**: `stg_{domain}__{table_name}.sql` - Generated base models with enhanced transformations
 - **YAML Files**: `stg_{domain}__{table_name}.yml` - Basic model schema definitions
 
 ## Examples
 
-### Generate MITlearn User Tables
+### Generate MITlearn User Tables with Enhanced Transformations
+```bash
+python bin/dbt-create-staging-models.py generate-all \
+    --schema ol_warehouse_production_raw \
+    --prefix raw__mitlearn__app__postgres__user \
+    --target production
+```
+
+### Generate Without Transformations (Legacy Mode)
+```bash
+python bin/dbt-create-staging-models.py generate-all \
+    --schema ol_warehouse_production_raw \
+    --prefix raw__mitlearn__app__postgres__user \
+    --target production \
+    --no-apply-transformations
+```
+
+### Override Entity Type Detection
+```bash
+python bin/dbt-create-staging-models.py generate-all \
+    --schema ol_warehouse_production_raw \
+    --prefix raw__mitlearn__app__postgres__user \
+    --target production \
+    --entity-type user
+```
+
+### Basic Generate MITlearn User Tables
 ```bash
 python bin/dbt-create-staging-models.py generate-all \
     --schema ol_warehouse_production_raw \

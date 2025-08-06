@@ -303,12 +303,14 @@ def adjust_source_schema_pattern(
 
 
 @app.command
-def generate_staging_models(  # noqa: C901
+def generate_staging_models(  # noqa: C901, PLR0913
     schema: str,
     prefix: str,
     tables: list[str] | None = None,
     directory: str | None = None,
     target: str | None = None,
+    apply_transformations: bool = True,  # noqa: FBT001, FBT002
+    entity_type: str | None = None,
 ):
     """
     Generate dbt staging models and YAML files for a given schema and table prefix,
@@ -320,7 +322,9 @@ def generate_staging_models(  # noqa: C901
         tables: An optional list of table names to generate models for.
         directory: An optional subdirectory within 'models/staging' to place the models.
         target: The dbt target to use (optional).
-    """
+        apply_transformations: Whether to apply semantic transformations (default: True).
+        entity_type: Override auto-detection of entity type (optional).
+    """  # noqa: E501
     dbt_project_dir = Path("src") / "ol_dbt"
     staging_dir = dbt_project_dir / "models" / "staging"
 
@@ -378,16 +382,18 @@ def generate_staging_models(  # noqa: C901
         yaml_file_path = staging_dir / f"stg_{source}__{table_name}.yml"
 
         try:
-            # Generate SQL file first
+            # Generate SQL file first using enhanced macro
             base_model_args = json.dumps(
                 {
                     "source_name": "ol_warehouse_raw_data",  # Use standard source name
                     "table_name": table_name,
+                    "apply_transformations": apply_transformations,
+                    "entity_type": entity_type,
                 }
             )
             result_sql = run_dbt_command(
                 str(dbt_project_dir),
-                ["generate_base_model", "--args", base_model_args],
+                ["generate_base_model_enhanced", "--args", base_model_args],
                 target,
             )
             sql_content_match = re.search(
@@ -417,11 +423,13 @@ models:
 
 
 @app.command
-def generate_all(
+def generate_all(  # noqa: PLR0913
     schema: str,
     prefix: str,
     database: str | None = None,
     target: str | None = None,
+    apply_transformations: bool = True,  # noqa: FBT001, FBT002
+    entity_type: str | None = None,
 ):
     """Generate both dbt sources and staging models for a given schema and table prefix.
 
@@ -433,14 +441,23 @@ def generate_all(
         prefix: The table prefix to filter tables by.
         database: The database name (optional).
         target: The dbt target to use (optional).
+        apply_transformations: Whether to apply semantic transformations (default: True).
+        entity_type: Override auto-detection of entity type (optional).
 
-    """
+    """  # noqa: E501
     # First generate sources and get the discovered tables
     discovered_tables = generate_sources(schema, prefix, ".", database, target)
 
     # Then generate staging models using the discovered tables
     if discovered_tables:
-        generate_staging_models(schema, prefix, tables=discovered_tables, target=target)
+        generate_staging_models(
+            schema,
+            prefix,
+            tables=discovered_tables,
+            target=target,
+            apply_transformations=apply_transformations,
+            entity_type=entity_type,
+        )
         print(f"Generated staging models for {len(discovered_tables)} tables")
     else:
         print("No tables found matching the specified criteria")
