@@ -104,10 +104,6 @@ profiles_dir = "src/ol_dbt/"
 profile ="open_learning"
 target = "qa"
 
-[tool.sqlfluff.layout.type.comma]
-# Use leading commas for cleaner diffs
-line_position = "leading"
-
 [tool.mypy]
 python_version = "3.12"
 plugins = [
