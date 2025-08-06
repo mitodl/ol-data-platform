@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201, BLE001
+# ruff: noqa: T201, BLE001, UP045
 """
 This script provides commands to generate dbt sources and staging models.
 It interacts with dbt to discover tables and generate the necessary YAML and SQL files.
@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import yaml
 from cyclopts import App
@@ -33,7 +34,7 @@ def extract_domain_from_prefix(prefix: str) -> str:
 
 
 def run_dbt_command(
-    dbt_project_dir: str, command: list[str], target: str | None
+    dbt_project_dir: str, command: list[str], target: Optional[str]
 ) -> subprocess.CompletedProcess[str]:
     """
     Run a dbt command and captures its output.
@@ -90,8 +91,8 @@ def generate_sources(
     schema: str,
     prefix: str,
     output_directory: str = ".",
-    database: str | None = None,
-    target: str | None = None,
+    database: Optional[str] = None,
+    target: Optional[str] = None,
 ):
     """
     Generate dbt sources YAML file for a given schema and table prefix.
@@ -176,7 +177,7 @@ def generate_sources(
 def merge_sources_content(
     existing_content: str,
     new_content: str,
-    original_schema: str | None,  # noqa: ARG001
+    original_schema: Optional[str],  # noqa: ARG001
 ) -> str:
     """
     Merge new source table definitions with existing sources file.
@@ -236,7 +237,7 @@ def merge_sources_content(
 
 
 def adjust_source_schema_pattern(
-    content: str, original_schema: str | None = None
+    content: str, original_schema: Optional[str] = None
 ) -> str:
     """
     Adjust the generated source content to use the standard schema pattern.
@@ -307,10 +308,10 @@ def generate_staging_models(  # noqa: C901, PLR0913
     schema: str,
     prefix: str,
     tables: list[str] | None = None,
-    directory: str | None = None,
-    target: str | None = None,
+    directory: Optional[str] = None,
+    target: Optional[str] = None,
     apply_transformations: bool = True,  # noqa: FBT001, FBT002
-    entity_type: str | None = None,
+    entity_type: Optional[str] = None,
 ):
     """
     Generate dbt staging models and YAML files for a given schema and table prefix,
@@ -426,10 +427,10 @@ models:
 def generate_all(  # noqa: PLR0913
     schema: str,
     prefix: str,
-    database: str | None = None,
-    target: str | None = None,
+    database: Optional[str] = None,
+    target: Optional[str] = None,
     apply_transformations: bool = True,  # noqa: FBT001, FBT002
-    entity_type: str | None = None,
+    entity_type: Optional[str] = None,
 ):
     """Generate both dbt sources and staging models for a given schema and table prefix.
 
