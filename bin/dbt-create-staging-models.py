@@ -87,7 +87,7 @@ def run_dbt_command(
 
 
 @app.command
-def generate_sources(
+def generate_sources(  # noqa: C901, PLR0915
     schema: str,
     prefix: str,
     output_directory: str = ".",
@@ -149,10 +149,35 @@ def generate_sources(
     if sources_file_path.exists():
         print(f"Merging with existing sources file: {sources_file_path}")
         existing_content = sources_file_path.read_text()
-        merged_content = merge_sources_content(
-            existing_content, generated_content, schema
-        )
-        sources_file_path.write_text(merged_content)
+
+        # Validate existing content
+        try:
+            yaml.safe_load(existing_content)
+        except yaml.YAMLError as e:
+            print(f"Warning: Existing sources file has invalid YAML: {e}")
+            print("Creating backup and using new content")
+            backup_path = sources_file_path.with_suffix(".yml.backup")
+            backup_path.write_text(existing_content)
+            adjusted_content = adjust_source_schema_pattern(generated_content, schema)
+            sources_file_path.write_text(adjusted_content)
+        else:
+            merged_content = merge_sources_content(
+                existing_content, generated_content, schema
+            )
+
+            # Validate merged content before writing
+            try:
+                yaml.safe_load(merged_content)
+                sources_file_path.write_text(merged_content)
+            except yaml.YAMLError as e:
+                print(f"Error: Merged content has invalid YAML: {e}")
+                print("Creating backup and using new content instead")
+                backup_path = sources_file_path.with_suffix(".yml.backup")
+                backup_path.write_text(existing_content)
+                adjusted_content = adjust_source_schema_pattern(
+                    generated_content, schema
+                )
+                sources_file_path.write_text(adjusted_content)
     else:
         # Adjust the generated content to use standard source schema pattern
         adjusted_content = adjust_source_schema_pattern(generated_content, schema)
@@ -177,7 +202,7 @@ def generate_sources(
 def merge_sources_content(
     existing_content: str,
     new_content: str,
-    original_schema: Optional[str],  # noqa: ARG001
+    original_schema: Optional[str] = None,
 ) -> str:
     """
     Merge new source table definitions with existing sources file.
@@ -185,14 +210,32 @@ def merge_sources_content(
     Args:
         existing_content: Content of existing sources YAML file
         new_content: New source content to merge in
+        original_schema: The original schema name (unused but kept for compatibility)
 
     Returns:
         Merged YAML content
     """
-
     try:
+        # First adjust the new content to use standard schema pattern
+        adjusted_new_content = adjust_source_schema_pattern(
+            new_content, original_schema
+        )
+
         existing_yaml = yaml.safe_load(existing_content)
-        new_yaml = yaml.safe_load(new_content)
+        new_yaml = yaml.safe_load(adjusted_new_content)
+
+        # Ensure both have the correct structure
+        if not existing_yaml or "sources" not in existing_yaml:
+            print(
+                "Warning: Existing sources file has invalid structure, using new content"  # noqa: E501
+            )
+            return adjusted_new_content
+
+        if not new_yaml or "sources" not in new_yaml:
+            print(
+                "Warning: New content has invalid structure, keeping existing content"
+            )
+            return existing_content
 
         # Find the source section in both
         existing_sources = existing_yaml.get("sources", [])
@@ -202,7 +245,7 @@ def merge_sources_content(
             return existing_content
 
         new_source = new_sources[0]  # Should only be one source from generate_source
-        source_name = new_source.get("name")
+        source_name = new_source.get("name", "ol_warehouse_raw_data")
 
         # Find matching source in existing content
         existing_source = None
@@ -218,22 +261,44 @@ def merge_sources_content(
             }
             new_tables = new_source.get("tables", [])
 
+            # Add new tables, updating any existing ones
             for table in new_tables:
                 table_name = table["name"]
                 existing_tables[table_name] = table  # This will overwrite if duplicate
 
-            existing_source["tables"] = list(existing_tables.values())
+            # Sort tables by name for consistency
+            existing_source["tables"] = sorted(
+                existing_tables.values(), key=lambda x: x["name"]
+            )
         else:
-            # Add new source
+            # Add new source to existing sources
             existing_sources.append(new_source)
 
-        # Convert back to YAML
-        return yaml.dump(existing_yaml, default_flow_style=False, sort_keys=False)
+        # Convert back to YAML with proper formatting
+        yaml_output = yaml.dump(
+            existing_yaml,
+            default_flow_style=False,
+            sort_keys=False,
+            width=1000,  # Prevent line wrapping
+            indent=2,
+        )
 
+        return yaml_output  # noqa: RET504, TRY300
+
+    except yaml.YAMLError as e:
+        print(f"YAML parsing error during merge: {e}")
+        print("Falling back to appending new content")
+        adjusted_fallback = adjust_source_schema_pattern(new_content, original_schema)
+        return (
+            existing_content + "\n\n# --- NEWLY ADDED TABLES ---\n" + adjusted_fallback
+        )
     except Exception as e:
-        print(f"Error merging sources: {e}")
-        # Fall back to appending
-        return existing_content + "\n\n# Newly added tables:\n" + new_content
+        print(f"Unexpected error merging sources: {e}")
+        print("Falling back to appending new content")
+        adjusted_fallback = adjust_source_schema_pattern(new_content, original_schema)
+        return (
+            existing_content + "\n\n# --- NEWLY ADDED TABLES ---\n" + adjusted_fallback
+        )
 
 
 def adjust_source_schema_pattern(
@@ -304,7 +369,7 @@ def adjust_source_schema_pattern(
 
 
 @app.command
-def generate_staging_models(  # noqa: C901, PLR0913
+def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
     schema: str,
     prefix: str,
     tables: list[str] | None = None,
@@ -370,6 +435,9 @@ def generate_staging_models(  # noqa: C901, PLR0913
     if not discovered_tables:
         return
 
+    # Collect model information for consolidated YAML
+    model_definitions = []
+
     for table_name in discovered_tables:
         # Extract the source (second section) from table name like
         # raw__mitlearn__app__postgres__table
@@ -380,7 +448,6 @@ def generate_staging_models(  # noqa: C901, PLR0913
 
         # Create file paths within the staging directory
         sql_file_path = staging_dir / f"stg_{source}__{table_name}.sql"
-        yaml_file_path = staging_dir / f"stg_{source}__{table_name}.yml"
 
         try:
             # Generate SQL file first using enhanced macro
@@ -404,23 +471,80 @@ def generate_staging_models(  # noqa: C901, PLR0913
                 sql_content = sql_content_match.group(1)
                 sql_file_path.write_text(sql_content)
                 print(f"Generated SQL for {table_name}")
+
+                # Add model definition for consolidated YAML
+                model_definitions.append(
+                    {
+                        "name": f"stg_{source}__{table_name}",
+                        "description": "",
+                        "columns": [],
+                    }
+                )
             else:
                 print(f"Could not extract SQL content for {table_name}")
                 continue
 
-            basic_yaml = f"""version: 2
-
-models:
-  - name: stg_{source}__{table_name}
-    description: ""
-    columns: []
-"""
-            yaml_file_path.write_text(basic_yaml)
-            print(f"Generated basic YAML structure for {table_name}")
-
         except Exception as e:
             print(f"Error processing table {table_name}: {e}")
             continue
+
+    # Generate consolidated YAML file for all models
+    if model_definitions:
+        domain = extract_domain_from_prefix(prefix)
+        consolidated_yaml_path = staging_dir / f"_stg_{domain}__models.yml"
+
+        # Check if consolidated YAML already exists and merge
+        if consolidated_yaml_path.exists():
+            print(f"Merging with existing consolidated YAML: {consolidated_yaml_path}")
+            existing_content = consolidated_yaml_path.read_text()
+            try:
+                existing_yaml = yaml.safe_load(existing_content)
+                existing_models = {
+                    model["name"]: model for model in existing_yaml.get("models", [])
+                }
+
+                # Add or update models
+                for model_def in model_definitions:
+                    existing_models[model_def["name"]] = model_def
+
+                existing_yaml["models"] = sorted(
+                    existing_models.values(), key=lambda x: x["name"]
+                )
+
+                consolidated_content = yaml.dump(
+                    existing_yaml,
+                    default_flow_style=False,
+                    sort_keys=False,
+                    width=1000,
+                    indent=2,
+                )
+            except yaml.YAMLError as e:
+                print(f"Error parsing existing YAML: {e}, creating new file")
+                consolidated_content = yaml.dump(
+                    {
+                        "version": 2,
+                        "models": sorted(model_definitions, key=lambda x: x["name"]),  # type: ignore[arg-type, return-value]
+                    },
+                    default_flow_style=False,
+                    sort_keys=False,
+                    width=1000,
+                    indent=2,
+                )
+        else:
+            print(f"Creating new consolidated YAML: {consolidated_yaml_path}")
+            consolidated_content = yaml.dump(
+                {
+                    "version": 2,
+                    "models": sorted(model_definitions, key=lambda x: x["name"]),  # type: ignore[arg-type, return-value]
+                },
+                default_flow_style=False,
+                sort_keys=False,
+                width=1000,
+                indent=2,
+            )
+
+        consolidated_yaml_path.write_text(consolidated_content)
+        print(f"Generated consolidated YAML with {len(model_definitions)} models")
 
 
 @app.command
