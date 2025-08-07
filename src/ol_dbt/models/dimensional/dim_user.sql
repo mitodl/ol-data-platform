@@ -4,6 +4,7 @@ with mitx_users as (
     select
         user_mitxonline_id as mitxonline_application_user_id
         , user_mitxonline_username
+        , user_global_id
         , user_edxorg_id as edxorg_openedx_user_id
         , user_edxorg_username
         , user_mitxonline_email
@@ -175,23 +176,16 @@ with mitx_users as (
     left join mitxresidential_profile on mitxresidential_openedx_users.user_id = mitxresidential_profile.user_id
 )
 
-, combined_users as (
+, mitx_users_view as (
     select
-        {{ dbt_utils.generate_surrogate_key(['mitx_users.user_email']) }} as user_pk
+        mitx_users.user_global_id
         , coalesce(
             openedx_users_username.openedx_user_id, openedx_users_email.openedx_user_id
         ) as mitxonline_openedx_user_id
         , mitx_users.mitxonline_application_user_id
         , mitx_users.user_mitxonline_username
-        , null as mitxpro_openedx_user_id
-        , null as mitxpro_application_user_id
-        , null as user_mitxpro_username
-        , null as residential_openedx_user_id
-        , null as user_residential_username
         , mitx_users.edxorg_openedx_user_id
         , mitx_users.user_edxorg_username
-        , null as emeritus_user_id
-        , null as global_alumni_user_id
         , mitx_users.user_email as email
         , mitx_users.full_name
         , mitx_users.address_country
@@ -205,20 +199,123 @@ with mitx_users as (
         , mitx_users.user_joined_on_mitxonline
         , mitx_users.user_is_active_on_edxorg
         , mitx_users.user_joined_on_edxorg
-        , null as user_is_active_on_mitxpro
-        , null as user_joined_on_mitxpro
-        , null as user_is_active_on_residential
-        , null as user_joined_on_residential
     from mitx_users
     left join mitxonline_openedx_users as openedx_users_username
         on mitx_users.user_mitxonline_username = openedx_users_username.user_username
     left join mitxonline_openedx_users as openedx_users_email
         on mitx_users.user_mitxonline_email = openedx_users_email.user_email
+)
+
+, learn_user as (
+    select * from (
+        select
+            *
+            , row_number() over (
+                partition by user_email
+                order by user_created_on desc
+            ) as row_num
+        from {{ ref('stg__mitlearn__app__postgres__users_user') }}
+    )
+    where row_num = 1
+)
+
+, learn_profile as (
+    select * from {{ ref('stg__mitlearn__app__postgres__profiles_profile') }}
+)
+
+, learn_user_view as(
+    select
+        learn_user.user_global_id
+        , learn_user.user_id as mitlearn_user_id
+        , learn_user.user_email as email
+        , concat(learn_user.user_first_name, ' ', learn_user.user_last_name) as full_name
+        , learn_profile.user_current_education as highest_education
+        , learn_user.user_is_active as user_is_active_on_mitlearn
+        , learn_user.user_joined_on as user_joined_on_mitlearn
+    from learn_user
+    left join learn_profile on learn_user.user_id = learn_profile.user_id
+)
+
+, users_with_global_id as (
+    select
+        learn_user_view.mitlearn_user_id
+        , mitx_users_view.mitxonline_openedx_user_id
+        , mitx_users_view.mitxonline_application_user_id
+        , mitx_users_view.user_mitxonline_username
+        , mitx_users_view.edxorg_openedx_user_id
+        , mitx_users_view.user_edxorg_username
+        , mitx_users_view.address_country
+        , mitx_users_view.gender
+        , mitx_users_view.birth_year
+        , mitx_users_view.company
+        , mitx_users_view.job_title
+        , mitx_users_view.industry
+        , learn_user_view.user_is_active_on_mitlearn
+        , learn_user_view.user_joined_on_mitlearn
+        , mitx_users_view.user_is_active_on_mitxonline
+        , mitx_users_view.user_joined_on_mitxonline
+        , mitx_users_view.user_is_active_on_edxorg
+        , mitx_users_view.user_joined_on_edxorg
+        , coalesce(learn_user_view.full_name, mitx_users_view.full_name) as full_name
+        , coalesce(learn_user_view.user_global_id, mitx_users_view.user_global_id) as user_global_id
+        , coalesce(learn_user_view.highest_education, mitx_users_view.highest_education) as highest_education
+        , coalesce(
+            case
+                when mitx_users_view.user_is_active_on_mitxonline
+                    and mitx_users_view.user_joined_on_mitxonline > learn_user_view.user_joined_on_mitlearn
+                then mitx_users_view.email
+            end,
+            learn_user_view.email,
+            mitx_users_view.email
+        ) as email
+    from mitx_users_view
+             full outer join learn_user_view on mitx_users_view.user_global_id = learn_user_view.user_global_id
+)
+
+, combined_users as (
+    select
+        {{ dbt_utils.generate_surrogate_key(['email']) }} as user_pk
+        , user_global_id
+        , mitlearn_user_id
+        , mitxonline_openedx_user_id
+        , mitxonline_application_user_id
+        , user_mitxonline_username
+        , null as mitxpro_openedx_user_id
+        , null as mitxpro_application_user_id
+        , null as user_mitxpro_username
+        , null as residential_openedx_user_id
+        , null as user_residential_username
+        , edxorg_openedx_user_id
+        , user_edxorg_username
+        , null as emeritus_user_id
+        , null as global_alumni_user_id
+        , email
+        , full_name
+        , address_country
+        , highest_education
+        , gender
+        , birth_year
+        , company
+        , job_title
+        , industry
+        , user_is_active_on_mitlearn
+        , user_joined_on_mitlearn
+        , user_is_active_on_mitxonline
+        , user_joined_on_mitxonline
+        , user_is_active_on_edxorg
+        , user_joined_on_edxorg
+        , null as user_is_active_on_mitxpro
+        , null as user_joined_on_mitxpro
+        , null as user_is_active_on_residential
+        , null as user_joined_on_residential
+    from users_with_global_id
 
     union all
 
     select
         {{ dbt_utils.generate_surrogate_key(['mitxpro_user_view.user_email']) }} as user_pk
+        , null as user_global_id
+        , null as mitlearn_user_id
         , null as mitxonline_openedx_user_id
         , null as mitxonline_application_user_id
         , null as user_mitxonline_username
@@ -242,6 +339,8 @@ with mitx_users as (
         , mitxpro_user_view.user_company as company
         , mitxpro_user_view.user_job_title as job_title
         , mitxpro_user_view.user_industry as industry
+        , null as user_is_active_on_mitlearn
+        , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
         , null as user_joined_on_mitxonline
         , null as user_is_active_on_edxorg
@@ -260,6 +359,8 @@ with mitx_users as (
 
     select
         {{ dbt_utils.generate_surrogate_key(['user_email']) }} as user_pk
+        , null as user_global_id
+        , null as mitlearn_user_id
         , null as mitxonline_openedx_user_id
         , null as mitxonline_application_user_id
         , null as user_mitxonline_username
@@ -281,6 +382,8 @@ with mitx_users as (
         , user_company as company
         , user_job_title as job_title
         , user_industry as industry
+        , null as user_is_active_on_mitlearn
+        , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
         , null as user_joined_on_mitxonline
         , null as user_is_active_on_edxorg
@@ -296,6 +399,8 @@ with mitx_users as (
 
     select
         {{ dbt_utils.generate_surrogate_key(['user_email']) }} as user_pk
+        , null as user_global_id
+        , null as mitlearn_user_id
         , null as mitxonline_openedx_user_id
         , null as mitxonline_application_user_id
         , null as user_mitxonline_username
@@ -317,6 +422,8 @@ with mitx_users as (
         , user_company as company
         , user_job_title as job_title
         , user_industry as industry
+        , null as user_is_active_on_mitlearn
+        , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
         , null as user_joined_on_mitxonline
         , null as user_is_active_on_edxorg
@@ -332,6 +439,8 @@ with mitx_users as (
 
     select
         {{ dbt_utils.generate_surrogate_key(['mitxresidential_user_view.user_email']) }} as user_pk
+        , null as user_global_id
+        , null as mitlearn_user_id
         , null as mitxonline_openedx_user_id
         , null as mitxonline_application_user_id
         , null as user_mitxonline_username
@@ -353,6 +462,8 @@ with mitx_users as (
         , null as company
         , null as job_title
         , null as industry
+        , null as user_is_active_on_mitlearn
+        , null as user_joined_on_mitlearn
         , null as user_is_active_on_mitxonline
         , null as user_joined_on_mitxonline
         , null as user_is_active_on_edxorg
@@ -362,6 +473,7 @@ with mitx_users as (
         , mitxresidential_user_view.user_is_active as user_is_active_on_residential
         , mitxresidential_user_view.user_joined_on as user_joined_on_residential
     from mitxresidential_user_view
+
 )
 
 , ranked_users as (
@@ -371,7 +483,8 @@ with mitx_users as (
             partition by user_pk
             order by
                 greatest(
-                    user_joined_on_mitxonline
+                    user_joined_on_mitlearn
+                    , user_joined_on_mitxonline
                     , user_joined_on_edxorg
                     , user_joined_on_mitxpro
                     , user_joined_on_residential
@@ -389,6 +502,8 @@ with mitx_users as (
 , agg_view as (
     select
         user_pk
+        , max(user_global_id) as user_global_id
+        , max(mitlearn_user_id) as mitlearn_user_id
         , max(mitxonline_openedx_user_id) as mitxonline_openedx_user_id
         , max(mitxonline_application_user_id) as mitxonline_application_user_id
         , max(user_mitxonline_username) as user_mitxonline_username
@@ -401,6 +516,8 @@ with mitx_users as (
         , max(emeritus_user_id) as emeritus_user_id
         , max(global_alumni_user_id) as global_alumni_user_id
         , max(user_edxorg_username) as user_edxorg_username
+        , max(user_is_active_on_mitlearn) as user_is_active_on_mitlearn
+        , max(user_joined_on_mitlearn) as user_joined_on_mitlearn
         , max(user_is_active_on_mitxonline) as user_is_active_on_mitxonline
         , max(user_joined_on_mitxonline) as user_joined_on_mitxonline
         , max(user_is_active_on_edxorg) as user_is_active_on_edxorg
@@ -415,6 +532,8 @@ with mitx_users as (
 
 select
     base.user_pk
+    , base.user_global_id
+    , agg.mitlearn_user_id
     , agg.mitxonline_openedx_user_id
     , agg.mitxonline_application_user_id
     , agg.user_mitxonline_username
@@ -436,6 +555,12 @@ select
     , base.company
     , base.job_title
     , base.industry
+    , learn_profile.user_goals as goals
+    , learn_profile.user_delivery_preference as delivery_preference
+    , learn_profile.user_completed_onboarding as completed_onboarding
+    , learn_profile.user_certificate_desired as certificate_desired
+    , agg.user_is_active_on_mitlearn
+    , agg.user_joined_on_mitlearn
     , agg.user_is_active_on_mitxonline
     , agg.user_joined_on_mitxonline
     , agg.user_is_active_on_edxorg
@@ -446,3 +571,4 @@ select
     , agg.user_joined_on_residential
 from base_info as base
 inner join agg_view as agg on base.user_pk = agg.user_pk
+left join learn_profile on base.mitlearn_user_id = learn_profile.user_id

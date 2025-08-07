@@ -77,9 +77,6 @@ models:
     tests:
     - unique
     - not_null
-    - relationships:
-        to: ref('stg__mitlearn__app__postgres__users_user')
-        field: user_id
   - name: user_name
     description: str, display name for the user
   - name: user_bio

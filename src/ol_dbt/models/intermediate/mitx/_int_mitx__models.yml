@@ -119,6 +119,11 @@ models:
     description: str, primary key for this table to identify the user
     tests:
     - unique
+  - name: user_global_id
+    description: str, str, The SSO ID (usually a Keycloak UUID) for the user across
+      all platforms.
+    tests:
+    - unique
   - name: is_mitxonline_user
     description: boolean, indicating if this user has an account on MITx Online
   - name: is_edxorg_user
