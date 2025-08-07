@@ -555,6 +555,10 @@ select
     , base.company
     , base.job_title
     , base.industry
+    , learn_profile.user_goals as goals
+    , learn_profile.user_delivery_preference as delivery_preference
+    , learn_profile.user_completed_onboarding as completed_onboarding
+    , learn_profile.user_certificate_desired as certificate_desired
     , agg.user_is_active_on_mitlearn
     , agg.user_joined_on_mitlearn
     , agg.user_is_active_on_mitxonline
@@ -567,3 +571,4 @@ select
     , agg.user_joined_on_residential
 from base_info as base
 inner join agg_view as agg on base.user_pk = agg.user_pk
+left join learn_profile on base.mitlearn_user_id = learn_profile.user_id

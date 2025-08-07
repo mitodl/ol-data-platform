@@ -298,6 +298,17 @@ models:
     description: str, user's job title
   - name: industry
     description: str, user's job industry
+  - name: delivery_preference
+    description: array, a list of course format that MIT Learn users prefer to take
+      courses in. e.g. 'online', 'in-person', 'hybrid', 'offline'.
+  - name: goals
+    description: array, learning goals or objectives set by MIT Learn users
+  - name: certificate_desired
+    description: boolean, indicating whether the MIT Learn user wants to receive certificates
+      upon course completion
+  - name: completed_onboarding
+    description: boolean, indicating whether the user has completed the platform onboarding
+      process on MIT Learn
   - name: user_is_active_on_mitlearn
     description: boolean, indicating if user's account is active on MIT Learn.
   - name: user_joined_on_mitlearn
