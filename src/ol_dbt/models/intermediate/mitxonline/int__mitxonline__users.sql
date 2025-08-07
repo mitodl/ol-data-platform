@@ -77,7 +77,4 @@ left join micromasters_profile on users.user_username = micromasters_profile.use
 left join micromasters_users
     on micromasters_profile.user_profile_id = micromasters_users.user_profile_id
 left join openedx_users
-    on (
-        users.user_username = openedx_users.user_username
-        or users.user_email = openedx_users.user_email
-    )
+    on users.user_email = openedx_users.user_email
