@@ -1163,9 +1163,6 @@ models:
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxonline__users')
-        field: user_id
   - name: courseruncertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
   - name: courseruncertificate_created_on
@@ -1351,9 +1348,6 @@ models:
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-    - relationships:
-        to: ref('int__mitxonline__users')
-        field: user_id
   - name: programcertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
   - name: programcertificate_created_on

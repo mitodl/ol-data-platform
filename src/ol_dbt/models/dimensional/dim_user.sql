@@ -238,14 +238,12 @@ with mitx_users as (
 
 , users_with_global_id as (
     select
-        mitx_users_view.user_global_id
-        , learn_user_view.mitlearn_user_id
+        learn_user_view.mitlearn_user_id
         , mitx_users_view.mitxonline_openedx_user_id
         , mitx_users_view.mitxonline_application_user_id
         , mitx_users_view.user_mitxonline_username
         , mitx_users_view.edxorg_openedx_user_id
         , mitx_users_view.user_edxorg_username
-        , mitx_users_view.full_name
         , mitx_users_view.address_country
         , mitx_users_view.gender
         , mitx_users_view.birth_year
@@ -258,6 +256,8 @@ with mitx_users as (
         , mitx_users_view.user_joined_on_mitxonline
         , mitx_users_view.user_is_active_on_edxorg
         , mitx_users_view.user_joined_on_edxorg
+        , coalesce(learn_user_view.full_name, mitx_users_view.full_name) as full_name
+        , coalesce(learn_user_view.user_global_id, mitx_users_view.user_global_id) as user_global_id
         , coalesce(learn_user_view.highest_education, mitx_users_view.highest_education) as highest_education
         , coalesce(
             case
