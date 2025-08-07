@@ -65,12 +65,6 @@ repos:
     - types-pytz
     - types-pymysql
     - types-requests
-- repo: https://github.com/tconbeer/sqlfmt
-  rev: v0.27.0
-  hooks:
-  - id: sqlfmt
-    language_version: python
-    additional_dependencies: ['.[jinjafmt]']
 - repo: https://github.com/sqlfluff/sqlfluff
   rev: 3.4.2
   hooks:
