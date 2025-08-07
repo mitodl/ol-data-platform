@@ -508,8 +508,16 @@ def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
             continue
         source = source_match.group(1)
 
+        # Extract the meaningful part of the table name after the source prefix
+        # e.g., raw__mitlearn__app__postgres__auth_user -> app__postgres__auth_user
+        source_prefix = f"raw__{source}__"
+        if table_name.startswith(source_prefix):
+            table_suffix = table_name[len(source_prefix) :]
+        else:
+            table_suffix = table_name  # fallback to full name
+
         # Create file paths within the staging directory
-        model_name = f"stg_{source}__{table_name}"
+        model_name = f"stg__{source}__{table_suffix}"
         sql_file_path = staging_dir / f"{model_name}.sql"
 
         try:
@@ -548,7 +556,7 @@ def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
     # Generate consolidated YAML file using dbt-codegen generate_model_yaml
     if generated_models:
         domain = extract_domain_from_prefix(prefix)
-        consolidated_yaml_path = staging_dir / f"_stg_{domain}_models.yml"
+        consolidated_yaml_path = staging_dir / f"_stg__{domain}__models.yml"
 
         try:
             # First, parse the project to make dbt aware of the new models
@@ -564,7 +572,7 @@ def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
                 print(f"Warning: dbt parse failed: {parse_error}")
                 print("Proceeding with YAML generation anyway...")
 
-            # Use dbt-codegen's generate_model_yaml macro
+            # Use our enhanced generate_model_yaml macro
             model_yaml_args = json.dumps(
                 {
                     "model_names": generated_models,
@@ -575,7 +583,7 @@ def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
 
             result_yaml = run_dbt_command(
                 str(dbt_project_dir),
-                ["generate_model_yaml", "--args", model_yaml_args],
+                ["generate_model_yaml_enhanced", "--args", model_yaml_args],
                 target,
             )
 
