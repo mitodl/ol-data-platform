@@ -17,7 +17,7 @@ with source as (
         , scim_id as user_scim_id
         , scim_username as user_scim_username
         , scim_external_id as user_scim_external_id
-        , global_id as user_global_id
+        , coalesce(nullif(global_id, ''), scim_external_id) as user_global_id
         , {{ cast_timestamp_to_iso8601('created_on') }} as user_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as user_updated_on
         , {{ cast_timestamp_to_iso8601('date_joined') }} as user_joined_on
