@@ -298,6 +298,9 @@ models:
     description: str, user's job title
   - name: industry
     description: str, user's job industry
+  - name: topic_interests
+    description: array, a list of topic interests selected by MIT Learn users on their
+      profile. e.g. Art, Design & Architecture, Health & Medicine, Business & Management
   - name: delivery_preference
     description: array, a list of course format that MIT Learn users prefer to take
       courses in. e.g. 'online', 'in-person', 'hybrid', 'offline'.

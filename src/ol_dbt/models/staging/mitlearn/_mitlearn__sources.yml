@@ -107,3 +107,25 @@ sources:
       description: Boolean flag indicating if user wants to earn certificates
     - name: completed_onboarding
       description: Boolean flag indicating if user has completed onboarding process
+
+  - name: raw__mitlearn__app__postgres__learning_resources_learningresourcetopic
+    description: Learning resource topics
+    columns:
+    - name: id
+      description: int, primary key for the learning resource topic
+    - name: name
+      description: str, name of the learning resource topic
+    - name: parent_id
+      description: int, foreign key referencing the parent topic (if any)
+    - name: topic_uuid
+      description: str, unique identifier for the learning resource topic
+
+  - name: raw__mitlearn__app__postgres__profiles_profile_topic_interests
+    description: learning resource topic interests for user profiles
+    columns:
+    - name: id
+      description: int, primary key for the profile topic interest record
+    - name: profile_id
+      description: int, foreign key referencing the user profile
+    - name: learningresourcetopic_id
+      description: int, foreign key to the learning resource topic

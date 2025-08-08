@@ -124,3 +124,39 @@ models:
     description: timestamp, date and time when the profile was most recently updated
     tests:
     - not_null
+
+  - name: stg__mitlearn__app__postgres__learning_resources_learningresourcetopic
+    description: Learning resource topics
+    columns:
+    - name: learningresourcetopic_id
+      description: int, primary key for the learning resource topic
+      tests:
+      - unique
+      - not_null
+    - name: learningresourcetopic_name
+      description: str, name of the learning resource topic
+      tests:
+      - not_null
+    - name: learningresourcetopic_parent_id
+      description: int, foreign key referencing the parent topic (if any)
+    - name: learningresourcetopic_uuid
+      description: str, unique identifier for the learning resource topic
+      tests:
+      - not_null
+
+  - name: stg__mitlearn__app__postgres__profiles_profile_topic_interests
+    description: learning resource topic interests for user profiles
+    columns:
+    - name: profiletopicinterests_id
+      description: int, primary key for the profile topic interest record
+      tests:
+      - unique
+      - not_null
+    - name: profile_id
+      description: int, foreign key referencing the user profile
+      tests:
+      - not_null
+    - name: learningresourcetopic_id
+      description: int, foreign key to the learning resource topic
+      tests:
+      - not_null
