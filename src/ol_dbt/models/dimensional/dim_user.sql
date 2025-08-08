@@ -223,6 +223,17 @@ with mitx_users as (
     select * from {{ ref('stg__mitlearn__app__postgres__profiles_profile') }}
 )
 
+, learn_user_topic_interests as (
+    select
+        profile_id
+        , array_agg(topic.learningresourcetopic_name) as topic_interests
+    from {{ ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests') }} as topic_interests
+    join {{ ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic') }} as topic
+        on topic_interests.learningresourcetopic_id = topic.learningresourcetopic_id
+    group by profile_id
+
+)
+
 , learn_user_view as(
     select
         learn_user.user_global_id
@@ -555,6 +566,7 @@ select
     , base.company
     , base.job_title
     , base.industry
+    , learn_user_topic_interests.topic_interests as topic_interests
     , learn_profile.user_goals as goals
     , learn_profile.user_delivery_preference as delivery_preference
     , learn_profile.user_completed_onboarding as completed_onboarding
@@ -572,3 +584,4 @@ select
 from base_info as base
 inner join agg_view as agg on base.user_pk = agg.user_pk
 left join learn_profile on base.mitlearn_user_id = learn_profile.user_id
+left join learn_user_topic_interests on learn_profile.profile_id = learn_user_topic_interests.profile_id
