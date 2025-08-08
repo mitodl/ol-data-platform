@@ -532,7 +532,7 @@ with mitx_users as (
 
 select
     base.user_pk
-    , base.user_global_id
+    , agg.user_global_id
     , agg.mitlearn_user_id
     , agg.mitxonline_openedx_user_id
     , agg.mitxonline_application_user_id
