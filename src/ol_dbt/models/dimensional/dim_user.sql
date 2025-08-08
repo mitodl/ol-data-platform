@@ -225,12 +225,12 @@ with mitx_users as (
 
 , learn_user_topic_interests as (
     select
-        profile_id
+        profile_topic_interests.profile_id
         , array_agg(topic.learningresourcetopic_name) as topic_interests
-    from {{ ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests') }} as topic_interests
+    from {{ ref('stg__mitlearn__app__postgres__profiles_profile_topic_interests') }} as profile_topic_interests
     join {{ ref('stg__mitlearn__app__postgres__learning_resources_learningresourcetopic') }} as topic
-        on topic_interests.learningresourcetopic_id = topic.learningresourcetopic_id
-    group by profile_id
+        on profile_topic_interests.learningresourcetopic_id = topic.learningresourcetopic_id
+    group by profile_topic_interests.profile_id
 
 )
 
@@ -494,8 +494,7 @@ with mitx_users as (
             partition by user_pk
             order by
                 greatest(
-                    user_joined_on_mitlearn
-                    , user_joined_on_mitxonline
+                    user_joined_on_mitxonline
                     , user_joined_on_edxorg
                     , user_joined_on_mitxpro
                     , user_joined_on_residential
