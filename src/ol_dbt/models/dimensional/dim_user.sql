@@ -494,7 +494,8 @@ with mitx_users as (
             partition by user_pk
             order by
                 greatest(
-                    user_joined_on_mitxonline
+                    user_joined_on_mitlearn
+                    , user_joined_on_mitxonline
                     , user_joined_on_edxorg
                     , user_joined_on_mitxpro
                     , user_joined_on_residential
