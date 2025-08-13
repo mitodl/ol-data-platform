@@ -249,3 +249,39 @@ models:
   - name: max_video_index
     description: int, The maximum sequence number giving order in which this block
       content appears within the course.
+
+- name: cheating_detection_report
+  description: Problem and grade information that is associated with a particular course run, platform, and learner
+    that is used for cheating detection analysis.
+  columns:
+  - name: platform
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx.
+  - name: openedx_user_id
+    description: int, user ID on the corresponding open edX platform
+  - name: courserun_readable_id
+    description: string, foreign key to dim_course_content, referencing the edX course
+      run ID
+  - name: problem_block_fk
+    description: string, foreign key referencing the problem block ID in the dim_course_content
+      table, formatted as block-v1:{org}+{course}+{run}type@problem@{hash code}.
+  - name: unit_name
+    description: string, title of the course content block. It is the name field for
+      the unit on the Studio 'Course Outline' page.
+  - name: chapter_name
+    description: string, title of the course content block. It is the name field for
+      the chapter.
+  - name: max_grade
+    description: number, maximum possible grade value for the problem
+  - name: attempts_on_problem
+    description: int, max attempt number generated when parsing answer submissions
+  - name: grades
+    description: number, current values indicating the total unweighted grades for this
+      problem that the learner has scored. e.g. how many responses they got right
+      within the problem. This data is also available in courseactivity_problemcheck
+  - name: time_spent_on_problem
+    description: string, the estimated amount of time spent on a problem. 
+      It cannot exceed 600 seconds or it will be null.
+  - name: courserungrade_grade
+    description: float, course grade on edX.org or MITxOnline or xPro range from 0
+      to 1
