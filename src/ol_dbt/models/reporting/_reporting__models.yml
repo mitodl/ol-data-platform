@@ -251,8 +251,8 @@ models:
       content appears within the course.
 
 - name: cheating_detection_report
-  description: Problem and grade information that is associated with a particular course run, platform, and learner
-    that is used for cheating detection analysis.
+  description: Problem and grade information that is associated with a particular
+    course run, platform, and learner that is used for cheating detection analysis.
   columns:
   - name: platform
     description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
@@ -276,12 +276,12 @@ models:
   - name: attempts_on_problem
     description: int, max attempt number generated when parsing answer submissions
   - name: grades
-    description: number, current values indicating the total unweighted grades for this
-      problem that the learner has scored. e.g. how many responses they got right
+    description: number, current values indicating the total unweighted grades for
+      this problem that the learner has scored. e.g. how many responses they got right
       within the problem. This data is also available in courseactivity_problemcheck
   - name: time_spent_on_problem
-    description: string, the estimated amount of time spent on a problem. 
-      It cannot exceed 600 seconds or it will be null.
+    description: string, the estimated amount of time spent on a problem. It cannot
+      exceed 600 seconds or it will be null.
   - name: courserungrade_grade
     description: float, course grade on edX.org or MITxOnline or xPro range from 0
       to 1
