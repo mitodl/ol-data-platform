@@ -22,7 +22,7 @@ with problem_events as (
 )
 
 , problems_joined as (
-    select
+    select 
         problem_events.platform
         , problem_events.openedx_user_id
         , problem_events.courserun_readable_id
@@ -34,34 +34,34 @@ with problem_events as (
         , overall_grade.courserungrade_grade
         , unit.block_title as unit_name
         , chapter.block_title as chapter_name
-        , lag(problem_events.event_timestamp, 1)
+        , lag(problem_events.event_timestamp, 1) 
             over (
-                partition by
+                partition by 
                     problem_events.platform
                     , problem_events.openedx_user_id
                     , problem_events.courserun_readable_id
                 order by problem_events.event_timestamp
-            ) as prev_event_timestamp
+            ) as prev_event_timestamp 
     from problem_events
     left join overall_grade
-        on
+        on 
             cast(problem_events.openedx_user_id as varchar) = overall_grade.user_id
             and problem_events.courserun_readable_id = overall_grade.courserun_readable_id
     left join course_content as cc
-        on
+        on 
             problem_events.problem_block_fk = cc.block_id
             and cc.is_latest = true
     left join course_content as unit
-        on
+        on 
             cc.parent_block_id = unit.block_id
             and unit.is_latest = true
     left join course_content as chapter
-        on
+        on 
             cc.chapter_block_id = chapter.block_id
             and chapter.is_latest = true
 )
 
-select
+select 
     platform
     , openedx_user_id
     , courserun_readable_id
@@ -72,14 +72,14 @@ select
     , max(attempt) as attempts_on_problem
     , array_agg(grade) as grades
     , min(
-        case
+        case 
             when date_diff('second', event_timestamp, prev_event_timestamp) < 600
-                then event_timestamp - prev_event_timestamp
+                then cast(event_timestamp - prev_event_timestamp as varchar)
         end
     ) as time_spent_on_problem
     , max(courserungrade_grade) as courserungrade_grade
 from problems_joined
-group by
+group by 
     platform
     , openedx_user_id
     , courserun_readable_id
