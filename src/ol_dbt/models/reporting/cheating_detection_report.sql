@@ -15,6 +15,7 @@ with problem_events as (
         user_id
         , courserun_readable_id
         , max(courserungrade_grade) as courserungrade_grade
+        , sum(case when courserunenrollment_enrollment_mode = 'verified' then 1 else 0 end) as verified_cnt
     from enrollment_detail
     group by
         user_id
@@ -43,7 +44,7 @@ with problem_events as (
                 order by problem_events.event_timestamp
             ) as prev_event_timestamp
     from problem_events
-    left join overall_grade
+    inner join overall_grade
         on
             cast(problem_events.openedx_user_id as varchar) = overall_grade.user_id
             and problem_events.courserun_readable_id = overall_grade.courserun_readable_id
@@ -59,6 +60,7 @@ with problem_events as (
         on
             cc.chapter_block_id = chapter.block_id
             and chapter.is_latest = true
+    where overall_grade.verified_cnt > 0
 )
 
 select
