@@ -160,3 +160,151 @@ models:
       description: int, foreign key to the learning resource topic
       tests:
       - not_null
+
+  - name: stg__mitlearn__app__postgres__course_catalog_userlist
+    description: MIT Learn user-created lists for organizing courses and learning
+      resources
+    columns:
+    - name: userlist_id
+      description: int, unique identifier for the user list
+      tests:
+      - unique
+      - not_null
+    - name: userlist_title
+      description: str, title or name of the user list
+    - name: userlist_author_user_id
+      description: int, foreign key referencing the user who created this list
+      tests:
+      - not_null
+    - name: userlist_image_url
+      description: str, URL or path to the list's cover image
+    - name: userlist_type
+      description: str, type or category of the user list
+    - name: userlist_privacy_level
+      description: str, privacy setting for the list (public, private, etc.)
+    - name: userlist_image_description
+      description: str, alt text or description for the list's cover image
+    - name: userlist_short_description
+      description: str, brief description or summary of the user list
+    - name: userlist_created_on
+      description: timestamp, date and time when this user list was created
+      tests:
+      - not_null
+    - name: userlist_updated_on
+      description: timestamp, date and time when this user list was last updated
+      tests:
+      - not_null
+
+  - name: stg__mitlearn__app__postgres__course_catalog_userlist_offered_by
+    description: Association table linking user lists to the institutions or organizations
+      that offer the learning resources
+    columns:
+    - name: userlistofferedby_id
+      description: int, unique identifier for the user list offered by association
+      tests:
+      - unique
+      - not_null
+    - name: userlist_id
+      description: int, foreign key referencing the user list
+      tests:
+      - not_null
+    - name: learningresourceofferor_id
+      description: int, foreign key referencing the institution or organization offering
+        the learning resources
+      tests:
+      - not_null
+
+  - name: stg__mitlearn__app__postgres__course_catalog_userlist_topics
+    description: Association table linking user lists to course topics for categorization
+      and filtering
+    columns:
+    - name: userlisttopics_id
+      description: int, unique identifier for the user list topic association
+      tests:
+      - unique
+      - not_null
+    - name: userlist_id
+      description: int, foreign key referencing the user list
+      tests:
+      - not_null
+    - name: coursetopic_id
+      description: int, foreign key referencing the course topic
+      tests:
+      - not_null
+
+- name: stg__mitlearn__app__postgres__course_catalog_userlistitem
+  description: Individual items within user lists, linking learning resources to specific
+    user-created lists
+  columns:
+  - name: userlistitem_id
+    description: int, unique identifier for the user list item
+    tests:
+    - unique
+    - not_null
+  - name: userlistitem_position
+    description: int, order position of this item within the user list
+  - name: userlistitem_object_id
+    description: int, foreign key referencing the learning resource or content object
+  - name: userlist_id
+    description: int, foreign key referencing the user list this item belongs to
+    tests:
+    - not_null
+  - name: userlistitem_content_type_id
+    description: int, foreign key referencing the content type of the associated object
+  - name: userlistitem_created_on
+    description: timestamp, date and time when this list item was created
+    tests:
+    - not_null
+  - name: userlistitem_updated_on
+    description: timestamp, date and time when this list item was last updated
+    tests:
+    - not_null
+
+  - name: stg__mitlearn__app__postgres__learning_resources_userlist
+    description: MIT Learn user-created lists for organizing learning resources
+    columns:
+    - name: userlist_id
+      description: int, unique identifier for the user list
+      tests:
+      - unique
+      - not_null
+    - name: userlist_title
+      description: str, title or name of the user list
+    - name: userlist_author_user_id
+      description: int, foreign key referencing the user who created this list
+    - name: userlist_description
+      description: str, description or summary of the user list content
+    - name: userlist_privacy_level
+      description: str, privacy setting for the list (public, private, etc.)
+    - name: userlist_created_on
+      description: timestamp, date and time when this user list was created
+      tests:
+      - not_null
+    - name: userlist_updated_on
+      description: timestamp, date and time when this user list was last updated
+      tests:
+      - not_null
+
+  - name: stg__mitlearn__app__postgres__learning_resources_userlistrelationship
+    description: Relationships between user lists, defining parent-child hierarchies
+      and positioning
+    columns:
+    - name: userlistrelationship_id
+      description: int, unique identifier for the user list relationship
+      tests:
+      - unique
+      - not_null
+    - name: userlistrelationship_child_id
+      description: int, foreign key referencing the child user list in the relationship
+    - name: userlistrelationship_position
+      description: int, position or order of the child list within the parent list
+    - name: userlistrelationship_parent_id
+      description: int, foreign key referencing the parent user list in the relationship
+    - name: userlistrelationship_created_on
+      description: timestamp, date and time when this relationship was created
+      tests:
+      - not_null
+    - name: userlistrelationship_updated_on
+      description: timestamp, date and time when this relationship was last updated
+      tests:
+      - not_null
