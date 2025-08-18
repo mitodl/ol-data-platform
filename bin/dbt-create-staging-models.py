@@ -556,7 +556,7 @@ def generate_staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
     # Generate consolidated YAML file using dbt-codegen generate_model_yaml
     if generated_models:
         domain = extract_domain_from_prefix(prefix)
-        consolidated_yaml_path = staging_dir / f"_stg__{domain}__models.yml"
+        consolidated_yaml_path = staging_dir / f"_stg_{domain}__models.yml"
 
         try:
             # First, parse the project to make dbt aware of the new models
