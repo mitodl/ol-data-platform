@@ -24,6 +24,13 @@ clean-targets:         # directories to be removed by `dbt clean`
 - "target"
 - "dbt_packages"
 
+dispatch:
+- macro_namespace: dbt_utils
+  search_order: ['trino_utils', 'dbt_utils']
+- macro_namespace: dbt_date
+  search_order: ['trino_utils', 'dbt_date']
+- macro_namespace: metrics
+  search_order: ['trino_utils', 'metrics']
 
 vars:
   schema_suffix: dev

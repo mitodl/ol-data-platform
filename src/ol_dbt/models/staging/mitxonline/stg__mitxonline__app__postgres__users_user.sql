@@ -11,6 +11,10 @@ with source as (
         , username as user_username
         , email as user_email
         , is_active as user_is_active
+        , nullif(global_id, '') as user_global_id
+        , nullif(scim_id, '') as user_scim_id
+        , nullif(scim_username, '') as user_scim_username
+        , nullif(scim_external_id, '') as user_scim_external_id
         , replace(replace(replace(name, ' ', '<>'), '><', ''), '<>', ' ') as user_full_name
         ,{{ cast_timestamp_to_iso8601('created_on') }} as user_joined_on
         ,{{ cast_timestamp_to_iso8601('last_login') }} as user_last_login

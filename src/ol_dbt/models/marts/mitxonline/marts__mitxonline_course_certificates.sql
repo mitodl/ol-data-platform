@@ -19,7 +19,4 @@ select
     , users.openedx_user_id
 from course_certificates
 left join users
-    on (
-        course_certificates.user_mitxonline_username = users.user_username
-        or course_certificates.user_email = users.user_email
-    )
+    on course_certificates.user_email = users.user_email

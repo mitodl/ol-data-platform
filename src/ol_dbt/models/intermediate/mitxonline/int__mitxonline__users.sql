@@ -42,6 +42,7 @@ with users as (
 
 select
     users.user_id
+    , users.user_global_id
     , openedx_users.openedx_user_id
     , users.user_username
     , users.user_full_name
@@ -76,7 +77,4 @@ left join micromasters_profile on users.user_username = micromasters_profile.use
 left join micromasters_users
     on micromasters_profile.user_profile_id = micromasters_users.user_profile_id
 left join openedx_users
-    on (
-        users.user_username = openedx_users.user_username
-        or users.user_email = openedx_users.user_email
-    )
+    on lower(users.user_email) = lower(openedx_users.user_email)
