@@ -285,6 +285,24 @@ models:
       tests:
       - not_null
 
+  - name: stg__mitlearn__app__postgres__learning_resources_userlist_topics
+    description: Association table linking user lists to learning resource topics
+      for categorization and filtering
+    columns:
+    - name: userlisttopics_id
+      description: int, unique identifier for the user list topic association
+      tests:
+      - unique
+      - not_null
+    - name: userlist_id
+      description: int, foreign key referencing the user list
+      tests:
+      - not_null
+    - name: learningresourcetopic_id
+      description: int, foreign key referencing the learning resource topic
+      tests:
+      - not_null
+
   - name: stg__mitlearn__app__postgres__learning_resources_userlistrelationship
     description: Relationships between user lists, defining parent-child hierarchies
       and positioning

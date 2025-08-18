@@ -255,6 +255,25 @@ sources:
     - name: privacy_level
       description: Privacy setting for the list (public, private, etc.)
 
+  - name: raw__mitlearn__app__postgres__learning_resources_userlist_topics
+    description: Association table linking user lists to learning resource topics
+      for categorization and filtering
+    columns:
+    - name: _airbyte_raw_id
+      description: Unique identifier for this Airbyte record
+    - name: _airbyte_extracted_at
+      description: Timestamp when this record was extracted by Airbyte
+    - name: _airbyte_meta
+      description: Airbyte metadata for this record
+    - name: _airbyte_generation_id
+      description: Airbyte generation identifier for this record
+    - name: id
+      description: Primary key, unique identifier for the user list topic association
+    - name: userlist_id
+      description: Foreign key referencing the user list
+    - name: learningresourcetopic_id
+      description: Foreign key referencing the learning resource topic
+
   - name: raw__mitlearn__app__postgres__learning_resources_userlistrelationship
     description: Relationships between user lists, defining parent-child hierarchies
       and positioning
