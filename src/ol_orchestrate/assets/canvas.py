@@ -1,3 +1,4 @@
+import json
 import time
 from pathlib import Path
 
@@ -6,10 +7,12 @@ from dagster import (
     AssetExecutionContext,
     AssetIn,
     AssetKey,
+    AssetOut,
     DataVersion,
     Output,
     StaticPartitionsDefinition,
     asset,
+    multi_asset,
 )
 
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
@@ -65,12 +68,20 @@ canvas_course_ids = StaticPartitionsDefinition(
 )
 
 
-@asset(
-    key=AssetKey(["canvas", "course_content"]),
+@multi_asset(
     group_name="canvas",
     required_resource_keys={"canvas_api"},
-    io_manager_key="s3file_io_manager",
     partitions_def=canvas_course_ids,
+    outs={
+        "course_content": AssetOut(
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(["canvas", "course_content"]),
+        ),
+        "course_file_ids": AssetOut(
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(["canvas", "course_file_ids"]),
+        ),
+    },
 )
 def export_course_content(context: AssetExecutionContext):
     course_id = int(context.partition_key)
@@ -130,8 +141,40 @@ def export_course_content(context: AssetExecutionContext):
 
     context.log.info("Downloading %s file to %s", download_url, target_path)
 
+    # Course file ID extraction
+    course_file_generator = context.resources.canvas_api.client.get_course_files(
+        course_id
+    )
+    files_detail = []
+    for course_file in course_file_generator:
+        for file in course_file:
+            folder_id = file["folder_id"]
+            folder_detail = context.resources.canvas_api.client.get_course_folders(
+                course_id, folder_id
+            )
+            folder_path = folder_detail["full_name"]
+            files_detail.append(
+                {
+                    "file_id": file["id"],
+                    "file_name": file["filename"],
+                    "file_path": folder_path + "/" + file["filename"],
+                    "url": f"https://canvas.mit.edu/courses/{course_id}/files/{file['id']}/",
+                }
+            )
+
+    context.log.info(
+        "Total extracted %d files from course %s", len(files_detail), course_id
+    )
+
+    json_file = Path(f"file_ids_{data_version}.json")
+    json_file_path = f"{'/'.join(context.asset_key_for_output('course_content').path)}/{course_id}/file_ids_{data_version}.json"  # noqa: E501
+
+    with Path.open(json_file, "w") as file:
+        json.dump(files_detail, file, indent=2)
+
     yield Output(
         value=(course_content_path, target_path),
+        output_name="course_content",
         data_version=DataVersion(data_version),
         metadata={
             "course_id": course_id,
@@ -139,6 +182,18 @@ def export_course_content(context: AssetExecutionContext):
             "course_code": course["course_code"],
             "course_readable_id": course["sis_course_id"],
             "object_key": target_path,
+        },
+    )
+
+    yield Output(
+        (json_file, json_file_path),
+        output_name="course_file_ids",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": course_id,
+            "file_count": len(files_detail),
+            "data_version": data_version,
+            "object_key": json_file_path,
         },
     )
 
