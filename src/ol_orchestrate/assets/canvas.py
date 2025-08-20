@@ -212,15 +212,25 @@ def export_course_content(context: AssetExecutionContext):
     description="Notify Learn API via webhook after canvas course export.",
     automation_condition=upstream_or_code_changes(),
     partitions_def=canvas_course_ids,
-    ins={"canvas_content_export": AssetIn(key=AssetKey(["canvas", "course_content"]))},
+    ins={
+        "canvas_content_export": AssetIn(key=AssetKey(["canvas", "course_content"])),
+        "course_metadata_export": AssetIn(key=AssetKey(["canvas", "course_metadata"])),
+    },
     required_resource_keys={"canvas_api", "learn_api"},
 )
-def course_content_metadata(context: AssetExecutionContext, canvas_content_export):
+def course_content_metadata(
+    context: AssetExecutionContext, canvas_content_export, course_metadata_export
+):
     course_id = int(context.partition_key)
     metadata = context.resources.canvas_api.client.get_course(course_id)
     # canvas_content_export is a full path to the exported course content file
     relative_path = str(canvas_content_export).split("canvas/course_content/", 1)[-1]
     content_path = f"canvas/course_content/{relative_path}"
+
+    metadata_relative_path = str(course_metadata_export).split(
+        "canvas/course_content/", 1
+    )[-1]
+    metadata_path = f"canvas/course_content/{metadata_relative_path}"
 
     data = {
         "course_id": course_id,
@@ -228,6 +238,7 @@ def course_content_metadata(context: AssetExecutionContext, canvas_content_expor
         "course_code": metadata["course_code"],
         "course_readable_id": metadata["sis_course_id"],
         "content_path": content_path,
+        "metadata_path": metadata_path,
         "source": "canvas",
         "time": time.time(),
     }
