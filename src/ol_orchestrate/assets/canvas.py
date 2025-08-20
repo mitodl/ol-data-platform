@@ -77,9 +77,9 @@ canvas_course_ids = StaticPartitionsDefinition(
             io_manager_key="s3file_io_manager",
             key=AssetKey(["canvas", "course_content"]),
         ),
-        "course_files": AssetOut(
+        "course_metadata": AssetOut(
             io_manager_key="s3file_io_manager",
-            key=AssetKey(["canvas", "course_files"]),
+            key=AssetKey(["canvas", "course_metadata"]),
         ),
     },
 )
@@ -166,11 +166,19 @@ def export_course_content(context: AssetExecutionContext):
         "Total extracted %d files from course %s", len(files_detail), course_id
     )
 
-    json_file = Path(f"course_files_{data_version}.json")
-    json_file_path = f"{'/'.join(context.asset_key_for_output('course_content').path)}/{course_id}/course_files_{data_version}.json"  # noqa: E501
+    json_file = Path(f"{data_version}.metadata.json")
+    json_file_path = f"{'/'.join(context.asset_key_for_output('course_content').path)}/{course_id}/{data_version}.metadata.json"  # noqa: E501
 
+    course_metadata = {
+        "course_files": files_detail,
+        "course_id": course_id,
+        "course_name": course["name"],
+        "course_code": course["course_code"],
+        "course_readable_id": course["sis_course_id"],
+        "course_created_at": course["created_at"],
+    }
     with Path.open(json_file, "w") as file:
-        json.dump(files_detail, file, indent=2)
+        json.dump(course_metadata, file, indent=2)
 
     yield Output(
         value=(course_content_path, target_path),
@@ -187,7 +195,7 @@ def export_course_content(context: AssetExecutionContext):
 
     yield Output(
         (json_file, json_file_path),
-        output_name="course_files",
+        output_name="course_metadata",
         data_version=DataVersion(data_version),
         metadata={
             "course_id": course_id,
