@@ -23,12 +23,9 @@ models:
     description: str, the initial question of the chat session.
   - name: edx_module_id
     description: str, edX module ID for the chat session
-    tests:
-    - not_null
   - name: courserun_readable_id
-    description: str, the edX course ID for the chat session
-    tests:
-    - not_null
+    description: str, the course ID for the chat session. May be blank for Canvas
+      courses
   - name: user_id
     description: int, user ID in learn AI application. Null if the user is not logged
       in.
