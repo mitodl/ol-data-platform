@@ -1955,3 +1955,25 @@ sources:
     - name: course_key
       description: string, unique string to identify a course run on the corresponding
         platform.
+
+  - name: raw__mitxonline__app__postgres__openedx_openedxuser
+    description: Mapping of MITx Online users to open edX users
+    columns:
+    - name: id
+      description: int, the primary key for the openedx_openedxuser table
+    - name: user_id
+      description: int, the foreign key referencing the users_user table in the MITx
+        Online app
+    - name: platform
+      description: str, the platform where the user is registered. e.g. "edx"
+    - name: edx_username
+      description: str, the username of the user on the open edX platform
+    - name: has_been_synced
+      description: boolean, indicating whether a corresponding user has been created
+        on the open edX platform
+    - name: desired_edx_username
+      description: str, the desired username for the user on the open edX platform
+    - name: created_on
+      description: timestamp, date and time when this record was created
+    - name: updated_on
+      description: timestamp, date and time when this record was last updated
