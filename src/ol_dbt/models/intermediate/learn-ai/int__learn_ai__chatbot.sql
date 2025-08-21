@@ -51,6 +51,10 @@ select
     , users.user_full_name
     , users.user_username
     , users.user_global_id
+    , djangocheckpoint.checkpoint_source
+    , djangocheckpoint.checkpoint_step
+    , djangocheckpoint.human_message
+    , djangocheckpoint.agent_message
     , djangocheckpoint.checkpoint_json
     , djangocheckpoint.checkpoint_metadata
     , djangocheckpoint.parent_checkpoint_id

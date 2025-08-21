@@ -16,6 +16,7 @@ with mitxonline_users as (
 , mitxonline_users_view as (
     select
         mitxonline_users.user_id as user_mitxonline_id
+        , mitxonline_users.user_global_id
         , mitxonline_users.user_username as user_mitxonline_username
         , mitxonline_users.user_edxorg_username
         , mitxonline_users.user_email as user_mitxonline_email
@@ -86,6 +87,7 @@ with mitxonline_users as (
     select
         mitxonline_users_view.user_mitxonline_id
         , edxorg_users_view.user_edxorg_id
+        , mitxonline_users_view.user_global_id
         , mitxonline_users_view.user_mitxonline_username
         , edxorg_users_view.user_edxorg_username
         , mitxonline_users_view.user_mitxonline_email
@@ -129,6 +131,7 @@ with mitxonline_users as (
 select
     is_mitxonline_user
     , is_edxorg_user
+    , user_global_id
     , user_mitxonline_id
     , user_edxorg_id
     , user_micromasters_id
@@ -170,6 +173,7 @@ union distinct
 select
     if(micromasters_users.user_mitxonline_username is not null, true, false) as is_mitxonline_user
     , if(micromasters_users.user_edxorg_username is not null, true, false) as is_edxorg_user
+    , null as user_global_id
     , null as user_mitxonline_id
     , null as user_edxorg_id
     , micromasters_users.user_id as user_micromasters_id

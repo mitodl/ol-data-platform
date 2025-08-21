@@ -1,0 +1,411 @@
+---
+version: 2
+
+models:
+- name: stg__zendesk__ticket
+  description: Zendesk tickets
+  columns:
+  - name: ticket_id
+    description: int, primary key for the ticket
+    tests:
+    - not_null
+    - unique
+  - name: ticket_via_object
+    description: object, the via object describes how or why the ticket object was
+      created.
+    tests:
+    - not_null
+  - name: ticket_api_url
+    description: str, the API url of the ticket
+  - name: ticket_tags
+    description: array, the array of tags applied to this ticket.
+  - name: ticket_type
+    description: str, the type of this ticket. Possible values are "problem", "incident",
+      "question", or "task".
+  - name: ticket_status
+    description: str, the state of the ticket. Possible values are "new", "open",
+      "pending", "hold", "solved", or "closed".
+    tests:
+    - not_null
+  - name: ticket_description
+    description: str, first comment on the ticket
+    tests:
+    - not_null
+  - name: ticket_subject
+    description: str, the subject/title of the ticket
+    tests:
+    - not_null
+  - name: ticket_raw_subject
+    description: str, the dynamic content placeholder, if present, or the "subject"
+      value, if not.
+  - name: brand_id
+    description: int, foreign key to the brand associated with the ticket
+    tests:
+    - not_null
+  - name: group_id
+    description: int, foreign key to the group associated with the ticket
+  - name: problem_id
+    description: int, the ID of the problem ticket this links to
+  - name: ticket_priority
+    description: str, the urgency with which the ticket should be addressed. Possible
+      values are "urgent", "high", "normal", or "low".
+  - name: ticket_is_public
+    description: bool, whether this ticket is publicly visible
+  - name: ticket_recipient_email
+    description: str, the original recipient e-mail address of the ticket.
+  - name: ticket_requester_user_id
+    description: int, foreign key to zendesk user who requested the ticket
+    tests:
+    - not_null
+  - name: ticket_submitter_user_id
+    description: int, foreign key to zendesk user who submitted the ticket.
+    tests:
+    - not_null
+  - name: ticket_assignee_user_id
+    description: int, foreign key to zendesk user assigned to the ticket
+  - name: ticket_email_cc_user_ids
+    description: array, array of IDs agent or end users email CC to the ticket.
+  - name: ticket_follower_user_ids
+    description: array, the IDs of users currently following this ticket
+  - name: ticket_collaborator_user_ids
+    description: array, The IDs of users currently CC'ed on the ticket
+  - name: ticket_form_id
+    description: int, the ID of the ticket form to render for the ticket
+  - name: organization_id
+    description: int, foreign key to the organization associated with the ticket
+  - name: custom_status_id
+    description: int, foreign key to custom_statuses in ticket_fields table
+  - name: sharing_agreement_ids
+    description: array, the IDs of sharing agreements associated with the ticket
+  - name: ticket_has_incidents
+    description: bool, true if a ticket is a problem type and has one or more incidents
+      linked to it. Otherwise, the value is false.
+  - name: ticket_allow_attachments
+    description: bool, permission for agents to add add attachments to a comment.
+      Defaults to true
+  - name: ticket_allow_channelback
+    description: bool, false if channelback is disabled, true otherwise. Only applicable
+      for channels framework ticket
+  - name: ticket_satisfaction_rating_object
+    description: object, the satisfaction rating of the ticket, if it exists, or the
+      state of satisfaction
+  - name: ticket_satisfaction_rating_score
+    description: str, the satisfaction rating score of the ticket. e.g. "good", "bad",
+      "offered".
+  - name: ticket_satisfaction_rating_comment
+    description: str, the satisfaction rating comment of the ticket
+  - name: ticket_satisfaction_rating_reason
+    description: str, the satisfaction rating reason
+  - name: ticket_is_from_messaging_channel
+    description: bool, true if the ticket's via type is a messaging channel.
+  - name: ticket_custom_fields
+    description: array, custom fields for the ticket. e.g. {"id":360028099972,"value":"course_information"}
+      indicates this ticket is related to course information.
+  - name: ticket_source_channel
+    description: str, the channel through which the ticket was created. e.g. "web",
+      "email"
+    tests:
+    - not_null
+  - name: ticket_source_email
+    description: str, source email address of the ticket
+  - name: ticket_source_rel
+    description: str, the relationship of the source channel to the ticket. e.g. "follow_up"
+  - name: ticket_source_ticket_id
+    description: str, the ID of the source ticket, if this ticket is a follow-up to
+      another ticket.
+  - name: ticket_due_at
+    description: timestamp, if this is a ticket of type "task" it has a due date.
+  - name: ticket_unix_timestamp
+    description: int, a unix timestamp that represents the most accurate reading of
+      when this record was last updated. It is updated for all ticket updates, including
+      system updates.
+    tests:
+    - not_null
+  - name: ticket_created_at
+    description: timestamp, the time when the ticket was created
+    tests:
+    - not_null
+  - name: ticket_updated_at
+    description: timestamp, the time when the ticket was last updated
+    tests:
+    - not_null
+
+- name: stg__zendesk__ticket_comment
+  description: Comments associated with Zendesk tickets
+  columns:
+  - name: comment_id
+    description: int, primary key for the ticket comment
+    tests:
+    - not_null
+    - unique
+  - name: ticket_id
+    description: int, foreign key to the ticket
+    tests:
+    - not_null
+  - name: comment_via_object
+    description: object, the via object describes how or why the object was created.
+    tests:
+    - not_null
+  - name: comment_type
+    description: string, type of the comment. Possible values are "comment" or "VoiceComment".
+  - name: comment_is_public
+    description: boolean, true if a public comment; false if an internal note.
+  - name: comment_uploads
+    description: array, list of tokens received from uploading files for comment attachments.
+  - name: audit_id
+    description: int, foreign key to the ticket audit record
+  - name: comment_author_user_id
+    description: int, foreign key to the user who created the comment
+  - name: comment_body_string
+    description: text, the comment string.
+  - name: comment_html_body
+    description: text, the comment formatted as HTML
+  - name: comment_plain_body
+    description: text, The comment presented as plain text.
+  - name: comment_attachments
+    description: array, array of attachments, if any.
+  - name: comment_source_channel
+    description: str, the channel through which the comment was created. e.g. "web",
+      "email"
+    tests:
+    - not_null
+  - name: comment_source_email
+    description: str, source email address of the ticket
+  - name: comment_source_rel
+    description: str, comment relationship to the ticket.
+  - name: comment_unix_timestamp
+    description: int, the unix time comment was created
+    tests:
+    - not_null
+  - name: comment_created_at
+    description: timestamp, the time comment was created
+    tests:
+    - not_null
+
+- name: stg__zendesk__brand
+  description: MIT brands in Zendesk
+  columns:
+  - name: brand_id
+    description: int, primary key for the brand
+    tests:
+    - not_null
+    - unique
+  - name: brand_api_url
+    description: str, the API url of the brand
+  - name: brand_url
+    description: str, the url of the brand
+  - name: brand_name
+    description: str, the name of the brand. e.g. "MIT Open Learning", "MIT OpenCourseWare",
+      "MITx"
+    tests:
+    - not_null
+  - name: brand_is_active
+    description: bool, if the brand is set as active
+  - name: brand_is_default
+    description: bool, is the brand the default brand for this account
+  - name: brand_subdomain
+    description: str, the subdomain of the brand
+  - name: brand_is_deleted
+    description: bool, if the brand object is deleted or not
+  - name: brand_has_help_center
+    description: bool, whether the brand has a help center
+  - name: brand_help_center_state
+    description: str, the state of the Help Center. Possible values are "enabled",
+      "disabled", or "restricted".
+  - name: brand_created_at
+    description: timestamp, the time the brand was created
+    tests:
+    - not_null
+  - name: brand_updated_at
+    description: timestamp, the time of the last update of the brand
+    tests:
+    - not_null
+
+- name: stg__zendesk__organization
+  description: Organizations in Zendesk system
+  columns:
+  - name: organization_id
+    description: int, primary key for the organization
+    tests:
+    - not_null
+    - unique
+  - name: organization_api_url
+    description: str, the API url of the organization
+  - name: organization_name
+    description: str, the name of the organization. e.g. "MIT Open Learning", "edX",
+      "Sloan", etc.
+    tests:
+    - not_null
+  - name: organization_tags
+    description: array, the tags applied to this organization
+  - name: organization_notes
+    description: str, any notes about the organization
+  - name: group_id
+    description: int, new tickets from users in this organization are automatically
+      put in this group
+  - name: organization_domain_names
+    description: array, an array of domain names associated with this organization
+  - name: organization_has_shared_tickets
+    description: bool,end users in this organization are able to see each other's
+      tickets
+  - name: organization_has_shared_comments
+    description: bool, end users in this organization are able to comment on each
+      other's tickets
+  - name: organization_deleted_at
+    description: timestamp, the time the organization was deleted, if it was deleted
+  - name: organization_created_at
+    description: timestamp, the time the organization was created
+    tests:
+    - not_null
+  - name: organization_updated_at
+    description: timestamp, the time of the last update of the organization
+    tests:
+    - not_null
+
+- name: stg__zendesk__user
+  columns:
+  - name: user_id
+    description: int, primary key for the user
+    tests:
+    - not_null
+    - unique
+  - name: user_api_url
+    description: str, the API url of the user
+  - name: user_name
+    description: str, the name of the user
+    tests:
+    - not_null
+  - name: user_role
+    description: str, the user's role. Possible values are "end-user", "agent", or
+      "admin"
+  - name: user_role_type
+    description: str, the role type of the user
+  - name: user_tags
+    description: array, user tags. e.g. [ staff ]
+  - name: user_alias
+    description: str, an alias displayed to end users
+  - name: user_email
+    description: str, the user's primary email address. May be null for permanently
+      deleted users.
+  - name: user_phone_number
+    description: str, the user's primary phone number
+  - name: user_photo_object
+    description: object, the user's profile picture represented as an attachment object
+  - name: user_is_active
+    description: bool, true if the user is active; false if the user has been deleted
+  - name: user_is_permanently_deleted
+    description: bool, if the user is permanently deleted
+  - name: user_is_suspended
+    description: bool, if the agent is suspended. Tickets from suspended users are
+      also suspended, and these users cannot sign in to the end user portal
+  - name: user_is_shared
+    description: bool, if the user is shared from a different Zendesk Support instance.
+  - name: user_details
+    description: str, any details about the user, such as an address
+  - name: user_notes
+    description: str, any notes about the user
+  - name: user_is_verified
+    description: bool, any of the user's identities is verified.
+  - name: user_is_chat_only
+    description: bool, whether or not the user is a chat-only agent
+  - name: user_is_moderator
+    description: bool, designates whether the user has forum moderation capabilities
+  - name: user_is_restricted_agent
+    description: bool, if the agent has any restrictions; false for admins and unrestricted
+      agents, true for other agents
+  - name: user_signature
+    description: str, the user's signature. Only agents and admins can have signatures
+  - name: user_locale
+    description: str, the user's locale. e.g. en-US
+  - name: user_locale_id
+    description: int, the ID of the user's locale
+  - name: user_time_zone
+    description: str, the user's time zone. e.g. Eastern Time (US & Canada)
+  - name: user_iana_time_zone
+    description: str, the user's IANA time zone. e.g. America/New_York
+  - name: organization_id
+    description: int, foreign key to the organization associated with the user. e.g.
+      27035583809563 represents ocw_intranet, 25296730 represents MIT Open Learning
+  - name: user_default_group_id
+    description: int, foreign key to the default group associated with the user
+  - name: user_fields
+    description: array, custom fields in the user's profile
+  - name: user_is_shared_agent
+    description: bool, if the user is a shared agent from a different Zendesk Support
+      instance.
+  - name: user_ticket_restriction
+    description: str, specifies which tickets the user has access to. Possible values
+      are "organization", "groups", "assigned", "requested", null.
+  - name: user_only_private_comments
+    description: bool, true if the user can only create private comments
+  - name: user_has_two_factor_auth_enabled
+    description: bool, if the user has two-factor authentication enabled
+  - name: user_last_login_at
+    description: str, Last time the user signed in to Zendesk Support or made an API
+      request using an API token or basic authentication
+  - name: user_created_at
+    description: timestamp, the time the user was created
+    tests:
+    - not_null
+  - name: user_updated_at
+    description: timestamp, the time the user was last updated
+    tests:
+    - not_null
+
+- name: stg__zendesk__group
+  description: Groups in Zendesk system
+  columns:
+  - name: group_id
+    description: int, primary key for the group
+    tests:
+    - not_null
+    - unique
+  - name: group_api_url
+    description: str, the API url of the group
+  - name: group_name
+    description: str, the name of the group. e.g. "Admin", "Finance"
+    tests:
+    - not_null
+  - name: group_description
+    description: str, the description of the group
+  - name: group_is_default
+    description: bool, if the group is the default one for the account
+  - name: group_is_deleted
+    description: bool, if the group has been deleted
+  - name: group_is_public
+    description: bool, if the group is public or private
+  - name: group_created_at
+    description: timestamp, the time the group was created
+    tests:
+    - not_null
+  - name: group_updated_at
+    description: timestamp, the time of the last update of the group
+    tests:
+    - not_null
+
+- name: stg__zendesk__ticket_field
+  description: Custom fields for Zendesk tickets
+  columns:
+  - name: field_id
+    description: int, primary key for the ticket field
+    tests:
+    - not_null
+    - unique
+  - name: field_api_url
+    description: str, the API url of the ticket field
+  - name: field_title
+    description: str, the title of the ticket field. e.g. MIT xPRO Course or Program
+    tests:
+    - not_null
+  - name: field_is_active
+    description: bool, if the field is active or not
+  - name: field_description
+    description: str, the description of the ticket field
+  - name: field_created_at
+    description: timestamp, the time the field was created
+    tests:
+    - not_null
+  - name: field_updated_at
+    description: timestamp, the time of the last update of the field
+    tests:
+    - not_null

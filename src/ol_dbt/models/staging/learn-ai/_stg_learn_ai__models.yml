@@ -100,7 +100,8 @@ models:
     tests:
     - not_null
   - name: checkpoint_json
-    description: json, the checkpoint metadata for the chat session
+    description: json, the checkpoint json object for the chat session. It contains
+      the entire session chat history
   - name: checkpoint_namespace
     description: str, checkpoint namespace, used to group checkpoints in a thread.
   - name: checkpoint_id
@@ -110,6 +111,20 @@ models:
   - name: parent_checkpoint_id
     description: str, checkpoint ID of the parent checkpoint. Null if this is the
       first checkpoint in the thread.
+  - name: checkpoint_metadata
+    description: json, the metadata for the checkpoint
+  - name: human_message
+    description: str, the human message extracted from the metadata.
+  - name: agent_message
+    description: str, the agent message extracted from the metadata.
+  - name: checkpoint_step
+    description: int, the step number of the checkpoint in the chat session extracted
+      from the metadata.
+    tests:
+    - not_null
+  - name: checkpoint_source
+    description: str, the source of the checkpoint extracted from the metadata. e.g.
+      'input', 'loop'
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["checkpoint_namespace", "chatsession_thread_id", "checkpoint_id"]

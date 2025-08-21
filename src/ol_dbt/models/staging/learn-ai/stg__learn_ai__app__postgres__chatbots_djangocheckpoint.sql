@@ -14,6 +14,10 @@ with source as (
         , checkpoint_id
         , parent_checkpoint_id
         , metadata as checkpoint_metadata
+        , cast(json_query(metadata, 'lax $.step' omit quotes) as integer) as checkpoint_step
+        , json_query(metadata, 'lax $.writes.__start__.messages.kwargs.content' omit quotes) as human_message
+        , json_query(metadata, 'lax $.writes.agent.messages.kwargs.content' omit quotes) as agent_message
+        , json_query(metadata, 'lax $.source' omit quotes) as checkpoint_source
     from most_recent_source
 )
 
