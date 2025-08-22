@@ -41,6 +41,7 @@ with problem_events as (
                     problem_events.platform
                     , problem_events.openedx_user_id
                     , problem_events.courserun_readable_id
+                    , cc.parent_block_id
                 order by problem_events.event_timestamp
             ) as prev_event_timestamp
     from problem_events
@@ -70,15 +71,37 @@ select
     , problem_block_fk
     , unit_name
     , chapter_name
+    , coalesce((
+        upper(unit_name) like '%EXAM%'
+        and upper(unit_name) not like '%EXAMPLE%'
+        and upper(unit_name) not like '%EXAMINING%'
+    )
+    or (
+        upper(chapter_name) like '%EXAM%'
+        and upper(chapter_name) not like '%EXAMPLE%'
+        and upper(chapter_name) not like '%EXAMINING%'
+    )
+    or upper(chapter_name) like '%EXAM %'
+    or upper(unit_name) like '%EXAM %', true
+    ) as exam_indicator
     , max(max_grade) as max_grade
     , max(attempt) as attempts_on_problem
     , array_agg(grade) as grades
     , min(
         case
-            when date_diff('second', event_timestamp, prev_event_timestamp) < 600
-                then cast(event_timestamp - prev_event_timestamp as varchar)
+            when
+                prev_event_timestamp is not null
+                and date_diff('second', prev_event_timestamp, event_timestamp) < 600
+                then date_diff('second', prev_event_timestamp, event_timestamp)
         end
     ) as time_spent_on_problem
+    , min(
+        case
+            when
+                prev_event_timestamp is not null
+                then date_diff('second', prev_event_timestamp, event_timestamp)
+        end
+    ) as time_spent_on_problem_nolimit
     , max(courserungrade_grade) as courserungrade_grade
 from problems_joined
 group by
@@ -88,3 +111,16 @@ group by
     , problem_block_fk
     , unit_name
     , chapter_name
+    , coalesce((
+        upper(unit_name) like '%EXAM%'
+        and upper(unit_name) not like '%EXAMPLE%'
+        and upper(unit_name) not like '%EXAMINING%'
+    )
+    or (
+        upper(chapter_name) like '%EXAM%'
+        and upper(chapter_name) not like '%EXAMPLE%'
+        and upper(chapter_name) not like '%EXAMINING%'
+    )
+    or upper(chapter_name) like '%EXAM %'
+    or upper(unit_name) like '%EXAM %', true
+    )

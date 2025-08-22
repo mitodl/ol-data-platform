@@ -17,7 +17,7 @@ jobs:
     steps:
     - name: "Step 01 - Checkout current branch"
       id: step-01
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: "Step 02 - Install dbt"
       id: step-02
