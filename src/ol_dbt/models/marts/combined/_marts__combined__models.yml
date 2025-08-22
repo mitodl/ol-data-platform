@@ -771,9 +771,6 @@ models:
       for edX.org courses.
     tests:
     - not_null
-  - name: course_number
-    description: str, unique string for the course. It can contain letters, numbers,
-      or periods. e.g. 6.002.1x
   - name: user_hashed_id
     description: str, foreign key to combined_users to identify the user.
   - name: user_username
@@ -813,6 +810,9 @@ models:
     description: timestamp, datetime on when the course begins
   - name: courserun_end_on
     description: timestamp, datetime on when the course ends
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x
   - name: courserun_is_current
     description: boolean, indicating if the course run is currently running. True
       if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on

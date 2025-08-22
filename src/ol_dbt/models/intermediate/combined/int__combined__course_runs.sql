@@ -76,7 +76,6 @@ with mitx_courses as (
         '{{ var("mitxonline") }}' as platform
         , mitx_courses.course_title
         , mitx_courses.course_readable_id
-        , mitxonline_runs.course_number
         , mitxonline_runs.courserun_title
         , mitxonline_runs.courserun_readable_id
         , mitxonline_runs.courserun_url
@@ -84,6 +83,7 @@ with mitx_courses as (
         , mitxonline_runs.courserun_end_on
         , mitxonline_runs.courserun_upgrade_deadline
         , mitxonline_runs.courserun_is_live
+        , mitxonline_runs.course_number
         , case
             when
                 mitxonline_runs.courserun_end_on is null
@@ -105,7 +105,6 @@ with mitx_courses as (
         '{{ var("edxorg") }}' as platform
         , mitx_courses.course_title
         , mitx_courses.course_readable_id
-        , edxorg_runs.course_number
         , edxorg_runs.courserun_title
         , edxorg_runs.courserun_readable_id
         , edxorg_runs.courserun_url
@@ -113,6 +112,7 @@ with mitx_courses as (
         , edxorg_runs.courserun_end_date as courserun_end_on
         , micromasters_runs.courserun_upgrade_deadline
         , null as courserun_is_live
+        , edxorg_runs.course_number
         , case
             when
                 edxorg_runs.courserun_end_date is null
@@ -137,10 +137,6 @@ with mitx_courses as (
         end as platform
         , mitxpro_courses.course_title
         , mitxpro_courses.course_readable_id
-        , case
-            when cardinality(split(mitxpro_runs.courserun_readable_id, '+')) >= 2
-                then split(mitxpro_runs.courserun_readable_id, '+')[2]
-        end as course_number
         , mitxpro_runs.courserun_title
         , mitxpro_runs.courserun_readable_id
         , mitxpro_runs.courserun_url
@@ -148,6 +144,10 @@ with mitx_courses as (
         , mitxpro_runs.courserun_end_on
         , null as courserun_upgrade_deadline
         , mitxpro_runs.courserun_is_live
+        , case
+            when cardinality(split(mitxpro_runs.courserun_readable_id, '+')) >= 2
+                then split(mitxpro_runs.courserun_readable_id, '+')[2]
+        end as course_number
         , case
             when
                 mitxpro_runs.courserun_end_on is null
@@ -168,7 +168,6 @@ with mitx_courses as (
         '{{ var("emeritus") }}' as platform
         , emeritus_runs.courserun_title as course_title
         , emeritus_runs.courserun_external_readable_id as course_readable_id
-        , emeritus_runs.course_number
         , emeritus_runs.courserun_title
         , emeritus_runs.courserun_external_readable_id
         , null as courserun_url
@@ -176,6 +175,7 @@ with mitx_courses as (
         , emeritus_runs.courserun_end_on
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
+        , emeritus_runs.course_number
         , case
             when
                 emeritus_runs.courserun_end_on is null
@@ -200,12 +200,12 @@ with mitx_courses as (
         , global_alumni_runs.courserun_external_readable_id as course_readable_id
         , global_alumni_runs.courserun_title
         , global_alumni_runs.courserun_external_readable_id
-        , global_alumni_runs.course_number
         , null as courserun_url
         , global_alumni_runs.courserun_start_on
         , global_alumni_runs.courserun_end_on
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
+        , global_alumni_runs.course_number
         , case
             when
                 global_alumni_runs.courserun_end_on is null
@@ -230,15 +230,15 @@ with mitx_courses as (
         , bootcamps_courses.course_readable_id
         , bootcamps_runs.courserun_title
         , bootcamps_runs.courserun_readable_id
-        , case
-            when cardinality(split(bootcamps_runs.courserun_readable_id, '+')) >= 2
-                then split(bootcamps_runs.courserun_readable_id, '+')[2]
-        end as course_number
         , null as courserun_url
         , bootcamps_runs.courserun_start_on
         , bootcamps_runs.courserun_end_on
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
+        , case
+            when cardinality(split(bootcamps_runs.courserun_readable_id, '+')) >= 2
+                then split(bootcamps_runs.courserun_readable_id, '+')[2]
+        end as course_number
         , case
             when
                 bootcamps_runs.courserun_end_on is null
@@ -261,15 +261,15 @@ with mitx_courses as (
         , course_readable_id
         , courserun_title
         , courserun_readable_id
-        , case
-            when cardinality(split(courserun_readable_id, '+')) >= 2
-                then split(courserun_readable_id, '+')[2]
-        end as course_number
         , null as courserun_url
         , courserun_start_on
         , courserun_end_on
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
+        , case
+            when cardinality(split(courserun_readable_id, '+')) >= 2
+                then split(courserun_readable_id, '+')[2]
+        end as course_number
         , case
             when
                 courserun_end_on is null
