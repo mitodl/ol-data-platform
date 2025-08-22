@@ -183,11 +183,11 @@ with mitx_users as (
 , mitx_users_view as (
     select
         mitx_users.user_global_id
-        , mitxonline_openedx_users.user_id as mitxonline_openedx_user_id
+        , mitxonline_openedx_users.openedx_user_id as mitxonline_openedx_user_id
         , mitx_users.mitxonline_application_user_id
         , coalesce(
             mitxonline_app_openedxuser_mapping.openedxuser_username, mitx_users.user_mitxonline_username
-        ).user_mitxonline_username
+        ) as user_mitxonline_username
         , mitx_users.edxorg_openedx_user_id
         , mitx_users.user_edxorg_username
         , mitx_users.user_email as email
