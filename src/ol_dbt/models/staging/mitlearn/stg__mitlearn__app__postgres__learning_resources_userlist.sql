@@ -7,11 +7,11 @@ with source as (
     select
         id as userlist_id
         , title as userlist_title
-        , author_id as userlist_author_user_id
+        , author_id as user_id
         , description as userlist_description
         , privacy_level as userlist_privacy_level
-        , created_on as userlist_created_on
-        , updated_on as userlist_updated_on
+       ,  {{ cast_timestamp_to_iso8601('created_on') }} as userlist_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as userlist_updated_on
     from source
 )
 
