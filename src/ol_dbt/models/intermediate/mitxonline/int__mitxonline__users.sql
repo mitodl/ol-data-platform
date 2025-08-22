@@ -48,7 +48,6 @@ select
     users.user_id
     , users.user_global_id
     , openedx_users.openedx_user_id
-    , users.user_username
     , users.user_full_name
     , users.user_email
     , users.user_joined_on
@@ -74,6 +73,7 @@ select
     , users_profile.user_type_is_other
     , micromasters_profile.user_profile_id as user_micromasters_profile_id
     , micromasters_users.user_edxorg_username
+    , coalesce(openedx_users.user_username, users.user_username) as user_username
 from users
 left join users_legaladdress on users.user_id = users_legaladdress.user_id
 left join users_profile on users.user_id = users_profile.user_id
