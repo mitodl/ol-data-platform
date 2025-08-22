@@ -1901,3 +1901,37 @@ models:
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
+
+  - name: stg__mitxonline__app__postgres__openedx_openedxuser
+    description: Mapping of MITx Online users to open edX users
+    columns:
+    - name: openedxuser_id
+      description: int, the primary key for the openedx_openedxuser table
+      tests:
+      - not_null
+      - unique
+    - name: user_id
+      description: int, the foreign key referencing the users_user table in the MITx
+        Online application
+      tests:
+      - unique
+      - not_null
+    - name: openedxuser_platform
+      description: str, the platform where the user is registered. e.g. "edx"
+      tests:
+      - not_null
+    - name: openedxuser_username
+      description: str, the username of the user on the open edX platform
+      tests:
+      - unique
+    - name: openedxuser_desired_username
+      description: str, the desired username for the user on the open edX platform
+      tests:
+      - unique
+    - name: openedxuser_has_been_synced
+      description: boolean, indicating whether a corresponding user has been created
+        on the open edX platform
+    - name: openedxuser_created_on
+      description: timestamp, date and time when this record was created
+    - name: openedxuser_updated_on
+      description: timestamp, date and time when this record was last updated
