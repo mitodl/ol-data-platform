@@ -1,3 +1,4 @@
+import json
 import time
 from pathlib import Path
 
@@ -6,10 +7,12 @@ from dagster import (
     AssetExecutionContext,
     AssetIn,
     AssetKey,
+    AssetOut,
     DataVersion,
     Output,
     StaticPartitionsDefinition,
     asset,
+    multi_asset,
 )
 
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
@@ -61,16 +64,25 @@ canvas_course_ids = StaticPartitionsDefinition(
         "28849",
         "34545",
         "34642",
+        "35054",
     ]
 )
 
 
-@asset(
-    key=AssetKey(["canvas", "course_content"]),
+@multi_asset(
     group_name="canvas",
     required_resource_keys={"canvas_api"},
-    io_manager_key="s3file_io_manager",
     partitions_def=canvas_course_ids,
+    outs={
+        "course_content": AssetOut(
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(["canvas", "course_content"]),
+        ),
+        "course_metadata": AssetOut(
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(["canvas", "course_metadata"]),
+        ),
+    },
 )
 def export_course_content(context: AssetExecutionContext):
     course_id = int(context.partition_key)
@@ -130,8 +142,48 @@ def export_course_content(context: AssetExecutionContext):
 
     context.log.info("Downloading %s file to %s", download_url, target_path)
 
+    # Course file ID extraction
+    course_file_generator = context.resources.canvas_api.client.get_course_files(
+        course_id
+    )
+    files_detail = []
+    for course_file in course_file_generator:
+        for file in course_file:
+            folder_id = file["folder_id"]
+            folder_detail = context.resources.canvas_api.client.get_course_folders(
+                course_id, folder_id
+            )
+            folder_path = folder_detail["full_name"]
+            files_detail.append(
+                {
+                    "file_id": file["id"],
+                    "file_name": file["filename"],
+                    "file_path": folder_path + "/" + file["filename"],
+                    "url": f"https://canvas.mit.edu/courses/{course_id}/files/{file['id']}/",
+                }
+            )
+
+    context.log.info(
+        "Total extracted %d files from course %s", len(files_detail), course_id
+    )
+
+    json_file = Path(f"{data_version}.metadata.json")
+    json_file_path = f"{'/'.join(context.asset_key_for_output('course_content').path)}/{course_id}/{data_version}.metadata.json"  # noqa: E501
+
+    course_metadata = {
+        "course_files": files_detail,
+        "course_id": course_id,
+        "course_name": course["name"],
+        "course_code": course["course_code"],
+        "course_readable_id": course["sis_course_id"],
+        "course_created_at": course["created_at"],
+    }
+    with Path.open(json_file, "w") as file:
+        json.dump(course_metadata, file, indent=2)
+
     yield Output(
         value=(course_content_path, target_path),
+        output_name="course_content",
         data_version=DataVersion(data_version),
         metadata={
             "course_id": course_id,
@@ -142,6 +194,18 @@ def export_course_content(context: AssetExecutionContext):
         },
     )
 
+    yield Output(
+        (json_file, json_file_path),
+        output_name="course_metadata",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": course_id,
+            "file_count": len(files_detail),
+            "data_version": data_version,
+            "object_key": json_file_path,
+        },
+    )
+
 
 @asset(
     key=AssetKey(["canvas", "course_content_metadata"]),
@@ -149,15 +213,25 @@ def export_course_content(context: AssetExecutionContext):
     description="Notify Learn API via webhook after canvas course export.",
     automation_condition=upstream_or_code_changes(),
     partitions_def=canvas_course_ids,
-    ins={"canvas_content_export": AssetIn(key=AssetKey(["canvas", "course_content"]))},
+    ins={
+        "canvas_content_export": AssetIn(key=AssetKey(["canvas", "course_content"])),
+        "course_metadata_export": AssetIn(key=AssetKey(["canvas", "course_metadata"])),
+    },
     required_resource_keys={"canvas_api", "learn_api"},
 )
-def course_content_metadata(context: AssetExecutionContext, canvas_content_export):
+def course_content_metadata(
+    context: AssetExecutionContext, canvas_content_export, course_metadata_export
+):
     course_id = int(context.partition_key)
     metadata = context.resources.canvas_api.client.get_course(course_id)
     # canvas_content_export is a full path to the exported course content file
     relative_path = str(canvas_content_export).split("canvas/course_content/", 1)[-1]
     content_path = f"canvas/course_content/{relative_path}"
+
+    metadata_relative_path = str(course_metadata_export).split(
+        "canvas/course_content/", 1
+    )[-1]
+    metadata_path = f"canvas/course_content/{metadata_relative_path}"
 
     data = {
         "course_id": course_id,
@@ -165,6 +239,7 @@ def course_content_metadata(context: AssetExecutionContext, canvas_content_expor
         "course_code": metadata["course_code"],
         "course_readable_id": metadata["sis_course_id"],
         "content_path": content_path,
+        "metadata_path": metadata_path,
         "source": "canvas",
         "time": time.time(),
     }

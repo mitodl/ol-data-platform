@@ -40,6 +40,10 @@ with users as (
     select * from {{ ref('stg__mitxonline__openedx__mysql__auth_user') }}
 )
 
+, openedxuser_mapping as (
+    select * from {{ ref('stg__mitxonline__app__postgres__openedx_openedxuser') }}
+)
+
 select
     users.user_id
     , users.user_global_id
@@ -76,5 +80,7 @@ left join users_profile on users.user_id = users_profile.user_id
 left join micromasters_profile on users.user_username = micromasters_profile.user_username
 left join micromasters_users
     on micromasters_profile.user_profile_id = micromasters_users.user_profile_id
+left join openedxuser_mapping
+    on users.user_id = openedxuser_mapping.user_id
 left join openedx_users
-    on lower(users.user_email) = lower(openedx_users.user_email)
+    on openedxuser_mapping.openedxuser_username = openedx_users.user_username
