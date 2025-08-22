@@ -129,3 +129,50 @@ sources:
       description: int, foreign key referencing the user profile
     - name: learningresourcetopic_id
       description: int, foreign key to the learning resource topic
+
+  - name: raw__mitlearn__app__postgres__learning_resources_search_percolatequery
+    description: Learning resource search percolate queries for content discovery
+    columns:
+    - name: _airbyte_raw_id
+      description: Unique identifier for this Airbyte record
+    - name: _airbyte_extracted_at
+      description: Timestamp when this record was extracted by Airbyte
+    - name: _airbyte_meta
+      description: Airbyte metadata for this record
+    - name: _airbyte_generation_id
+      description: Airbyte generation identifier for this record
+    - name: id
+      description: Primary key, unique identifier for the percolate query
+    - name: query
+      description: The search query string used for percolating content
+    - name: created_on
+      description: Timestamp when this percolate query was created
+    - name: updated_on
+      description: Timestamp when this percolate query was last updated
+    - name: source_type
+      description: Type or category of the source for this query
+    - name: display_label
+      description: Human-readable label for displaying this query
+    - name: original_query
+      description: The original query string before any processing or modifications
+
+  - name: raw__mitlearn__app__postgres__learning_resources_search_percolatequery_users
+    description: Association table linking users to their percolate queries for personalized
+      content discovery
+    columns:
+    - name: _airbyte_raw_id
+      description: Unique identifier for this Airbyte record
+    - name: _airbyte_extracted_at
+      description: Timestamp when this record was extracted by Airbyte
+    - name: _airbyte_meta
+      description: Airbyte metadata for this record
+    - name: _airbyte_generation_id
+      description: Airbyte generation identifier for this record
+    - name: id
+      description: Primary key, unique identifier for the user-percolate query association
+    - name: user_id
+      description: Foreign key referencing the user who is associated with the percolate
+        query
+    - name: percolatequery_id
+      description: Foreign key referencing the percolate query associated with the
+        user

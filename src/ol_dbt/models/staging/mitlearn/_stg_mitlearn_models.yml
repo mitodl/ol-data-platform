@@ -160,3 +160,48 @@ models:
       description: int, foreign key to the learning resource topic
       tests:
       - not_null
+
+  - name: stg__mitlearn__app__postgres__learning_resources_search_percolatequery
+    description: MIT Learn search percolate queries for content discovery
+    columns:
+    - name: percolatequery_id
+      description: int, unique identifier for the percolate query
+      tests:
+      - unique
+      - not_null
+    - name: percolatequery_query
+      description: str, the search query string used for percolating content
+    - name: percolatequery_created_on
+      description: timestamp, date and time when this percolate query was created
+      tests:
+      - not_null
+    - name: percolatequery_updated_on
+      description: timestamp, date and time when this percolate query was last updated
+      tests:
+      - not_null
+    - name: percolatequery_source_type
+      description: str, type or category of the source for this query
+    - name: percolatequery_display_label
+      description: str, human-readable label for displaying this query
+    - name: percolatequery_original_query
+      description: str, the original query string before any processing or modifications
+
+  - name: stg__mitlearn__app__postgres__learning_resources_search_percolatequery_users
+    description: Association table linking users to their percolate queries for personalized
+      content discovery
+    columns:
+    - name: percolatequery_users_id
+      description: int, unique identifier for the user-percolate query association
+      tests:
+      - unique
+      - not_null
+    - name: user_id
+      description: int, foreign key referencing the user who is associated with the
+        percolate query
+      tests:
+      - not_null
+    - name: percolatequery_id
+      description: int, foreign key referencing the percolate query associated with
+        the user
+      tests:
+      - not_null
