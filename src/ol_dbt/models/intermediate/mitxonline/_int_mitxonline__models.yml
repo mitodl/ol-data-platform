@@ -1414,9 +1414,7 @@ models:
       due to username or email mismatch between app and open edX. Also, there may
       be multiple mitxonline users matching with same open edx user.
   - name: user_username
-    description: string, username on the MITx Online open edx platform. If user doesn't
-      have an open edX account, it defaults to username on the MITx Online application,
-      which is their email address.
+    description: string, username
     tests:
     - unique
     - not_null
@@ -2057,9 +2055,7 @@ models:
   - name: user_full_name
     description: str, user full name on MITx Online
   - name: user_username
-    description: str, username on the MITx Online open edx platform. If user doesn't
-      have an open edX account, it defaults to username on the MITx Online application,
-      which is their email address.
+    description: str, username on MITx Online
     tests:
     - not_null
   - name: user_edxorg_username
