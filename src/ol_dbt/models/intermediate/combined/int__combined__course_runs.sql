@@ -34,6 +34,7 @@ with mitx_courses as (
     select * from (
         select
             courserun_external_readable_id
+            , courserun_id as course_number
             , courserun_title
             , courserun_start_on
             , courserun_end_on
@@ -50,6 +51,7 @@ with mitx_courses as (
     select * from (
         select
             courserun_external_readable_id
+            , courserun_id as course_number
             , courserun_title
             , courserun_start_on
             , courserun_end_on
@@ -81,6 +83,7 @@ with mitx_courses as (
         , mitxonline_runs.courserun_end_on
         , mitxonline_runs.courserun_upgrade_deadline
         , mitxonline_runs.courserun_is_live
+        , mitxonline_runs.course_number
         , case
             when
                 mitxonline_runs.courserun_end_on is null
@@ -109,6 +112,7 @@ with mitx_courses as (
         , edxorg_runs.courserun_end_date as courserun_end_on
         , micromasters_runs.courserun_upgrade_deadline
         , null as courserun_is_live
+        , edxorg_runs.course_number
         , case
             when
                 edxorg_runs.courserun_end_date is null
@@ -141,6 +145,10 @@ with mitx_courses as (
         , null as courserun_upgrade_deadline
         , mitxpro_runs.courserun_is_live
         , case
+            when cardinality(split(mitxpro_runs.courserun_readable_id, '+')) >= 2
+                then split(mitxpro_runs.courserun_readable_id, '+')[2]
+        end as course_number
+        , case
             when
                 mitxpro_runs.courserun_end_on is null
                 and from_iso8601_timestamp(mitxpro_runs.courserun_start_on) <= current_date
@@ -167,6 +175,7 @@ with mitx_courses as (
         , emeritus_runs.courserun_end_on
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
+        , emeritus_runs.course_number
         , case
             when
                 emeritus_runs.courserun_end_on is null
@@ -196,6 +205,7 @@ with mitx_courses as (
         , global_alumni_runs.courserun_end_on
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
+        , global_alumni_runs.course_number
         , case
             when
                 global_alumni_runs.courserun_end_on is null
@@ -226,6 +236,10 @@ with mitx_courses as (
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
         , case
+            when cardinality(split(bootcamps_runs.courserun_readable_id, '+')) >= 2
+                then split(bootcamps_runs.courserun_readable_id, '+')[2]
+        end as course_number
+        , case
             when
                 bootcamps_runs.courserun_end_on is null
                 and from_iso8601_timestamp(bootcamps_runs.courserun_start_on) <= current_date
@@ -252,6 +266,10 @@ with mitx_courses as (
         , courserun_end_on
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
+        , case
+            when cardinality(split(courserun_readable_id, '+')) >= 2
+                then split(courserun_readable_id, '+')[2]
+        end as course_number
         , case
             when
                 courserun_end_on is null

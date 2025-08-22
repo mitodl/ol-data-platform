@@ -1334,6 +1334,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "program_id"]
+
 - name: stg__mitxpro__app__postgres__courses_courserunenrollment
   columns:
   - name: courserunenrollment_id
