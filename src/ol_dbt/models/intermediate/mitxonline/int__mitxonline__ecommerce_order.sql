@@ -24,8 +24,7 @@ with lines as (
 )
 
 , users as (
-    select *
-    from {{ ref('stg__mitxonline__app__postgres__users_user') }}
+    select * from {{ ref('stg__mitxonline__app__postgres__users_user') }}
 )
 
 , intermediate_products_view as (

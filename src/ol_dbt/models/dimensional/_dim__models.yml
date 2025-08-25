@@ -257,7 +257,9 @@ models:
   - name: mitxonline_application_user_id
     description: string, user id on MITxOnline application
   - name: user_mitxonline_username
-    description: string, username on MITxOnline
+    description: string, username on the MITx Online open edx platform. If user doesn't
+      have an open edX account, it defaults to username on the MITx Online application,
+      which is their email address.
   - name: mitxpro_openedx_user_id
     description: int, openedx user id for MITx Pro
   - name: mitxpro_application_user_id
