@@ -232,6 +232,7 @@ select
     , combined_users.user_gender
     , combined_runs.courserun_title
     , combined_runs.course_readable_id
+    , combined_runs.course_number
     , combined_runs.courserun_is_current
     , combined_runs.courserun_start_on
     , combined_runs.courserun_end_on
