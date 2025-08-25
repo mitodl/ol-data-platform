@@ -16,7 +16,7 @@ with enrollments as (
         user_id
         , user_username
         , user_email
-    from {{ ref('stg__mitxonline__app__postgres__users_user') }}
+    from {{ ref('int__mitxonline__users') }}
 )
 
 , mitxonline_enrollments as (
