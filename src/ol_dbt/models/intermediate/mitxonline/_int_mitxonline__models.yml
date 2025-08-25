@@ -1410,13 +1410,12 @@ models:
     tests:
     - unique
   - name: openedx_user_id
-    description: int, foreign key to open edX users. Not all app users have openedx_user_id
-      due to username or email mismatch between app and open edX. Also, there may
-      be multiple mitxonline users matching with same open edx user.
+    description: int, foreign key to open edX users. Not all app users have openedx_user_id.
   - name: user_username
-    description: string, username
+    description: string, username on the MITx Online open edx platform. If user doesn't
+      have an open edX account, it defaults to username on the MITx Online application,
+      which is their email address.
     tests:
-    - unique
     - not_null
   - name: user_full_name
     description: string, full name
@@ -1493,6 +1492,8 @@ models:
     description: boolean, indicating if learner is identified as Other (not Professional,
       Student, or Educator)
   tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "openedx_user_id"]
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__users_user')
 

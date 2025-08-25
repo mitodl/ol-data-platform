@@ -1,8 +1,23 @@
 ---MITx users from MITx Online and edX with dedup
 ---For users exist on both MITx Online and edX.org, profile data are COALESCE from MITx Online, MicroMasters or edX.org
 
-with mitxonline_users as (
+with users as (
     select * from {{ ref('int__mitxonline__users') }}
+)
+----deduplicate users based on their openedx user_username, prioritizing those with an openedx_user_id
+-- and the most recent joined date
+
+, mitxonline_users as (
+    select * from (
+        select
+            *
+            , row_number() over (
+                partition by user_username
+                order by openedx_user_id asc nulls last, user_joined_on desc
+            ) as row_num
+        from users
+    )
+    where row_num = 1
 )
 
 , edxorg_users as (
