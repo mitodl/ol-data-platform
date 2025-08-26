@@ -10,3 +10,4 @@ load_from:
 - python_module: ol_orchestrate.definitions.platform.notification
 - python_module: ol_orchestrate.repositories.edx_gcs_courses
 - python_module: ol_orchestrate.repositories.open_edx
+- python_module: ol_orchestrate.definitions.uai_customer.export_learner_data
