@@ -30,7 +30,7 @@ canvas_course_content_job = define_asset_job(
 canvas_course_export_schedule = build_schedule_from_partitioned_job(
     name="canvas_course_export_schedule",
     job=canvas_course_content_job,
-    cron_schedule="@daily",
+    cron_schedule="0 */6 * * *",
     execution_timezone="Etc/UTC",
 )
 
