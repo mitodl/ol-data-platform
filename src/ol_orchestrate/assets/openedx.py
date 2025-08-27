@@ -33,6 +33,7 @@ from ol_orchestrate.lib.openedx import (
 
 HTTP_SUCCESS = 200
 HTTP_NOT_FOUND = 404
+COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT = timedelta(minutes=60)
 
 
 @asset(
@@ -172,7 +173,11 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
         successful_exports: set[str] = set()
         failed_exports: set[str] = set()
         tasks = exported_courses["upload_task_ids"]
+        start_time = datetime.now(tz=UTC)
         while len(successful_exports.union(failed_exports)) < len(tasks):
+            if datetime.now(tz=UTC) - start_time > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT:
+                context.log.warning("Timeout reached before all tasks completed.")
+                break
             time.sleep(timedelta(seconds=20).seconds)
             for course_id, task_id in tasks.items():
                 task_status = (
@@ -181,9 +186,10 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
                         task_id,
                     )
                 )
-                if task_status["state"] == "Succeeded":
+                state = task_status.get("state")
+                if state == "Succeeded":
                     successful_exports.add(course_id)
-                if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
+                elif state in {"Failed", "Canceled", "Retrying"}:
                     failed_exports.add(course_id)
         if failed_exports:
             errmsg = f"Unable to export the course XML for {course_key}"
