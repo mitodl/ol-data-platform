@@ -175,7 +175,10 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
         tasks = exported_courses["upload_task_ids"]
         start_time = datetime.now(tz=UTC)
         while len(successful_exports.union(failed_exports)) < len(tasks):
-            if datetime.now(tz=UTC) - start_time > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT:
+            if (
+                datetime.now(tz=UTC) - start_time
+                > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT
+            ):
                 context.log.warning("Timeout reached before all tasks completed.")
                 break
             time.sleep(timedelta(seconds=20).seconds)
