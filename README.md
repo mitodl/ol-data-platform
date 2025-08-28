@@ -38,7 +38,7 @@ The script provides three main commands:
 ### 1. Generate Sources Only
 
 ```bash
-python bin/dbt-create-staging-models.py generate-sources \
+uv run python bin/dbt-create-staging-models.py generate-sources \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production
@@ -47,7 +47,7 @@ python bin/dbt-create-staging-models.py generate-sources \
 ### 2. Generate Staging Models Only
 
 ```bash
-python bin/dbt-create-staging-models.py generate-staging-models \
+uv run python bin/dbt-create-staging-models.py generate-staging-models \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production
@@ -56,7 +56,7 @@ python bin/dbt-create-staging-models.py generate-staging-models \
 ### 3. Generate Both Sources and Staging Models
 
 ```bash
-python bin/dbt-create-staging-models.py generate-all \
+uv run python bin/dbt-create-staging-models.py generate-all \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production
