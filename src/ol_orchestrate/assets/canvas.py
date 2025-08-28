@@ -158,8 +158,9 @@ def export_course_content(context: AssetExecutionContext):
             files_detail.append(
                 {
                     "file_id": file["id"],
+                    "display_name": file["display_name"],
                     "file_name": file["filename"],
-                    "file_path": folder_path + "/" + file["filename"],
+                    "file_path": folder_path + "/" + file["display_name"],
                     "url": f"https://canvas.mit.edu/courses/{course_id}/files/{file['id']}/",
                 }
             )
