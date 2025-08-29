@@ -42,6 +42,10 @@ models:
     description: str, Open edX ID for the course formatted as {org}/{course}
     tests:
     - not_null
+  - name: coursedepartment_name
+    description: str, course department name
+  - name: coursedepartment_number
+    description: int, course department number
 
 - name: stg__edxorg__bigquery__mitx_person_course
   description: It contains user activities from edX.org, MITxOnline/xPro open edx

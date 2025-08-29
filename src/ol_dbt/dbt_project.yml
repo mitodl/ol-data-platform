@@ -85,6 +85,11 @@ models:
       +schema: staging
       +grants:
         select: ['read_only_production', 'reverse_etl']
+    migration:
+      +materialized: table
+      +schema: migration
+      +grants:
+        select: ['read_only_production', 'reverse_etl']
     dimensional:
       +materialized: table
       +schema: dimensional
