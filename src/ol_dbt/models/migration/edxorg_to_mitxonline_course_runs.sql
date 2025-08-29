@@ -5,7 +5,7 @@ with mitx_courses as (
 , edx_courseruns as (
     select
         *
-        , element_at(split(edx_courseruns.course_number, '.'), 1) as extracted_department_number
+        , element_at(split(course_number, '.'), 1) as extracted_department_number
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
 
@@ -19,6 +19,7 @@ select
     , mitx_courses.course_title
     , edx_courseruns.courserun_is_self_paced as is_self_paced
     , edx_courseruns.courserun_is_published as is_published
+    , edx_courseruns.courserun_title
     , {{ format_course_id('edx_courseruns.courserun_readable_id', false) }} as courseware_id
     , element_at(split(mitx_courses.course_readable_id, '/'), 3) as run_tag
     , from_iso8601_timestamp(edx_courseruns.courserun_enrollment_start_date) as enrollment_start
@@ -26,7 +27,7 @@ select
     , from_iso8601_timestamp(edx_courseruns.courserun_start_date) as start_date
     , from_iso8601_timestamp(edx_courseruns.courserun_end_date) as end_date
     , coalesce(
-        edx_courseruns.coursedeptartment_name
+        edx_courseruns.coursedepartment_name
         , {{ transform_ocw_department_number('edx_courseruns.extracted_department_number') }}
     ) as department_number
 from mitx_courses

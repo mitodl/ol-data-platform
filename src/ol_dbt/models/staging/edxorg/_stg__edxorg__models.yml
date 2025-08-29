@@ -44,7 +44,7 @@ models:
     - not_null
   - name: coursedepartment_name
     description: str, course department name
-  - name: coursedeptartment_number
+  - name: coursedepartment_number
     description: int, course department number
 
 - name: stg__edxorg__bigquery__mitx_person_course
