@@ -1,0 +1,43 @@
+---
+version: 2
+
+models:
+- name: edxorg_to_mitxonline_course_runs
+  description: Course runs not yet migrated to MITx Online from edx.org
+  columns:
+  - name: mitxonline_course_id
+    description: int, foreign key to courses table in the mitxonline database
+  - name: course_readable_id
+    description: str, edX course readable id formatted as {org}+{course code}
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, the title of the course run
+    tests:
+    - not_null
+  - name: courseware_id
+    description: str, the edx course run readable id formatted as course-v1:{org}+{course
+      code}+{run tag}
+    tests:
+    - not_null
+  - name: enrollment_start
+    description: timestamp, the course enrollment start date.
+  - name: enrollment_end
+    description: timestamp, the course enrollment end date.
+  - name: start_date
+    description: timestamp, The date on which the course starts
+  - name: end_date
+    description: timestamp, The date on which the course ends
+  - name: is_self_paced
+    description: boolean, indicate whether or not the course is self paced
+  - name: is_published
+    description: boolean, indicating whether the course run is published and open
+      for enrollment
+  - name: run_tag
+    description: str, the edX course run tag. e.g. 2T2024
+  - name: department_name
+    description: str, the department offering the course

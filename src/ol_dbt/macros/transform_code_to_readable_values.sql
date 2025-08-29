@@ -97,3 +97,48 @@
         else {{ column_name }}
     end
 {% endmacro %}
+
+
+--- https://github.com/mitodl/mit-learn/blob/main/learning_resources/constants.py#L189-L227
+{% macro transform_edx_department_number(column_name='department_number') %}
+   case
+       when {{ column_name }} = '1' then 'Civil and Environmental Engineering'
+       when {{ column_name }} = '2' then 'Mechanical Engineering'
+       when {{ column_name }} = '3' then 'Materials Science and Engineering'
+       when {{ column_name }} = '4' then 'Architecture'
+       when {{ column_name }} = '5' then 'Chemistry'
+       when {{ column_name }} = '6' then 'Electrical Engineering and Computer Science'
+       when {{ column_name }} = '7' then 'Biology'
+       when {{ column_name }} = '8' then 'Physics'
+       when {{ column_name }} = '9' then 'Brain and Cognitive Sciences'
+       when {{ column_name }} = '10' then 'Chemical Engineering'
+       when {{ column_name }} = '11' then 'Urban Studies and Planning'
+       when {{ column_name }} = '12' then 'Earth, Atmospheric, and Planetary Sciences'
+       when {{ column_name }} = '14' then 'Economics'
+       when {{ column_name }} = '15' then 'Management'
+       when {{ column_name }} = '16' then 'Aeronautics and Astronautics'
+       when {{ column_name }} = '17' then 'Political Science'
+       when {{ column_name }} = '18' then 'Mathematics'
+       when {{ column_name }} = '20' then 'Biological Engineering'
+       when {{ column_name }} = '21A' then 'Anthropology'
+       when {{ column_name }} = '21G' then 'Global Languages'
+       when {{ column_name }} = '21H' then 'History'
+       when {{ column_name }} = '21L' then 'Literature'
+       when {{ column_name }} = '21M' then 'Music and Theater Arts'
+       when {{ column_name }} = '22' then 'Nuclear Science and Engineering'
+       when {{ column_name }} = '24' then 'Linguistics and Philosophy'
+       when {{ column_name }} = 'CC' then 'Concourse'
+       when {{ column_name }} = 'CMS-W' then 'Comparative Media Studies/Writing'
+       when {{ column_name }} = 'EC' then 'Edgerton Center'
+       when {{ column_name }} = 'ES' then 'Experimental Study Group'
+       when {{ column_name }} = 'ESD' then 'Engineering Systems Division'
+       when {{ column_name }} = 'HST' then 'Medical Engineering and Science'
+       when {{ column_name }} = 'IDS' then 'Data, Systems, and Society'
+       when {{ column_name }} = 'MAS' then 'Media Arts and Sciences'
+       when {{ column_name }} = 'PE' then 'Athletics, Physical Education and Recreation'
+       when {{ column_name }} = 'SP' then 'Special Programs'
+       when {{ column_name }} = 'STS' then 'Science, Technology, and Society'
+       when {{ column_name }} = 'WGS' then 'Women''s and Gender Studies'
+       else {{ column_name }}
+   end
+{% endmacro %}
