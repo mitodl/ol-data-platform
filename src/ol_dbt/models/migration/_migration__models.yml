@@ -39,5 +39,9 @@ models:
       for enrollment
   - name: run_tag
     description: str, the edX course run tag. e.g. 2T2024
+    tests:
+    - not_null
   - name: department_name
-    description: str, the department offering the course
+    description: str, the course department name
+    tests:
+    - not_null
