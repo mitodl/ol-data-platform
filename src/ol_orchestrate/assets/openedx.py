@@ -179,8 +179,8 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
                 datetime.now(tz=UTC) - start_time
                 > COURSE_EXPORT_GET_TASKS_STATUS_TIMEOUT
             ):
-                context.log.warning("Timeout reached before all tasks completed.")
-                raise TimeoutError(f"Course export timed out for {course_key}")
+                err_msg = f"Course export timed out for {course_key}"
+                raise TimeoutError(err_msg)
             time.sleep(timedelta(seconds=20).seconds)
             for course_id, task_id in tasks.items():
                 task_status = (
@@ -198,7 +198,9 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
                 elif details:
                     context.log.info(
                         "Details of export task for course %s (task %s): %s",
-                        course_id, task_id, details,
+                        course_id,
+                        task_id,
+                        details,
                     )
         if failed_exports:
             errmsg = f"Unable to export the course XML for {course_key}"
