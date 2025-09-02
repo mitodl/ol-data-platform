@@ -17,13 +17,29 @@ with mitx_courses as (
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
 
-, edxorg_enrollments as (
-    select * from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
+, edx_enrollments as (
+    select
+        courserun_readable_id
+        , count(*) as enrollment_count
+    from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
+    group by courserun_readable_id
+)
+
+, edx_certificates as (
+    select
+        courserun_readable_id
+        , count(*) as certificate_count
+    from {{ ref('int__edxorg__mitx_courserun_certificates') }}
+    group by courserun_readable_id
 )
 
 select distinct
     mitx_courses.mitxonline_course_id
-    , mitx_courses.course_readable_id
+    , if(
+        mitx_courses.mitxonline_course_id is not null
+        , mitx_courses.course_readable_id
+        , replace(replace(mitx_courses.course_readable_id, 'course-v1:', ''), '+', '/')
+    ) as course_readable_id
     , mitx_courses.course_title
     , edx_courseruns.courserun_is_self_paced as is_self_paced
     , edx_courseruns.courserun_is_published as is_published
@@ -39,11 +55,15 @@ select distinct
         , edx_courseruns.coursedepartment_name
         , {{ transform_edx_department_number('edx_courseruns.extracted_department_number') }}
     ) as department_name
+    , edx_enrollments.enrollment_count
+    , edx_certificates.certificate_count
 from mitx_courses
 inner join edx_courseruns
     on mitx_courses.course_number = edx_courseruns.course_number
--- ensure we only import course runs that have enrollments on edX.org
-inner join edxorg_enrollments
-    on edx_courseruns.courserun_readable_id = edxorg_enrollments.courserun_readable_id
+inner join edx_enrollments
+    on edx_courseruns.courserun_readable_id = edx_enrollments.courserun_readable_id
+left join edx_certificates
+    on edx_courseruns.courserun_readable_id = edx_certificates.courserun_readable_id
 left join mitxonline_course_department
     on mitx_courses.mitxonline_course_id = mitxonline_course_department.course_id
+where from_iso8601_timestamp(edx_courseruns.courserun_end_date) < current_date

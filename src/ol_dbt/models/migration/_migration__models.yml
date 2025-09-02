@@ -43,3 +43,7 @@ models:
     - not_null
   - name: department_name
     description: str, the course department name
+  - name: enrollment_count
+    description: int,  count of users enrolled in the course run
+  - name: certificate_count
+    description: int, count of users who have earned a certificate in the course run
