@@ -51,6 +51,8 @@ with runs_from_bigquery as (
     select
         runs_from_bigquery.course_number
         , runs_from_bigquery.courserun_semester
+        , runs_from_bigquery.coursedepartment_name
+        , runs_from_bigquery.coursedepartment_number
         , runs_from_api.courserun_enrollment_end_on as courserun_enrollment_end_date
         , runs_from_api.courserun_short_description as courserun_description
         , runs_from_api.course_topics
@@ -102,6 +104,8 @@ select
     runs.courserun_readable_id
     , runs.course_number
     , runs.course_readable_id
+    , runs.coursedepartment_name
+    , runs.coursedepartment_number
     , runs.courserun_title
     , runs.courserun_semester
     , runs.courserun_url
