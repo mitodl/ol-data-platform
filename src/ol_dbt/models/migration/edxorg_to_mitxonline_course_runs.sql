@@ -28,7 +28,7 @@ select
     , from_iso8601_timestamp(edx_courseruns.courserun_end_date) as end_date
     , coalesce(
         edx_courseruns.coursedepartment_name
-        , {{ transform_ocw_department_number('edx_courseruns.extracted_department_number') }}
+        , {{ transform_edx_department_number('edx_courseruns.extracted_department_number') }}
     ) as department_name
 from mitx_courses
 inner join edx_courseruns
