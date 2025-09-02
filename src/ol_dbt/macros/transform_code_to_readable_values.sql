@@ -139,6 +139,6 @@
        when {{ column_name }} = 'SP' then 'Special Programs'
        when {{ column_name }} = 'STS' then 'Science, Technology, and Society'
        when {{ column_name }} = 'WGS' then 'Women''s and Gender Studies'
-       else {{ column_name }}
+       else null
    end
 {% endmacro %}

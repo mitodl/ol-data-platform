@@ -43,5 +43,3 @@ models:
     - not_null
   - name: department_name
     description: str, the course department name
-    tests:
-    - not_null
