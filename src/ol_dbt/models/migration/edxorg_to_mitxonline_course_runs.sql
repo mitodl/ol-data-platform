@@ -2,6 +2,10 @@ with mitx_courses as (
     select * from {{ ref('int__mitx__courses') }}
 )
 
+, mitxonline_courseruns as (
+    select * from {{ ref('int__mitxonline__course_runs') }}
+)
+
 , mitxonline_course_department as (
     select
         course_id
@@ -13,6 +17,7 @@ with mitx_courses as (
 , edx_courseruns as (
     select
         *
+        , element_at(split(courserun_readable_id, '/'), 3) as run_tag
         , element_at(split(course_number, '.'), 1) as extracted_department_number
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
@@ -38,14 +43,14 @@ select distinct
     , if(
         mitx_courses.mitxonline_course_id is not null
         , mitx_courses.course_readable_id
-        , replace(replace(mitx_courses.course_readable_id, 'course-v1:', ''), '+', '/')
+        , 'course-v1:MITx+' || mitx_courses.course_number
     ) as course_readable_id
     , mitx_courses.course_title
     , edx_courseruns.courserun_is_self_paced as is_self_paced
     , edx_courseruns.courserun_is_published as is_published
     , edx_courseruns.courserun_title
     , {{ format_course_id('edx_courseruns.courserun_readable_id', false) }} as courseware_id
-    , element_at(split(edx_courseruns.courserun_readable_id, '/'), 3) as run_tag
+    , edx_courseruns.run_tag
     , from_iso8601_timestamp(edx_courseruns.courserun_enrollment_start_date) as enrollment_start
     , from_iso8601_timestamp(edx_courseruns.courserun_enrollment_end_date) as enrollment_end
     , from_iso8601_timestamp(edx_courseruns.courserun_start_date) as start_date
@@ -66,4 +71,10 @@ left join edx_certificates
     on edx_courseruns.courserun_readable_id = edx_certificates.courserun_readable_id
 left join mitxonline_course_department
     on mitx_courses.mitxonline_course_id = mitxonline_course_department.course_id
-where from_iso8601_timestamp(edx_courseruns.courserun_end_date) < current_date
+left join mitxonline_courseruns
+    on
+        edx_courseruns.course_number = mitxonline_courseruns.course_number
+        and edx_courseruns.run_tag = mitxonline_courseruns.courserun_tag
+where
+    from_iso8601_timestamp(edx_courseruns.courserun_end_date) < current_date  -- unenrollable runs
+    and mitxonline_courseruns.course_number is null  -- not already in mitxonline course runs
