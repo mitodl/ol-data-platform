@@ -35,6 +35,7 @@ with problem_events as (
         , overall_grade.courserungrade_grade
         , unit.block_title as unit_name
         , chapter.block_title as chapter_name
+        , sequential.block_title as sequential_name
         , lag(problem_events.event_timestamp, 1)
             over (
                 partition by
@@ -61,6 +62,10 @@ with problem_events as (
         on
             cc.chapter_block_id = chapter.block_id
             and chapter.is_latest = true
+    left join course_content as sequential
+        on 
+            cc.sequential_block_id = sequential.block_id
+            and sequential.is_latest = true
     where overall_grade.verified_cnt > 0
 )
 
@@ -71,6 +76,7 @@ select
     , problem_block_fk
     , unit_name
     , chapter_name
+    , sequential_name
     , coalesce((
         upper(unit_name) like '%EXAM%'
         and upper(unit_name) not like '%EXAMPLE%'
@@ -111,6 +117,7 @@ group by
     , problem_block_fk
     , unit_name
     , chapter_name
+    , sequential_name
     , coalesce((
         upper(unit_name) like '%EXAM%'
         and upper(unit_name) not like '%EXAMPLE%'
