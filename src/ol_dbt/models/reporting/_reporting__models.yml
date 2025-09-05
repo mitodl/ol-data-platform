@@ -271,6 +271,9 @@ models:
   - name: chapter_name
     description: string, title of the course content block. It is the name field for
       the chapter.
+  - name: sequential_name
+    description: string, title of the course content block. It is the name field for
+      the sequential.
   - name: exam_indicator
     description: boolean, If the name field for the unit on the Studio 'Course Outline'
       page contains the word 'exam' then this is true otherwise it's false.
