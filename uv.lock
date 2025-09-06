@@ -865,16 +865,16 @@ wheels = [
 
 [[package]]
 name = "fsspec"
-version = "2025.7.0"
+version = "2025.9.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8b/02/0835e6ab9cfc03916fe3f78c0956cfcdb6ff2669ffa6651065d5ebf7fc98/fsspec-2025.7.0.tar.gz", hash = "sha256:786120687ffa54b8283d942929540d8bc5ccfa820deb555a2b5d0ed2b737bf58", size = 304432, upload-time = "2025-07-15T16:05:21.19Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/de/e0/bab50af11c2d75c9c4a2a26a5254573c0bd97cea152254401510950486fa/fsspec-2025.9.0.tar.gz", hash = "sha256:19fd429483d25d28b65ec68f9f4adc16c17ea2c7c7bf54ec61360d478fb19c19", size = 304847, upload-time = "2025-09-02T19:10:49.215Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2f/e0/014d5d9d7a4564cf1c40b5039bc882db69fd881111e03ab3657ac0b218e2/fsspec-2025.7.0-py3-none-any.whl", hash = "sha256:8b012e39f63c7d5f10474de957f3ab793b47b45ae7d39f2fb735f8bbe25c0e21", size = 199597, upload-time = "2025-07-15T16:05:19.529Z" },
+    { url = "https://files.pythonhosted.org/packages/47/71/70db47e4f6ce3e5c37a607355f80da8860a33226be640226ac52cb05ef2e/fsspec-2025.9.0-py3-none-any.whl", hash = "sha256:530dc2a2af60a414a832059574df4a6e10cce927f6f4a78209390fe38955cfb7", size = 199289, upload-time = "2025-09-02T19:10:47.708Z" },
 ]
 
 [[package]]
 name = "gcsfs"
-version = "2025.7.0"
+version = "2025.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -885,9 +885,9 @@ dependencies = [
     { name = "google-cloud-storage" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5b/d7/5eafe9f09f1bb09433a473cef7984cd52c398592c8fd09974e0ad87cfea4/gcsfs-2025.7.0.tar.gz", hash = "sha256:ad3ff66cf189ae8fc375ac8a2af409003dbca02357621cb94a66e457e02ba420", size = 82659, upload-time = "2025-07-15T16:49:21.647Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/54/55/cd737f96929f9cf52666bd49e9b4d1aac697655b3ab17c49ab4fb587bb12/gcsfs-2025.9.0.tar.gz", hash = "sha256:36b8c379d9789d5332a45a3aa2840ec518ff73c6d21c1e962f53318d1cd65db9", size = 82843, upload-time = "2025-09-02T19:23:19.22Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/21/f5/54bccbee01efbc25581db6aafefb6f6c277d880930f7a083b10052382463/gcsfs-2025.7.0-py2.py3-none-any.whl", hash = "sha256:653503331d58cb02bb34e725d4595d166e93f7f2f3ff88e4c66ef535ae66eae5", size = 36815, upload-time = "2025-07-15T16:49:20.333Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/41/f793f3bae39f9fbaabf935d0afcf3aa99e417c92096f3e232ac085aaddbf/gcsfs-2025.9.0-py2.py3-none-any.whl", hash = "sha256:38208bc79af60c693e44ff2f0bd6fd3ca664fea1940fe6770ac1c6003aa0f559", size = 36893, upload-time = "2025-09-02T19:23:18.002Z" },
 ]
 
 [[package]]
@@ -1707,7 +1707,7 @@ requires-dist = [
     { name = "dbt-duckdb", specifier = "~=1.9.0" },
     { name = "dbt-trino", specifier = "~=1.9.0" },
     { name = "flatten-dict", specifier = "~=0.4.2" },
-    { name = "fsspec", specifier = "~=2025.7.0" },
+    { name = "fsspec", specifier = "~=2025.9.0" },
     { name = "gcsfs", specifier = ">=2025.2.0,<2026.0.0" },
     { name = "httpx", specifier = "~=0.28.0" },
     { name = "hvac", specifier = "~=2.3.0" },
@@ -2348,16 +2348,16 @@ wheels = [
 
 [[package]]
 name = "s3fs"
-version = "2025.7.0"
+version = "2025.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiobotocore" },
     { name = "aiohttp" },
     { name = "fsspec" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bf/13/37438c4672ba1d23ec46df0e4b57e98469e5c5f4f98313cf6842b631652b/s3fs-2025.7.0.tar.gz", hash = "sha256:5e7f9ec0cad7745155e3eb86fae15b1481fa29946bf5b3a4ce3a60701ce6022d", size = 77795, upload-time = "2025-07-15T16:35:22.177Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/f3/8e6371436666aedfd16e63ff68a51b8a8fcf5f33a0eee33c35e0b2476b27/s3fs-2025.9.0.tar.gz", hash = "sha256:6d44257ef19ea64968d0720744c4af7a063a05f5c1be0e17ce943bef7302bc30", size = 77823, upload-time = "2025-09-02T19:18:21.781Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ff/c7/30d13b7fd4f866ca3f30e9a6e7ae038f0c45226f6e26b3cc98d6d197f93b/s3fs-2025.7.0-py3-none-any.whl", hash = "sha256:b6b2d3f84b6aa1c2ba5e62e39dd9410cf54f10a2cce1ea6db1ba0d1a6bcce685", size = 30315, upload-time = "2025-07-15T16:35:20.734Z" },
+    { url = "https://files.pythonhosted.org/packages/37/b3/ca7d58ca25b1bb6df57e6cbd0ca8d6437a4b9ce1cd35adc8a6b2949c113b/s3fs-2025.9.0-py3-none-any.whl", hash = "sha256:c33c93d48f66ed440dbaf6600be149cdf8beae4b6f8f0201a209c5801aeb7e30", size = 30319, upload-time = "2025-09-02T19:18:20.563Z" },
 ]
 
 [[package]]
