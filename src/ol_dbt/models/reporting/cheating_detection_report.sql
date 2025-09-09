@@ -63,7 +63,7 @@ with problem_events as (
             cc.chapter_block_id = chapter.block_id
             and chapter.is_latest = true
     left join course_content as sequential
-        on 
+        on
             cc.sequential_block_id = sequential.block_id
             and sequential.is_latest = true
     where overall_grade.verified_cnt > 0

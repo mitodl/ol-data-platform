@@ -282,8 +282,8 @@ models:
   - name: attempts_on_problem
     description: int, max attempt number generated when parsing answer submissions
   - name: max_learner_grade
-    description: number, max of how many responses the learner got right
-      within the problem.
+    description: number, max of how many responses the learner got right within the
+      problem.
   - name: grades
     description: number, current values indicating the total unweighted grades for
       this problem that the learner has scored. e.g. how many responses they got right
