@@ -117,6 +117,62 @@ def process_video_xml(archive_path: Path) -> list[dict[str, str]]:
     return video_block_details
 
 
+def process_policy_json(
+    archive_path: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    signatory_rows = []
+    course_policy_rows = []
+    with tarfile.open(archive_path, "r") as tf:
+        archive_root = tf.next()
+        if archive_root is None:
+            msg = "Unable to retrieve the archive root of the course XML."
+            raise Exception(msg)  # noqa: TRY002
+        tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
+        xml_file = tf.extractfile(tar_info_course)
+        course_id, course_number, run_tag, org = parse_course_id(str(xml_file))
+        for member in tf.getmembers():
+            if not member.isdir() and member.path.startswith(
+                f"{archive_root.name}/policies/{run_tag}/"
+            ):
+                json_data = tf.extractfile(member)
+                if not json_data:
+                    continue
+
+                policy_data = json.load(json_data)
+
+                for course_id, course_info in policy_data.items():
+                    if course_id.startswith("course/"):
+                        course_policy_row = {
+                            "course_id": course_id,
+                            "advanced_modules": course_info.get("advanced_modules"),
+                            "discussions_settings": course_info.get(
+                                "discussions_settings"
+                            ),
+                            "display_coursenumber": course_info.get(
+                                "display_coursenumber"
+                            ),
+                            "self_paced": course_info.get("self_paced"),
+                            "tabs": course_info.get("tabs"),
+                            "tags": course_info.get("tags"),
+                        }
+                        course_policy_rows.append(course_policy_row)
+
+                        certificates = course_info.get("certificates", {}).get(
+                            "certificates", []
+                        )
+                        for cert in certificates:
+                            cert_id = cert.get("id")
+                            signatories = cert.get("signatories", [])
+                            for signatory in signatories:
+                                signatory_row = signatory.copy()
+                                signatory_row["course_id"] = course_id
+                                signatory_row["certificate_id"] = cert_id
+                                signatory_rows.append(signatory_row)
+                        break  # Only process the first element
+
+    return course_policy_rows, signatory_rows
+
+
 def parse_course_id(course_xml: str | Path) -> tuple[str, str, str, str]:
     """
     Parse the attributes of the course.xml file in the root directory
