@@ -63,7 +63,7 @@ with problem_events as (
             cc.chapter_block_id = chapter.block_id
             and chapter.is_latest = true
     left join course_content as sequential
-        on
+        on 
             cc.sequential_block_id = sequential.block_id
             and sequential.is_latest = true
     where overall_grade.verified_cnt > 0
@@ -81,17 +81,20 @@ select
         upper(unit_name) like '%EXAM%'
         and upper(unit_name) not like '%EXAMPLE%'
         and upper(unit_name) not like '%EXAMINING%'
+        and upper(unit_name) not like '%PRACTICE%'
     )
     or (
         upper(chapter_name) like '%EXAM%'
         and upper(chapter_name) not like '%EXAMPLE%'
         and upper(chapter_name) not like '%EXAMINING%'
+        and upper(chapter_name) not like '%PRACTICE%'
     )
     or upper(chapter_name) like '%EXAM %'
     or upper(unit_name) like '%EXAM %', true
     ) as exam_indicator
-    , max(max_grade) as max_grade
+    , max(max_grade) as max_possible_grade
     , max(attempt) as attempts_on_problem
+    , max(grade) as max_learner_grade
     , array_agg(grade) as grades
     , min(
         case
@@ -122,11 +125,13 @@ group by
         upper(unit_name) like '%EXAM%'
         and upper(unit_name) not like '%EXAMPLE%'
         and upper(unit_name) not like '%EXAMINING%'
+        and upper(unit_name) not like '%PRACTICE%'
     )
     or (
         upper(chapter_name) like '%EXAM%'
         and upper(chapter_name) not like '%EXAMPLE%'
         and upper(chapter_name) not like '%EXAMINING%'
+        and upper(chapter_name) not like '%PRACTICE%'
     )
     or upper(chapter_name) like '%EXAM %'
     or upper(unit_name) like '%EXAM %', true
