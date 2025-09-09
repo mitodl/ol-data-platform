@@ -271,13 +271,19 @@ models:
   - name: chapter_name
     description: string, title of the course content block. It is the name field for
       the chapter.
+  - name: sequential_name
+    description: string, title of the course content block. It is the name field for
+      the sequential.
   - name: exam_indicator
     description: boolean, If the name field for the unit on the Studio 'Course Outline'
       page contains the word 'exam' then this is true otherwise it's false.
-  - name: max_grade
+  - name: max_possible_grade
     description: number, maximum possible grade value for the problem
   - name: attempts_on_problem
     description: int, max attempt number generated when parsing answer submissions
+  - name: max_learner_grade
+    description: number, max of how many responses the learner got right within the
+      problem.
   - name: grades
     description: number, current values indicating the total unweighted grades for
       this problem that the learner has scored. e.g. how many responses they got right
