@@ -36,7 +36,6 @@ with chatsession as (
                 replace(chatsession.chatsession_object_id, 'asset-v1:', ''), 1
                 , strpos(replace(chatsession.chatsession_object_id, 'asset-v1:', ''), '+type@asset+block@') - 1
             )
-            and chatsession.chatsession_created_on < video.retrieved_at
 )
 
 select
