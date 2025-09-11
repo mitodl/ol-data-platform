@@ -37,6 +37,7 @@ with showanswers as (
 
 , users as (
     select * from {{ ref('int__mitxonline__users') }}
+    where openedx_user_id is not null
 )
 
 , combined as (

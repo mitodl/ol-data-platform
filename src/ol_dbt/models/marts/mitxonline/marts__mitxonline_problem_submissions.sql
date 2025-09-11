@@ -36,4 +36,7 @@ select
     , if(problem_response.most_recent_num = 1, true, false) as is_most_recent_attempt
 from problem_response
 inner join course_runs on problem_response.courserun_readable_id = course_runs.courserun_readable_id
-left join users on problem_response.user_username = users.user_username
+left join users
+    on
+        problem_response.user_username = users.user_username
+        and problem_response.openedx_user_id = users.openedx_user_id

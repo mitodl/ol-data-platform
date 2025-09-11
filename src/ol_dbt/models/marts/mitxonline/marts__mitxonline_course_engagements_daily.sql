@@ -4,6 +4,7 @@ with course_activities_daily as (
 
 , users as (
     select * from {{ ref('int__mitxonline__users') }}
+    where openedx_user_id is not null
 )
 
 , video as (
