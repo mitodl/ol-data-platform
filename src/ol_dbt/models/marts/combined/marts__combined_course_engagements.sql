@@ -164,6 +164,7 @@ with combined_course_activities_daily as (
 
 , combined_users as (
     select * from {{ ref('int__combined__users') }}
+    where openedx_user_id is not null
 )
 
 , combined_runs as (

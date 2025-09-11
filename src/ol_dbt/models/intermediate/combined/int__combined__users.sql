@@ -72,6 +72,7 @@ with mitxonline_users as (
     select
         '{{ var("mitxonline") }}' as platform
         , cast(user_id as varchar) as user_id
+        , openedx_user_id
         , user_username
         , user_email
         , user_full_name
@@ -96,6 +97,7 @@ with mitxonline_users as (
     select
         '{{ var("mitxpro") }}' as platform
         , cast(user_id as varchar) as user_id
+        , openedx_user_id
         , user_username
         , user_email
         , user_full_name
@@ -120,6 +122,7 @@ with mitxonline_users as (
     select
         '{{ var("emeritus") }}' as platform
         , user_id
+        , null as openedx_user_id
         , null as user_username
         , user_email
         , user_full_name
@@ -145,6 +148,7 @@ with mitxonline_users as (
     select
         '{{ var("global_alumni") }}' as platform
         , user_id
+        , null as openedx_user_id
         , null as user_username
         , user_email
         , user_full_name
@@ -170,6 +174,7 @@ with mitxonline_users as (
     select
         '{{ var("bootcamps") }}' as platform
         , cast(user_id as varchar) as user_id
+        , null as openedx_user_id
         , user_username
         , user_email
         , user_full_name
@@ -194,6 +199,7 @@ with mitxonline_users as (
     select
         '{{ var("edxorg") }}' as platform
         , cast(edxorg_users.user_id as varchar) as user_id
+        , edxorg_users.user_id as openedx_user_id
         , edxorg_users.user_username
         , edxorg_users.user_email
         , edxorg_users.user_full_name
@@ -219,6 +225,7 @@ with mitxonline_users as (
     select
         '{{ var("residential") }}' as platform
         , cast(user_id as varchar) as user_id
+        , user_id as openedx_user_id
         , user_username
         , user_email
         , user_full_name
