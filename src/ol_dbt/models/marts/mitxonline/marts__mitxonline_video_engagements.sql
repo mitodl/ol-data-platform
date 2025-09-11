@@ -54,5 +54,8 @@ left join mitxonline_videos
     on
         video_structure.courserun_readable_id = mitxonline_videos.courserun_readable_id
         and video_structure.video_edx_uuid = mitxonline_videos.video_edx_uuid
-left join users on video.user_username = users.user_username
+left join users
+    on
+        video.user_username = users.user_username
+        and video.openedx_user_id = users.openedx_user_id
 where video.useractivity_event_type in ('play_video', 'seek_video', 'complete_video', 'pause_video', 'stop_video')
