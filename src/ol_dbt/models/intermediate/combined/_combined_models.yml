@@ -18,6 +18,9 @@ models:
   - name: user_id
     description: string, user ID from the corresponding platform. May be null for
       some xPRO Emeritus learners.
+  - name: openedx_user_id
+    description: int, user ID on the corresponding Open edX platform. Apply to MITx
+      Online, xPro, edxorg and Residential MITx users.
   - name: user_username
     description: string, username on the corresponding platform. Null for all the
       xPRO Emeritus learners.
