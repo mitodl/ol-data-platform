@@ -128,8 +128,12 @@ def process_policy_json(
             msg = "Unable to retrieve the archive root of the course XML."
             raise Exception(msg)  # noqa: TRY002
         tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
-        xml_file = tf.extractfile(tar_info_course)
-        course_id, course_number, run_tag, org = parse_course_id(str(xml_file))
+        course_xml_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_course.xml").name
+        )
+        course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
+        course_id, course_number, run_tag, org = parse_course_id(str(course_xml_file))
+        course_xml_file.unlink()
         for member in tf.getmembers():
             if not member.isdir() and member.path.startswith(
                 f"{archive_root.name}/policies/{run_tag}/"
