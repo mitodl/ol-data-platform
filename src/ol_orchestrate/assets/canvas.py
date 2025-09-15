@@ -91,9 +91,7 @@ def _extract_course_files(context, course_id):
             files_detail.append(
                 {
                     **{k if k != "url" else "download_url": v for k, v in file.items()},
-                    "file_path": folder_detail["full_name"]
-                    + "/"
-                    + file["display_name"],
+                    "file_path": f"{folder_detail['full_name']}/{file['display_name']}",
                     "url": f"https://canvas.mit.edu/courses/{course_id}/files/{file['id']}/",
                     "folder": folder_detail,
                 }
