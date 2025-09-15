@@ -126,7 +126,7 @@ def process_policy_json(
         archive_root = tf.next()
         if archive_root is None:
             msg = "Unable to retrieve the archive root of the course XML."
-            raise Exception(msg)  # noqa: TRY002
+            raise ValueError(msg)
         tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
         course_xml_file = Path(
             NamedTemporaryFile(delete=False, suffix="_course.xml").name
@@ -172,7 +172,6 @@ def process_policy_json(
                                 signatory_row["course_id"] = course_id
                                 signatory_row["certificate_id"] = cert_id
                                 signatory_rows.append(signatory_row)
-                        break  # Only process the first element
 
     return course_policy_rows, signatory_rows
 
