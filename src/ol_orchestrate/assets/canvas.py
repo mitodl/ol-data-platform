@@ -111,7 +111,6 @@ def _extract_course_assignments(context, course_id):
             "id": assignment["id"],
             "name": assignment["name"],
             "html_url": assignment["html_url"],
-            "url": assignment["url"],
             "visible_to_everyone": assignment["visible_to_everyone"],
             "published": assignment["published"],
         }
