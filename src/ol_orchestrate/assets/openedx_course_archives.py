@@ -23,6 +23,7 @@ from ol_orchestrate.assets.edxorg_archive import course_and_source_partitions
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
+    process_policy_json,
     process_video_xml,
 )
 
@@ -56,6 +57,20 @@ def dummy_edxorg_course_xml(): ...
             ),
             io_manager_key="s3file_io_manager",
             key=AssetKey(("edxorg", "processed_data", "course_video")),
+        ),
+        "course_certificate_signatory": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Details about the course certificate signatories in the course"
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("edxorg", "processed_data", "course_certificate_signatory")),
+        ),
+        "course_policy": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=("Details about the course policy in the course"),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("edxorg", "processed_data", "course_policy")),
         ),
     },
 )
@@ -107,6 +122,37 @@ def extract_edxorg_courserun_metadata(
         metadata={
             "course_id": partition_dict["course_id"],
             "object_key": course_video_object_key,
+        },
+    )
+
+    course_policy_rows, signatory_rows = process_policy_json(course_xml_path)
+    course_policy_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_policy.jsonl").name
+    )
+    jsonlines.open(course_policy_file, "w").write_all(course_policy_rows)
+    course_policy_object_key = f"{'/'.join(context.asset_key_for_output('course_policy').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
+    yield Output(
+        (course_policy_file, course_policy_object_key),
+        output_name="course_policy",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": partition_dict["course_id"],
+            "object_key": course_policy_object_key,
+        },
+    )
+
+    course_certificate_signatory_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_certificate_signatory.jsonl").name
+    )
+    jsonlines.open(course_certificate_signatory_file, "w").write_all(signatory_rows)
+    course_certificate_signatory_object_key = f"{'/'.join(context.asset_key_for_output('course_certificate_signatory').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
+    yield Output(
+        (course_certificate_signatory_file, course_certificate_signatory_object_key),
+        output_name="course_certificate_signatory",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": partition_dict["course_id"],
+            "object_key": course_certificate_signatory_object_key,
         },
     )
     course_xml_path.unlink()
