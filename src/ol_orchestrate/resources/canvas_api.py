@@ -158,7 +158,7 @@ class CanvasApiClient(BaseApiClient):
 
     def get_course_pages(
         self, course_id: int, per_page: int = 100
-    ) -> Generator[list[dict[str, str]], None, None]:
+    ) -> Generator[list[dict[str, Any]], None, None]:
         """Get a list of Pages in a course including pagination.
 
         :param course_id: The unique identifier of the course
