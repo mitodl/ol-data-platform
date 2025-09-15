@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field
 
@@ -84,9 +85,39 @@ class CanvasApiClient(BaseApiClient):
                         f.write(chunk)
         return output_path
 
+    def get_all_items(
+        self, course_id: int, endpoint: str, per_page: int = 100
+    ) -> Generator[list[dict[str, Any]], None, None]:
+        """
+        Fetch all paginated results from a Canvas course endpoint.
+
+        Example endpoints:
+          - 'files'
+          - 'pages'
+          - 'assignments'
+        """
+        page = 1
+        while True:
+            request_url = (
+                f"{self.base_url}/api/v1/courses/{course_id}/{endpoint}"
+                f"?page={page}&per_page={per_page}"
+            )
+            response = self.http_client.get(
+                request_url,
+                headers={"Authorization": f"{self.token_type} {self.access_token}"},
+            )
+            response.raise_for_status()
+            items = response.json()
+
+            if not items:
+                break
+
+            yield items
+            page += 1
+
     def get_course_files(
         self, course_id: int, per_page: int = 100
-    ) -> Generator[list[dict[str, str]], None, None]:
+    ) -> Generator[list[dict[str, Any]], None, None]:
         """Get a list of files in a course including pagination.
 
         :param course_id: The unique identifier of the course
@@ -94,23 +125,7 @@ class CanvasApiClient(BaseApiClient):
         :param per_page: Number of items per page
         :type per_page: int
         """
-        page = 1
-
-        while True:
-            request_url = f"{self.base_url}/api/v1/courses/{course_id}/files?page={page}&per_page={per_page}"  # noqa: E501
-            response = self.http_client.get(
-                request_url,
-                headers={"Authorization": f"{self.token_type} {self.access_token}"},
-            )
-            response.raise_for_status()
-            page_files = response.json()
-
-            # If no files returned, we've reached the end
-            if not page_files:
-                break
-
-            yield page_files
-            page += 1
+        yield from self.get_all_items(course_id, "files", per_page=per_page)
 
     def get_course_folders(self, course_id: int, folder_id: int) -> dict[str, str]:
         """Get details of a specific folder in a course.
@@ -128,3 +143,27 @@ class CanvasApiClient(BaseApiClient):
         )
         response.raise_for_status()
         return response.json()
+
+    def get_course_assignments(
+        self, course_id: int, per_page: int = 100
+    ) -> Generator[list[dict[str, Any]], None, None]:
+        """Get a list of Assignments in a course including pagination.
+
+        :param course_id: The unique identifier of the course
+        :type course_id: int
+        :param per_page: Number of items per page
+        :type per_page: int
+        """
+        yield from self.get_all_items(course_id, "assignments", per_page=per_page)
+
+    def get_course_pages(
+        self, course_id: int, per_page: int = 100
+    ) -> Generator[list[dict[str, Any]], None, None]:
+        """Get a list of Pages in a course including pagination.
+
+        :param course_id: The unique identifier of the course
+        :type course_id: int
+        :param per_page: Number of items per page
+        :type per_page: int
+        """
+        yield from self.get_all_items(course_id, "pages", per_page=per_page)

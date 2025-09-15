@@ -76,6 +76,49 @@ canvas_course_ids = StaticPartitionsDefinition(
 )
 
 
+def _extract_course_files(context, course_id):
+    """Extract course file information."""
+    course_file_generator = context.resources.canvas_api.client.get_course_files(
+        course_id
+    )
+    files_detail = []
+    for course_file in course_file_generator:
+        for file in course_file:
+            folder_id = file["folder_id"]
+            folder_detail = context.resources.canvas_api.client.get_course_folders(
+                course_id, folder_id
+            )
+            folder_path = folder_detail["full_name"]
+            files_detail.append(
+                {
+                    "file_id": file["id"],
+                    "display_name": file["display_name"],
+                    "file_name": file["filename"],
+                    "file_path": folder_path + "/" + file["display_name"],
+                    "url": f"https://canvas.mit.edu/courses/{course_id}/files/{file['id']}/",
+                }
+            )
+    return files_detail
+
+
+def _extract_course_assignments(context, course_id):
+    """Extract course assignment information."""
+    assignment_generator = context.resources.canvas_api.client.get_course_assignments(
+        course_id
+    )
+    return [
+        {
+            "id": assignment["id"],
+            "name": assignment["name"],
+            "html_url": assignment["html_url"],
+            "visible_to_everyone": assignment["visible_to_everyone"],
+            "published": assignment["published"],
+        }
+        for batch in assignment_generator
+        for assignment in batch
+    ]
+
+
 @multi_asset(
     group_name="canvas",
     required_resource_keys={"canvas_api"},
@@ -150,41 +193,34 @@ def export_course_content(context: AssetExecutionContext):
     context.log.info("Downloading %s file to %s", download_url, target_path)
 
     # Course file ID extraction
-    course_file_generator = context.resources.canvas_api.client.get_course_files(
-        course_id
-    )
-    files_detail = []
-    for course_file in course_file_generator:
-        for file in course_file:
-            folder_id = file["folder_id"]
-            folder_detail = context.resources.canvas_api.client.get_course_folders(
-                course_id, folder_id
-            )
-            folder_path = folder_detail["full_name"]
-            files_detail.append(
-                {
-                    "file_id": file["id"],
-                    "display_name": file["display_name"],
-                    "file_name": file["filename"],
-                    "file_path": folder_path + "/" + file["display_name"],
-                    "url": f"https://canvas.mit.edu/courses/{course_id}/files/{file['id']}/",
-                }
-            )
-
+    files_detail = _extract_course_files(context, course_id)
     context.log.info(
         "Total extracted %d files from course %s", len(files_detail), course_id
     )
+
+    # Course Assignments
+    assignments = _extract_course_assignments(context, course_id)
+    context.log.info(
+        "Total extracted %d assignments from course %s", len(assignments), course_id
+    )
+
+    # course pages
+    page_generator = context.resources.canvas_api.client.get_course_pages(course_id)
+    pages = [item for batch in page_generator for item in batch]
+    context.log.info("Total extracted %d pages from course %s", len(pages), course_id)
 
     json_file = Path(f"{data_version}.metadata.json")
     json_file_path = f"{'/'.join(context.asset_key_for_output('course_content').path)}/{course_id}/{data_version}.metadata.json"  # noqa: E501
 
     course_metadata = {
-        "course_files": files_detail,
         "course_id": course_id,
         "course_name": course["name"],
         "course_code": course["course_code"],
         "course_readable_id": course["sis_course_id"],
         "course_created_at": course["created_at"],
+        "course_files": files_detail,
+        "assignments": assignments,
+        "pages": pages,
     }
     with Path.open(json_file, "w") as file:
         json.dump(course_metadata, file, indent=2)
