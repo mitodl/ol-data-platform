@@ -88,14 +88,14 @@ def _extract_course_files(context, course_id):
             folder_detail = context.resources.canvas_api.client.get_course_folders(
                 course_id, folder_id
             )
-            folder_path = folder_detail["full_name"]
             files_detail.append(
                 {
-                    "file_id": file["id"],
-                    "display_name": file["display_name"],
-                    "file_name": file["filename"],
-                    "file_path": folder_path + "/" + file["display_name"],
+                    **{k if k != "url" else "download_url": v for k, v in file.items()},
+                    "file_path": folder_detail["full_name"]
+                    + "/"
+                    + file["display_name"],
                     "url": f"https://canvas.mit.edu/courses/{course_id}/files/{file['id']}/",
+                    "folder": folder_detail,
                 }
             )
     return files_detail
