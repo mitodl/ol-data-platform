@@ -26,10 +26,11 @@ with source as (
     select
         cast("user id" as integer) as user_id
         , "program uuid" as program_uuid
+        , "course run key" as courserun_readable_id
         , min(program_certificate_awarded_at) as earliest_program_cert_award_on
         , max("completed program") as ever_completed_program
     from source_sorted
-    group by 1, 2
+    group by 1, 2, 3
 )
 
 , dedup_source as (
@@ -117,3 +118,4 @@ left join aggregated_program_certificate
     on
         cleaned.user_id = aggregated_program_certificate.user_id
         and cleaned.program_uuid = aggregated_program_certificate.program_uuid
+        and cleaned.courserun_readable_id = aggregated_program_certificate.courserun_readable_id
