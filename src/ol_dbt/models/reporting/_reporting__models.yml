@@ -296,3 +296,29 @@ models:
   - name: courserungrade_grade
     description: float, course grade on edX.org or MITxOnline or xPro range from 0
       to 1
+
+- name: chatbot_usage_report
+  description: AI chatbot interactions from Learn AI application including TutorBot,
+    ResourceRecommendationBot, SyllabusBot and VideoGPTBot. No personal information
+    is included in this report.
+  columns:
+  - name: ai_agent
+    description: str, indicates the type of chatbot agent used in the session. Possible
+      values - TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot
+    tests:
+    - not_null
+  - name: thread_id
+    description: str, unique identifier for the chat thread.
+    tests:
+    - not_null
+  - name: resource_id
+    description: str, course ID, video transcript asset ID, or edX module ID depending
+      on the ai_agent. May be blank for ResourceRecommendationBot.
+  - name: human_message
+    description: str, the human message
+  - name: agent_message
+    description: str, the agent message
+  - name: message_index
+    description: int, the order of the message in the chat session.
+  - name: created_on
+    description: timestamp, date and time when the chat session was created.
