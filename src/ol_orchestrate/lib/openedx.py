@@ -144,20 +144,20 @@ def process_policy_json(
 
                 policy_data = json.load(json_data)
 
-                for course_id, course_info in policy_data.items():
-                    if course_id.startswith("course/"):
+                for policy_key, course_info in policy_data.items():
+                    if policy_key.startswith("course/"):
                         course_policy_row = {
                             "course_id": course_id,
-                            "advanced_modules": course_info.get("advanced_modules"),
+                            "advanced_modules": course_info.get("advanced_modules", []),
                             "discussions_settings": course_info.get(
-                                "discussions_settings"
+                                "discussions_settings", {}
                             ),
                             "display_coursenumber": course_info.get(
-                                "display_coursenumber"
+                                "display_coursenumber", ""
                             ),
                             "self_paced": course_info.get("self_paced"),
-                            "tabs": course_info.get("tabs"),
-                            "tags": course_info.get("tags"),
+                            "tabs": course_info.get("tabs", []),
+                            "tags": course_info.get("tags", []),
                         }
                         course_policy_rows.append(course_policy_row)
 
