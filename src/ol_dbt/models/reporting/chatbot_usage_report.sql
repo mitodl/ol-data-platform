@@ -35,20 +35,10 @@ with chatbot as (
 )
 
 , tutorbot as (
-    -- Get the most recent tutorbotoutput entry for each chatsession_thread_id
-    -- since there can be multiple entries per thread and we want only the last one for the
-    -- complete chat history
-    select * from (
-        select
-            *
-            , json_parse(json_extract_scalar(tutorbot_chat_json, '$')) as chat_json
-            , row_number() over (
-                partition by chatsession_thread_id
-                order by tutorbotoutput_id desc
-            ) as row_num
-        from {{ ref("int__learn_ai__tutorbot") }}
-    )
-    where row_num = 1
+    select
+        *
+        , json_parse(json_extract_scalar(tutorbot_chat_json, '$')) as chat_json
+    from {{ ref("int__learn_ai__tutorbot") }}
 )
 
 , tutorbot_flatten as (
@@ -69,6 +59,31 @@ with chatbot as (
     with ordinality as t(element, idx) -- noqa: PRS
 )
 
+, tutorbot_deduplicated as (
+    select
+        tutorbotoutput_id
+        , chatsession_agent
+        , edx_module_id
+        , chatsession_thread_id
+        , human_message
+        , agent_message
+        , chatsession_created_on
+        , row_number() over (
+            partition by chatsession_thread_id
+            order by tutorbotoutput_id, message_index
+        ) as message_index
+    from (
+        select
+            *
+            , row_number() over (
+                partition by chatsession_thread_id, human_message, agent_message
+                order by tutorbotoutput_id, message_index
+            ) as message_occurrence
+        from tutorbot_flatten
+    )
+    where message_occurrence = 1
+)
+
 select
     chatsession_agent as ai_agent
     , chatsession_object_id as resource_id
@@ -83,14 +98,14 @@ where coalesce(agent_message, '') != '' or human_message is not null
 union all
 
 select
-    tutorbot_flatten.chatsession_agent as ai_agent
-    , tutorbot_flatten.edx_module_id as resource_id
-    , tutorbot_flatten.chatsession_thread_id as thread_id
-    , tutorbot_flatten.human_message
-    , tutorbot_flatten.agent_message as ai_message
-    , tutorbot_flatten.chatsession_created_on as created_on
-    , tutorbot_flatten.message_index
-from tutorbot_flatten
+    tutorbot_deduplicated.chatsession_agent as ai_agent
+    , tutorbot_deduplicated.edx_module_id as resource_id
+    , tutorbot_deduplicated.chatsession_thread_id as thread_id
+    , tutorbot_deduplicated.human_message
+    , tutorbot_deduplicated.agent_message as ai_message
+    , tutorbot_deduplicated.chatsession_created_on as created_on
+    , tutorbot_deduplicated.message_index
+from tutorbot_deduplicated
 left join chatbot
-    on tutorbot_flatten.chatsession_thread_id = chatbot.chatsession_thread_id
+    on tutorbot_deduplicated.chatsession_thread_id = chatbot.chatsession_thread_id
 where chatbot.chatsession_thread_id is null
