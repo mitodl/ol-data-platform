@@ -1,5 +1,14 @@
 with chatbot as (
-    select * from {{ ref("int__learn_ai__chatbot") }}
+    select
+        *
+        , row_number() over (
+            partition by chatsession_thread_id
+            order by djangocheckpoint_id
+        ) as message_index
+    from (
+        select * from {{ ref("int__learn_ai__chatbot") }}
+        where coalesce(agent_message, '') != '' or human_message is not null
+    )
 )
 
 , tutorbot as (
@@ -59,11 +68,8 @@ select
     , human_message
     , agent_message as ai_message
     , chatsession_created_on as created_on
-    , checkpoint_step as message_index
+    , message_index
 from chatbot
-where
-    (coalesce(agent_message, '') != '' or human_message is not null)
-    and chatsession_agent != 'TutorBot'
 
 union all
 
@@ -76,3 +82,6 @@ select
     , tutorbot_deduplicated.chatsession_created_on as created_on
     , tutorbot_deduplicated.message_index
 from tutorbot_deduplicated
+left join chatbot
+    on tutorbot_deduplicated.chatsession_thread_id = chatbot.chatsession_thread_id
+where chatbot.chatsession_thread_id is null
