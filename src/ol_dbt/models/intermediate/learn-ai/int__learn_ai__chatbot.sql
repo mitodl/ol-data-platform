@@ -39,7 +39,8 @@ with chatsession as (
 )
 
 select
-    djangocheckpoint.checkpoint_id
+    djangocheckpoint.djangocheckpoint_id
+    , djangocheckpoint.checkpoint_id
     , djangocheckpoint.chatsession_thread_id
     , chatsession.chatsession_agent
     , chatsession.chatsession_title

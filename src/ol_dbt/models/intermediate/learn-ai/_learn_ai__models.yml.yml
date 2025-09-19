@@ -50,6 +50,10 @@ models:
   description: Intermediate model for Learn AI RecommendationBot, SyllabusBot and
     VideoGPTBot
   columns:
+  - name: djangocheckpoint_id
+    description: int, foreign key to chatbots_djangocheckpoint
+    tests:
+    - not_null
   - name: checkpoint_id
     description: str, unique identifier for the chatbots checkpoint.
     tests:

@@ -1,37 +1,14 @@
 with chatbot as (
-    select * from (
-        select
-            *
-            , row_number() over (
-                partition by chatsession_thread_id
-                order by checkpoint_step desc
-            ) as row_num
-        from {{ ref("int__learn_ai__chatbot") }}
-    )
-    where row_num = 1
-)
-
-, chatbot_flatten as (
-    --- this is to address the recent change in langchain where messages are not written into checkpoint_metadata
-    --  anymore. Instead we need to extract messages from checkpoint
     select
-        chatbot.chatsession_agent
-        , chatbot.chatsession_object_id
-        , chatbot.chatsession_thread_id
-        , chatbot.chatsession_created_on
-        , t.idx as message_index
-        , case
-            when json_extract_scalar(t.element, '$.kwargs.type') = 'human'
-                then json_extract_scalar(t.element, '$.kwargs.content')
-        end as human_message
-        , case
-            when json_extract_scalar(t.element, '$.kwargs.type') = 'ai'
-                then json_extract_scalar(t.element, '$.kwargs.content')
-        end as agent_message
-    from chatbot
-    cross join
-        unnest(cast(json_extract(chatbot.checkpoint_json, '$.channel_values.messages') as array<json>))
-    with ordinality as t(element, idx) -- noqa: PRS
+        *
+        , row_number() over (
+            partition by chatsession_thread_id
+            order by djangocheckpoint_id
+        ) as message_index
+    from (
+        select * from {{ ref("int__learn_ai__chatbot") }}
+        where coalesce(agent_message, '') != '' or human_message is not null
+    )
 )
 
 , tutorbot as (
@@ -92,8 +69,7 @@ select
     , agent_message as ai_message
     , chatsession_created_on as created_on
     , message_index
-from chatbot_flatten
-where coalesce(agent_message, '') != '' or human_message is not null
+from chatbot
 
 union all
 
