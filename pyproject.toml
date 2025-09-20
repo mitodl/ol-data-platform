@@ -45,7 +45,7 @@ dev = [
     "pytest>=8.0.0,<9",
     "ruff",
     "sqlfluff>=3.0.0,<4",
-    "typer[all]>=0.17,<0.18",
+    "typer[all]>=0.19,<0.20",
 ]
 
 [tool.hatch.build.targets.sdist]
