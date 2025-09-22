@@ -1090,3 +1090,39 @@ sources:
         visible.
     - name: modified
       description: timestamp, the date and time the course was last modified.
+
+  - name: raw__edxorg__s3__course_structure__course_certificate_signatory
+    description: edx course certificate signatory data
+    columns:
+    - name: id
+      description: int, ID for the certificate signatory
+    - name: course_id
+      description: str, course readable ID formatted in {org}+{course number}+{run}
+    - name: certificate_id
+      description: int, ID used to identify the course certificate
+    - name: signatory_name
+      description: str, name of the signatory
+    - name: title
+      description: str, title of the signatory
+    - name: organization
+      description: str, organization of the signatory
+    - name: signature_image_path
+      description: str, relative path to the signature image file on edX platform
+
+  - name: raw__edxorg__s3__course_structure__course_policy
+    description: edx course policy data
+    columns:
+    - name: course_id
+      description: str, course readable ID formatted in {org}+{course number}+{run}
+    - name: display_coursenumber
+      description: str, the course number to display to users
+    - name: self_paced
+      description: boolean, whether the course is self-paced or instructor-paced
+    - name: advanced_modules
+      description: array, list of advanced modules indicating what custom xblocks
+        are in use in a course. e.g.["lti_consumer"]
+    - name: tabs
+      description: array, metadata about additional static tabs added to the course
+    - name: discussion_settings
+      description: object, discussion (forum) configurations. Member fields example
+        - enable_graded_units, posting_restrictions, provider, etc.

@@ -1133,3 +1133,51 @@ models:
     description: timestamp, the date and time the course was last modified.
     tests:
     - not_null
+
+- name: stg__edxorg__s3__course_certificate_signatory
+  description: edx course certificate signatory data
+  columns:
+  - name: signatory_id
+    description: int, ID for the certificate signatory
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, course readable ID formatted in {org}+{course number}+{run}
+    tests:
+    - not_null
+  - name: signatory_certificate_id
+    description: int, ID used to identify the course certificate
+    tests:
+    - not_null
+  - name: signatory_name
+    description: str, name of the signatory
+  - name: signatory_title
+    description: str, title of the signatory
+  - name: signatory_organization
+    description: str, organization of the signatory
+  - name: signature_image_url
+    description: str, url of signature image file on edX platform
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["signatory_id", "courserun_readable_id"]
+
+- name: stg__edxorg__s3__course_policy
+  description: edx course policy data
+  columns:
+  - name: courserun_readable_id
+    description: str, course readable ID formatted in {org}+{course number}+{run}
+    tests:
+    - not_null
+    - unique
+  - name: display_coursenumber
+    description: str, the course number to display to users
+  - name: courserun_is_self_paced
+    description: boolean, whether the course is self-paced or instructor-paced
+  - name: course_advanced_module_array
+    description: array, list of advanced modules indicating what custom xblocks are
+      in use in a course. e.g.["lti_consumer"]
+  - name: courserun_tabs_array
+    description: array, metadata about additional static tabs added to the course
+  - name: course_discussion_settings_object
+    description: object, discussion (forum) configurations. Member fields example
+      - enable_graded_units, posting_restrictions, provider, etc.
