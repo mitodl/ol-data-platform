@@ -1151,6 +1151,8 @@ models:
     - not_null
   - name: signatory_name
     description: str, name of the signatory
+  - name: signatory_normalized_name
+    description: str, normalized name of the signatory. Removes Professor, Dr., etc.
   - name: signatory_title
     description: str, title of the signatory
   - name: signatory_organization

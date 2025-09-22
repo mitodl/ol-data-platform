@@ -43,6 +43,8 @@ models:
     - not_null
   - name: department_name
     description: str, the course department name
+  - name: signatory_names
+    description: array, the names of the signatories for the course certificate
   - name: enrollment_count
     description: int,  count of users enrolled in the course run
   - name: certificate_count

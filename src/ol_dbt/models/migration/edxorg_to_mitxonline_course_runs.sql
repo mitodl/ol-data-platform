@@ -19,7 +19,16 @@ with mitx_courses as (
         *
         , element_at(split(courserun_readable_id, '/'), 3) as run_tag
         , element_at(split(course_number, '.'), 1) as extracted_department_number
+        , {{ format_course_id('courserun_readable_id', false) }} as courseware_id
     from {{ ref('int__edxorg__mitx_courseruns') }}
+)
+
+, edx_signatories as (
+    select
+        courserun_readable_id
+        , array_agg(signatory_normalized_name) as signatory_names
+    from {{ ref('stg__edxorg__s3__course_certificate_signatory') }}
+    group by courserun_readable_id
 )
 
 , edx_enrollments as (
@@ -49,7 +58,7 @@ select distinct
     , edx_courseruns.courserun_is_self_paced as is_self_paced
     , edx_courseruns.courserun_is_published as is_published
     , edx_courseruns.courserun_title
-    , {{ format_course_id('edx_courseruns.courserun_readable_id', false) }} as courseware_id
+    , edx_courseruns.courseware_id
     , edx_courseruns.run_tag
     , from_iso8601_timestamp(edx_courseruns.courserun_enrollment_start_date) as enrollment_start
     , from_iso8601_timestamp(edx_courseruns.courserun_enrollment_end_date) as enrollment_end
@@ -60,6 +69,7 @@ select distinct
         , edx_courseruns.coursedepartment_name
         , {{ transform_edx_department_number('edx_courseruns.extracted_department_number') }}
     ) as department_name
+    , edx_signatories.signatory_names
     , edx_enrollments.enrollment_count
     , edx_certificates.certificate_count
 from mitx_courses
@@ -75,6 +85,8 @@ left join mitxonline_courseruns
     on
         edx_courseruns.course_number = mitxonline_courseruns.course_number
         and edx_courseruns.run_tag = mitxonline_courseruns.courserun_tag
+left join edx_signatories
+    on edx_courseruns.courseware_id = edx_signatories.courserun_readable_id
 where
     from_iso8601_timestamp(edx_courseruns.courserun_end_date) < current_date  -- unenrollable runs
     and mitxonline_courseruns.course_number is null  -- not already in mitxonline course runs
