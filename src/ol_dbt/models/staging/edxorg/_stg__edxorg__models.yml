@@ -1181,5 +1181,5 @@ models:
   - name: courserun_tabs_array
     description: array, metadata about additional static tabs added to the course
   - name: course_discussion_settings_object
-    description: object, discussion (forum) configurations. Member fields example
-      - enable_graded_units, posting_restrictions, provider, etc.
+    description: object, contains discussion (forum) configurations. Examples of member
+      fields include enable_graded_units, posting_restrictions, provider, etc.
