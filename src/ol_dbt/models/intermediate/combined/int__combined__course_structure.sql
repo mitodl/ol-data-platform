@@ -1,89 +1,79 @@
-with mitxonline_course_structure as (
-    select * from {{ ref('int__mitxonline__course_structure') }}
-)
+with
+    mitxonline_course_structure as (select * from {{ ref("int__mitxonline__course_structure") }}),
+    edxorg_course_structure as (select * from {{ ref("int__edxorg__mitx_course_structure") }}),
+    xpro_course_structure as (select * from {{ ref("int__mitxpro__course_structure") }}),
+    residential_course_structure as (select * from {{ ref("int__mitxresidential__course_structure") }}),
+    combined as (
+        select
+            '{{ var("mitxonline") }}' as platform,
+            courserun_readable_id,
+            courserun_title,
+            coursestructure_block_index,
+            coursestructure_block_id,
+            coursestructure_parent_block_id,
+            coursestructure_block_category,
+            coursestructure_block_title,
+            coursestructure_block_metadata,
+            coursestructure_retrieved_at,
+            coursestructure_chapter_id,
+            coursestructure_chapter_title
+        from mitxonline_course_structure
+        where coursestructure_is_latest = true
 
-, edxorg_course_structure as (
-    select * from {{ ref('int__edxorg__mitx_course_structure') }}
-)
+        union all
 
-, xpro_course_structure as (
-    select * from {{ ref('int__mitxpro__course_structure') }}
-)
+        select
+            '{{ var("edxorg") }}' as platform,
+            courserun_readable_id,
+            courserun_title,
+            coursestructure_block_index,
+            coursestructure_block_id,
+            coursestructure_parent_block_id,
+            coursestructure_block_category,
+            coursestructure_block_title,
+            coursestructure_block_metadata,
+            coursestructure_retrieved_at,
+            coursestructure_chapter_id,
+            coursestructure_chapter_title
+        from edxorg_course_structure
+        where coursestructure_is_latest = true
 
-, residential_course_structure as (
-    select * from {{ ref('int__mitxresidential__course_structure') }}
-)
+        union all
 
-, combined as (
-    select
-        '{{ var("mitxonline") }}' as platform
-        , courserun_readable_id
-        , courserun_title
-        , coursestructure_block_index
-        , coursestructure_block_id
-        , coursestructure_parent_block_id
-        , coursestructure_block_category
-        , coursestructure_block_title
-        , coursestructure_block_metadata
-        , coursestructure_retrieved_at
-        , coursestructure_chapter_id
-        , coursestructure_chapter_title
-    from mitxonline_course_structure
-    where coursestructure_is_latest = true
+        select
+            '{{ var("mitxpro") }}' as platform,
+            courserun_readable_id,
+            courserun_title,
+            coursestructure_block_index,
+            coursestructure_block_id,
+            coursestructure_parent_block_id,
+            coursestructure_block_category,
+            coursestructure_block_title,
+            coursestructure_block_metadata,
+            coursestructure_retrieved_at,
+            coursestructure_chapter_id,
+            coursestructure_chapter_title
+        from xpro_course_structure
+        where coursestructure_is_latest = true
 
-    union all
+        union all
 
-    select
-        '{{ var("edxorg") }}' as platform
-        , courserun_readable_id
-        , courserun_title
-        , coursestructure_block_index
-        , coursestructure_block_id
-        , coursestructure_parent_block_id
-        , coursestructure_block_category
-        , coursestructure_block_title
-        , coursestructure_block_metadata
-        , coursestructure_retrieved_at
-        , coursestructure_chapter_id
-        , coursestructure_chapter_title
-    from edxorg_course_structure
-    where coursestructure_is_latest = true
+        select
+            '{{ var("residential") }}' as platform,
+            courserun_readable_id,
+            courserun_title,
+            coursestructure_block_index,
+            coursestructure_block_id,
+            coursestructure_parent_block_id,
+            coursestructure_block_category,
+            coursestructure_block_title,
+            coursestructure_block_metadata,
+            coursestructure_retrieved_at,
+            coursestructure_chapter_id,
+            coursestructure_chapter_title
+        from residential_course_structure
+        where coursestructure_is_latest = true
+    )
 
-    union all
-
-    select
-        '{{ var("mitxpro") }}' as platform
-        , courserun_readable_id
-        , courserun_title
-        , coursestructure_block_index
-        , coursestructure_block_id
-        , coursestructure_parent_block_id
-        , coursestructure_block_category
-        , coursestructure_block_title
-        , coursestructure_block_metadata
-        , coursestructure_retrieved_at
-        , coursestructure_chapter_id
-        , coursestructure_chapter_title
-    from xpro_course_structure
-    where coursestructure_is_latest = true
-
-    union all
-
-    select
-        '{{ var("residential") }}' as platform
-        , courserun_readable_id
-        , courserun_title
-        , coursestructure_block_index
-        , coursestructure_block_id
-        , coursestructure_parent_block_id
-        , coursestructure_block_category
-        , coursestructure_block_title
-        , coursestructure_block_metadata
-        , coursestructure_retrieved_at
-        , coursestructure_chapter_id
-        , coursestructure_chapter_title
-    from residential_course_structure
-    where coursestructure_is_latest = true
-)
-
-select * from combined
+select *
+from combined

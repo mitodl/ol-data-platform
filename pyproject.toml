@@ -65,7 +65,11 @@ build-backend = "hatchling.build"
 
 [tool.sqlfmt]
 line_length = 120
-exclude=["target/**/*", "dbt_packages/**/*"]
+exclude=[
+  "target/**/*",
+  "dbt_packages/**/*",
+  "src/ol_dbt/models/staging/ovs/stg__ovs__studio__postgres__ui_encodejob.sql"
+]
 
 [tool.sqlfluff.core]
 templater = "jinja"

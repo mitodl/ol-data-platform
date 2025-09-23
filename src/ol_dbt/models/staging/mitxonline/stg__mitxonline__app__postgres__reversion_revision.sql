@@ -1,19 +1,20 @@
-with source as (
+with
+    source as (
 
-    select * from {{ source('ol_warehouse_raw_data', 'raw__mitxonline__app__postgres__reversion_revision') }}
+        select * from {{ source("ol_warehouse_raw_data", "raw__mitxonline__app__postgres__reversion_revision") }}
 
-)
+    ),
+    renamed as (
 
-, renamed as (
+        select
+            id as revision_id,
+            comment as revision_comment,
+            user_id,
+            {{ cast_timestamp_to_iso8601("date_created") }} as revision_date_created
 
-    select
-        id as revision_id
-        , comment as revision_comment
-        , user_id
-        ,{{ cast_timestamp_to_iso8601('date_created') }} as revision_date_created
+        from source
 
-    from source
+    )
 
-)
-
-select * from renamed
+select *
+from renamed

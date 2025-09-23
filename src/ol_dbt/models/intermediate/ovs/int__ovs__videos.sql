@@ -1,47 +1,33 @@
-with video_encodejobs as (
-    select
-        *
-        --- there may be multiple encodejobs for the same video, but we only need the last one for video duration
-        , row_number() over (
-            partition by video_id
-            order by encodejob_created_on desc
-        ) as encodejob_rank
-    from {{ ref('stg__ovs__studio__postgres__ui_encodejob') }}
-)
-
-, videos as (
-    select * from {{ ref('stg__ovs__studio__postgres__ui_video') }}
-)
-
-, collections as (
-    select * from {{ ref('stg__ovs__studio__postgres__ui_collection') }}
-)
-
-, collection_edxendpoints as (
-    select * from {{ ref('stg__ovs__studio__postgres__ui_collectionedxendpoint') }}
-)
-
-, edxendpoints as (
-    select * from {{ ref('stg__ovs__studio__postgres__ui_edxendpoint') }}
-)
+with
+    video_encodejobs as (
+        select
+            *,
+            -- - there may be multiple encodejobs for the same video, but we only need the last one for video duration
+            row_number() over (partition by video_id order by encodejob_created_on desc) as encodejob_rank
+        from {{ ref("stg__ovs__studio__postgres__ui_encodejob") }}
+    ),
+    videos as (select * from {{ ref("stg__ovs__studio__postgres__ui_video") }}),
+    collections as (select * from {{ ref("stg__ovs__studio__postgres__ui_collection") }}),
+    collection_edxendpoints as (select * from {{ ref("stg__ovs__studio__postgres__ui_collectionedxendpoint") }}),
+    edxendpoints as (select * from {{ ref("stg__ovs__studio__postgres__ui_edxendpoint") }})
 
 select
-    collections.collection_id
-    , collections.collection_uuid
-    , collections.collection_title
-    , collections.courserun_readable_id
-    , edxendpoints.edxendpoint_base_url
-    , videos.video_id
-    , videos.video_uuid
-    , videos.video_title
-    , videos.video_status
-    , videos.video_created_on
-    , video_encodejobs.video_duration
-    , case
+    collections.collection_id,
+    collections.collection_uuid,
+    collections.collection_title,
+    collections.courserun_readable_id,
+    edxendpoints.edxendpoint_base_url,
+    videos.video_id,
+    videos.video_uuid,
+    videos.video_title,
+    videos.video_status,
+    videos.video_created_on,
+    video_encodejobs.video_duration,
+    case
         when edxendpoints.edxendpoint_base_url = '{{ var("mitxonline_openedx_url") }}'
-            then '{{ var("mitxonline") }}'
+        then '{{ var("mitxonline") }}'
         when edxendpoints.edxendpoint_base_url = '{{ var("mitxpro_openedx_url") }}'
-            then '{{ var("mitxpro") }}'
+        then '{{ var("mitxpro") }}'
     end as platform
 from videos
 inner join collections on videos.collection_id = collections.collection_id
