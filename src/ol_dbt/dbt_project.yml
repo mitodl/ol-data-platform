@@ -123,3 +123,6 @@ models:
 tests:
   open_learning:
     +error_if: ">10"
+
+flags:
+  require_certificate_validation: true

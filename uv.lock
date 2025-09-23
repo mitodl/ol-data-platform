@@ -175,6 +175,26 @@ wheels = [
 ]
 
 [[package]]
+name = "black"
+version = "25.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "mypy-extensions" },
+    { name = "packaging" },
+    { name = "pathspec" },
+    { name = "platformdirs" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/94/49/26a7b0f3f35da4b5a65f081943b7bcd22d7002f5f0fb8098ec1ff21cb6ef/black-25.1.0.tar.gz", hash = "sha256:33496d5cd1222ad73391352b4ae8da15253c5de89b93a80b3e2c8d9a19ec2666", size = 649449, upload-time = "2025-01-29T04:15:40.373Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/98/87/0edf98916640efa5d0696e1abb0a8357b52e69e82322628f25bf14d263d1/black-25.1.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:8f0b18a02996a836cc9c9c78e5babec10930862827b1b724ddfe98ccf2f2fe4f", size = 1650673, upload-time = "2025-01-29T05:37:20.574Z" },
+    { url = "https://files.pythonhosted.org/packages/52/e5/f7bf17207cf87fa6e9b676576749c6b6ed0d70f179a3d812c997870291c3/black-25.1.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:afebb7098bfbc70037a053b91ae8437c3857482d3a690fefc03e9ff7aa9a5fd3", size = 1453190, upload-time = "2025-01-29T05:37:22.106Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/ee/adda3d46d4a9120772fae6de454c8495603c37c4c3b9c60f25b1ab6401fe/black-25.1.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:030b9759066a4ee5e5aca28c3c77f9c64789cdd4de8ac1df642c40b708be6171", size = 1782926, upload-time = "2025-01-29T04:18:58.564Z" },
+    { url = "https://files.pythonhosted.org/packages/cc/64/94eb5f45dcb997d2082f097a3944cfc7fe87e071907f677e80788a2d7b7a/black-25.1.0-cp313-cp313-win_amd64.whl", hash = "sha256:a22f402b410566e2d1c950708c77ebf5ebd5d0d88a6a2e87c86d9fb48afa0d18", size = 1442613, upload-time = "2025-01-29T04:19:27.63Z" },
+    { url = "https://files.pythonhosted.org/packages/09/71/54e999902aed72baf26bca0d50781b01838251a462612966e9fc4891eadd/black-25.1.0-py3-none-any.whl", hash = "sha256:95e8176dae143ba9097f351d174fdaf0ccd29efb414b362ae3fd72bf0f710717", size = 207646, upload-time = "2025-01-29T04:15:38.082Z" },
+]
+
+[[package]]
 name = "boto3"
 version = "1.40.18"
 source = { registry = "https://pypi.org/simple" }
@@ -289,6 +309,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/84/1b/1ecdd371fa68839cfbda15cc671d0f6c92d2c42688df995a9bf6e36f3511/coloredlogs-14.0.tar.gz", hash = "sha256:a1fab193d2053aa6c0a97608c4342d031f1f93a3d1218432c59322441d31a505", size = 275863, upload-time = "2020-02-16T20:51:12.172Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5c/2f/12747be360d6dea432e7b5dfae3419132cb008535cfe614af73b9ce2643b/coloredlogs-14.0-py2.py3-none-any.whl", hash = "sha256:346f58aad6afd48444c2468618623638dadab76e4e70d5e10822676f2d32226a", size = 43888, upload-time = "2020-02-16T20:51:09.712Z" },
+]
+
+[[package]]
+name = "cyclopts"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "docstring-parser" },
+    { name = "rich" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/39/22/6482353414d69675d4ad2671b88761b0b1ead175da9c811110733a9c1600/cyclopts-1.0.2.tar.gz", hash = "sha256:8059b917eadc32556b4a7eacc1bbedcb959e6d8cf609219202c5e8647bd7f89c", size = 27329, upload-time = "2023-12-13T04:34:49.225Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/c4/062586512fd5994ace1de7e40611fb80fe781e7c615abad290437ec06d8a/cyclopts-1.0.2-py3-none-any.whl", hash = "sha256:59b24a403205e87059b1b36f245f108143c628341eca17b85311b38a381e4955", size = 28638, upload-time = "2023-12-13T04:34:47.436Z" },
 ]
 
 [[package]]
@@ -778,11 +813,11 @@ wheels = [
 
 [[package]]
 name = "docstring-parser"
-version = "0.17.0"
+version = "0.15"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b2/9d/c3b43da9515bd270df0f80548d9944e389870713cc1fe2b8fb35fe2bcefd/docstring_parser-0.17.0.tar.gz", hash = "sha256:583de4a309722b3315439bb31d64ba3eebada841f2e2cee23b99df001434c912", size = 27442, upload-time = "2025-07-21T07:35:01.868Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/2d/ea1dfc15b909cc660f657a3a9d698a2916b7f3b05535a2d72e8d7ea3ad5b/docstring_parser-0.15.tar.gz", hash = "sha256:48ddc093e8b1865899956fcc03b03e66bb7240c310fac5af81814580c55bf682", size = 26768, upload-time = "2022-09-05T07:36:08.139Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/55/e2/2537ebcff11c1ee1ff17d8d0b6f4db75873e3b0fb32c2d4a2ee31ecb310a/docstring_parser-0.17.0-py3-none-any.whl", hash = "sha256:cf2569abd23dce8099b300f9b4fa8191e9582dda731fd533daf54c4551658708", size = 36896, upload-time = "2025-07-21T07:35:00.684Z" },
+    { url = "https://files.pythonhosted.org/packages/89/e3/32e272db7adcf90e93f73e9a98fd763049ed7c641fb57ab26cb8f3e7e79c/docstring_parser-0.15-py3-none-any.whl", hash = "sha256:d1679b86250d269d06a99670924d6bce45adc00b08069dae8c47d98e89b667a9", size = 36093, upload-time = "2022-09-05T07:36:05.303Z" },
 ]
 
 [[package]]
@@ -1658,6 +1693,7 @@ name = "ol-data-platform"
 version = "0.6.1"
 source = { editable = "." }
 dependencies = [
+    { name = "cyclopts" },
     { name = "dagster" },
     { name = "dagster-airbyte" },
     { name = "dagster-aws" },
@@ -1691,12 +1727,14 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "shandy-sqlfmt", extra = ["jinjafmt"] },
     { name = "sqlfluff" },
     { name = "typer" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "cyclopts", specifier = "~=1.0.0" },
     { name = "dagster", specifier = "~=1.10" },
     { name = "dagster-airbyte", specifier = "~=0.27.0" },
     { name = "dagster-aws", specifier = "~=0.27.0" },
@@ -1730,6 +1768,7 @@ dev = [
     { name = "pre-commit", specifier = ">=4.0.0,<5" },
     { name = "pytest", specifier = ">=8.0.0,<9" },
     { name = "ruff" },
+    { name = "shandy-sqlfmt", extras = ["jinjafmt"], specifier = ">=0.27.0" },
     { name = "sqlfluff", specifier = ">=3.0.0,<4" },
     { name = "typer", extras = ["all"], specifier = ">=0.19,<0.20" },
 ]
@@ -2397,6 +2436,26 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/18/5d/3bf57dcd21979b887f014ea83c24ae194cfcd12b9e0fda66b957c69d1fca/setuptools-80.9.0.tar.gz", hash = "sha256:f36b47402ecde768dbfafc46e8e4207b4360c654f1f3bb84475f0a28628fb19c", size = 1319958, upload-time = "2025-05-27T00:56:51.443Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a3/dc/17031897dae0efacfea57dfd3a82fdd2a2aeb58e0ff71b77b87e44edc772/setuptools-80.9.0-py3-none-any.whl", hash = "sha256:062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922", size = 1201486, upload-time = "2025-05-27T00:56:49.664Z" },
+]
+
+[[package]]
+name = "shandy-sqlfmt"
+version = "0.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "jinja2" },
+    { name = "platformdirs" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b3/88/db0e588e7de42eb56f4052f6392011d09748396669ae2eab815487035f52/shandy_sqlfmt-0.27.0.tar.gz", hash = "sha256:1c9ac6beb5f17f66e7b87b4c70be586e87db538cd7d72f42dedb85132e8b3a96", size = 62380, upload-time = "2025-07-28T18:11:42.774Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e6/b7/c63d537a502dab52ba24a81f29608641950ab0efe2a3b552729b0c30ee1a/shandy_sqlfmt-0.27.0-py3-none-any.whl", hash = "sha256:84359f5e4b8754852019e0b7dde6ba438594adbdfdc0131bc17cb5b51f88b72e", size = 71115, upload-time = "2025-07-28T18:11:41.535Z" },
+]
+
+[package.optional-dependencies]
+jinjafmt = [
+    { name = "black" },
 ]
 
 [[package]]

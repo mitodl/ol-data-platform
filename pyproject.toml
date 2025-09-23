@@ -11,6 +11,7 @@ classifiers = [
 ]
 dependencies = [
     "PyPika ~= 0.48.9",
+    "cyclopts~=1.0.0",
     "dagster ~= 1.10",
     "dagster-airbyte ~=0.27.0",
     "dagster-aws ~=0.27.0",
@@ -44,6 +45,7 @@ dev = [
     "pre-commit>=4.0.0,<5",
     "pytest>=8.0.0,<9",
     "ruff",
+    "shandy-sqlfmt[jinjafmt]>=0.27.0",
     "sqlfluff>=3.0.0,<4",
     "typer[all]>=0.19,<0.20",
 ]
@@ -61,13 +63,33 @@ include = ["src/ol_orchestrate"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.sqlfmt]
+line_length = 120
+exclude=["target/**/*", "dbt_packages/**/*"]
+
 [tool.sqlfluff.core]
 templater = "jinja"
-dialect = "hive"
+dialect = "trino"
 sql_file_exts = ".sql,.sql.j2,.dml,.ddl"
 max_line_length = 120
-exclude_rules = "CV10"
 ignore = "templating"
+exclude_rules = [
+  "layout.indent",
+  "layout.cte_bracket",
+  "layout.keyword_newline",
+  "layout.cte_newline",
+  "layout.select_targets",
+  "layout.spacing",
+  "convention.quoted_literals"
+]
+warn_unused_ignores = true
+
+[tool.sqlfluff.rules]
+capitalisation_policy = "lower"
+extended_capitalisation_policy = "lower"
+
+[tool.sqlfluff.rules.convention.terminator]
+multiline_newline = true
 
 [tool.sqlfluff.templater]
 unwrap_wrapped_queries = true
@@ -81,10 +103,6 @@ project_dir = "src/ol_dbt/"
 profiles_dir = "src/ol_dbt/"
 profile ="open_learning"
 target = "qa"
-
-[tool.sqlfluff.layout.type.comma]
-# Use leading commas for cleaner diffs
-line_position = "leading"
 
 [tool.mypy]
 python_version = "3.12"
