@@ -1,20 +1,25 @@
 -- MicroMasters Program Information
+with
+    source as (
+        select *
+        from
+            {{
+                source(
+                    "ol_warehouse_raw_data", "raw__micromasters__app__postgres__grades_micromastersprogramcertificate"
+                )
+            }}
+    ),
+    cleaned as (
+        select
+            id as programcertificate_id,
+            {{ cast_timestamp_to_iso8601("created_on") }} as programcertificate_created_on,
+            {{ cast_timestamp_to_iso8601("updated_on") }} as programcertificate_updated_on,
+            hash as programcertificate_hash,
+            program_id,
+            user_id
 
-with source as (
-    select *
-    from {{ source('ol_warehouse_raw_data','raw__micromasters__app__postgres__grades_micromastersprogramcertificate') }}
-)
+        from source
+    )
 
-, cleaned as (
-    select
-        id as programcertificate_id
-        ,{{ cast_timestamp_to_iso8601('created_on') }} as programcertificate_created_on
-        ,{{ cast_timestamp_to_iso8601('updated_on') }} as programcertificate_updated_on
-        , hash as programcertificate_hash
-        , program_id
-        , user_id
-
-    from source
-)
-
-select * from cleaned
+select *
+from cleaned
