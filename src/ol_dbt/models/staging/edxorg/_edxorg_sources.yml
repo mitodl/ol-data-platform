@@ -643,7 +643,7 @@ sources:
       description: str, time when the course grade was was last updated for this user
         for this course run
 
-  - name: raw__edxorg__s3__course_structure__course_blocks
+  - name: raw__edxorg__s3__course_blocks
     columns:
     - name: block_id
       description: str, Unique ID for a distinct piece of content in a course, formatted
