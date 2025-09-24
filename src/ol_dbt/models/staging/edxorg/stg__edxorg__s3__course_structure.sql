@@ -1,5 +1,5 @@
 with course_block_source as (
-    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__course_structure__course_blocks') }}
+    select * from {{ source('ol_warehouse_raw_data','raw__edxorg__s3__course_blocks') }}
 )
 
 , course_block as (
