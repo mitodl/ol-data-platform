@@ -10,3 +10,5 @@ OPENEDX_COURSE_RUN_PARTITIONS = {
     deployment: DynamicPartitionsDefinition(name=f"{deployment}_openedx_course_run")
     for deployment in OPENEDX_DEPLOYMENTS
 }
+
+UAI_CUSTOMER_PARTITIONS = DynamicPartitionsDefinition(name="uai_customers")
