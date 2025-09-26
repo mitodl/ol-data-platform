@@ -110,7 +110,7 @@ group_name_to_interval: dict[str, int] = {}
 if DAGSTER_ENV == "production":
     group_name_to_interval = {
         "bootcamps_production_app_db__s3_data_lake": 24,
-        "edxorg_production_course_structure__s3_data_lake": 24,
+        "edxorg_production_course_structure_s3_data_lake": 24,
         "edxorg_production_course_tables__s3_data_lake": 24,
         "edxorg_tracking_logs__s3_data_lake": 24,
         "emeritus_bigquery__s3_data_lake": 24,
@@ -140,6 +140,7 @@ if DAGSTER_ENV == "production":
         "mitx_online_production_app_db__s3_data_lake": 6,
         "ocw_studio_app_db__s3_data_lake": 6,
         "odl_video_service__s3_data_lake": 6,
+        "learn_ai_production__s3_data_lake": 6,
     }
 
 airbyte_asset_jobs = []
