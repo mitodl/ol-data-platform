@@ -49,3 +49,132 @@ models:
     description: int,  count of users enrolled in the course run
   - name: certificate_count
     description: int, count of users who have earned a certificate in the course run
+
+- name: edxorg_to_mitxonline_enrollments
+  description: Enrollments not yet migrated to MITx Online from edx.org
+  columns:
+  - name: platform
+    description: string, application where the data is from
+    tests:
+    - not_null
+    - accepted_values:
+        values: '{{ var("platforms") }}'
+  - name: courserunenrollment_id
+    description: int, internal ID and foreign key to courserunenrollments on the corresponding
+      platform. Null for enrollments on edX.org.
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online, xPro or Residential courses, and {org}/{course} for edX.org courses.
+      May be null for some Bootcamps courses. Examples include MITx/6.00.2x and course-v1:MITxT+14.740x.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'Bootcamps'"
+  - name: course_title
+    description: str, title of the course. May be null for some edX.org and Residential
+      courses
+  - name: courserun_end_on
+    description: timestamp, date and time when the course run ends. May be Null.
+  - name: courserun_id
+    description: int, primary key representing a single course run on the corresponding
+      platform. Null for course runs from edx.org
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: str, Open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITxOnline and xPro courses, {org}/{course}/{run_tag} for edX.org courses
+  - name: courserun_start_on
+    description: timestamp, date and time when the course run starts. May be Null.
+  - name: courserun_title
+    description: string, title of the course run on the corresponding platform. Maybe
+      blank for a few edX.org runs missing in int__edxorg__mitx_courseruns.
+  - name: courserun_upgrade_deadline
+    description: timestamp, specifying the date time beyond which users can not enroll
+      in paid course mode
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when the course certificate was initially
+      created
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "courseruncertificate_is_earned = true"
+  - name: courseruncertificate_is_earned
+    description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
+      edX.org or xpro.mit.edu.
+    tests:
+    - not_null
+  - name: courseruncertificate_url
+    description: str, URL to the course certificate for users who earned the certificate
+      on mitxonline.mit.edu, edX.org or xpro.mit.edu.
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on the corresponding platform
+  - name: courserunenrollment_created_on
+    description: timestamp, specifying when the enrollment was initially
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Global Alumni'"
+  - name: courserunenrollment_enrollment_mode
+    description: string, enrollment mode for user on the corresponding platform
+  - name: courserunenrollment_enrollment_status
+    description: string, enrollment status for users whose enrollment changed on the
+      corresponding platform
+  - name: courserunenrollment_is_active
+    description: boolean, indicating whether the enrollment is active
+    tests:
+    - not_null
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, indicating whether the user is enrolled on edX platform.
+      For edx.org course enrollment, it would always be true. Null for Bootcamps as
+      it doesn't apply.
+  - name: courserungrade_grade
+    description: float, course grade on edX.org or MITxOnline or xPro range from 0
+      to 1
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on edX.org or MITxOnline or xPro
+  - name: line_id
+    description: int, foreign key to ecommerce line table for fulfilled or refunded
+      orders on the corresponding platform. For edX.org, it refers to line table in
+      MicroMasters application.
+  - name: order_id
+    description: int, foreign key to ecommerce order table for fulfilled or refunded
+      orders on the corresponding platform. Note that this does not include orders
+      from edX.org, for which we do not have data.
+  - name: order_reference_number
+    description: string, order reference number to identify a fulfilled or refunded
+      order on the corresponding platform, e.g. mitxonline-production-20
+  - name: coupon_code
+    description: string, discount code for the redeemed coupon if applicable
+  - name: courserunenrollment_upgraded_on
+    description: timestamp, date and time when the learner upgraded to the verified
+      track course mode. May be the same as the date when the course enrollment was
+      created for xPro.
+  - name: user_company
+    description: str, user's company pulled on the platform user enrolled. May be
+      blank.
+  - name: user_country_code
+    description: str, country code on the platform user enrolled. May be blank.
+  - name: user_email
+    description: string, user email that user registered on the corresponding platform.
+      May be null for some xPRO Emeritus learners.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform != 'xPRO Emeritus'"
+  - name: user_full_name
+    description: str, user full name on the platform user enrolled.
+  - name: user_highest_education
+    description: str, user's highest education on the platform user enrolled. May
+      be blank.
+  - name: user_gender
+    description: str, gender on the platform user enrolled
+  - name: user_id
+    description: int, user ID on the corresponding platform. May be null for some
+      xPRO Emeritus and Global Alumni learners.
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "platform not in ('xPRO Emeritus', 'xPRO Global Alumni')"
+  - name: user_username
+    description: string, username to identify a user on the corresponding platform.
+      Null for xPRO Emeritus and Global Alumni learners.
