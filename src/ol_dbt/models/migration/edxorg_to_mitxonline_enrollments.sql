@@ -36,7 +36,7 @@ with combined_enrollments as (
         , combined_enrollments.course_readable_id
     from combined_enrollments
     where combined_enrollments.platform = '{{ var("mitxonline") }}'
-    group by 
+    group by
         combined_enrollments.courserun_readable_id
         , combined_enrollments.user_email
         , combined_enrollments.course_readable_id
@@ -159,11 +159,11 @@ select
     , edxorg_enrollment.user_username
 from edxorg_enrollment
 left join mitxonline_enrollment
-    on 
+    on
         edxorg_enrollment.user_email = mitxonline_enrollment.user_email
         and edxorg_enrollment.course_readable_id = mitxonline_enrollment.course_readable_id
-        and substring(edxorg_enrollment.courserun_readable_id, length(edxorg_enrollment.courserun_readable_id) - 5) 
+        and substring(edxorg_enrollment.courserun_readable_id, length(edxorg_enrollment.courserun_readable_id) - 5)
             = substring(mitxonline_enrollment.courserun_readable_id, length(mitxonline_enrollment.courserun_readable_id) - 5)
-where 
+where
     edxorg_enrollment.courseruncertificate_created_on is not null
     and mitxonline_enrollment.user_email is null
