@@ -10,6 +10,14 @@ with combined_enrollments as (
     select * from {{ ref('int__combined__users') }}
 )
 
+, mitx__users as (
+    select * from {{ ref('int__mitx__users') }}
+)
+
+, mitxonline__course_runs as (
+    select * from {{ ref('int__mitxonline__course_runs') }}
+)
+
 , micromasters_completed_orders as (
     select
         *
@@ -36,7 +44,7 @@ with combined_enrollments as (
         , combined_enrollments.course_readable_id
     from combined_enrollments
     where combined_enrollments.platform = '{{ var("mitxonline") }}'
-    group by
+    group by 
         combined_enrollments.courserun_readable_id
         , combined_enrollments.user_email
         , combined_enrollments.course_readable_id
@@ -122,48 +130,27 @@ with combined_enrollments as (
 )
 
 select
-    edxorg_enrollment.platform
-    , edxorg_enrollment.courserunenrollment_id
-    , edxorg_enrollment.course_readable_id
-    , edxorg_enrollment.course_title
-    , edxorg_enrollment.courserun_id
-    , edxorg_enrollment.courserun_is_current
-    , edxorg_enrollment.courserun_readable_id
-    , edxorg_enrollment.courserun_start_on
-    , edxorg_enrollment.courserun_end_on
-    , edxorg_enrollment.courserun_title
-    , edxorg_enrollment.courserun_upgrade_deadline
-    , edxorg_enrollment.courseruncertificate_created_on
-    , edxorg_enrollment.courseruncertificate_is_earned
-    , edxorg_enrollment.courseruncertificate_url
-    , edxorg_enrollment.courseruncertificate_uuid
-    , edxorg_enrollment.courserunenrollment_created_on
+    edxorg_enrollment.user_id as user_edxorg_id
+    , mitx__users.user_mitxonline_id
+    , edxorg_enrollment.user_email
+    , mitxonline__course_runs.courserun_id
+    , {{ format_course_id('edxorg_enrollment.courserun_readable_id', false) }} as courserun_readable_id
     , edxorg_enrollment.courserunenrollment_enrollment_mode
-    , edxorg_enrollment.courserunenrollment_enrollment_status
-    , edxorg_enrollment.courserunenrollment_is_active
-    , edxorg_enrollment.courserunenrollment_is_edx_enrolled
-    , edxorg_enrollment.courserunenrollment_upgraded_on
     , edxorg_enrollment.courserungrade_grade
     , edxorg_enrollment.courserungrade_is_passing
-    , edxorg_enrollment.line_id
-    , edxorg_enrollment.order_id
-    , edxorg_enrollment.order_reference_number
-    , edxorg_enrollment.coupon_code
-    , edxorg_enrollment.user_company
-    , edxorg_enrollment.user_country_code
-    , edxorg_enrollment.user_email
-    , edxorg_enrollment.user_full_name
-    , edxorg_enrollment.user_highest_education
-    , edxorg_enrollment.user_gender
-    , edxorg_enrollment.user_id
-    , edxorg_enrollment.user_username
+    , edxorg_enrollment.courserunenrollment_created_on
+    , edxorg_enrollment.courseruncertificate_created_on
 from edxorg_enrollment
 left join mitxonline_enrollment
-    on
+    on 
         edxorg_enrollment.user_email = mitxonline_enrollment.user_email
         and edxorg_enrollment.course_readable_id = mitxonline_enrollment.course_readable_id
-        and substring(edxorg_enrollment.courserun_readable_id, length(edxorg_enrollment.courserun_readable_id) - 5)
+        and substring(edxorg_enrollment.courserun_readable_id, length(edxorg_enrollment.courserun_readable_id) - 5) 
             = substring(mitxonline_enrollment.courserun_readable_id, length(mitxonline_enrollment.courserun_readable_id) - 5)
-where
+left join mitx__users
+    on edxorg_enrollment.user_id = mitx__users.user_edxorg_id
+left join mitxonline__course_runs
+    on edxorg_enrollment.courserun_readable_id = mitxonline__course_runs.courserun_edx_readable_id
+where 
     edxorg_enrollment.courseruncertificate_created_on is not null
     and mitxonline_enrollment.user_email is null
