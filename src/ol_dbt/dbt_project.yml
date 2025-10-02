@@ -95,25 +95,25 @@ models:
       +schema: dimensional
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-          'business_intelligence', 'reverse_etl']
+          'ol_business_analyst', 'reverse_etl']
     intermediate:
       +materialized: table
       +schema: intermediate
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-          'business_intelligence', 'reverse_etl']
+          'ol_business_analyst', 'reverse_etl']
     marts:
       +materialized: table
       +schema: mart
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-          'business_intelligence', 'reverse_etl', 'finance']
+          'ol_business_analyst', 'reverse_etl', 'finance']
     reporting:
       +materialized: table
       +schema: reporting
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-          'business_intelligence', 'reverse_etl']
+          'ol_business_analyst', 'reverse_etl']
     external:
       +materialized: table
       +schema: external
