@@ -119,7 +119,7 @@ models:
       +schema: external
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
-          'business_intelligence', 'reverse_etl', 'mit_irx']
+          'ol_business_analyst', 'reverse_etl', 'mit_irx']
     sample:
 
 
