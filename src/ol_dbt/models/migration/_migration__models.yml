@@ -59,10 +59,9 @@ models:
     description: int, user ID on the mitxonline platform.
   - name: user_email
     description: string, user email that user registered on the corresponding platform.
-      May be null for some xPRO Emeritus learners.
   - name: courserun_id
-    description: int, primary key representing a single course run on the corresponding
-      platform. Null for course runs from edx.org
+    description: int, foreign key representing a single course run on the corresponding
+      platform.
   - name: course_readable_id
     description: str, Open edX readable ID
   - name: courserunenrollment_enrollment_mode
