@@ -49,3 +49,31 @@ models:
     description: int,  count of users enrolled in the course run
   - name: certificate_count
     description: int, count of users who have earned a certificate in the course run
+
+- name: edxorg_to_mitxonline_enrollments
+  description: Enrollments not yet migrated to MITx Online from edx.org
+  columns:
+  - name: user_edxorg_id
+    description: int, user ID on the edxorg platform.
+  - name: user_mitxonline_id
+    description: int, user ID on the mitxonline platform.
+  - name: user_email
+    description: string, user email that user registered on the corresponding platform.
+  - name: courserun_id
+    description: int, foreign key representing a single course run on the corresponding
+      platform.
+  - name: course_readable_id
+    description: str, Open edX readable ID
+  - name: courserunenrollment_enrollment_mode
+    description: string, enrollment mode for user on the corresponding platform
+  - name: courserungrade_grade
+    description: float, course grade on edX.org or MITxOnline or xPro range from 0
+      to 1
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on edX.org or MITxOnline or xPro
+  - name: courserunenrollment_created_on
+    description: timestamp, specifying when the enrollment was initially
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when the course certificate was initially
+      created
