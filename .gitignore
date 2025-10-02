@@ -11,3 +11,4 @@ bin/pants
 **/dagster_local/*
 .aider*
 .env
+**/*.egg-info/

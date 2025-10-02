@@ -1,0 +1,28 @@
+[tool.dg]
+directory_type = "workspace"
+
+[[tool.dg.workspace.projects]]
+path = "code_locations/lakehouse"
+
+[[tool.dg.workspace.projects]]
+path = "code_locations/openedx"
+
+[[tool.dg.workspace.projects]]
+path = "code_locations/edxorg"
+
+[[tool.dg.workspace.projects]]
+path = "code_locations/legacy_openedx"
+
+[[tool.dg.workspace.projects]]
+path = "code_locations/canvas"
+
+[[tool.dg.workspace.projects]]
+path = "code_locations/orchestration_platform"
+
+[[tool.dg.workspace.projects]]
+path = "code_locations/learning_resources"
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.11.13",
+]

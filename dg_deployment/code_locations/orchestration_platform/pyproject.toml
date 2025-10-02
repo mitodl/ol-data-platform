@@ -1,0 +1,36 @@
+[project]
+name = "orchestration-platform"
+requires-python = ">=3.12,<3.14"
+version = "0.1.0"
+dependencies = [
+    "dagster-components",
+    "ol-orchestrate-lib",
+]
+
+[project.entry-points]
+"dagster.components" = { orchestration_platform = "orchestration_platform.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "orchestration_platform.definitions"
+project_name = "orchestration-platform"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "orchestration_platform"
+
+[tool.setuptools.packages.find]
+exclude=["orchestration_platform_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../../packages/ol-orchestrate-lib", editable = true }

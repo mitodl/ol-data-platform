@@ -12,7 +12,7 @@ classifiers = [
 dependencies = [
     "PyPika ~= 0.48.9",
     "cyclopts~=3.24.0",
-    "dagster ~= 1.10",
+    "dagster ~= 1.11",
     "dagster-airbyte ~=0.27.0",
     "dagster-aws ~=0.27.0",
     "dagster-dbt ~=0.27.0",
@@ -41,15 +41,18 @@ dependencies = [
 ]
 repository = "https://github.com/mitodl/ol-data-platform"
 
+[tool.uv.workspace]
+members = ["packages/*"]
+
 [dependency-groups]
 dev = [
+    "dagster-dg-cli>=1.11.13",
     "mypy",
     "pre-commit>=4.0.0,<5",
     "pytest>=8.0.0,<9",
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
     "sqlfluff>=3.0.0,<4",
-    "typer[all]>=0.19,<0.20",
 ]
 
 [tool.hatch.build.targets.sdist]

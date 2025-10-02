@@ -1,0 +1,87 @@
+"""Canvas course export definitions.
+
+Exports Canvas course content and metadata for specified course IDs.
+"""
+
+from dagster import (
+    Definitions,
+    build_schedule_from_partitioned_job,
+    define_asset_job,
+)
+from dagster_aws.s3 import S3Resource
+
+from canvas.assets.canvas import (
+    canvas_course_ids,
+    course_content_metadata,
+    export_course_content,
+)
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.lib.dagster_helpers import (
+    default_file_object_io_manager,
+    default_io_manager,
+)
+from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
+from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+
+# Initialize vault with resilient loading
+try:
+    vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
+    vault_authenticated = True
+except Exception as e:  # noqa: BLE001 (resilient loading)
+    import warnings
+
+    from ol_orchestrate.resources.secrets.vault import Vault
+
+    warnings.warn(
+        f"Failed to authenticate with Vault: {e}. Using mock configuration.",
+        stacklevel=2,
+    )
+    vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
+    vault_authenticated = False
+
+# Define job for canvas course export
+canvas_course_content_job = define_asset_job(
+    name="canvas_course_export_job",
+    selection=[export_course_content, course_content_metadata],
+    partitions_def=canvas_course_ids,
+)
+
+# Define schedule for canvas course export (every 6 hours)
+canvas_course_export_schedule = build_schedule_from_partitioned_job(
+    name="canvas_course_export_schedule",
+    job=canvas_course_content_job,
+    cron_schedule="0 */6 * * *",
+    execution_timezone="Etc/UTC",
+)
+
+# Create unified definitions
+defs = Definitions(
+    resources={
+        "io_manager": default_io_manager(DAGSTER_ENV),
+        "s3file_io_manager": default_file_object_io_manager(
+            dagster_env=DAGSTER_ENV,
+            bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
+            path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+        ),
+        "vault": vault,
+        "s3": S3Resource(),
+        "canvas_api": ApiClientFactory(
+            deployment="canvas",
+            client_class="CanvasApiClient",
+            mount_point="secret-data",
+            config_path="pipelines/canvas",
+            kv_version="1",
+            vault=vault,
+        ),
+        "learn_api": ApiClientFactory(
+            deployment="mit-learn",
+            client_class="MITLearnApiClient",
+            mount_point="secret-global",
+            config_path="shared_hmac",
+            kv_version="2",
+            vault=vault,
+        ),
+    },
+    assets=[export_course_content, course_content_metadata],
+    schedules=[canvas_course_export_schedule],
+)

@@ -1,0 +1,36 @@
+[project]
+name = "edxorg"
+requires-python = ">=3.12,<3.14"
+version = "0.1.0"
+dependencies = [
+    "dagster-components",
+    "ol-orchestrate-lib",
+]
+
+[project.entry-points]
+"dagster.components" = { edxorg = "edxorg.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "edxorg.definitions"
+project_name = "edxorg"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "edxorg"
+
+[tool.setuptools.packages.find]
+exclude=["edxorg_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../../packages/ol-orchestrate-lib", editable = true }
