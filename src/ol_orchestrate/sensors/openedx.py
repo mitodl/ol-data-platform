@@ -141,6 +141,7 @@ def course_version_sensor(
     asset_selection=[
         AssetKey(["canvas", "course_content"]),
         AssetKey(["canvas", "course_metadata"]),
+        AssetKey(["canvas", "course_content_metadata"]),
     ],
 )
 def canvas_google_sheet_course_id_sensor(context):
@@ -170,6 +171,7 @@ def canvas_google_sheet_course_id_sensor(context):
             asset_selection=[
                 AssetKey(["canvas", "course_content"]),
                 AssetKey(["canvas", "course_metadata"]),
+                AssetKey(["canvas", "course_content_metadata"]),
             ],
             partition_key=course_id,
         )
