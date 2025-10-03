@@ -7,12 +7,14 @@ from dagster import (
     RunRequest,
     SensorEvaluationContext,
     SensorResult,
+    SkipReason,
     sensor,
 )
 from pydantic import BaseModel
 
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.lib.magic_numbers import HTTP_NOT_FOUND
+from ol_orchestrate.lib.utils import fetch_canvas_course_ids_from_google_sheet
 from ol_orchestrate.partitions.openedx import (
     OPENEDX_COURSE_RUN_PARTITIONS,
 )
@@ -130,3 +132,50 @@ def course_version_sensor(
 
     context.update_cursor(json.dumps(cursor))
     return SensorResult(run_requests=run_requests)
+
+
+@sensor(
+    description="Sensor to monitor a Google Sheet for Canvas course IDs to export.",
+    minimum_interval_seconds=60 * 60,  # Check every 1 hour
+    required_resource_keys={"google_sheet_config"},
+    asset_selection=[
+        AssetKey(["canvas", "course_content"]),
+        AssetKey(["canvas", "course_metadata"]),
+    ],
+)
+def canvas_google_sheet_course_id_sensor(context):
+    google_sheet_course_ids = fetch_canvas_course_ids_from_google_sheet(context)
+
+    # Existing dynamic partitions
+    existing_partitions = set(
+        context.instance.get_dynamic_partitions("canvas_course_ids")
+    )
+
+    # Register any new course IDs as partitions
+    new_course_ids = google_sheet_course_ids - existing_partitions
+    if new_course_ids:
+        context.log.info("Adding new course IDs as partitions: %s", new_course_ids)
+        # Add new IDs as partitions
+        context.instance.add_dynamic_partitions(
+            "canvas_course_ids", list(new_course_ids)
+        )
+    else:
+        yield SkipReason("No new canvas course IDs found")
+
+    for course_id in new_course_ids:
+        context.log.info(
+            "Triggering canvas course export for new course_id= %s", course_id
+        )
+        yield RunRequest(
+            asset_selection=[
+                AssetKey(["canvas", "course_content"]),
+                AssetKey(["canvas", "course_metadata"]),
+            ],
+            partition_key=course_id,
+        )
+
+    existing_ids = json.loads(context.cursor) if context.cursor else []
+    existing_ids_set = set(existing_ids)
+
+    updated_ids = sorted(existing_ids_set.union(new_course_ids))
+    context.update_cursor(json.dumps(updated_ids))
