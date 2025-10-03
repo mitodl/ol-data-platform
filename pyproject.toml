@@ -44,6 +44,9 @@ repository = "https://github.com/mitodl/ol-data-platform"
 [tool.uv.workspace]
 members = ["packages/*"]
 
+[tool.uv]
+package = false  # This is a workspace root, not a package
+
 [dependency-groups]
 dev = [
     "dagster-dg-cli>=1.11.13",
@@ -55,14 +58,8 @@ dev = [
     "sqlfluff>=3.0.0,<4",
 ]
 
-[tool.hatch.build.targets.sdist]
-include = ["src/ol_orchestrate"]
-
-[tool.hatch.build.targets.wheel]
-include = ["src/ol_orchestrate"]
-
-[tool.hatch.build.targets.wheel.sources]
-"src/ol_orchestrate" = "ol_orchestrate"
+# The ol_orchestrate package has been moved to packages/ol-orchestrate-lib/
+# and is managed as a workspace member package
 
 [build-system]
 requires = ["hatchling"]

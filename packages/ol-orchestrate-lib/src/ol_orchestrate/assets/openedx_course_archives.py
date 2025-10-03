@@ -19,13 +19,13 @@ from dagster._core.definitions.partitions.utils.multi import (
 )
 from upath import UPath
 
-from ol_orchestrate.assets.edxorg_archive import course_and_source_partitions
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
     process_policy_json,
     process_video_xml,
 )
+from ol_orchestrate.partitions.edxorg import course_and_source_partitions
 
 
 @asset(

@@ -25,4 +25,5 @@ path = "code_locations/learning_resources"
 [dependency-groups]
 dev = [
     "dagster-dg-cli>=1.11.13",
+    "dagster-webserver>=1.11.13",
 ]
