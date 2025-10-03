@@ -1924,7 +1924,7 @@ wheels = [
 [[package]]
 name = "ol-data-platform"
 version = "0.6.1"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "cyclopts" },
     { name = "dagster" },
