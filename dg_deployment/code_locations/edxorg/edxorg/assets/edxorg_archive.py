@@ -54,10 +54,10 @@ from ol_orchestrate.lib.edxorg import (
     parse_archive_path,
 )
 from ol_orchestrate.lib.openedx import un_nest_course_structure
+from ol_orchestrate.partitions.edxorg import course_and_source_partitions
 
 edxorg_archive_partitions = DynamicPartitionsDefinition(name="edxorg_archive")
 edxorg_tracking_log_partitions = DynamicPartitionsDefinition(name="edxorg_tracking_log")
-course_and_source_partitions = DynamicPartitionsDefinition(name="course_and_source")
 raw_archive_asset_key = AssetKey(("edxorg", "raw_data_archive"))
 raw_tracking_log_asset_key = AssetKey(("edxorg", "raw_tracking_logs"))
 
