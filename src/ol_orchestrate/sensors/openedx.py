@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from dagster import (
     AssetKey,
+    DefaultSensorStatus,
     RunRequest,
     SensorEvaluationContext,
     SensorResult,
@@ -138,6 +139,7 @@ def course_version_sensor(
     description="Sensor to monitor a Google Sheet for Canvas course IDs to export.",
     minimum_interval_seconds=60 * 60,  # Check every 1 hour
     required_resource_keys={"google_sheet_config"},
+    default_status=DefaultSensorStatus.STOPPED,
     asset_selection=[
         AssetKey(["canvas", "course_content"]),
         AssetKey(["canvas", "course_metadata"]),
@@ -176,8 +178,5 @@ def canvas_google_sheet_course_id_sensor(context):
             partition_key=course_id,
         )
 
-    existing_ids = json.loads(context.cursor) if context.cursor else []
-    existing_ids_set = set(existing_ids)
-
-    updated_ids = sorted(existing_ids_set.union(new_course_ids))
+    updated_ids = sorted(existing_partitions.union(new_course_ids))
     context.update_cursor(json.dumps(updated_ids))
