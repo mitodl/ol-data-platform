@@ -22,17 +22,16 @@ from ol_orchestrate.lib.dagster_helpers import (
 )
 from ol_orchestrate.lib.utils import (
     authenticate_vault,
-    fetch_canvas_course_ids_from_google_sheet,
     s3_uploads_bucket,
 )
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
-from ol_orchestrate.sensors.openedx import canvas_google_sheet_course_id_sensor
+from ol_orchestrate.sensors.canvas import canvas_google_sheet_course_id_sensor
 
 vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
 
 gs_secrets = vault.client.secrets.kv.v1.read_secret(
     mount_point="secret-data",
-    path="pipelines/google-service-account",  # to be replaced
+    path="pipelines/google-service-account",
 )["data"]
 
 
@@ -59,7 +58,7 @@ canvas_course_export_job = define_asset_job(
 )
 def canvas_course_export_schedule(context: OpExecutionContext):
     """Return a RunRequest for each canvas course ID found in the Google Sheet"""
-    partition_keys = fetch_canvas_course_ids_from_google_sheet(context)
+    partition_keys = context.instance.get_dynamic_partitions("canvas_course_ids")
 
     return [
         RunRequest(
