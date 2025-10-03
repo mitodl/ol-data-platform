@@ -33,6 +33,7 @@ dependencies = [
     "polars ~= 1.19",
     "pyarrow ~=21.0.0",
     "pydantic ~=2.11.1",
+    "pygsheets>=2.0.6",
     "pymysql ~= 1.1",
     "s3fs (>=2025.2.0,<2026.0.0)",
     "trino[external-authentication-token-cache]>=0.336.0",
