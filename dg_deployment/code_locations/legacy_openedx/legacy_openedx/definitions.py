@@ -134,7 +134,6 @@ def open_edx_export_irx_job_config(
     deployment: Literal["mitx", "mitxonline", "xpro"],
     dagster_env: Literal["qa", "production"],
 ):
-    """Generate configuration for Open edX course export jobs."""
     pipeline_path = "residential" if deployment == "mitx" else deployment
     etl_bucket_map = {
         "mitx": f"mitx-etl-residential-live-mitx-{dagster_env}",
@@ -142,37 +141,6 @@ def open_edx_export_irx_job_config(
         "mitxonline": f"mitx-etl-mitxonline-{dagster_env}",
     }
 
-    # Build configuration based on vault availability
-    if not vault_authenticated:
-        # Return minimal config for testing
-        return {
-            "resources": {
-                "sqldb": {"config": {"database": ":memory:"}},
-                "results_dir": {"config": {"results_dir": "/tmp/results"}},  # noqa: S108
-                "healthchecks": {"config": {"healthchecks_io_key": "test"}},
-                "openedx": {
-                    "config": {
-                        "client_id": "test",
-                        "client_secret": "test",  # pragma: allowlist secret
-                        "base_url": "http://test.com",
-                        "studio_url": "http://test.com",
-                        "token_type": "JWT",
-                        "token_url": "http://test.com/token",
-                    }
-                },
-            },
-            "ops": {
-                "list_courses": {"config": {"openedx_api_client": "test"}},
-                "upload_extracted_data": {
-                    "config": {
-                        "extract_bucket": "test-bucket",
-                        "extract_prefix": f"edxapp-{deployment}-{dagster_env}",
-                    }
-                },
-            },
-        }
-
-    # Real configuration with vault
     mongo_creds = vault.client.secrets.kv.v1.read_secret(
         mount_point=f"secret-{deployment}", path="mongodb-forum"
     )["data"]
@@ -213,22 +181,26 @@ def open_edx_export_irx_job_config(
     }
 
     return {
-        "resources": {
-            "sqldb": {"config": edx_db_config},
-            "results_dir": {
-                "config": {"results_dir": f"/dagster_home/tmp/{deployment}"}
-            },
-            "healthchecks": {"config": {"healthchecks_io_key": healthcheck_id}},
-            "openedx": {"config": edx_resource_config},
-        },
         "ops": {
-            "export_edx_forum_database": {"config": mongo_config},
-            "upload_extracted_data": {
+            "edx_export_courses": {
                 "config": {
-                    "extract_bucket": etl_bucket_map[deployment],
-                    "extract_prefix": f"edxapp-{deployment}-{dagster_env}",
+                    "edx_course_bucket": f"{deployment}-{dagster_env}-edxapp-courses",
                 }
             },
+            "edx_upload_daily_extracts": {
+                "config": {"edx_etl_results_bucket": etl_bucket_map[deployment]}
+            },
+            "export_edx_forum_database": {
+                "config": mongo_config,
+            },
+        },
+        "resources": {
+            "openedx": {"config": edx_resource_config},
+            "healthchecks": {"config": {"check_id": healthcheck_id}},
+            "results_dir": {
+                "config": {"date_format": "%Y%m%d", "dir_prefix": deployment}
+            },
+            "sqldb": {"config": edx_db_config},
         },
     }
 
