@@ -220,3 +220,27 @@ builtins-allowed-modules = ["secrets", "platform"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "test_*.py" = ["S101"]
+
+[tool.dg]
+directory_type = "workspace"
+
+[[tool.dg.workspace.projects]]
+path = "dg_deployment/code_locations/lakehouse"
+
+[[tool.dg.workspace.projects]]
+path = "dg_deployment/code_locations/openedx"
+
+[[tool.dg.workspace.projects]]
+path = "dg_deployment/code_locations/edxorg"
+
+[[tool.dg.workspace.projects]]
+path = "dg_deployment/code_locations/legacy_openedx"
+
+[[tool.dg.workspace.projects]]
+path = "dg_deployment/code_locations/canvas"
+
+[[tool.dg.workspace.projects]]
+path = "dg_deployment/code_locations/orchestration_platform"
+
+[[tool.dg.workspace.projects]]
+path = "dg_deployment/code_locations/learning_resources"

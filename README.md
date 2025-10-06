@@ -172,3 +172,81 @@ This merges auth-related tables into the existing `_mitlearn__sources.yml` file.
 - Source files use the standard `ol_warehouse_raw_data` source with dynamic schema configuration
 - Generated staging models reference the correct source and include all discovered columns
 - The script handles YAML merging to avoid duplicating source definitions
+
+# UV Operations Utility
+
+This repository includes a utility script for running `uv` commands across all code locations in the `dg_deployment/code_locations` directory. The script is located at `bin/uv-operations.py`.
+
+## Overview
+
+The `uv-operations.py` script automatically discovers all directories containing a `pyproject.toml` file in the code locations directory and executes the specified `uv` command on each one. This is useful for operations like:
+
+- Synchronizing dependencies across all code locations (`uv sync`)
+- Upgrading lock files (`uv lock --upgrade`)
+- Building packages (`uv build`)
+- Listing installed packages (`uv pip list`)
+
+## Usage
+
+### Basic Command
+
+```bash
+python bin/uv-operations.py <uv-command> [args...]
+```
+
+Or run it directly as an executable:
+
+```bash
+./bin/uv-operations.py <uv-command> [args...]
+```
+
+### Examples
+
+#### Sync all code locations
+
+```bash
+python bin/uv-operations.py sync
+```
+
+#### Upgrade lock files
+
+```bash
+python bin/uv-operations.py lock --upgrade
+```
+
+#### List packages in all locations
+
+```bash
+python bin/uv-operations.py pip list
+```
+
+#### Continue on errors
+
+By default, the script stops at the first failure. To continue processing all locations even if some fail:
+
+```bash
+python bin/uv-operations.py sync --continue-on-error
+```
+
+#### Verbose output
+
+For detailed output showing the exact commands being run:
+
+```bash
+python bin/uv-operations.py sync --verbose
+```
+
+## Parameters
+
+- `--code-locations-dir`: Base directory containing code locations (default: `dg_deployment/code_locations`)
+- `--continue-on-error`: Continue running even if some locations fail
+- `--verbose`: Print verbose output including the full command being executed
+
+## Output
+
+The script provides:
+
+- A list of discovered code locations
+- Progress indicators for each location being processed
+- Success (✓) or failure (✗) markers for each location
+- A summary at the end showing successful and failed operations
