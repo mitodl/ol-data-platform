@@ -1,0 +1,6 @@
+---
+# Build context is set to repository root to access packages/ol-orchestrate-lib
+directory: ../..
+# The Dockerfile is located in the legacy_openedx directory
+dockerfile: dg_projects/legacy_openedx/Dockerfile
+registry: mitodl/dagster-legacy_openedx
