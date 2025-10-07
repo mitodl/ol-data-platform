@@ -3,14 +3,17 @@
 services:
   dagster_init:
     container_name: dagster_init
-    image: ol-dagster
+    image: mitodl/dagster-lakehouse:dev
     depends_on:
       postgres:
         condition: service_healthy
     build:
       context: .
-      dockerfile: Dockerfile
-    command: ["uv", "run", "--no-dev", "dagster", "instance", "migrate"]
+      dockerfile: dg_projects/lakehouse/Dockerfile
+      secrets:
+      - dbt_trino_username
+      - dbt_trino_password
+    command: ["dagster", "instance", "migrate"]
     environment:
       DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
       DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
@@ -18,26 +21,21 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      DAGSTER_CURRENT_IMAGE: "dagster-daemon"
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-lakehouse:dev"
       DAGSTER_PG_USERNAME: postgres
       DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
       DAGSTER_PG_HOST: postgres
       DAGSTER_PG_DB: dagster
+      DAGSTER_ENV: dev
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ./src/ol_orchestrate/dagster_local/:/opt/dagster/dagster_home/
-    - ./src/ol_orchestrate/dagster.dev.yaml:/opt/dagster/dagster_home/dagster.yaml
-    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
-    - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
-    - ./src/ol_dbt:/opt/dagster/code/ol_dbt
+    - ./dagster_home:/opt/dagster/dagster_home
 
-  # This service runs dagster-webserver, which loads your user code from the user code container.
-  # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
-  # a queue and later dequeued and launched by dagster-daemon.
+  # This service runs dagster-webserver, which loads code from all code locations.
   dagster_webserver:
     container_name: dagster_webserver
-    image: ol-dagster
+    image: mitodl/dagster-lakehouse:dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,10 +43,12 @@ services:
         condition: service_completed_successfully
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: dg_projects/lakehouse/Dockerfile
+      secrets:
+      - dbt_trino_username
+      - dbt_trino_password
     restart: unless-stopped
-    entrypoint: ["uv", "run", "--no-dev", "dagster-webserver", "-w", "/opt/dagster/dagster_home/workspace.yaml",
-      "-h", "0.0.0.0", "-p", "3000"]
+    entrypoint: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000"]
     ports:
     - "3000:3000"
     environment:
@@ -58,27 +58,22 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      DAGSTER_CURRENT_IMAGE: "ol-dagster"
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-lakehouse:dev"
       DAGSTER_PG_USERNAME: postgres
       DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
       DAGSTER_PG_HOST: postgres
       DAGSTER_PG_DB: dagster
       DAGSTER_IS_DEV_CLI: true
+      DAGSTER_ENV: dev
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ./src/ol_orchestrate/dagster_local/:/opt/dagster/dagster_home/
-    - ./src/ol_orchestrate/dagster.dev.yaml:/opt/dagster/dagster_home/dagster.yaml
-    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
-    - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
-    - ./src/ol_dbt:/opt/dagster/code/ol_dbt
-    - ./src/ol_orchestrate/dagster_local/storage/:/opt/dagster/app/storage/
+    - ./dagster_home:/opt/dagster/dagster_home
 
-  # This service runs the dagster-daemon process, which is responsible for taking runs
-  # off of the queue and launching them, as well as creating runs from schedules or sensors.
+  # This service runs the dagster-daemon process
   dagster_daemon:
     container_name: dagster_daemon
-    image: ol-dagster
+    image: mitodl/dagster-lakehouse:dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,10 +81,12 @@ services:
         condition: service_completed_successfully
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: dg_projects/lakehouse/Dockerfile
+      secrets:
+      - dbt_trino_username
+      - dbt_trino_password
     restart: on-failure
-    # restart: unless-stopped
-    entrypoint: ["uv", "run", "--no-dev", "dagster-daemon", "run", "-w", "/opt/dagster/dagster_home/workspace.yaml"]
+    entrypoint: ["dagster-daemon", "run"]
     environment:
       DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
       DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
@@ -97,21 +94,133 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
-      DAGSTER_CURRENT_IMAGE: "ol-dagster"
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-lakehouse:dev"
       DAGSTER_PG_USERNAME: postgres
       DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
       DAGSTER_PG_HOST: postgres
       DAGSTER_PG_DB: dagster
       DAGSTER_IS_DEV_CLI: true
+      DAGSTER_ENV: dev
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - /tmp/io_manager_storage:/tmp/io_manager_storage
-    - ./src/ol_orchestrate/dagster_local/:/opt/dagster/dagster_home/
-    - ./src/ol_orchestrate/dagster.dev.yaml:/opt/dagster/dagster_home/dagster.yaml
-    - ./src/ol_orchestrate/workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
-    - ./src/ol_orchestrate:/opt/dagster/code/ol_orchestrate
-    - ./src/ol_dbt:/opt/dagster/code/ol_dbt
-    - ./src/ol_orchestrate/dagster_local/storage/:/opt/dagster/app/storage/
+    - ./dagster_home:/opt/dagster/dagster_home
+
+  # Code location: canvas
+  dagster_canvas:
+    container_name: dagster_canvas
+    image: mitodl/dagster-canvas:dev
+    build:
+      context: .
+      dockerfile: dg_projects/canvas/Dockerfile
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-canvas:dev"
+      DAGSTER_ENV: dev
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+
+  # Code location: data_platform
+  dagster_data_platform:
+    container_name: dagster_data_platform
+    image: mitodl/dagster-data_platform:dev
+    build:
+      context: .
+      dockerfile: dg_projects/data_platform/Dockerfile
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-data_platform:dev"
+      DAGSTER_ENV: dev
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+
+  # Code location: edxorg
+  dagster_edxorg:
+    container_name: dagster_edxorg
+    image: mitodl/dagster-edxorg:dev
+    build:
+      context: .
+      dockerfile: dg_projects/edxorg/Dockerfile
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-edxorg:dev"
+      DAGSTER_ENV: dev
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+
+  # Code location: lakehouse
+  dagster_lakehouse:
+    container_name: dagster_lakehouse
+    image: mitodl/dagster-lakehouse:dev
+    build:
+      context: .
+      dockerfile: dg_projects/lakehouse/Dockerfile
+      secrets:
+      - dbt_trino_username
+      - dbt_trino_password
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-lakehouse:dev"
+      DAGSTER_ENV: dev
+      DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
+      DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
+      DBT_TRINO_PASSWORD: ${DBT_TRINO_PASSWORD}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+
+  # Code location: learning_resources
+  dagster_learning_resources:
+    container_name: dagster_learning_resources
+    image: mitodl/dagster-learning_resources:dev
+    build:
+      context: .
+      dockerfile: dg_projects/learning_resources/Dockerfile
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-learning_resources:dev"
+      DAGSTER_ENV: dev
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+
+  # Code location: legacy_openedx
+  dagster_legacy_openedx:
+    container_name: dagster_legacy_openedx
+    image: mitodl/dagster-legacy_openedx:dev
+    build:
+      context: .
+      dockerfile: dg_projects/legacy_openedx/Dockerfile
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-legacy_openedx:dev"
+      DAGSTER_ENV: dev
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+
+  # Code location: openedx
+  dagster_openedx:
+    container_name: dagster_openedx
+    image: mitodl/dagster-openedx:dev
+    build:
+      context: .
+      dockerfile: dg_projects/openedx/Dockerfile
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-openedx:dev"
+      DAGSTER_ENV: dev
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
 
   postgres:
     image: postgres
@@ -129,6 +238,12 @@ services:
       POSTGRES_DB: dagster
     volumes:
     - pgdata:/var/lib/postgresql
+
+secrets:
+  dbt_trino_username:
+    environment: DBT_TRINO_USERNAME
+  dbt_trino_password:
+    environment: DBT_TRINO_PASSWORD
 
 volumes:
   pgdata:
