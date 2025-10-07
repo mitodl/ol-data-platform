@@ -6,38 +6,25 @@ from functools import partial
 from typing import Any, Literal
 
 from dagster import (
-    AutomationConditionSensorDefinition,
-    DefaultSensorStatus,
-    Definitions,
-    SensorDefinition,
     daily_partitioned_config,
+)
+from dagster._core.definitions.definitions_class import (
+    create_repository_using_definitions_args,
 )
 from dagster_aws.s3 import S3Resource
 from dagster_duckdb import DuckDBResource
 
-from ol_orchestrate.lib.assets_helper import (
-    add_prefix_to_asset_keys,
-    late_bind_partition_to_asset,
-)
-from ol_orchestrate.lib.constants import DAGSTER_ENV, OPENEDX_DEPLOYMENTS, VAULT_ADDRESS
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
-from ol_orchestrate.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
-from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
-from openedx.assets.openedx import (
-    course_structure,
-    course_xml,
-    extract_courserun_details,
-    openedx_live_courseware,
-)
+from openedx.components import OpenEdxDeploymentComponent
 from openedx.jobs.normalize_logs import (
     jsonify_tracking_logs,
     normalize_tracking_logs,
 )
-from openedx.sensors.openedx import course_run_sensor, course_version_sensor
 
 # Initialize vault with resilient loading
 try:
@@ -164,51 +151,24 @@ def daily_tracking_log_config(
     }
 
 
-# Build assets for each deployment
-all_deployment_assets = []
-all_deployment_sensors = []
-all_deployment_resources = {}
+# Build shared resources (these will be used across all deployments)
+shared_resources = {
+    "io_manager": default_io_manager(DAGSTER_ENV),
+    "s3file_io_manager": default_file_object_io_manager(
+        dagster_env=DAGSTER_ENV,
+        bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
+        path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+    ),
+    "vault": vault,
+    "s3": S3Resource(),
+    "duckdb": DuckDBResource.configure_at_launch(),
+}
 
-for deployment_name in OPENEDX_DEPLOYMENTS:
-    course_version_asset = late_bind_partition_to_asset(
-        add_prefix_to_asset_keys(openedx_live_courseware, deployment_name),
-        OPENEDX_COURSE_RUN_PARTITIONS[deployment_name],
-    )
-    deployment_assets = [
-        course_version_asset,
-        add_prefix_to_asset_keys(course_structure, deployment_name),
-        add_prefix_to_asset_keys(course_xml, deployment_name),
-        add_prefix_to_asset_keys(extract_courserun_details, deployment_name),
-    ]
+# Create a repository for each OpenEdX deployment
+# Each repository has its own isolated resource namespace where "openedx" maps
+# to the deployment-specific OpenEdxApiClientFactory
 
-    asset_bound_course_version_sensor = SensorDefinition(
-        name=f"{deployment_name}_course_version_sensor",
-        asset_selection=[course_version_asset],
-        job=None,
-        default_status=DefaultSensorStatus.STOPPED,
-        minimum_interval_seconds=60 * 60,
-        evaluation_fn=course_version_sensor,
-    )
-
-    deployment_sensors = [
-        course_run_sensor,
-        asset_bound_course_version_sensor,
-        AutomationConditionSensorDefinition(
-            f"{deployment_name}_openedx_automation_sensor",
-            minimum_interval_seconds=300 if DAGSTER_ENV == "dev" else 60 * 60,
-            target=deployment_assets,
-        ),
-    ]
-
-    all_deployment_assets.extend(deployment_assets)
-    all_deployment_sensors.extend(deployment_sensors)
-
-    # Add deployment-specific resources
-    all_deployment_resources[f"openedx_{deployment_name}"] = OpenEdxApiClientFactory(
-        deployment=deployment_name, vault=vault
-    )
-
-# Build normalize/jsonify jobs
+# Build normalize/jsonify jobs (these are shared across deployments)
 normalize_jobs = [
     normalize_tracking_logs.to_job(
         config=daily_partitioned_config(
@@ -229,24 +189,30 @@ jsonify_jobs = [
     for deployment in ["xpro", "mitx", "mitxonline", "edxorg"]
 ]
 
-# Combine all resources
-all_resources = {
-    "io_manager": default_io_manager(DAGSTER_ENV),
-    "s3file_io_manager": default_file_object_io_manager(
-        dagster_env=DAGSTER_ENV,
-        bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
-        path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
-    ),
-    "vault": vault,
-    "s3": S3Resource(),
-    "duckdb": DuckDBResource.configure_at_launch(),
-    **all_deployment_resources,
-}
 
-# Create unified definitions
-defs = Definitions(
-    assets=all_deployment_assets,
-    resources=all_resources,
-    sensors=all_deployment_sensors,
+# Helper function to create a repository for a deployment
+def _create_deployment_repository(deployment_name: str):
+    """Create a repository for a specific OpenEdX deployment."""
+    component = OpenEdxDeploymentComponent(deployment_name=deployment_name, vault=vault)
+    deployment_defs = component.build_definitions(shared_resources=shared_resources)
+
+    return create_repository_using_definitions_args(
+        name=f"{deployment_name}_openedx",
+        assets=deployment_defs.assets,
+        sensors=deployment_defs.sensors,
+        resources=deployment_defs.resources,
+    )
+
+
+# Create individual repositories as module-level variables
+# Dagster will automatically discover these when loading the code location
+mitx_openedx = _create_deployment_repository("mitx")
+mitxonline_openedx = _create_deployment_repository("mitxonline")
+xpro_openedx = _create_deployment_repository("xpro")
+
+# Create a repository for shared jobs
+openedx_shared_jobs = create_repository_using_definitions_args(
+    name="openedx_shared_jobs",
     jobs=normalize_jobs + jsonify_jobs,
+    resources=shared_resources,
 )
