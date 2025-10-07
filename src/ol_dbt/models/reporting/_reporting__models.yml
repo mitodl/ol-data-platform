@@ -304,7 +304,8 @@ models:
       to 1
   - name: time_flag
     description: int, the student gets a performance time flag of 1 if their solving
-      time was below the 10th percentile of time taken by all students to solve a problem.
+      time was below the 10th percentile of time taken by all students to solve a
+      problem.
 
 - name: chatbot_usage_report
   description: AI chatbot interactions from Learn AI application including TutorBot,
