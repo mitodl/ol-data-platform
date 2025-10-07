@@ -16,7 +16,7 @@ from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 DBT_REPO_DIR = (
-    Path(__file__).parents[6].joinpath("src/ol_dbt")
+    Path(__file__).parents[5].joinpath("src/ol_dbt")
     if DAGSTER_ENV == "dev"
     else Path("/opt/dbt")
 )

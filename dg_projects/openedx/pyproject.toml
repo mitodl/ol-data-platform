@@ -1,5 +1,5 @@
 [project]
-name = "orchestration-platform"
+name = "openedx"
 requires-python = ">=3.12,<3.14"
 version = "0.1.0"
 dependencies = [
@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [project.entry-points]
-"dagster.components" = { orchestration_platform = "orchestration_platform.lib"}
+"dagster.components" = { openedx = "openedx.lib"}
 
 [dependency-groups]
 dev = [
@@ -20,17 +20,17 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.dagster]
-module_name = "orchestration_platform.definitions"
-project_name = "orchestration-platform"
+module_name = "openedx.definitions"
+project_name = "openedx"
 
 [tool.dg]
 directory_type = "project"
 
 [tool.dg.project]
-root_module = "orchestration_platform"
+root_module = "openedx"
 
 [tool.setuptools.packages.find]
-exclude=["orchestration_platform_tests"]
+exclude=["openedx_tests"]
 
 [tool.uv.sources]
-ol-orchestrate-lib = { path = "../../../packages/ol-orchestrate-lib", editable = true }
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

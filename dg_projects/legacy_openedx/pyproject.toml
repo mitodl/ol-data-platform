@@ -33,4 +33,4 @@ root_module = "legacy_openedx"
 exclude=["legacy_openedx_tests"]
 
 [tool.uv.sources]
-ol-orchestrate-lib = { path = "../../../packages/ol-orchestrate-lib", editable = true }
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

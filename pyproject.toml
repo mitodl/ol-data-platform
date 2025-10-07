@@ -225,22 +225,22 @@ builtins-allowed-modules = ["secrets", "platform"]
 directory_type = "workspace"
 
 [[tool.dg.workspace.projects]]
-path = "dg_deployment/code_locations/lakehouse"
+path = "dg_projects/lakehouse"
 
 [[tool.dg.workspace.projects]]
-path = "dg_deployment/code_locations/openedx"
+path = "dg_projects/openedx"
 
 [[tool.dg.workspace.projects]]
-path = "dg_deployment/code_locations/edxorg"
+path = "dg_projects/edxorg"
 
 [[tool.dg.workspace.projects]]
-path = "dg_deployment/code_locations/legacy_openedx"
+path = "dg_projects/legacy_openedx"
 
 [[tool.dg.workspace.projects]]
-path = "dg_deployment/code_locations/canvas"
+path = "dg_projects/canvas"
 
 [[tool.dg.workspace.projects]]
-path = "dg_deployment/code_locations/orchestration_platform"
+path = "dg_projects/data_platform"
 
 [[tool.dg.workspace.projects]]
-path = "dg_deployment/code_locations/learning_resources"
+path = "dg_projects/learning_resources"
