@@ -69,70 +69,130 @@ with problem_events as (
     where overall_grade.verified_cnt > 0
 )
 
+, final as (
+    select
+        platform
+        , openedx_user_id
+        , courserun_readable_id
+        , problem_block_fk
+        , unit_name
+        , chapter_name
+        , sequential_name
+        , coalesce((
+            upper(unit_name) like '%EXAM%'
+            and upper(unit_name) not like '%EXAMPLE%'
+            and upper(unit_name) not like '%EXAMINING%'
+            and upper(unit_name) not like '%PRACTICE%'
+        )
+        or (
+            upper(chapter_name) like '%EXAM%'
+            and upper(chapter_name) not like '%EXAMPLE%'
+            and upper(chapter_name) not like '%EXAMINING%'
+            and upper(chapter_name) not like '%PRACTICE%'
+        )
+        or upper(chapter_name) like '%EXAM %'
+        or upper(unit_name) like '%EXAM %', true
+        ) as exam_indicator
+        , coalesce((upper(unit_name) like '%HOMEWORK%' 
+        or upper(chapter_name) like '%HOMEWORK%'), true
+        ) as hw_indicator
+        , max(max_grade) as max_possible_grade
+        , max(attempt) as attempts_on_problem
+        , max(grade) as max_learner_grade
+        , avg(grade) as avg_learner_grade
+        , array_agg(grade) as grades
+        , min(
+            case
+                when
+                    prev_event_timestamp is not null
+                    and date_diff('second', prev_event_timestamp, event_timestamp) < 600
+                    then date_diff('second', prev_event_timestamp, event_timestamp)
+            end
+        ) as time_spent_on_problem
+        , min(
+            case
+                when
+                    prev_event_timestamp is not null
+                    then date_diff('second', prev_event_timestamp, event_timestamp)
+            end
+        ) as time_spent_on_problem_nolimit
+        , max(courserungrade_grade) as courserungrade_grade
+    from problems_joined
+    group by
+        platform
+        , openedx_user_id
+        , courserun_readable_id
+        , problem_block_fk
+        , unit_name
+        , chapter_name
+        , sequential_name
+        , coalesce((
+            upper(unit_name) like '%EXAM%'
+            and upper(unit_name) not like '%EXAMPLE%'
+            and upper(unit_name) not like '%EXAMINING%'
+            and upper(unit_name) not like '%PRACTICE%'
+        )
+        or (
+            upper(chapter_name) like '%EXAM%'
+            and upper(chapter_name) not like '%EXAMPLE%'
+            and upper(chapter_name) not like '%EXAMINING%'
+            and upper(chapter_name) not like '%PRACTICE%'
+        )
+        or upper(chapter_name) like '%EXAM %'
+        or upper(unit_name) like '%EXAM %', true
+        )
+        , coalesce((upper(unit_name) like '%HOMEWORK%' 
+            or upper(chapter_name) like '%HOMEWORK%'), true
+        )
+)
+
+, ten_percent_time as (
+    select
+        platform
+        , courserun_readable_id
+        , problem_block_fk
+        , approx_percentile(time_spent_on_problem, 0.1) as time_spent_percentile_10
+    from final
+    group by 
+        platform
+        , courserun_readable_id
+        , problem_block_fk
+)
+
+, ten_percent_time as (
+    select
+        platform
+        , courserun_readable_id
+        , problem_block_fk
+        , approx_percentile(time_spent_on_problem, 0.1) as time_spent_percentile_10
+    from final
+    group by
+        platform
+        , courserun_readable_id
+        , problem_block_fk
+)
+
 select
-    platform
-    , openedx_user_id
-    , courserun_readable_id
-    , problem_block_fk
-    , unit_name
-    , chapter_name
-    , sequential_name
-    , coalesce((
-        upper(unit_name) like '%EXAM%'
-        and upper(unit_name) not like '%EXAMPLE%'
-        and upper(unit_name) not like '%EXAMINING%'
-        and upper(unit_name) not like '%PRACTICE%'
-    )
-    or (
-        upper(chapter_name) like '%EXAM%'
-        and upper(chapter_name) not like '%EXAMPLE%'
-        and upper(chapter_name) not like '%EXAMINING%'
-        and upper(chapter_name) not like '%PRACTICE%'
-    )
-    or upper(chapter_name) like '%EXAM %'
-    or upper(unit_name) like '%EXAM %', true
-    ) as exam_indicator
-    , max(max_grade) as max_possible_grade
-    , max(attempt) as attempts_on_problem
-    , max(grade) as max_learner_grade
-    , array_agg(grade) as grades
-    , min(
-        case
-            when
-                prev_event_timestamp is not null
-                and date_diff('second', prev_event_timestamp, event_timestamp) < 600
-                then date_diff('second', prev_event_timestamp, event_timestamp)
-        end
-    ) as time_spent_on_problem
-    , min(
-        case
-            when
-                prev_event_timestamp is not null
-                then date_diff('second', prev_event_timestamp, event_timestamp)
-        end
-    ) as time_spent_on_problem_nolimit
-    , max(courserungrade_grade) as courserungrade_grade
-from problems_joined
-group by
-    platform
-    , openedx_user_id
-    , courserun_readable_id
-    , problem_block_fk
-    , unit_name
-    , chapter_name
-    , sequential_name
-    , coalesce((
-        upper(unit_name) like '%EXAM%'
-        and upper(unit_name) not like '%EXAMPLE%'
-        and upper(unit_name) not like '%EXAMINING%'
-        and upper(unit_name) not like '%PRACTICE%'
-    )
-    or (
-        upper(chapter_name) like '%EXAM%'
-        and upper(chapter_name) not like '%EXAMPLE%'
-        and upper(chapter_name) not like '%EXAMINING%'
-        and upper(chapter_name) not like '%PRACTICE%'
-    )
-    or upper(chapter_name) like '%EXAM %'
-    or upper(unit_name) like '%EXAM %', true
-    )
+    final.platform
+    , final.openedx_user_id
+    , final.courserun_readable_id
+    , final.problem_block_fk
+    , final.unit_name
+    , final.chapter_name
+    , final.sequential_name
+    , final.exam_indicator
+    , final.hw_indicator
+    , final.max_possible_grade
+    , final.attempts_on_problem
+    , final.max_learner_grade
+    , final.avg_learner_grade
+    , final.grades
+    , final.time_spent_on_problem
+    , final.time_spent_on_problem_nolimit
+    , final.courserungrade_grade
+    , approx_percentile(time_spent_on_problem, 0.5)
+    , case when final.time_spent_on_problem < ten_percent_time.time_spent_percentile_10
+        then 1 else 0 end time_flag
+from final
+left join ten_percent_time
+    on final.problem_block_fk = ten_percent_time.problem_block_fk
