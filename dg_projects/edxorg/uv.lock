@@ -885,7 +885,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "dagster-components" },
-    { name = "ol-orchestrate-lib", editable = "../../../packages/ol-orchestrate-lib" },
+    { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
 ]
 
 [package.metadata.requires-dev]
@@ -1856,7 +1856,7 @@ wheels = [
 [[package]]
 name = "ol-orchestrate-lib"
 version = "0.1.0"
-source = { editable = "../../../packages/ol-orchestrate-lib" }
+source = { editable = "../../packages/ol-orchestrate-lib" }
 dependencies = [
     { name = "dagster" },
     { name = "dagster-airbyte" },

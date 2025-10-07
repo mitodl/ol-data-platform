@@ -1,5 +1,5 @@
 [project]
-name = "openedx"
+name = "canvas"
 requires-python = ">=3.12,<3.14"
 version = "0.1.0"
 dependencies = [
@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [project.entry-points]
-"dagster.components" = { openedx = "openedx.lib"}
+"dagster.components" = { canvas = "canvas.lib"}
 
 [dependency-groups]
 dev = [
@@ -20,17 +20,17 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.dagster]
-module_name = "openedx.definitions"
-project_name = "openedx"
+module_name = "canvas.definitions"
+project_name = "canvas"
 
 [tool.dg]
 directory_type = "project"
 
 [tool.dg.project]
-root_module = "openedx"
+root_module = "canvas"
 
 [tool.setuptools.packages.find]
-exclude=["openedx_tests"]
+exclude=["canvas_tests"]
 
 [tool.uv.sources]
-ol-orchestrate-lib = { path = "../../../packages/ol-orchestrate-lib", editable = true }
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

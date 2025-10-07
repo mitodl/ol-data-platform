@@ -33,4 +33,4 @@ root_module = "learning_resources"
 exclude=["learning_resources_tests"]
 
 [tool.uv.sources]
-ol-orchestrate-lib = { path = "../../../packages/ol-orchestrate-lib", editable = true }
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

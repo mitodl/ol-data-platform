@@ -235,29 +235,6 @@ wheels = [
 ]
 
 [[package]]
-name = "canvas"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "dagster-components" },
-    { name = "ol-orchestrate-lib" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "dagster-webserver" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "dagster-components" },
-    { name = "ol-orchestrate-lib", editable = "../../../packages/ol-orchestrate-lib" },
-]
-
-[package.metadata.requires-dev]
-dev = [{ name = "dagster-webserver" }]
-
-[[package]]
 name = "certifi"
 version = "2025.10.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1856,7 +1833,7 @@ wheels = [
 [[package]]
 name = "ol-orchestrate-lib"
 version = "0.1.0"
-source = { editable = "../../../packages/ol-orchestrate-lib" }
+source = { editable = "../../packages/ol-orchestrate-lib" }
 dependencies = [
     { name = "dagster" },
     { name = "dagster-airbyte" },
@@ -1915,6 +1892,29 @@ requires-dist = [
     { name = "trino", extras = ["external-authentication-token-cache"], specifier = ">=0.336.0" },
     { name = "universal-pathlib", specifier = "~=0.3.1" },
 ]
+
+[[package]]
+name = "openedx"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "dagster-components" },
+    { name = "ol-orchestrate-lib" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "dagster-webserver" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dagster-components" },
+    { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "dagster-webserver" }]
 
 [[package]]
 name = "orderly-set"

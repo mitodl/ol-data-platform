@@ -81,7 +81,7 @@ lakehouse/
 
 The lakehouse code location depends on:
 - `dagster-components`: For dg CLI component support
-- `ol-orchestrate-lib`: Shared library (editable install from `../../../packages/ol-orchestrate-lib`)
+- `ol-orchestrate-lib`: Shared library (editable install from `../../packages/ol-orchestrate-lib`)
 - All transitive dependencies from ol-orchestrate-lib (dagster, dbt, airbyte, etc.)
 
 ## Running/Testing

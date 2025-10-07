@@ -1,5 +1,5 @@
 [project]
-name = "edxorg"
+name = "lakehouse"
 requires-python = ">=3.12,<3.14"
 version = "0.1.0"
 dependencies = [
@@ -8,10 +8,11 @@ dependencies = [
 ]
 
 [project.entry-points]
-"dagster.components" = { edxorg = "edxorg.lib"}
+"dagster.components" = { lakehouse = "lakehouse.lib"}
 
 [dependency-groups]
 dev = [
+    "dagster-dg-cli>=1.11.13",
     "dagster-webserver",
 ]
 
@@ -20,17 +21,17 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.dagster]
-module_name = "edxorg.definitions"
-project_name = "edxorg"
+module_name = "lakehouse.definitions"
+project_name = "lakehouse"
 
 [tool.dg]
 directory_type = "project"
 
 [tool.dg.project]
-root_module = "edxorg"
+root_module = "lakehouse"
 
 [tool.setuptools.packages.find]
-exclude=["edxorg_tests"]
+exclude=["lakehouse_tests"]
 
 [tool.uv.sources]
-ol-orchestrate-lib = { path = "../../../packages/ol-orchestrate-lib", editable = true }
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
