@@ -93,7 +93,7 @@ with problem_events as (
         or upper(chapter_name) like '%EXAM %'
         or upper(unit_name) like '%EXAM %', true
         ) as exam_indicator
-        , coalesce((upper(unit_name) like '%HOMEWORK%' 
+        , coalesce((upper(unit_name) like '%HOMEWORK%'
         or upper(chapter_name) like '%HOMEWORK%'), true
         ) as hw_indicator
         , max(max_grade) as max_possible_grade
@@ -140,7 +140,7 @@ with problem_events as (
         or upper(chapter_name) like '%EXAM %'
         or upper(unit_name) like '%EXAM %', true
         )
-        , coalesce((upper(unit_name) like '%HOMEWORK%' 
+        , coalesce((upper(unit_name) like '%HOMEWORK%'
             or upper(chapter_name) like '%HOMEWORK%'), true
         )
 )
@@ -152,7 +152,7 @@ with problem_events as (
         , problem_block_fk
         , approx_percentile(time_spent_on_problem, 0.1) as time_spent_percentile_10
     from final
-    group by 
+    group by
         platform
         , courserun_readable_id
         , problem_block_fk
@@ -178,7 +178,7 @@ with problem_events as (
     from final
     left join ten_percent_time
         on final.problem_block_fk = ten_percent_time.problem_block_fk
-    group by 
+    group by
         final.platform
         , final.openedx_user_id
         , final.courserun_readable_id
@@ -209,7 +209,7 @@ select
     , final_grouping.user_exam_time_flags
 from final
 left join final_grouping
-    on 
+    on
         final.platform = final_grouping.platform
         and final.openedx_user_id = final_grouping.openedx_user_id
         and final.courserun_readable_id = final_grouping.courserun_readable_id
