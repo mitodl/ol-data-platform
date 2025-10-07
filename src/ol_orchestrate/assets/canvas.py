@@ -135,7 +135,7 @@ def export_course_content(context: AssetExecutionContext):
         downloaded_path, skip_filename="imsmanifest.xml"
     )
 
-    target_path = f"canvas/course_content/{course_id}/{data_version}.{extension}"
+    target_path = f"{'/'.join(context.asset_key_for_output('course_content').path)}/{course_id}/{data_version}.{extension}"  # noqa: E501
 
     context.log.info("Downloading %s file to %s", download_url, target_path)
 
