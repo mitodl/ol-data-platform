@@ -287,9 +287,6 @@ models:
   - name: max_learner_grade
     description: number, max of how many responses the learner got right within the
       problem.
-  - name: avg_learner_grade
-    description: number, max of how many responses the learner got right within the
-      problem.
   - name: grades
     description: number, current values indicating the total unweighted grades for
       this problem that the learner has scored. e.g. how many responses they got right
@@ -304,8 +301,7 @@ models:
       to 1
   - name: time_flag
     description: int, the student gets a performance time flag of 1 if their solving
-      time was below the 10th percentile of time taken by all students to solve a
-      problem.
+      time was below the 10th percentile of time taken by all students to solve a problem.
 
 - name: chatbot_usage_report
   description: AI chatbot interactions from Learn AI application including TutorBot,

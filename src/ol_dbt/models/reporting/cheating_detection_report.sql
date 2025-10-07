@@ -93,13 +93,12 @@ with problem_events as (
         or upper(chapter_name) like '%EXAM %'
         or upper(unit_name) like '%EXAM %', true
         ) as exam_indicator
-        , coalesce((upper(unit_name) like '%HOMEWORK%'
+        , coalesce((upper(unit_name) like '%HOMEWORK%' 
         or upper(chapter_name) like '%HOMEWORK%'), true
         ) as hw_indicator
         , max(max_grade) as max_possible_grade
         , max(attempt) as attempts_on_problem
         , max(grade) as max_learner_grade
-        , avg(grade) as avg_learner_grade
         , array_agg(grade) as grades
         , min(
             case
@@ -141,7 +140,7 @@ with problem_events as (
         or upper(chapter_name) like '%EXAM %'
         or upper(unit_name) like '%EXAM %', true
         )
-        , coalesce((upper(unit_name) like '%HOMEWORK%'
+        , coalesce((upper(unit_name) like '%HOMEWORK%' 
             or upper(chapter_name) like '%HOMEWORK%'), true
         )
 )
@@ -153,20 +152,7 @@ with problem_events as (
         , problem_block_fk
         , approx_percentile(time_spent_on_problem, 0.1) as time_spent_percentile_10
     from final
-    group by
-        platform
-        , courserun_readable_id
-        , problem_block_fk
-)
-
-, ten_percent_time as (
-    select
-        platform
-        , courserun_readable_id
-        , problem_block_fk
-        , approx_percentile(time_spent_on_problem, 0.1) as time_spent_percentile_10
-    from final
-    group by
+    group by 
         platform
         , courserun_readable_id
         , problem_block_fk
