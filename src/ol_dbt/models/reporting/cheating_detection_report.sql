@@ -93,7 +93,7 @@ with problem_events as (
         or upper(chapter_name) like '%EXAM %'
         or upper(unit_name) like '%EXAM %', true
         ) as exam_indicator
-        , coalesce((upper(unit_name) like '%HOMEWORK%'
+        , coalesce((upper(unit_name) like '%HOMEWORK%' 
         or upper(chapter_name) like '%HOMEWORK%'), true
         ) as hw_indicator
         , max(max_grade) as max_possible_grade
@@ -140,7 +140,7 @@ with problem_events as (
         or upper(chapter_name) like '%EXAM %'
         or upper(unit_name) like '%EXAM %', true
         )
-        , coalesce((upper(unit_name) like '%HOMEWORK%'
+        , coalesce((upper(unit_name) like '%HOMEWORK%' 
             or upper(chapter_name) like '%HOMEWORK%'), true
         )
 )
@@ -152,10 +152,36 @@ with problem_events as (
         , problem_block_fk
         , approx_percentile(time_spent_on_problem, 0.1) as time_spent_percentile_10
     from final
-    group by
+    group by 
         platform
         , courserun_readable_id
         , problem_block_fk
+)
+
+, final_grouping as (
+    select
+        final.platform
+        , final.openedx_user_id
+        , final.courserun_readable_id
+        , avg(cast(case when final.hw_indicator = true then final.max_learner_grade else null end as decimal(12,2)))
+            as user_avg_hw_grade
+        , avg(cast(case when final.exam_indicator = true then final.max_learner_grade else null end as decimal(12,2)))
+            as user_avg_exam_grade
+        , approx_percentile(case when final.hw_indicator = true then final.time_spent_on_problem else null end, 0.5)
+            as user_hw_median_solving_time
+        , approx_percentile(case when final.exam_indicator = true then final.time_spent_on_problem else null end, 0.5)
+            as user_exam_median_solving_time
+        , sum(case when final.hw_indicator = true then cast(final.attempts_on_problem as integer) else 0 end)
+            as user_hw_attempts_on_problem
+        , sum(case when final.time_spent_on_problem < ten_percent_time.time_spent_percentile_10 and final.exam_indicator = true
+            then 1 else 0 end) as user_exam_time_flags
+    from final
+    left join ten_percent_time
+        on final.problem_block_fk = ten_percent_time.problem_block_fk
+    group by 
+        final.platform
+        , final.openedx_user_id
+        , final.courserun_readable_id
 )
 
 select
@@ -175,8 +201,15 @@ select
     , final.time_spent_on_problem
     , final.time_spent_on_problem_nolimit
     , final.courserungrade_grade
-    , case when final.time_spent_on_problem < ten_percent_time.time_spent_percentile_10
-        then 1 else 0 end time_flag
+    , final_grouping.user_avg_hw_grade
+    , final_grouping.user_avg_exam_grade
+    , final_grouping.user_hw_median_solving_time
+    , final_grouping.user_exam_median_solving_time
+    , final_grouping.user_hw_attempts_on_problem
+    , final_grouping.user_exam_time_flags
 from final
-left join ten_percent_time
-    on final.problem_block_fk = ten_percent_time.problem_block_fk
+left join final_grouping
+    on 
+        final.platform = final_grouping.platform
+        and final.openedx_user_id = final_grouping.openedx_user_id
+        and final.courserun_readable_id = final_grouping.courserun_readable_id
