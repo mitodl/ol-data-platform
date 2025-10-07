@@ -52,7 +52,7 @@ class FileObjectIOManager(ConfigurableIOManager):
             obj[1], **self.configure_path_fs(output_path.protocol).storage_options
         )
         output_path.write_bytes(obj[0].read_bytes())
-        context.add_output_metadata({"path": MetadataValue.path(output_path)})
+        context.add_output_metadata({"path": MetadataValue.path(str(output_path))})
         obj[0].unlink()
 
     def configure_path_fs(
