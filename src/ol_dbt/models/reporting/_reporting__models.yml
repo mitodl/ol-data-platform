@@ -304,14 +304,18 @@ models:
   - name: user_avg_exam_grade
     description: number, avg of grades the learner got for all exam problems
   - name: user_hw_median_solving_time
-    description: string, the estimated median amount of time the learner spent on all homework problems.
+    description: string, the estimated median amount of time the learner spent on
+      all homework problems.
   - name: user_exam_median_solving_time
-    description: string, the estimated median amount of time the learner spent on all exam problems.
+    description: string, the estimated median amount of time the learner spent on
+      all exam problems.
   - name: user_hw_attempts_on_problem
-    description: int, total learner attempts generated when parsing answer submissions on homework problems
+    description: int, total learner attempts generated when parsing answer submissions
+      on homework problems
   - name: user_exam_time_flags
-    description: int, total times a learner gets a performance time flag when their exam problem solving time was
-      below the 10th percentile of time taken by all students to solve an exam problem
+    description: int, total times a learner gets a performance time flag when their
+      exam problem solving time was below the 10th percentile of time taken by all
+      students to solve an exam problem
 
 - name: chatbot_usage_report
   description: AI chatbot interactions from Learn AI application including TutorBot,
