@@ -3,6 +3,7 @@ name = "lakehouse"
 requires-python = ">=3.12,<3.14"
 version = "0.1.0"
 dependencies = [
+    "dagster>=1.11.13",
     "dagster-components",
     "dagster-dbt ~=0.27.0",
     "dbt-duckdb ~= 1.9.0",
