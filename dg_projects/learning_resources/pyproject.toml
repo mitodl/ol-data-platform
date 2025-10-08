@@ -3,6 +3,7 @@ name = "learning_resources"
 requires-python = ">=3.12,<3.14"
 version = "0.1.0"
 dependencies = [
+    "dagster>=1.11.13",
     "dagster-components",
     "ol-orchestrate-lib",
 ]

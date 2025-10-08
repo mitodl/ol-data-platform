@@ -10,15 +10,16 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 # for an example.
 ENV UV_PYTHON_DOWNLOADS=0
 
-WORKDIR /repo
+WORKDIR /app
 
 # Copy the entire workspace structure needed for uv
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
 COPY dg_projects/openedx dg_projects/openedx
 
 # Install dependencies from the openedx project
-WORKDIR /repo/dg_projects/openedx
+WORKDIR /app/dg_projects/openedx
 RUN --mount=type=cache,target=/root/.cache/uv \
+    uv venv --relocatable && \
     uv sync --frozen --no-install-project --no-dev
 
 # Sync the project itself
@@ -32,7 +33,7 @@ FROM python:3.13-slim-bookworm
 # Python executable must be the same.
 
 # Copy the application from the builder
-COPY --from=builder /repo/dg_projects/openedx /app
+COPY --from=builder /app/dg_projects/openedx /app
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"

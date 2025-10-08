@@ -1,0 +1,15 @@
+[project]
+name = "ol_data_platform_local"
+requires-python = ">=3.9,<3.14"
+version = "0.1.0"
+dependencies = [
+  "dagster~=1.11.13",
+  "dagster-webserver",
+  "dagster-postgres",
+  "psycopg2-binary",
+  "dagster-aws",
+  "dagster-dg-cli",
+]
+
+[tool.dg]
+directory_type = "deployment"

@@ -3,6 +3,7 @@ name = "openedx"
 requires-python = ">=3.12,<3.14"
 version = "0.1.0"
 dependencies = [
+    "dagster>=1.11.13",
     "dagster-components",
     "dagster-duckdb>=0.27.13",
     "ol-orchestrate-lib",

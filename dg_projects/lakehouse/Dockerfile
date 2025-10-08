@@ -10,7 +10,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 # for an example.
 ENV UV_PYTHON_DOWNLOADS=0
 
-WORKDIR /repo
+WORKDIR /app
 
 # Copy the entire workspace structure needed for uv
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
@@ -18,8 +18,9 @@ COPY dg_projects/lakehouse dg_projects/lakehouse
 COPY src/ol_dbt src/ol_dbt
 
 # Install dependencies from the lakehouse project
-WORKDIR /repo/dg_projects/lakehouse
+WORKDIR /app/dg_projects/lakehouse
 RUN --mount=type=cache,target=/root/.cache/uv \
+    uv venv --relocatable && \
     uv sync --frozen --no-install-project --no-dev
 
 # Sync the project itself
@@ -33,10 +34,10 @@ FROM python:3.13-slim-bookworm
 # Python executable must be the same.
 
 # Copy the application from the builder
-COPY --from=builder /repo/dg_projects/lakehouse /app
+COPY --from=builder /app/dg_projects/lakehouse /app
 
 # Copy the dbt project from the builder
-COPY --from=builder /repo/src/ol_dbt /opt/dbt
+COPY --from=builder /app/src/ol_dbt /opt/dbt
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"

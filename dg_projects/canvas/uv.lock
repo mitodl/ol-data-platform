@@ -213,6 +213,7 @@ name = "canvas"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "dagster" },
     { name = "dagster-components" },
     { name = "ol-orchestrate-lib" },
 ]
@@ -225,6 +226,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dagster", specifier = ">=1.11.13" },
     { name = "dagster-components" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
 ]
@@ -1400,7 +1402,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = "~=1.36.0" },
-    { name = "dagster", specifier = "~=1.10" },
+    { name = "dagster", specifier = "~=1.11" },
     { name = "dagster-airbyte", specifier = "~=0.27.0" },
     { name = "dagster-aws", specifier = "~=0.27.0" },
     { name = "flatten-dict", specifier = "~=0.4.2" },
