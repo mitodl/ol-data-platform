@@ -45,7 +45,7 @@ class GoogleSheetConfig(ConfigurableResource):
 # Asset job that will be executed per partition (course_id)
 canvas_course_export_job = define_asset_job(
     name="canvas_course_export_job",
-    selection=[export_course_content, course_content_metadata],
+    selection=[export_course_content],
     partitions_def=canvas_course_ids,
 )
 
