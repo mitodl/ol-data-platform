@@ -93,7 +93,7 @@ with problem_events as (
         or upper(chapter_name) like '%EXAM %'
         or upper(unit_name) like '%EXAM %', true
         ) as exam_indicator
-        , coalesce((upper(unit_name) like '%HOMEWORK%' 
+        , coalesce((upper(unit_name) like '%HOMEWORK%'
         or upper(chapter_name) like '%HOMEWORK%'), true
         ) as hw_indicator
         , max(max_grade) as max_possible_grade
@@ -140,7 +140,7 @@ with problem_events as (
         or upper(chapter_name) like '%EXAM %'
         or upper(unit_name) like '%EXAM %', true
         )
-        , coalesce((upper(unit_name) like '%HOMEWORK%' 
+        , coalesce((upper(unit_name) like '%HOMEWORK%'
             or upper(chapter_name) like '%HOMEWORK%'), true
         )
 )
@@ -152,7 +152,7 @@ with problem_events as (
         , problem_block_fk
         , approx_percentile(time_spent_on_problem, 0.1) as time_spent_percentile_10
     from final
-    group by 
+    group by
         platform
         , courserun_readable_id
         , problem_block_fk
@@ -171,7 +171,7 @@ with problem_events as (
         , ten_percent_time.time_spent_percentile_10
     from final
     left join ten_percent_time
-        on 
+        on
             final.problem_block_fk = ten_percent_time.problem_block_fk
             and final.platform = ten_percent_time.platform
             and final.courserun_readable_id = ten_percent_time.courserun_readable_id
@@ -190,7 +190,7 @@ with problem_events as (
             as user_hw_attempts_on_problem
     from add_time
     where hw_indicator = true
-    group by 
+    group by
         platform
         , courserun_readable_id
         , openedx_user_id
@@ -209,7 +209,7 @@ with problem_events as (
             then 1 else 0 end) as user_exam_time_flags
     from add_time
     where exam_indicator = true
-    group by 
+    group by
         platform
         , courserun_readable_id
         , openedx_user_id
@@ -240,12 +240,12 @@ select
     , exam_grouping.user_exam_time_flags
 from final
 left join hw_grouping
-    on 
+    on
         final.platform = hw_grouping.platform
         and final.openedx_user_id = hw_grouping.openedx_user_id
         and final.courserun_readable_id = hw_grouping.courserun_readable_id
 left join exam_grouping
-    on 
+    on
         final.platform = exam_grouping.platform
         and final.openedx_user_id = exam_grouping.openedx_user_id
         and final.courserun_readable_id = exam_grouping.courserun_readable_id
