@@ -67,6 +67,7 @@ def _extract_course_assignments(context, course_id):
 
 
 @multi_asset(
+    code_version="canvas_course_export_v1",
     group_name="canvas",
     required_resource_keys={"canvas_api"},
     partitions_def=canvas_course_ids,
@@ -199,6 +200,7 @@ def export_course_content(context: AssetExecutionContext):
 
 
 @asset(
+    code_version="canvas_course_export_webhook_v1",
     key=AssetKey(["canvas", "course_content_metadata"]),
     group_name="course_content_metadata",
     description="Notify Learn API via webhook after canvas course export.",
