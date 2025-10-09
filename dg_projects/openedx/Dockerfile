@@ -20,11 +20,11 @@ COPY dg_projects/openedx dg_projects/openedx
 WORKDIR /app/dg_projects/openedx
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv venv --relocatable && \
-    uv sync --frozen --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev --no-editable
 
 # Sync the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --no-editable
 
 
 # Then, use a final image without uv
