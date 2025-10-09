@@ -113,8 +113,8 @@ services:
     build:
       context: .
       dockerfile: dg_projects/canvas/Dockerfile
-    entrypoint: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "--module-name",
-      "canvas.definitions"]
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000",
+      "--module-name", "canvas.definitions"]
     ports:
     - "4000:4000"
     environment:
@@ -125,6 +125,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./dg_projects/canvas/canvas:/app/canvas
 
   # Code location: data_platform
   dagster_data_platform:
@@ -133,8 +134,8 @@ services:
     build:
       context: .
       dockerfile: dg_projects/data_platform/Dockerfile
-    entrypoint: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4001", "--module-name",
-      "data_platform.definitions"]
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4001",
+      "--module-name", "data_platform.definitions"]
     ports:
     - "4001:4001"
     environment:
@@ -143,6 +144,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./dg_projects/data_platform/data_platform:/app/data_platform
 
   # Code location: edxorg
   dagster_edxorg:
@@ -151,8 +153,8 @@ services:
     build:
       context: .
       dockerfile: dg_projects/edxorg/Dockerfile
-    entrypoint: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4002", "--module-name",
-      "edxorg.definitions"]
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4002",
+      "--module-name", "edxorg.definitions"]
     ports:
     - "4002:4002"
     environment:
@@ -163,6 +165,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./dg_projects/edxorg/edxorg:/app/edxorg
 
   # Code location: lakehouse
   dagster_lakehouse:
@@ -174,13 +177,13 @@ services:
       secrets:
       - dbt_trino_username
       - dbt_trino_password
-    entrypoint: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4003", "--module-name",
-      "lakehouse.definitions"]
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4003",
+      "--module-name", "lakehouse.definitions"]
     ports:
     - "4003:4003"
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-lakehouse:dev"
-      DAGSTER_ENV: dev
+      DAGSTER_ENVIRONMENT: qa
       DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
       DBT_TRINO_USERNAME: ${DBT_TRINO_USERNAME}
       DBT_TRINO_PASSWORD: ${DBT_TRINO_PASSWORD}
@@ -189,6 +192,8 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./dg_projects/lakehouse/lakehouse:/app/lakehouse
+    - ./src/ol_dbt:/opt/dbt
 
   # Code location: learning_resources
   dagster_learning_resources:
@@ -197,8 +202,8 @@ services:
     build:
       context: .
       dockerfile: dg_projects/learning_resources/Dockerfile
-    entrypoint: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4004", "--module-name",
-      "learning_resources.definitions"]
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4004",
+      "--module-name", "learning_resources.definitions"]
     ports:
     - "4004:4004"
     environment:
@@ -209,6 +214,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./dg_projects/learning_resources/learning_resources:/app/learning_resources
 
   # Code location: legacy_openedx
   dagster_legacy_openedx:
@@ -217,8 +223,8 @@ services:
     build:
       context: .
       dockerfile: dg_projects/legacy_openedx/Dockerfile
-    entrypoint: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4005", "--module-name",
-      "legacy_openedx.definitions"]
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4005",
+      "--module-name", "legacy_openedx.definitions"]
     ports:
     - "4005:4005"
     environment:
@@ -229,6 +235,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./dg_projects/legacy_openedx/legacy_openedx:/app/legacy_openedx
 
   # Code location: openedx
   dagster_openedx:
@@ -237,8 +244,8 @@ services:
     build:
       context: .
       dockerfile: dg_projects/openedx/Dockerfile
-    entrypoint: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4006", "--module-name",
-      "openedx.definitions"]
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4006",
+      "--module-name", "openedx.definitions"]
     ports:
     - "4006:4006"
     environment:
@@ -249,6 +256,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./dg_projects/openedx/openedx:/app/openedx
 
   postgres:
     image: postgres
