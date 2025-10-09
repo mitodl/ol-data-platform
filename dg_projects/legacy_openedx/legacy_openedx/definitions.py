@@ -8,10 +8,9 @@ that were defined using repository-based patterns. These include:
 """
 
 import os
-from functools import partial
 from typing import Literal
 
-from dagster import DefaultSensorStatus, Definitions, SensorDefinition
+from dagster import Definitions
 from dagster_aws.s3 import S3Resource
 from dagster_aws.s3.resources import s3_resource
 
@@ -30,7 +29,6 @@ from ol_orchestrate.schedules.open_edx import (
     residential_edx_daily_schedule,
     xpro_edx_daily_schedule,
 )
-from ol_orchestrate.sensors.object_storage import gcs_multi_file_sensor
 
 # Initialize vault with resilient loading
 try:
@@ -115,14 +113,6 @@ gcs_sync_job = sync_gcs_to_s3.to_job(
             }
         }
     },
-)
-
-gcs_course_sensor = SensorDefinition(
-    evaluation_fn=partial(gcs_multi_file_sensor, "simeon-mitx-course-tarballs"),
-    name="edxorg_course_bundle_sensor",
-    minimum_interval_seconds=86400,
-    job=gcs_sync_job,
-    default_status=DefaultSensorStatus.STOPPED,
 )
 
 # ============================================================================
@@ -244,7 +234,6 @@ mitxonline_edx_job = edx_course_pipeline.to_job(
 # Create unified definitions
 defs = Definitions(
     jobs=[gcs_sync_job, residential_edx_job, xpro_edx_job, mitxonline_edx_job],
-    sensors=[gcs_course_sensor],
     schedules=[
         residential_edx_daily_schedule.with_updated_job(residential_edx_job),
         xpro_edx_daily_schedule.with_updated_job(xpro_edx_job),

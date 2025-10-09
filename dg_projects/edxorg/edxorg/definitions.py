@@ -39,7 +39,7 @@ from edxorg.ops.object_storage import (
     download_files_from_s3,
     upload_files_to_s3,
 )
-from edxorg.sensors.object_storage import s3_multi_file_sensor
+from edxorg.sensors.object_storage import gcs_multi_file_sensor, s3_multi_file_sensor
 from ol_orchestrate.assets.openedx_course_archives import (
     dummy_edxorg_course_xml,
     extract_edxorg_courserun_metadata,
@@ -202,6 +202,14 @@ edxorg_program_reports_sensor = SensorDefinition(
     minimum_interval_seconds=86400,
 )
 
+edxorg_course_bundle_sensor = SensorDefinition(
+    evaluation_fn=partial(gcs_multi_file_sensor, "simeon-mitx-course-tarballs"),
+    name="edxorg_course_bundle_sensor",
+    minimum_interval_seconds=86400,
+    job=edxorg_course_data_job,
+    default_status=DefaultSensorStatus.STOPPED,
+)
+
 # Schedule
 edxorg_api_daily_schedule = ScheduleDefinition(
     name="edxorg_api_daily_schedule",
@@ -216,7 +224,7 @@ edxorg_api_daily_schedule = ScheduleDefinition(
 )
 
 # Build sensor list
-sensor_list = [edxorg_program_reports_sensor]
+sensor_list = [edxorg_program_reports_sensor, edxorg_course_bundle_sensor]
 if sensors_available and gcs_edxorg_archive_sensor and gcs_edxorg_tracking_log_sensor:
     sensor_list.extend(
         [
