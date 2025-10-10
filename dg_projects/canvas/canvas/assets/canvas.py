@@ -9,8 +9,8 @@ from dagster import (
     AssetKey,
     AssetOut,
     DataVersion,
+    DynamicPartitionsDefinition,
     Output,
-    StaticPartitionsDefinition,
     asset,
     multi_asset,
 )
@@ -22,67 +22,7 @@ from ol_orchestrate.lib.constants import (
 )
 from ol_orchestrate.lib.utils import compute_zip_content_hash
 
-# predefined course IDs to export
-canvas_course_ids = StaticPartitionsDefinition(
-    [
-        "155",
-        "7023",
-        "14566",
-        "28766",
-        "28768",
-        "28770",
-        "28772",
-        "28774",
-        "28777",
-        "28751",
-        "28753",
-        "28755",
-        "28759",
-        "28765",
-        "28767",
-        "28785",
-        # "28760",
-        # "28761",
-        # "28762",
-        "28803",
-        "28805",
-        "28807",
-        "28808",
-        "28811",
-        "28813",
-        "28815",
-        "28816",
-        "28818",
-        "28821",
-        "28822",
-        "28824",
-        "28839",
-        "28841",
-        "28842",
-        "28845",
-        "28847",
-        "28849",
-        "28880",
-        "33448",
-        "34062",
-        "34545",
-        "34562",
-        "34580",
-        "34593",
-        "34599",
-        "34625",
-        "34627",
-        "34631",
-        "34633",
-        "34642",
-        "34653",
-        "34681",
-        "34716",
-        "34721",
-        # "34859",
-        "35054",
-    ]
-)
+canvas_course_ids = DynamicPartitionsDefinition(name="canvas_course_ids")
 
 
 def _extract_course_files(context, course_id):
@@ -127,6 +67,7 @@ def _extract_course_assignments(context, course_id):
 
 
 @multi_asset(
+    code_version="canvas_course_export_v1",
     group_name="canvas",
     required_resource_keys={"canvas_api"},
     partitions_def=canvas_course_ids,
@@ -195,7 +136,7 @@ def export_course_content(context: AssetExecutionContext):
         downloaded_path, skip_filename="imsmanifest.xml"
     )
 
-    target_path = f"canvas/course_content/{course_id}/{data_version}.{extension}"
+    target_path = f"{'/'.join(context.asset_key_for_output('course_content').path)}/{course_id}/{data_version}.{extension}"  # noqa: E501
 
     context.log.info("Downloading %s file to %s", download_url, target_path)
 
@@ -259,6 +200,7 @@ def export_course_content(context: AssetExecutionContext):
 
 
 @asset(
+    code_version="canvas_course_export_webhook_v1",
     key=AssetKey(["canvas", "course_content_metadata"]),
     group_name="course_content_metadata",
     description="Notify Learn API via webhook after canvas course export.",

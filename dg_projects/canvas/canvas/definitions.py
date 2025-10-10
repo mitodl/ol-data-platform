@@ -3,10 +3,15 @@
 Exports Canvas course content and metadata for specified course IDs.
 """
 
+from typing import Any
+
 from dagster import (
+    ConfigurableResource,
     Definitions,
-    build_schedule_from_partitioned_job,
+    OpExecutionContext,
+    RunRequest,
     define_asset_job,
+    schedule,
 )
 from dagster_aws.s3 import S3Resource
 
@@ -15,6 +20,7 @@ from canvas.assets.canvas import (
     course_content_metadata,
     export_course_content,
 )
+from canvas.sensors.canvas import canvas_google_sheet_course_id_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -39,20 +45,52 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
     vault_authenticated = False
 
-# Define job for canvas course export
-canvas_course_content_job = define_asset_job(
+# Get Google Sheets credentials
+try:
+    if vault_authenticated:
+        gs_secrets = vault.client.secrets.kv.v1.read_secret(
+            mount_point="secret-data",
+            path="pipelines/google-service-account",
+        )["data"]
+    else:
+        gs_secrets = {}
+except Exception:  # noqa: BLE001
+    gs_secrets = {}
+
+
+class GoogleSheetConfig(ConfigurableResource):
+    service_account_json: dict[str, Any]  # Service account JSON credentials
+    # Google Sheet ID for canvas course IDs
+    sheet_id: str = "13AoothEhEvWs2cJEEfZETm7E6h3-ZY4tD11KX_ARe1A"
+    worksheet_id: int = 1472315099  # Worksheet ID (gid) within the Google Sheet
+
+
+# Asset job that will be executed per partition (course_id)
+canvas_course_export_job = define_asset_job(
     name="canvas_course_export_job",
-    selection=[export_course_content, course_content_metadata],
+    selection=[export_course_content],
     partitions_def=canvas_course_ids,
 )
 
-# Define schedule for canvas course export (every 6 hours)
-canvas_course_export_schedule = build_schedule_from_partitioned_job(
-    name="canvas_course_export_schedule",
-    job=canvas_course_content_job,
+
+@schedule(
     cron_schedule="0 */6 * * *",
+    job=canvas_course_export_job,
     execution_timezone="Etc/UTC",
+    required_resource_keys={"google_sheet_config"},
 )
+def canvas_course_export_schedule(context: OpExecutionContext):
+    """Return a RunRequest for each canvas course ID found in the Google Sheet"""
+    partition_keys = context.instance.get_dynamic_partitions("canvas_course_ids")
+
+    return [
+        RunRequest(
+            run_key=partition_key,
+            partition_key=partition_key,
+        )
+        for partition_key in partition_keys
+    ]
+
 
 # Create unified definitions
 defs = Definitions(
@@ -81,7 +119,9 @@ defs = Definitions(
             kv_version="2",
             vault=vault,
         ),
+        "google_sheet_config": GoogleSheetConfig(service_account_json=gs_secrets),
     },
     assets=[export_course_content, course_content_metadata],
     schedules=[canvas_course_export_schedule],
+    sensors=[canvas_google_sheet_course_id_sensor],
 )

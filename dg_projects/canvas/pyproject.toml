@@ -6,6 +6,7 @@ dependencies = [
     "dagster>=1.11.13",
     "dagster-components",
     "ol-orchestrate-lib",
+    "pygsheets>=2.0.6",
 ]
 
 [project.entry-points]
