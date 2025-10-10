@@ -8,8 +8,8 @@ from pydantic import PrivateAttr
 
 class Vault(ConfigurableResource):
     vault_addr: str
-    vault_token: str | None
-    vault_role: str | None
+    vault_token: str | None = None
+    vault_role: str | None = None
     vault_auth_type: str = "aws-iam"  # can be one of ["github", "aws-iam", "token"]
     auth_mount: str | None = None
     verify_tls: bool = True

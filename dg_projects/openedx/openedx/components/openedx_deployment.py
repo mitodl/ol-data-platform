@@ -107,7 +107,9 @@ class OpenEdxDeploymentComponent:
             automation_sensor,
         ]
 
-    def build_resource(self) -> dict[str, ConfigurableResource]:
+    def build_resource(
+        self,
+    ) -> dict[str, ConfigurableResource[OpenEdxApiClientFactory]]:
         """Build resource definition for the deployment.
 
         Returns:
@@ -122,7 +124,9 @@ class OpenEdxDeploymentComponent:
         }
 
     def build_definitions(
-        self, shared_resources: dict[str, ConfigurableResource] | None = None
+        self,
+        shared_resources: dict[str, ConfigurableResource[OpenEdxApiClientFactory]]
+        | None = None,
     ) -> Definitions:
         """Build complete Definitions object for the deployment.
 

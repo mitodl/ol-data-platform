@@ -1,3 +1,4 @@
+# mypy: disable-error-code="call-overload,union-attr,misc"
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Self
@@ -78,7 +79,7 @@ class OpenEdxApiClient(OAuthApiClient):
         self, course_id: str, task_id: str
     ) -> dict[str, str]:
         request_url = f"{self.studio_url}/api/courses/v0/export/{course_id}/"
-        return self.fetch_with_auth(request_url, extra_params={"task_id": task_id})
+        return self.fetch_with_auth(request_url, extra_params={"task_id": task_id})  # type: ignore[return-value]
 
     def get_course_structure_document(self, course_id: str):
         """Retrieve the course structure for an active course as JSON.

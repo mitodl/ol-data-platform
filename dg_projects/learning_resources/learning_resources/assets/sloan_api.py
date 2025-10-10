@@ -43,15 +43,15 @@ def sloan_course_metadata(
     )
     courses = [
         {
-            "course_id": course["Course_Id"],
-            "title": course["Title"],
-            "description": course["Description"],
-            "course_url": course["URL"],
-            "certification_type": course["Certification_Type"],
-            "topics": course["Topics"],
-            "image_url": course["Image_Src"],
-            "created": course["SourceCreateDate"],
-            "modified": course["SourceLastModifiedDate"],
+            "course_id": course["Course_Id"],  # type: ignore[index]
+            "title": course["Title"],  # type: ignore[index]
+            "description": course["Description"],  # type: ignore[index]
+            "course_url": course["URL"],  # type: ignore[index]
+            "certification_type": course["Certification_Type"],  # type: ignore[index]
+            "topics": course["Topics"],  # type: ignore[index]
+            "image_url": course["Image_Src"],  # type: ignore[index]
+            "created": course["SourceCreateDate"],  # type: ignore[index]
+            "modified": course["SourceLastModifiedDate"],  # type: ignore[index]
             "retrieved_at": data_retrieval_timestamp,
         }
         for course in sloan_courses
@@ -64,19 +64,19 @@ def sloan_course_metadata(
     )
     course_offerings = [
         {
-            "title": course_offering["CO_Title"],
-            "course_id": course_offering["Course_Id"],
-            "start_date": course_offering["Start_Date"],
-            "end_date": course_offering["End_Date"],
-            "delivery": course_offering["Delivery"],
-            "duration": course_offering["Duration"],
-            "price": course_offering["Price"],
-            "continuing_ed_credits": course_offering["Continuing_Ed_Credits"],
-            "time_commitment": course_offering["Time_Commitment"],
-            "location": course_offering["Location"],
-            "tuition_cost_non_usd": course_offering["Tuition_Cost(non-USD)"],
-            "currency": course_offering["Currency"],
-            "faculty": course_offering["Faculty_Name"],
+            "title": course_offering["CO_Title"],  # type: ignore[index]
+            "course_id": course_offering["Course_Id"],  # type: ignore[index]
+            "start_date": course_offering["Start_Date"],  # type: ignore[index]
+            "end_date": course_offering["End_Date"],  # type: ignore[index]
+            "delivery": course_offering["Delivery"],  # type: ignore[index]
+            "duration": course_offering["Duration"],  # type: ignore[index]
+            "price": course_offering["Price"],  # type: ignore[index]
+            "continuing_ed_credits": course_offering["Continuing_Ed_Credits"],  # type: ignore[index]
+            "time_commitment": course_offering["Time_Commitment"],  # type: ignore[index]
+            "location": course_offering["Location"],  # type: ignore[index]
+            "tuition_cost_non_usd": course_offering["Tuition_Cost(non-USD)"],  # type: ignore[index]
+            "currency": course_offering["Currency"],  # type: ignore[index]
+            "faculty": course_offering["Faculty_Name"],  # type: ignore[index]
             "retrieved_at": data_retrieval_timestamp,
         }
         for course_offering in sloan_course_offerings

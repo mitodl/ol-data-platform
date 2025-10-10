@@ -7,7 +7,6 @@ from dagster import (
     EventRecordsFilter,
     InputContext,
     MetadataValue,
-    Nothing,
     OutputContext,
 )
 from fsspec.implementations.local import LocalFileSystem
@@ -45,7 +44,7 @@ class FileObjectIOManager(ConfigurableIOManager):
             **self.configure_path_fs(asset_path.protocol).storage_options,
         )
 
-    def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
+    def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> None:
         context.log.info("Writing contents of %s to %s", *obj)
         output_path = UPath(obj[1])
         output_path = UPath(
@@ -102,7 +101,7 @@ class FileObjectIOManager(ConfigurableIOManager):
 class S3FileObjectIOManager(FileObjectIOManager):
     bucket: str | None = None
 
-    def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
+    def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> None:
         if self.bucket:
             dest_path = f"{self.bucket}/{self.path_prefix or ''}/{obj[1]}".replace(
                 "//", "/"
@@ -116,6 +115,9 @@ class DummyIOManager(ConfigurableIOManager):
     input_file_path: str | None
 
     def load_input(self, context: InputContext) -> DagsterPath:  # noqa: ARG002
+        if self.input_file_path is None:
+            msg = "input_file_path must be set"
+            raise ValueError(msg)
         return DagsterPath(self.input_file_path)
 
     def handle_output(self, context: "OutputContext", obj: Any) -> None: ...
@@ -124,7 +126,7 @@ class DummyIOManager(ConfigurableIOManager):
 class LocalFileObjectIOManager(FileObjectIOManager):
     bucket: str | None = None
 
-    def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> Nothing:
+    def handle_output(self, context: OutputContext, obj: tuple[Path, str]) -> None:
         if self.bucket:
             dest_path = Path(
                 f"{self.bucket}/{self.path_prefix or ''}/{obj[1]}".replace("//", "/")

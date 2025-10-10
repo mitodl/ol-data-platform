@@ -55,7 +55,9 @@ def canvas_google_sheet_course_id_sensor(context):
     ]
 
     updated_ids = sorted(google_sheet_course_ids)
-    dynamic_requests = []
+    dynamic_requests: list[
+        AddDynamicPartitionsRequest | DeleteDynamicPartitionsRequest
+    ] = []
     if new_course_ids:
         dynamic_requests.append(
             AddDynamicPartitionsRequest(

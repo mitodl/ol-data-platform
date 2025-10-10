@@ -66,7 +66,7 @@ try:
         vault_authenticated = True
     else:
         vault = Vault(
-            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", auth_mount="aws"
         )
         vault._auth_aws_iam()  # noqa: SLF001
         vault_authenticated = True
@@ -106,8 +106,14 @@ try:
     else:
         # Mock GCS connection for testing
         gcs_connection = GCSConnection(
-            service_account_json='{"type": "service_account"}',
             project_id="test-project",
+            client_email="test@test.iam.gserviceaccount.com",
+            client_id="123456",
+            client_x509_cert_url="https://test.com/cert",
+            private_key="-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",  # pragma: allowlist secret  # noqa: E501
+            private_key_id="test",
+            auth_uri="https://accounts.google.com/o/oauth2/auth",
+            token_uri="https://oauth2.googleapis.com/token",  # noqa: S106 (not a password)
         )
 except Exception as e:  # noqa: BLE001
     import warnings
@@ -117,7 +123,6 @@ except Exception as e:  # noqa: BLE001
     )
     # Create minimal mock GCS connection for testing
     gcs_connection = GCSConnection(
-        service_account_json='{"type": "service_account"}',
         project_id="test-project",
         client_email="test@test.iam.gserviceaccount.com",
         client_id="123456",
@@ -147,10 +152,12 @@ edxorg_tracking_logs_job = define_asset_job(
 dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
 download_config = S3DownloadConfig(
     source_bucket="edx-program-reports",
+    object_keys=[],
 )
 upload_config = S3UploadConfig(
     destination_bucket=f"ol-data-lake-landing-zone-{dagster_deployment.lower()}",
     destination_prefix="edxorg-program-credentials",
+    destination_key=None,
 )
 
 
