@@ -18,6 +18,7 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
+from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.secrets.vault import Vault
 
 from openedx.components import OpenEdxDeploymentComponent
@@ -28,16 +29,8 @@ from openedx.jobs.normalize_logs import (
 
 # Initialize vault with resilient loading
 try:
-    if DAGSTER_ENV == "dev":
-        vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
-        vault._auth_github()  # noqa: SLF001
-        vault_authenticated = True
-    else:
-        vault = Vault(
-            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", auth_mount="aws"
-        )
-        vault._auth_aws_iam()  # noqa: SLF001
-        vault_authenticated = True
+    vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
+    vault_authenticated = True
 except Exception as e:  # noqa: BLE001 (resilient loading)
     import warnings
 
