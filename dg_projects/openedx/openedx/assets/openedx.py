@@ -22,14 +22,13 @@ from dagster import (
 )
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
-from upath import UPath
-
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
     process_video_xml,
     un_nest_course_structure,
 )
+from upath import UPath
 
 HTTP_SUCCESS = 200
 HTTP_NOT_FOUND = 404

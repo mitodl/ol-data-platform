@@ -11,13 +11,13 @@ from dagster import (
     ScheduleDefinition,
 )
 from dagster_aws.s3 import S3Resource
-
-from learning_resources.assets.sloan_api import sloan_course_metadata
 from ol_orchestrate.io_managers.filepath import S3FileObjectIOManager
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
 from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
+
+from learning_resources.assets.sloan_api import sloan_course_metadata
 
 # Initialize vault with resilient loading
 try:

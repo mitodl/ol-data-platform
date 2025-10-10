@@ -8,9 +8,8 @@ src/ol_orchstrate/io_managers/filepath.py
 from pathlib import Path
 
 from dagster import Config, In, OpExecutionContext, Out, op
-from pydantic import Field
-
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
+from pydantic import Field
 
 
 class SyncS3ObjectsConfig(Config):

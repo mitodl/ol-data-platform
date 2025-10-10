@@ -14,6 +14,12 @@ from dagster import (
     schedule,
 )
 from dagster_aws.s3 import S3Resource
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.lib.dagster_helpers import (
+    default_file_object_io_manager,
+    default_io_manager,
+)
+from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
 
 from canvas.assets.canvas import (
     canvas_course_ids,
@@ -22,12 +28,6 @@ from canvas.assets.canvas import (
 )
 from canvas.resources.api_client_factory import ApiClientFactory
 from canvas.sensors.canvas import canvas_google_sheet_course_id_sensor
-from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.lib.dagster_helpers import (
-    default_file_object_io_manager,
-    default_io_manager,
-)
-from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
 
 # Initialize vault with resilient loading
 try:

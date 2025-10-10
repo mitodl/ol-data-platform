@@ -9,7 +9,6 @@ from typing import Any
 
 from dagster import DefaultSensorStatus, Definitions, RunFailureSensorContext
 from dagster_slack import make_slack_on_run_failure_sensor
-
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.secrets.vault import Vault
 

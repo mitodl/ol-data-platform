@@ -2,7 +2,6 @@ from dagster import (
     DynamicPartitionsDefinition,
     StaticPartitionsDefinition,
 )
-
 from ol_orchestrate.lib.constants import OPENEDX_DEPLOYMENTS
 
 OPENEDX_DEPLOYMENT_PARTITION = StaticPartitionsDefinition(OPENEDX_DEPLOYMENTS)

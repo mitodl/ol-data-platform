@@ -102,7 +102,9 @@ def process_video_xml(archive_path: Path) -> list[dict[str, str]]:
             NamedTemporaryFile(delete=False, suffix="_course.xml").name
         )
         course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
-        course_id, course_number, run_tag, org = parse_course_id(str(course_xml_file))
+        course_id, _course_number, _run_tag, _org = parse_course_id(
+            str(course_xml_file)
+        )
         course_xml_file.unlink()
         for member in tf.getmembers():
             if not member.isdir() and member.path.startswith(
@@ -132,7 +134,7 @@ def process_policy_json(
             NamedTemporaryFile(delete=False, suffix="_course.xml").name
         )
         course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
-        course_id, course_number, run_tag, org = parse_course_id(str(course_xml_file))
+        course_id, _course_number, run_tag, _org = parse_course_id(str(course_xml_file))
         course_xml_file.unlink()
         for member in tf.getmembers():
             if not member.isdir() and member.path.startswith(

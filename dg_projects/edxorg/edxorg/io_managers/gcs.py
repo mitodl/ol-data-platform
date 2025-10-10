@@ -5,10 +5,9 @@ from dagster import (
     InputContext,
     OutputContext,
 )
-from upath import UPath
-
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
+from upath import UPath
 
 
 class GCSFileIOManager(ConfigurableIOManager):
