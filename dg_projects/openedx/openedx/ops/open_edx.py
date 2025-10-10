@@ -2,6 +2,7 @@ import hashlib
 import json
 import subprocess
 import time
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -89,8 +90,9 @@ class UploadExtractedDataConfig(Config):
     out={"edx_course_ids": Out(description="List of course IDs in the app")},
 )
 def list_courses(
-    context: OpExecutionContext, config: ListCoursesConfig
-) -> List[String]:
+    context: OpExecutionContext,
+    config: ListCoursesConfig,
+) -> Generator[ExpectationResult | Output, None, None]:
     """
     Retrieve the list of course IDs active in the edX instance to be used in subsequent
     steps to pull data per course.
@@ -138,8 +140,10 @@ class CourseStructureConfig(Config):
     out=DynamicOut(),
 )
 def fetch_edx_course_structure_from_api(
-    context: OpExecutionContext, config: CourseStructureConfig, course_ids: list[str]
-) -> DagsterPath:
+    context: OpExecutionContext,
+    config: CourseStructureConfig,
+    course_ids: list[str],
+) -> Generator[DynamicOutput, None, None]:
     """Retrieve the course structure via the REST API of a running Open edX instance.
 
     :param context: The Dagster execution context
@@ -201,8 +205,9 @@ def fetch_edx_course_structure_from_api(
     },
 )
 def enrolled_users(
-    context: OpExecutionContext, edx_course_ids: List[String]
-) -> DagsterPath:
+    context: OpExecutionContext,
+    edx_course_ids: list[str],
+) -> Generator[Output | ExpectationResult, None, None]:
     """Generate a table showing which students are currently enrolled in which courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -263,8 +268,9 @@ def enrolled_users(
     },
 )
 def student_submissions(
-    context: OpExecutionContext, edx_course_ids: List[String]
-) -> DagsterPath:
+    context: OpExecutionContext,
+    edx_course_ids: list[str],
+) -> Generator[Output | ExpectationResult, None, None]:
     """Retrieve details of student submissions for the given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -331,8 +337,9 @@ def student_submissions(
     },
 )
 def course_enrollments(
-    context: OpExecutionContext, edx_course_ids: List[String]
-) -> DagsterPath:
+    context: OpExecutionContext,
+    edx_course_ids: list[str],
+) -> Generator[Output | ExpectationResult, None, None]:
     """Retrieve enrollment records for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -381,8 +388,9 @@ def course_enrollments(
     },
 )
 def course_roles(
-    context: OpExecutionContext, edx_course_ids: List[String]
-) -> DagsterPath:
+    context: OpExecutionContext,
+    edx_course_ids: list[str],
+) -> Generator[Output | ExpectationResult, None, None]:
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -429,8 +437,9 @@ def course_roles(
     },
 )
 def user_roles(
-    context: OpExecutionContext, edx_course_ids: List[String]
-) -> DagsterPath:
+    context: OpExecutionContext,
+    edx_course_ids: list[str],
+) -> Generator[Output | ExpectationResult, None, None]:
     """Retrieve information about user roles for given courses.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -489,7 +498,7 @@ def user_roles(
 def export_edx_forum_database(
     context: OpExecutionContext,
     config: ExportEdxForumDatabaseConfig,
-) -> DagsterPath:
+) -> Generator[Output, None, None]:
     """Export the edX forum database using mongodump.
 
     :param context: Dagster execution context for propagaint configuration data
@@ -565,7 +574,7 @@ def export_edx_forum_database(
 )
 def export_edx_courses(
     context: OpExecutionContext,
-    edx_course_ids: List[str],
+    edx_course_ids: list[str],
     daily_extracts_dir: str,
     config: ExportEdxCoursesConfig,
 ) -> None:

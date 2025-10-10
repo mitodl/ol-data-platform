@@ -51,7 +51,7 @@ try:
             else "https://pipelines-qa.odl.mit.edu"
         )
         vault = Vault(
-            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", auth_mount="aws"
         )
         vault._auth_aws_iam()  # noqa: SLF001
         dbt_target = "production"

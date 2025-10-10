@@ -26,7 +26,7 @@ try:
             else "https://pipelines-qa.odl.mit.edu"
         )
         vault = Vault(
-            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", auth_mount="aws"
         )
         vault._auth_aws_iam()  # noqa: SLF001
         vault_authenticated = True
@@ -71,15 +71,21 @@ def get_exception(text: str, substring: str = "\n\nStack Trace:") -> str:
 
 def error_message(context: RunFailureSensorContext) -> list[dict[str, Any]]:
     """Format error message for Slack notification."""
+
+    def format_error(error_event):
+        return (
+            get_exception(error_event.event_specific_data.error.to_string())
+            if hasattr(error_event.event_specific_data, "error")
+            and error_event.event_specific_data.error
+            else "Unknown error"
+        )
+
     error_details = [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": (
-                    f"*Step:* {event.step_key}"
-                    f"\n{get_exception(event.event_specific_data.error.to_string())}"
-                ),
+                "text": (f"*Step:* {event.step_key}\n{format_error(event)}"),
             },
             "expand": False,
         }

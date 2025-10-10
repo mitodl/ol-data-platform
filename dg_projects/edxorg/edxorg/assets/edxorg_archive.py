@@ -318,7 +318,8 @@ def process_edxorg_archive_bundle(
                     ),
                     "dagster/input_data_version/edxorg/raw_data_archive": input_asset_materialization_event.asset_materialization.tags.get(  # noqa: E501
                         DATA_VERSION_TAG
-                    ),
+                    )
+                    or "",
                 },
             )
             yield materialization

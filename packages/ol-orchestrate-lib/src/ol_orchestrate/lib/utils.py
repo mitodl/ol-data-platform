@@ -22,7 +22,7 @@ def authenticate_vault(dagster_env: str, vault_address: str) -> Vault:
         vault._auth_github()  # noqa: SLF001
     else:
         vault = Vault(
-            vault_addr=vault_address, vault_role="dagster-server", aws_auth_mount="aws"
+            vault_addr=vault_address, vault_role="dagster-server", auth_mount="aws"
         )
         vault._auth_aws_iam()  # noqa: SLF001
 

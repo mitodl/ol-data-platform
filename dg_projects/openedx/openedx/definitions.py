@@ -34,7 +34,7 @@ try:
         vault_authenticated = True
     else:
         vault = Vault(
-            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", auth_mount="aws"
         )
         vault._auth_aws_iam()  # noqa: SLF001
         vault_authenticated = True
@@ -191,7 +191,9 @@ jsonify_jobs = [
 
 
 # Helper function to create a repository for a deployment
-def _create_deployment_repository(deployment_name: str):
+def _create_deployment_repository(
+    deployment_name: Literal["mitx", "mitxonline", "xpro", "edxorg"],
+):
     """Create a repository for a specific OpenEdX deployment."""
     component = OpenEdxDeploymentComponent(deployment_name=deployment_name, vault=vault)
     deployment_defs = component.build_definitions(shared_resources=shared_resources)

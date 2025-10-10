@@ -10,7 +10,7 @@ from ol_orchestrate.resources.secrets.vault import Vault
 from pydantic import Field, PrivateAttr
 
 
-class ApiClientFactory(ConfigurableResource):
+class ApiClientFactory(ConfigurableResource[BaseApiClient]):
     deployment: str = Field(
         description="The deployment name this resource is used in. e.g. canvas"
     )

@@ -83,12 +83,12 @@ class SupersetApiClient(OAuthApiClient):
             response_data = self.fetch_with_auth(
                 request_url, extra_params={"q": query_string}
             )
-            dataset_result = response_data["result"]
-            total_fetched += len(dataset_result)
+            dataset_result = response_data["result"]  # type: ignore[call-overload]
+            total_fetched += len(dataset_result)  # type: ignore[arg-type]
 
-            yield dataset_result
+            yield dataset_result  # type: ignore[misc]
 
-            count = response_data.get("count", 0)
+            count = response_data.get("count", 0)  # type: ignore[union-attr]
             if total_fetched >= count:
                 break
 

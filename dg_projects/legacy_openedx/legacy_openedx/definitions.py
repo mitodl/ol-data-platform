@@ -38,7 +38,7 @@ try:
         vault_authenticated = True
     else:
         vault = Vault(
-            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", aws_auth_mount="aws"
+            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", auth_mount="aws"
         )
         vault._auth_aws_iam()  # noqa: SLF001
         vault_authenticated = True
@@ -63,7 +63,6 @@ try:
     else:
         # Mock GCS connection for testing
         gcs_connection = GCSConnection(
-            service_account_json='{"type": "service_account"}',
             project_id="test-project",
             client_email="test@test.iam.gserviceaccount.com",
             client_id="123456",
@@ -80,7 +79,6 @@ except Exception as e:  # noqa: BLE001
         f"Failed to initialize GCS connection: {e}. Using mock.", stacklevel=2
     )
     gcs_connection = GCSConnection(
-        service_account_json='{"type": "service_account"}',
         project_id="test-project",
         client_email="test@test.iam.gserviceaccount.com",
         client_id="123456",
@@ -122,7 +120,7 @@ gcs_sync_job = sync_gcs_to_s3.to_job(
 
 def open_edx_export_irx_job_config(
     deployment: Literal["mitx", "mitxonline", "xpro"],
-    dagster_env: Literal["qa", "production"],
+    dagster_env: Literal["dev", "qa", "production"],
 ):
     pipeline_path = "residential" if deployment == "mitx" else deployment
     etl_bucket_map = {

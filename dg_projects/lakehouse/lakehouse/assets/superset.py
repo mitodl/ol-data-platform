@@ -45,7 +45,7 @@ def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
             )
 
         try:
-            superset_api.client.refresh_dataset(dataset_id)
+            superset_api.client.refresh_dataset(int(dataset_id))
             context.log.info(
                 "Successfully refreshed dataset: %s.%s",
                 dbt_asset_group_name,

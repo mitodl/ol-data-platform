@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from pathlib import Path
 
 from dagster import (
@@ -59,7 +60,7 @@ class WriteFilesConfig(Config):
 )
 def load_files_to_table(
     context: OpExecutionContext, log_date: str, config: LoadFilesConfig
-) -> Nothing:
+) -> None:
     """Create an in-memory DuckDB table from a newline delimited JSON file.
 
     The schema is auto-inferred on read and only parses top level JSON. Supports file
@@ -116,7 +117,7 @@ def load_files_to_table(
     ins={"log_db": In(dagster_type=Nothing)},
     out={"columns": Out(dagster_type=List[String])},
 )
-def transform_log_data(context: OpExecutionContext) -> Nothing:
+def transform_log_data(context: OpExecutionContext) -> Generator[Output, None, None]:
     """Transform records in the tracking_log table to normalize data.
 
     All columns are converted to VARCHAR and JSON is extracted to a
@@ -170,7 +171,7 @@ def transform_log_data(context: OpExecutionContext) -> Nothing:
     ins={"log_db": In(dagster_type=Nothing)},
     out={"columns": Out(dagster_type=List[String])},
 )
-def jsonify_log_data(context: OpExecutionContext) -> Nothing:
+def jsonify_log_data(context: OpExecutionContext) -> Generator[Output, None, None]:
     """Transform records in the tracking_log table to normalize data.
 
     All columns are converted to VARCHAR and JSON is extracted to a
@@ -222,8 +223,8 @@ def jsonify_log_data(context: OpExecutionContext) -> Nothing:
 )
 def write_file_to_s3(
     context: OpExecutionContext,
-    columns: List[String],
-    log_date: String,
+    columns: list[str],
+    log_date: str,
     config: WriteFilesConfig,
 ) -> None:
     """Export data from the tracking_logs table in DuckDB to the S3 bucket.
