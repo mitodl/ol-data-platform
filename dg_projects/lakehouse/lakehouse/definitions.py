@@ -22,6 +22,7 @@ from dagster_dbt import (
     DbtCliResource,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.secrets.vault import Vault
 
 from lakehouse.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
@@ -37,25 +38,21 @@ airbyte_host_map = {
 
 airbyte_host = os.environ.get("DAGSTER_AIRBYTE_HOST", airbyte_host_map[DAGSTER_ENV])
 
+# Determine dagster URL and dbt target based on environment
+if DAGSTER_ENV == "dev":
+    dagster_url = "http://localhost:3000"
+    dbt_target = "dev_production"
+else:
+    dagster_url = (
+        "https://pipelines.odl.mit.edu"
+        if DAGSTER_ENV == "production"
+        else "https://pipelines-qa.odl.mit.edu"
+    )
+    dbt_target = "production"
+
 # Initialize vault with proper auth
 try:
-    if DAGSTER_ENV == "dev":
-        dagster_url = "http://localhost:3000"
-        vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
-        vault._auth_github()  # noqa: SLF001
-        dbt_target = "dev_production"
-    else:
-        dagster_url = (
-            "https://pipelines.odl.mit.edu"
-            if DAGSTER_ENV == "production"
-            else "https://pipelines-qa.odl.mit.edu"
-        )
-        vault = Vault(
-            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", auth_mount="aws"
-        )
-        vault._auth_aws_iam()  # noqa: SLF001
-        dbt_target = "production"
-
+    vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
     vault_authenticated = True
 except Exception as e:  # noqa: BLE001 (resilient loading)
     # If vault auth fails (e.g., in testing without credentials),

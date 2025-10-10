@@ -14,6 +14,7 @@ from dagster import Definitions
 from dagster_aws.s3 import S3Resource
 from dagster_aws.s3.resources import s3_resource
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.openedx import OpenEdxApiClient
 from ol_orchestrate.resources.outputs import DailyResultsDir
@@ -32,16 +33,8 @@ from legacy_openedx.schedules.open_edx import (
 
 # Initialize vault with resilient loading
 try:
-    if DAGSTER_ENV == "dev":
-        vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
-        vault._auth_github()  # noqa: SLF001
-        vault_authenticated = True
-    else:
-        vault = Vault(
-            vault_addr=VAULT_ADDRESS, vault_role="dagster-server", auth_mount="aws"
-        )
-        vault._auth_aws_iam()  # noqa: SLF001
-        vault_authenticated = True
+    vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
+    vault_authenticated = True
 except Exception as e:  # noqa: BLE001 (resilient loading)
     import warnings
 

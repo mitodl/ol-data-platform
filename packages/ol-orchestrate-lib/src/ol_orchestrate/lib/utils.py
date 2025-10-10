@@ -1,4 +1,5 @@
 import hashlib
+import os
 import zipfile
 from pathlib import Path
 from typing import Any, Literal
@@ -19,13 +20,16 @@ def authenticate_vault(dagster_env: str, vault_address: str) -> Vault:
     """
     if dagster_env == "dev":
         vault = Vault(vault_addr=vault_address, vault_auth_type="github")
-        vault._auth_github()  # noqa: SLF001
     else:
+        vault_role = os.getenv("DAGSTER_VAULT_ROLE", "dagster")
+        vault_mount = os.getenv("DAGSTER_VAULT_MOUNT", "k8s-data")
         vault = Vault(
-            vault_addr=vault_address, vault_role="dagster-server", auth_mount="aws"
+            vault_addr=vault_address,
+            vault_auth_type="kubernetes",
+            vault_role=vault_role,
+            auth_mount=vault_mount,
         )
-        vault._auth_aws_iam()  # noqa: SLF001
-
+    vault.authenticate()
     return vault
 
 
