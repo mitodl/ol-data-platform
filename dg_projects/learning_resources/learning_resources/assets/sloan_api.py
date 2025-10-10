@@ -14,7 +14,6 @@ from dagster import (
     Output,
     multi_asset,
 )
-
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 
 

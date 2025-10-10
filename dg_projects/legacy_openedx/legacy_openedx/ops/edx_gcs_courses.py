@@ -11,9 +11,8 @@ from dagster import (
     op,
 )
 from dagster.core.definitions.input import In
-from pydantic import Field
-
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
+from pydantic import Field
 
 
 class DownloadEdxGcsCourseConfig(Config):

@@ -14,7 +14,6 @@ from dagster import (
     asset,
     multi_asset,
 )
-
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.constants import (
     EXPORT_TYPE_COMMON_CARTRIDGE,

@@ -13,13 +13,13 @@ from dagster._core.definitions.definitions_class import (
 )
 from dagster_aws.s3 import S3Resource
 from dagster_duckdb import DuckDBResource
-
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
     default_io_manager,
 )
 from ol_orchestrate.resources.secrets.vault import Vault
+
 from openedx.components import OpenEdxDeploymentComponent
 from openedx.jobs.normalize_logs import (
     jsonify_tracking_logs,

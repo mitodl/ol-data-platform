@@ -23,13 +23,12 @@ from dagster import (
 from dagster.core.definitions.input import In
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
-from pydantic import Field
-from pypika import MySQLQuery as Query
-from pypika import Table, Tables
-
 from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.lib.file_rendering import write_csv
 from ol_orchestrate.lib.openedx import un_nest_course_structure
+from pydantic import Field
+from pypika import MySQLQuery as Query
+from pypika import Table, Tables
 
 
 class ListCoursesConfig(Config):

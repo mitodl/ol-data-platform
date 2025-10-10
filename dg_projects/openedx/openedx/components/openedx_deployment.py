@@ -10,10 +10,10 @@ from dagster import (
     Definitions,
     SensorDefinition,
 )
-
 from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
+
 from openedx.assets.openedx import (
     course_structure,
     course_xml,

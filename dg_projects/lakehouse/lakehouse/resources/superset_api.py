@@ -4,10 +4,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Self
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
-from pydantic import Field, PrivateAttr
-
 from ol_orchestrate.resources.oauth import OAuthApiClient
 from ol_orchestrate.resources.secrets.vault import Vault
+from pydantic import Field, PrivateAttr
 
 
 class SupersetApiClient(OAuthApiClient):

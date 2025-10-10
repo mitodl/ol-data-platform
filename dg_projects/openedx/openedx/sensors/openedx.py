@@ -9,10 +9,10 @@ from dagster import (
     SensorResult,
     sensor,
 )
-from pydantic import BaseModel
-
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
+from pydantic import BaseModel
+
 from openedx.lib.magic_numbers import HTTP_NOT_FOUND
 from openedx.partitions.openedx import (
     OPENEDX_COURSE_RUN_PARTITIONS,

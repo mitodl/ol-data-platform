@@ -3,12 +3,11 @@ from contextlib import contextmanager
 from typing import ClassVar, Self
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
-from pydantic import Field, PrivateAttr
-
 from ol_orchestrate.resources.api_client import BaseApiClient
 from ol_orchestrate.resources.canvas_api import CanvasApiClient
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
 from ol_orchestrate.resources.secrets.vault import Vault
+from pydantic import Field, PrivateAttr
 
 
 class ApiClientFactory(ConfigurableResource):

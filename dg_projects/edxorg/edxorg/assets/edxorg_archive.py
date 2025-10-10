@@ -43,6 +43,10 @@ from dagster._core.definitions.data_version import DATA_VERSION_TAG
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from google.cloud import storage
+from ol_orchestrate.lib.dagster_helpers import sanitize_mapping_key
+from ol_orchestrate.lib.dagster_types.files import DagsterPath
+from ol_orchestrate.lib.openedx import un_nest_course_structure
+from ol_orchestrate.partitions.edxorg import course_and_source_partitions
 from pydantic import Field
 from upath import UPath
 
@@ -51,10 +55,6 @@ from edxorg.lib.edxorg import (
     categorize_archive_element,
     parse_archive_path,
 )
-from ol_orchestrate.lib.dagster_helpers import sanitize_mapping_key
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
-from ol_orchestrate.lib.openedx import un_nest_course_structure
-from ol_orchestrate.partitions.edxorg import course_and_source_partitions
 
 edxorg_archive_partitions = DynamicPartitionsDefinition(name="edxorg_archive")
 edxorg_tracking_log_partitions = DynamicPartitionsDefinition(name="edxorg_tracking_log")

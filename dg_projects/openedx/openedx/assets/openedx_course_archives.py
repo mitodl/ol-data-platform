@@ -17,8 +17,6 @@ from dagster import (
 from dagster._core.definitions.partitions.utils.multi import (
     MULTIPARTITION_KEY_DELIMITER,
 )
-from upath import UPath
-
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
@@ -26,6 +24,7 @@ from ol_orchestrate.lib.openedx import (
     process_video_xml,
 )
 from ol_orchestrate.partitions.edxorg import course_and_source_partitions
+from upath import UPath
 
 
 @asset(

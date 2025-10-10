@@ -20,6 +20,19 @@ from dagster import (
     job,
 )
 from dagster_aws.s3 import S3Resource
+from ol_orchestrate.io_managers.filepath import (
+    FileObjectIOManager,
+    S3FileObjectIOManager,
+)
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.resources.gcp_gcs import GCSConnection
+from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
+from ol_orchestrate.resources.outputs import DailyResultsDir, SimpleResultsDir
+from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.sensors.object_storage import (
+    gcs_multi_file_sensor,
+    s3_multi_file_sensor,
+)
 
 from edxorg.assets.edxorg_api import (
     edxorg_mitx_course_metadata,
@@ -43,19 +56,6 @@ from edxorg.ops.object_storage import (
     S3UploadConfig,
     download_files_from_s3,
     upload_files_to_s3,
-)
-from ol_orchestrate.io_managers.filepath import (
-    FileObjectIOManager,
-    S3FileObjectIOManager,
-)
-from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.resources.gcp_gcs import GCSConnection
-from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
-from ol_orchestrate.resources.outputs import DailyResultsDir, SimpleResultsDir
-from ol_orchestrate.resources.secrets.vault import Vault
-from ol_orchestrate.sensors.object_storage import (
-    gcs_multi_file_sensor,
-    s3_multi_file_sensor,
 )
 
 # Initialize vault with resilient loading
