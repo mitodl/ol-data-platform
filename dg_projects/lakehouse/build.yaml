@@ -1,0 +1,6 @@
+---
+# Build context is set to repository root to access src/ol_dbt
+directory: ../..
+# The Dockerfile is located in the lakehouse directory
+dockerfile: dg_projects/lakehouse/Dockerfile
+registry: mitodl/dagster-lakehouse

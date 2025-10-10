@@ -1,0 +1,37 @@
+[project]
+name = "ol-orchestrate-lib"
+version = "0.1.0"
+description = "Shared library for MIT Open Learning Dagster orchestration"
+authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
+requires-python = ">=3.12,<3.14"
+license = "BSD-3-Clause"
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "PyAthena ~= 3.11.0",
+    "PyPika ~= 0.48.9",
+    "boto3 ~= 1.36.0",
+    "dagster ~= 1.11",
+    "dagster-aws ~=0.27.0",
+    "fsspec ~=2025.9.0",
+    "gcsfs (>=2025.2.0,<2026.0.0)",
+    "httpx ~= 0.28.0",
+    "hvac ~= 2.3.0",
+    "pandas ~= 2.2.0",
+    "psycopg2-binary ~= 2.9.10",
+    "pyarrow ~=21.0.0",
+    "pydantic ~=2.11.1",
+    "pygsheets ~= 2.0.6",
+    "s3fs (>=2025.2.0,<2026.0.0)",
+    "universal-pathlib ~= 0.3.1",
+]
+repository = "https://github.com/mitodl/ol-data-platform"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ol_orchestrate"]
