@@ -410,19 +410,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dagster-airbyte"
-version = "0.27.13"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "dagster" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b3/ad/767f92b83a1fba57f4cc361186992f0f78d1224d8324e10e6978ec1579a1/dagster_airbyte-0.27.13.tar.gz", hash = "sha256:aaafb018d3f142155af32331b2a6e55fd743c8fa1dc0d4a3cb954697a29e30ca", size = 105007, upload-time = "2025-10-02T18:04:37.751Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/7b/3c9ead233bb7521fec4e9ceb0c7d42f7b731b55ba269a85e4b9deccccda0/dagster_airbyte-0.27.13-py3-none-any.whl", hash = "sha256:046101aba59a1c3b02f767e2c1b6b47e4c033b56dbf97d1b79f8f364ce3fd59d", size = 112232, upload-time = "2025-10-02T18:04:35.987Z" },
-]
-
-[[package]]
 name = "dagster-aws"
 version = "0.27.13"
 source = { registry = "https://pypi.org/simple" }
@@ -641,18 +628,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/40/bb/0ab3e58d22305b6f5440629d20683af28959bf793d98d11950e305c1c326/filelock-3.19.1.tar.gz", hash = "sha256:66eda1888b0171c998b35be2bcc0f6d75c388a7ce20c3f3f37aa8e96c2dddf58", size = 17687, upload-time = "2025-08-14T16:56:03.016Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/42/14/42b2651a2f46b022ccd948bca9f2d5af0fd8929c4eec235b8d6d844fbe67/filelock-3.19.1-py3-none-any.whl", hash = "sha256:d38e30481def20772f5baf097c122c3babc4fcdb7e14e57049eb9d88c6dc017d", size = 15988, upload-time = "2025-08-14T16:56:01.633Z" },
-]
-
-[[package]]
-name = "flatten-dict"
-version = "0.4.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/89/c6/5fe21639369f2ea609c964e20870b5c6c98a134ef12af848a7776ddbabe3/flatten-dict-0.4.2.tar.gz", hash = "sha256:506a96b6e6f805b81ae46a0f9f31290beb5fa79ded9d80dbe1b7fa236ab43076", size = 10362, upload-time = "2021-08-08T09:56:51.455Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/43/f5/ee39c6e92acc742c052f137b47c210cd0a1b72dcd3f98495528bb4d27761/flatten_dict-0.4.2-py2.py3-none-any.whl", hash = "sha256:7e245b20c4c718981212210eec4284a330c9f713e632e98765560e05421e48ad", size = 9656, upload-time = "2021-08-08T09:56:54.313Z" },
 ]
 
 [[package]]
@@ -1153,18 +1128,6 @@ wheels = [
 ]
 
 [[package]]
-name = "jsonlines"
-version = "4.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "attrs" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/35/87/bcda8e46c88d0e34cad2f09ee2d0c7f5957bccdb9791b0b934ec84d84be4/jsonlines-4.0.0.tar.gz", hash = "sha256:0c6d2c09117550c089995247f605ae4cf77dd1533041d366351f6f298822ea74", size = 11359, upload-time = "2023-09-01T12:34:44.187Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/62/d9ba6323b9202dd2fe166beab8a86d29465c41a0288cbe229fac60c1ab8d/jsonlines-4.0.0-py3-none-any.whl", hash = "sha256:185b334ff2ca5a91362993f42e83588a360cf95ce4b71a73548502bda52a7c55", size = 8701, upload-time = "2023-09-01T12:34:42.563Z" },
-]
-
-[[package]]
 name = "jsonschema"
 version = "4.25.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1394,21 +1357,17 @@ source = { editable = "../../packages/ol-orchestrate-lib" }
 dependencies = [
     { name = "boto3" },
     { name = "dagster" },
-    { name = "dagster-airbyte" },
     { name = "dagster-aws" },
-    { name = "flatten-dict" },
     { name = "fsspec" },
     { name = "gcsfs" },
     { name = "httpx" },
     { name = "hvac" },
-    { name = "jsonlines" },
     { name = "pandas" },
     { name = "psycopg2-binary" },
     { name = "pyarrow" },
     { name = "pyathena" },
     { name = "pydantic" },
     { name = "pygsheets" },
-    { name = "pymysql" },
     { name = "pypika" },
     { name = "s3fs" },
     { name = "universal-pathlib" },
@@ -1418,21 +1377,17 @@ dependencies = [
 requires-dist = [
     { name = "boto3", specifier = "~=1.36.0" },
     { name = "dagster", specifier = "~=1.11" },
-    { name = "dagster-airbyte", specifier = "~=0.27.0" },
     { name = "dagster-aws", specifier = "~=0.27.0" },
-    { name = "flatten-dict", specifier = "~=0.4.2" },
     { name = "fsspec", specifier = "~=2025.9.0" },
     { name = "gcsfs", specifier = ">=2025.2.0,<2026.0.0" },
     { name = "httpx", specifier = "~=0.28.0" },
     { name = "hvac", specifier = "~=2.3.0" },
-    { name = "jsonlines", specifier = "~=4.0.0" },
     { name = "pandas", specifier = "~=2.2.0" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
     { name = "pyarrow", specifier = "~=21.0.0" },
     { name = "pyathena", specifier = "~=3.11.0" },
     { name = "pydantic", specifier = "~=2.11.1" },
     { name = "pygsheets", specifier = "~=2.0.6" },
-    { name = "pymysql", specifier = "~=1.1" },
     { name = "pypika", specifier = "~=0.48.9" },
     { name = "s3fs", specifier = ">=2025.2.0,<2026.0.0" },
     { name = "universal-pathlib", specifier = "~=0.3.1" },
@@ -1790,15 +1745,6 @@ wheels = [
 [package.optional-dependencies]
 crypto = [
     { name = "cryptography" },
-]
-
-[[package]]
-name = "pymysql"
-version = "1.1.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f5/ae/1fe3fcd9f959efa0ebe200b8de88b5a5ce3e767e38c7ac32fb179f16a388/pymysql-1.1.2.tar.gz", hash = "sha256:4961d3e165614ae65014e361811a724e2044ad3ea3739de9903ae7c21f539f03", size = 48258, upload-time = "2025-08-24T12:55:55.146Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7c/4c/ad33b92b9864cbde84f259d5df035a6447f91891f5be77788e2a3892bce3/pymysql-1.1.2-py3-none-any.whl", hash = "sha256:e6b1d89711dd51f8f74b1631fe08f039e7d76cf67a42a323d3178f0f25762ed9", size = 45300, upload-time = "2025-08-24T12:55:53.394Z" },
 ]
 
 [[package]]

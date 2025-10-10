@@ -15,20 +15,20 @@ from dagster_aws.s3 import S3Resource
 from dagster_aws.s3.resources import s3_resource
 
 from legacy_openedx.jobs.edx_gcs_courses import sync_gcs_to_s3
-from ol_orchestrate.jobs.open_edx import edx_course_pipeline
-from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.resources.gcp_gcs import GCSConnection
-from ol_orchestrate.resources.healthchecks import HealthchecksIO
-from ol_orchestrate.resources.mysql_db import mysql_db_resource
-from ol_orchestrate.resources.openedx import OpenEdxApiClient
-from ol_orchestrate.resources.outputs import DailyResultsDir
-from ol_orchestrate.resources.secrets.vault import Vault
-from ol_orchestrate.resources.sqlite_db import sqlite_db_resource
-from ol_orchestrate.schedules.open_edx import (
+from legacy_openedx.jobs.open_edx import edx_course_pipeline
+from legacy_openedx.resources.healthchecks import HealthchecksIO
+from legacy_openedx.resources.mysql_db import mysql_db_resource
+from legacy_openedx.resources.sqlite_db import sqlite_db_resource
+from legacy_openedx.schedules.open_edx import (
     mitxonline_edx_daily_schedule,
     residential_edx_daily_schedule,
     xpro_edx_daily_schedule,
 )
+from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.resources.gcp_gcs import GCSConnection
+from ol_orchestrate.resources.openedx import OpenEdxApiClient
+from ol_orchestrate.resources.outputs import DailyResultsDir
+from ol_orchestrate.resources.secrets.vault import Vault
 
 # Initialize vault with resilient loading
 try:

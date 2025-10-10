@@ -24,10 +24,10 @@ from dagster_dbt import (
 
 from lakehouse.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
 from lakehouse.assets.superset import create_superset_asset
+from lakehouse.resources.airbyte import AirbyteOSSWorkspace
+from lakehouse.resources.superset_api import SupersetApiClientFactory
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
-from ol_orchestrate.resources.airbyte import AirbyteOSSWorkspace
 from ol_orchestrate.resources.secrets.vault import Vault
-from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
 
 airbyte_host_map = {
     "dev": "https://api-airbyte-qa.odl.mit.edu",

@@ -11,12 +11,7 @@ from dagster import (
     SensorDefinition,
 )
 
-from ol_orchestrate.lib.assets_helper import (
-    add_prefix_to_asset_keys,
-    late_bind_partition_to_asset,
-)
 from ol_orchestrate.lib.constants import DAGSTER_ENV
-from ol_orchestrate.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 from openedx.assets.openedx import (
@@ -25,6 +20,11 @@ from openedx.assets.openedx import (
     extract_courserun_details,
     openedx_live_courseware,
 )
+from openedx.lib.assets_helper import (
+    add_prefix_to_asset_keys,
+    late_bind_partition_to_asset,
+)
+from openedx.partitions.openedx import OPENEDX_COURSE_RUN_PARTITIONS
 from openedx.sensors.openedx import course_run_sensor, course_version_sensor
 
 

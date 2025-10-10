@@ -11,7 +11,7 @@ from dagster import (
     sensor,
 )
 
-from ol_orchestrate.lib.canvas import fetch_canvas_course_ids_from_google_sheet
+from canvas.lib.canvas import fetch_canvas_course_ids_from_google_sheet
 
 
 @sensor(
