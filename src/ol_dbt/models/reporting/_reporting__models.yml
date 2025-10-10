@@ -277,6 +277,9 @@ models:
   - name: exam_indicator
     description: boolean, If the name field for the unit on the Studio 'Course Outline'
       page contains the word 'exam' then this is true otherwise it's false.
+  - name: hw_indicator
+    description: boolean, If the name field for the unit on the Studio 'Course Outline'
+      page contains the word 'homework' then this is true otherwise it's false.
   - name: max_possible_grade
     description: number, maximum possible grade value for the problem
   - name: attempts_on_problem
@@ -296,6 +299,23 @@ models:
   - name: courserungrade_grade
     description: float, course grade on edX.org or MITxOnline or xPro range from 0
       to 1
+  - name: user_avg_hw_grade
+    description: number, avg of grades the learner got for all homework problems
+  - name: user_avg_exam_grade
+    description: number, avg of grades the learner got for all exam problems
+  - name: user_hw_median_solving_time
+    description: string, the estimated median amount of time the learner spent on
+      all homework problems.
+  - name: user_exam_median_solving_time
+    description: string, the estimated median amount of time the learner spent on
+      all exam problems.
+  - name: user_hw_attempts_on_problem
+    description: int, total learner attempts generated when parsing answer submissions
+      on homework problems
+  - name: user_exam_time_flags
+    description: int, total times a learner gets a performance time flag when their
+      exam problem solving time was below the 10th percentile of time taken by all
+      students to solve an exam problem
 
 - name: chatbot_usage_report
   description: AI chatbot interactions from Learn AI application including TutorBot,
