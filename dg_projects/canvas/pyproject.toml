@@ -4,7 +4,9 @@ requires-python = ">=3.12,<3.14"
 version = "0.1.0"
 dependencies = [
     "dagster>=1.11.13",
+    "dagster-aws ~=0.27.0",
     "dagster-components",
+    "httpx ~= 0.28.0",
     "ol-orchestrate-lib",
     "pygsheets>=2.0.6",
 ]

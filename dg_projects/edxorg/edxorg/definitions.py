@@ -32,6 +32,11 @@ from edxorg.assets.edxorg_archive import (
     flatten_edxorg_course_structure,
     normalize_edxorg_tracking_log,
 )
+from edxorg.assets.openedx_course_archives import (
+    dummy_edxorg_course_xml,
+    extract_edxorg_courserun_metadata,
+)
+from edxorg.io_managers.gcs import GCSFileIOManager
 from edxorg.jobs.retrieve_edx_exports import retrieve_edx_course_exports
 from edxorg.ops.object_storage import (
     S3DownloadConfig,
@@ -39,21 +44,19 @@ from edxorg.ops.object_storage import (
     download_files_from_s3,
     upload_files_to_s3,
 )
-from edxorg.sensors.object_storage import gcs_multi_file_sensor, s3_multi_file_sensor
-from ol_orchestrate.assets.openedx_course_archives import (
-    dummy_edxorg_course_xml,
-    extract_edxorg_courserun_metadata,
-)
 from ol_orchestrate.io_managers.filepath import (
     FileObjectIOManager,
     S3FileObjectIOManager,
 )
-from ol_orchestrate.io_managers.gcs import GCSFileIOManager
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir, SimpleResultsDir
 from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.sensors.object_storage import (
+    gcs_multi_file_sensor,
+    s3_multi_file_sensor,
+)
 
 # Initialize vault with resilient loading
 try:

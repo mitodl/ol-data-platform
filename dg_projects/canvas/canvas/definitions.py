@@ -20,6 +20,7 @@ from canvas.assets.canvas import (
     course_content_metadata,
     export_course_content,
 )
+from canvas.resources.api_client_factory import ApiClientFactory
 from canvas.sensors.canvas import canvas_google_sheet_course_id_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
@@ -27,7 +28,6 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_io_manager,
 )
 from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
-from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
 # Initialize vault with resilient loading
 try:

@@ -4,10 +4,14 @@ requires-python = ">=3.12,<3.14"
 version = "0.1.0"
 dependencies = [
     "dagster>=1.11.13",
+    "dagster-aws ~=0.27.0",
     "dagster-components",
     "dagster-duckdb ~=0.27.0",
+    "flatten-dict ~= 0.4.2",
+    "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
     "polars ~= 1.19",
+    "universal-pathlib ~= 0.3.1",
 ]
 
 [project.entry-points]

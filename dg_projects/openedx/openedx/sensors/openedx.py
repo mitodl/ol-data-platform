@@ -12,11 +12,11 @@ from dagster import (
 from pydantic import BaseModel
 
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
-from ol_orchestrate.lib.magic_numbers import HTTP_NOT_FOUND
-from ol_orchestrate.partitions.openedx import (
+from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
+from openedx.lib.magic_numbers import HTTP_NOT_FOUND
+from openedx.partitions.openedx import (
     OPENEDX_COURSE_RUN_PARTITIONS,
 )
-from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 
 
 class CourseCursor(BaseModel):

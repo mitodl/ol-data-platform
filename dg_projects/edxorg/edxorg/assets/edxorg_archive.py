@@ -46,13 +46,13 @@ from google.cloud import storage
 from pydantic import Field
 from upath import UPath
 
-from ol_orchestrate.lib.dagster_helpers import sanitize_mapping_key
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
-from ol_orchestrate.lib.edxorg import (
+from edxorg.lib.edxorg import (
     build_mapping_key,
     categorize_archive_element,
     parse_archive_path,
 )
+from ol_orchestrate.lib.dagster_helpers import sanitize_mapping_key
+from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.lib.openedx import un_nest_course_structure
 from ol_orchestrate.partitions.edxorg import course_and_source_partitions
 
