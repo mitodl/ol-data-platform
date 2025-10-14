@@ -7,6 +7,7 @@ dependencies = [
     "dagster-aws ~=0.27.0",
     "dagster-components",
     "dagster-duckdb ~=0.27.0",
+    "dagster-postgres>=0.27.13",
     "flatten-dict ~= 0.4.2",
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",

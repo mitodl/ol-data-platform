@@ -598,6 +598,19 @@ wheels = [
 ]
 
 [[package]]
+name = "dagster-postgres"
+version = "0.27.13"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dagster" },
+    { name = "psycopg2-binary" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bb/17/b0790db97f1b4168092c1d9430589aa5f3051f85fbe19ffd486c7d9c87b6/dagster_postgres-0.27.13.tar.gz", hash = "sha256:efb8d69147f7154ed05283d6a2a87ada1d1032583ca68c022ea690d4d7723e7f", size = 16421, upload-time = "2025-10-02T18:05:11.643Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/db/6fc92db1ab7e5c6297fc3946bf14e1bd1dfbe476714202b296fc4e4dc2d8/dagster_postgres-0.27.13-py3-none-any.whl", hash = "sha256:5bfc614d67850c093b7b29abfbfecf86f2d60e61a3e59d4948f662b720c845ac", size = 22958, upload-time = "2025-10-02T18:05:10.307Z" },
+]
+
+[[package]]
 name = "dagster-shared"
 version = "1.11.13"
 source = { registry = "https://pypi.org/simple" }
@@ -1405,6 +1418,7 @@ dependencies = [
     { name = "dagster-airbyte" },
     { name = "dagster-components" },
     { name = "dagster-dbt" },
+    { name = "dagster-postgres" },
     { name = "dbt-duckdb" },
     { name = "dbt-trino" },
     { name = "httpx" },
@@ -1423,6 +1437,7 @@ requires-dist = [
     { name = "dagster-airbyte", specifier = "~=0.27.0" },
     { name = "dagster-components" },
     { name = "dagster-dbt", specifier = "~=0.27.0" },
+    { name = "dagster-postgres", specifier = ">=0.27.13" },
     { name = "dbt-duckdb", specifier = "~=1.9.0" },
     { name = "dbt-trino", specifier = "~=1.9.0" },
     { name = "httpx", specifier = "~=0.28.0" },

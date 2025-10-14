@@ -7,6 +7,7 @@ dependencies = [
     "dagster-airbyte ~=0.27.0",
     "dagster-components",
     "dagster-dbt ~=0.27.0",
+    "dagster-postgres>=0.27.13",
     "dbt-duckdb ~= 1.9.0",
     "dbt-trino ~= 1.9.0",
     "httpx ~= 0.28.0",

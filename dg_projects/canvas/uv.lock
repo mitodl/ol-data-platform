@@ -216,6 +216,7 @@ dependencies = [
     { name = "dagster" },
     { name = "dagster-aws" },
     { name = "dagster-components" },
+    { name = "dagster-postgres" },
     { name = "httpx" },
     { name = "ol-orchestrate-lib" },
     { name = "pygsheets" },
@@ -232,6 +233,7 @@ requires-dist = [
     { name = "dagster", specifier = ">=1.11.13" },
     { name = "dagster-aws", specifier = "~=0.27.0" },
     { name = "dagster-components" },
+    { name = "dagster-postgres", specifier = ">=0.27.13" },
     { name = "httpx", specifier = "~=0.28.0" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
     { name = "pygsheets", specifier = ">=2.0.6" },
@@ -560,6 +562,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/88/f3/f61d173964e5dccdf3fb455c9716d112789bf0cf637382d3285095641e9c/dagster_pipes-1.11.13.tar.gz", hash = "sha256:c68512ecab3a62d64cca1dbb5b78f37f61e4eb211c58a000cc3667bb7903d5b3", size = 20855, upload-time = "2025-10-02T18:00:49.893Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/86/fa/be3fc8639cc021543c5779374641bdd2c7e7242ebb7d243ca6630d5ed443/dagster_pipes-1.11.13-py3-none-any.whl", hash = "sha256:4e9194b243393fcb17c73dfc09e50fbf176c46cd882cc1f52ed07e441fa9c4e0", size = 20622, upload-time = "2025-10-02T18:00:48.661Z" },
+]
+
+[[package]]
+name = "dagster-postgres"
+version = "0.27.13"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dagster" },
+    { name = "psycopg2-binary" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bb/17/b0790db97f1b4168092c1d9430589aa5f3051f85fbe19ffd486c7d9c87b6/dagster_postgres-0.27.13.tar.gz", hash = "sha256:efb8d69147f7154ed05283d6a2a87ada1d1032583ca68c022ea690d4d7723e7f", size = 16421, upload-time = "2025-10-02T18:05:11.643Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/db/6fc92db1ab7e5c6297fc3946bf14e1bd1dfbe476714202b296fc4e4dc2d8/dagster_postgres-0.27.13-py3-none-any.whl", hash = "sha256:5bfc614d67850c093b7b29abfbfecf86f2d60e61a3e59d4948f662b720c845ac", size = 22958, upload-time = "2025-10-02T18:05:10.307Z" },
 ]
 
 [[package]]
