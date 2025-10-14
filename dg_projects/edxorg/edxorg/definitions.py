@@ -248,6 +248,7 @@ defs = Definitions(
             path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
         ),
         "gcs_input": GCSFileIOManager(gcs=gcs_connection),
+        "gcp_gcs": gcs_connection,
         "vault": vault,
         "edxorg_api": OpenEdxApiClientFactory(deployment="edxorg", vault=vault),
         "s3": S3Resource(profile_name="edxorg"),
