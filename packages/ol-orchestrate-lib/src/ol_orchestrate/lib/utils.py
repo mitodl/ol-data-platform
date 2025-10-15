@@ -19,7 +19,16 @@ def authenticate_vault(dagster_env: str, vault_address: str) -> Vault:
         Vault: An authenticated Vault client.
     """
     if dagster_env == "dev":
-        vault = Vault(vault_addr=vault_address, vault_auth_type="github")
+        if os.environ.get("GITHUB_TOKEN"):
+            auth_method = "github"
+            vault = Vault(vault_addr=vault_address, vault_auth_type=auth_method)
+        else:
+            auth_method = "oidc"
+            vault = Vault(
+                vault_addr=vault_address,
+                vault_auth_type=auth_method,
+                vault_role=os.environ.get("DAGSTER_VAULT_ROLE", "developer"),
+            )
     else:
         vault_role = os.getenv("DAGSTER_VAULT_ROLE", "dagster")
         vault_mount = os.getenv("DAGSTER_VAULT_MOUNT", "k8s-data")
