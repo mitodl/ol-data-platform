@@ -446,19 +446,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dagster-components"
-version = "0.2.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "dagster" },
-    { name = "typer" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/9c/5c/e5b487471e32dc34e8dece6ad4b720099436ddd71017b9e823dd7795c6a4/dagster_components-0.2.2.tar.gz", hash = "sha256:c1d8d6ac31036cb40cd460aaa5d84c7322432d3b7e7fd5dd7115ef7942bde4c1", size = 36975, upload-time = "2025-03-12T19:37:10.339Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a8/02/ea3c8784390109ba8d2fb3c292ed3a6e104871ad061f42d6a0bb65d059bb/dagster_components-0.2.2-py3-none-any.whl", hash = "sha256:94d08de9c5df6268261d9b0c535a74eb335db5a0e376dda0b0f14403fdc981bc", size = 50178, upload-time = "2025-03-12T19:37:08.999Z" },
-]
-
-[[package]]
 name = "dagster-dg-cli"
 version = "1.11.13"
 source = { registry = "https://pypi.org/simple" }
@@ -1142,7 +1129,6 @@ source = { editable = "." }
 dependencies = [
     { name = "dagster" },
     { name = "dagster-aws" },
-    { name = "dagster-components" },
     { name = "dagster-postgres" },
     { name = "jsonlines" },
     { name = "ol-orchestrate-lib" },
@@ -1158,7 +1144,6 @@ dev = [
 requires-dist = [
     { name = "dagster", specifier = ">=1.11.13" },
     { name = "dagster-aws", specifier = "~=0.27.0" },
-    { name = "dagster-components" },
     { name = "dagster-postgres", specifier = ">=0.27.13" },
     { name = "jsonlines", specifier = "~=4.0.0" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
