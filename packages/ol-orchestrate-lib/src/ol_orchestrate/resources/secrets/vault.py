@@ -10,10 +10,10 @@ from pydantic import PrivateAttr
 class Vault(ConfigurableResource):
     vault_addr: str
     vault_token: str | None = None
-    vault_role: str | None = "dagster"
+    vault_role: str | None = None
     # can be one of ["github", "aws-iam", "token", "kubernetes", "oidc", "jwt"]
     vault_auth_type: str = "kubernetes"
-    auth_mount: str | None = "k8s-data"
+    auth_mount: str | None = None
     verify_tls: bool = True
     _client: hvac.Client = PrivateAttr(default=None)
 
