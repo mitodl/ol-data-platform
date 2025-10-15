@@ -1,0 +1,41 @@
+[project]
+name = "canvas"
+requires-python = ">=3.12,<3.14"
+version = "0.1.0"
+dependencies = [
+    "dagster>=1.11.13",
+    "dagster-aws ~=0.27.0",
+    "dagster-postgres>=0.27.13",
+    "httpx ~= 0.28.0",
+    "ol-orchestrate-lib",
+    "pygsheets>=2.0.6",
+]
+
+[project.entry-points]
+"dagster.components" = { canvas = "canvas.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.11.13",
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "canvas.definitions"
+project_name = "canvas"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "canvas"
+
+[tool.setuptools.packages.find]
+exclude=["canvas_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

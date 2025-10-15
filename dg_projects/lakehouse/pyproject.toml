@@ -1,0 +1,43 @@
+[project]
+name = "lakehouse"
+requires-python = ">=3.12,<3.14"
+version = "0.1.0"
+dependencies = [
+    "dagster>=1.11.13",
+    "dagster-airbyte ~=0.27.0",
+    "dagster-dbt ~=0.27.0",
+    "dagster-postgres>=0.27.13",
+    "dbt-duckdb ~= 1.9.0",
+    "dbt-trino ~= 1.9.0",
+    "httpx ~= 0.28.0",
+    "ol-orchestrate-lib",
+]
+
+[project.entry-points]
+"dagster.components" = { lakehouse = "lakehouse.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.11.13",
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "lakehouse.definitions"
+project_name = "lakehouse"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "lakehouse"
+
+[tool.setuptools.packages.find]
+exclude=["lakehouse_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

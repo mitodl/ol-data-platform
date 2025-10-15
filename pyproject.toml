@@ -12,54 +12,33 @@ classifiers = [
 dependencies = [
     "PyPika ~= 0.48.9",
     "cyclopts~=3.24.0",
-    "dagster ~= 1.10",
-    "dagster-airbyte ~=0.27.0",
-    "dagster-aws ~=0.27.0",
-    "dagster-dbt ~=0.27.0",
-    "dagster-docker ~=0.27.0",
-    "dagster-duckdb ~=0.27.0",
-    "dagster-gcp ~=0.27.0",
-    "dagster-postgres ~=0.27.0",
-    "dagster-slack ~=0.27.0",
-    "dagster-webserver ~= 1.10",
-    "dbt-duckdb ~= 1.9.0",
-    "dbt-trino ~= 1.9.0",
-    "flatten-dict ~= 0.4.2",
-    "fsspec ~=2025.9.0",
-    "gcsfs (>=2025.2.0,<2026.0.0)",
-    "httpx ~= 0.28.0",
-    "hvac ~= 2.3.0",
-    "jsonlines ~= 4.0.0",
-    "polars ~= 1.19",
-    "pyarrow ~=21.0.0",
-    "pydantic ~=2.12.0",
-    "pygsheets>=2.0.6",
-    "pymysql ~= 1.1",
-    "s3fs (>=2025.2.0,<2026.0.0)",
+    "dbt-duckdb>=1.9.6",
+    "dbt-trino>=1.9.3",
     "trino[external-authentication-token-cache]>=0.336.0",
     "universal-pathlib ~=0.3.1",
 ]
 repository = "https://github.com/mitodl/ol-data-platform"
 
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv]
+package = false  # This is a workspace root, not a package
+
 [dependency-groups]
 dev = [
+    "dagster-dg-cli>=1.11.13",
+    "dagster-webserver>=1.11.13",
     "mypy",
     "pre-commit>=4.0.0,<5",
     "pytest>=8.0.0,<9",
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
     "sqlfluff>=3.0.0,<4",
-    "typer[all]>=0.19,<0.20",
 ]
 
-[tool.hatch.build.targets.sdist]
-include = ["src/ol_orchestrate"]
-
-[tool.hatch.build.targets.wheel]
-include = ["src/ol_orchestrate"]
-
-[tool.hatch.build.targets.wheel.sources]
-"src/ol_orchestrate" = "ol_orchestrate"
+# The ol_orchestrate package has been moved to packages/ol-orchestrate-lib/
+# and is managed as a workspace member package
 
 [build-system]
 requires = ["hatchling"]
@@ -220,3 +199,27 @@ builtins-allowed-modules = ["secrets", "platform"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 "test_*.py" = ["S101"]
+
+[tool.dg]
+directory_type = "workspace"
+
+[[tool.dg.workspace.projects]]
+path = "dg_projects/lakehouse"
+
+[[tool.dg.workspace.projects]]
+path = "dg_projects/openedx"
+
+[[tool.dg.workspace.projects]]
+path = "dg_projects/edxorg"
+
+[[tool.dg.workspace.projects]]
+path = "dg_projects/legacy_openedx"
+
+[[tool.dg.workspace.projects]]
+path = "dg_projects/canvas"
+
+[[tool.dg.workspace.projects]]
+path = "dg_projects/data_platform"
+
+[[tool.dg.workspace.projects]]
+path = "dg_projects/learning_resources"

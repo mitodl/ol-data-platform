@@ -1,0 +1,40 @@
+[project]
+name = "learning_resources"
+requires-python = ">=3.12,<3.14"
+version = "0.1.0"
+dependencies = [
+    "dagster>=1.11.13",
+    "dagster-aws ~=0.27.0",
+    "dagster-postgres>=0.27.13",
+    "jsonlines ~= 4.0.0",
+    "ol-orchestrate-lib",
+]
+
+[project.entry-points]
+"dagster.components" = { learning_resources = "learning_resources.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.11.13",
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "learning_resources.definitions"
+project_name = "learning_resources"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "learning_resources"
+
+[tool.setuptools.packages.find]
+exclude=["learning_resources_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
