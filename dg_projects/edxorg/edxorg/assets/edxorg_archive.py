@@ -382,7 +382,7 @@ def flatten_edxorg_course_structure(
     )[0]
     course_id = input_asset_materialization_event.asset_materialization.metadata[
         "course_id"
-    ]
+    ].value
     course_structure_document = json.load(course_structure.open())
     data_version = hashlib.sha256(
         json.dumps(course_structure_document).encode("utf-8")
