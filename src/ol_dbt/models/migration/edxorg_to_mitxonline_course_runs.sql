@@ -26,7 +26,8 @@ with mitx_courses as (
 , edx_signatories as (
     select
         courserun_readable_id
-        , array_agg(signatory_normalized_name) as signatory_names
+        , array_agg(signatory_normalized_name)
+            filter (where signatory_normalized_name <> '') as signatory_names
     from {{ ref('stg__edxorg__s3__course_certificate_signatory') }}
     group by courserun_readable_id
 )
