@@ -156,7 +156,7 @@ def open_edx_export_irx_job_config(
     )["data"]
     edx_db_config = {
         "mysql_db_name": "edxapp",
-        "mysql_hostname": f"edxapp-db{'-replica' if dagster_env == 'production' else ''}.service.{deployment}-{dagster_env}.consul",  # noqa: E501
+        "mysql_hostname": f"edxapp-db-{deployment}-{dagster_env}{'-replica' if dagster_env == 'production' else ''}.cbnm7ajau6mi.us-east-1.rds.amazonaws.com",  # noqa: E501
         "mysql_username": db_creds["username"],
         "mysql_password": db_creds["password"],
     }
