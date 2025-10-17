@@ -197,6 +197,59 @@ def trino_lineage(
 
 
 @asset(
+    key=["openmetadata", "trino", "profiling"],
+    group_name="openmetadata",
+    deps=["openmetadata__trino__metadata"],
+    automation_condition=upstream_or_code_changes(),
+)
+def trino_profiling(
+    context: AssetExecutionContext,
+    openmetadata_client: OpenMetadataClient,
+) -> Output:
+    """Run data profiling on Trino tables.
+
+    This asset runs statistical profiling on Trino tables to gather
+    data quality metrics and column statistics.
+    """
+    workflow_config = {
+        "source": {
+            "type": "trino",
+            "serviceName": "starburst_galaxy",
+            "serviceConnection": {
+                "config": {
+                    "type": "Trino",
+                    "hostPort": (
+                        "ol-data-platform-cluster.starburstdata.net:443"
+                    ),
+                    "catalog": "ol_warehouse",
+                    "databaseSchema": "ol_warehouse_qa_staging",
+                    "supportsProfiler": True,
+                }
+            },
+            "sourceConfig": {
+                "config": {
+                    "type": "Profiler",
+                    "schemaFilterPattern": {
+                        "includes": ["ol_warehouse_.*"],
+                    },
+                }
+            },
+        },
+        "processor": {
+            "type": "orm-profiler",
+            "config": {},
+        },
+        "sink": {"type": "metadata-rest"},
+        "workflowConfig": {
+            "loggerLevel": "INFO",
+            "openMetadataServerConfig": {},
+        },
+    }
+
+    return run_metadata_workflow(context, openmetadata_client, workflow_config)
+
+
+@asset(
     key=["openmetadata", "dbt", "metadata"],
     group_name="openmetadata",
     automation_condition=upstream_or_code_changes(),
@@ -209,6 +262,9 @@ def dbt_metadata(
 
     This asset ingests dbt model definitions, documentation, and tests
     into OpenMetadata, creating a comprehensive view of transformed data.
+
+    Note: This requires dbt artifacts (catalog.json, manifest.json,
+    run_results.json) to be available at the configured paths.
     """
     workflow_config = {
         "source": {
@@ -218,10 +274,63 @@ def dbt_metadata(
                 "config": {
                     "type": "DBT",
                     "dbtConfigSource": {
-                        "dbtCatalogFilePath": "/path/to/dbt/target/catalog.json",
-                        "dbtManifestFilePath": "/path/to/dbt/target/manifest.json",
-                        "dbtRunResultsFilePath": "/path/to/dbt/target/run_results.json",
+                        "dbtCatalogFilePath": (
+                            "/app/src/ol_dbt/target/catalog.json"
+                        ),
+                        "dbtManifestFilePath": (
+                            "/app/src/ol_dbt/target/manifest.json"
+                        ),
+                        "dbtRunResultsFilePath": (
+                            "/app/src/ol_dbt/target/run_results.json"
+                        ),
                     },
+                }
+            },
+        },
+        "sink": {"type": "metadata-rest"},
+        "workflowConfig": {
+            "loggerLevel": "INFO",
+            "openMetadataServerConfig": {},
+        },
+    }
+
+    return run_metadata_workflow(context, openmetadata_client, workflow_config)
+
+
+@asset(
+    key=["openmetadata", "dbt", "lineage"],
+    group_name="openmetadata",
+    deps=["openmetadata__dbt__metadata"],
+    automation_condition=upstream_or_code_changes(),
+)
+def dbt_lineage(
+    context: AssetExecutionContext,
+    openmetadata_client: OpenMetadataClient,
+) -> Output:
+    """Ingest lineage information from dbt models.
+
+    This asset analyzes dbt model dependencies to create lineage
+    relationships showing how models depend on each other and source tables.
+    """
+    workflow_config = {
+        "source": {
+            "type": "dbt",
+            "serviceName": "dbt_ol_warehouse",
+            "sourceConfig": {
+                "config": {
+                    "type": "DBT",
+                    "dbtConfigSource": {
+                        "dbtCatalogFilePath": (
+                            "/app/src/ol_dbt/target/catalog.json"
+                        ),
+                        "dbtManifestFilePath": (
+                            "/app/src/ol_dbt/target/manifest.json"
+                        ),
+                        "dbtRunResultsFilePath": (
+                            "/app/src/ol_dbt/target/run_results.json"
+                        ),
+                    },
+                    "includeLineage": True,
                 }
             },
         },

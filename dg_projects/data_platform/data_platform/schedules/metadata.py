@@ -32,6 +32,7 @@ critical_metadata_schedule = ScheduleDefinition(
         selection=AssetSelection.keys(
             ["openmetadata", "trino", "metadata"],
             ["openmetadata", "dbt", "metadata"],
+            ["openmetadata", "dbt", "lineage"],
             ["openmetadata", "dagster", "metadata"],
         ),
         description="Ingest metadata from critical data sources",
