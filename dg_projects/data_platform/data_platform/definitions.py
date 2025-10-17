@@ -16,6 +16,8 @@ from ol_orchestrate.resources.secrets.vault import Vault
 # Determine dagster URL based on environment
 if DAGSTER_ENV == "dev":
     dagster_url = "http://localhost:3000"
+elif DAGSTER_ENV == "ci":
+    dagster_url = "https://pipelines-ci.odl.mit.edu"
 else:
     dagster_url = (
         "https://pipelines.odl.mit.edu"

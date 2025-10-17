@@ -32,6 +32,7 @@ from lakehouse.resources.superset_api import SupersetApiClientFactory
 
 airbyte_host_map = {
     "dev": "https://api-airbyte-qa.odl.mit.edu",
+    "ci": "https://api-airbyte-qa.odl.mit.edu",
     "qa": "https://api-airbyte-qa.odl.mit.edu",
     "production": "https://api-airbyte.odl.mit.edu",
 }
@@ -42,6 +43,9 @@ airbyte_host = os.environ.get("DAGSTER_AIRBYTE_HOST", airbyte_host_map[DAGSTER_E
 if DAGSTER_ENV == "dev":
     dagster_url = "http://localhost:3000"
     dbt_target = "dev_production"
+elif DAGSTER_ENV == "ci":
+    dagster_url = "https://pipelines-ci.odl.mit.edu"
+    dbt_target = "ci"
 else:
     dagster_url = (
         "https://pipelines.odl.mit.edu"

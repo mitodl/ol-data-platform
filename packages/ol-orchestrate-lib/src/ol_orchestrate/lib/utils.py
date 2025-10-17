@@ -43,19 +43,21 @@ def authenticate_vault(dagster_env: str, vault_address: str) -> Vault:
 
 
 def s3_uploads_bucket(
-    dagster_env: Literal["dev", "qa", "production"],
+    dagster_env: Literal["dev", "ci", "qa", "production"],
 ) -> dict[str, Any]:
     """
     Return the S3 bucket configuration based on the environment.
 
     Parameters:
-        dagster_env (Literal): Environment name, one of "dev", "qa", or "production".
+        dagster_env (Literal): Environment name, one of "dev", "ci", "qa", or
+            "production".
 
     Returns:
         dict: A dictionary with the S3 bucket and prefix for the specified environment.
     """
     bucket_map = {
         "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
+        "ci": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage-ci"},
         "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": ""},
         "production": {
             "bucket": "ol-data-lake-landing-zone-production",

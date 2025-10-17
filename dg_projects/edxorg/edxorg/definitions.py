@@ -75,10 +75,11 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
 
 
 def s3_uploads_bucket(
-    dagster_env: Literal["dev", "qa", "production"],
+    dagster_env: Literal["dev", "ci", "qa", "production"],
 ) -> dict[str, Any]:
     bucket_map = {
         "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
+        "ci": {"bucket": "ol-data-lake-landing-zone-ci", "prefix": ""},
         "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": ""},
         "production": {
             "bucket": "ol-data-lake-landing-zone-production",

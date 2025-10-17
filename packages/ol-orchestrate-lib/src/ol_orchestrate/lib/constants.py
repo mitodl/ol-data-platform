@@ -1,7 +1,7 @@
 import os
 from typing import Literal
 
-DAGSTER_ENV: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore[assignment]
+DAGSTER_ENV: Literal["dev", "ci", "qa", "production"] = os.environ.get(  # type: ignore[assignment]
     "DAGSTER_ENVIRONMENT", "dev"
 )
 

@@ -20,24 +20,24 @@ def contains_invalid_partition_strings(partition_key: str) -> bool:
 
 
 def default_io_manager(dagster_env) -> IOManager:
-    if dagster_env != "dev":
+    if dagster_env == "dev":
+        return FilesystemIOManager()
+    else:
         return S3PickleIOManager(
             s3_resource=S3Resource(),
             s3_bucket=os.environ.get("DAGSTER_BUCKET_NAME", f"dagster-{dagster_env}"),
             s3_prefix="assets",
         )
-    else:
-        return FilesystemIOManager()
 
 
 def default_file_object_io_manager(dagster_env, bucket, path_prefix) -> IOManager:
-    if dagster_env != "dev":
-        return S3FileObjectIOManager(
-            bucket=bucket,
+    if dagster_env == "dev":
+        return LocalFileObjectIOManager(
+            bucket="/opt/dagster/app/storage",
             path_prefix=path_prefix,
         )
     else:
-        return LocalFileObjectIOManager(
-            bucket="/opt/dagster/app/storage",
+        return S3FileObjectIOManager(
+            bucket=bucket,
             path_prefix=path_prefix,
         )

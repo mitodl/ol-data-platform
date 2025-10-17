@@ -41,16 +41,17 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
     vault_authenticated = False
 
-dagster_env: Literal["dev", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: PGH003
+dagster_env: Literal["dev", "ci", "qa", "production"] = os.environ.get(  # type: ignore  # noqa: PGH003
     "DAGSTER_ENVIRONMENT", DAGSTER_ENV
 )
 
 
 def s3_uploads_bucket(
-    dagster_env: Literal["dev", "qa", "production"],
+    dagster_env: Literal["dev", "ci", "qa", "production"],
 ) -> dict[str, Any]:
     bucket_map = {
         "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
+        "ci": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage-ci"},
         "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": ""},
         "production": {
             "bucket": "ol-data-lake-landing-zone-production",
@@ -61,10 +62,10 @@ def s3_uploads_bucket(
 
 
 def earliest_log_date(
-    dagster_env: Literal["dev", "qa", "production"],
+    dagster_env: Literal["dev", "ci", "qa", "production"],
     deployment_name: Literal["mitx", "mitxonline", "xpro"],
 ) -> datetime:
-    if dagster_env == "dev":
+    if dagster_env in ("dev", "ci"):
         dagster_env = "qa"
     date_map = {
         "qa": {
@@ -88,7 +89,7 @@ def daily_tracking_log_config(
 ):
     """Generate configuration for daily tracking log jobs."""
     log_bucket = s3_uploads_bucket(dagster_env)["bucket"]
-    if dagster_env == "dev":
+    if dagster_env in ("dev", "ci"):
         return {
             "resources": {
                 "duckdb": {

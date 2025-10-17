@@ -89,6 +89,7 @@ dagster_deployment = os.getenv("DAGSTER_ENVIRONMENT", "qa")
 # ============================================================================
 
 course_upload_bucket = {
+    "ci": "edxorg-ci-edxapp-courses",
     "qa": "edxorg-qa-edxapp-courses",
     "production": "edxorg-production-edxapp-courses",
 }
@@ -113,7 +114,7 @@ gcs_sync_job = sync_gcs_to_s3.to_job(
 
 def open_edx_export_irx_job_config(
     deployment: Literal["mitx", "mitxonline", "xpro"],
-    dagster_env: Literal["dev", "qa", "production"],
+    dagster_env: Literal["dev", "ci", "qa", "production"],
 ):
     pipeline_path = "residential" if deployment == "mitx" else deployment
     etl_bucket_map = {
