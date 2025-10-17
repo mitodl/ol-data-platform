@@ -2,16 +2,31 @@
 
 Contains platform-level functionality including:
 - Slack notifications for run failures
-- Database metadata ingestion (future)
+- OpenMetadata ingestion for data discovery and governance
 """
 
 from typing import Any
 
-from dagster import DefaultSensorStatus, Definitions, RunFailureSensorContext
+from dagster import (
+    DefaultSensorStatus,
+    Definitions,
+    RunFailureSensorContext,
+    load_assets_from_modules,
+)
 from dagster_slack import make_slack_on_run_failure_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.secrets.vault import Vault
+
+from data_platform.assets.metadata import ingestion
+from data_platform.resources.openmetadata import (
+    OpenMetadataClient,
+    get_openmetadata_config,
+)
+from data_platform.schedules.metadata import (
+    critical_metadata_schedule,
+    metadata_ingestion_schedule,
+)
 
 # Determine dagster URL based on environment
 if DAGSTER_ENV == "dev":
@@ -136,7 +151,35 @@ if vault_authenticated:
 
         warnings.warn(f"Failed to create Slack sensor: {e}", stacklevel=2)
 
+# Load metadata ingestion assets
+metadata_assets = load_assets_from_modules([ingestion])
+
+# Build resources
+resources = {
+    "vault": vault,
+}
+
+# Add OpenMetadata client if vault is authenticated
+if vault_authenticated:
+    try:
+        openmetadata_config = get_openmetadata_config()
+        resources["openmetadata_client"] = OpenMetadataClient(
+            vault=vault,
+            **openmetadata_config,
+        )
+    except Exception as e:  # noqa: BLE001
+        import warnings
+
+        warnings.warn(f"Failed to create OpenMetadata client: {e}", stacklevel=2)
+
 # Create unified definitions
 defs = Definitions(
+    assets=metadata_assets if vault_authenticated else [],
     sensors=sensor_list,
+    schedules=(
+        [metadata_ingestion_schedule, critical_metadata_schedule]
+        if vault_authenticated
+        else []
+    ),
+    resources=resources,
 )
