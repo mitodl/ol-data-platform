@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12, <3.14"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -1130,8 +1130,12 @@ dependencies = [
     { name = "dagster" },
     { name = "dagster-aws" },
     { name = "dagster-postgres" },
+    { name = "google-api-python-client" },
     { name = "jsonlines" },
     { name = "ol-orchestrate-lib" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "yt-dlp" },
 ]
 
 [package.dev-dependencies]
@@ -1145,8 +1149,12 @@ requires-dist = [
     { name = "dagster", specifier = ">=1.11.13" },
     { name = "dagster-aws", specifier = "~=0.27.0" },
     { name = "dagster-postgres", specifier = ">=0.27.13" },
+    { name = "google-api-python-client", specifier = "~=2.0" },
     { name = "jsonlines", specifier = "~=4.0.0" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
+    { name = "pyyaml", specifier = "~=6.0" },
+    { name = "requests", specifier = "~=2.31" },
+    { name = "yt-dlp", specifier = "~=2025.10.14" },
 ]
 
 [package.metadata.requires-dev]
@@ -2517,4 +2525,13 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dc/f9/9d9556b9fef2df1dd78c770c021bfcf84d03413bd137cd3e3279a612adc4/yaspin-3.2.0.tar.gz", hash = "sha256:416fe8d6722d26e4d1a1f50498bb4f3bdd4c68b9cd54065d224a4b9d1228cce7", size = 39083, upload-time = "2025-09-17T18:54:08.267Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b9/76/92596d08527dab7bc2ccbfd0fd620175231994feb7eaddb2a78d6333e7b6/yaspin-3.2.0-py3-none-any.whl", hash = "sha256:6a98053c75c0728271070bd6c99d0c83b6de76734bee34a294c2c2df00e9a06c", size = 20634, upload-time = "2025-09-17T18:54:06.965Z" },
+]
+
+[[package]]
+name = "yt-dlp"
+version = "2025.10.14"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/b7/dab729345e22891e79294273bc59c5213a1ec87331f49cb82ccea2b1bc9f/yt_dlp-2025.10.14.tar.gz", hash = "sha256:b18436aa9bb6f04354fd78d31ad9eeaae8c81b6a859f07072b25c18cd6c25844", size = 3045272, upload-time = "2025-10-14T23:39:52.688Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/19/399c85d29bd7b366b31ede82698f7963374e5a3842ae9de0cde6514506b0/yt_dlp-2025.10.14-py3-none-any.whl", hash = "sha256:0b9da17eda1bbf48e2315130043d7993fd4ca1c5a35571f8231da1a910c9c115", size = 3248664, upload-time = "2025-10-14T23:39:49.95Z" },
 ]
