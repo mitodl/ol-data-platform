@@ -36,3 +36,32 @@ class MITLearnApiClient(BaseApiClient):
         )
         response.raise_for_status()
         return response.json()
+
+    def notify_shorts_processed(self, short_id: str) -> dict[str, Any]:
+        """Send webhook notification when a video short is processed."""
+        data = {"id": short_id}
+        payload_string = json.dumps(data, separators=(",", ":"))  # remove extra spaces
+        signature = hmac.new(
+            self.token.encode(), payload_string.encode(), hashlib.sha256
+        ).hexdigest()
+        headers = {
+            "X-MITLearn-Signature": signature,
+        }
+
+        response = self.http_client.post(
+            f"{self.base_url}/api/v1/webhooks/shorts/",
+            content=payload_string,
+            headers=headers,
+        )
+        response.raise_for_status()
+
+        return {"status": "success", "short_id": short_id}
+
+    def notify_shorts_deleted(self, short_id: str) -> dict[str, Any]:
+        """Send webhook notification when a video short is deleted."""
+        response = self.http_client.delete(
+            f"{self.base_url}/api/v1/webhooks/shorts/{short_id}"
+        )
+        response.raise_for_status()
+
+        return {"status": "success", "short_id": short_id}
