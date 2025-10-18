@@ -1778,7 +1778,7 @@ requires-dist = [
     { name = "pandas", specifier = "~=2.3.3" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
     { name = "pyarrow", specifier = "~=21.0.0" },
-    { name = "pyathena", specifier = "~=3.11.0" },
+    { name = "pyathena", specifier = "~=3.18.0" },
     { name = "pydantic", specifier = "~=2.11.1" },
     { name = "pygsheets", specifier = "~=2.0.6" },
     { name = "pypika", specifier = "~=0.48.9" },
@@ -2065,7 +2065,7 @@ wheels = [
 
 [[package]]
 name = "pyathena"
-version = "3.11.0"
+version = "3.18.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
@@ -2074,9 +2074,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b7/a0/a1e663963c69e4a2ae5234c33adc69fed7f5c7bc429cc8ec24e253b6b8cd/pyathena-3.11.0.tar.gz", hash = "sha256:a6e9cac35132abe719a0fc2862182c77a34af0eb0a356c3374a583bca7bb530a", size = 56007, upload-time = "2024-12-07T11:19:39.045Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/02/5b/70d5ee0313b5d2f55a11272c84ecfb73e72d82ff807873a9a35c9bf9dd25/pyathena-3.18.0.tar.gz", hash = "sha256:5d6c9c70c1abcc49fdb33c9470d520f470cace1f04e5249c7b92e06ffc328326", size = 86840, upload-time = "2025-09-07T07:31:25.512Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a2/42/9743122a5b9d866faa28cbc6c0226774b607d987cc9920d9245fad92ed08/pyathena-3.11.0-py3-none-any.whl", hash = "sha256:f17cf61063384affbe940f5df42e191ed959b88f701fa382812fc7a3d4ebde51", size = 75678, upload-time = "2024-12-07T11:19:37.449Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/b1/07918b90eb9e7e0d05f5ad1c16269ab9dfa9a6f32e11aa794075de31c9c8/pyathena-3.18.0-py3-none-any.whl", hash = "sha256:acf3b975bfb09f854c94ac8a152d34469a4dc27ff4e2f6ce23e1e27838d1ab96", size = 112313, upload-time = "2025-09-07T07:31:23.884Z" },
 ]
 
 [[package]]
