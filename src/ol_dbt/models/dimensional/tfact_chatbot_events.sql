@@ -42,19 +42,73 @@ with openedx_events as (
         , useractivity_session_id as session_id
         , json_query(useractivity_context_object, 'lax $.module.usage_key' omit quotes) as block_id
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as block_name
-        , json_query(useractivity_event_object, 'lax $.value' omit quotes) as event_value
         , json_query(useractivity_event_object, 'lax $.xblock_state' omit quotes) as chatbot_type
         , json_query(useractivity_event_object, 'lax $.problem_set' omit quotes) as problem_set
-        , json_query(useractivity_event_object, 'lax $.canvas_course_id' omit quotes) as canvas_course_id
+        , nullif(json_query(useractivity_event_object, 'lax $.canvas_course_id' omit quotes),'') as canvas_course_id
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
-        , if (useractivity_event_type like '%submit'
-          , json_query(useractivity_event_object, 'lax $.value' omit quotes)
-        ) as human_message
-        , if (useractivity_event_type like '%response'
-          , json_query(useractivity_event_object, 'lax $.value' omit quotes)
-        ) as agent_message
-    from {{ ref('stg__mitxonline__canvas__tracking_logs__user_activity') }}
+        , case when useractivity_event_type like '%response'
+             then regexp_replace(
+                 json_query(useractivity_event_object, 'lax $.value' omit quotes)
+                 , '^b[''"]|[''"]$', ''
+               )
+          else json_query(useractivity_event_object, 'lax $.value' omit quotes)
+        end as event_value
+        , regexp_extract(
+             json_query(useractivity_event_object, 'lax $.value' omit quotes)
+             , '"thread_id": "([^"]+)"'
+             , 1
+        ) AS thread_id
+    from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
         and useractivity_event_type in {{ canvas_chatbot_events }}
 )
+
+, learn_ai_userchatsession as (
+    select * from {{ ref('stg__learn_ai__app__postgres__chatbots_userchatsession') }}
+)
+
+, canvas_events_with_learnai as (
+    select
+        canvas_events.*
+        , coalesce(canvas_events.canvas_course_id, learn_ai_userchatsession.chatsession_object_id) as canvas_object_id
+    from canvas_events
+    left join learn_ai_userchatsession
+        on canvas_events.thread_id = learn_ai_userchatsession.chatsession_thread_id
+)
+
+select
+    'open_edx' as chatbot_source
+    , user_username
+    , openedx_user_id
+    , org_id
+    , courserun_readable_id
+    , event_type
+    , session_id
+    , block_id
+    , block_name
+    , 'Tutor' as chatbot_type
+    , null as problem_set
+    , event_value
+    , event_timestamp
+    , event_json
+from openedx_events
+
+union
+
+select
+    'canvas' as chatbot_source
+    , user_username
+    , openedx_user_id
+    , org_id
+    , canvas_object_id as courserun_readable_id
+    , event_type
+    , session_id
+    , block_id
+    , block_name
+    , chatbot_type
+    , problem_set
+    , event_value
+    , event_timestamp
+    , event_json
+from canvas_events_with_learnai
