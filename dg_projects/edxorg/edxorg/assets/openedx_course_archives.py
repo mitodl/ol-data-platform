@@ -20,6 +20,7 @@ from dagster._core.definitions.partitions.utils.multi import (
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
+    process_course_xml_blocks,
     process_policy_json,
     process_video_xml,
 )
@@ -70,6 +71,15 @@ def dummy_edxorg_course_xml(): ...
             description=("Details about the course policy in the course"),
             io_manager_key="s3file_io_manager",
             key=AssetKey(("edxorg", "processed_data", "course_policy")),
+        ),
+        "course_xml_blocks": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Comprehensive block-level data extracted from course XML archives, "
+                "including chapters, sequentials, verticals, and content components"
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("edxorg", "processed_data", "course_xml_blocks")),
         ),
     },
 )
@@ -154,4 +164,23 @@ def extract_edxorg_courserun_metadata(
             "object_key": course_certificate_signatory_object_key,
         },
     )
+
+    # Process comprehensive XML block data
+    xml_blocks = process_course_xml_blocks(course_xml_path)
+    course_xml_blocks_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_xml_blocks.jsonl").name
+    )
+    jsonlines.open(course_xml_blocks_file, "w").write_all(xml_blocks)
+    course_xml_blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_xml_blocks').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
+    yield Output(
+        (course_xml_blocks_file, course_xml_blocks_object_key),
+        output_name="course_xml_blocks",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": partition_dict["course_id"],
+            "object_key": course_xml_blocks_object_key,
+            "block_count": len(xml_blocks),
+        },
+    )
+
     course_xml_path.unlink()

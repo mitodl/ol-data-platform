@@ -314,3 +314,127 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
         "self_paced": self_paced,
         "title": title,
     }
+
+
+def process_course_xml_blocks(archive_path: Path) -> list[dict[str, Any]]:  # noqa: C901
+    """
+    Extract comprehensive block information from course XML archives.
+
+    Processes all XML files in the course archive to extract block-level data
+    including chapters, sequentials, verticals, and content components like
+    videos, problems, and HTML blocks.
+
+    :param archive_path: The path to the tar archive for the course bundle
+
+    :return: A list of dictionaries containing block information with metadata
+    :rtype: list[dict[str, Any]]
+    """
+    blocks = []
+    retrieved_at = datetime.now(tz=UTC).isoformat()
+
+    with tarfile.open(archive_path, "r") as tf:
+        # Get course info from the course xml file in the root directory
+        archive_root = tf.next()
+        if archive_root is None:
+            msg = "Unable to retrieve the archive root of the course XML."
+            raise ValueError(msg)
+
+        tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
+        course_xml_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_course.xml").name
+        )
+        course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
+        course_id, _course_number, _run_tag, _org = parse_course_id(
+            str(course_xml_file)
+        )
+        course_xml_file.unlink()
+
+        # Process all XML files to extract block information
+        # Common block types: chapter, sequential, vertical, video, problem,
+        # html, discussion
+        block_types = [
+            "chapter",
+            "sequential",
+            "vertical",
+            "video",
+            "problem",
+            "html",
+            "discussion",
+            "lti",
+            "lti_consumer",
+            "word_cloud",
+            "poll_question",
+        ]
+
+        for member in tf.getmembers():
+            if not member.isdir() and member.path.endswith(".xml"):
+                # Determine block type from directory path
+                path_parts = member.path.split("/")
+                if len(path_parts) < 2:  # noqa: PLR2004
+                    continue
+
+                block_type = path_parts[1]
+                # Skip non-block files like policies, about, etc.
+                if (
+                    block_type not in block_types
+                    and block_type != "course"
+                    and block_type in ["policies", "about", "static", "drafts"]
+                ):
+                    continue
+
+                xml_data = tf.extractfile(member)
+                if not xml_data:
+                    continue
+
+                try:
+                    tree = ElementTree()
+                    tree.parse(xml_data)
+                    root = tree.getroot()
+
+                    if root is None:
+                        continue
+
+                    # Extract block_id from filename or url_name attribute
+                    block_id = root.attrib.get("url_name")
+                    if not block_id:
+                        # Use filename without extension as fallback
+                        block_id = Path(member.path).stem
+
+                    # Build complete block data
+                    block_data = {
+                        "course_id": course_id,
+                        "block_id": block_id,
+                        "block_type": block_type,
+                        "block_display_name": root.attrib.get("display_name", ""),
+                        "xml_attributes": dict(root.attrib),
+                        "xml_path": member.path,
+                        "retrieved_at": retrieved_at,
+                    }
+
+                    # Add type-specific metadata
+                    if block_type == "video":
+                        edx_video_id = root.attrib.get("edx_video_id")
+                        if edx_video_id:
+                            block_data["edx_video_id"] = edx_video_id
+                        video_asset = root.find("video_asset")
+                        if video_asset is not None:
+                            duration = video_asset.attrib.get("duration", "0.0")
+                            block_data["duration"] = duration
+                    elif block_type == "problem":
+                        max_attempts = root.attrib.get("max_attempts")
+                        if max_attempts:
+                            block_data["max_attempts"] = max_attempts
+                        weight = root.attrib.get("weight")
+                        if weight:
+                            block_data["weight"] = weight
+                        markdown = root.attrib.get("markdown")
+                        if markdown:
+                            block_data["markdown"] = markdown
+
+                    blocks.append(block_data)
+
+                except Exception:  # noqa: BLE001
+                    # Skip malformed XML files
+                    continue
+
+    return blocks
