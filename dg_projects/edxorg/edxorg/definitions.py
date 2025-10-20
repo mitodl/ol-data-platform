@@ -28,6 +28,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
 from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
+from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir, SimpleResultsDir
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -49,6 +50,10 @@ from edxorg.assets.edxorg_archive import (
     gcs_edxorg_archive_sensor,
     gcs_edxorg_tracking_log_sensor,
     normalize_edxorg_tracking_log,
+)
+from edxorg.assets.instructor_onboarding import (
+    generate_instructor_onboarding_user_list,
+    update_access_forge_repository,
 )
 from edxorg.assets.openedx_course_archives import (
     dummy_edxorg_course_xml,
@@ -223,7 +228,10 @@ edxorg_api_daily_schedule = ScheduleDefinition(
     job=define_asset_job(
         name="edxorg_api_daily_job",
         selection=AssetSelection.assets(
-            edxorg_program_metadata, edxorg_mitx_course_metadata
+            edxorg_program_metadata,
+            edxorg_mitx_course_metadata,
+            generate_instructor_onboarding_user_list,
+            update_access_forge_repository,
         ),
     ),
     cron_schedule="0 5 * * *",
@@ -253,6 +261,7 @@ defs = Definitions(
         "gcp_gcs": gcs_connection,
         "vault": vault,
         "edxorg_api": OpenEdxApiClientFactory(deployment="edxorg", vault=vault),
+        "github_api": GithubApiClientFactory(vault=vault),
         "s3": S3Resource(profile_name="edxorg"),
         "s3_download": S3Resource(profile_name="edxorg"),
         "s3_upload": S3Resource(),
@@ -275,6 +284,8 @@ defs = Definitions(
         dummy_edxorg_course_xml,
         edxorg_program_metadata,
         edxorg_mitx_course_metadata,
+        generate_instructor_onboarding_user_list,
+        update_access_forge_repository,
     ],
     schedules=[edxorg_api_daily_schedule],
 )
