@@ -44,6 +44,8 @@ from edxorg.assets.edxorg_archive import (
     edxorg_raw_data_archive,
     edxorg_raw_tracking_logs,
     flatten_edxorg_course_structure,
+    gcs_edxorg_archive_sensor,
+    gcs_edxorg_tracking_log_sensor,
     normalize_edxorg_tracking_log,
 )
 from edxorg.assets.openedx_course_archives import (
@@ -51,6 +53,7 @@ from edxorg.assets.openedx_course_archives import (
     extract_edxorg_courserun_metadata,
 )
 from edxorg.io_managers.gcs import GCSFileIOManager
+from edxorg.jobs.edx_gcs_courses import sync_gcs_to_s3
 from edxorg.jobs.retrieve_edx_exports import retrieve_edx_course_exports
 from edxorg.ops.object_storage import (
     S3DownloadConfig,
@@ -170,19 +173,6 @@ def sync_edxorg_program_reports():
     upload_files_to_s3(download_files_from_s3())
 
 
-# Sensors
-try:
-    from edxorg.sensors.object_storage import (
-        gcs_edxorg_archive_sensor,
-        gcs_edxorg_tracking_log_sensor,
-    )
-
-    sensors_available = True
-except Exception:  # noqa: BLE001
-    sensors_available = False
-    gcs_edxorg_archive_sensor = None
-    gcs_edxorg_tracking_log_sensor = None
-
 edxorg_program_reports_sensor = SensorDefinition(
     name="edxorg_program_reports_sensor",
     evaluation_fn=partial(
@@ -206,11 +196,30 @@ edxorg_program_reports_sensor = SensorDefinition(
     minimum_interval_seconds=86400,
 )
 
+course_upload_bucket = {
+    "ci": "edxorg-ci-edxapp-courses",
+    "qa": "edxorg-qa-edxapp-courses",
+    "production": "edxorg-production-edxapp-courses",
+}
+
+gcs_sync_job = sync_gcs_to_s3.to_job(
+    name="edx_gcs_course_retrieval",
+    config={
+        "ops": {
+            "edx_upload_gcs_course_tarballs": {
+                "config": {
+                    "edx_etl_results_bucket": course_upload_bucket[dagster_deployment]
+                }
+            }
+        }
+    },
+)
+
 edxorg_course_bundle_sensor = SensorDefinition(
     evaluation_fn=partial(gcs_multi_file_sensor, "simeon-mitx-course-tarballs"),
     name="edxorg_course_bundle_sensor",
     minimum_interval_seconds=86400,
-    job=edxorg_course_data_job,
+    job=gcs_sync_job,
     default_status=DefaultSensorStatus.STOPPED,
 )
 
@@ -228,14 +237,12 @@ edxorg_api_daily_schedule = ScheduleDefinition(
 )
 
 # Build sensor list
-sensor_list = [edxorg_program_reports_sensor, edxorg_course_bundle_sensor]
-if sensors_available and gcs_edxorg_archive_sensor and gcs_edxorg_tracking_log_sensor:
-    sensor_list.extend(
-        [
-            gcs_edxorg_archive_sensor.with_updated_job(edxorg_course_data_job),
-            gcs_edxorg_tracking_log_sensor,
-        ]
-    )
+sensor_list = [
+    edxorg_program_reports_sensor,
+    edxorg_course_bundle_sensor,
+    gcs_edxorg_archive_sensor,
+    gcs_edxorg_tracking_log_sensor,
+]
 
 # Create unified definitions
 defs = Definitions(

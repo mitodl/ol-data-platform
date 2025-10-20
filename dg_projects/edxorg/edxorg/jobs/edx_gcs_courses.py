@@ -1,6 +1,6 @@
 from dagster import graph
 
-from legacy_openedx.ops.edx_gcs_courses import (
+from edxorg.ops.edx_gcs_courses import (
     download_edx_gcs_course_data,
     upload_edx_gcs_course_data_to_s3,
 )
