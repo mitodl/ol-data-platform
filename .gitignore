@@ -12,6 +12,7 @@ bin/pants
 .aider*
 .env
 **/*.egg-info/
+<<<<<<< HEAD
 progress.log
 # dlt specific
 **/.dlt/secrets.toml
@@ -19,3 +20,4 @@ progress.log
 **/.dlt/.sources
 **/.dlt/.pipelines
 **/.dlt/state/
+src/ol_dbt/.user.yml
