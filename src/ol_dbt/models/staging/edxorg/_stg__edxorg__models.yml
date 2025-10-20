@@ -661,6 +661,52 @@ models:
       column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
         "coursestructure_retrieved_at"]
 
+- name: stg__edxorg__s3__course_xml_blocks
+  description: Comprehensive block-level data extracted from edX.org course XML archives.
+    This table contains all course components parsed directly from the XML structure,
+    including chapters, sequentials, verticals, and content blocks like videos, problems,
+    and HTML components.
+  columns:
+  - name: courserun_readable_id
+    description: str, course ID formatted as course-v1:{org}+{course}+{run}
+    tests:
+    - not_null
+  - name: coursestructure_xml_block_id
+    description: str, unique identifier for the block from XML url_name attribute or filename
+    tests:
+    - not_null
+  - name: coursestructure_xml_block_type
+    description: str, category/type of the XML block such as chapter, sequential, vertical,
+      video, problem, html, discussion, lti, etc.
+    tests:
+    - not_null
+  - name: coursestructure_xml_block_display_name
+    description: str, display name of the block from the XML display_name attribute
+  - name: coursestructure_xml_block_attributes
+    description: json, complete set of XML attributes for the block as a JSON object
+  - name: coursestructure_xml_block_path
+    description: str, path to the XML file within the course archive
+    tests:
+    - not_null
+  - name: video_edx_id
+    description: str, for video blocks, the edX video ID used to reference the video
+  - name: video_duration
+    description: decimal, for video blocks, the duration in seconds
+  - name: problem_max_attempts
+    description: str, for problem blocks, maximum number of attempts allowed
+  - name: problem_weight
+    description: str, for problem blocks, the weight/points value for grading
+  - name: problem_markdown
+    description: str, for problem blocks, markdown content if present
+  - name: coursestructure_xml_retrieved_at
+    description: timestamp, ISO8601 timestamp when the block data was extracted from the archive
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "coursestructure_xml_block_id", 
+        "coursestructure_xml_block_type", "coursestructure_xml_retrieved_at"]
+
 - name: stg__edxorg__s3__user
   description: edx.org user data
   columns:

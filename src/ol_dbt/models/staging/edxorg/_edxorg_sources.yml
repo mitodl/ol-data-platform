@@ -681,6 +681,37 @@ sources:
       description: timestamp, time indicating when this block was initially retrieved
         from S3
 
+  - name: raw__edxorg__s3__course_xml_blocks
+    description: Comprehensive block-level data extracted from edX.org course XML archives,
+      including all course components from the XML structure
+    columns:
+    - name: course_id
+      description: str, course ID formatted as course-v1:{org}+{course}+{run}
+    - name: block_id
+      description: str, unique identifier for the block extracted from XML url_name
+        attribute or filename
+    - name: block_type
+      description: str, category/type of the XML block such as chapter, sequential,
+        vertical, video, problem, html, discussion, lti, etc.
+    - name: block_display_name
+      description: str, display name of the block from the XML display_name attribute
+    - name: xml_attributes
+      description: json, complete set of XML attributes for the block as a JSON object
+    - name: xml_path
+      description: str, path to the XML file within the course archive
+    - name: edx_video_id
+      description: str, for video blocks, the edX video ID
+    - name: duration
+      description: str, for video blocks, the duration in seconds
+    - name: max_attempts
+      description: str, for problem blocks, maximum number of attempts allowed
+    - name: weight
+      description: str, for problem blocks, the weight/points value
+    - name: markdown
+      description: str, for problem blocks, markdown content if present
+    - name: retrieved_at
+      description: timestamp, ISO8601 timestamp when the block data was extracted
+
   - name: raw__edxorg__s3__tables__auth_user
     description: edx.org user data
     columns:
