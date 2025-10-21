@@ -88,7 +88,6 @@ select
     , block_id
     , block_name
     , 'Tutor' as chatbot_type
-    , null as problem_set
     , event_value
     , event_timestamp
     , event_json
@@ -107,7 +106,6 @@ select
     , block_id
     , block_name
     , chatbot_type
-    , problem_set
     , event_value
     , event_timestamp
     , event_json
