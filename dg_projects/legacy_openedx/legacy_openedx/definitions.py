@@ -20,7 +20,6 @@ from ol_orchestrate.resources.openedx import OpenEdxApiClient
 from ol_orchestrate.resources.outputs import DailyResultsDir
 from ol_orchestrate.resources.secrets.vault import Vault
 
-from legacy_openedx.jobs.edx_gcs_courses import sync_gcs_to_s3
 from legacy_openedx.jobs.open_edx import edx_course_pipeline
 from legacy_openedx.resources.healthchecks import HealthchecksIO
 from legacy_openedx.resources.mysql_db import mysql_db_resource
@@ -94,18 +93,6 @@ course_upload_bucket = {
     "production": "edxorg-production-edxapp-courses",
 }
 
-gcs_sync_job = sync_gcs_to_s3.to_job(
-    name="edx_gcs_course_retrieval",
-    config={
-        "ops": {
-            "edx_upload_gcs_course_tarballs": {
-                "config": {
-                    "edx_etl_results_bucket": course_upload_bucket[dagster_deployment]
-                }
-            }
-        }
-    },
-)
 
 # ============================================================================
 # IRx Open edX Course Data Exports
@@ -225,7 +212,7 @@ mitxonline_edx_job = edx_course_pipeline.to_job(
 
 # Create unified definitions
 defs = Definitions(
-    jobs=[gcs_sync_job, residential_edx_job, xpro_edx_job, mitxonline_edx_job],
+    jobs=[residential_edx_job, xpro_edx_job, mitxonline_edx_job],
     schedules=[
         residential_edx_daily_schedule.with_updated_job(residential_edx_job),
         xpro_edx_daily_schedule.with_updated_job(xpro_edx_job),
