@@ -8,7 +8,14 @@ access management.
 from datetime import UTC, datetime
 
 import polars as pl
-from dagster import AssetExecutionContext, AssetIn, AssetKey, Output, asset
+from dagster import (
+    AssetExecutionContext,
+    AssetIn,
+    AssetKey,
+    MaterializeResult,
+    Output,
+    asset,
+)
 from github.GithubException import UnknownObjectException
 from ol_orchestrate.resources.github import GithubApiClientFactory
 
@@ -81,29 +88,31 @@ def generate_instructor_onboarding_user_list(
 
 @asset(
     name="update_access_forge_repo",
-    group_name="instructor_onboarding",
-    ins={"instructor_onboarding_user_list": AssetIn()},
-    required_resource_keys={"github_api"},
+    group_name="edxorg_instructor_onboarding",
+    ins={
+        "instructor_onboarding_user_list": AssetIn(
+            key=AssetKey(["instructor_onboarding_user_list"])
+        )
+    },
     description="Updates the access-forge repository with the generated user list",
 )
-def update_access_forge_repository(
+def update_access_forge_repo(
     context: AssetExecutionContext,
-    instructor_onboarding_user_list: str,
     github_api: GithubApiClientFactory,
-) -> Output[dict]:
-    """Push the generated CSV content to the access-forge GitHub repository.
+    instructor_onboarding_user_list: str,
+) -> MaterializeResult:
+    """Update access-forge repository with instructor user list.
 
     This asset updates or creates a CSV file in the private mitodl/access-forge
     repository with the user list generated from the dbt model.
 
     Args:
         context: Dagster execution context
-        instructor_onboarding_user_list: CSV string content to upload with columns:
-            email, role, sent_invite
         github_api: GitHub API client factory resource for authentication
+        instructor_onboarding_user_list: CSV string content from upstream asset
 
     Returns:
-        Output containing metadata about the commit (repo, file path, action, SHA)
+        MaterializeResult containing metadata about the commit
 
     Raises:
         Exception: If GitHub API call fails or authentication issues occur
@@ -119,8 +128,8 @@ def update_access_forge_repository(
     commit_message = "dagster-pipeline - update user list from ol-data-platform"
 
     try:
-        gh_client = github_api.get_client()
-        repo = gh_client.get_repo(repo_name)
+        github_client = github_api.get_client()
+        repo = github_client.get_repo(repo_name)
 
         # Get the base branch reference
         base_ref = repo.get_git_ref(f"heads/{base_branch}")
