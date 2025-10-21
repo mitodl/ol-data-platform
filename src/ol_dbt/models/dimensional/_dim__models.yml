@@ -798,3 +798,58 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "discussion_topic_fk",
         "commentable_id", 'post_id']
+
+- name: tfact_chatbot_events
+  description: Transactional fact table for learner chatbot events in a course
+  columns:
+  - name: chatbot_source
+    description: string, indicates the source of the chatbot event like 'open_edx'
+      or 'canvas'
+    tests:
+    - not_null
+  - name: org_id
+    description: string, the name of the organization that created the course. e.g.
+      MITxT, MITx, UAI_MIT, etc.
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, user ID on the MIT Learn open edX platform
+    tests:
+    - not_null
+  - name: user_username
+    description: str, username of the MIT Learn open edX
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, the open edX course readable ID or canvas course id. May
+      be Null for some canvas chatbot events where course info is not captured.
+  - name: event_type
+    description: string, type of the chatbot event. e.g. ol_openedx_chat.drawer.submit,
+      ol_openedx_chat.drawer.response, ol_openedx_chat_xblock.OLChat.submit, ol_openedx_chat_xblock.OLChat.response,
+      etc.
+    tests:
+    - not_null
+  - name: session_id
+    description: string, unique identifier for the chatbot session
+    tests:
+    - not_null
+  - name: block_id
+    description: string, foreign key to dim_course_content, referencing the block
+      ID of the page where the chatbot event occurred. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
+      code}.
+  - name: block_name
+    description: string, name of the content block where the chatbot event occurred.
+  - name: chatbot_type
+    description: string, type of the chatbot. e.g. Syllabus, Tutor, etc.
+  - name: event_value
+    description: string, the value of the event, e.g. the message submitted by the
+      learner or the response from the chatbot. For other event type such as tabchange,
+      it is string indicating which tab the user switched to.
+  - name: event_json
+    description: json, it includes member fields that identify specifics of each triggered
+      event.
+  - name: event_timestamp
+    description: timestamp, timestamp (with time zone) indicating the time at which
+      the event occurred
+    tests:
+    - not_null
