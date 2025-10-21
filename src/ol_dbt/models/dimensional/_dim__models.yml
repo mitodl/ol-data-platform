@@ -841,6 +841,10 @@ models:
     description: string, name of the content block where the chatbot event occurred.
   - name: chatbot_type
     description: string, type of the chatbot. e.g. Syllabus, Tutor, etc.
+  - name: event_value
+    description: string, the value of the event, e.g. the message submitted by the
+      learner or the response from the chatbot. For other event type such as tabchange,
+      it is string indicating which tab the user switched to.
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event.
