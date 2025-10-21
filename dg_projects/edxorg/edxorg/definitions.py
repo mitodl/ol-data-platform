@@ -93,42 +93,11 @@ def s3_uploads_bucket(
 
 
 # Initialize GCS connection with resilient loading
-try:
-    if vault_authenticated:
-        gcs_connection = GCSConnection(
-            **vault.client.secrets.kv.v1.read_secret(
-                mount_point="secret-data", path="pipelines/edx/org/gcp-oauth-client"
-            )["data"]
-        )
-    else:
-        # Mock GCS connection for testing
-        gcs_connection = GCSConnection(
-            project_id="test-project",
-            client_email="test@test.iam.gserviceaccount.com",
-            client_id="123456",
-            client_x509_cert_url="https://test.com/cert",
-            private_key="-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",  # pragma: allowlist secret  # noqa: E501
-            private_key_id="test",
-            auth_uri="https://accounts.google.com/o/oauth2/auth",
-            token_uri="https://oauth2.googleapis.com/token",  # noqa: S106 (not a password)
-        )
-except Exception as e:  # noqa: BLE001
-    import warnings
-
-    warnings.warn(
-        f"Failed to initialize GCS connection: {e}. Using mock.", stacklevel=2
-    )
-    # Create minimal mock GCS connection for testing
-    gcs_connection = GCSConnection(
-        project_id="test-project",
-        client_email="test@test.iam.gserviceaccount.com",
-        client_id="123456",
-        client_x509_cert_url="https://test.com/cert",
-        private_key="-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",  # pragma: allowlist secret  # noqa: E501
-        private_key_id="test",
-        auth_uri="https://accounts.google.com/o/oauth2/auth",
-        token_uri="https://oauth2.googleapis.com/token",  # noqa: S106 (not a password)
-    )
+gcs_connection = GCSConnection(
+    **vault.client.secrets.kv.v1.read_secret(
+        mount_point="secret-data", path="pipelines/edx/org/gcp-oauth-client"
+    )["data"]
+)
 
 # EdX.org course data and tracking logs jobs
 edxorg_course_data_job = retrieve_edx_course_exports.to_job(
