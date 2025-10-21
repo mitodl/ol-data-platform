@@ -3,14 +3,14 @@ with enrollment_detail as (
 )
 
 , certificate_org_data as (
-    select 
+    select
         platform
         , course_title
         , courserun_readable_id
         , user_email
         , cast(substring(courseruncertificate_created_on, 1, 10) as date) as certificate_created_date
     from enrollment_detail
-    group by 
+    group by
         platform
         , course_title
         , courserun_readable_id
