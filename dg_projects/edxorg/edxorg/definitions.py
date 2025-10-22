@@ -25,6 +25,7 @@ from ol_orchestrate.io_managers.filepath import (
     S3FileObjectIOManager,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
+from ol_orchestrate.lib.dagster_helpers import default_io_manager
 from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
@@ -143,6 +144,12 @@ upload_config = S3UploadConfig(
     name="sync_edxorg_program_reports",
     description="Replicate program credential reports from edx.org into our own S3 "
     "bucket so that it can be ingested into the OL data lake.",
+    resource_defs={
+        "io_manager": default_io_manager(DAGSTER_ENV),
+        "results_dir": SimpleResultsDir.configure_at_launch(),
+        "s3_download": S3Resource(profile_name="edxorg"),
+        "s3_upload": S3Resource(),
+    },
     config={
         "ops": {
             "download_files_from_s3": {"config": download_config.dict()},
@@ -185,6 +192,12 @@ course_upload_bucket = {
 
 gcs_sync_job = sync_gcs_to_s3.to_job(
     name="edx_gcs_course_retrieval",
+    resource_defs={
+        "io_manager": default_io_manager(DAGSTER_ENV),
+        "results_dir": SimpleResultsDir.configure_at_launch(),
+        "gcp_gcs": gcs_connection,
+        "s3": S3Resource(),
+    },
     config={
         "ops": {
             "edx_upload_gcs_course_tarballs": {
@@ -250,6 +263,7 @@ defs = Definitions(
         edxorg_course_data_job,
         edxorg_tracking_logs_job,
         sync_edxorg_program_reports,
+        gcs_sync_job,
     ],
     assets=[
         edxorg_raw_data_archive.to_source_asset(),
