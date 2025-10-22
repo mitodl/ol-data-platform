@@ -29,7 +29,7 @@ with mitx_users as (
     from {{ ref('int__mitx__users') }}
 )
 
-, mitxonline_openedx_users as (
+, mitlearn_openedx_users as (
     select
         openedx_user_id
         , user_username
@@ -183,14 +183,15 @@ with mitx_users as (
 , mitx_users_view as (
     select
         mitx_users.user_global_id
-        , mitxonline_openedx_users.openedx_user_id as mitxonline_openedx_user_id
+        , mitlearn_openedx_users.openedx_user_id as mitlearn_openedx_user_id
+        , mitlearn_openedx_users.openedx_user_id as mitxonline_openedx_user_id
         , mitx_users.mitxonline_application_user_id
         , coalesce(
             mitxonline_app_openedxuser_mapping.openedxuser_username, mitx_users.user_mitxonline_username
         ) as user_mitxonline_username
         , mitx_users.edxorg_openedx_user_id
         , mitx_users.user_edxorg_username
-        , mitx_users.user_email as email
+        , coalesce(mitx_users.user_email, mitlearn_openedx_users.user_email) as email
         , mitx_users.full_name
         , mitx_users.address_country
         , mitx_users.highest_education
@@ -206,8 +207,8 @@ with mitx_users as (
     from mitx_users
     left join mitxonline_app_openedxuser_mapping
         on mitx_users.mitxonline_application_user_id = mitxonline_app_openedxuser_mapping.user_id
-    left join mitxonline_openedx_users
-        on mitxonline_app_openedxuser_mapping.openedxuser_username = mitxonline_openedx_users.user_username
+    full outer join mitlearn_openedx_users
+        on mitxonline_app_openedxuser_mapping.openedxuser_username = mitlearn_openedx_users.user_username
 )
 
 , learn_user as (
