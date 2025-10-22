@@ -129,6 +129,11 @@ def download_youtube_video_assets(context: AssetExecutionContext):
             "outtmpl": video_output_template,
             "quiet": True,
             "no_warnings": True,
+            "postprocessor_args": {
+                # Recommended for fast streaming, for details see:
+                # https://code.pixplicity.com/ffmpeg/faststart/
+                "ffmpeg": ["-movflags", "faststart"]
+            },
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
