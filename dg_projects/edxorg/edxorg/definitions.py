@@ -41,6 +41,7 @@ from edxorg.assets.edxorg_api import (
 )
 from edxorg.assets.edxorg_archive import (
     dummy_edxorg_course_structure,
+    edxorg_archive_partitions,
     edxorg_raw_data_archive,
     edxorg_raw_tracking_logs,
     flatten_edxorg_course_structure,
@@ -107,6 +108,7 @@ edxorg_course_data_job = retrieve_edx_course_exports.to_job(
         "gcp_gcs": gcs_connection,
         "gcs_input": GCSFileIOManager(gcs=gcs_connection),
     },
+    partitions_def=edxorg_archive_partitions,
 )
 
 edxorg_tracking_logs_job = define_asset_job(

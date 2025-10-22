@@ -63,6 +63,7 @@ raw_tracking_log_asset_key = AssetKey(("edxorg", "raw_tracking_logs"))
 
 
 @sensor(
+    job_name="retrieve_edxorg_raw_data",
     default_status=DefaultSensorStatus.STOPPED,
     required_resource_keys={"gcp_gcs"},
     minimum_interval_seconds=60 * 60,  # Set the tick frequency to hourly
@@ -119,7 +120,6 @@ def gcs_edxorg_archive_sensor(context: SensorEvaluationContext):
         ],
         run_requests=[
             RunRequest(
-                job_name="retrieve_edx_course_exports",
                 run_key=partition,
                 partition_key=partition,
             )
