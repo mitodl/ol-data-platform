@@ -15,7 +15,6 @@ from pydantic import PrivateAttr
 from s3fs import S3FileSystem
 from upath import UPath
 
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.resources.secrets.vault import Vault
 
 
@@ -114,11 +113,11 @@ class S3FileObjectIOManager(FileObjectIOManager):
 class DummyIOManager(ConfigurableIOManager):
     input_file_path: str | None
 
-    def load_input(self, context: InputContext) -> DagsterPath:  # noqa: ARG002
+    def load_input(self, context: InputContext) -> Path:  # noqa: ARG002
         if self.input_file_path is None:
             msg = "input_file_path must be set"
             raise ValueError(msg)
-        return DagsterPath(self.input_file_path)
+        return Path(self.input_file_path)
 
     def handle_output(self, context: "OutputContext", obj: Any) -> None: ...
 

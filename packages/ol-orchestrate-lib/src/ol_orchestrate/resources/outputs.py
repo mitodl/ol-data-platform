@@ -5,8 +5,6 @@ from pathlib import Path
 from dagster import ConfigurableResource, InitResourceContext
 from pydantic import Field
 
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
-
 
 def current_dir_str():
     return str(Path.cwd())
@@ -40,8 +38,8 @@ class BaseResultsDir(ConfigurableResource):
         return Path(self.outputs_root_dir).joinpath(self.dir_prefix or "")
 
     @property
-    def path(self) -> DagsterPath:
-        return DagsterPath(Path(self.root_dir).joinpath(self.dir_name))
+    def path(self) -> Path:
+        return Path(Path(self.root_dir).joinpath(self.dir_name))
 
     @property
     def absolute_path(self) -> str:

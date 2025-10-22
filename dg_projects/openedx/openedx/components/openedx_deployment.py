@@ -64,11 +64,20 @@ class OpenEdxDeploymentComponent:
             OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
         )
 
-        # Create additional assets with deployment prefixes
+        # Create additional assets with deployment prefixes and partitions
+        course_structure_asset = late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(course_structure, self.deployment_name),
+            OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
+        )
+        course_xml_asset = late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(course_xml, self.deployment_name),
+            OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
+        )
+
         return [
             course_version_asset,
-            add_prefix_to_asset_keys(course_structure, self.deployment_name),
-            add_prefix_to_asset_keys(course_xml, self.deployment_name),
+            course_structure_asset,
+            course_xml_asset,
             add_prefix_to_asset_keys(extract_courserun_details, self.deployment_name),
         ]
 

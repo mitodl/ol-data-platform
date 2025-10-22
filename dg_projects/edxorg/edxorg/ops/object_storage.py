@@ -8,7 +8,6 @@ src/ol_orchstrate/io_managers/filepath.py
 from pathlib import Path
 
 from dagster import Config, In, OpExecutionContext, Out, op
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from pydantic import Field
 
 
@@ -51,7 +50,7 @@ class S3DownloadConfig(Config):
     description="Synchronize a list of files from one bucket to another.",
     out={"downloaded_objects": Out()},
 )
-def download_files_from_s3(context, config: S3DownloadConfig) -> DagsterPath:
+def download_files_from_s3(context, config: S3DownloadConfig) -> Path:
     """Download a list of objects from an S3 bucket."""
     for object_key in config.object_keys or []:
         context.log.info(
@@ -82,7 +81,7 @@ class S3UploadConfig(Config):
 
 @op(required_resource_keys={"s3_upload"}, ins={"downloaded_objects": In()})
 def upload_files_to_s3(
-    context, config: S3UploadConfig, downloaded_objects: DagsterPath
+    context, config: S3UploadConfig, downloaded_objects: Path
 ) -> None:
     """Upload the contents of a directory to an S3 bucket."""
     if not downloaded_objects.is_dir():
@@ -107,7 +106,7 @@ class GCSDownloadConfig(Config):
 
 
 @op(required_resource_keys={"gcp_gcs"})
-def download_file_from_gcs(context, config: GCSDownloadConfig) -> DagsterPath:
+def download_file_from_gcs(context, config: GCSDownloadConfig) -> Path:
     """Download a file from a Google Cloud Storage bucket."""
     context.log.info(
         "Downloading %s from %s",
@@ -122,12 +121,12 @@ def download_file_from_gcs(context, config: GCSDownloadConfig) -> DagsterPath:
         blob_name=config.object_key,
         destination_path=config.destination_path,
     )
-    return DagsterPath(config.destination_path)
+    return Path(config.destination_path)
 
 
 @op(required_resource_keys={"s3_upload"}, ins={"output_file": In()})
 def upload_file_to_s3(
-    context: OpExecutionContext, config: S3UploadConfig, output_file: DagsterPath
+    context: OpExecutionContext, config: S3UploadConfig, output_file: Path
 ) -> None:
     """Upload a file to an S3 bucket."""
     context.resources.s3_upload.upload_file(

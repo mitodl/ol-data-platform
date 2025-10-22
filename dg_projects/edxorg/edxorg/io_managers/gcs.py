@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from dagster import (
     ConfigurableIOManager,
     DagsterEventType,
@@ -5,7 +7,6 @@ from dagster import (
     InputContext,
     OutputContext,
 )
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from upath import UPath
 
@@ -15,7 +16,7 @@ class GCSFileIOManager(ConfigurableIOManager):
     gcs_prefix: str | None = None
     gcs: GCSConnection | None = None
 
-    def load_input(self, context: InputContext) -> DagsterPath:
+    def load_input(self, context: InputContext) -> Path:
         if context.has_asset_key:
             asset_dep = context.instance.get_event_records(
                 event_records_filter=EventRecordsFilter(
@@ -44,6 +45,6 @@ class GCSFileIOManager(ConfigurableIOManager):
         gcs_bucket = self.gcs.client.get_bucket(bucket)
         gcs_blob = gcs_bucket.blob(blob)
         gcs_blob.download_to_filename(context.partition_key)
-        return DagsterPath(context.partition_key)
+        return Path(context.partition_key)
 
-    def handle_output(self, context: OutputContext, obj: DagsterPath) -> None: ...
+    def handle_output(self, context: OutputContext, obj: Path) -> None: ...

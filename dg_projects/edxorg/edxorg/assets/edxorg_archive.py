@@ -44,7 +44,6 @@ from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from google.cloud import storage
 from ol_orchestrate.lib.dagster_helpers import sanitize_mapping_key
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from ol_orchestrate.lib.openedx import un_nest_course_structure
 from ol_orchestrate.partitions.edxorg import course_and_source_partitions
 from pydantic import Field
@@ -208,7 +207,7 @@ class EdxorgArchiveProcessConfig(Config):
 def process_edxorg_archive_bundle(
     context: OpExecutionContext,
     config: EdxorgArchiveProcessConfig,
-    edxorg_raw_data_archive: DagsterPath,
+    edxorg_raw_data_archive: Path,
 ):
     archive = tarfile.open(edxorg_raw_data_archive)
     dagster_instance = context.instance
@@ -519,7 +518,7 @@ def edxorg_raw_tracking_logs(): ...
     ),
 )
 def normalize_edxorg_tracking_log(
-    context: AssetExecutionContext, edxorg_raw_tracking_log: DagsterPath
+    context: AssetExecutionContext, edxorg_raw_tracking_log: Path
 ):
     database_path = f"{context.run_id}_edxorg_tracking_logs.db"
     transformed_logs = Path(f"normalized_{context.partition_key}")

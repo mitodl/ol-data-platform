@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from dagster import (
     AssetMaterialization,
@@ -11,7 +12,6 @@ from dagster import (
     op,
 )
 from dagster.core.definitions.input import In
-from ol_orchestrate.lib.dagster_types.files import DagsterPath
 from pydantic import Field
 
 
@@ -33,7 +33,7 @@ class UploadEdxGcsCourseConfig(Config):
     name="edx_course_tarballs",
     description="Download edx course tarballs from GCS bucket",
     required_resource_keys={"gcp_gcs", "results_dir"},
-    out={"edx_course_tarball_directory": Out(dagster_type=DagsterPath)},
+    out={"edx_course_tarball_directory": Out(dagster_type=Path)},
 )
 def download_edx_gcs_course_data(context, config: DownloadEdxGcsCourseConfig):
     # TODO: replace context and config with a new asset config  # noqa: E501, FIX002, TD002, TD003
@@ -58,13 +58,13 @@ def download_edx_gcs_course_data(context, config: DownloadEdxGcsCourseConfig):
     description="Upload all data from GCS downloaded course tarballs provided by institutional research.",  # noqa: E501
     required_resource_keys={"results_dir", "s3"},
     ins={
-        "edx_gcs_course_tarball_directory": In(dagster_type=DagsterPath),
+        "edx_gcs_course_tarball_directory": In(dagster_type=Path),
     },
     out={"edx_s3_course_tarball_directory": Out(dagster_type=String)},
 )
 def upload_edx_gcs_course_data_to_s3(
     context: OpExecutionContext,
-    edx_gcs_course_tarball_directory: DagsterPath,  # noqa: ARG001
+    edx_gcs_course_tarball_directory: Path,  # noqa: ARG001
     config: UploadEdxGcsCourseConfig,
 ):
     """Upload course tarballs to S3 from gcs provided by institutional research.
@@ -73,7 +73,7 @@ def upload_edx_gcs_course_data_to_s3(
     :type context: OpExecutionContext
 
     :param edx_gcs_course_tarball_directory: Directory path containing course tarballs.
-    :type edx_gcs_course_tarball_directory: DagsterPath
+    :type edx_gcs_course_tarball_directory: Path
 
     :param config: Directory path containing course tarballs.
     :type Config
