@@ -109,6 +109,16 @@ edxorg_course_data_job = retrieve_edx_course_exports.to_job(
         "gcs_input": GCSFileIOManager(gcs=gcs_connection),
     },
     partitions_def=edxorg_archive_partitions,
+    config={
+        "ops": {
+            "process_edxorg_archive_bundle": {
+                "config": {
+                    "s3_bucket": s3_uploads_bucket(DAGSTER_ENV)["bucket"],
+                    "s3_prefix": s3_uploads_bucket(DAGSTER_ENV)["prefix"],
+                }
+            }
+        }
+    },
 )
 
 edxorg_tracking_logs_job = define_asset_job(
