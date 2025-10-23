@@ -7,14 +7,14 @@ with enrollment_detail as (
 )
 
 , org_field as (
-    select 
-        distinct courserun_readable_id 
+    select
+        distinct courserun_readable_id
         , organization
     from user_course_roles
 )
 
 , certificate_org_data as (
-    select 
+    select
         distinct platform
         , course_title
         , courserun_readable_id

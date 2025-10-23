@@ -357,6 +357,7 @@ models:
   - name: certificate_created_date
     description: date, date that the course run certificate was created
   - name: certificate_count
-    description: int, will be 1 if a certificate was created otherwise it will be 0
+    description: int, will be 1 if a certificate was created otherwise it will be
+      0
   - name: organization
     description: str, organization that lists the course. e.g. MITx, MITxT, null
