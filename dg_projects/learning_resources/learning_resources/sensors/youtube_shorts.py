@@ -70,7 +70,7 @@ def get_successfully_materialized_partitions(context, asset_keys, partition_keys
     description=(
         "Monitor YouTube playlists daily and process the 16 most recent videos."
     ),
-    minimum_interval_seconds=60,  # Check once per minute
+    minimum_interval_seconds=86400,  # Check once per day
     required_resource_keys={"youtube_api"},
     default_status=DefaultSensorStatus.STOPPED,
     asset_selection=[
