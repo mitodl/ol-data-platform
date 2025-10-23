@@ -8,9 +8,11 @@ credential reports.
 
 import os
 from functools import partial
+from pathlib import Path
 from typing import Any, Literal
 
 from dagster import (
+    AssetExecutionContext,
     AssetSelection,
     DefaultSensorStatus,
     Definitions,
@@ -20,6 +22,7 @@ from dagster import (
     job,
 )
 from dagster_aws.s3 import S3Resource
+from dagster_dbt import DbtCliResource, DbtProject, dbt_assets
 from ol_orchestrate.io_managers.filepath import (
     FileObjectIOManager,
     S3FileObjectIOManager,
@@ -28,6 +31,7 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
 from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
+from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir, SimpleResultsDir
 from ol_orchestrate.resources.secrets.vault import Vault
@@ -46,9 +50,11 @@ from edxorg.assets.edxorg_archive import (
     edxorg_raw_data_archive,
     edxorg_raw_tracking_logs,
     flatten_edxorg_course_structure,
-    gcs_edxorg_archive_sensor,
-    gcs_edxorg_tracking_log_sensor,
     normalize_edxorg_tracking_log,
+)
+from edxorg.assets.instructor_onboarding import (
+    generate_instructor_onboarding_user_list,
+    update_access_forge_repo,
 )
 from edxorg.assets.openedx_course_archives import (
     dummy_edxorg_course_xml,
@@ -63,6 +69,16 @@ from edxorg.ops.object_storage import (
     download_files_from_s3,
     upload_files_to_s3,
 )
+
+# Initialize dbt project - handle both local dev and Docker paths
+if Path("/app/ol_dbt").exists():
+    # In Docker container
+    DBT_PROJECT_DIR = Path("/app/ol_dbt")
+else:
+    # Local development
+    DBT_PROJECT_DIR = Path(__file__).resolve().parents[3] / "src" / "ol_dbt"
+
+dbt_project = DbtProject(project_dir=DBT_PROJECT_DIR)
 
 # Initialize vault with resilient loading
 try:
@@ -161,6 +177,31 @@ def sync_edxorg_program_reports():
     upload_files_to_s3(download_files_from_s3())
 
 
+@dbt_assets(
+    manifest=dbt_project.manifest_path,
+    project=dbt_project,
+)
+def edxorg_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
+    """Dbt models for edxorg data transformations."""
+    yield from dbt.cli(["build"], context=context).stream()
+
+
+# Sensors - resilient loading
+try:
+    from edxorg.sensors.object_storage import (
+        gcs_edxorg_archive_sensor,
+        gcs_edxorg_tracking_log_sensor,
+    )
+
+    sensors_available = True
+except Exception:  # noqa: BLE001
+    import warnings
+
+    warnings.warn("GCS sensors not available, using fallback", stacklevel=2)
+    sensors_available = False
+    gcs_edxorg_archive_sensor = None
+    gcs_edxorg_tracking_log_sensor = None
+
 edxorg_program_reports_sensor = SensorDefinition(
     name="edxorg_program_reports_sensor",
     evaluation_fn=partial(
@@ -223,19 +264,26 @@ edxorg_api_daily_schedule = ScheduleDefinition(
     job=define_asset_job(
         name="edxorg_api_daily_job",
         selection=AssetSelection.assets(
-            edxorg_program_metadata, edxorg_mitx_course_metadata
+            edxorg_program_metadata,
+            edxorg_mitx_course_metadata,
+            generate_instructor_onboarding_user_list,
+            update_access_forge_repo,
         ),
     ),
     cron_schedule="0 5 * * *",
     execution_timezone="UTC",
 )
 
-# Build sensor list
+# Build sensor list (filter None values from resilient loading)
 sensor_list = [
-    edxorg_program_reports_sensor,
-    edxorg_course_bundle_sensor,
-    gcs_edxorg_archive_sensor,
-    gcs_edxorg_tracking_log_sensor,
+    s
+    for s in [
+        edxorg_program_reports_sensor,
+        edxorg_course_bundle_sensor,
+        gcs_edxorg_archive_sensor,
+        gcs_edxorg_tracking_log_sensor,
+    ]
+    if s is not None
 ]
 
 # Create unified definitions
@@ -253,10 +301,12 @@ defs = Definitions(
         "gcp_gcs": gcs_connection,
         "vault": vault,
         "edxorg_api": OpenEdxApiClientFactory(deployment="edxorg", vault=vault),
+        "github_api": GithubApiClientFactory(vault=vault),
         "s3": S3Resource(profile_name="edxorg"),
         "s3_download": S3Resource(profile_name="edxorg"),
         "s3_upload": S3Resource(),
         "results_dir": SimpleResultsDir.configure_at_launch(),
+        "dbt": DbtCliResource(project_dir=dbt_project),
     },
     sensors=sensor_list,
     jobs=[
@@ -266,6 +316,7 @@ defs = Definitions(
         gcs_sync_job,
     ],
     assets=[
+        edxorg_dbt_assets,
         edxorg_raw_data_archive.to_source_asset(),
         edxorg_raw_tracking_logs.to_source_asset(),
         normalize_edxorg_tracking_log,
@@ -275,6 +326,8 @@ defs = Definitions(
         dummy_edxorg_course_xml,
         edxorg_program_metadata,
         edxorg_mitx_course_metadata,
+        generate_instructor_onboarding_user_list,
+        update_access_forge_repo,
     ],
     schedules=[edxorg_api_daily_schedule],
 )
