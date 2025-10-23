@@ -342,3 +342,22 @@ models:
     description: int, the order of the message in the chat session.
   - name: created_on
     description: timestamp, date and time when the chat session was created.
+
+- name: organization_administration_report
+  description: A report showing certificates/completions for later roll-up at the
+    organizational level.
+  columns:
+  - name: platform
+    description: str, name of the platform
+  - name: course_title
+    description: str, title of the course.
+  - name: courserun_readable_id
+    description: string, unique string to identify a course run on the corresponding
+      platform.
+  - name: certificate_created_date
+    description: date, date that the course run certificate was created
+  - name: certificate_count
+    description: int, will be 1 if a certificate was created otherwise it will be
+      0
+  - name: organization
+    description: str, organization that lists the course. e.g. MITx, MITxT, null
