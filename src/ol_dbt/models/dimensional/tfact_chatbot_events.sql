@@ -68,6 +68,10 @@ with openedx_events as (
     select * from {{ ref('stg__learn_ai__app__postgres__chatbots_userchatsession') }}
 )
 
+, users as (
+    select * from {{ ref('dim_user') }}
+)
+
 , canvas_events_with_learnai as (
     select
         canvas_events.*
@@ -77,36 +81,57 @@ with openedx_events as (
         on canvas_events.thread_id = learn_ai_userchatsession.chatsession_thread_id
 )
 
-select
-    'open_edx' as chatbot_source
-    , user_username
-    , openedx_user_id
-    , org_id
-    , courserun_readable_id
-    , event_type
-    , session_id
-    , block_id
-    , block_name
-    , 'Tutor' as chatbot_type
-    , event_value
-    , event_timestamp
-    , event_json
-from openedx_events
+, combined as (
+    select
+        'open_edx' as chatbot_source
+            , user_username
+            , openedx_user_id
+            , org_id
+            , courserun_readable_id
+            , event_type
+            , session_id
+            , block_id
+            , block_name
+            , 'Tutor' as chatbot_type
+            , event_value
+            , event_timestamp
+            , event_json
+    from openedx_events
 
-union
+    union
+
+    select
+        'canvas' as chatbot_source
+        , user_username
+        , openedx_user_id
+        , org_id
+        , split_part(canvas_object_id,  '+', 1) as courserun_readable_id
+        , event_type
+        , session_id
+        , block_id
+        , block_name
+        , chatbot_type
+        , event_value
+        , event_timestamp
+        , event_json
+    from canvas_events_with_learnai
+)
 
 select
-    'canvas' as chatbot_source
-    , user_username
-    , openedx_user_id
-    , org_id
-    , canvas_object_id as courserun_readable_id
-    , event_type
-    , session_id
-    , block_id
-    , block_name
-    , chatbot_type
-    , event_value
-    , event_timestamp
-    , event_json
-from canvas_events_with_learnai
+    users.user_pk as user_fk
+    , combined.chatbot_source
+    , combined.user_username
+    , combined.openedx_user_id
+    , combined.org_id
+    , combined.courserun_readable_id
+    , combined.event_type
+    , combined.session_id
+    , combined.block_id
+    , combined.block_name
+    , combined.chatbot_type
+    , combined.event_value
+    , combined.event_timestamp
+    , combined.event_json
+from combined
+left join users
+    on combined.openedx_user_id = users.mitlearn_openedx_user_id

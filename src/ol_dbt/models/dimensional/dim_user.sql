@@ -29,7 +29,7 @@ with mitx_users as (
     from {{ ref('int__mitx__users') }}
 )
 
-, mitxonline_openedx_users as (
+, mitlearn_openedx_users as (
     select
         openedx_user_id
         , user_username
@@ -183,14 +183,15 @@ with mitx_users as (
 , mitx_users_view as (
     select
         mitx_users.user_global_id
-        , mitxonline_openedx_users.openedx_user_id as mitxonline_openedx_user_id
+        , mitlearn_openedx_users.openedx_user_id as mitlearn_openedx_user_id
+        , mitlearn_openedx_users.openedx_user_id as mitxonline_openedx_user_id
         , mitx_users.mitxonline_application_user_id
         , coalesce(
             mitxonline_app_openedxuser_mapping.openedxuser_username, mitx_users.user_mitxonline_username
         ) as user_mitxonline_username
         , mitx_users.edxorg_openedx_user_id
         , mitx_users.user_edxorg_username
-        , mitx_users.user_email as email
+        , coalesce(mitx_users.user_email, mitlearn_openedx_users.user_email) as email
         , mitx_users.full_name
         , mitx_users.address_country
         , mitx_users.highest_education
@@ -206,8 +207,8 @@ with mitx_users as (
     from mitx_users
     left join mitxonline_app_openedxuser_mapping
         on mitx_users.mitxonline_application_user_id = mitxonline_app_openedxuser_mapping.user_id
-    left join mitxonline_openedx_users
-        on mitxonline_app_openedxuser_mapping.openedxuser_username = mitxonline_openedx_users.user_username
+    full outer join mitlearn_openedx_users
+        on mitxonline_app_openedxuser_mapping.openedxuser_username = mitlearn_openedx_users.user_username
 )
 
 , learn_user as (
@@ -254,6 +255,7 @@ with mitx_users as (
 , users_with_global_id as (
     select
         learn_user_view.mitlearn_user_id
+        , mitx_users_view.mitlearn_openedx_user_id
         , mitx_users_view.mitxonline_openedx_user_id
         , mitx_users_view.mitxonline_application_user_id
         , mitx_users_view.user_mitxonline_username
@@ -292,6 +294,7 @@ with mitx_users as (
         {{ dbt_utils.generate_surrogate_key(['email']) }} as user_pk
         , user_global_id
         , mitlearn_user_id
+        , mitlearn_openedx_user_id
         , mitxonline_openedx_user_id
         , mitxonline_application_user_id
         , user_mitxonline_username
@@ -331,6 +334,7 @@ with mitx_users as (
         {{ dbt_utils.generate_surrogate_key(['mitxpro_user_view.user_email']) }} as user_pk
         , null as user_global_id
         , null as mitlearn_user_id
+        , null as mitlearn_openedx_user_id
         , null as mitxonline_openedx_user_id
         , null as mitxonline_application_user_id
         , null as user_mitxonline_username
@@ -376,6 +380,7 @@ with mitx_users as (
         {{ dbt_utils.generate_surrogate_key(['user_email']) }} as user_pk
         , null as user_global_id
         , null as mitlearn_user_id
+        , null as mitlearn_openedx_user_id
         , null as mitxonline_openedx_user_id
         , null as mitxonline_application_user_id
         , null as user_mitxonline_username
@@ -416,6 +421,7 @@ with mitx_users as (
         {{ dbt_utils.generate_surrogate_key(['user_email']) }} as user_pk
         , null as user_global_id
         , null as mitlearn_user_id
+        , null as mitlearn_openedx_user_id
         , null as mitxonline_openedx_user_id
         , null as mitxonline_application_user_id
         , null as user_mitxonline_username
@@ -456,6 +462,7 @@ with mitx_users as (
         {{ dbt_utils.generate_surrogate_key(['mitxresidential_user_view.user_email']) }} as user_pk
         , null as user_global_id
         , null as mitlearn_user_id
+        , null as mitlearn_openedx_user_id
         , null as mitxonline_openedx_user_id
         , null as mitxonline_application_user_id
         , null as user_mitxonline_username
@@ -519,6 +526,7 @@ with mitx_users as (
         user_pk
         , max(user_global_id) as user_global_id
         , max(mitlearn_user_id) as mitlearn_user_id
+        , max(mitlearn_openedx_user_id) as mitlearn_openedx_user_id
         , max(mitxonline_openedx_user_id) as mitxonline_openedx_user_id
         , max(mitxonline_application_user_id) as mitxonline_application_user_id
         , max(user_mitxonline_username) as user_mitxonline_username
@@ -549,6 +557,7 @@ select
     base.user_pk
     , agg.user_global_id
     , agg.mitlearn_user_id
+    , agg.mitlearn_openedx_user_id
     , agg.mitxonline_openedx_user_id
     , agg.mitxonline_application_user_id
     , agg.user_mitxonline_username
