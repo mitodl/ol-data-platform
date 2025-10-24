@@ -81,6 +81,22 @@ with openedx_events as (
         on canvas_events.thread_id = learn_ai_userchatsession.chatsession_thread_id
 )
 
+--- this CTE fills in missing canvas_object_id values by looking back within the same session_id and block_id
+--- to find the next event's canvas_object_id as only the agent's response events have it set
+, canvas_events_filled as (
+    select
+        *
+        , coalesce(canvas_object_id, next_canvas_object_id) AS filled_canvas_object_id
+    from (
+        select
+            *
+            , lead(canvas_object_id) over (
+                 partition by session_id, block_id order by event_timestamp
+            ) as next_canvas_object_id
+        from canvas_events_with_learnai
+    )
+)
+
 , combined as (
     select
         'open_edx' as chatbot_source
@@ -105,7 +121,7 @@ with openedx_events as (
         , user_username
         , openedx_user_id
         , org_id
-        , split_part(canvas_object_id,  '+', 1) as courserun_readable_id
+        , split_part(filled_canvas_object_id,  '+', 1) as courserun_readable_id
         , event_type
         , session_id
         , block_id
@@ -114,7 +130,7 @@ with openedx_events as (
         , event_value
         , event_timestamp
         , event_json
-    from canvas_events_with_learnai
+    from canvas_events_filled
 )
 
 select
