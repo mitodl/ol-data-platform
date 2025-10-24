@@ -81,18 +81,18 @@ with openedx_events as (
         on canvas_events.thread_id = learn_ai_userchatsession.chatsession_thread_id
 )
 
---- this CTE fills in missing canvas_object_id values by looking ahead within the same session_id and block_id
---- to find the next event's canvas_object_id as only the response events have it set
+--- this CTE fills in missing canvas_object_id values by looking back within the same session_id and block_id
+--- to find the next event's canvas_object_id as only the agent's response events have it set
 , canvas_events_filled as (
     select
         *
-       , coalesce(canvas_object_id, next_canvas_object_id) AS filled_canvas_object_id
+        , coalesce(canvas_object_id, next_canvas_object_id) AS filled_canvas_object_id
     from (
         select
-            *,
-            lead(canvas_object_id)
-                over (partition by session_id, block_id order by event_timestamp)
-                as next_canvas_object_id
+            *
+            , lead(canvas_object_id) over (
+                 partition by session_id, block_id order by event_timestamp
+            ) as next_canvas_object_id
         from canvas_events_with_learnai
     )
 )
