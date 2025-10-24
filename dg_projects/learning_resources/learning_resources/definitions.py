@@ -62,8 +62,10 @@ defs = Definitions(
             path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
         ),
         "yt_s3file_io_manager": S3FileObjectIOManager(
-            bucket=os.environ.get("YOUTUBE_SHORTS_BUCKET"),
-            path_prefix="youtube_shorts",
+            bucket=os.environ.get(
+                "LEARN_SHORTS_BUCKET", f"ol-mitlearn-app-storage-{DAGSTER_ENV}"
+            ),
+            path_prefix=os.environ.get("LEARN_SHORTS_PREFIX", "shorts/"),
         ),
         "vault": vault,
         "s3": S3Resource(),
