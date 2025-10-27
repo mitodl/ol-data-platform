@@ -63,7 +63,7 @@ defs = Definitions(
         ),
         "yt_s3file_io_manager": S3FileObjectIOManager(
             bucket=os.environ.get(
-                "LEARN_SHORTS_BUCKET", f"ol-mitlearn-app-storage-{DAGSTER_ENV}"
+                "YOUTUBE_SHORTS_BUCKET", f"ol-mitlearn-app-storage-{DAGSTER_ENV}"
             ),
             path_prefix=os.environ.get("LEARN_SHORTS_PREFIX", "shorts/"),
         ),

@@ -1,24 +1,16 @@
 """Sensor for monitoring YouTube playlists and triggering video processing."""
 
-import json
-
 from dagster import (
     AddDynamicPartitionsRequest,
     AssetKey,
-    DagsterEventType,
     DefaultSensorStatus,
-    EventRecordsFilter,
     RunRequest,
     SensorResult,
     SkipReason,
     sensor,
 )
 
-from learning_resources.lib.youtube import (
-    extract_video_id_from_playlist_item,
-    fetch_youtube_shorts_config,
-    sort_videos_by_publish_date,
-)
+from learning_resources.lib.youtube import get_videos_to_process
 
 YOUTUBE_SHORTS_CONFIG_URL = (
     "https://raw.githubusercontent.com/mitodl/open-video-data/"
@@ -27,43 +19,6 @@ YOUTUBE_SHORTS_CONFIG_URL = (
 
 # Process top 16 most recent videos
 MAX_VIDEOS_TO_PROCESS = 16
-
-
-def get_successfully_materialized_partitions(context, asset_keys, partition_keys):
-    """
-    Check which partitions have been successfully materialized.
-
-    Returns a set of partition keys with successful materializations for
-    all specified assets.
-    """
-    if not partition_keys:
-        return set()
-
-    successfully_materialized = set(partition_keys)
-
-    # Check each asset to see which partitions have been successfully materialized
-    for asset_key in asset_keys:
-        asset_materialized_partitions = set()
-
-        # Get materialization events for this asset and these partitions
-        for partition_key in partition_keys:
-            event_records = context.instance.get_event_records(
-                EventRecordsFilter(
-                    event_type=DagsterEventType.ASSET_MATERIALIZATION,
-                    asset_key=asset_key,
-                    asset_partitions=[partition_key],
-                ),
-                limit=1,  # We only need to know if at least one exists
-            )
-
-            # Check if materialization succeeded for this asset partition
-            if event_records:
-                asset_materialized_partitions.add(partition_key)
-
-        # Only keep partitions that succeeded for this asset
-        successfully_materialized &= asset_materialized_partitions
-
-    return successfully_materialized
 
 
 @sensor(
@@ -101,53 +56,6 @@ def youtube_shorts_sensor(context):
     being permanently skipped due to transient failures.
     """
     try:
-        # Fetch playlist configuration
-        config = fetch_youtube_shorts_config(YOUTUBE_SHORTS_CONFIG_URL)
-        context.log.info("Fetched YouTube config: %s", config)
-
-        # Collect all playlist IDs from config
-        playlist_ids = []
-        for channel_config in config:
-            if playlists := channel_config.get("playlists"):
-                playlist_ids.extend([p["id"] for p in playlists])
-
-        if not playlist_ids:
-            return SkipReason("No playlists found in configuration")
-
-        context.log.info("Processing %s playlists: %s", len(playlist_ids), playlist_ids)
-
-        # Fetch all videos from all playlists
-        all_video_ids = set()
-
-        for playlist_id in playlist_ids:
-            context.log.info("Fetching playlist: %s", playlist_id)
-            playlist_items = context.resources.youtube_api.client.get_playlist_items(
-                playlist_id
-            )
-
-            # Extract video IDs from playlist items
-            video_ids = [
-                extract_video_id_from_playlist_item(item) for item in playlist_items
-            ]
-            all_video_ids.update(video_ids)
-
-        # Fetch detailed video metadata for all unique videos
-        context.log.info("Fetching metadata for %s unique videos", len(all_video_ids))
-        videos = context.resources.youtube_api.client.get_videos(list(all_video_ids))
-
-        # Sort videos by publish date (newest first)
-        sorted_videos = sort_videos_by_publish_date(videos, descending=True)
-
-        # Select top N most recent videos
-        top_videos = sorted_videos[:MAX_VIDEOS_TO_PROCESS]
-        top_video_ids = {video["id"] for video in top_videos}
-
-        context.log.info(
-            "Selected top %s most recent videos: %s",
-            len(top_video_ids),
-            top_video_ids,
-        )
-
         # Define asset keys we're monitoring (including webhook)
         asset_keys = [
             AssetKey(["youtube_shorts", "video_content"]),
@@ -162,36 +70,26 @@ def youtube_shorts_sensor(context):
         )
         context.log.info("Existing partitions: %s", existing_partitions)
 
-        # Determine new video IDs to process (not yet in partitions)
-        new_video_ids = top_video_ids - existing_partitions
-
-        # Check which existing partitions have been successfully materialized
-        # A partition is only successful if ALL 4 assets are materialized
-        existing_top_video_ids = top_video_ids & existing_partitions
-        successfully_materialized = get_successfully_materialized_partitions(
-            context, asset_keys, existing_top_video_ids
+        # Get videos needing processing using utility function
+        result = get_videos_to_process(
+            youtube_client=context.resources.youtube_api.client,
+            config_url=YOUTUBE_SHORTS_CONFIG_URL,
+            max_videos=MAX_VIDEOS_TO_PROCESS,
+            existing_partitions=existing_partitions,
+            instance=context.instance,
+            asset_keys=asset_keys,
         )
 
-        # Videos needing processing: new + failed/unmaterialized
-        failed_or_unmaterialized = existing_top_video_ids - successfully_materialized
-        videos_to_process = new_video_ids | failed_or_unmaterialized
+        # Extract results
+        playlist_ids = result["playlist_ids"]
+        videos_to_process = result["videos_to_process"]
+        new_video_ids = result["new_video_ids"]
 
-        # Determine video IDs to not process (no longer in top N)
-        old_video_ids = existing_partitions - top_video_ids
+        if not playlist_ids:
+            return SkipReason("No playlists found in configuration")
 
-        if not videos_to_process and not old_video_ids:
-            return SkipReason(
-                f"No changes in top YouTube videos. "
-                f"All {len(successfully_materialized)} videos already materialized."
-            )
-
-        context.log.info("New videos to process: %s", new_video_ids)
-        context.log.info(
-            "Failed/unmaterialized videos to retry: %s", failed_or_unmaterialized
-        )
-        context.log.info(
-            "Successfully materialized videos: %s", successfully_materialized
-        )
+        if not videos_to_process:
+            return SkipReason("No changes in top YouTube videos. ")
 
         # Create run requests for all videos that need processing
         run_requests = [
@@ -220,7 +118,6 @@ def youtube_shorts_sensor(context):
         return SensorResult(
             dynamic_partitions_requests=dynamic_requests,
             run_requests=run_requests,
-            cursor=json.dumps(sorted(top_video_ids)),
         )
 
     except Exception as e:

@@ -25,6 +25,7 @@ from dagster import (
     asset,
     multi_asset,
 )
+from upath import UPath
 
 from learning_resources.lib.youtube import get_highest_quality_thumbnail
 
@@ -113,11 +114,8 @@ def download_youtube_video_assets(context: AssetExecutionContext):
     video_published_at = video_metadata["snippet"]["publishedAt"]
 
     # Create data version from video ID, title, and publish date
-    # This detects changes in metadata (e.g., title edits) and triggers re-processing
-    # Hash ensures consistent 16-char version string for file paths
     version_string = f"{video_id}|{video_title}|{video_published_at}"
-    data_version = hashlib.sha256(version_string.encode()).hexdigest()[:16]
-    context.log.info("Data version for %s: %s", video_id, data_version)
+    data_version = hashlib.sha256(version_string.encode()).hexdigest()
 
     # Download video using yt-dlp
     context.log.info("Downloading video: %s", video_title)
@@ -250,9 +248,9 @@ def download_youtube_video_assets(context: AssetExecutionContext):
 )
 def youtube_video_webhook(
     context: AssetExecutionContext,
-    video_content: Any,
-    video_thumbnail: Any,
-    video_metadata: Any,
+    video_content: UPath,  # noqa: ARG001
+    video_thumbnail: UPath,  # noqa: ARG001
+    video_metadata: UPath,
 ) -> dict[str, Any]:
     """
     Send webhook notification to Learn API after video assets are ready.
@@ -262,42 +260,13 @@ def youtube_video_webhook(
     metadata JSON to the Learn API webhook endpoint.
     """
     video_id = context.partition_key
-    context.log.info("Sending webhook for video ID: %s", video_id)
 
-    # Retrieve metadata from upstream asset materialization instead of reading from S3
-    metadata_asset_key = AssetKey(["youtube_shorts", "video_metadata"])
-    materialization = get_latest_materialization(
-        context, metadata_asset_key, partition_key=video_id
-    )
-
-    # Extract metadata dict from materialization metadata
-    metadata_value = materialization.metadata.get("youtube_metadata")
-    if metadata_value is None:
-        msg = f"Metadata field not found in materialization for video: {video_id}"
-        raise ValueError(msg)
-
-    # metadata_value is a MetadataValue, extract the actual dict value
-    metadata_content = metadata_value.value
-
-    # Convert S3 paths to strings for webhook payload
-    video_content_path = str(video_content)
-    video_thumbnail_path = str(video_thumbnail)
-    video_metadata_path = str(video_metadata)
-
-    # Extract key from full S3 path (remove s3://bucket/ prefix)
-    # e.g., "s3://bucket/youtube_shorts/ID/ID.mp4" -> "youtube_shorts/ID/ID.mp4"
-    content_key = "/".join(video_content_path.split("/")[3:])
-    thumbnail_key = "/".join(video_thumbnail_path.split("/")[3:])
-    metadata_key = "/".join(video_metadata_path.split("/")[3:])
+    # Read metadata content
+    metadata_content = video_metadata.read_text()
 
     # Construct webhook payload with YouTube metadata
     webhook_data = {
         "video_id": video_id,
-        "s3_paths": {
-            "content": content_key,
-            "thumbnail": thumbnail_key,
-            "metadata": metadata_key,
-        },
         "youtube_metadata": metadata_content,
         "source": "youtube_shorts",
     }
