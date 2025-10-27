@@ -72,6 +72,9 @@ models:
   - name: chatsession_object_id
     description: str, course ID, video transcript asset ID, or edX module ID depending
       on the chatsession_agent. May be blank for ResourceRecommendationBot.
+  - name: canvas_course_id
+    description: str, Canvas course ID for the chat session, e.g. 34625-15.060_FA25
+      May be blank for non-Canvas
   - name: chatsession_django_session_key
     description: str, Django session key for the chat session.
   - name: chatsession_created_on
