@@ -18,7 +18,7 @@ YOUTUBE_SHORTS_CONFIG_URL = (
 )
 
 # Process top 16 most recent videos
-MAX_VIDEOS_TO_PROCESS = 16
+MAX_VIDEOS_TO_PROCESS = 12
 
 
 @sensor(
