@@ -38,6 +38,10 @@ with chatsession as (
             )
 )
 
+, problem as (
+    select * from {{ ref('dim_problem') }}
+)
+
 select
     djangocheckpoint.djangocheckpoint_id
     , djangocheckpoint.checkpoint_id
@@ -45,7 +49,6 @@ select
     , chatsession.chatsession_agent
     , chatsession.chatsession_title
     , chatsession.chatsession_object_id
-    , videos_with_ranking.courserun_readable_id
     , chatsession.user_id
     , users.user_email
     , users.user_full_name
@@ -62,6 +65,11 @@ select
     , djangocheckpoint.checkpoint_type
     , chatsession.chatsession_created_on
     , chatsession.chatsession_updated_on
+    , coalesce(
+        chatsession.canvas_course_id
+        , videos_with_ranking.courserun_readable_id
+        , problem.courserun_readable_id
+    ) as courserun_readable_id
 from djangocheckpoint
 inner join chatsession on djangocheckpoint.chatsession_thread_id = chatsession.chatsession_thread_id
 left join users on chatsession.user_id = users.user_id
@@ -69,3 +77,4 @@ left join videos_with_ranking
     on
         chatsession.chatsession_object_id = videos_with_ranking.chatsession_object_id
         and videos_with_ranking.row_num = 1
+left join problem on chatsession.chatsession_object_id = problem.problem_block_pk

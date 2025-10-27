@@ -21,7 +21,7 @@ select
     , chatsession.chatsession_agent
     , chatsession.chatsession_title
     , chatsession.chatsession_object_id as edx_module_id
-    , problem.courserun_readable_id
+    , coalesce(chatsession.canvas_course_id, problem.courserun_readable_id) as courserun_readable_id
     , chatsession.user_id
     , users.user_email
     , users.user_full_name

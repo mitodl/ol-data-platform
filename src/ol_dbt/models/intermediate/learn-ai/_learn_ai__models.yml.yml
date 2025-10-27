@@ -24,8 +24,7 @@ models:
   - name: edx_module_id
     description: str, edX module ID for the chat session
   - name: courserun_readable_id
-    description: str, the course ID for the chat session. May be blank for Canvas
-      courses
+    description: str, the course ID for the chat session
   - name: user_id
     description: int, user ID in learn AI application. Null if the user is not logged
       in.
@@ -70,7 +69,8 @@ models:
   - name: chatsession_object_id
     description: str, course ID or video transcript asset ID. May be blank for ResourceRecommendationBot.
   - name: courserun_readable_id
-    description: str, the course readable ID for the chat session. Populated for VideoGPTBot.
+    description: str, the course readable ID for the chat session. Populated for VideoGPTBot,
+      SyllabusBot and TutorBot in a course context.
   - name: user_id
     description: int, user ID in learn AI application. Null if the user is not logged
       in.
