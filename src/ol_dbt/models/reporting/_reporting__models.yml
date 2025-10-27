@@ -354,10 +354,13 @@ models:
   - name: courserun_readable_id
     description: string, unique string to identify a course run on the corresponding
       platform.
-  - name: certificate_created_date
-    description: date, date that the course run certificate was created
-  - name: certificate_count
-    description: int, will be 1 if a certificate was created otherwise it will be
-      0
+  - name: user_email
+    description: string, user email that user registered on the corresponding platform
   - name: organization
     description: str, organization that lists the course. e.g. MITx, MITxT, null
+  - name: activity_date
+    description: date, date the user engaged in an activity
+  - name: chatbot_used_count
+    description: int, a count of 1 if the user used a chatbot during the course run otherwise 0
+  - name: certificate_count
+    description: int, a count of 1 if the user earned a certificate that day otherwise 0
