@@ -6,6 +6,14 @@ with enrollment_detail as (
     select * from {{ ref('int__combined__user_course_roles') }}
 )
 
+, chatbot_events as (
+    select * from {{ ref('tfact_chatbot_events') }}
+)
+
+, user as (
+    select * from {{ ref('dim_user') }}
+)
+
 , org_field as (
     select
         distinct courserun_readable_id
@@ -23,14 +31,67 @@ with enrollment_detail as (
     from enrollment_detail
 )
 
+, enroll_data as (
+    select
+        distinct platform
+        , course_title
+        , courserun_readable_id
+        , user_email
+    from enrollment_detail
+)
+
+, chatbot_data as (
+    select
+        distinct user.email as user_email
+        , cast(chatbot_events.event_timestamp as date) as activity_date
+        , chatbot_events.courserun_readable_id
+        , 1 as chatbot_used_count
+        , 0 as certificate_count
+    from chatbot_events
+    inner join user
+        on chatbot_events.user_fk = user.user_pk
+
+    union
+
+    select
+        distinct user_email
+        , certificate_created_date as activity_date
+        , courserun_readable_id
+        , 0 as chatbot_used_count
+        , 1 as certificate_count
+    from certificate_org_data
+    where certificate_created_date is not null
+
+)
+
+, activity_day_data as (
+    select
+        user_email
+        , activity_date
+        , courserun_readable_id
+        , max(chatbot_used_count) as chatbot_used_count
+        , max(certificate_count) as certificate_count
+    from chatbot_data
+    group by
+        user_email
+        , activity_date
+        , courserun_readable_id
+)
+
+
 select
-    certificate_org_data.platform
-    , certificate_org_data.course_title
-    , certificate_org_data.courserun_readable_id
-    , certificate_org_data.certificate_created_date
-    , certificate_org_data.user_email
-    , case when certificate_org_data.certificate_created_date is not null then 1 else 0 end as certificate_count
+    enroll_data.platform
+    , enroll_data.course_title
+    , enroll_data.courserun_readable_id
+    , enroll_data.user_email
     , org_field.organization
-from certificate_org_data
+    , activity_day_data.activity_date
+    , activity_day_data.chatbot_used_count
+    , activity_day_data.certificate_count
+from enroll_data
 left join org_field
-    on certificate_org_data.courserun_readable_id = org_field.courserun_readable_id
+    on enroll_data.courserun_readable_id = org_field.courserun_readable_id
+left join activity_day_data
+    on
+        enroll_data.user_email = activity_day_data.user_email
+        and enroll_data.courserun_readable_id = activity_day_data.courserun_readable_id
