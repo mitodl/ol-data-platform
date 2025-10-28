@@ -1,4 +1,4 @@
-{% macro generate_studentmodule_problem_events(studentmodule_table, studentmodulehistory_table, user_id_field) %}
+{% macro generate_studentmodule_problem_events(studentmodule_table, studentmodulehistory_table, user_id_field, platform='mitxonline') %}
   with studentmodule as (
     select
       studentmodule_id
@@ -17,6 +17,7 @@
     {% if is_incremental %}
       and from_iso8601_timestamp_nanos(studentmodule_created_on) > (
           select max(event_timestamp) from {{ this }}
+          where platform = '{{ platform }}'
       )
     {% endif %}
 
@@ -35,6 +36,7 @@
     {% if is_incremental %}
       where from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) > (
           select max(event_timestamp) from {{ this }}
+            where platform = '{{ platform }}'
       )
     {% endif %}
 

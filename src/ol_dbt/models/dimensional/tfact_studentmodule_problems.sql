@@ -8,7 +8,8 @@ with mitxonline_studentmodule_problems as (
     {{ generate_studentmodule_problem_events(
         ref('stg__mitxonline__openedx__mysql__courseware_studentmodule'),
         ref('stg__mitxonline__openedx__courseware_studentmodulehistoryextended'),
-        'openedx_user_id'
+        'openedx_user_id',
+        'mitxonline'
     ) }}
 )
 
@@ -16,7 +17,8 @@ with mitxonline_studentmodule_problems as (
     {{ generate_studentmodule_problem_events(
         ref('stg__mitxpro__openedx__mysql__courseware_studentmodule'),
         ref('stg__mitxpro__openedx__courseware_studentmodulehistoryextended'),
-        'openedx_user_id'
+        'openedx_user_id',
+        'mitxpro'
     ) }}
 )
 
@@ -24,7 +26,8 @@ with mitxonline_studentmodule_problems as (
     {{ generate_studentmodule_problem_events(
         ref('stg__mitxresidential__openedx__courseware_studentmodule'),
         ref('stg__mitxresidential__openedx__courseware_studentmodulehistoryextended'),
-        'user_id'
+        'user_id',
+        'residential'
     ) }}
 )
 
