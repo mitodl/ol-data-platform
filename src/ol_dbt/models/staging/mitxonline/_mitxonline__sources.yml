@@ -522,12 +522,8 @@ sources:
         field for new users, could be blank for existing users.
     - name: user_id
       description: int, foreign key to users_user
-    - name: last_name
-      description: string, user last name
     - name: created_on
       description: timestamp, when the record was created
-    - name: first_name
-      description: string, user first name
     - name: updated_on
       description: timestamp, when the record was updated
 

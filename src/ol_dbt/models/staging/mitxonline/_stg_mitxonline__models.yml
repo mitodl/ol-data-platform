@@ -713,14 +713,6 @@ models:
     tests:
     - unique
     - not_null
-  - name: user_last_name
-    description: string, user last name
-    tests:
-    - not_null
-  - name: user_first_name
-    description: string, user first name
-    tests:
-    - not_null
 
 - name: stg__mitxonline__app__postgres__users_userprofile
   columns:

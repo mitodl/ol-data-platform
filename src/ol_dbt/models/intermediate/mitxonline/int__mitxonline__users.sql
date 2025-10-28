@@ -1,5 +1,8 @@
 with users as (
-    select *
+    select
+        *
+        , element_at(split(user_full_name, ' '), 1) as user_first_name
+        , element_at(split(user_full_name, ' '), -1) as user_last_name
     from {{ ref('stg__mitxonline__app__postgres__users_user') }}
 )
 
@@ -55,8 +58,8 @@ select
     , users.user_is_active
     , users_legaladdress.user_address_country
     , users_legaladdress.user_address_state
-    , users_legaladdress.user_first_name
-    , users_legaladdress.user_last_name
+    , users.user_first_name
+    , users.user_last_name
     , users_profile.user_birth_year
     , users_profile.user_company
     , users_profile.user_job_title
