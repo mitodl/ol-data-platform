@@ -6,12 +6,12 @@ with enrollment_detail as (
     select * from {{ ref('int__combined__user_course_roles') }}
 )
 
-, ai__chatbot as (
-    select * from {{ ref('int__learn_ai__chatbot') }}
+, chatbot_events as (
+    select * from {{ ref('tfact_chatbot_events') }}
 )
 
-, ai__tutorbot as (
-    select * from {{ ref('int__learn_ai__tutorbot') }}
+, user as (
+    select * from {{ ref('dim_user') }}
 )
 
 , org_field as (
@@ -41,29 +41,19 @@ with enrollment_detail as (
 )
 
 , chatbot_data as (
-    select
-        distinct user_email
-        , cast(substring(chatsession_created_on, 1, 10) as date) as activity_date
-        , courserun_readable_id
+    select 
+        distinct user.email as user_email
+        , cast(chatbot_events.event_timestamp as date) as activity_date
+        , chatbot_events.courserun_readable_id
         , 1 as chatbot_used_count
         , 0 as certificate_count
-    from ai__chatbot
-    where user_email is not null
+    from chatbot_events
+    inner join user
+        on chatbot_events.user_fk = user.user_pk
 
     union
 
-    select
-        distinct user_email
-        , cast(substring(chatsession_created_on, 1, 10) as date) as activity_date
-        , courserun_readable_id
-        , 1 as chatbot_used_count
-        , 0 as certificate_count
-    from ai__tutorbot
-    where user_email is not null
-
-    union
-
-    select
+    select 
         distinct user_email
         , certificate_created_date as activity_date
         , courserun_readable_id
@@ -75,7 +65,7 @@ with enrollment_detail as (
 )
 
 , activity_day_data as (
-    select
+    select 
         user_email
         , activity_date
         , courserun_readable_id
@@ -102,6 +92,6 @@ from enroll_data
 left join org_field
     on enroll_data.courserun_readable_id = org_field.courserun_readable_id
 left join activity_day_data
-    on
+    on 
         enroll_data.user_email = activity_day_data.user_email
         and enroll_data.courserun_readable_id = activity_day_data.courserun_readable_id

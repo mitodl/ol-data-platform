@@ -361,8 +361,6 @@ models:
   - name: activity_date
     description: date, date the user engaged in an activity
   - name: chatbot_used_count
-    description: int, a count of 1 if the user used a chatbot during the course run
-      otherwise 0
+    description: int, a count of 1 if the user used a chatbot during the course run otherwise 0
   - name: certificate_count
-    description: int, a count of 1 if the user earned a certificate that day otherwise
-      0
+    description: int, a count of 1 if the user earned a certificate that day otherwise 0
