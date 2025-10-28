@@ -41,7 +41,7 @@ with enrollment_detail as (
 )
 
 , chatbot_data as (
-    select 
+    select
         distinct user.email as user_email
         , cast(chatbot_events.event_timestamp as date) as activity_date
         , chatbot_events.courserun_readable_id
@@ -53,7 +53,7 @@ with enrollment_detail as (
 
     union
 
-    select 
+    select
         distinct user_email
         , certificate_created_date as activity_date
         , courserun_readable_id
@@ -65,7 +65,7 @@ with enrollment_detail as (
 )
 
 , activity_day_data as (
-    select 
+    select
         user_email
         , activity_date
         , courserun_readable_id
@@ -92,6 +92,6 @@ from enroll_data
 left join org_field
     on enroll_data.courserun_readable_id = org_field.courserun_readable_id
 left join activity_day_data
-    on 
+    on
         enroll_data.user_email = activity_day_data.user_email
         and enroll_data.courserun_readable_id = activity_day_data.courserun_readable_id
