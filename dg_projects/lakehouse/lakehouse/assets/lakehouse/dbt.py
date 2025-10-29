@@ -31,7 +31,7 @@ class DbtAutomationTranslator(DagsterDbtTranslator):
         self,
         dbt_resource_props: Mapping[str, Any],  # noqa: ARG002
     ) -> AutomationCondition | None:
-        return upstream_or_code_changes()
+        return upstream_or_code_changes() & ~AutomationCondition.in_progress()
 
     def get_group_name(self, dbt_resource_props: Mapping[str, Any]) -> str | None:
         """
