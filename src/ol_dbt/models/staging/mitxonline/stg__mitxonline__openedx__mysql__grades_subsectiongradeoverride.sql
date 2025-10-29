@@ -4,7 +4,7 @@ with source as (
    }}
 )
 
-{{ deduplicate_raw_table(order_by='modified' , partition_columns = 'id') }}
+{{ deduplicate_raw_table(order_by='modified' , partition_columns = 'grade_id') }}
 , cleaned as (
 
     select

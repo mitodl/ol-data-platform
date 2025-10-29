@@ -146,6 +146,3 @@ select
     , max_grade
     , success
 from deduped_combined
-{% if is_incremental() %}
-  where event_timestamp >= (select max(event_timestamp) from {{ this }})
-{% endif %}

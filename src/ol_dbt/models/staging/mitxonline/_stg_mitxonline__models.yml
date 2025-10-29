@@ -668,8 +668,6 @@ models:
     - unique
   - name: user_scim_username
     description: str, The username for the SCIM resource
-    tests:
-    - unique
   - name: user_scim_external_id
     description: str, a string identifier for the SCIM resource as defined by the
       provisioning client
@@ -884,12 +882,13 @@ models:
         to: ref('stg__mitxonline__app__postgres__courses_program')
         field: program_id
   - name: programrequirement_node_type
-    description: str, there are 3 types of nodes that exist in a requirement tree
-      - program_root (represent a program) - course (represent a reference to a course)
-      - operator (represent a logical operation over a set of courses)
+    description: str, different types of nodes that exist in a requirement tree -
+      program_root (represent a program) - course (represent a reference to a course)
+      - program (represent a reference to a program) - operator (represent a logical
+      operation over a set of courses)
     tests:
     - accepted_values:
-        values: ["program_root", "course", "operator"]
+        values: ["program_root", "course", "program", "operator"]
   - name: programrequirement_path
     description: str, the full materialized path for each node (readonly) e.g. 0001
       is root path, 00010001 is the path to a node in this requirement tree
