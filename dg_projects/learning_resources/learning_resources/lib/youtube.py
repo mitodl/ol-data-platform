@@ -88,7 +88,7 @@ def get_highest_quality_thumbnail(video: dict[str, Any]) -> dict[str, Any]:
     return thumbnails.get("default", {})
 
 
-def get_successfully_materialized_partitions(context, asset_keys, partition_keys):
+def get_successfully_materialized_partitions(instance, asset_keys, partition_keys):
     """
     Check which partitions have been successfully materialized.
 
@@ -106,7 +106,7 @@ def get_successfully_materialized_partitions(context, asset_keys, partition_keys
 
         # Get materialization events for this asset and these partitions
         for partition_key in partition_keys:
-            event_records = context.instance.get_event_records(
+            event_records = instance.get_event_records(
                 EventRecordsFilter(
                     event_type=DagsterEventType.ASSET_MATERIALIZATION,
                     asset_key=asset_key,
