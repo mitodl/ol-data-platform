@@ -267,7 +267,7 @@ def youtube_video_webhook(
     # Construct webhook payload with YouTube metadata
     webhook_data = {
         "video_id": video_id,
-        "youtube_metadata": metadata_content,
+        "youtube_metadata": json.loads(metadata_content),
         "source": "youtube_shorts",
     }
 
