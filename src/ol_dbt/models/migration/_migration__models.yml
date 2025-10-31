@@ -77,3 +77,20 @@ models:
   - name: courseruncertificate_created_on
     description: timestamp, date and time when the course certificate was initially
       created
+
+- name: edxorg_to_mitxonline_users
+  description: edX.org certificate learners who not yet have account on MITx Online
+  columns:
+  - name: user_email
+    description: string, user email that user registered on edX.org platform.
+    tests:
+    - not_null
+    - unique
+  - name: user_full_name
+    description: string, user full name on edX.org platform
+  - name: user_gender
+    description: string, user gender
+  - name: user_birth_year
+    description: int, user birth year
+  - name: user_country
+    description: string, user country
