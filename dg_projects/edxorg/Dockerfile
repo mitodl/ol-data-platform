@@ -15,7 +15,6 @@ WORKDIR /app
 # Copy the entire workspace structure needed for uv
 COPY packages/ol-orchestrate-lib packages/ol-orchestrate-lib
 COPY dg_projects/edxorg dg_projects/edxorg
-COPY src/ol_dbt src/ol_dbt
 
 # Install dependencies from the edxorg project
 WORKDIR /app/dg_projects/edxorg
@@ -27,13 +26,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
-# Compile dbt to generate manifest.json (CRITICAL for @dbt_assets)
-WORKDIR /app/src/ol_dbt
-RUN /app/dg_projects/edxorg/.venv/bin/dbt deps && \
-    /app/dg_projects/edxorg/.venv/bin/dbt compile --target production || \
-    /app/dg_projects/edxorg/.venv/bin/dbt compile --target dev
-
-
 # Then, use a final image without uv
 FROM python:3.13-slim-bookworm
 # It is important to use the image that matches the builder, as the path to the
@@ -41,7 +33,6 @@ FROM python:3.13-slim-bookworm
 
 # Copy the application from the builder
 COPY --from=builder /app/dg_projects/edxorg /app
-COPY --from=builder /app/src/ol_dbt /app/ol_dbt
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"

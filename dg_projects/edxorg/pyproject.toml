@@ -13,6 +13,7 @@ dependencies = [
     "ol-orchestrate-lib",
     "polars ~= 1.19",
     "universal-pathlib ~= 0.3.1",
+    "pygithub>=2.8.1",
 ]
 
 [project.entry-points]
