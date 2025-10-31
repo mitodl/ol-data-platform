@@ -155,6 +155,7 @@ def get_videos_to_process(  # noqa: PLR0913
     Returns:
         Dictionary containing:
             - playlist_ids: List of playlist IDs found in config
+            - all_video_ids: List of all video IDs found across all playlists
             - new_video_ids: Set of new video IDs not yet in partitions
             - videos_to_process: Set of all video IDs that need processing
     """
@@ -202,6 +203,7 @@ def get_videos_to_process(  # noqa: PLR0913
 
     return {
         "playlist_ids": playlist_ids,
+        "all_video_ids": list(all_video_ids),
         "new_video_ids": new_video_ids,
         "videos_to_process": videos_to_process,
     }

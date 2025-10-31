@@ -14,6 +14,7 @@ from dagster import (
     AssetKey,
     AssetMaterialization,
     AssetOut,
+    AssetSpec,
     Backoff,
     DagsterEventType,
     DataVersion,
@@ -31,6 +32,28 @@ from learning_resources.lib.youtube import get_highest_quality_thumbnail
 
 # Dynamic partitions for video IDs
 youtube_video_ids = DynamicPartitionsDefinition(name="youtube_video_ids")
+
+# External assets representing YouTube data sources
+external_youtube_playlists = AssetSpec(
+    key=AssetKey(["youtube_shorts", "external_playlists"]),
+    description=(
+        "External asset representing YouTube playlists configured for "
+        "shorts processing. Playlists are defined in the open-video-data "
+        "GitHub repository."
+    ),
+    group_name="youtube_shorts",
+)
+
+external_youtube_videos = AssetSpec(
+    key=AssetKey(["youtube_shorts", "external_videos"]),
+    description=(
+        "External asset representing the list of YouTube videos in the "
+        "configured playlists. Videos are fetched from YouTube API based "
+        "on playlist configuration."
+    ),
+    group_name="youtube_shorts",
+    deps=[external_youtube_playlists],
+)
 
 
 def get_latest_materialization(
@@ -74,6 +97,7 @@ def get_latest_materialization(
     group_name="youtube_shorts",
     required_resource_keys={"youtube_api"},
     partitions_def=youtube_video_ids,
+    deps=[external_youtube_videos],
     outs={
         "video_content": AssetOut(
             io_manager_key="yt_s3file_io_manager",

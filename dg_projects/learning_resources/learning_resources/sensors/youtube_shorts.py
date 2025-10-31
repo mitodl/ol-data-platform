@@ -3,6 +3,7 @@
 from dagster import (
     AddDynamicPartitionsRequest,
     AssetKey,
+    AssetMaterialization,
     DefaultSensorStatus,
     RunRequest,
     SensorResult,
@@ -84,12 +85,43 @@ def youtube_shorts_sensor(context):
         playlist_ids = result["playlist_ids"]
         videos_to_process = result["videos_to_process"]
         new_video_ids = result["new_video_ids"]
+        all_video_ids = result["all_video_ids"]
 
         if not playlist_ids:
             return SkipReason("No playlists found in configuration")
 
         if not videos_to_process:
             return SkipReason("No changes in top YouTube videos. ")
+
+        # Create asset events for external assets to track lineage
+        asset_events = []
+
+        # Record materialization for external playlists
+        asset_events.append(
+            AssetMaterialization(
+                asset_key=AssetKey(["youtube_shorts", "external_playlists"]),
+                metadata={
+                    "playlist_ids": playlist_ids,
+                    "playlist_count": len(playlist_ids),
+                    "config_url": YOUTUBE_SHORTS_CONFIG_URL,
+                },
+            )
+        )
+
+        # Record materialization for external videos
+        asset_events.append(
+            AssetMaterialization(
+                asset_key=AssetKey(["youtube_shorts", "external_videos"]),
+                metadata={
+                    "total_video_count": len(all_video_ids),
+                    "all_video_ids": list(all_video_ids),
+                    "new_video_count": len(new_video_ids),
+                    "new_video_ids": list(new_video_ids),
+                    "videos_to_process": len(videos_to_process),
+                    "video_ids": list(all_video_ids[:MAX_VIDEOS_TO_PROCESS]),
+                },
+            )
+        )
 
         # Create run requests for all videos that need processing
         run_requests = [
@@ -116,6 +148,7 @@ def youtube_shorts_sensor(context):
         # be re-processed unless they move back into the top 16.
 
         return SensorResult(
+            asset_events=asset_events,
             dynamic_partitions_requests=dynamic_requests,
             run_requests=run_requests,
         )

@@ -24,6 +24,8 @@ from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 from learning_resources.assets.sloan_api import sloan_course_metadata
 from learning_resources.assets.youtube_shorts import (
     download_youtube_video_assets,
+    external_youtube_playlists,
+    external_youtube_videos,
     youtube_video_webhook,
 )
 from learning_resources.resources.youtube_api import YouTubeApiClientFactory
@@ -82,6 +84,8 @@ defs = Definitions(
     },
     assets=[
         sloan_course_metadata,
+        external_youtube_playlists,
+        external_youtube_videos,
         download_youtube_video_assets,
         youtube_video_webhook,
     ],
