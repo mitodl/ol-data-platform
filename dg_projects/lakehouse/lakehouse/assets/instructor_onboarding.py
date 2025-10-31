@@ -88,7 +88,7 @@ def generate_instructor_onboarding_user_list(
 
 @asset(
     name="update_access_forge_repo",
-    group_name="edxorg_instructor_onboarding",
+    group_name="instructor_onboarding",
     ins={
         "instructor_onboarding_user_list": AssetIn(
             key=AssetKey(["instructor_onboarding_user_list"])
@@ -170,7 +170,7 @@ def update_access_forge_repo(
                 f"pipeline.\n\n"
                 f"- Action: {action} file\n"
                 f"- File: {file_path}\n"
-                f"- Users: {instructor_onboarding_user_list.count(chr(10))} entries"
+                f"- Users: {instructor_onboarding_user_list.count(chr(10)) - 1} entries"
             ),
             head=new_branch,
             base=base_branch,

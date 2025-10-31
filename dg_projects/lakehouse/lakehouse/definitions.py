@@ -2,6 +2,7 @@
 
 import os
 import re
+from pathlib import Path
 
 from dagster import (
     AssetSelection,
@@ -20,11 +21,17 @@ from dagster_airbyte import (
 )
 from dagster_dbt import (
     DbtCliResource,
+    DbtProject,
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
+from lakehouse.assets.instructor_onboarding import (
+    generate_instructor_onboarding_user_list,
+    update_access_forge_repo,
+)
 from lakehouse.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
 from lakehouse.assets.superset import create_superset_asset
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
@@ -91,6 +98,16 @@ dbt_config = {
     "target": dbt_target,
 }
 dbt_cli = DbtCliResource(**dbt_config)
+
+# Initialize dbt project - handle both local dev and Docker paths
+if Path("/app/ol_dbt").exists():
+    # In Docker container
+    DBT_PROJECT_DIR = Path("/app/ol_dbt")
+else:
+    # Local development
+    DBT_PROJECT_DIR = Path(__file__).resolve().parents[3] / "src" / "ol_dbt"
+
+dbt_project = DbtProject(project_dir=DBT_PROJECT_DIR)
 
 
 class OLAirbyteTranslator(DagsterAirbyteTranslator):
@@ -218,17 +235,34 @@ superset_assets = [
     if key.path[0] in dbt_models_for_superset_datasets
 ]
 
+# Instructor onboarding schedule
+instructor_onboarding_schedule = ScheduleDefinition(
+    name="instructor_onboarding_daily_schedule",
+    job=define_asset_job(
+        name="instructor_onboarding_daily_job",
+        selection=AssetSelection.assets(
+            generate_instructor_onboarding_user_list,
+            update_access_forge_repo,
+        ),
+    ),
+    cron_schedule="0 5 * * *",
+    execution_timezone="UTC",
+)
+
 defs = Definitions(
     assets=[
         *with_source_code_references([full_dbt_project]),
         *airbyte_assets,
         *superset_assets,
+        generate_instructor_onboarding_user_list,
+        update_access_forge_repo,
     ],
     resources={
         "airbyte": airbyte_workspace,
         "dbt": dbt_cli,
         "vault": vault,
         "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
+        "github_api": GithubApiClientFactory(vault=vault),
     },
     sensors=[
         AutomationConditionSensorDefinition(
@@ -243,5 +277,5 @@ defs = Definitions(
         ),
     ],
     jobs=[*airbyte_asset_jobs],
-    schedules=airbyte_update_schedules,
+    schedules=[*airbyte_update_schedules, instructor_onboarding_schedule],
 )
