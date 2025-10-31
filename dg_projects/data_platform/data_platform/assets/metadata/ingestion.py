@@ -9,6 +9,7 @@ from typing import Any
 from dagster import AssetExecutionContext, Output, asset
 from metadata.workflow.metadata import MetadataWorkflow
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.dagster_helpers import get_dagster_host_and_port
 from pydantic import BaseModel, Field
 
 from data_platform.resources.openmetadata import OpenMetadataClient
@@ -52,9 +53,9 @@ def run_metadata_workflow(
     workflow_config["workflowConfig"]["openMetadataServerConfig"] = {
         "hostPort": openmetadata_client.base_url,
         "authProvider": "openmetadata",
-        "securityConfig": workflow_config["workflowConfig"].get(
-            "openMetadataServerConfig", {}
-        ).get("securityConfig", {}),
+        "securityConfig": workflow_config["workflowConfig"]
+        .get("openMetadataServerConfig", {})
+        .get("securityConfig", {}),
     }
 
     try:
@@ -66,10 +67,7 @@ def run_metadata_workflow(
         status = workflow.get_status()
 
         context.log.info(
-            "Workflow completed successfully. "
-            "Records: %s, "
-            "Warnings: %s, "
-            "Errors: %s",
+            "Workflow completed successfully. Records: %s, Warnings: %s, Errors: %s",
             status.records,
             status.warnings.failures if status.warnings else 0,
             status.failures.failures if status.failures else 0,
@@ -118,9 +116,7 @@ def trino_metadata(
             "serviceConnection": {
                 "config": {
                     "type": "Trino",
-                    "hostPort": (
-                        "ol-data-platform-cluster.starburstdata.net:443"
-                    ),
+                    "hostPort": ("ol-data-platform-cluster.starburstdata.net:443"),
                     "catalog": "ol_warehouse",
                     "databaseSchema": "ol_warehouse_qa_staging",
                     "connectionOptions": {},
@@ -172,9 +168,7 @@ def trino_lineage(
             "serviceConnection": {
                 "config": {
                     "type": "Trino",
-                    "hostPort": (
-                        "ol-data-platform-cluster.starburstdata.net:443"
-                    ),
+                    "hostPort": ("ol-data-platform-cluster.starburstdata.net:443"),
                     "catalog": "ol_warehouse",
                     "supportsLineageExtraction": True,
                 }
@@ -218,9 +212,7 @@ def trino_profiling(
             "serviceConnection": {
                 "config": {
                     "type": "Trino",
-                    "hostPort": (
-                        "ol-data-platform-cluster.starburstdata.net:443"
-                    ),
+                    "hostPort": ("ol-data-platform-cluster.starburstdata.net:443"),
                     "catalog": "ol_warehouse",
                     "databaseSchema": "ol_warehouse_qa_staging",
                     "supportsProfiler": True,
@@ -274,12 +266,8 @@ def dbt_metadata(
                 "config": {
                     "type": "DBT",
                     "dbtConfigSource": {
-                        "dbtCatalogFilePath": (
-                            "/app/src/ol_dbt/target/catalog.json"
-                        ),
-                        "dbtManifestFilePath": (
-                            "/app/src/ol_dbt/target/manifest.json"
-                        ),
+                        "dbtCatalogFilePath": ("/app/src/ol_dbt/target/catalog.json"),
+                        "dbtManifestFilePath": ("/app/src/ol_dbt/target/manifest.json"),
                         "dbtRunResultsFilePath": (
                             "/app/src/ol_dbt/target/run_results.json"
                         ),
@@ -320,12 +308,8 @@ def dbt_lineage(
                 "config": {
                     "type": "DBT",
                     "dbtConfigSource": {
-                        "dbtCatalogFilePath": (
-                            "/app/src/ol_dbt/target/catalog.json"
-                        ),
-                        "dbtManifestFilePath": (
-                            "/app/src/ol_dbt/target/manifest.json"
-                        ),
+                        "dbtCatalogFilePath": ("/app/src/ol_dbt/target/catalog.json"),
+                        "dbtManifestFilePath": ("/app/src/ol_dbt/target/manifest.json"),
                         "dbtRunResultsFilePath": (
                             "/app/src/ol_dbt/target/run_results.json"
                         ),
@@ -355,9 +339,18 @@ def dagster_metadata(
 ) -> Output:
     """Ingest metadata from Dagster pipelines.
 
-    This asset ingests Dagster pipeline definitions, assets, and jobs
-    into OpenMetadata.
+    This asset ingests Dagster pipeline definitions, assets, jobs, schedules,
+    and lineage information into OpenMetadata. The Dagster host is automatically
+    determined based on the DAGSTER_ENV environment variable.
+
     """
+    # Get environment-aware Dagster configuration
+    dagster_host, dagster_port = get_dagster_host_and_port()
+
+    context.log.info(
+        "Ingesting Dagster metadata from %s:%s", dagster_host, dagster_port
+    )
+
     workflow_config = {
         "source": {
             "type": "dagster",
@@ -365,11 +358,33 @@ def dagster_metadata(
             "serviceConnection": {
                 "config": {
                     "type": "Dagster",
-                    "host": "pipelines.odl.mit.edu",
-                    "port": 443,
+                    "host": dagster_host,
+                    "port": dagster_port,
+                    "timeout": 60,
                 }
             },
-            "sourceConfig": {"config": {"type": "PipelineMetadata"}},
+            "sourceConfig": {
+                "config": {
+                    "type": "PipelineMetadata",
+                    # Include lineage to show asset dependencies
+                    "includeLineage": True,
+                    # Mark deleted pipelines for cleanup
+                    "markDeletedPipelines": True,
+                    # Filter to relevant code locations
+                    "pipelineFilterPattern": {
+                        "includes": [
+                            ".*lakehouse.*",
+                            ".*data_platform.*",
+                            ".*openedx.*",
+                            ".*edxorg.*",
+                            ".*canvas.*",
+                            ".*learning_resources.*",
+                        ],
+                        # Exclude test and temporary pipelines
+                        "excludes": [".*test.*", ".*_test_.*"],
+                    },
+                }
+            },
         },
         "sink": {"type": "metadata-rest"},
         "workflowConfig": {
