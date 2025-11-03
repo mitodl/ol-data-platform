@@ -1973,3 +1973,61 @@ sources:
       description: timestamp, date and time when this record was created
     - name: updated_on
       description: timestamp, date and time when this record was last updated
+
+  - name: raw__mitxonline__app__postgres__wagtailcore_revision
+    description: Wagtail page revisions in MITx Online CMS
+    columns:
+    - name: id
+      data_type: bigint
+      description: primary key for wagtailcore_revision
+    - name: content
+      data_type: varchar
+      description: content of the revision stored as a JSON string
+    - name: user_id
+      data_type: bigint
+      description: foreign key to users_user representing the user who made the revision
+    - name: object_id
+      data_type: varchar
+      description: foreign key to wagtailcore_page representing the page being revised
+    - name: object_str
+      data_type: varchar
+      description: title of the page being revised
+    - name: content_type_id
+      data_type: bigint
+      description: foreign key to django_contenttype representing the type of page
+        being revised
+    - name: base_content_type_id
+      data_type: bigint
+      description: foreign key to django_contenttype representing the base type of
+        page being revised
+    - name: approved_go_live_at
+      data_type: timestamp(6) with time zone
+      description: timestamp for when the revision was approved to go live
+    - name: created_at
+      data_type: timestamp(6) with time zone
+      description: timestamp for when the revision was created
+
+  - name: raw__mitxonline__app__postgres__cms_signatorypage
+    description: MITx Online CMS signatory pages
+    columns:
+    - name: name
+      data_type: varchar
+      description: the name of the signatory
+    - name: title_1
+      data_type: varchar
+      description: primary title of the signatory
+    - name: title_2
+      data_type: varchar
+      description: second title of the signatory
+    - name: title_3
+      data_type: varchar
+      description: third title of the signatory
+    - name: page_ptr_id
+      data_type: bigint
+      description: foreign key to wagtailcore_page
+    - name: organization
+      data_type: varchar
+      description: the organization of the signatory
+    - name: signature_image_id
+      data_type: bigint
+      description: foreign key to wagtailimages_image for the signature image

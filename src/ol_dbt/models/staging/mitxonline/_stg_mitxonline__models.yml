@@ -1086,8 +1086,8 @@ models:
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-  - name: certificate_page_revision_id
-    description: int, foreign key to wagtailcore_pagerevision (could be blank)
+  - name: wagtailcore_revision_id
+    description: int, foreign key to wagtailcore_revision
   - name: courseruncertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: courseruncertificate_updated_on
@@ -1926,3 +1926,56 @@ models:
       description: timestamp, date and time when this record was created
     - name: openedxuser_updated_on
       description: timestamp, date and time when this record was last updated
+
+- name: stg__mitxonline__app__postgres__cms_wagtailcore_revision
+  description: Wagtail page revisions in MITx Online CMS
+  columns:
+  - name: wagtailcore_revision_id
+    description: int, primary key for wagtailcore_revision
+    tests:
+    - unique
+    - not_null
+  - name: wagtailcore_revision_content
+    description: str, content of the revision stored as a JSON string
+    tests:
+    - not_null
+  - name: user_id
+    description: int, foreign key to users_user representing the user who made the
+      revision
+  - name: wagtail_page_id
+    description: int, foreign key to wagtailcore_page representing the page being
+      revised
+    tests:
+    - not_null
+  - name: wagtail_page_title
+    description: str, title of the page being revised
+  - name: contenttype_id
+    description: int, foreign key to django_contenttype representing the type of page
+      being revised
+    tests:
+    - not_null
+  - name: base_contenttype_id
+    description: int, foreign key to django_contenttype representing the base type
+      of page being revised
+  - name: wagtailcore_revision_created_on
+    description: timestamp for when the revision was created
+
+- name: stg__mitxonline__app__postgres__cms_signatorypage
+  description: Signatory page metadata from Wagtail CMS
+  columns:
+  - name: signatorypage_name
+    description: str, name of the signatory
+    tests:
+    - not_null
+  - name: signatorypage_title_1
+    description: str, primary title of the signatory
+  - name: signatorypage_title_2
+    description: str, secondary title of the signatory
+  - name: signatorypage_title_3
+    description: str, third title of the signatory
+  - name: wagtail_page_id
+    description: int, foreign key to wagtailcore_page
+  - name: signatorypage_organization
+    description: str, the organization of the signatory
+  - name: wagtailimages_image_id
+    description: int, foreign key to wagtailimages_image for the signature image
