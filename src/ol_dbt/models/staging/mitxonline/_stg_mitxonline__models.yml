@@ -1,780 +1,245 @@
 ---
 version: 2
-
 models:
-- name: stg__mitxonline__openedx__mysql__bulk_email_optout
+- name: stg__mitxonline__app__postgres__cms_coursepage
+  description: course page metadata sourced from Wagtail CMS
   columns:
-  - name: email_optout_id
-    description: int, sequential ID tracking a email optout
+  - name: wagtail_page_id
+    description: int, foreign key to wagtail_page
     tests:
     - unique
     - not_null
-  - name: openedx_user_id
-    description: int, unique ID for each user on the MITx Online open edX platform
-    tests:
-    - not_null
-  - name: courserun_readable_id
-    description: string, unique ID representing a single MITx Online course run
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id"]
-
-- name: stg__mitxonline__app__postgres__courses_courserunenrollment
-  columns:
-  - name: courserunenrollment_id
-    description: int, sequential ID tracking a single user enrollment
+  - name: course_id
+    description: int, foreign key to courses_course
     tests:
     - unique
     - not_null
-  - name: courserunenrollment_created_on
-    description: timestamp, specifying when an enrollment was initially created
+  - name: course_description
+    description: text, the description shown on the home page and product page.
     tests:
     - not_null
-  - name: courserunenrollment_updated_on
-    description: timestamp, specifying when an enrollment was most recently updated
+  - name: course_length
+    description: str, a short description indicating how long it takes to complete
+      (e.g. '4 weeks').
     tests:
     - not_null
-  - name: courserunenrollment_enrollment_status
-    description: str, enrollment status for users whose enrollment is no longer active.
-      Options are 'deferred', 'transferred', 'refunded', 'unenrolled', maybe blank
-    tests:
-    - accepted_values:
-        values: ['deferred', 'transferred', 'refunded', 'unenrolled']
-  - name: courserunenrollment_is_active
-    description: boolean, indicating whether the user is still enrolled in the run
+  - name: course_effort
+    description: str, a short description indicating how much effort is required (e.g.
+      1-3 hours per week).
+  - name: course_price
+    description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
+      available)
     tests:
     - not_null
-  - name: courserunenrollment_is_edx_enrolled
-    description: boolean, indicating whether the user is enrolled on edx
-    tests:
-    - not_null
-  - name: courserun_id
-    description: int, unique ID specifying a "run" of an MITx Online course
-    tests:
-    - not_null
-  - name: user_id
-    description: int, unique ID for each user on the MITx Online platform
-    tests:
-    - not_null
-  - name: courserunenrollment_enrollment_mode
-    description: str, enrollment mode for user
-  - name: courserunenrollment_has_edx_email_subscription
-    description: bool, indicates whether the user should receive emails from edx
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_id", "user_id"]
-  - dbt_utils.recency:
-      datepart: day
-      field: from_iso8601_timestamp_nanos(courserunenrollment_created_on)
-      interval: 2
-      config:
-        severity: error
-        error_if: "!=0"
-
-- name: stg__mitxonline__app__postgres__courses_programenrollment
+  - name: course_prerequisites
+    description: text, a short description indicating prerequisites of this course.
+  - name: course_faq_url
+    description: str, URL a relevant FAQ page or entry for the course.
+  - name: course_about
+    description: text, details about this course.
+  - name: course_what_you_learn
+    description: text, what you will learn from this course.
+  - name: course_video_url
+    description: str, URL to the video to be displayed for this course. It can be
+      an HLS or Youtube video URL.
+- name: stg__mitxonline__app__postgres__cms_coursepage_topics
   columns:
-  - name: programenrollment_id
-    description: int, sequential ID tracking a single user enrollment
+  - name: wagtail_page_id
+    description: int, foreign key to cms_coursepage referring to the course page
+    tests:
+    - not_null
+  - name: coursetopic_id
+    description: int, foreign key to courses_coursetopic
+    tests:
+    - not_null
+- name: stg__mitxonline__app__postgres__cms_instructorpage
+  columns:
+  - name: wagtail_page_id
+    description: int, foreign key to cms_coursepage referring to the course page
+    tests:
+    - not_null
+  - name: instructor_name
+    description: str, the name of the instructor.
+    tests:
+    - not_null
+  - name: instructor_title
+    description: str, the instructor's title (academic or otherwise).
+  - name: instructor_bio_short
+    description: str, a short biography of the instructor. May be blank.
+  - name: instructor_bio_long
+    description: str, a longer biography of the instructor.
+- name: stg__mitxonline__app__postgres__cms_instructorpagelink
+  columns:
+  - name: wagtail_page_id
+    description: int, foreign key to wagtail_page referring to the course page
+    tests:
+    - not_null
+  - name: instructor_wagtail_page_id
+    description: int, foreign key to wagtail_page referring to the linked instructor
+      page
+    tests:
+    - not_null
+- name: stg__mitxonline__app__postgres__cms_programpage
+  description: program page metadata sourced from Wagtail CMS
+  columns:
+  - name: wagtail_page_id
+    description: int, foreign key to wagtail_page
     tests:
     - unique
-    - not_null
-  - name: programenrollment_created_on
-    description: timestamp, specifying when an enrollment was initially created
-    tests:
-    - not_null
-  - name: programenrollment_updated_on
-    description: timestamp, specifying when an enrollment was most recently updated
-    tests:
-    - not_null
-  - name: programenrollment_enrollment_status
-    description: str, enrollment status for users whose enrollment is no longer active.
-      Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
-  - name: programenrollment_is_active
-    description: boolean, indicating whether the user is still enrolled in the program
-    tests:
     - not_null
   - name: program_id
-    description: int, foreign key from the courses_program table
+    description: int, foreign key to courses_program
+    tests:
+    - unique
+    - not_null
+  - name: program_description
+    description: text, the description shown on the home page and product page.
     tests:
     - not_null
-  - name: user_id
-    description: int, unique ID for each user on the MITx Online platform
+  - name: program_length
+    description: str, a short description indicating how long it takes to complete
+      (e.g. '4 weeks').
     tests:
     - not_null
-  - name: programenrollment_enrollment_mode
-    description: str, enrollment mode for user
+  - name: program_effort
+    description: str, a short description indicating how much effort is required (e.g.
+      1-3 hours per week).
+  - name: program_price
+    description: str, product price in plain text. e.g. $250 - $1000.
+    tests:
+    - not_null
+  - name: program_prerequisites
+    description: text, a short description indicating prerequisites of this program.
+  - name: program_faq_url
+    description: str, URL a relevant FAQ page or entry for the program.
+  - name: program_about
+    description: text, details about this program.
+  - name: program_what_you_learn
+    description: text, what you will learn from this program.
+  - name: program_video_url
+    description: str, URL to the video to be displayed for this program. It can be
+      an HLS or Youtube video URL.
+- name: stg__mitxonline__app__postgres__cms_signatorypage
+  description: ''
+  columns:
+  - name: item_name
+    data_type: varchar
+    description: ''
+  - name: title_1
+    data_type: varchar
+    description: ''
+  - name: title_2
+    data_type: varchar
+    description: ''
+  - name: page_ptr_id
+    data_type: bigint
+    description: ''
+  - name: organization
+    data_type: varchar
+    description: ''
+  - name: signature_image_id
+    data_type: bigint
+    description: ''
+  - name: title_3
+    data_type: varchar
+    description: ''
+- name: stg__mitxonline__app__postgres__cms_wagtail_page
+  columns:
+  - name: wagtail_page_id
+    description: int, primary key for this table.
+    tests:
+    - not_null
+    - unique
+  - name: wagtail_page_path
+    description: str, the full materialized path for each node (readonly) e.g. 0001
+      is root path, 00010001 is the path to a node in this requirement tree
+    tests:
+    - not_null
+    - unique
+  - name: wagtail_page_depth
+    description: int, depth of a node in the tree. A root node has a depth of 1.
+    tests:
+    - not_null
+  - name: wagtail_page_num_children
+    description: int, the number of children of a node
+    tests:
+    - not_null
+  - name: wagtail_page_title
+    description: str, human-readable title of the page
+    tests:
+    - not_null
+  - name: wagtail_page_slug
+    description: "str, this is used for constructing the page’s URL."
+    tests:
+    - not_null
+  - name: wagtail_page_is_live
+    description: boolean, if set to true this page is published
+    tests:
+    - not_null
+  - name: wagtail_page_has_unpublished_changes
+    description: boolean, set to True when the page is either in draft or published
+      with draft changes.
+    tests:
+    - not_null
+  - name: wagtail_page_seo_title
+    description: "str, alternate SEO-crafted title, for use in the page’s <title>\
+      \ HTML tag."
+    tests:
+    - not_null
+  - name: wagtail_page_url_path
+    description: str, url path for the page
+    tests:
+    - not_null
+  - name: wagtail_page_search_description
+    description: "str, SEO-crafted description of the content, used for search indexing.\
+      \ This is also suitable for the page’s <meta name=\"description\"> HTML tag."
+    tests:
+    - not_null
+  - name: contenttype_id
+    description: int, primary key in django_contenttype. The cms_ table of that has
+      data for this page
+    tests:
+    - not_null
+  - name: owner_user_id
+    description: int, foreign key to users_user to reference the page owner
+  - name: wagtail_page_live_pagerevision_id
+    description: int, foreign key to wagtailcore_pagerevision of the page's latest
+      revision
+  - name: wagtail_page_latest_revision_created_on
+    description: timestamp, timestamp of the page's latest revision
+  - name: wagtail_page_first_published_on
+    description: timestamp, date and time when the page was first published
+  - name: wagtail_page_last_published_on
+    description: timestamp, date and time when the page was last published
+- name: stg__mitxonline__app__postgres__courses_blockedcountry
+  columns:
+  - name: blockedcountry_id
+    description: int, primary key for courses_blockedcountry table from MITx Online
+    tests:
+    - unique
+    - not_null
+  - name: blockedcountry_code
+    description: str, two-letter code of a blocked country for a course
+    tests:
+    - not_null
+  - name: course_id
+    description: int, foreign key to courses_course representing a single course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__mitxonline__app__postgres__courses_course')
+        field: course_id
+  - name: blockedcountry_created_on
+    description: timestamp, specifying when a blocked country record was initially
+      created
+  - name: blockedcountry_updated_on
+    description: timestamp, specifying when a blocked country record was most recently
+      updated
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["program_id", "user_id"]
-
-- name: stg__mitxonline__app__postgres__ecommerce_basketdiscount
-  columns:
-  - name: basketdiscount_id
-    description: int, primary key representing a discount in a user's basket
-  - name: basketdiscount_created_on
-    description: timestamp, specifying when the basket discount was initially created
-  - name: basketdiscount_updated_on
-    description: timestamp, specifying when the basket discount was most recently
-      updated
-  - name: basketdiscount_applied_on
-    description: timestamp, specifying when the discount was applied to the basket
-  - name: basket_id
-    description: int, foreign key referencing ecommerce_basket
-  - name: user_id
-    description: int, foreign key referencing users_user
-  - name: discount_id
-    description: int, foreign key referencing ecommerce_discount
-
-- name: stg__mitxonline__app__postgres__ecommerce_basketitem
-  columns:
-  - name: basketitem_id
-    description: int, primary key representing a item in a user's basket
-  - name: basketitem_created_on
-    description: timestamp, specifying when the basket item was initially created
-  - name: basketitem_updated_on
-    description: timestamp, specifying when the basket item was most recently updated
-  - name: basketitem_quantity
-    description: int, quantitiy of the item. Always 1
-  - name: basket_id
-    description: int, foreign key referencing ecommerce_basket
-  - name: product_id
-    description: int, foreign key referencing ecommerce_product
-
-- name: stg__mitxonline__app__postgres__ecommerce_basket
-  description: Checkout basket that contains courseware that a users wants to purchase
-    but has not purchased yet
-  columns:
-  - name: basket_id
-    description: int, primary key representing a user basket
-  - name: basket_created_on
-    description: timestamp, specifying when the basket was initially created
-  - name: basket_updated_on
-    description: timestamp, specifying when the basket was most recently updated
-  - name: user_id
-    description: int, foreign key to the users_user table
-    tests:
-    - unique
-
-- name: stg__mitxonline__app__postgres__flexiblepricing_flexiblepriceapplication
-  description: An application for an income based discount.
-  columns:
-  - name: flexiblepriceapplication_id
-    description: int, primary key representing a flexible pricing application
-    tests:
-    - not_null
-    - unique
-  - name: flexiblepriceapplication_created_on
-    description: timestamp, specifying when the table row was created
-    tests:
-    - not_null
-  - name: flexiblepriceapplication_updated_on
-    description: timestamp, specifying when the table row was updated
-    tests:
-    - not_null
-  - name: flexiblepriceapplication_status
-    description: string, status of the application. One of "approved", "auto-approved",
-      "created", "pending-manual-approval", "denied", "reset"
-    tests:
-    - not_null
-    - accepted_values:
-        values: ["approved", "auto-approved", "created", "pending-manual-approval",
-          "denied", "reset"]
-  - name: flexiblepriceapplication_income_usd
-    description: numeric, user income in usd
-  - name: flexiblepriceapplication_original_income
-    description: numeric, user income in it's original currency
-  - name: flexiblepriceapplication_original_currency
-    description: string, currency code of orginal income
-  - name: flexiblepriceapplication_country_of_income
-    description: string, country code for user country of income
-  - name: flexiblepriceapplication_exchange_rate_timestamp
-    description: timestamp, timestamp of exchange rate used to convert the original
-      income to usd
-  - name: flexiblepriceapplication_date_documents_sent
-    description: date, date that the user sent documents that prove their income
-  - name: flexiblepriceapplication_justification
-    description: string, explanation for flexible pricing application approval or
-      rejection
-  - name: flexiblepriceapplication_country_of_residence
-    description: string, country code for user country of residece
-    tests:
-    - not_null
-  - name: user_id
-    description: int, primary key in the users_user table of the user  requesting
-      flexible pricing
-    tests:
-    - not_null
-  - name: flexiblepriceapplication_cms_submission_id
-    description: int, primary key of the cms submission stored in the flexiblepricing_flexiblepricingrequestsubmission
-      table
-  - name: contenttype_id
-    description: int, primary key in django_contenttype of either courses_course or
-      courses_program
-    tests:
-    - not_null
-  - name: courseware_object_id
-    description: int, primary key in either the courses_course or courses_program
-      table of the courseware the user applied for flexible pricing for
-    tests:
-    - not_null
-  - name: flexiblepricetier_id
-    description: int, primary key in flexiblepricing_flexiblepricetier of the price
-      tier the user applied for
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courseware_object_id", "contenttype_id", "user_id"]
-
-- name: stg__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
-  columns:
-  - name: flexiblepricetier_id
-    description: int, primary key representing a flexible pricing tier
-    tests:
-    - not_null
-    - unique
-  - name: flexiblepricetier_created_on
-    description: timestamp, specifying when the table row was created
-    tests:
-    - not_null
-  - name: flexiblepricetier_updated_on
-    description: timestamp, specifying when the table row was updated
-    tests:
-    - not_null
-  - name: contenttype_id
-    description: int, foreign key in django_contenttype for either course or program
-    tests:
-    - not_null
-  - name: courseware_object_id
-    description: int, id for the courseware object in either the courses_course or
-      courses_program table
-    tests:
-    - not_null
-  - name: flexiblepricetier_is_current
-    description: boolean, whether the flexible pricing tier is currently enabled
-    tests:
-    - not_null
-  - name: flexiblepricetier_income_threshold_usd
-    description: numeric, maximum income in usd to qualify for the flexible price
-      tier
-    tests:
-    - not_null
-  - name: discount_id
-    description: int, id of ecommerce_discount associated with the flexible price
-      tier
-    tests:
-    - not_null
-
-- name: stg__mitxonline__app__postgres__flexiblepricing_currencyexchangerate
-  columns:
-  - name: currencyexchangerate_id
-    description: int, primary key representing a country exchange rate
-    tests:
-    - not_null
-    - unique
-  - name: currencyexchangerate_created_on
-    description: timestamp, specifying when the table row was created
-    tests:
-    - not_null
-  - name: currencyexchangerate_updated_on
-    description: timestamp, specifying when the table row was updated
-    tests:
-    - not_null
-  - name: currencyexchangerate_currency_code
-    description: string, currency code
-    tests:
-    - not_null
-    - unique
-  - name: currencyexchangerate_exchange_rate
-    description: numeric, exchange rate to usd
-    tests:
-    - not_null
-  - name: currencyexchangerate_description
-    description: string, readable currency name
-
-- name: stg__mitxonline__app__postgres__flexiblepricing_countryincomethreshold
-  columns:
-  - name: countryincomethreshold_id
-    description: int, primary key representing a country income threshold
-    tests:
-    - not_null
-    - unique
-  - name: countryincomethreshold_created_on
-    description: timestamp, specifying when the table row was created
-    tests:
-    - not_null
-  - name: countryincomethreshold_updated_on
-    description: timestamp, specifying when the table row was updated
-    tests:
-    - not_null
-  - name: countryincomethreshold_country_code
-    description: string, country code
-    tests:
-    - not_null
-    - unique
-  - name: countryincomethreshold_income_threshold
-    description: int, usd income threshold to quantity for flexible pricing
-    tests:
-    - not_null
-
-- name: stg__mitxonline__app__postgres__ecommerce_userdiscount
-  description: This table is used to pre-apply a discount when a user checks out
-  columns:
-  - name: userdiscount_id
-    description: int, primary key representing a discount user combo
-    tests:
-    - not_null
-  - name: userdiscount_created_on
-    description: timestamp, specifying when the discount user association was initially
-      created
-    tests:
-    - not_null
-  - name: userdiscount_updated_on
-    description: timestamp, specifying when the discount user association was initially
-      created
-    tests:
-    - not_null
-  - name: discount_id
-    description: int, foreign key for ecommerce_discount
-    tests:
-    - not_null
-  - name: user_id
-    description: int, foreign key for users_user
-    tests:
-    - not_null
-
-- name: stg__mitxonline__app__postgres__ecommerce_discountproduct
-  description: This table is used to limit dicounts to a specific product. Discounts
-    which do not have a record in this table are redeemable for all products
-  columns:
-  - name: discountproduct_id
-    description: int, primary key representing a discount product combo
-    tests:
-    - not_null
-  - name: discountproduct_created_on
-    description: timestamp, specifying when the discount product association was initially
-      created
-  - name: discountproduct_updated_on
-    description: timestamp, specifying when the discount product association was last
-      updated
-  - name: discount_id
-    description: int, foreign key for ecommerce_discount
-    tests:
-    - not_null
-  - name: product_id
-    description: int, foreign key for ecommerce_product
-
-- name: stg__mitxonline__app__postgres__ecommerce_discount
-  columns:
-  - name: discount_id
-    description: int, primary key representing a discount
-    tests:
-    - not_null
-    - unique
-  - name: discount_created_on
-    description: timestamp, specifying when the discount was initially created
-  - name: discount_updated_on
-    description: timestamp, specifying when the discount was most recently updated
-  - name: discount_amount
-    description: numeric, discount amount. May be a precent or dollar amount
-    tests:
-    - not_null
-  - name: discount_type
-    description: string, one of  "percent-off", "dollars-off" and "fixed-price". Specifys
-      if the ammount of the discount refers to a percent of, a dollar amount off or
-      a discounted price
-    tests:
-    - not_null
-    - accepted_values:
-        values: ["percent-off", "dollars-off", "fixed-price"]
-  - name: discount_amount_text
-    description: str, discount amount in readable format. It can be percent-off which
-      is <dollar amount>% off, dollars-off which is $<dollar amount> off or fixed-price
-    tests:
-    - not_null
-  - name: discount_redemption_type
-    description: string, one of  "one-time",  "one-time-per-user" and "unlimited"
-    tests:
-    - not_null
-    - accepted_values:
-        values: ["one-time", "one-time-per-user", "unlimited"]
-  - name: discount_max_redemptions
-    description: int, maximum times a coupon can be redeemed
-  - name: discount_code
-    description: string, discount code
-    tests:
-    - not_null
-  - name: discount_source
-    description: string, reason for the discount creation. Possible options are "marketing",
-      "sales", "financial-assistance", "customer-support", "staff", "legacy"
-    tests:
-    - accepted_values:
-        values: ["marketing", "sales", "financial-assistance", "customer-support",
-          "staff", "legacy"]
-  - name: discount_activated_on
-    description: timestamp, specifying when the discount is activated
-  - name: discount_expires_on
-    description: timestamp, specifying when the discount is deactivated
-
-- name: stg__mitxonline__app__postgres__ecommerce_discountredemption
-  columns:
-  - name: discountredemption_id
-    description: int, primary key representing a discount redemption
-  - name: discountredemption_timestamp
-    description: timestamp, specifying when the discount was redeemed by the user
-  - name: user_id
-    description: int, foreign key for users_user
-  - name: discount_id
-    description: int, foreign key for ecommerce_discount
-  - name: order_id
-    description: int, foreign key for ecommerce_orders
-
-- name: stg__mitxonline__app__postgres__ecommerce_transaction
-  columns:
-  - name: transaction_id
-    description: int, primary key representing an ecommerce transaction
-    tests:
-    - unique
-    - not_null
-  - name: transaction_data
-    description: json, data returned from cybersource when the transaction is fulfilled
-    tests:
-    - not_null
-  - name: transaction_amount
-    description: numeric, transaction ammount
-    tests:
-    - not_null
-  - name: order_id
-    description: int, foreign id in the ecommerce_orders tabe for the order associated
-      with the transaction
-    tests:
-    - not_null
-  - name: transaction_created_on
-    description: timestamp, specifying when the transaction was initially created
-  - name: transaction_updated_on
-    description: timestamp, specifying when the transaction was most recently updated
-  - name: transaction_readable_identifier
-    description: string, unique identifier. Either the transaction_id from cybersource
-      or a unique uuid
-    tests:
-    - not_null
-    - unique
-  - name: transaction_type
-    description: string, transaction type, one of "refund" and "payment"
-    tests:
-    - accepted_values:
-        values: ["refund", "payment"]
-
-- name: stg__mitxonline__app__postgres__ecommerce_line
-  description: ""
-  columns:
-  - name: line_id
-    description: int, primary key representing an ecommerce line
-    tests:
-    - unique
-    - not_null
-  - name: order_id
-    description: int, foreign key in the orders_order table for the order that contains
-      the line Currently orders have exactly one line
-    tests:
-    - not_null
-  - name: line_created_on
-    description: timestamp, specifying when the line was initially created
-  - name: line_updated_on
-    description: timestamp, specifying when the line was most recently updated
-  - name: product_version_id
-    description: int, foreign key in the reversion_version table. Versioned product
-    tests:
-    - not_null
-  - name: product_object_id
-    description: int, id for the product object in either the course_courseruns or
-      the course_programruns table
-  - name: contenttype_id
-    description: int, foreign key in the django_contenttype table, content type of
-      the product
-
-- name: stg__mitxonline__app__postgres__reversion_revision
-  description: This table is used to track changes to products and transactions
-  columns:
-  - name: revision_id
-    description: int, primary key representing a revision of a product or transaction
-    tests:
-    - unique
-    - not_null
-  - name: revision_comment
-    description: string, automatically generated discription of the change
-  - name: user_id
-    description: int, foreign key to the users_user record for the user that made
-      the change
-  - name: revision_date_created
-    description: timestamp, timestamp, specifying when the revision was made
-    tests:
-    - not_null
-
-- name: stg__mitxonline__app__postgres__reversion_version
-  description: This table is used to track changes to products and transactions
-  columns:
-  - name: version_id
-    description: int, primary key representing a version of a product or transaction
-    tests:
-    - unique
-    - not_null
-  - name: version_object_id
-    description: int, foreign key of the object being versioned
-    tests:
-    - not_null
-  - name: revision_id
-    description: int, primary key in the reversion_revision table
-    tests:
-    - unique
-    - not_null
-  - name: contenttype_id
-    description: int, foreign key to django_contenttype of the object being versioned
-    tests:
-    - not_null
-  - name: version_object_serialized_data
-    description: json, serialized data from the object at the time it was versioned
-
-- name: stg__mitxonline__app__postgres__ecommerce_order
-  columns:
-  - name: order_id
-    description: int, primary key representing a single MITx Online order
-    tests:
-    - not_null
-    - unique
-  - name: order_state
-    description: string, order state. Options are "pending", "fulfilled", "canceled"
-      "declined", "errored", "refunded", "review", "partially_refunded"
-    tests:
-    - accepted_values:
-        values: ["pending", "fulfilled", "canceled", "declined", "errored", "refunded",
-          "review", "partially_refunded"]
-    - not_null
-  - name: order_created_on
-    description: timestamp, specifying when the order was initially created
-  - name: order_updated_on
-    description: timestamp, specifying when the order was updated
-  - name: order_purchaser_user_id
-    description: int, primary key in users_user for the purchaser
-    tests:
-    - not_null
-  - name: order_reference_number
-    description: string, readable id for the order. Shared with micromasters
-    tests:
-    - not_null
-  - name: order_total_price_paid
-    description: number, total order amount
-
-- name: stg__mitxonline__app__postgres__courses_programrun
-  description: ""
-  columns:
-  - name: programrun_id
-    description: int, primary key representing a single MITx Online program run
-    tests:
-    - not_null
-    - unique
-  - name: programrun_tag
-    description: str, string that identifies a single run in a prgram E.g. R11
-    tests:
-    - not_null
-  - name: programrun_start_on
-    description: timestamp, specifying when the program run starts
-  - name: programrun_end_on
-    description: timestamp, specifying when the program run ends
-  - name: programrun_updated_on
-    description: timestamp, specifying when a program run was last updated
-  - name: programrun_created_on
-    description: timestamp, specifying when a program run was initially created
-  - name: program_id
-    description: int, foreign key to courses_program representing a single MITx Online
-      program
-    tests:
-    - not_null
-
-- name: stg__mitxonline__app__postgres__ecommerce_product
-  columns:
-  - name: product_id
-    description: int, sequential ID for ecommerce product
-    tests:
-    - unique
-    - not_null
-  - name: product_price
-    description: numeric, the price of the product
-    tests:
-    - not_null
-  - name: product_is_active
-    description: boolean, whether the product is visible in the app
-    tests:
-    - not_null
-  - name: product_object_id
-    description: int, the course run or program run id in the courses_courserun or
-      courses_programrun table
-    tests:
-    - not_null
-  - name: product_created_on
-    description: timestamp, the timestamp the product was created
-    tests:
-    - not_null
-  - name: product_updated_on
-    description: timestamp, the timestamp the product was last updated
-    tests:
-    - not_null
-  - name: product_description
-    description: string, the product description, usually the readable_id from the
-      courses_course table
-    tests:
-    - not_null
-  - name: contenttype_id
-    description: int, the id of the product object type in the django_contenttype
-      table
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["product_object_id", "contenttype_id"]
-      row_condition: "product_is_active"
-
-- name: stg__mitxonline__app__postgres__django_contenttype
-  columns:
-  - name: contenttype_id
-    description: int, sequential ID for the django model
-    tests:
-    - unique
-    - not_null
-  - name: contenttype_full_name
-    description: string, name for django model. A combination of the models name and
-      functional group
-    tests:
-    - unique
-    - not_null
-
-- name: stg__mitxonline__app__postgres__users_user
-  columns:
-  - name: user_id
-    description: int, sequential ID representing one user in MITx Online
-    tests:
-    - unique
-    - not_null
-  - name: user_global_id
-    description: str, The SSO ID (usually a Keycloak UUID) for the user across all
-      platforms.
-    tests:
-    - unique
-  - name: user_scim_id
-    description: str, The unique identifier for the SCIM resource
-    tests:
-    - unique
-  - name: user_scim_username
-    description: str, The username for the SCIM resource
-  - name: user_scim_external_id
-    description: str, a string identifier for the SCIM resource as defined by the
-      provisioning client
-  - name: user_username
-    description: str, name chosen by user
-    tests:
-    - unique
-    - not_null
-  - name: user_email
-    description: str, user email associated with their account
-    tests:
-    - unique
-    - not_null
-  - name: user_is_active
-    description: boolean, used to soft delete user accounts
-  - name: user_full_name
-    description: str, the user's full name
-    tests:
-    - not_null
-  - name: user_joined_on
-    description: timestamp, specifying when a user account was initially created
-  - name: user_last_login
-    description: timestamp, specifying when a user last logged in
-
-- name: stg__mitxonline__app__postgres__users_legaladdress
-  columns:
-  - name: user_address_id
-    description: int, sequential ID
-    tests:
-    - unique
-    - not_null
-  - name: user_address_country
-    description: string, user country code
-    tests:
-    - not_null
-  - name: user_address_state
-    description: string, state code for the user's address. e.g. US-NY It's required
-      field for new users, may be blank for existing users.
-  - name: user_id
-    description: int, foreign key to users_user
-    tests:
-    - unique
-    - not_null
-
-- name: stg__mitxonline__app__postgres__users_userprofile
-  columns:
-  - name: user_profile_id
-    description: int, sequential ID representing a single MITx Online user profile
-    tests:
-    - unique
-    - not_null
-  - name: user_id
-    description: int,  unique ID for user on MITx Online
-    tests:
-    - unique
-    - not_null
-  - name: user_birth_year
-    description: int, user birth year
-  - name: user_company
-    description: str, user company
-  - name: user_job_title
-    description: str, user job title
-  - name: user_industry
-    description: str, user job industry
-  - name: user_job_function
-    description: str, user job function
-  - name: user_leadership_level
-    description: str, user leadership level
-  - name: user_type_is_student
-    description: boolean, indicating if learner is identified as Student
-  - name: user_type_is_professional
-    description: boolean, indicating if learner is identified as Professional
-  - name: user_type_is_educator
-    description: boolean, indicating if learner is identified as Educator
-  - name: user_type_is_other
-    description: boolean, indicating if learner is identified as Other (not Professional,
-      Student, or Educator)
-  - name: user_gender
-    description: str, user gender
-    tests:
-    - accepted_values:
-        values: '{{ var("gender_values") }}'
-  - name: user_company_size
-    description: str, company size
-    tests:
-    - accepted_values:
-        values: ['Small/Start-up (1+ employees)', 'Small/Home office (1-9 employees)',
-          'Small (10-99 employees)', 'Small to medium-sized (100-999 employees)',
-          'Medium-sized (1000-9999 employees)', 'Large Enterprise (10,000+ employees)',
-          "Other (N/A or Don''t know)"]
-  - name: user_years_experience
-    description: str, years experience
-    tests:
-    - accepted_values:
-        values: ['Less than 2 years', '2-5 years', '6 - 10 years', '11 - 15 years',
-          '16 - 20 years', 'More than 20 years', 'Prefer not to say']
-  - name: user_highest_education
-    description: str, user highest education
-    tests:
-    - accepted_values:
-        values: '{{ var("highest_education_values") }}'
-  - name: user_profile_created_on
-    description: timestamp, date and time when this profile data was initially created
-  - name: user_profile_updated_on
-    description: timestamp, date and time when this profile data was most recently
-      updated
-
+      column_list:
+      - blockedcountry_code
+      - course_id
 - name: stg__mitxonline__app__postgres__courses_course
   columns:
   - name: course_id
@@ -808,116 +273,34 @@ models:
     description: timestamp, specifying when a course was initially created
   - name: course_updated_on
     description: timestamp, specifying when a course was most recently updated
-
-- name: stg__mitxonline__app__postgres__courses_program
+- name: stg__mitxonline__app__postgres__courses_course_to_department
   columns:
-  - name: program_id
-    description: int, primary key representing a single MITx Online program
+  - name: coursetodepartment_id
+    description: int, primary key representing a single MITx Online course tagged
+      to a department
     tests:
     - unique
     - not_null
-  - name: program_is_live
-    description: boolean, indicating whether the program is available to users
-  - name: program_title
-    description: str, title of the program, including the specific track if applicable.
+  - name: coursedepartment_id
+    description: int, foreign key to courses_coursedepartment representing a single
+      course department
     tests:
     - not_null
-  - name: program_type
-    description: str, type of the program. Value is free text, it could be MicroMasters,
-      Series, etc
-  - name: program_availability
-    description: str, either 'anytime' or 'date'
-    tests:
-    - not_null
-  - name: program_certification_type
-    description: str, either 'MicroMasters Credential' or 'Certificate of Completion'.
-      These values are currently set in the application code.
-    tests:
-    - not_null
-  - name: program_name
-    description: str, name of the program, which does not specify which track. e.g.,
-      Data, Economics, and Design of Policy
-    tests:
-    - not_null
-  - name: program_track
-    description: str, name of the specific track for MicroMasters programs. For example,
-      DEDP program has two separate tracks - International Development and Public
-      Policy.
-  - name: program_is_dedp
-    description: boolean, specifying if the program is DEDP from readable_id
-    tests:
-    - not_null
-  - name: program_is_micromasters
-    description: boolean, specifying if the program is MITx MicroMasters® Program
-    tests:
-    - not_null
-  - name: program_readable_id
-    description: str, Open edX ID formatted as program-v1:{org}+{program code}
-    tests:
-    - unique
-    - not_null
-  - name: program_created_on
-    description: timestamp, specifying when a program was initially created
-  - name: program_updated_on
-    description: timestamp, specifying when a program was most recently updated
-
-- name: stg__mitxonline__app__postgres__courses_programrequirement
-  columns:
-  - name: programrequirement_id
-    description: int, primary key representing a MITx Online program requirement node
-    tests:
-    - unique
-    - not_null
+    - relationships:
+        to: ref('stg__mitxonline__app__postgres__courses_department')
+        field: coursedepartment_id
   - name: course_id
     description: int, foreign key to courses_course representing a single course
     tests:
+    - not_null
     - relationships:
         to: ref('stg__mitxonline__app__postgres__courses_course')
         field: course_id
-  - name: program_id
-    description: int, foreign key to courses_program representing a single program
-    tests:
-    - not_null
-    - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_program')
-        field: program_id
-  - name: programrequirement_node_type
-    description: str, different types of nodes that exist in a requirement tree -
-      program_root (represent a program) - course (represent a reference to a course)
-      - program (represent a reference to a program) - operator (represent a logical
-      operation over a set of courses)
-    tests:
-    - accepted_values:
-        values: ["program_root", "course", "program", "operator"]
-  - name: programrequirement_path
-    description: str, the full materialized path for each node (readonly) e.g. 0001
-      is root path, 00010001 is the path to a node in this requirement tree
-    tests:
-    - not_null
-  - name: programrequirement_depth
-    description: int, depth of a node in the tree. A root node has a depth of 1. (readonly)
-    tests:
-    - not_null
-  - name: programrequirement_numchild
-    description: int, the number of children of a node (readonly)
-    tests:
-    - not_null
-  - name: programrequirement_title
-    description: str, title of the requirement
-  - name: programrequirement_operator
-    description: str, the logical operation over a set of courses, it can be all_of,
-      min_number_of or blank
-    tests:
-    - accepted_values:
-        values: ["all_of", "min_number_of"]
-  - name: programrequirement_operator_value
-    description: int, value of the operator for this requirement e.g. if operator
-      is all_of, the corresponding operator_value 3 means all of 3 courses
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["program_id", "programrequirement_depth"]
-      row_condition: "programrequirement_depth=1"
-
+      column_list:
+      - coursedepartment_id
+      - course_id
 - name: stg__mitxonline__app__postgres__courses_courserun
   columns:
   - name: courserun_id
@@ -962,7 +345,9 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["MITx Online", "edX.org"]
+        values:
+        - MITx Online
+        - edX.org
   - name: courserun_url
     description: str, url location for the course run in MITx Online
   - name: courserun_is_self_paced
@@ -986,80 +371,6 @@ models:
     description: timestamp, specifying when a course run was initially created
   - name: courserun_updated_on
     description: timestamp, specifying when a course run was most recently updated
-
-- name: stg__mitxonline__app__postgres__courses_department
-  columns:
-  - name: coursedepartment_id
-    description: int, primary key representing a single MITx Online course department
-    tests:
-    - unique
-    - not_null
-  - name: coursedepartment_name
-    description: str, name of a course department
-    tests:
-    - unique
-    - not_null
-  - name: coursedepartment_created_on
-    description: timestamp, specifying when a course department was initially created
-  - name: coursedepartment_updated_on
-    description: timestamp, specifying when a course department was most recently
-      updated
-
-- name: stg__mitxonline__app__postgres__courses_course_to_department
-  columns:
-  - name: coursetodepartment_id
-    description: int, primary key representing a single MITx Online course tagged
-      to a department
-    tests:
-    - unique
-    - not_null
-  - name: coursedepartment_id
-    description: int, foreign key to courses_coursedepartment representing a single
-      course department
-    tests:
-    - not_null
-    - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_department')
-        field: coursedepartment_id
-  - name: course_id
-    description: int, foreign key to courses_course representing a single course
-    tests:
-    - not_null
-    - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_course')
-        field: course_id
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursedepartment_id", "course_id"]
-
-- name: stg__mitxonline__app__postgres__courses_blockedcountry
-  columns:
-  - name: blockedcountry_id
-    description: int, primary key for courses_blockedcountry table from MITx Online
-    tests:
-    - unique
-    - not_null
-  - name: blockedcountry_code
-    description: str, two-letter code of a blocked country for a course
-    tests:
-    - not_null
-  - name: course_id
-    description: int, foreign key to courses_course representing a single course
-    tests:
-    - not_null
-    - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_course')
-        field: course_id
-  - name: blockedcountry_created_on
-    description: timestamp, specifying when a blocked country record was initially
-      created
-  - name: blockedcountry_updated_on
-    description: timestamp, specifying when a blocked country record was most recently
-      updated
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["blockedcountry_code", "course_id"]
-
 - name: stg__mitxonline__app__postgres__courses_courseruncertificate
   columns:
   - name: courseruncertificate_id
@@ -1086,8 +397,8 @@ models:
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-  - name: certificate_page_revision_id
-    description: int, foreign key to wagtailcore_pagerevision (could be blank)
+  - name: wagtailcore_revision_id
+    description: int, foreign key to wagtailcore_revision
   - name: courseruncertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: courseruncertificate_updated_on
@@ -1096,44 +407,68 @@ models:
     description: boolean, indicating whether the certificate is revoked and invalid
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_id"]
-
-- name: stg__mitxonline__app__postgres__courses_programcertificate
+      column_list:
+      - user_id
+      - courserun_id
+- name: stg__mitxonline__app__postgres__courses_courserunenrollment
   columns:
-  - name: programcertificate_id
-    description: int, primary key representing a single MITxOnline program certificate
-      record
+  - name: courserunenrollment_id
+    description: int, sequential ID tracking a single user enrollment
     tests:
     - unique
     - not_null
-  - name: programcertificate_uuid
-    description: str, unique identifier for the program certificate
-    tests:
-    - unique
-    - not_null
-  - name: program_id
-    description: int, foreign key to courses_program representing a single program
+  - name: courserunenrollment_created_on
+    description: timestamp, specifying when an enrollment was initially created
     tests:
     - not_null
-    - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_program')
-        field: program_id
+  - name: courserunenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
+    tests:
+    - not_null
+  - name: courserunenrollment_enrollment_status
+    description: str, enrollment status for users whose enrollment is no longer active.
+      Options are 'deferred', 'transferred', 'refunded', 'unenrolled', maybe blank
+    tests:
+    - accepted_values:
+        values:
+        - deferred
+        - transferred
+        - refunded
+        - unenrolled
+  - name: courserunenrollment_is_active
+    description: boolean, indicating whether the user is still enrolled in the run
+    tests:
+    - not_null
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, indicating whether the user is enrolled on edx
+    tests:
+    - not_null
+  - name: courserun_id
+    description: int, unique ID specifying a "run" of an MITx Online course
+    tests:
+    - not_null
   - name: user_id
-    description: str, foreign key to users_user representing a single user
+    description: int, unique ID for each user on the MITx Online platform
     tests:
     - not_null
-  - name: certificate_page_revision_id
-    description: int, foreign key to wagtailcore_pagerevision (could be blank)
-  - name: programcertificate_created_on
-    description: timestamp, specifying when a certificate was initially created
-  - name: programcertificate_updated_on
-    description: timestamp, specifying when a certificate was most recently updated
-  - name: programcertificate_is_revoked
-    description: boolean, indicating whether the certificate is revoked and invalid
+  - name: courserunenrollment_enrollment_mode
+    description: str, enrollment mode for user
+  - name: courserunenrollment_has_edx_email_subscription
+    description: bool, indicates whether the user should receive emails from edx
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "program_id"]
-
+      column_list:
+      - courserun_id
+      - user_id
+  - dbt_utils.recency:
+      datepart: day
+      field: from_iso8601_timestamp_nanos(courserunenrollment_created_on)
+      interval: 2
+      config:
+        severity: error
+        error_if: '!=0'
 - name: stg__mitxonline__app__postgres__courses_courserungrade
   columns:
   - name: courserungrade_id
@@ -1171,117 +506,924 @@ models:
     description: timestamp, specifying when a grade was most recently updated
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_id"]
-
-- name: stg__mitxonline__openedx__mysql__auth_user
-  description: MITx Online open edX users
+      column_list:
+      - user_id
+      - courserun_id
+- name: stg__mitxonline__app__postgres__courses_coursetopic
   columns:
-  - name: openedx_user_id
-    description: int, sequential ID representing a user on MITx Online open edX platform
+  - name: coursetopic_id
+    description: int, primary key for courses_coursetopic
     tests:
     - unique
     - not_null
-  - name: user_username
-    description: str, unique username on the open edX platform
-    tests:
-    - unique
-    - not_null
-  - name: user_email
-    description: str, user's email associated with their account
-    tests:
-    - unique
-    - not_null
-  - name: user_is_active
-    description: boolean, used to soft delete users
+  - name: coursetopic_name
+    description: str, name of a course topic
     tests:
     - not_null
-  - name: user_is_staff
-    description: boolean, indicating whether user can log into admin site
+  - name: coursetopic_parent_id
+    description: int, id for the parent coursetopic of the subtopic. For example 'Computer
+      Science' is the parent topic of 'AI'
+  - name: coursetopic_created_on
+    description: timestamp, date and time when a course topic was initially created
     tests:
     - not_null
-  - name: user_is_superuser
-    description: boolean, indicating whether user has all permissions on open edx
-      platform
-    tests:
-    - not_null
-
-- name: stg__mitxonline__openedx__tracking_logs__user_activity
-  description: This table is cleaned to remove duplicate events, events without user
-    identifiers , and events that represent server errors
-  columns:
-  - name: user_username
-    description: str, username of the open edX user who caused the event to be emitted.
-    tests:
-    - not_null
-  - name: openedx_user_id
-    description: int, open edX user ID extracted from context field. This id doesn't
-      always match with auth_user in open edX table, there can be multiple openedx_user_ids
-      for the same user_username. For those cases, use openedx_user_id from auth_user
-      open edX table.
-    tests:
-    - not_null
-  - name: courserun_readable_id
-    description: str, Open edX Course ID formatted as course-v1:{org}+{course number}+{run_tag}.
-      Extracted from various fields - context.course_id, context.path, event_type
-      and page. The course ID extracted from context field may not be valid, it would
-      require joining with courserun table to be sure. This field could be blank for
-      any events that are not for any specific course .e.g. user login/out, visiting
-      dashboard, some course team events e.g. course export from studio
-  - name: org_id
-    description: str, reference name in organizations_organization from open edX.
-      e.g. MITxT . Extracted from context field
-  - name: useractivity_path
-    description: str, URL that generated this event. Extracted from context field
-  - name: useractivity_context_object
-    description: object, it includes member fields that provide contextual information.
-      Common fields apply to all events are course_id, org_id, path, user_id. Other
-      member fields for applicable events are course_user_tags, module.
-  - name: useractivity_event_source
-    description: str, specifies the source of the interaction that triggered the event.
-      The values are - browser, mobile, server, task
-    tests:
-    - not_null
-  - name: useractivity_event_type
-    description: str, type of event triggered. Values depend on event_source.
-    tests:
-    - not_null
-  - name: useractivity_event_name
-    description: str, type of event triggered. When this field is present for an event,
-      it supersedes the event_type field.
-  - name: useractivity_event_object
-    description: object,it includes member fields that identify specifics of each
-      triggered event. Different member fields are supplied for different events.
-    tests:
-    - not_null
-  - name: useractivity_page_url
-    description: str, url of the page the user was visiting when the event was emitted.
-  - name: useractivity_session_id
-    description: str, 32-character value to identify the user’s session. All browser
-      events and the server 'enrollment' events include session value. Other server
-      events and mobile events do not include a session value.
-  - name: useractivity_ip
-    description: str, IP address of the user who triggered the event. Empty for mobile
-      events.
-  - name: useractivity_http_host
-    description: str, The site visited by the user. e.g. courses.mitxonline.mit.edu
-    tests:
-    - not_null
-  - name: useractivity_http_user_agent
-    description: str, browser agent string of the user who triggered the event.
-  - name: useractivity_http_accept_language
-    description: str, value from the HTTP Accept-Language request-header field
-  - name: useractivity_http_referer
-    description: str, URI from the HTTP Referer request-header field
-  - name: useractivity_timestamp
-    description: timestamp, time at which the event was emitted, formatted as ISO
-      8601 string
+  - name: coursetopic_updated_on
+    description: timestamp, date and time when a course topic was most recently updated
     tests:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
-        "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
-
+      column_list:
+      - coursetopic_name
+      - coursetopic_parent_id
+- name: stg__mitxonline__app__postgres__courses_department
+  columns:
+  - name: coursedepartment_id
+    description: int, primary key representing a single MITx Online course department
+    tests:
+    - unique
+    - not_null
+  - name: coursedepartment_name
+    description: str, name of a course department
+    tests:
+    - unique
+    - not_null
+  - name: coursedepartment_created_on
+    description: timestamp, specifying when a course department was initially created
+  - name: coursedepartment_updated_on
+    description: timestamp, specifying when a course department was most recently
+      updated
+- name: stg__mitxonline__app__postgres__courses_program
+  columns:
+  - name: program_id
+    description: int, primary key representing a single MITx Online program
+    tests:
+    - unique
+    - not_null
+  - name: program_is_live
+    description: boolean, indicating whether the program is available to users
+  - name: program_title
+    description: str, title of the program, including the specific track if applicable.
+    tests:
+    - not_null
+  - name: program_type
+    description: str, type of the program. Value is free text, it could be MicroMasters,
+      Series, etc
+  - name: program_availability
+    description: str, either 'anytime' or 'date'
+    tests:
+    - not_null
+  - name: program_certification_type
+    description: str, either 'MicroMasters Credential' or 'Certificate of Completion'.
+      These values are currently set in the application code.
+    tests:
+    - not_null
+  - name: program_name
+    description: str, name of the program, which does not specify which track. e.g.,
+      Data, Economics, and Design of Policy
+    tests:
+    - not_null
+  - name: program_track
+    description: str, name of the specific track for MicroMasters programs. For example,
+      DEDP program has two separate tracks - International Development and Public
+      Policy.
+  - name: program_is_dedp
+    description: boolean, specifying if the program is DEDP from readable_id
+    tests:
+    - not_null
+  - name: program_is_micromasters
+    description: "boolean, specifying if the program is MITx MicroMasters® Program"
+    tests:
+    - not_null
+  - name: program_readable_id
+    description: str, Open edX ID formatted as program-v1:{org}+{program code}
+    tests:
+    - unique
+    - not_null
+  - name: program_created_on
+    description: timestamp, specifying when a program was initially created
+  - name: program_updated_on
+    description: timestamp, specifying when a program was most recently updated
+- name: stg__mitxonline__app__postgres__courses_programcertificate
+  columns:
+  - name: programcertificate_id
+    description: int, primary key representing a single MITxOnline program certificate
+      record
+    tests:
+    - unique
+    - not_null
+  - name: programcertificate_uuid
+    description: str, unique identifier for the program certificate
+    tests:
+    - unique
+    - not_null
+  - name: program_id
+    description: int, foreign key to courses_program representing a single program
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__mitxonline__app__postgres__courses_program')
+        field: program_id
+  - name: user_id
+    description: str, foreign key to users_user representing a single user
+    tests:
+    - not_null
+  - name: certificate_page_revision_id
+    description: int, foreign key to wagtailcore_pagerevision (could be blank)
+  - name: programcertificate_created_on
+    description: timestamp, specifying when a certificate was initially created
+  - name: programcertificate_updated_on
+    description: timestamp, specifying when a certificate was most recently updated
+  - name: programcertificate_is_revoked
+    description: boolean, indicating whether the certificate is revoked and invalid
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list:
+      - user_id
+      - program_id
+- name: stg__mitxonline__app__postgres__courses_programenrollment
+  columns:
+  - name: programenrollment_id
+    description: int, sequential ID tracking a single user enrollment
+    tests:
+    - unique
+    - not_null
+  - name: programenrollment_created_on
+    description: timestamp, specifying when an enrollment was initially created
+    tests:
+    - not_null
+  - name: programenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
+    tests:
+    - not_null
+  - name: programenrollment_enrollment_status
+    description: str, enrollment status for users whose enrollment is no longer active.
+      Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
+  - name: programenrollment_is_active
+    description: boolean, indicating whether the user is still enrolled in the program
+    tests:
+    - not_null
+  - name: program_id
+    description: int, foreign key from the courses_program table
+    tests:
+    - not_null
+  - name: user_id
+    description: int, unique ID for each user on the MITx Online platform
+    tests:
+    - not_null
+  - name: programenrollment_enrollment_mode
+    description: str, enrollment mode for user
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list:
+      - program_id
+      - user_id
+- name: stg__mitxonline__app__postgres__courses_programrequirement
+  columns:
+  - name: programrequirement_id
+    description: int, primary key representing a MITx Online program requirement node
+    tests:
+    - unique
+    - not_null
+  - name: course_id
+    description: int, foreign key to courses_course representing a single course
+    tests:
+    - relationships:
+        to: ref('stg__mitxonline__app__postgres__courses_course')
+        field: course_id
+  - name: program_id
+    description: int, foreign key to courses_program representing a single program
+    tests:
+    - not_null
+    - relationships:
+        to: ref('stg__mitxonline__app__postgres__courses_program')
+        field: program_id
+  - name: programrequirement_node_type
+    description: str, different types of nodes that exist in a requirement tree -
+      program_root (represent a program) - course (represent a reference to a course)
+      - program (represent a reference to a program) - operator (represent a logical
+      operation over a set of courses)
+    tests:
+    - accepted_values:
+        values:
+        - program_root
+        - course
+        - program
+        - operator
+  - name: programrequirement_path
+    description: str, the full materialized path for each node (readonly) e.g. 0001
+      is root path, 00010001 is the path to a node in this requirement tree
+    tests:
+    - not_null
+  - name: programrequirement_depth
+    description: int, depth of a node in the tree. A root node has a depth of 1. (readonly)
+    tests:
+    - not_null
+  - name: programrequirement_numchild
+    description: int, the number of children of a node (readonly)
+    tests:
+    - not_null
+  - name: programrequirement_title
+    description: str, title of the requirement
+  - name: programrequirement_operator
+    description: str, the logical operation over a set of courses, it can be all_of,
+      min_number_of or blank
+    tests:
+    - accepted_values:
+        values:
+        - all_of
+        - min_number_of
+  - name: programrequirement_operator_value
+    description: int, value of the operator for this requirement e.g. if operator
+      is all_of, the corresponding operator_value 3 means all of 3 courses
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list:
+      - program_id
+      - programrequirement_depth
+      row_condition: programrequirement_depth=1
+- name: stg__mitxonline__app__postgres__courses_programrun
+  description: ''
+  columns:
+  - name: programrun_id
+    description: int, primary key representing a single MITx Online program run
+    tests:
+    - not_null
+    - unique
+  - name: programrun_tag
+    description: str, string that identifies a single run in a prgram E.g. R11
+    tests:
+    - not_null
+  - name: programrun_start_on
+    description: timestamp, specifying when the program run starts
+  - name: programrun_end_on
+    description: timestamp, specifying when the program run ends
+  - name: programrun_updated_on
+    description: timestamp, specifying when a program run was last updated
+  - name: programrun_created_on
+    description: timestamp, specifying when a program run was initially created
+  - name: program_id
+    description: int, foreign key to courses_program representing a single MITx Online
+      program
+    tests:
+    - not_null
+- name: stg__mitxonline__app__postgres__django_contenttype
+  columns:
+  - name: contenttype_id
+    description: int, sequential ID for the django model
+    tests:
+    - unique
+    - not_null
+  - name: contenttype_full_name
+    description: string, name for django model. A combination of the models name and
+      functional group
+    tests:
+    - unique
+    - not_null
+- name: stg__mitxonline__app__postgres__ecommerce_basket
+  description: Checkout basket that contains courseware that a users wants to purchase
+    but has not purchased yet
+  columns:
+  - name: basket_id
+    description: int, primary key representing a user basket
+  - name: basket_created_on
+    description: timestamp, specifying when the basket was initially created
+  - name: basket_updated_on
+    description: timestamp, specifying when the basket was most recently updated
+  - name: user_id
+    description: int, foreign key to the users_user table
+    tests:
+    - unique
+- name: stg__mitxonline__app__postgres__ecommerce_basketdiscount
+  columns:
+  - name: basketdiscount_id
+    description: int, primary key representing a discount in a user's basket
+  - name: basketdiscount_created_on
+    description: timestamp, specifying when the basket discount was initially created
+  - name: basketdiscount_updated_on
+    description: timestamp, specifying when the basket discount was most recently
+      updated
+  - name: basketdiscount_applied_on
+    description: timestamp, specifying when the discount was applied to the basket
+  - name: basket_id
+    description: int, foreign key referencing ecommerce_basket
+  - name: user_id
+    description: int, foreign key referencing users_user
+  - name: discount_id
+    description: int, foreign key referencing ecommerce_discount
+- name: stg__mitxonline__app__postgres__ecommerce_basketitem
+  columns:
+  - name: basketitem_id
+    description: int, primary key representing a item in a user's basket
+  - name: basketitem_created_on
+    description: timestamp, specifying when the basket item was initially created
+  - name: basketitem_updated_on
+    description: timestamp, specifying when the basket item was most recently updated
+  - name: basketitem_quantity
+    description: int, quantitiy of the item. Always 1
+  - name: basket_id
+    description: int, foreign key referencing ecommerce_basket
+  - name: product_id
+    description: int, foreign key referencing ecommerce_product
+- name: stg__mitxonline__app__postgres__ecommerce_discount
+  columns:
+  - name: discount_id
+    description: int, primary key representing a discount
+    tests:
+    - not_null
+    - unique
+  - name: discount_created_on
+    description: timestamp, specifying when the discount was initially created
+  - name: discount_updated_on
+    description: timestamp, specifying when the discount was most recently updated
+  - name: discount_amount
+    description: numeric, discount amount. May be a precent or dollar amount
+    tests:
+    - not_null
+  - name: discount_type
+    description: string, one of  "percent-off", "dollars-off" and "fixed-price". Specifys
+      if the ammount of the discount refers to a percent of, a dollar amount off or
+      a discounted price
+    tests:
+    - not_null
+    - accepted_values:
+        values:
+        - percent-off
+        - dollars-off
+        - fixed-price
+  - name: discount_amount_text
+    description: str, discount amount in readable format. It can be percent-off which
+      is <dollar amount>% off, dollars-off which is $<dollar amount> off or fixed-price
+    tests:
+    - not_null
+  - name: discount_redemption_type
+    description: string, one of  "one-time",  "one-time-per-user" and "unlimited"
+    tests:
+    - not_null
+    - accepted_values:
+        values:
+        - one-time
+        - one-time-per-user
+        - unlimited
+  - name: discount_max_redemptions
+    description: int, maximum times a coupon can be redeemed
+  - name: discount_code
+    description: string, discount code
+    tests:
+    - not_null
+  - name: discount_source
+    description: string, reason for the discount creation. Possible options are "marketing",
+      "sales", "financial-assistance", "customer-support", "staff", "legacy"
+    tests:
+    - accepted_values:
+        values:
+        - marketing
+        - sales
+        - financial-assistance
+        - customer-support
+        - staff
+        - legacy
+  - name: discount_activated_on
+    description: timestamp, specifying when the discount is activated
+  - name: discount_expires_on
+    description: timestamp, specifying when the discount is deactivated
+- name: stg__mitxonline__app__postgres__ecommerce_discountproduct
+  description: This table is used to limit dicounts to a specific product. Discounts
+    which do not have a record in this table are redeemable for all products
+  columns:
+  - name: discountproduct_id
+    description: int, primary key representing a discount product combo
+    tests:
+    - not_null
+  - name: discountproduct_created_on
+    description: timestamp, specifying when the discount product association was initially
+      created
+  - name: discountproduct_updated_on
+    description: timestamp, specifying when the discount product association was last
+      updated
+  - name: discount_id
+    description: int, foreign key for ecommerce_discount
+    tests:
+    - not_null
+  - name: product_id
+    description: int, foreign key for ecommerce_product
+- name: stg__mitxonline__app__postgres__ecommerce_discountredemption
+  columns:
+  - name: discountredemption_id
+    description: int, primary key representing a discount redemption
+  - name: discountredemption_timestamp
+    description: timestamp, specifying when the discount was redeemed by the user
+  - name: user_id
+    description: int, foreign key for users_user
+  - name: discount_id
+    description: int, foreign key for ecommerce_discount
+  - name: order_id
+    description: int, foreign key for ecommerce_orders
+- name: stg__mitxonline__app__postgres__ecommerce_line
+  description: ''
+  columns:
+  - name: line_id
+    description: int, primary key representing an ecommerce line
+    tests:
+    - unique
+    - not_null
+  - name: order_id
+    description: int, foreign key in the orders_order table for the order that contains
+      the line Currently orders have exactly one line
+    tests:
+    - not_null
+  - name: line_created_on
+    description: timestamp, specifying when the line was initially created
+  - name: line_updated_on
+    description: timestamp, specifying when the line was most recently updated
+  - name: product_version_id
+    description: int, foreign key in the reversion_version table. Versioned product
+    tests:
+    - not_null
+  - name: product_object_id
+    description: int, id for the product object in either the course_courseruns or
+      the course_programruns table
+  - name: contenttype_id
+    description: int, foreign key in the django_contenttype table, content type of
+      the product
+- name: stg__mitxonline__app__postgres__ecommerce_order
+  columns:
+  - name: order_id
+    description: int, primary key representing a single MITx Online order
+    tests:
+    - not_null
+    - unique
+  - name: order_state
+    description: string, order state. Options are "pending", "fulfilled", "canceled"
+      "declined", "errored", "refunded", "review", "partially_refunded"
+    tests:
+    - accepted_values:
+        values:
+        - pending
+        - fulfilled
+        - canceled
+        - declined
+        - errored
+        - refunded
+        - review
+        - partially_refunded
+    - not_null
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created
+  - name: order_updated_on
+    description: timestamp, specifying when the order was updated
+  - name: order_purchaser_user_id
+    description: int, primary key in users_user for the purchaser
+    tests:
+    - not_null
+  - name: order_reference_number
+    description: string, readable id for the order. Shared with micromasters
+    tests:
+    - not_null
+  - name: order_total_price_paid
+    description: number, total order amount
+- name: stg__mitxonline__app__postgres__ecommerce_product
+  columns:
+  - name: product_id
+    description: int, sequential ID for ecommerce product
+    tests:
+    - unique
+    - not_null
+  - name: product_price
+    description: numeric, the price of the product
+    tests:
+    - not_null
+  - name: product_is_active
+    description: boolean, whether the product is visible in the app
+    tests:
+    - not_null
+  - name: product_object_id
+    description: int, the course run or program run id in the courses_courserun or
+      courses_programrun table
+    tests:
+    - not_null
+  - name: product_created_on
+    description: timestamp, the timestamp the product was created
+    tests:
+    - not_null
+  - name: product_updated_on
+    description: timestamp, the timestamp the product was last updated
+    tests:
+    - not_null
+  - name: product_description
+    description: string, the product description, usually the readable_id from the
+      courses_course table
+    tests:
+    - not_null
+  - name: contenttype_id
+    description: int, the id of the product object type in the django_contenttype
+      table
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list:
+      - product_object_id
+      - contenttype_id
+      row_condition: product_is_active
+- name: stg__mitxonline__app__postgres__ecommerce_transaction
+  columns:
+  - name: transaction_id
+    description: int, primary key representing an ecommerce transaction
+    tests:
+    - unique
+    - not_null
+  - name: transaction_data
+    description: json, data returned from cybersource when the transaction is fulfilled
+    tests:
+    - not_null
+  - name: transaction_amount
+    description: numeric, transaction ammount
+    tests:
+    - not_null
+  - name: order_id
+    description: int, foreign id in the ecommerce_orders tabe for the order associated
+      with the transaction
+    tests:
+    - not_null
+  - name: transaction_created_on
+    description: timestamp, specifying when the transaction was initially created
+  - name: transaction_updated_on
+    description: timestamp, specifying when the transaction was most recently updated
+  - name: transaction_readable_identifier
+    description: string, unique identifier. Either the transaction_id from cybersource
+      or a unique uuid
+    tests:
+    - not_null
+    - unique
+  - name: transaction_type
+    description: string, transaction type, one of "refund" and "payment"
+    tests:
+    - accepted_values:
+        values:
+        - refund
+        - payment
+- name: stg__mitxonline__app__postgres__ecommerce_userdiscount
+  description: This table is used to pre-apply a discount when a user checks out
+  columns:
+  - name: userdiscount_id
+    description: int, primary key representing a discount user combo
+    tests:
+    - not_null
+  - name: userdiscount_created_on
+    description: timestamp, specifying when the discount user association was initially
+      created
+    tests:
+    - not_null
+  - name: userdiscount_updated_on
+    description: timestamp, specifying when the discount user association was initially
+      created
+    tests:
+    - not_null
+  - name: discount_id
+    description: int, foreign key for ecommerce_discount
+    tests:
+    - not_null
+  - name: user_id
+    description: int, foreign key for users_user
+    tests:
+    - not_null
+- name: stg__mitxonline__app__postgres__flexiblepricing_countryincomethreshold
+  columns:
+  - name: countryincomethreshold_id
+    description: int, primary key representing a country income threshold
+    tests:
+    - not_null
+    - unique
+  - name: countryincomethreshold_created_on
+    description: timestamp, specifying when the table row was created
+    tests:
+    - not_null
+  - name: countryincomethreshold_updated_on
+    description: timestamp, specifying when the table row was updated
+    tests:
+    - not_null
+  - name: countryincomethreshold_country_code
+    description: string, country code
+    tests:
+    - not_null
+    - unique
+  - name: countryincomethreshold_income_threshold
+    description: int, usd income threshold to quantity for flexible pricing
+    tests:
+    - not_null
+- name: stg__mitxonline__app__postgres__flexiblepricing_currencyexchangerate
+  columns:
+  - name: currencyexchangerate_id
+    description: int, primary key representing a country exchange rate
+    tests:
+    - not_null
+    - unique
+  - name: currencyexchangerate_created_on
+    description: timestamp, specifying when the table row was created
+    tests:
+    - not_null
+  - name: currencyexchangerate_updated_on
+    description: timestamp, specifying when the table row was updated
+    tests:
+    - not_null
+  - name: currencyexchangerate_currency_code
+    description: string, currency code
+    tests:
+    - not_null
+    - unique
+  - name: currencyexchangerate_exchange_rate
+    description: numeric, exchange rate to usd
+    tests:
+    - not_null
+  - name: currencyexchangerate_description
+    description: string, readable currency name
+- name: stg__mitxonline__app__postgres__flexiblepricing_flexiblepriceapplication
+  description: An application for an income based discount.
+  columns:
+  - name: flexiblepriceapplication_id
+    description: int, primary key representing a flexible pricing application
+    tests:
+    - not_null
+    - unique
+  - name: flexiblepriceapplication_created_on
+    description: timestamp, specifying when the table row was created
+    tests:
+    - not_null
+  - name: flexiblepriceapplication_updated_on
+    description: timestamp, specifying when the table row was updated
+    tests:
+    - not_null
+  - name: flexiblepriceapplication_status
+    description: string, status of the application. One of "approved", "auto-approved",
+      "created", "pending-manual-approval", "denied", "reset"
+    tests:
+    - not_null
+    - accepted_values:
+        values:
+        - approved
+        - auto-approved
+        - created
+        - pending-manual-approval
+        - denied
+        - reset
+  - name: flexiblepriceapplication_income_usd
+    description: numeric, user income in usd
+  - name: flexiblepriceapplication_original_income
+    description: numeric, user income in it's original currency
+  - name: flexiblepriceapplication_original_currency
+    description: string, currency code of orginal income
+  - name: flexiblepriceapplication_country_of_income
+    description: string, country code for user country of income
+  - name: flexiblepriceapplication_exchange_rate_timestamp
+    description: timestamp, timestamp of exchange rate used to convert the original
+      income to usd
+  - name: flexiblepriceapplication_date_documents_sent
+    description: date, date that the user sent documents that prove their income
+  - name: flexiblepriceapplication_justification
+    description: string, explanation for flexible pricing application approval or
+      rejection
+  - name: flexiblepriceapplication_country_of_residence
+    description: string, country code for user country of residece
+    tests:
+    - not_null
+  - name: user_id
+    description: int, primary key in the users_user table of the user  requesting
+      flexible pricing
+    tests:
+    - not_null
+  - name: flexiblepriceapplication_cms_submission_id
+    description: int, primary key of the cms submission stored in the flexiblepricing_flexiblepricingrequestsubmission
+      table
+  - name: contenttype_id
+    description: int, primary key in django_contenttype of either courses_course or
+      courses_program
+    tests:
+    - not_null
+  - name: courseware_object_id
+    description: int, primary key in either the courses_course or courses_program
+      table of the courseware the user applied for flexible pricing for
+    tests:
+    - not_null
+  - name: flexiblepricetier_id
+    description: int, primary key in flexiblepricing_flexiblepricetier of the price
+      tier the user applied for
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list:
+      - courseware_object_id
+      - contenttype_id
+      - user_id
+- name: stg__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
+  columns:
+  - name: flexiblepricetier_id
+    description: int, primary key representing a flexible pricing tier
+    tests:
+    - not_null
+    - unique
+  - name: flexiblepricetier_created_on
+    description: timestamp, specifying when the table row was created
+    tests:
+    - not_null
+  - name: flexiblepricetier_updated_on
+    description: timestamp, specifying when the table row was updated
+    tests:
+    - not_null
+  - name: contenttype_id
+    description: int, foreign key in django_contenttype for either course or program
+    tests:
+    - not_null
+  - name: courseware_object_id
+    description: int, id for the courseware object in either the courses_course or
+      courses_program table
+    tests:
+    - not_null
+  - name: flexiblepricetier_is_current
+    description: boolean, whether the flexible pricing tier is currently enabled
+    tests:
+    - not_null
+  - name: flexiblepricetier_income_threshold_usd
+    description: numeric, maximum income in usd to qualify for the flexible price
+      tier
+    tests:
+    - not_null
+  - name: discount_id
+    description: int, id of ecommerce_discount associated with the flexible price
+      tier
+    tests:
+    - not_null
+- name: stg__mitxonline__app__postgres__reversion_revision
+  description: This table is used to track changes to products and transactions
+  columns:
+  - name: revision_id
+    description: int, primary key representing a revision of a product or transaction
+    tests:
+    - unique
+    - not_null
+  - name: revision_comment
+    description: string, automatically generated discription of the change
+  - name: user_id
+    description: int, foreign key to the users_user record for the user that made
+      the change
+  - name: revision_date_created
+    description: timestamp, timestamp, specifying when the revision was made
+    tests:
+    - not_null
+- name: stg__mitxonline__app__postgres__reversion_version
+  description: This table is used to track changes to products and transactions
+  columns:
+  - name: version_id
+    description: int, primary key representing a version of a product or transaction
+    tests:
+    - unique
+    - not_null
+  - name: version_object_id
+    description: int, foreign key of the object being versioned
+    tests:
+    - not_null
+  - name: revision_id
+    description: int, primary key in the reversion_revision table
+    tests:
+    - unique
+    - not_null
+  - name: contenttype_id
+    description: int, foreign key to django_contenttype of the object being versioned
+    tests:
+    - not_null
+  - name: version_object_serialized_data
+    description: json, serialized data from the object at the time it was versioned
+- name: stg__mitxonline__app__postgres__users_legaladdress
+  columns:
+  - name: user_address_id
+    description: int, sequential ID
+    tests:
+    - unique
+    - not_null
+  - name: user_address_country
+    description: string, user country code
+    tests:
+    - not_null
+  - name: user_address_state
+    description: string, state code for the user's address. e.g. US-NY It's required
+      field for new users, may be blank for existing users.
+  - name: user_id
+    description: int, foreign key to users_user
+    tests:
+    - unique
+    - not_null
+- name: stg__mitxonline__app__postgres__users_user
+  columns:
+  - name: user_id
+    description: int, sequential ID representing one user in MITx Online
+    tests:
+    - unique
+    - not_null
+  - name: user_global_id
+    description: str, The SSO ID (usually a Keycloak UUID) for the user across all
+      platforms.
+    tests:
+    - unique
+  - name: user_scim_id
+    description: str, The unique identifier for the SCIM resource
+    tests:
+    - unique
+  - name: user_scim_username
+    description: str, The username for the SCIM resource
+  - name: user_scim_external_id
+    description: str, a string identifier for the SCIM resource as defined by the
+      provisioning client
+  - name: user_username
+    description: str, name chosen by user
+    tests:
+    - unique
+    - not_null
+  - name: user_email
+    description: str, user email associated with their account
+    tests:
+    - unique
+    - not_null
+  - name: user_is_active
+    description: boolean, used to soft delete user accounts
+  - name: user_full_name
+    description: str, the user's full name
+    tests:
+    - not_null
+  - name: user_joined_on
+    description: timestamp, specifying when a user account was initially created
+  - name: user_last_login
+    description: timestamp, specifying when a user last logged in
+- name: stg__mitxonline__app__postgres__users_userprofile
+  columns:
+  - name: user_profile_id
+    description: int, sequential ID representing a single MITx Online user profile
+    tests:
+    - unique
+    - not_null
+  - name: user_id
+    description: int,  unique ID for user on MITx Online
+    tests:
+    - unique
+    - not_null
+  - name: user_birth_year
+    description: int, user birth year
+  - name: user_company
+    description: str, user company
+  - name: user_job_title
+    description: str, user job title
+  - name: user_industry
+    description: str, user job industry
+  - name: user_job_function
+    description: str, user job function
+  - name: user_leadership_level
+    description: str, user leadership level
+  - name: user_type_is_student
+    description: boolean, indicating if learner is identified as Student
+  - name: user_type_is_professional
+    description: boolean, indicating if learner is identified as Professional
+  - name: user_type_is_educator
+    description: boolean, indicating if learner is identified as Educator
+  - name: user_type_is_other
+    description: boolean, indicating if learner is identified as Other (not Professional,
+      Student, or Educator)
+  - name: user_gender
+    description: str, user gender
+    tests:
+    - accepted_values:
+        values: '{{ var("gender_values") }}'
+  - name: user_company_size
+    description: str, company size
+    tests:
+    - accepted_values:
+        values:
+        - Small/Start-up (1+ employees)
+        - Small/Home office (1-9 employees)
+        - Small (10-99 employees)
+        - Small to medium-sized (100-999 employees)
+        - Medium-sized (1000-9999 employees)
+        - Large Enterprise (10,000+ employees)
+        - Other (N/A or Don''t know)
+  - name: user_years_experience
+    description: str, years experience
+    tests:
+    - accepted_values:
+        values:
+        - Less than 2 years
+        - 2-5 years
+        - 6 - 10 years
+        - 11 - 15 years
+        - 16 - 20 years
+        - More than 20 years
+        - Prefer not to say
+  - name: user_highest_education
+    description: str, user highest education
+    tests:
+    - accepted_values:
+        values: '{{ var("highest_education_values") }}'
+  - name: user_profile_created_on
+    description: timestamp, date and time when this profile data was initially created
+  - name: user_profile_updated_on
+    description: timestamp, date and time when this profile data was most recently
+      updated
 - name: stg__mitxonline__openedx__api__course_structure
   description: This table captures the historical changes made to the MITx Online
     course structure by comparing the new course block to the course block from the
@@ -1342,9 +1484,179 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
-        "coursestructure_retrieved_at"]
-
+      column_list:
+      - courserun_readable_id
+      - coursestructure_block_id
+      - coursestructure_content_hash
+      - coursestructure_retrieved_at
+- name: stg__mitxonline__openedx__blockcompletion
+  description: History of user block completion in a course such as video, problem,
+    survey on the MITx Online platform
+  columns:
+  - name: blockcompletion_id
+    description: int, primary key in this table
+  - name: user_id
+    description: int, foreign key to the users_user table
+  - name: blockcompletion_created_on
+    description: timestamp, datetime when this row was created
+  - name: blockcompletion_updated_on
+    description: timestamp, datetime when this row was last updated
+  - name: block_key
+    description: string, foreign key to dim_course_content, referencing the block
+      ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
+      code}.
+  - name: block_category
+    description: string, category/type of the content block. Possible values are course,
+      chapter, sequential, vertical, discussion, html, problem, video, etc.
+  - name: block_completed
+    description: integer, will be 1 if the learner completed the block
+  - name: courserun_readable_id
+    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: stg__mitxonline__app__postgres__openedx_openedxuser
+    description: Mapping of MITx Online users to open edX users
+    columns:
+    - name: openedxuser_id
+      description: int, the primary key for the openedx_openedxuser table
+      tests:
+      - not_null
+      - unique
+    - name: user_id
+      description: int, the foreign key referencing the users_user table in the MITx
+        Online application
+      tests:
+      - unique
+      - not_null
+    - name: openedxuser_platform
+      description: str, the platform where the user is registered. e.g. "edx"
+      tests:
+      - not_null
+    - name: openedxuser_username
+      description: str, the username of the user on the open edX platform
+      tests:
+      - unique
+    - name: openedxuser_desired_username
+      description: str, the desired username for the user on the open edX platform
+      tests:
+      - unique
+    - name: openedxuser_has_been_synced
+      description: boolean, indicating whether a corresponding user has been created
+        on the open edX platform
+    - name: openedxuser_created_on
+      description: timestamp, date and time when this record was created
+    - name: openedxuser_updated_on
+      description: timestamp, date and time when this record was last updated
+  - name: stg__mitxonline__app__postgres__cms_wagtailcore_revision
+    description: Wagtail page revisions in MITx Online CMS
+    columns:
+    - name: wagtailcore_revision_id
+      description: int, primary key for wagtailcore_revision
+      tests:
+      - unique
+      - not_null
+    - name: wagtailcore_revision_content
+      description: str, content of the revision stored as a JSON string
+      tests:
+      - not_null
+    - name: user_id
+      description: int, foreign key to users_user representing the user who made the
+        revision
+      tests:
+      - not_null
+    - name: wagtail_page_id
+      description: int, foreign key to wagtailcore_page representing the page being
+        revised
+      tests:
+      - not_null
+    - name: wagtail_page_title
+      description: str, title of the page being revised
+    - name: contenttype_id
+      description: int, foreign key to django_contenttype representing the type of
+        page being revised
+      tests:
+      - not_null
+    - name: base_contenttype_id
+      description: int, foreign key to django_contenttype representing the base type
+        of page being revised
+    - name: wagtailcore_revision_created_on
+      description: timestamp for when the revision was created
+- name: stg__mitxonline__openedx__courseware_studentmodulehistoryextended
+  description: History of studentmodule in MITx Online open edx platform
+  columns:
+  - name: studentmodulehistoryextended_id
+    description: int, primary key in this table
+    tests:
+    - not_null
+    - unique
+  - name: studentmodule_id
+    description: int, foreign key to courseware_studentmodule
+    tests:
+    - not_null
+  - name: studentmodule_state_data
+    description: str, JSON text indicating the learner's state for the corresponding
+      module such as course, chapter, problemset, sequential, videosequence, etc.
+  - name: studentmodule_problem_grade
+    description: str, floating point value indicating the total unweighted grade for
+      this problem that the learner has scored. e.g. how many responses they got right
+      within the problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_problem_max_grade
+    description: str, floating point value indicating the total possible unweighted
+      grade for this problem, or basically the number of responses that are in this
+      problem. This data is also available in courseactivity_problemcheck
+  - name: studentmodule_created_on
+    description: timestamp, datetime when this row was created
+- name: stg__mitxonline__openedx__mysql__auth_user
+  description: MITx Online open edX users
+  columns:
+  - name: openedx_user_id
+    description: int, sequential ID representing a user on MITx Online open edX platform
+    tests:
+    - unique
+    - not_null
+  - name: user_username
+    description: str, unique username on the open edX platform
+    tests:
+    - unique
+    - not_null
+  - name: user_email
+    description: str, user's email associated with their account
+    tests:
+    - unique
+    - not_null
+  - name: user_is_active
+    description: boolean, used to soft delete users
+    tests:
+    - not_null
+  - name: user_is_staff
+    description: boolean, indicating whether user can log into admin site
+    tests:
+    - not_null
+  - name: user_is_superuser
+    description: boolean, indicating whether user has all permissions on open edx
+      platform
+    tests:
+    - not_null
+- name: stg__mitxonline__openedx__mysql__bulk_email_optout
+  columns:
+  - name: email_optout_id
+    description: int, sequential ID tracking a email optout
+    tests:
+    - unique
+    - not_null
+  - name: openedx_user_id
+    description: int, unique ID for each user on the MITx Online open edX platform
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, unique ID representing a single MITx Online course run
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list:
+      - openedx_user_id
+      - courserun_readable_id
 - name: stg__mitxonline__openedx__mysql__courseware_studentmodule
   description: It holds the most current course state and score per course section
     for learners on MITx Online. There is a separate row for every piece of content
@@ -1373,9 +1685,9 @@ models:
     tests:
     - not_null
   - name: studentmodule_state_data
-    description: json, JSON object indicating the user’s last known state in the course.
-      It may contain any attributes for different module types - course, chapter,
-      sequential, etc.
+    description: "json, JSON object indicating the user’s last known state in the\
+      \ course. It may contain any attributes for different module types - course,\
+      \ chapter, sequential, etc."
     tests:
     - not_null
   - name: studentmodule_problem_grade
@@ -1398,8 +1710,64 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
-
+      column_list:
+      - openedx_user_id
+      - courserun_readable_id
+      - coursestructure_block_id
+- name: stg__mitxonline__openedx__mysql__edxval_coursevideo
+  description: course ID and video association on MITx Online open edx
+  columns:
+  - name: coursevideo_id
+    description: int, primary key in edxval_coursevideo.
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    tests:
+    - not_null
+  - name: video_id
+    description: int, foreign key in edxval_video
+    tests:
+    - not_null
+  - name: coursevideo_is_hidden
+    description: boolean, indicating if the video is hidden for the course.
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list:
+      - courserun_readable_id
+      - video_id
+- name: stg__mitxonline__openedx__mysql__edxval_video
+  description: video content on MITx Online open edx
+  columns:
+  - name: video_id
+    description: int, primary key in edxval_video.
+    tests:
+    - unique
+    - not_null
+  - name: video_edx_uuid
+    description: str, hashed ID for the edx video
+    tests:
+    - unique
+    - not_null
+  - name: video_client_id
+    description: str, human readable name for video. e.g. 14.310x_Lect9_Seg8_Final.mp4
+  - name: video_status
+    description: str, values are external, imported, file_complete, and upload_failed.
+      Videos with 'external' and 'imported' status may be not managed from ODL Video
+      Service (OVS) application.
+    tests:
+    - not_null
+  - name: video_duration
+    description: float, the length of the video, in seconds. Default to 0.0
+    tests:
+    - not_null
+  - name: video_created_on
+    description: timestamp, date and time when the record was created.
+    tests:
+    - not_null
 - name: stg__mitxonline__openedx__mysql__grades_subsectiongrade
   description: Persistent values for learners' subsection (aka sequential) grades.
   columns:
@@ -1466,8 +1834,10 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
-
+      column_list:
+      - openedx_user_id
+      - courserun_readable_id
+      - coursestructure_block_id
 - name: stg__mitxonline__openedx__mysql__grades_subsectiongradeoverride
   description: Stores the most recent override grades for a given subsection
   columns:
@@ -1511,7 +1881,6 @@ models:
     description: timestamp, datetime when the override was last modified.
     tests:
     - not_null
-
 - name: stg__mitxonline__openedx__mysql__grades_visibleblocks
   description: Stores an ordered list of visible blocks within a subsection for a
     learner at the time of computing the subsection grade.
@@ -1534,7 +1903,6 @@ models:
     description: str, json object of all visible blocks within a subsection
     tests:
     - not_null
-
 - name: stg__mitxonline__openedx__mysql__user_courseaccessrole
   description: lists the users who have a privileged role or roles for working in
     a course on MITx Online open edX platform
@@ -1562,367 +1930,102 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
-          'sales_admin', 'beta_testers', 'library_user', 'org_course_creator_group',
-          'course_creator_group', 'support']
+        values:
+        - staff
+        - limited_staff
+        - data_researcher
+        - instructor
+        - finance_admin
+        - sales_admin
+        - beta_testers
+        - library_user
+        - org_course_creator_group
+        - course_creator_group
+        - support
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "openedx_user_id", "courseaccess_role"]
-
-- name: stg__mitxonline__openedx__mysql__edxval_video
-  description: video content on MITx Online open edx
+      column_list:
+      - courserun_readable_id
+      - openedx_user_id
+      - courseaccess_role
+- name: stg__mitxonline__openedx__tracking_logs__user_activity
+  description: This table is cleaned to remove duplicate events, events without user
+    identifiers , and events that represent server errors
   columns:
-  - name: video_id
-    description: int, primary key in edxval_video.
-    tests:
-    - unique
-    - not_null
-  - name: video_edx_uuid
-    description: str, hashed ID for the edx video
-    tests:
-    - unique
-    - not_null
-  - name: video_client_id
-    description: str, human readable name for video. e.g. 14.310x_Lect9_Seg8_Final.mp4
-  - name: video_status
-    description: str, values are external, imported, file_complete, and upload_failed.
-      Videos with 'external' and 'imported' status may be not managed from ODL Video
-      Service (OVS) application.
+  - name: user_username
+    description: str, username of the open edX user who caused the event to be emitted.
     tests:
     - not_null
-  - name: video_duration
-    description: float, the length of the video, in seconds. Default to 0.0
+  - name: openedx_user_id
+    description: int, open edX user ID extracted from context field. This id doesn't
+      always match with auth_user in open edX table, there can be multiple openedx_user_ids
+      for the same user_username. For those cases, use openedx_user_id from auth_user
+      open edX table.
     tests:
-    - not_null
-  - name: video_created_on
-    description: timestamp, date and time when the record was created.
-    tests:
-    - not_null
-
-- name: stg__mitxonline__openedx__mysql__edxval_coursevideo
-  description: course ID and video association on MITx Online open edx
-  columns:
-  - name: coursevideo_id
-    description: int, primary key in edxval_coursevideo.
-    tests:
-    - unique
     - not_null
   - name: courserun_readable_id
-    description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course number}+{run_tag}.
+      Extracted from various fields - context.course_id, context.path, event_type
+      and page. The course ID extracted from context field may not be valid, it would
+      require joining with courserun table to be sure. This field could be blank for
+      any events that are not for any specific course .e.g. user login/out, visiting
+      dashboard, some course team events e.g. course export from studio
+  - name: org_id
+    description: str, reference name in organizations_organization from open edX.
+      e.g. MITxT . Extracted from context field
+  - name: useractivity_path
+    description: str, URL that generated this event. Extracted from context field
+  - name: useractivity_context_object
+    description: object, it includes member fields that provide contextual information.
+      Common fields apply to all events are course_id, org_id, path, user_id. Other
+      member fields for applicable events are course_user_tags, module.
+  - name: useractivity_event_source
+    description: str, specifies the source of the interaction that triggered the event.
+      The values are - browser, mobile, server, task
     tests:
     - not_null
-  - name: video_id
-    description: int, foreign key in edxval_video
+  - name: useractivity_event_type
+    description: str, type of event triggered. Values depend on event_source.
     tests:
     - not_null
-  - name: coursevideo_is_hidden
-    description: boolean, indicating if the video is hidden for the course.
+  - name: useractivity_event_name
+    description: str, type of event triggered. When this field is present for an event,
+      it supersedes the event_type field.
+  - name: useractivity_event_object
+    description: object,it includes member fields that identify specifics of each
+      triggered event. Different member fields are supplied for different events.
     tests:
     - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "video_id"]
-
-- name: stg__mitxonline__app__postgres__cms_wagtail_page
-  columns:
-  - name: wagtail_page_id
-    description: int, primary key for this table.
+  - name: useractivity_page_url
+    description: str, url of the page the user was visiting when the event was emitted.
+  - name: useractivity_session_id
+    description: "str, 32-character value to identify the user’s session. All browser\
+      \ events and the server 'enrollment' events include session value. Other server\
+      \ events and mobile events do not include a session value."
+  - name: useractivity_ip
+    description: str, IP address of the user who triggered the event. Empty for mobile
+      events.
+  - name: useractivity_http_host
+    description: str, The site visited by the user. e.g. courses.mitxonline.mit.edu
     tests:
     - not_null
-    - unique
-  - name: wagtail_page_path
-    description: str, the full materialized path for each node (readonly) e.g. 0001
-      is root path, 00010001 is the path to a node in this requirement tree
-    tests:
-    - not_null
-    - unique
-  - name: wagtail_page_depth
-    description: int, depth of a node in the tree. A root node has a depth of 1.
-    tests:
-    - not_null
-  - name: wagtail_page_num_children
-    description: int, the number of children of a node
-    tests:
-    - not_null
-  - name: wagtail_page_title
-    description: str, human-readable title of the page
-    tests:
-    - not_null
-  - name: wagtail_page_slug
-    description: str, this is used for constructing the page’s URL.
-    tests:
-    - not_null
-  - name: wagtail_page_is_live
-    description: boolean, if set to true this page is published
-    tests:
-    - not_null
-  - name: wagtail_page_has_unpublished_changes
-    description: boolean, set to True when the page is either in draft or published
-      with draft changes.
-    tests:
-    - not_null
-  - name: wagtail_page_seo_title
-    description: str, alternate SEO-crafted title, for use in the page’s <title> HTML
-      tag.
-    tests:
-    - not_null
-  - name: wagtail_page_url_path
-    description: str, url path for the page
-    tests:
-    - not_null
-  - name: wagtail_page_search_description
-    description: str, SEO-crafted description of the content, used for search indexing.
-      This is also suitable for the page’s <meta name="description"> HTML tag.
-    tests:
-    - not_null
-  - name: contenttype_id
-    description: int, primary key in django_contenttype. The cms_ table of that has
-      data for this page
-    tests:
-    - not_null
-  - name: owner_user_id
-    description: int, foreign key to users_user to reference the page owner
-  - name: wagtail_page_live_pagerevision_id
-    description: int, foreign key to wagtailcore_pagerevision of the page's latest
-      revision
-  - name: wagtail_page_latest_revision_created_on
-    description: timestamp, timestamp of the page's latest revision
-  - name: wagtail_page_first_published_on
-    description: timestamp, date and time when the page was first published
-  - name: wagtail_page_last_published_on
-    description: timestamp, date and time when the page was last published
-
-- name: stg__mitxonline__app__postgres__cms_coursepage
-  description: course page metadata sourced from Wagtail CMS
-  columns:
-  - name: wagtail_page_id
-    description: int, foreign key to wagtail_page
-    tests:
-    - unique
-    - not_null
-  - name: course_id
-    description: int, foreign key to courses_course
-    tests:
-    - unique
-    - not_null
-  - name: course_description
-    description: text, the description shown on the home page and product page.
-    tests:
-    - not_null
-  - name: course_length
-    description: str, a short description indicating how long it takes to complete
-      (e.g. '4 weeks').
-    tests:
-    - not_null
-  - name: course_effort
-    description: str, a short description indicating how much effort is required (e.g.
-      1-3 hours per week).
-  - name: course_price
-    description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
-      available)
-    tests:
-    - not_null
-  - name: course_prerequisites
-    description: text, a short description indicating prerequisites of this course.
-  - name: course_faq_url
-    description: str, URL a relevant FAQ page or entry for the course.
-  - name: course_about
-    description: text, details about this course.
-  - name: course_what_you_learn
-    description: text, what you will learn from this course.
-  - name: course_video_url
-    description: str, URL to the video to be displayed for this course. It can be
-      an HLS or Youtube video URL.
-
-- name: stg__mitxonline__app__postgres__cms_programpage
-  description: program page metadata sourced from Wagtail CMS
-  columns:
-  - name: wagtail_page_id
-    description: int, foreign key to wagtail_page
-    tests:
-    - unique
-    - not_null
-  - name: program_id
-    description: int, foreign key to courses_program
-    tests:
-    - unique
-    - not_null
-  - name: program_description
-    description: text, the description shown on the home page and product page.
-    tests:
-    - not_null
-  - name: program_length
-    description: str, a short description indicating how long it takes to complete
-      (e.g. '4 weeks').
-    tests:
-    - not_null
-  - name: program_effort
-    description: str, a short description indicating how much effort is required (e.g.
-      1-3 hours per week).
-  - name: program_price
-    description: str, product price in plain text. e.g. $250 - $1000.
-    tests:
-    - not_null
-  - name: program_prerequisites
-    description: text, a short description indicating prerequisites of this program.
-  - name: program_faq_url
-    description: str, URL a relevant FAQ page or entry for the program.
-  - name: program_about
-    description: text, details about this program.
-  - name: program_what_you_learn
-    description: text, what you will learn from this program.
-  - name: program_video_url
-    description: str, URL to the video to be displayed for this program. It can be
-      an HLS or Youtube video URL.
-
-- name: stg__mitxonline__app__postgres__courses_coursetopic
-  columns:
-  - name: coursetopic_id
-    description: int, primary key for courses_coursetopic
-    tests:
-    - unique
-    - not_null
-  - name: coursetopic_name
-    description: str, name of a course topic
-    tests:
-    - not_null
-  - name: coursetopic_parent_id
-    description: int, id for the parent coursetopic of the subtopic. For example 'Computer
-      Science' is the parent topic of 'AI'
-  - name: coursetopic_created_on
-    description: timestamp, date and time when a course topic was initially created
-    tests:
-    - not_null
-  - name: coursetopic_updated_on
-    description: timestamp, date and time when a course topic was most recently updated
+  - name: useractivity_http_user_agent
+    description: str, browser agent string of the user who triggered the event.
+  - name: useractivity_http_accept_language
+    description: str, value from the HTTP Accept-Language request-header field
+  - name: useractivity_http_referer
+    description: str, URI from the HTTP Referer request-header field
+  - name: useractivity_timestamp
+    description: timestamp, time at which the event was emitted, formatted as ISO
+      8601 string
     tests:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursetopic_name", "coursetopic_parent_id"]
-
-- name: stg__mitxonline__app__postgres__cms_coursepage_topics
-  columns:
-  - name: wagtail_page_id
-    description: int, foreign key to cms_coursepage referring to the course page
-    tests:
-    - not_null
-  - name: coursetopic_id
-    description: int, foreign key to courses_coursetopic
-    tests:
-    - not_null
-
-- name: stg__mitxonline__app__postgres__cms_instructorpage
-  columns:
-  - name: wagtail_page_id
-    description: int, foreign key to cms_coursepage referring to the course page
-    tests:
-    - not_null
-  - name: instructor_name
-    description: str, the name of the instructor.
-    tests:
-    - not_null
-  - name: instructor_title
-    description: str, the instructor's title (academic or otherwise).
-  - name: instructor_bio_short
-    description: str, a short biography of the instructor. May be blank.
-  - name: instructor_bio_long
-    description: str, a longer biography of the instructor.
-
-- name: stg__mitxonline__app__postgres__cms_instructorpagelink
-  columns:
-  - name: wagtail_page_id
-    description: int, foreign key to wagtail_page referring to the course page
-    tests:
-    - not_null
-  - name: instructor_wagtail_page_id
-    description: int, foreign key to wagtail_page referring to the linked instructor
-      page
-    tests:
-    - not_null
-
-- name: stg__mitxonline__openedx__courseware_studentmodulehistoryextended
-  description: History of studentmodule in MITx Online open edx platform
-  columns:
-  - name: studentmodulehistoryextended_id
-    description: int, primary key in this table
-    tests:
-    - not_null
-    - unique
-  - name: studentmodule_id
-    description: int, foreign key to courseware_studentmodule
-    tests:
-    - not_null
-  - name: studentmodule_state_data
-    description: str, JSON text indicating the learner's state for the corresponding
-      module such as course, chapter, problemset, sequential, videosequence, etc.
-  - name: studentmodule_problem_grade
-    description: str, floating point value indicating the total unweighted grade for
-      this problem that the learner has scored. e.g. how many responses they got right
-      within the problem. This data is also available in courseactivity_problemcheck
-  - name: studentmodule_problem_max_grade
-    description: str, floating point value indicating the total possible unweighted
-      grade for this problem, or basically the number of responses that are in this
-      problem. This data is also available in courseactivity_problemcheck
-  - name: studentmodule_created_on
-    description: timestamp, datetime when this row was created
-
-- name: stg__mitxonline__openedx__blockcompletion
-  description: History of user block completion in a course such as video, problem,
-    survey on the MITx Online platform
-  columns:
-  - name: blockcompletion_id
-    description: int, primary key in this table
-  - name: user_id
-    description: int, foreign key to the users_user table
-  - name: blockcompletion_created_on
-    description: timestamp, datetime when this row was created
-  - name: blockcompletion_updated_on
-    description: timestamp, datetime when this row was last updated
-  - name: block_key
-    description: string, foreign key to dim_course_content, referencing the block
-      ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
-      code}.
-  - name: block_category
-    description: string, category/type of the content block. Possible values are course,
-      chapter, sequential, vertical, discussion, html, problem, video, etc.
-  - name: block_completed
-    description: integer, will be 1 if the learner completed the block
-  - name: courserun_readable_id
-    description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
-    tests:
-    - not_null
-
-  - name: stg__mitxonline__app__postgres__openedx_openedxuser
-    description: Mapping of MITx Online users to open edX users
-    columns:
-    - name: openedxuser_id
-      description: int, the primary key for the openedx_openedxuser table
-      tests:
-      - not_null
-      - unique
-    - name: user_id
-      description: int, the foreign key referencing the users_user table in the MITx
-        Online application
-      tests:
-      - unique
-      - not_null
-    - name: openedxuser_platform
-      description: str, the platform where the user is registered. e.g. "edx"
-      tests:
-      - not_null
-    - name: openedxuser_username
-      description: str, the username of the user on the open edX platform
-      tests:
-      - unique
-    - name: openedxuser_desired_username
-      description: str, the desired username for the user on the open edX platform
-      tests:
-      - unique
-    - name: openedxuser_has_been_synced
-      description: boolean, indicating whether a corresponding user has been created
-        on the open edX platform
-    - name: openedxuser_created_on
-      description: timestamp, date and time when this record was created
-    - name: openedxuser_updated_on
-      description: timestamp, date and time when this record was last updated
+      column_list:
+      - user_username
+      - useractivity_context_object
+      - useractivity_event_source
+      - useractivity_event_type
+      - useractivity_event_object
+      - useractivity_timestamp

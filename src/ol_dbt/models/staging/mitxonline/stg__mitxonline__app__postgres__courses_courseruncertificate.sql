@@ -10,7 +10,7 @@ with source as (
         , uuid as courseruncertificate_uuid
         , course_run_id as courserun_id
         , user_id
-        , certificate_page_revision_id  --- rename it after the referenced model is created
+        , certificate_page_revision_id as wagtailcore_revision_id
         , is_revoked as courseruncertificate_is_revoked
         , if(is_revoked = false, concat('https://mitxonline.mit.edu/certificate/', uuid), null)
             as courseruncertificate_url
