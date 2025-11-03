@@ -1,436 +1,22 @@
 ---
 version: 2
+
 sources:
 - name: ol_warehouse_raw_data
   loader: airbyte
   database: '{{ target.database }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
-  - name: raw__mitxonline__app__postgres__cms_coursepage
+  - name: raw__mitxonline__openedx__mysql__bulk_email_optout
     columns:
-    - name: page_ptr_id
-      description: int, foreign key to wagtailcore_page
+    - name: id
+      description: int, sequential ID tracking a email optout
+    - name: user_id
+      description: int, unique ID for each user on the MITx Online platform
     - name: course_id
-      description: int, foreign key to courses_course
-    - name: description
-      description: text, the description shown on the home page and product page.
-    - name: length
-      description: str, a short description indicating how long it takes to complete
-        (e.g. '4 weeks').
-    - name: effort
-      description: str, a short description indicating how much effort is required
-        (e.g. 1-3 hours per week).
-    - name: price
-      description: json string, specify the product price details.
-    - name: prerequisites
-      description: text, a short description indicating prerequisites of this course.
-    - name: faq_url
-      description: str, URL a relevant FAQ page or entry for the course.
-    - name: about
-      description: text, details about this course.
-    - name: what_you_learn
-      description: text, what you will learn from this course.
-    - name: feature_image_id
-      description: int, reference to wagtailimages_image. Image that will be used
-        where the course is featured or linked.
-    - name: video_url
-      description: str, URL to the video to be displayed for this course. It can be
-        an HLS or Youtube video URL.
-    - name: faculty_section_title
-      description: str, the title text to display in the faculty cards section of
-        the product page.
-  - name: raw__mitxonline__app__postgres__cms_coursepage_topics
-    columns:
-    - name: id
-      description: int, primary key for cms_coursepage_topics
-    - name: coursepage_id
-      description: int, foreign key to cms_coursepage
-    - name: coursetopic_id
-      description: int, foreign key to courses_coursetopic
-  - name: raw__mitxonline__app__postgres__cms_instructorpage
-    columns:
-    - name: page_ptr_id
-      description: int, foreign key to wagtailcore_page
-    - name: instructor_name
-      description: str, the name of the instructor.
-    - name: instructor_title
-      description: str, the instructor's title (academic or otherwise).
-    - name: instructor_bio_short
-      description: str, a short biography of the instructor.
-    - name: instructor_bio_long
-      description: str, a longer biography of the instructor.
-    - name: feature_image_id
-      description: int, reference to wagtailimages_image. Image is used where the
-        instructor is featured or linked.
-  - name: raw__mitxonline__app__postgres__cms_instructorpagelink
-    columns:
-    - name: page_id
-      description: int, foreign key to wagtail_page referring to the course page
-    - name: linked_instructor_page_id
-      description: int, foreign key to wagtail_page referring to the linked instructor
-        page
-  - name: raw__mitxonline__app__postgres__cms_programpage
-    columns:
-    - name: page_ptr_id
-      description: int, foreign key to wagtailcore_page
-    - name: program_id
-      description: int, foreign key to courses_program
-    - name: description
-      description: text, the description shown on the home page and product page.
-    - name: length
-      description: str, a short description indicating how long it takes to complete
-        (e.g. '4 weeks').
-    - name: effort
-      description: str, a short description indicating how much effort is required
-        (e.g. 1-3 hours per week).
-    - name: price
-      description: json string, specify the product price details.
-    - name: prerequisites
-      description: text, a short description indicating prerequisites of this program.
-    - name: faq_url
-      description: str, URL a relevant FAQ page or entry for the program.
-    - name: about
-      description: text, details about this program.
-    - name: what_you_learn
-      description: text, what you will learn from this program.
-    - name: feature_image_id
-      description: int, reference to wagtailimages_image. Image that will be used
-        where the course is featured or linked.
-    - name: video_url
-      description: str, URL to the video to be displayed for this program. It can
-        be an HLS or Youtube video URL.
-    - name: faculty_section_title
-      description: str, the title text to display in the faculty cards section of
-        the product page.
-  - name: raw__mitxonline__app__postgres__cms_signatorypage
-    description: ''
-    columns:
-    - name: _airbyte_raw_id
-      data_type: varchar
-      description: ''
-    - name: _airbyte_extracted_at
-      data_type: bigint
-      description: ''
-    - name: _airbyte_meta
-      data_type: row(sync_id bigint, changes array(row(field varchar, change varchar,
-        reason varchar)))
-      description: ''
-    - name: _airbyte_generation_id
-      data_type: bigint
-      description: ''
-    - name: name
-      data_type: varchar
-      description: ''
-    - name: title_1
-      data_type: varchar
-      description: ''
-    - name: title_2
-      data_type: varchar
-      description: ''
-    - name: page_ptr_id
-      data_type: bigint
-      description: ''
-    - name: organization
-      data_type: varchar
-      description: ''
-    - name: signature_image_id
-      data_type: bigint
-      description: ''
-    - name: title_3
-      data_type: varchar
-      description: ''
-  - name: raw__mitxonline__app__postgres__courses_blockedcountry
-    columns:
-    - name: id
-      description: int, primary key for courses_blockedcountry table from MITx Online
-    - name: country
-      description: str, two-letter code of the blocked country for a course
-    - name: course_id
-      description: int, foreign key to courses_course representing a single course
-    - name: created_on
-      description: timestamp, specifying when a blocked country record was initially
-        created
-    - name: updated_on
-      description: timestamp, specifying when a blocked country record was most recently
-        updated
-  - name: raw__mitxonline__app__postgres__courses_course
-    columns:
-    - name: id
-      description: int, primary key representing a single MITx Online course
-    - name: live
-      description: boolean, indicating whether the course is available to users on
-        MITx Online website
-    - name: title
-      description: str, title of the course
-    - name: readable_id
-      description: str, Open edX ID formatted as course-v1:{org}+{course code}
-    - name: created_on
-      description: timestamp, specifying when a course was initially created
-    - name: updated_on
-      description: timestamp, specifying when a course was most recently updated
-  - name: raw__mitxonline__app__postgres__courses_course_departments
-    columns:
-    - name: id
-      description: int, primary key for this table
-    - name: course_id
-      description: int, foreign key to courses_course
-    - name: department_id
-      description: int, foreign key to courses_department
-  - name: raw__mitxonline__app__postgres__courses_courserun
-    columns:
-    - name: id
-      description: int, primary key representing a single MITx Online course run
-    - name: live
-      description: boolean, indicating whether the course run is available to users
-        on MITx Online website
-    - name: title
-      description: str, title of the course run
-    - name: run_tag
-      description: str, string that identifies a single run in a course E.g. 1T2022
-    - name: course_id
-      description: int, foreign key to courses_course representing a single MITx Online
+      description: string, unique ID representing a single MITx Online course run
         course
-    - name: courseware_id
-      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-    - name: courseware_url_path
-      description: str, url location for the course run in MITx Online
-    - name: is_self_paced
-      description: boolean, indicating whether users can take this course at their
-        own pace and earn certificate at any time
-    - name: end_date
-      description: timestamp, specifying when the course ends
-    - name: start_date
-      description: timestamp, specifying when the course begins
-    - name: enrollment_start
-      description: timestamp, specifying when enrollment starts
-    - name: enrollment_end
-      description: timestamp, specifying when enrollment ends
-    - name: expiration_date
-      description: timestamp, specifying the date time beyond which users should not
-        see link to this course run on their dashboard
-    - name: upgrade_deadline
-      description: timestamp, specifying the date time beyond which users can not
-        enroll in paid course mode
-    - name: created_on
-      description: timestamp, specifying when a course run was initially created
-    - name: updated_on
-      description: timestamp, specifying when a course run was most recently updated
-  - name: raw__mitxonline__app__postgres__courses_courseruncertificate
-    columns:
-    - name: id
-      description: int, primary key representing a single MITxOnline course certificate
-        record
-    - name: uuid
-      description: str, unique identifier for the certificate
-    - name: course_run_id
-      description: int, foreign key to courses_courserun representing a single course
-        run
-    - name: user_id
-      description: str, foreign key to users_user representing a single user
-    - name: certificate_page_revision_id
-      description: int, foreign key to wagtailcore_pagerevision (could be blank)
-    - name: created_on
-      description: timestamp, specifying when a certificate was initially created
-    - name: updated_on
-      description: timestamp, specifying when a certificate was most recently updated
-    - name: is_revoked
-      description: boolean, indicating whether the certificate is revoked and invalid
-  - name: raw__mitxonline__app__postgres__courses_courserunenrollment
-    freshness:
-      warn_after:
-        count: 1
-        period: day
-      error_after:
-        count: 2
-        period: day
-    loaded_at_field: from_iso8601_timestamp(created_on)
-    columns:
-    - name: id
-      description: int, sequential ID tracking a single user enrollment
-    - name: created_on
-      description: timestamp, specifying when an enrollment was initially created
-    - name: updated_on
-      description: timestamp, specifying when an enrollment was most recently updated
-    - name: change_status
-      description: str, enrollment status for users whose enrollment is no longer
-        active. Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
-    - name: active
-      description: boolean, indicating whether the user is still enrolled in the run
-    - name: edx_enrolled
-      description: boolean, indicating whether the user is enrolled on edx
-    - name: run_id
-      description: int, unique ID specifying a "run" of an MITx Online course
-    - name: user_id
-      description: int, unique ID for each user on the MITx Online platform
-    - name: enrollment_mode
-      description: str, enrollment mode for user
-    - name: edx_emails_subscription
-      description: bool, indicates whether the user should receive emails from edx
-  - name: raw__mitxonline__app__postgres__courses_courserungrade
-    columns:
-    - name: id
-      description: int, primary key representing a single MITxOnline grade record
-    - name: course_run_id
-      description: int, foreign key to courses_courserun representing a single course
-        run
-    - name: user_id
-      description: str, foreign key to users_user representing a single user
-    - name: grade
-      description: float, user's grade for the course (range between 0.0 to 1.0)
-    - name: letter_grade
-      description: str, letter grade defined ib edX grading policy (value may be 'A',
-        'B', 'C', 'D', 'Pass', none)
-    - name: set_by_admin
-      description: boolean, indicating whether this grade is set by a staff user
-    - name: passed
-      description: boolean, indicating whether the user has passed the minimum passing
-        score set for this course
-    - name: created_on
-      description: timestamp, specifying when a grade was initially created
-    - name: updated_on
-      description: timestamp, specifying when a grade was most recently updated
-  - name: raw__mitxonline__app__postgres__courses_coursestopic
-    columns:
-    - name: id
-      description: int, primary key for courses_coursetopic
-    - name: name
-      description: str, name of a course topic
-    - name: parent_id
-      description: int, id for the parent coursetopic of the subtopic. For example
-        'Computer Science' is the parent topic of 'AI'
-    - name: created_on
-      description: timestamp, specifying when a course topic was initially created
-    - name: updated_on
-      description: timestamp, specifying when a course topic was most recently updated
-  - name: raw__mitxonline__app__postgres__courses_department
-    columns:
-    - name: id
-      description: int, primary key representing a single MITx Online department
-    - name: name
-      description: str, name of a department
-    - name: created_on
-      description: timestamp, specifying when a department was initially created
-    - name: updated_on
-      description: timestamp, specifying when a department was most recently updated
-  - name: raw__mitxonline__app__postgres__courses_program
-    columns:
-    - name: id
-      description: int, primary key representing a single MITx Online program
-    - name: live
-      description: boolean, indicating whether the program is available to users
-    - name: title
-      description: str, title of the program
-    - name: readable_id
-      description: str, Open edX ID formatted as program-v1:{org}+{program code}
-    - name: program_type
-      description: "str, type of the program. Value is free text, it could be MicroMasters®,\
-        \ Series, etc"
-    - name: created_on
-      description: timestamp, specifying when a program was initially created
-    - name: updated_on
-      description: timestamp, specifying when a program was most recently updated
-  - name: raw__mitxonline__app__postgres__courses_programcertificate
-    columns:
-    - name: id
-      description: int, primary key representing a single MITxOnline program certificate
-        record
-    - name: uuid
-      description: str, unique identifier for the program certificate
-    - name: program_id
-      description: int, foreign key to courses_program representing a single program
-    - name: user_id
-      description: str, foreign key to users_user representing a single user
-    - name: certificate_page_revision_id
-      description: int, foreign key to wagtailcore_pagerevision (could be blank)
-    - name: created_on
-      description: timestamp, specifying when a certificate was initially created
-    - name: updated_on
-      description: timestamp, specifying when a certificate was most recently updated
-    - name: is_revoked
-      description: boolean, indicating whether the certificate is revoked and invalid
-  - name: raw__mitxonline__app__postgres__courses_programenrollment
-    columns:
-    - name: id
-      description: int, sequential ID tracking a single user enrollment
-    - name: created_on
-      description: timestamp, specifying when an enrollment was initially created
-    - name: updated_on
-      description: timestamp, specifying when an enrollment was most recently updated
-    - name: change_status
-      description: str, enrollment status for users whose enrollment is no longer
-        active. Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
-    - name: active
-      description: boolean, indicating whether the user is still enrolled in the program
-    - name: program_id
-      description: int, foreign key from the courses_program table
-    - name: user_id
-      description: int, unique ID for each user on the MITx Online platform
-    - name: enrollment_mode
-      description: str, enrollment mode for user
-  - name: raw__mitxonline__app__postgres__courses_programrequirement
-    columns:
-    - name: id
-      description: int, primary key representing a MITx Online program requirement
-        node
-    - name: course_id
-      description: int, foreign key to courses_course representing a single course
-    - name: program_id
-      description: int, foreign key to courses_program representing a single program
-    - name: node_type
-      description: str, there are 3 types of nodes that exist in a requirement tree
-        - program_root (represent a program) - course (represent a reference to a
-        course) - operator (represent a logical operation over a set of courses)
-    - name: path
-      description: str, the full materialized path for each node (readonly) e.g. 0001
-        is root path, 00010001 is the path to a node in this requirement tree
-    - name: depth
-      description: int, depth of a node in the tree. A root node has a depth of 1.
-        (readonly)
-    - name: numchild
-      description: int, the number of children of a node (readonly)
-    - name: operator
-      description: str, the logical operation over a set of courses, it can be all_of,
-        min_number_of or blank
-    - name: title
-      description: str, title of the operator for this requirement
-    - name: operator_value
-      description: str, value of the operator for this requirement e.g. if operator
-        is all_of, the corresponding operator_value 3 means all of 3 courses
-  - name: raw__mitxonline__app__postgres__courses_programrun
-    columns:
-    - name: id
-      description: int, primary key representing a single MITx Online program run
-    - name: created_on
-      description: timestamp, specifying when a program run was initially created
-    - name: updated_on
-      description: timestamp, specifying when a program run was most recently updated
-    - name: run_tag
-      description: str, string that identifies a single run in a prgram E.g. R11
-    - name: end_date
-      description: timestamp, specifying when the program run ends
-    - name: start_date
-      description: timestamp, specifying when the program run begins
-    - name: program_id
-      description: int, foreign key to courses_program representing a single MITx
-        Online program
-  - name: raw__mitxonline__app__postgres__django_content_type
-    columns:
-    - name: id
-      description: int, sequential ID for the django model
-    - name: model
-      description: string, the name of the django model
-    - name: app_label
-      description: string, the  functional group the model belongs to
-  - name: raw__mitxonline__app__postgres__ecommerce_basket
-    columns:
-    - name: id
-      description: int, primary key representing a user basket
-    - name: created_on
-      description: timestamp, specifying when the basket was initially created
-    - name: updated_on
-      description: timestamp, specifying when the basket was most recently updated
-    - name: user_id
-      description: int, foreign key to the users_user table
+
   - name: raw__mitxonline__app__postgres__ecommerce_basketdiscount
     columns:
     - name: id
@@ -448,6 +34,7 @@ sources:
       description: int, foreign key referencing users_user
     - name: redeemed_discount_id
       description: int, foreign key referencing ecommerce_discount
+
   - name: raw__mitxonline__app__postgres__ecommerce_basketitem
     columns:
     - name: id
@@ -462,189 +49,18 @@ sources:
       description: int, foreign key referencing ecommerce_basket
     - name: product_id
       description: int, foreign key referencing ecommerce_product
-  - name: raw__mitxonline__app__postgres__ecommerce_discount
+
+  - name: raw__mitxonline__app__postgres__ecommerce_basket
     columns:
     - name: id
-      description: int, primary key representing a discount
+      description: int, primary key representing a user basket
     - name: created_on
-      description: timestamp, specifying when the discount was initially created
+      description: timestamp, specifying when the basket was initially created
     - name: updated_on
-      description: timestamp, specifying when the discount was most recently updated
-    - name: amount
-      description: numeric, discount amount. May be a precent or dollar amount
-    - name: automatic
-      description: boolean, currently unused and always false on production.
-    - name: discount_type
-      description: string, one of  "percent-off", "dollars-off" and "fixed-price".
-        Specifys if the ammount of the discount refers to a percent of, a dollar amount
-        off or a discounted price
-    - name: redemption_type
-      description: string, one of  "one-time",  "one-time-per-user" and "unlimited"
-    - name: max_redemptions
-      description: int, maximum times a coupon can be redeemed
-    - name: discount_code
-      description: string, discount code
-    - name: payment_type
-      description: string, reason for the discount creation. Possible options are
-        "marketing", "sales", "financial-assistance", "customer-support", "staff",
-        "legacy"
-    - name: activation_date
-      description: timestamp, specifying when the discount is activated
-    - name: expiration_date
-      description: timestamp, specifying when the discount is deactivated
-  - name: raw__mitxonline__app__postgres__ecommerce_discountproduct
-    description: This table is used to limit dicounts to a specific product. Discounts
-      which do not have a record in this table are redeemable for all products
-    columns:
-    - name: id
-      description: int, primary key representing a discount product combo
-    - name: created_on
-      description: timestamp, specifying when the discount product association was
-        initially created
-    - name: updated_on
-      description: timestamp, specifying when the discount product association was
-        most recently updated
-    - name: discount_id
-      description: int, foreign key for ecommerce_discount
-    - name: product_id
-      description: int, foreign key for ecommerce_product
-  - name: raw__mitxonline__app__postgres__ecommerce_discountredemption
-    columns:
-    - name: id
-      description: int, primary key representing a discount redemption
-    - name: created_on
-      description: timestamp, specifying when the table row was created
-    - name: redemption_date
-      description: timestamp, specifying when the discount was redeemed by the user
-    - name: redeemed_by_id
-      description: int, foreign key for users_user
-    - name: redeemed_discount_id
-      description: int, foreign key for ecommerce_discount
-    - name: redeemed_order_id
-      description: int, foreign key for ecommerce_orders
-  - name: raw__mitxonline__app__postgres__ecommerce_line
-    columns:
-    - name: id
-      description: int, primary key representing an ecommerce line
-    - name: created_on
-      description: timestamp, specifying when the line was initially created
-    - name: updated_on
-      description: timestamp, specifying when the line was most recently updated
-    - name: quantity
-      description: int, quantitiy ordered, currently always 1
-    - name: order_id
-      description: int, foreign key in the orders_order table for the order that contains
-        the line Currently orders have exactly one line
-    - name: product_version_id
-      description: int stored as string, foreign key in the reversion_version table.
-        Versioned product
-    - name: purchased_content_type_id
-      description: int, foreign key in the django_contenttype table, content type
-        of the product
-    - name: purchased_object_id
-      description: int, id for the product object in either the course_courseruns
-        or the course_programruns table
-  - name: raw__mitxonline__app__postgres__ecommerce_order
-    columns:
-    - name: id
-      description: int, primary key representing a single MITx Online order
-    - name: created_on
-      description: timestamp, specifying when the order was initially created
-    - name: updated_on
-      description: timestamp, specifying when the order was most recently updated
-    - name: state
-      description: string, order state. Options are "pending", "fulfilled", "canceled"
-        "declined", "errored", "refunded", "review", "partially_refunded"
-    - name: total_price_paid
-      description: number, total order amount
-    - name: purchaser_id
-      description: int, primary key in users_user for the purchaser
-    - name: reference_number
-      description: string, readable id for the order. Shared with micromasters
-  - name: raw__mitxonline__app__postgres__ecommerce_product
-    columns:
-    - name: id
-      description: int, sequential ID for  ecommerce product
-    - name: price
-      description: numeric, the price of the product
-    - name: is_active
-      description: boolean, whether the product is visible in the app
-    - name: object_id
-      description: int, the course run or program run id in the courses_courserun
-        or courses_programrun table
-    - name: created_on
-      description: timestamp, the timestamp the product was create
-    - name: updated_on
-      description: timestamp, the timestamp the product was last updated
-    - name: description
-      description: string, the product description, usually the readable_id from the
-        courses_courserun table for products that are courseruns
-    - name: content_type_id
-      description: int, the id of the product object type in the django_contenttype
-        table
-  - name: raw__mitxonline__app__postgres__ecommerce_transaction
-    columns:
-    - name: id
-      description: int, primary key representing an ecommerce transaction
-    - name: created_on
-      description: timestamp, specifying when the transaction was initially created
-    - name: updated_on
-      description: timestamp, specifying when the transaction was most recently updated
-    - name: amount
-      description: numeric, transaction ammount
-    - name: data
-      description: json, data returned from cybersource when the transaction is fulfilled
-    - name: order_id
-      description: int, foreign id in the ecommerce_orders tabe for the order associated
-        with the transaction
-    - name: transaction_type
-      description: string, transaction type, one of "refund" and "payment"
-    - name: reason
-      description: string, reason for refund, currently always blank
-    - name: transaction_id
-      description: string, unique identifier. Either the transaction_id from cybersource
-        or a unique uuid
-  - name: raw__mitxonline__app__postgres__ecommerce_userdiscount
-    description: This table is used to pre-apply a discount when a user checks out
-    columns:
-    - name: id
-      description: int, primary key representing a discount user combo
-    - name: created_on
-      description: timestamp, specifying when the discount user association was initially
-        created
-    - name: updated_on
-      description: timestamp, specifying when the discount user association was most
-        recently updated
-    - name: discount_id
-      description: int, foreign key for ecommerce_discount
+      description: timestamp, specifying when the basket was most recently updated
     - name: user_id
-      description: int, foreign key for users_user
-  - name: raw__mitxonline__app__postgres__flexiblepricing_countryincomethreshold
-    columns:
-    - name: id
-      description: int, primary key representing a country income threshold
-    - name: created_on
-      description: timestamp, specifying when the table row was created
-    - name: updated_on
-      description: timestamp, specifying when the table row was created
-    - name: country_code
-      description: string, country code
-    - name: income_threshold
-      description: int, usd income threshold to quantity for flexible pricing
-  - name: raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate
-    columns:
-    - name: id
-      description: int, primary key representing a country exchange rate
-    - name: created_on
-      description: timestamp, specifying when the table row was created
-    - name: updated_on
-      description: timestamp, specifying when the table row was created
-    - name: currency_code
-      description: string, currency code
-    - name: exchange_rate
-      description: numeric, exchange rate to usd
-    - name: description
-      description: string, readable currency name
+      description: int, foreign key to the users_user table
+
   - name: raw__mitxonline__app__postgres__flexiblepricing_flexibleprice
     description: An application for an income based discount.
     columns:
@@ -690,6 +106,7 @@ sources:
     - name: tier_id
       description: int, primary key in flexiblepricing_flexiblepricetier of the price
         tier the user applied for
+
   - name: raw__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
     columns:
     - name: id
@@ -711,27 +128,160 @@ sources:
     - name: discount_id
       description: int, id of ecommerce_discount associated with the flexible price
         tier
-  - name: raw__mitxonline__app__postgres__openedx_openedxuser
-    description: Mapping of MITx Online users to open edX users
+
+  - name: raw__mitxonline__app__postgres__flexiblepricing_currencyexchangerate
     columns:
     - name: id
-      description: int, the primary key for the openedx_openedxuser table
-    - name: user_id
-      description: int, the foreign key referencing the users_user table in the MITx
-        Online app
-    - name: platform
-      description: str, the platform where the user is registered. e.g. "edx"
-    - name: edx_username
-      description: str, the username of the user on the open edX platform
-    - name: has_been_synced
-      description: boolean, indicating whether a corresponding user has been created
-        on the open edX platform
-    - name: desired_edx_username
-      description: str, the desired username for the user on the open edX platform
+      description: int, primary key representing a country exchange rate
     - name: created_on
-      description: timestamp, date and time when this record was created
+      description: timestamp, specifying when the table row was created
     - name: updated_on
-      description: timestamp, date and time when this record was last updated
+      description: timestamp, specifying when the table row was created
+    - name: currency_code
+      description: string, currency code
+    - name: exchange_rate
+      description: numeric, exchange rate to usd
+    - name: description
+      description: string, readable currency name
+
+  - name: raw__mitxonline__app__postgres__flexiblepricing_countryincomethreshold
+    columns:
+    - name: id
+      description: int, primary key representing a country income threshold
+    - name: created_on
+      description: timestamp, specifying when the table row was created
+    - name: updated_on
+      description: timestamp, specifying when the table row was created
+    - name: country_code
+      description: string, country code
+    - name: income_threshold
+      description: int, usd income threshold to quantity for flexible pricing
+
+  - name: raw__mitxonline__app__postgres__ecommerce_discountredemption
+    columns:
+    - name: id
+      description: int, primary key representing a discount redemption
+    - name: created_on
+      description: timestamp, specifying when the table row was created
+    - name: redemption_date
+      description: timestamp, specifying when the discount was redeemed by the user
+    - name: redeemed_by_id
+      description: int, foreign key for users_user
+    - name: redeemed_discount_id
+      description: int, foreign key for ecommerce_discount
+    - name: redeemed_order_id
+      description: int, foreign key for ecommerce_orders
+
+  - name: raw__mitxonline__app__postgres__ecommerce_userdiscount
+    description: This table is used to pre-apply a discount when a user checks out
+    columns:
+    - name: id
+      description: int, primary key representing a discount user combo
+    - name: created_on
+      description: timestamp, specifying when the discount user association was initially
+        created
+    - name: updated_on
+      description: timestamp, specifying when the discount user association was most
+        recently updated
+    - name: discount_id
+      description: int, foreign key for ecommerce_discount
+    - name: user_id
+      description: int, foreign key for users_user
+
+  - name: raw__mitxonline__app__postgres__ecommerce_discountproduct
+    description: This table is used to limit dicounts to a specific product. Discounts
+      which do not have a record in this table are redeemable for all products
+    columns:
+    - name: id
+      description: int, primary key representing a discount product combo
+    - name: created_on
+      description: timestamp, specifying when the discount product association was
+        initially created
+    - name: updated_on
+      description: timestamp, specifying when the discount product association was
+        most recently updated
+    - name: discount_id
+      description: int, foreign key for ecommerce_discount
+    - name: product_id
+      description: int, foreign key for ecommerce_product
+
+  - name: raw__mitxonline__app__postgres__ecommerce_discount
+    columns:
+    - name: id
+      description: int, primary key representing a discount
+    - name: created_on
+      description: timestamp, specifying when the discount was initially created
+    - name: updated_on
+      description: timestamp, specifying when the discount was most recently updated
+    - name: amount
+      description: numeric, discount amount. May be a precent or dollar amount
+    - name: automatic
+      description: boolean, currently unused and always false on production.
+    - name: discount_type
+      description: string, one of  "percent-off", "dollars-off" and "fixed-price".
+        Specifys if the ammount of the discount refers to a percent of, a dollar amount
+        off or a discounted price
+    - name: redemption_type
+      description: string, one of  "one-time",  "one-time-per-user" and "unlimited"
+    - name: max_redemptions
+      description: int, maximum times a coupon can be redeemed
+    - name: discount_code
+      description: string, discount code
+    - name: payment_type
+      description: string, reason for the discount creation. Possible options are
+        "marketing", "sales", "financial-assistance", "customer-support", "staff",
+        "legacy"
+    - name: activation_date
+      description: timestamp, specifying when the discount is activated
+    - name: expiration_date
+      description: timestamp, specifying when the discount is deactivated
+
+  - name: raw__mitxonline__app__postgres__ecommerce_transaction
+    columns:
+    - name: id
+      description: int, primary key representing an ecommerce transaction
+    - name: created_on
+      description: timestamp, specifying when the transaction was initially created
+    - name: updated_on
+      description: timestamp, specifying when the transaction was most recently updated
+    - name: amount
+      description: numeric, transaction ammount
+    - name: data
+      description: json, data returned from cybersource when the transaction is fulfilled
+    - name: order_id
+      description: int, foreign id in the ecommerce_orders tabe for the order associated
+        with the transaction
+    - name: transaction_type
+      description: string, transaction type, one of "refund" and "payment"
+    - name: reason
+      description: string, reason for refund, currently always blank
+    - name: transaction_id
+      description: string, unique identifier. Either the transaction_id from cybersource
+        or a unique uuid
+
+  - name: raw__mitxonline__app__postgres__ecommerce_line
+    columns:
+    - name: id
+      description: int, primary key representing an ecommerce line
+    - name: created_on
+      description: timestamp, specifying when the line was initially created
+    - name: updated_on
+      description: timestamp, specifying when the line was most recently updated
+    - name: quantity
+      description: int, quantitiy ordered, currently always 1
+    - name: order_id
+      description: int, foreign key in the orders_order table for the order that contains
+        the line Currently orders have exactly one line
+    - name: product_version_id
+      description: int stored as string, foreign key in the reversion_version table.
+        Versioned product
+    - name: purchased_content_type_id
+      description: int, foreign key in the django_contenttype table, content type
+        of the product
+    - name: purchased_object_id
+      description: int, id for the product object in either the course_courseruns
+        or the course_programruns table
+
   - name: raw__mitxonline__app__postgres__reversion_revision
     description: This table is used to track changes to products and transactions
     columns:
@@ -744,6 +294,7 @@ sources:
     - name: user_id
       description: int, foreign key to the users_user record for the user that made
         the change
+
   - name: raw__mitxonline__app__postgres__reversion_version
     description: This table is used to track changes to products and transactions
     columns:
@@ -763,21 +314,162 @@ sources:
       description: int, primary key in the reversion_revision table
     - name: db
       description: string, always set to "default"
-  - name: raw__mitxonline__app__postgres__users_legaladdress
+
+  - name: raw__mitxonline__app__postgres__ecommerce_order
     columns:
     - name: id
-      description: int, primary key for table
-    - name: country
-      description: string, user country code
-    - name: state
-      description: string, state code for the user's address. e.g. US-NY It's required
-        field for new users, could be blank for existing users.
-    - name: user_id
-      description: int, foreign key to users_user
+      description: int, primary key representing a single MITx Online order
     - name: created_on
-      description: timestamp, when the record was created
+      description: timestamp, specifying when the order was initially created
     - name: updated_on
-      description: timestamp, when the record was updated
+      description: timestamp, specifying when the order was most recently updated
+    - name: state
+      description: string, order state. Options are "pending", "fulfilled", "canceled"
+        "declined", "errored", "refunded", "review", "partially_refunded"
+    - name: total_price_paid
+      description: number, total order amount
+    - name: purchaser_id
+      description: int, primary key in users_user for the purchaser
+    - name: reference_number
+      description: string, readable id for the order. Shared with micromasters
+
+  - name: raw__mitxonline__app__postgres__courses_programrun
+    columns:
+    - name: id
+      description: int, primary key representing a single MITx Online program run
+    - name: created_on
+      description: timestamp, specifying when a program run was initially created
+    - name: updated_on
+      description: timestamp, specifying when a program run was most recently updated
+    - name: run_tag
+      description: str, string that identifies a single run in a prgram E.g. R11
+    - name: end_date
+      description: timestamp, specifying when the program run ends
+    - name: start_date
+      description: timestamp, specifying when the program run begins
+    - name: program_id
+      description: int, foreign key to courses_program representing a single MITx
+        Online program
+
+  - name: raw__mitxonline__app__postgres__ecommerce_product
+    columns:
+    - name: id
+      description: int, sequential ID for  ecommerce product
+    - name: price
+      description: numeric, the price of the product
+    - name: is_active
+      description: boolean, whether the product is visible in the app
+    - name: object_id
+      description: int, the course run or program run id in the courses_courserun
+        or courses_programrun table
+    - name: created_on
+      description: timestamp, the timestamp the product was create
+    - name: updated_on
+      description: timestamp, the timestamp the product was last updated
+    - name: description
+      description: string, the product description, usually the readable_id from the
+        courses_courserun table for products that are courseruns
+    - name: content_type_id
+      description: int, the id of the product object type in the django_contenttype
+        table
+
+  - name: raw__mitxonline__app__postgres__django_content_type
+    columns:
+    - name: id
+      description: int, sequential ID for the django model
+    - name: model
+      description: string, the name of the django model
+    - name: app_label
+      description: string, the  functional group the model belongs to
+
+  - name: raw__mitxonline__app__postgres__courses_courserunenrollment
+    freshness:
+      warn_after: {count: 1, period: day}
+      error_after: {count: 2, period: day}
+    loaded_at_field: "from_iso8601_timestamp(created_on)"
+    columns:
+    - name: id
+      description: int, sequential ID tracking a single user enrollment
+    - name: created_on
+      description: timestamp, specifying when an enrollment was initially created
+    - name: updated_on
+      description: timestamp, specifying when an enrollment was most recently updated
+    - name: change_status
+      description: str, enrollment status for users whose enrollment is no longer
+        active. Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
+    - name: active
+      description: boolean, indicating whether the user is still enrolled in the run
+    - name: edx_enrolled
+      description: boolean, indicating whether the user is enrolled on edx
+    - name: run_id
+      description: int, unique ID specifying a "run" of an MITx Online course
+    - name: user_id
+      description: int, unique ID for each user on the MITx Online platform
+    - name: enrollment_mode
+      description: str, enrollment mode for user
+    - name: edx_emails_subscription
+      description: bool, indicates whether the user should receive emails from edx
+
+  - name: raw__mitxonline__app__postgres__courses_programenrollment
+    columns:
+    - name: id
+      description: int, sequential ID tracking a single user enrollment
+    - name: created_on
+      description: timestamp, specifying when an enrollment was initially created
+    - name: updated_on
+      description: timestamp, specifying when an enrollment was most recently updated
+    - name: change_status
+      description: str, enrollment status for users whose enrollment is no longer
+        active. Options are 'deferred', 'transferred', 'refunded', 'unenrolled'
+    - name: active
+      description: boolean, indicating whether the user is still enrolled in the program
+    - name: program_id
+      description: int, foreign key from the courses_program table
+    - name: user_id
+      description: int, unique ID for each user on the MITx Online platform
+    - name: enrollment_mode
+      description: str, enrollment mode for user
+
+  - name: raw__mitxonline__app__postgres__courses_courserun
+    columns:
+    - name: id
+      description: int, primary key representing a single MITx Online course run
+    - name: live
+      description: boolean, indicating whether the course run is available to users
+        on MITx Online website
+    - name: title
+      description: str, title of the course run
+    - name: run_tag
+      description: str, string that identifies a single run in a course E.g. 1T2022
+    - name: course_id
+      description: int, foreign key to courses_course representing a single MITx Online
+        course
+    - name: courseware_id
+      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: courseware_url_path
+      description: str, url location for the course run in MITx Online
+    - name: is_self_paced
+      description: boolean, indicating whether users can take this course at their
+        own pace and earn certificate at any time
+    - name: end_date
+      description: timestamp, specifying when the course ends
+    - name: start_date
+      description: timestamp, specifying when the course begins
+    - name: enrollment_start
+      description: timestamp, specifying when enrollment starts
+    - name: enrollment_end
+      description: timestamp, specifying when enrollment ends
+    - name: expiration_date
+      description: timestamp, specifying the date time beyond which users should not
+        see link to this course run on their dashboard
+    - name: upgrade_deadline
+      description: timestamp, specifying the date time beyond which users can not
+        enroll in paid course mode
+    - name: created_on
+      description: timestamp, specifying when a course run was initially created
+    - name: updated_on
+      description: timestamp, specifying when a course run was most recently updated
+
   - name: raw__mitxonline__app__postgres__users_user
     columns:
     - name: id
@@ -802,6 +494,39 @@ sources:
       description: boolean, used for app permissions
     - name: is_superuser
       description: boolean, used for app permissions
+
+  - name: raw__mitxonline__app__postgres__courses_course
+    columns:
+    - name: id
+      description: int, primary key representing a single MITx Online course
+    - name: live
+      description: boolean, indicating whether the course is available to users on
+        MITx Online website
+    - name: title
+      description: str, title of the course
+    - name: readable_id
+      description: str, Open edX ID formatted as course-v1:{org}+{course code}
+    - name: created_on
+      description: timestamp, specifying when a course was initially created
+    - name: updated_on
+      description: timestamp, specifying when a course was most recently updated
+
+  - name: raw__mitxonline__app__postgres__users_legaladdress
+    columns:
+    - name: id
+      description: int, primary key for table
+    - name: country
+      description: string, user country code
+    - name: state
+      description: string, state code for the user's address. e.g. US-NY It's required
+        field for new users, could be blank for existing users.
+    - name: user_id
+      description: int, foreign key to users_user
+    - name: created_on
+      description: timestamp, when the record was created
+    - name: updated_on
+      description: timestamp, when the record was updated
+
   - name: raw__mitxonline__app__postgres__users_userprofile
     columns:
     - name: id
@@ -854,99 +579,259 @@ sources:
     - name: updated_on
       description: timestamp, date and time when this profile data was most recently
         updated
-  - name: raw__mitxonline__app__postgres__wagtailcore_page
+
+  - name: raw__mitxonline__app__postgres__courses_program
     columns:
     - name: id
-      description: int, primary key for wagtailcore_page
+      description: int, primary key representing a single MITx Online program
+    - name: live
+      description: boolean, indicating whether the program is available to users
+    - name: title
+      description: str, title of the program
+    - name: readable_id
+      description: str, Open edX ID formatted as program-v1:{org}+{program code}
+    - name: program_type
+      description: str, type of the program. Value is free text, it could be MicroMasters®,
+        Series, etc
+    - name: created_on
+      description: timestamp, specifying when a program was initially created
+    - name: updated_on
+      description: timestamp, specifying when a program was most recently updated
+
+  - name: raw__mitxonline__app__postgres__courses_programrequirement
+    columns:
+    - name: id
+      description: int, primary key representing a MITx Online program requirement
+        node
+    - name: course_id
+      description: int, foreign key to courses_course representing a single course
+    - name: program_id
+      description: int, foreign key to courses_program representing a single program
+    - name: node_type
+      description: str, there are 3 types of nodes that exist in a requirement tree
+        - program_root (represent a program) - course (represent a reference to a
+        course) - operator (represent a logical operation over a set of courses)
     - name: path
       description: str, the full materialized path for each node (readonly) e.g. 0001
         is root path, 00010001 is the path to a node in this requirement tree
     - name: depth
       description: int, depth of a node in the tree. A root node has a depth of 1.
+        (readonly)
     - name: numchild
-      description: int, the number of children of a node
+      description: int, the number of children of a node (readonly)
+    - name: operator
+      description: str, the logical operation over a set of courses, it can be all_of,
+        min_number_of or blank
     - name: title
-      description: str, human-readable title of the page
-    - name: slug
-      description: "str, this is used for constructing the page’s URL."
-    - name: live
-      description: boolean, if set to true this page is published
-    - name: has_unpublished_changes
-      description: boolean, set to True when the page is either in draft or published
-        with draft changes.
-    - name: seo_title
-      description: "str, alternate SEO-crafted title, for use in the page’s <title>\
-        \ HTML tag."
-    - name: url_path
-      description: str, url path for the page
-    - name: show_in_menus
-      description: boolean, toggles whether the page should be included in site-wide
-        menus
-    - name: search_description
-      description: "str, SEO-crafted description of the content, used for search indexing.\
-        \ This is also suitable for the page’s <meta name=\"description\"> HTML tag."
-    - name: go_live_at
-      description: timestamp, timestamp for when the page is scheduled to go live
-    - name: expire_at
-      description: timestamp, timestamp for when the page is scheduled to be expired.
-        This functionality is not used by xpro
-    - name: expired
-      description: boolean, whether the page has expired. This functionality is not
-        used by xpro
-    - name: content_type_id
-      description: int, primary key in django_contenttype. The cms_ table of that
-        has data for this page
-    - name: owner_id
-      description: int, primary key in users_user of the page owner
-    - name: locked
-      description: boolean, when set to True, the Wagtail editor will not allow any
-        users to edit the content of the page. This functionality is not used by xpro
-    - name: latest_revision_created_at
-      description: timestamp, timestamp of the page's latest revision
-    - name: first_published_at
-      description: timestamp, timestamp when the page was first published
-    - name: live_revision_id
-      description: int, primary key in wagtailcore_pagerevision of the page's latest
-        revision
-    - name: last_published_at
-      description: timestamp, timestamp when the page was last published
-    - name: draft_title
-      description: str, human-readable title of the page, incorporating any changes
-        that have been made in a draft edit (in contrast to the title field, which
-        for published pages will be the title as it exists in the current published
-        version).
-  - name: raw__mitxonline__app__postgres__wagtailcore_revision
-    description: Wagtail page revisions in MITx Online CMS
+      description: str, title of the operator for this requirement
+    - name: operator_value
+      description: str, value of the operator for this requirement e.g. if operator
+        is all_of, the corresponding operator_value 3 means all of 3 courses
+
+  - name: raw__mitxonline__app__postgres__courses_department
     columns:
     - name: id
-      data_type: bigint
-      description: primary key for wagtailcore_revision
-    - name: content
-      data_type: varchar
-      description: content of the revision stored as a JSON string
+      description: int, primary key representing a single MITx Online department
+    - name: name
+      description: str, name of a department
+    - name: created_on
+      description: timestamp, specifying when a department was initially created
+    - name: updated_on
+      description: timestamp, specifying when a department was most recently updated
+
+  - name: raw__mitxonline__app__postgres__courses_course_departments
+    columns:
+    - name: id
+      description: int, primary key for this table
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: department_id
+      description: int, foreign key to courses_department
+
+  - name: raw__mitxonline__app__postgres__courses_blockedcountry
+    columns:
+    - name: id
+      description: int, primary key for courses_blockedcountry table from MITx Online
+    - name: country
+      description: str, two-letter code of the blocked country for a course
+    - name: course_id
+      description: int, foreign key to courses_course representing a single course
+    - name: created_on
+      description: timestamp, specifying when a blocked country record was initially
+        created
+    - name: updated_on
+      description: timestamp, specifying when a blocked country record was most recently
+        updated
+
+  - name: raw__mitxonline__app__postgres__courses_courseruncertificate
+    columns:
+    - name: id
+      description: int, primary key representing a single MITxOnline course certificate
+        record
+    - name: uuid
+      description: str, unique identifier for the certificate
+    - name: course_run_id
+      description: int, foreign key to courses_courserun representing a single course
+        run
     - name: user_id
-      data_type: bigint
-      description: foreign key to users_user representing the user who made the revision
-    - name: object_id
-      data_type: varchar
-      description: foreign key to wagtailcore_page representing the page being revised
-    - name: object_str
-      data_type: varchar
-      description: title of the page being revised
-    - name: content_type_id
-      data_type: bigint
-      description: foreign key to django_contenttype representing the type of page
-        being revised
-    - name: base_content_type_id
-      data_type: bigint
-      description: foreign key to django_contenttype representing the base type of
-        page being revised
-    - name: approved_go_live_at
-      data_type: timestamp(6) with time zone
-      description: timestamp for when the revision was approved to go live
-    - name: created_at
-      data_type: timestamp(6) with time zone
-      description: timestamp for when the revision was created
+      description: str, foreign key to users_user representing a single user
+    - name: certificate_page_revision_id
+      description: int, foreign key to wagtailcore_pagerevision (could be blank)
+    - name: created_on
+      description: timestamp, specifying when a certificate was initially created
+    - name: updated_on
+      description: timestamp, specifying when a certificate was most recently updated
+    - name: is_revoked
+      description: boolean, indicating whether the certificate is revoked and invalid
+
+
+  - name: raw__mitxonline__app__postgres__courses_programcertificate
+    columns:
+    - name: id
+      description: int, primary key representing a single MITxOnline program certificate
+        record
+    - name: uuid
+      description: str, unique identifier for the program certificate
+    - name: program_id
+      description: int, foreign key to courses_program representing a single program
+    - name: user_id
+      description: str, foreign key to users_user representing a single user
+    - name: certificate_page_revision_id
+      description: int, foreign key to wagtailcore_pagerevision (could be blank)
+    - name: created_on
+      description: timestamp, specifying when a certificate was initially created
+    - name: updated_on
+      description: timestamp, specifying when a certificate was most recently updated
+    - name: is_revoked
+      description: boolean, indicating whether the certificate is revoked and invalid
+
+  - name: raw__mitxonline__app__postgres__courses_courserungrade
+    columns:
+    - name: id
+      description: int, primary key representing a single MITxOnline grade record
+    - name: course_run_id
+      description: int, foreign key to courses_courserun representing a single course
+        run
+    - name: user_id
+      description: str, foreign key to users_user representing a single user
+    - name: grade
+      description: float, user's grade for the course (range between 0.0 to 1.0)
+    - name: letter_grade
+      description: str, letter grade defined ib edX grading policy (value may be 'A',
+        'B', 'C', 'D', 'Pass', none)
+    - name: set_by_admin
+      description: boolean, indicating whether this grade is set by a staff user
+    - name: passed
+      description: boolean, indicating whether the user has passed the minimum passing
+        score set for this course
+    - name: created_on
+      description: timestamp, specifying when a grade was initially created
+    - name: updated_on
+      description: timestamp, specifying when a grade was most recently updated
+
+  - name: raw__mitxonline__openedx__mysql__auth_user
+    description: MITx Online open edX users
+    columns:
+    - name: id
+      description: int, sequential ID representing a user on MITx Online open edX
+        platform
+    - name: username
+      description: str, unique username on the open edX platform
+    - name: password
+      description: str, hashed password
+    - name: first_name
+      description: str, user's first name. This field is not populated on production.
+    - name: last_name
+      description: str, user's last name. This field is not populated on production.
+    - name: email
+      description: str, user's email associated with their account
+    - name: is_active
+      description: boolean, used to soft delete users
+    - name: is_staff
+      description: boolean, indicating whether user can log into admin site
+    - name: is_superuser
+      description: boolean, indicating whether user has all permissions on open edx
+        platform
+    - name: date_joined
+      description: timestamp, date and time when a user account was initially created
+        on the open edX platform
+    - name: last_login
+      description: timestamp, date and time when user last login on the open edX platform
+
+  - name: raw__mitxonline__openedx__tracking_logs
+    description: MITx Online Open edX event data that are emitted by server, the browser,
+      or the mobile device to capture information about user's interactions with a
+      course
+    columns:
+    - name: username
+      description: str, username of the open edX user who caused the event to be emitted.
+        Some events are recorded with a blank username. This can occur when a user
+        logs out, or the login session times out, while a browser window remains open.
+        EdX recommends to ignore these events.
+    - name: context
+      description: object, it includes member fields that provide contextual information.
+        Common fields apply to all events are course_id, org_id, path, user_id. Other
+        member fields for applicable events are course_user_tags, module.
+    - name: event_source
+      description: str, specifies the source of the interaction that triggered the
+        event. The values are - browser, mobile, server, task
+    - name: event_type
+      description: str, type of event triggered. Values depend on event_source.
+    - name: name
+      description: str, type of event triggered. When this field is present for an
+        event, it supersedes the event_type field.
+    - name: event
+      description: object, it includes member fields that identify specifics of each
+        triggered event. Different member fields are supplied for different events.
+    - name: page
+      description: str, url of the page the user was visiting when the event was emitted.
+    - name: session
+      description: str, 32-character value to identify the user’s session. All browser
+        events and the server 'enrollment' events include a session value. Other server
+        events and mobile events do not include a session value.
+    - name: ip
+      description: str, IP address of the user who triggered the event. Empty for
+        mobile events.
+    - name: host
+      description: str, the site visited by the user. e.g. courses.mitxonline.mit.edu
+    - name: time
+      description: str, time at which the event was emitted. It has inconsistent formats
+        due to log collector switches, YYYY-MM-DD HH:mm:ss.SSSSSS for older records,
+        YYYY-MM-ddTHH:mm:ss.SSSSSS for newer records
+    - name: agent
+      description: str, browser agent string of the user who triggered the event.
+    - name: accept_language
+      description: str, value from the HTTP Accept-Language request-header field
+    - name: referer
+      description: str, URI from the HTTP Referer request-header field
+    - name: log_file
+      description: str, internal used field for log file location
+    - name: _ab_source_file_url
+      description: str, url path for the raw log file
+    - name: vector_timestamp
+      description: str, time when Vector processed this record. Blank for old records.
+    - name: environment
+      description: str, internal used field to indicate environment for the event.
+        e.g. mitxonline-production
+
+
+  - name: raw__mitxonline__openedx__api__course_structure
+    description: It contains MITx Online course content at any point in time - json
+      structure
+    columns:
+    - name: course_id
+      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: content_hash
+      description: str, sha256 hashed string for the course content
+    - name: course_structure
+      description: str, json string of the course content
+    - name: course_structure_flattened
+      description: str, flatten json string of the course content. It flattens block's
+        category, metadata and children to same level.
+    - name: retrieved_at
+      description: timestamp, time indicating when this course structure was initially
+        retrieved from REST API.
+
   - name: raw__mitxonline__openedx__api__course_blocks
     description: It contains MITx Online course content at any point in time - unnested
       structure
@@ -986,460 +871,7 @@ sources:
     - name: retrieved_at
       description: timestamp, time indicating when this block was initially retrieved
         from REST API.
-  - name: raw__mitxonline__openedx__api__course_structure
-    description: It contains MITx Online course content at any point in time - json
-      structure
-    columns:
-    - name: course_id
-      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-    - name: content_hash
-      description: str, sha256 hashed string for the course content
-    - name: course_structure
-      description: str, json string of the course content
-    - name: course_structure_flattened
-      description: str, flatten json string of the course content. It flattens block's
-        category, metadata and children to same level.
-    - name: retrieved_at
-      description: timestamp, time indicating when this course structure was initially
-        retrieved from REST API.
-  - name: raw__mitxonline__openedx__mysql__assessment_aiclassifier
-    description: MITx Online open edX assessment ai classifier
-    columns:
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: classifier_set_id
-      description: int, foreign key referencing classifier_set
-    - name: classifier_data
-      description: varchar, the content of the classifier
-    - name: criterion_id
-      description: int, foreign key referencing criterion
-  - name: raw__mitxonline__openedx__mysql__assessment_aiclassifierset
-    description: MITx Online open edX assessment ai classifier sets
-    columns:
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-        course
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: str, foreign key referencing item
-    - name: rubric_id
-      description: int, foreign key referencing rubric
-    - name: created_at
-      description: timestamp, the datetime the ai classifier set was created
-    - name: algorithm_id
-      description: str, foreign key referencing the algorithm
-  - name: raw__mitxonline__openedx__mysql__assessment_aigradingworkflow
-    description: MITx Online open edX ai grading workflows
-    columns:
-    - name: scheduled_at
-      description: timestamp, specifying when the ai training workflows were scheduled
-    - name: submission_uuid
-      description: str, unique identifier for the submission
-    - name: algorithm_id
-      description: str, foreign key referencing the algorithm
-    - name: student_id
-      description: int, reference user id in auth_user from open edX
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-    - name: assessment_id
-      description: int, foreign key referencing the assessment
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: str, foreign key referencing item
-    - name: uuid
-      description: str, unique identifier for the ai training workflow
-    - name: rubric_id
-      description: int, foreign key to the unique identifier for the rubric
-    - name: classifier_set_id
-      description: int, foreign key referencing classifier_set
-    - name: completed_at
-      description: timestamp, specifying when the peer workflow was completed
-    - name: essay_text
-      description: str, the essay text of the assessment ai grading workflow
-  - name: raw__mitxonline__openedx__mysql__assessment_aitrainingworkflow
-    description: MITx Online open edX ai training workflows
-    columns:
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: int, foreign key referencing student_item
-    - name: uuid
-      description: str, unique identifier for the ai training workflow
-    - name: scheduled_at
-      description: timestamp, specifying when the ai training workflows were scheduled
-    - name: classifier_set_id
-      description: int, foreign key referencing classifier_set
-    - name: completed_at
-      description: timestamp, specifying when the ai training workflows were completed
-    - name: algorithm_id
-      description: str, foreign key referencing the algorithm
-  - name: raw__mitxonline__openedx__mysql__assessment_aitrainingworkflow_training_examples
-    description: MITx Online open edX assessment ai training workflow training examples
-    columns:
-    - name: trainingexample_id
-      description: int, the foreign key referencing the training example
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: aitrainingworkflow_id
-      description: int, the foreign key referencing the ai training workflow
-  - name: raw__mitxonline__openedx__mysql__assessment_assessment
-    description: MITx Online open edX assessments
-    columns:
-    - name: scorer_id
-      description: str, unique identifier of the scorer
-    - name: id
-      description: int, sequential ID tracking assessments
-    - name: score_type
-      description: str, sequential ID tracking assessments
-    - name: submission_uuid
-      description: str, unique identifier for the submission
-    - name: rubric_id
-      description: int, unique identifier for the rubric
-    - name: feedback
-      description: str, the assessment feedback content
-    - name: scored_at
-      description: timestamp, the time at which the assessment was scored
-  - name: raw__mitxonline__openedx__mysql__assessment_assessmentfeedback
-    description: MITx Online open edX assessment feedback
-    columns:
-    - name: id
-      description: int, sequential ID tracking assessment feedback
-    - name: submission_uuid
-      description: str, unique identifier for the submission
-    - name: feedback_text
-      description: str, the text content of the feedback
-  - name: raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_assessments
-    description: MITx Online open edX assessment feedback assessments
-    columns:
-    - name: assessment_id
-      description: int, foreign key referencing the assessment
-    - name: assessmentfeedback_id
-      description: int, foreign key referencing the assessment feedback
-    - name: id
-      description: int, sequential ID tracking assessment feedback assessments
-  - name: raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_options
-    description: MITx Online open edX assessment feedback options
-    columns:
-    - name: assessmentfeedbackoption_id
-      description: int, sequential ID tracking assessment feedback options
-    - name: assessmentfeedback_id
-      description: int, foreign key referencing the assessment feedback
-    - name: id
-      description: int, sequential ID tracking assessment feedback option
-  - name: raw__mitxonline__openedx__mysql__assessment_assessmentfeedbackoption
-    description: MITx Online open edX assessment feedback options
-    columns:
-    - name: text
-      description: str, the text of the assessment feedback
-    - name: id
-      description: int, the auto-incremented ID for this table
-  - name: raw__mitxonline__openedx__mysql__assessment_assessmentpart
-    description: MITx Online open edX assessment part
-    columns:
-    - name: assessment_id
-      description: int, foreign key referencing assessment
-    - name: option_id
-      description: int, foreign key referencing option
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: feedback
-      description: str, the content of the assessment feedback
-    - name: criterion_id
-      description: int, foreign key referencing criterion
-  - name: raw__mitxonline__openedx__mysql__assessment_criterion
-    description: MITx Online open edX assessment criteria
-    columns:
-    - name: order_num
-      description: int, unique identifier for the assessment criterion sequence
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: rubric_id
-      description: int, foreign key to the unique identifier for the rubric
-    - name: name
-      description: string, the name of the criterion
-    - name: prompt
-      description: string, the text of the assessment prompt
-    - name: label
-      description: string, the label for the assessment criterion
-  - name: raw__mitxonline__openedx__mysql__assessment_criterionoption
-    description: MITx Online open edX assessment criterion options
-    columns:
-    - name: order_num
-      description: int, unique identifier for the assessment criterion sequence
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: points
-      description: int, the number of points for this assessment criterion option
-    - name: name
-      description: str, the name of the assessment criterion option
-    - name: label
-      description: str, the label for this assessment criterion option
-    - name: criterion_id
-      description: int, foreign key referencing the assessment criterion
-    - name: explanation
-      description: str, the text explanation for the assessment criterion option
-  - name: raw__mitxonline__openedx__mysql__assessment_peerworkflow
-    description: MITx Online open edX assessment peer workflows
-    columns:
-    - name: cancelled_at
-      description: timestamp, specifying when the peer workflow was cancelled
-    - name: grading_completed_at
-      description: timestamp, specifying when the peer workflow was graded
-    - name: student_id
-      description: str, reference user id in auth_user from open edX
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: str, foreign key referencing item
-    - name: submission_uuid
-      description: str, the unique identifier referencing the submission
-    - name: created_at
-      description: timestamp, specifying when the peer workflow was created
-    - name: completed_at
-      description: timestamp, specifying when the peer workflow was completed
-  - name: raw__mitxonline__openedx__mysql__assessment_peerworkflowitem
-    description: MITx Online open edX assessment peer workflow items
-    columns:
-    - name: started_at
-      description: timestamp, specifying when the peer workflow item was started
-    - name: assessment_id
-      description: int, foreign key referencing unique identifier of the assessment
-    - name: author_id
-      description: int, foreign key referencing unique identifier of the author
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: submission_uuid
-      description: str, the unique identifier referencing the submission
-    - name: scorer_id
-      description: str, unique identifier of the scorer
-    - name: scored
-      description: boolean, whether the peer workflow item has been scored
-  - name: raw__mitxonline__openedx__mysql__assessment_rubric
-    description: MITx Online open edX assessment rubric
-    columns:
-    - name: structure_hash
-      description: str, sha256 hashed string for the course structure
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: content_hash
-      description: str, sha256 hashed string for the course content
-  - name: raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflow
-    description: MITx Online open edX assessment student training workflows
-    columns:
-    - name: student_id
-      description: str, reference user id in auth_user from open edX
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-        course
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: str, foreign key referencing item
-    - name: submission_uuid
-      description: str, the unique identifier referencing the submission
-  - name: raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflowitem
-    description: MITx Online open edX ai training workflow items
-    columns:
-    - name: workflow_id
-      description: int, foreign key referencing the workflow
-    - name: order_num
-      description: int, unique identifier for the training workflow sequence
-    - name: started_at
-      description: timestamp, specifying when the ai training workflows items was
-        started
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: training_example_id
-      description: int, foreign key referencing the training_exa ple
-    - name: completed_at
-      description: timestamp, specifying when the ai training workflows items was
-        completed
-  - name: raw__mitxonline__openedx__mysql__assessment_trainingexample
-    description: MITx Online open edX assessment training examples
-    columns:
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: content_hash
-      description: str, sha256 hashed string for the course content
-    - name: rubric_id
-      description: int, unique identifier for the rubric
-    - name: raw_answer
-      description: str, the raw text of the training example answer
-  - name: raw__mitxonline__openedx__mysql__assessment_trainingexample_options_selected
-    description: MITx Online open edX assessment selected training example options
-    columns:
-    - name: trainingexample_id
-      description: int, the foreign key referencing the training example
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: criterionoption_id
-      description: int, the foreign key referencing the criterion option
-  - name: raw__mitxonline__openedx__mysql__auth_user
-    description: MITx Online open edX users
-    columns:
-    - name: id
-      description: int, sequential ID representing a user on MITx Online open edX
-        platform
-    - name: username
-      description: str, unique username on the open edX platform
-    - name: password
-      description: str, hashed password
-    - name: first_name
-      description: str, user's first name. This field is not populated on production.
-    - name: last_name
-      description: str, user's last name. This field is not populated on production.
-    - name: email
-      description: str, user's email associated with their account
-    - name: is_active
-      description: boolean, used to soft delete users
-    - name: is_staff
-      description: boolean, indicating whether user can log into admin site
-    - name: is_superuser
-      description: boolean, indicating whether user has all permissions on open edx
-        platform
-    - name: date_joined
-      description: timestamp, date and time when a user account was initially created
-        on the open edX platform
-    - name: last_login
-      description: timestamp, date and time when user last login on the open edX platform
-  - name: raw__mitxonline__openedx__mysql__auth_userprofile
-    description: MITx Online open edX authorized user profiles
-    columns:
-    - name: phone_number
-      description: str, the phone number of the user
-    - name: mailing_address
-      description: str, the mailing address of the user
-    - name: location
-      description: str, the location of the user
-    - name: bio
-      description: str, the description of the user
-    - name: name
-      description: str, the name of the user
-    - name: user_id
-      description: int, unique ID for each user on the MITx Online platform
-    - name: language
-      description: string, the language the user uses
-    - name: profile_image_uploaded_at
-      description: timestamp, the datetime when the user profile image was uploaded
-    - name: gender
-      description: str, the gender of the user
-    - name: level_of_education
-      description: str, the highest level of education of the user
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: meta
-      description: str, the metadata of the user
-    - name: goals
-      description: str, the goals listed by the user
-    - name: courseware
-      description: str, the courseware the user is using
-    - name: country
-      description: str, the country the user is located in
-    - name: year_of_birth
-      description: int, the year the user was born
-    - name: city
-      description: str, the city the user is located in
-    - name: state
-      description: str, the state the user is located in
-  - name: raw__mitxonline__openedx__mysql__bulk_email_optout
-    columns:
-    - name: id
-      description: int, sequential ID tracking a email optout
-    - name: user_id
-      description: int, unique ID for each user on the MITx Online platform
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-        course
-  - name: raw__mitxonline__openedx__mysql__certificates_generatedcertificate
-    description: MITx Online open edX generated certificates
-    columns:
-    - name: modified_date
-      description: timestamp, specifying when the certificate was last modified
-    - name: mode
-      description: string, the mode of the certificate
-    - name: status
-      description: string, the status of the certificate
-    - name: error_reason
-      description: string, the error reason of the certificate
-    - name: distinction
-      description: boolean, whether the certificate has a distinction
-    - name: user_id
-      description: int, unique ID for each user on the MITx Online platform
-    - name: name
-      description: string, the name of the certificate
-    - name: verify_uuid
-      description: str, the unique identifier for certificate verification
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-        course
-    - name: download_url
-      description: str, url location for the generated certificate
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: grade
-      description: float, user grade for the course (range between 0.0 to 1.0)
-    - name: created_date
-      description: timestamp, specifying when the certificate was created
-    - name: key
-      description: str, the key for the certificate
-    - name: download_uuid
-      description: str, the unique identifier for a downloaded certificate
-  - name: raw__mitxonline__openedx__mysql__completion_blockcompletion
-    description: History of user block completion in a course such as video, problem,
-      survey on the MITx Online platform
-    columns:
-    - name: id
-      description: int, primary key in this table
-    - name: created
-      description: timestamp, datetime when this row was created
-    - name: user_id
-      description: int, foreign key to the users_user table
-    - name: modified
-      description: timestamp, datetime when this row was last updated. A change in
-        this field implies that there was a state change.
-    - name: block_key
-      description: string, foreign key to dim_course_content, referencing the block
-        ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
-        code}.
-    - name: block_type
-      description: string, category/type of the content block. Possible values are
-        course, chapter, sequential, vertical, discussion, html, problem, video, etc.
-    - name: completion
-      description: integer, will be 1 if the learner completed the block otherwise
-        it will be 0
-    - name: course_key
-      description: string, unique string to identify a course run on the corresponding
-        platform.
-  - name: raw__mitxonline__openedx__mysql__course_groups_cohortmembership
-    description: MITx Online open edX course group cohort memberships
-    columns:
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-        course
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: course_user_group_id
-      description: int, the mailing address of the user
-    - name: user_id
-      description: int, foreign key referencing course_user_group
-  - name: raw__mitxonline__openedx__mysql__course_groups_courseusergroup
-    description: MITx Online open edX course group user groups
-    columns:
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-        course
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: group_type
-      description: str, the type of course user group
-    - name: name
-      description: str, the name of the course user group
+
   - name: raw__mitxonline__openedx__mysql__courseware_studentmodule
     columns:
     - name: id
@@ -1472,133 +904,7 @@ sources:
     - name: modified
       description: timestamp, datetime when this row was last updated. A change in
         this field implies that there was a state change.
-  - name: raw__mitxonline__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended
-    description: History of studentmodule in MITx Online platform
-    columns:
-    - name: id
-      description: int, primary key in this table
-    - name: student_module_id
-      description: int, foreign key to courseware_studentmodule
-    - name: state
-      description: str, JSON text indicating the learner's state for the corresponding
-        module such as course, chapter, problemset, sequential, videosequence, etc.
-    - name: grade
-      description: str, floating point value indicating the total unweighted grade
-        for this problem that the learner has scored. e.g. how many responses they
-        got right within the problem. This data is also available in courseactivity_problemcheck
-    - name: max_grade
-      description: str, floating point value indicating the total possible unweighted
-        grade for this problem, or basically the number of responses that are in this
-        problem. This data is also available in courseactivity_problemcheck
-    - name: created
-      description: timestamp, datetime when this row was created
-    - name: version
-      description: str, the version of the student module history extended
-  - name: raw__mitxonline__openedx__mysql__credit_creditcourse
-    description: MITx Online open edX course credits
-    columns:
-    - name: enabled
-      description: boolean, whether the course credit is currently enabled
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: course_key
-      description: str, foreign key referencing a course
-  - name: raw__mitxonline__openedx__mysql__credit_crediteligibility
-    description: MITx Online open edX course credit eligibility
-    columns:
-    - name: deadline
-      description: timestamp, the datetime when the course is eligible for credit
-    - name: course_id
-      description: int, foreign key to courses_course representing a single course
-    - name: modified
-      description: timestamp, the datetime when the credit eligibility was last modified
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: created
-      description: timestamp, the datetime when the credit eligibility was first created
-    - name: username
-      description: str, unique username on the open edX platform
-  - name: raw__mitxonline__openedx__mysql__django_comment_client_role
-    description: MITx Online open edX comment client role data
-    columns:
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-    - name: name
-      description: string, the name of the role
-  - name: raw__mitxonline__openedx__mysql__django_comment_client_role_users
-    description: MITx Online open edX comment client user and role data
-    columns:
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: role_id
-      description: int, the id representing the role of the user
-    - name: user_id
-      description: int, unique ID for each user on the MITx Online platform
-  - name: raw__mitxonline__openedx__mysql__edxval_coursevideo
-    description: course ID and video association on MITx Online open edx platform
-    columns:
-    - name: id
-      description: int, primary key in edxval_coursevideo.
-    - name: course_id
-      description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-    - name: video_id
-      description: int, foreign key in edxval_video
-    - name: is_hidden
-      description: boolean, indicating if the video is hidden for the course.
-  - name: raw__mitxonline__openedx__mysql__edxval_video
-    description: video content on MITx Online open edx platform
-    columns:
-    - name: id
-      description: int, primary key in edxval_video.
-    - name: edx_video_id
-      description: str, video hashed ID.
-    - name: client_video_id
-      description: str, human readable name for video. e.g. 14.310x_Lect9_Seg8_Final.mp4
-    - name: status
-      description: str, values are external, imported, file_complete, and upload_failed.
-        The videos with 'external' and 'imported' status are not managed from ODL
-        Video Service (OVS) application.
-    - name: duration
-      description: int, the length of the video, in seconds. Default to 0.0
-    - name: created
-      description: timestamp, date and time when the record was created.
-  - name: raw__mitxonline__openedx__mysql__grades_persistentcoursegrade
-    description: MITx Online open edX course grades
-    columns:
-    - name: id
-      description: int, sequential ID tracking a user course grade on MITx Online
-        open edx platform
-    - name: course_id
-      description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
-        courses) or org/course/run (for old-type courses)
-    - name: user_id
-      description: int, user ID on Residential xPro open edx platform
-    - name: course_version
-      description: str, version number of the course in the Split Modulestore when
-        the grade was computed. Currently used for debugging purposes only.
-    - name: grading_policy_hash
-      description: str, A SHA-1 digest of the course grading policy, used to detect
-        and update grades whenever the policy changes
-    - name: percent_grade
-      description: float, calculated course grade as a decimal percentage, per grading
-        policy. e.g. 0.91 means 91%
-    - name: letter_grade
-      description: str, calculated course grade as a letter value (e.g., A-D, Pass),
-        per grading policy If the learner's grade is Fail or F, this value is empty.
-    - name: passed_timestamp
-      description: timestamp, date and time when the learner first passed the course.
-        If this value is empty, the learner never passed the course. If this value
-        is non-empty but the letter_grade value is empty, the learner transitioned
-        from passing to not passing.
-    - name: course_edited_timestamp
-      description: timestamp, last edited timestamp of the course when the grade was
-        computed. Currently used for debugging purposes only.
-    - name: created
-      description: timestamp, date and time when this grade was initially created
-    - name: modified
-      description: timestamp, date and time when this grade was most recently updated
+
   - name: raw__mitxonline__openedx__mysql__grades_persistentsubsectiongrade
     description: Persistent values for learners' subsection (aka sequential) grades.
     columns:
@@ -1644,6 +950,7 @@ sources:
       description: timestamp, datetime of the subsection grade was last updated for
         this user for this subsection. It will be updated every time the user attempts
         the problem.
+
   - name: raw__mitxonline__openedx__mysql__grades_persistentsubsectiongradeoverride
     description: Stores the most recent override grades for a given subsection
     columns:
@@ -1669,6 +976,7 @@ sources:
       description: timestamp, datetime when the override was first created.
     - name: modified
       description: timestamp, datetime when the override was last modified.
+
   - name: raw__mitxonline__openedx__mysql__grades_visibleblocks
     description: Stores an ordered list of visible blocks within a subsection for
       a learner at the time of computing the subsection grade.
@@ -1681,6 +989,7 @@ sources:
       description: str, SHA1 hash of the blocks_json value.
     - name: blocks_json
       description: str, json object of all visible blocks within a subsection
+
   - name: raw__mitxonline__openedx__mysql__student_anonymoususerid
     description: The student_anonymoususerid cache table that stores the mapping from
       user_id to anonymous id.
@@ -1693,25 +1002,7 @@ sources:
       description: int, the auto-incremented ID for this table
     - name: user_id
       description: int, the foreign key to the users_user table
-  - name: raw__mitxonline__openedx__mysql__student_courseaccessrole
-    description: MITx Online open edX student course access roles that lists the users
-      who have a privileged role or roles for working in a course on MITx Online open
-      edX platform
-    columns:
-    - name: course_id
-      description: string, open edX Course ID formatted as course-v1:{org}+{course
-        code}+{run_tag}
-    - name: org
-      description: string, the organization the course belongs to. e.g. MITxT
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: role
-      description: string, the privilege level assigned to the user for working in
-        this course. Currently the assigned roles are instructor, staff, beta_testers
-        and data_researcher on MITx Online open edX platform.
-    - name: user_id
-      description: int, unique ID for each user on the MITx Online platform. Note
-        that this is different from user_id from MITx Online app
+
   - name: raw__mitxonline__openedx__mysql__student_courseenrollment
     description: Stores the mapping of students to the courses they are enrolled in.
     columns:
@@ -1727,78 +1018,7 @@ sources:
       description: timestamp, specifying when the user first enrolled in the course
     - name: user_id
       description: int, the foreign key to the users_user table
-  - name: raw__mitxonline__openedx__mysql__student_languageproficiency
-    description: MITx Online open edX course student language proficiency
-    columns:
-    - name: user_profile_id
-      description: int, foreign key referencing user_profile
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: code
-      description: str, the language proficiency of the student
-  - name: raw__mitxonline__openedx__mysql__submissions_score
-    description: MITx Online open edX submission scores
-    columns:
-    - name: points_earned
-      description: int, the number of points earned on the submission
-    - name: reset
-      description: boolean, whether the score for the submission was reset
-    - name: submission_id
-      description: int, foreign key referencing the submission
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: student_item_id
-      description: int, foreign key referencing student_item
-    - name: created_at
-      description: timestamp, datetime when the submission score was created
-    - name: points_possible
-      description: int, the highest number of points possible for the submission
-  - name: raw__mitxonline__openedx__mysql__submissions_scoresummary
-    description: MITx Online open edX submission score summaries
-    columns:
-    - name: highest_id
-      description: int, the id representing the highest submission score
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: latest_id
-      description: int, the id representing the most recent submission score
-    - name: student_item_id
-      description: int, foreign key referencing student_item
-  - name: raw__mitxonline__openedx__mysql__submissions_studentitem
-    description: MITx Online open edX submission student items
-    columns:
-    - name: student_id
-      description: str, reference user id in auth_user from open edX
-    - name: course_id
-      description: string, unique ID representing a single MITx Online course run
-        course
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: item_id
-      description: str, foreign key referencing item
-    - name: item_type
-      description: varchar, the type of student item
-  - name: raw__mitxonline__openedx__mysql__submissions_submission
-    description: MITx Online open edX submissions
-    columns:
-    - name: team_submission_id
-      description: int, foreign key referencing team_submission
-    - name: submitted_at
-      description: timestamp, datetime when the submission was submitted
-    - name: status
-      description: str, the status of the submission
-    - name: id
-      description: int, the auto-incremented ID for this table
-    - name: student_item_id
-      description: int, foreign key referencing student_item
-    - name: uuid
-      description: str, unique identifier for the submission
-    - name: created_at
-      description: timestamp, datetime when the submission was created
-    - name: raw_answer
-      description: str, the raw text of the answer from the submission
-    - name: attempt_number
-      description: int, a number specifying the sequence of the submission
+
   - name: raw__mitxonline__openedx__mysql__teams_courseteam
     description: Stores unique course teams
     columns:
@@ -1830,6 +1050,7 @@ sources:
       description: string, the country that the team is based in
     - name: date_created
       description: timestamp, the date the team was created
+
   - name: raw__mitxonline__openedx__mysql__teams_courseteammembership
     description: Stores data on unique user and course team relationships.
     columns:
@@ -1843,6 +1064,171 @@ sources:
       description: timestamp, the last time the course team was active
     - name: date_joined
       description: timestamp, the date the user joined the course team
+
+  - name: raw__mitxonline__openedx__mysql__grades_persistentcoursegrade
+    description: MITx Online open edX course grades
+    columns:
+    - name: id
+      description: int, sequential ID tracking a user course grade on MITx Online
+        open edx platform
+    - name: course_id
+      description: str, Open edX Course Key e.g. course-v1:org+course+run (for new-type
+        courses) or org/course/run (for old-type courses)
+    - name: user_id
+      description: int, user ID on Residential xPro open edx platform
+    - name: course_version
+      description: str, version number of the course in the Split Modulestore when
+        the grade was computed. Currently used for debugging purposes only.
+    - name: grading_policy_hash
+      description: str, A SHA-1 digest of the course grading policy, used to detect
+        and update grades whenever the policy changes
+    - name: percent_grade
+      description: float, calculated course grade as a decimal percentage, per grading
+        policy. e.g. 0.91 means 91%
+    - name: letter_grade
+      description: str, calculated course grade as a letter value (e.g., A-D, Pass),
+        per grading policy If the learner's grade is Fail or F, this value is empty.
+    - name: passed_timestamp
+      description: timestamp, date and time when the learner first passed the course.
+        If this value is empty, the learner never passed the course. If this value
+        is non-empty but the letter_grade value is empty, the learner transitioned
+        from passing to not passing.
+    - name: course_edited_timestamp
+      description: timestamp, last edited timestamp of the course when the grade was
+        computed. Currently used for debugging purposes only.
+    - name: created
+      description: timestamp, date and time when this grade was initially created
+    - name: modified
+      description: timestamp, date and time when this grade was most recently updated
+
+  - name: raw__mitxonline__openedx__mysql__assessment_assessmentfeedback
+    description: MITx Online open edX assessment feedback
+    columns:
+    - name: id
+      description: int, sequential ID tracking assessment feedback
+    - name: submission_uuid
+      description: str, unique identifier for the submission
+    - name: feedback_text
+      description: str, the text content of the feedback
+
+  - name: raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_options
+    description: MITx Online open edX assessment feedback options
+    columns:
+    - name: assessmentfeedbackoption_id
+      description: int, sequential ID tracking assessment feedback options
+    - name: assessmentfeedback_id
+      description: int, foreign key referencing the assessment feedback
+    - name: id
+      description: int, sequential ID tracking assessment feedback option
+
+  - name: raw__mitxonline__openedx__mysql__assessment_assessment
+    description: MITx Online open edX assessments
+    columns:
+    - name: scorer_id
+      description: str, unique identifier of the scorer
+    - name: id
+      description: int, sequential ID tracking assessments
+    - name: score_type
+      description: str, sequential ID tracking assessments
+    - name: submission_uuid
+      description: str, unique identifier for the submission
+    - name: rubric_id
+      description: int, unique identifier for the rubric
+    - name: feedback
+      description: str, the assessment feedback content
+    - name: scored_at
+      description: timestamp, the time at which the assessment was scored
+
+  - name: raw__mitxonline__openedx__mysql__assessment_assessmentfeedback_assessments
+    description: MITx Online open edX assessment feedback assessments
+    columns:
+    - name: assessment_id
+      description: int, foreign key referencing the assessment
+    - name: assessmentfeedback_id
+      description: int, foreign key referencing the assessment feedback
+    - name: id
+      description: int, sequential ID tracking assessment feedback assessments
+
+  - name: raw__mitxonline__openedx__mysql__submissions_submission
+    description: MITx Online open edX submissions
+    columns:
+    - name: team_submission_id
+      description: int, foreign key referencing team_submission
+    - name: submitted_at
+      description: timestamp, datetime when the submission was submitted
+    - name: status
+      description: str, the status of the submission
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: student_item_id
+      description: int, foreign key referencing student_item
+    - name: uuid
+      description: str, unique identifier for the submission
+    - name: created_at
+      description: timestamp, datetime when the submission was created
+    - name: raw_answer
+      description: str, the raw text of the answer from the submission
+    - name: attempt_number
+      description: int, a number specifying the sequence of the submission
+
+  - name: raw__mitxonline__openedx__mysql__submissions_studentitem
+    description: MITx Online open edX submission student items
+    columns:
+    - name: student_id
+      description: str, reference user id in auth_user from open edX
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+        course
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: item_id
+      description: str, foreign key referencing item
+    - name: item_type
+      description: varchar, the type of student item
+
+  - name: raw__mitxonline__openedx__mysql__assessment_aiclassifier
+    description: MITx Online open edX assessment ai classifier
+    columns:
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: classifier_set_id
+      description: int, foreign key referencing classifier_set
+    - name: classifier_data
+      description: varchar, the content of the classifier
+    - name: criterion_id
+      description: int, foreign key referencing criterion
+
+  - name: raw__mitxonline__openedx__mysql__assessment_assessmentpart
+    description: MITx Online open edX assessment part
+    columns:
+    - name: assessment_id
+      description: int, foreign key referencing assessment
+    - name: option_id
+      description: int, foreign key referencing option
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: feedback
+      description: str, the content of the assessment feedback
+    - name: criterion_id
+      description: int, foreign key referencing criterion
+
+  - name: raw__mitxonline__openedx__mysql__assessment_aiclassifierset
+    description: MITx Online open edX assessment ai classifier sets
+    columns:
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+        course
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: item_id
+      description: str, foreign key referencing item
+    - name: rubric_id
+      description: int, foreign key referencing rubric
+    - name: created_at
+      description: timestamp, the datetime the ai classifier set was created
+    - name: algorithm_id
+      description: str, foreign key referencing the algorithm
+
   - name: raw__mitxonline__openedx__mysql__user_api_usercoursetag
     description: MITx Online open edX user api course tag
     columns:
@@ -1857,6 +1243,22 @@ sources:
       description: str, the key for the user course tag
     - name: value
       description: str, the value for the course tag kv pair
+
+  - name: raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflow
+    description: MITx Online open edX assessment student training workflows
+    columns:
+    - name: student_id
+      description: str, reference user id in auth_user from open edX
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+        course
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: item_id
+      description: str, foreign key referencing item
+    - name: submission_uuid
+      description: str, the unique identifier referencing the submission
+
   - name: raw__mitxonline__openedx__mysql__workflow_assessmentworkflow
     description: MITx Online open edX assessment workflows
     columns:
@@ -1875,6 +1277,406 @@ sources:
       description: str, the unique identifier referencing the submission
     - name: status_changed
       description: timestamp, the datetime the assessment workflow status last changed
+
+  - name: raw__mitxonline__openedx__mysql__credit_creditcourse
+    description: MITx Online open edX course credits
+    columns:
+    - name: enabled
+      description: boolean, whether the course credit is currently enabled
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: course_key
+      description: str, foreign key referencing a course
+
+  - name: raw__mitxonline__openedx__mysql__credit_crediteligibility
+    description: MITx Online open edX course credit eligibility
+    columns:
+    - name: deadline
+      description: timestamp, the datetime when the course is eligible for credit
+    - name: course_id
+      description: int, foreign key to courses_course representing a single course
+    - name: modified
+      description: timestamp, the datetime when the credit eligibility was last modified
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: created
+      description: timestamp, the datetime when the credit eligibility was first created
+    - name: username
+      description: str, unique username on the open edX platform
+
+  - name: raw__mitxonline__openedx__mysql__auth_userprofile
+    description: MITx Online open edX authorized user profiles
+    columns:
+    - name: phone_number
+      description: str, the phone number of the user
+    - name: mailing_address
+      description: str, the mailing address of the user
+    - name: location
+      description: str, the location of the user
+    - name: bio
+      description: str, the description of the user
+    - name: name
+      description: str, the name of the user
+    - name: user_id
+      description: int, unique ID for each user on the MITx Online platform
+    - name: language
+      description: string, the language the user uses
+    - name: profile_image_uploaded_at
+      description: timestamp, the datetime when the user profile image was uploaded
+    - name: gender
+      description: str, the gender of the user
+    - name: level_of_education
+      description: str, the highest level of education of the user
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: meta
+      description: str, the metadata of the user
+    - name: goals
+      description: str, the goals listed by the user
+    - name: courseware
+      description: str, the courseware the user is using
+    - name: country
+      description: str, the country the user is located in
+    - name: year_of_birth
+      description: int, the year the user was born
+    - name: city
+      description: str, the city the user is located in
+    - name: state
+      description: str, the state the user is located in
+
+  - name: raw__mitxonline__openedx__mysql__course_groups_cohortmembership
+    description: MITx Online open edX course group cohort memberships
+    columns:
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+        course
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: course_user_group_id
+      description: int, the mailing address of the user
+    - name: user_id
+      description: int, foreign key referencing course_user_group
+
+  - name: raw__mitxonline__openedx__mysql__course_groups_courseusergroup
+    description: MITx Online open edX course group user groups
+    columns:
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+        course
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: group_type
+      description: str, the type of course user group
+    - name: name
+      description: str, the name of the course user group
+
+  - name: raw__mitxonline__openedx__mysql__student_languageproficiency
+    description: MITx Online open edX course student language proficiency
+    columns:
+    - name: user_profile_id
+      description: int, foreign key referencing user_profile
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: code
+      description: str, the language proficiency of the student
+
+  - name: raw__mitxonline__openedx__mysql__assessment_peerworkflow
+    description: MITx Online open edX assessment peer workflows
+    columns:
+    - name: cancelled_at
+      description: timestamp, specifying when the peer workflow was cancelled
+    - name: grading_completed_at
+      description: timestamp, specifying when the peer workflow was graded
+    - name: student_id
+      description: str, reference user id in auth_user from open edX
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: item_id
+      description: str, foreign key referencing item
+    - name: submission_uuid
+      description: str, the unique identifier referencing the submission
+    - name: created_at
+      description: timestamp, specifying when the peer workflow was created
+    - name: completed_at
+      description: timestamp, specifying when the peer workflow was completed
+
+  - name: raw__mitxonline__openedx__mysql__assessment_peerworkflowitem
+    description: MITx Online open edX assessment peer workflow items
+    columns:
+    - name: started_at
+      description: timestamp, specifying when the peer workflow item was started
+    - name: assessment_id
+      description: int, foreign key referencing unique identifier of the assessment
+    - name: author_id
+      description: int, foreign key referencing unique identifier of the author
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: submission_uuid
+      description: str, the unique identifier referencing the submission
+    - name: scorer_id
+      description: str, unique identifier of the scorer
+    - name: scored
+      description: boolean, whether the peer workflow item has been scored
+
+  - name: raw__mitxonline__openedx__mysql__assessment_aitrainingworkflow
+    description: MITx Online open edX ai training workflows
+    columns:
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: item_id
+      description: int, foreign key referencing student_item
+    - name: uuid
+      description: str, unique identifier for the ai training workflow
+    - name: scheduled_at
+      description: timestamp, specifying when the ai training workflows were scheduled
+    - name: classifier_set_id
+      description: int, foreign key referencing classifier_set
+    - name: completed_at
+      description: timestamp, specifying when the ai training workflows were completed
+    - name: algorithm_id
+      description: str, foreign key referencing the algorithm
+
+  - name: raw__mitxonline__openedx__mysql__assessment_studenttrainingworkflowitem
+    description: MITx Online open edX ai training workflow items
+    columns:
+    - name: workflow_id
+      description: int, foreign key referencing the workflow
+    - name: order_num
+      description: int, unique identifier for the training workflow sequence
+    - name: started_at
+      description: timestamp, specifying when the ai training workflows items was
+        started
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: training_example_id
+      description: int, foreign key referencing the training_exa ple
+    - name: completed_at
+      description: timestamp, specifying when the ai training workflows items was
+        completed
+
+  - name: raw__mitxonline__openedx__mysql__assessment_aigradingworkflow
+    description: MITx Online open edX ai grading workflows
+    columns:
+    - name: scheduled_at
+      description: timestamp, specifying when the ai training workflows were scheduled
+    - name: submission_uuid
+      description: str, unique identifier for the submission
+    - name: algorithm_id
+      description: str, foreign key referencing the algorithm
+    - name: student_id
+      description: int, reference user id in auth_user from open edX
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+    - name: assessment_id
+      description: int, foreign key referencing the assessment
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: item_id
+      description: str, foreign key referencing item
+    - name: uuid
+      description: str, unique identifier for the ai training workflow
+    - name: rubric_id
+      description: int, foreign key to the unique identifier for the rubric
+    - name: classifier_set_id
+      description: int, foreign key referencing classifier_set
+    - name: completed_at
+      description: timestamp, specifying when the peer workflow was completed
+    - name: essay_text
+      description: str, the essay text of the assessment ai grading workflow
+
+  - name: raw__mitxonline__openedx__mysql__assessment_rubric
+    description: MITx Online open edX assessment rubric
+    columns:
+    - name: structure_hash
+      description: str, sha256 hashed string for the course structure
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: content_hash
+      description: str, sha256 hashed string for the course content
+
+  - name: raw__mitxonline__openedx__mysql__assessment_trainingexample
+    description: MITx Online open edX assessment training examples
+    columns:
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: content_hash
+      description: str, sha256 hashed string for the course content
+    - name: rubric_id
+      description: int, unique identifier for the rubric
+    - name: raw_answer
+      description: str, the raw text of the training example answer
+
+  - name: raw__mitxonline__openedx__mysql__assessment_aitrainingworkflow_training_examples
+    description: MITx Online open edX assessment ai training workflow training examples
+    columns:
+    - name: trainingexample_id
+      description: int, the foreign key referencing the training example
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: aitrainingworkflow_id
+      description: int, the foreign key referencing the ai training workflow
+
+  - name: raw__mitxonline__openedx__mysql__assessment_assessmentfeedbackoption
+    description: MITx Online open edX assessment feedback options
+    columns:
+    - name: text
+      description: str, the text of the assessment feedback
+    - name: id
+      description: int, the auto-incremented ID for this table
+
+  - name: raw__mitxonline__openedx__mysql__submissions_scoresummary
+    description: MITx Online open edX submission score summaries
+    columns:
+    - name: highest_id
+      description: int, the id representing the highest submission score
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: latest_id
+      description: int, the id representing the most recent submission score
+    - name: student_item_id
+      description: int, foreign key referencing student_item
+
+  - name: raw__mitxonline__openedx__mysql__django_comment_client_role_users
+    description: MITx Online open edX comment client user and role data
+    columns:
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: role_id
+      description: int, the id representing the role of the user
+    - name: user_id
+      description: int, unique ID for each user on the MITx Online platform
+
+  - name: raw__mitxonline__openedx__mysql__django_comment_client_role
+    description: MITx Online open edX comment client role data
+    columns:
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+    - name: name
+      description: string, the name of the role
+
+  - name: raw__mitxonline__openedx__mysql__assessment_trainingexample_options_selected
+    description: MITx Online open edX assessment selected training example options
+    columns:
+    - name: trainingexample_id
+      description: int, the foreign key referencing the training example
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: criterionoption_id
+      description: int, the foreign key referencing the criterion option
+
+  - name: raw__mitxonline__openedx__mysql__student_courseaccessrole
+    description: MITx Online open edX student course access roles that lists the users
+      who have a privileged role or roles for working in a course on MITx Online open
+      edX platform
+    columns:
+    - name: course_id
+      description: string, open edX Course ID formatted as course-v1:{org}+{course
+        code}+{run_tag}
+    - name: org
+      description: string, the organization the course belongs to. e.g. MITxT
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: role
+      description: string, the privilege level assigned to the user for working in
+        this course. Currently the assigned roles are instructor, staff, beta_testers
+        and data_researcher on MITx Online open edX platform.
+    - name: user_id
+      description: int, unique ID for each user on the MITx Online platform. Note
+        that this is different from user_id from MITx Online app
+
+  - name: raw__mitxonline__openedx__mysql__assessment_criterion
+    description: MITx Online open edX assessment criteria
+    columns:
+    - name: order_num
+      description: int, unique identifier for the assessment criterion sequence
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: rubric_id
+      description: int, foreign key to the unique identifier for the rubric
+    - name: name
+      description: string, the name of the criterion
+    - name: prompt
+      description: string, the text of the assessment prompt
+    - name: label
+      description: string, the label for the assessment criterion
+
+  - name: raw__mitxonline__openedx__mysql__certificates_generatedcertificate
+    description: MITx Online open edX generated certificates
+    columns:
+    - name: modified_date
+      description: timestamp, specifying when the certificate was last modified
+    - name: mode
+      description: string, the mode of the certificate
+    - name: status
+      description: string, the status of the certificate
+    - name: error_reason
+      description: string, the error reason of the certificate
+    - name: distinction
+      description: boolean, whether the certificate has a distinction
+    - name: user_id
+      description: int, unique ID for each user on the MITx Online platform
+    - name: name
+      description: string, the name of the certificate
+    - name: verify_uuid
+      description: str, the unique identifier for certificate verification
+    - name: course_id
+      description: string, unique ID representing a single MITx Online course run
+        course
+    - name: download_url
+      description: str, url location for the generated certificate
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: grade
+      description: float, user grade for the course (range between 0.0 to 1.0)
+    - name: created_date
+      description: timestamp, specifying when the certificate was created
+    - name: key
+      description: str, the key for the certificate
+    - name: download_uuid
+      description: str, the unique identifier for a downloaded certificate
+
+  - name: raw__mitxonline__openedx__mysql__submissions_score
+    description: MITx Online open edX submission scores
+    columns:
+    - name: points_earned
+      description: int, the number of points earned on the submission
+    - name: reset
+      description: boolean, whether the score for the submission was reset
+    - name: submission_id
+      description: int, foreign key referencing the submission
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: student_item_id
+      description: int, foreign key referencing student_item
+    - name: created_at
+      description: timestamp, datetime when the submission score was created
+    - name: points_possible
+      description: int, the highest number of points possible for the submission
+
+  - name: raw__mitxonline__openedx__mysql__assessment_criterionoption
+    description: MITx Online open edX assessment criterion options
+    columns:
+    - name: order_num
+      description: int, unique identifier for the assessment criterion sequence
+    - name: id
+      description: int, the auto-incremented ID for this table
+    - name: points
+      description: int, the number of points for this assessment criterion option
+    - name: name
+      description: str, the name of the assessment criterion option
+    - name: label
+      description: str, the label for this assessment criterion option
+    - name: criterion_id
+      description: int, foreign key referencing the assessment criterion
+    - name: explanation
+      description: str, the text explanation for the assessment criterion option
+
   - name: raw__mitxonline__openedx__mysql__workflow_assessmentworkflowstep
     description: MITx Online open edX assessment workflow steps
     columns:
@@ -1892,58 +1694,340 @@ sources:
       description: str, the name of the assessment workflow step
     - name: submitter_completed_at
       description: timestamp, specifying when assessment workflow step was completed
-  - name: raw__mitxonline__openedx__tracking_logs
-    description: MITx Online Open edX event data that are emitted by server, the browser,
-      or the mobile device to capture information about user's interactions with a
-      course
+
+  - name: raw__mitxonline__openedx__mysql__edxval_video
+    description: video content on MITx Online open edx platform
     columns:
-    - name: username
-      description: str, username of the open edX user who caused the event to be emitted.
-        Some events are recorded with a blank username. This can occur when a user
-        logs out, or the login session times out, while a browser window remains open.
-        EdX recommends to ignore these events.
-    - name: context
-      description: object, it includes member fields that provide contextual information.
-        Common fields apply to all events are course_id, org_id, path, user_id. Other
-        member fields for applicable events are course_user_tags, module.
-    - name: event_source
-      description: str, specifies the source of the interaction that triggered the
-        event. The values are - browser, mobile, server, task
-    - name: event_type
-      description: str, type of event triggered. Values depend on event_source.
+    - name: id
+      description: int, primary key in edxval_video.
+    - name: edx_video_id
+      description: str, video hashed ID.
+    - name: client_video_id
+      description: str, human readable name for video. e.g. 14.310x_Lect9_Seg8_Final.mp4
+    - name: status
+      description: str, values are external, imported, file_complete, and upload_failed.
+        The videos with 'external' and 'imported' status are not managed from ODL
+        Video Service (OVS) application.
+    - name: duration
+      description: int, the length of the video, in seconds. Default to 0.0
+    - name: created
+      description: timestamp, date and time when the record was created.
+
+  - name: raw__mitxonline__openedx__mysql__edxval_coursevideo
+    description: course ID and video association on MITx Online open edx platform
+    columns:
+    - name: id
+      description: int, primary key in edxval_coursevideo.
+    - name: course_id
+      description: str, open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: video_id
+      description: int, foreign key in edxval_video
+    - name: is_hidden
+      description: boolean, indicating if the video is hidden for the course.
+
+  - name: raw__mitxonline__app__postgres__wagtailcore_page
+    columns:
+    - name: id
+      description: int, primary key for wagtailcore_page
+    - name: path
+      description: str, the full materialized path for each node (readonly) e.g. 0001
+        is root path, 00010001 is the path to a node in this requirement tree
+    - name: depth
+      description: int, depth of a node in the tree. A root node has a depth of 1.
+    - name: numchild
+      description: int, the number of children of a node
+    - name: title
+      description: str, human-readable title of the page
+    - name: slug
+      description: str, this is used for constructing the page’s URL.
+    - name: live
+      description: boolean, if set to true this page is published
+    - name: has_unpublished_changes
+      description: boolean, set to True when the page is either in draft or published
+        with draft changes.
+    - name: seo_title
+      description: str, alternate SEO-crafted title, for use in the page’s <title>
+        HTML tag.
+    - name: url_path
+      description: str, url path for the page
+    - name: show_in_menus
+      description: boolean, toggles whether the page should be included in site-wide
+        menus
+    - name: search_description
+      description: str, SEO-crafted description of the content, used for search indexing.
+        This is also suitable for the page’s <meta name="description"> HTML tag.
+    - name: go_live_at
+      description: timestamp, timestamp for when the page is scheduled to go live
+    - name: expire_at
+      description: timestamp, timestamp for when the page is scheduled to be expired.
+        This functionality is not used by xpro
+    - name: expired
+      description: boolean, whether the page has expired. This functionality is not
+        used by xpro
+    - name: content_type_id
+      description: int, primary key in django_contenttype. The cms_ table of that
+        has data for this page
+    - name: owner_id
+      description: int, primary key in users_user of the page owner
+    - name: locked
+      description: boolean, when set to True, the Wagtail editor will not allow any
+        users to edit the content of the page. This functionality is not used by xpro
+    - name: latest_revision_created_at
+      description: timestamp, timestamp of the page's latest revision
+    - name: first_published_at
+      description: timestamp, timestamp when the page was first published
+    - name: live_revision_id
+      description: int, primary key in wagtailcore_pagerevision of the page's latest
+        revision
+    - name: last_published_at
+      description: timestamp, timestamp when the page was last published
+    - name: draft_title
+      description: str, human-readable title of the page, incorporating any changes
+        that have been made in a draft edit (in contrast to the title field, which
+        for published pages will be the title as it exists in the current published
+        version).
+
+  - name: raw__mitxonline__app__postgres__cms_coursepage
+    columns:
+    - name: page_ptr_id
+      description: int, foreign key to wagtailcore_page
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: description
+      description: text, the description shown on the home page and product page.
+    - name: length
+      description: str, a short description indicating how long it takes to complete
+        (e.g. '4 weeks').
+    - name: effort
+      description: str, a short description indicating how much effort is required
+        (e.g. 1-3 hours per week).
+    - name: price
+      description: json string, specify the product price details.
+    - name: prerequisites
+      description: text, a short description indicating prerequisites of this course.
+    - name: faq_url
+      description: str, URL a relevant FAQ page or entry for the course.
+    - name: about
+      description: text, details about this course.
+    - name: what_you_learn
+      description: text, what you will learn from this course.
+    - name: feature_image_id
+      description: int, reference to wagtailimages_image. Image that will be used
+        where the course is featured or linked.
+    - name: video_url
+      description: str, URL to the video to be displayed for this course. It can be
+        an HLS or Youtube video URL.
+    - name: faculty_section_title
+      description: str, the title text to display in the faculty cards section of
+        the product page.
+
+  - name: raw__mitxonline__app__postgres__cms_programpage
+    columns:
+    - name: page_ptr_id
+      description: int, foreign key to wagtailcore_page
+    - name: program_id
+      description: int, foreign key to courses_program
+    - name: description
+      description: text, the description shown on the home page and product page.
+    - name: length
+      description: str, a short description indicating how long it takes to complete
+        (e.g. '4 weeks').
+    - name: effort
+      description: str, a short description indicating how much effort is required
+        (e.g. 1-3 hours per week).
+    - name: price
+      description: json string, specify the product price details.
+    - name: prerequisites
+      description: text, a short description indicating prerequisites of this program.
+    - name: faq_url
+      description: str, URL a relevant FAQ page or entry for the program.
+    - name: about
+      description: text, details about this program.
+    - name: what_you_learn
+      description: text, what you will learn from this program.
+    - name: feature_image_id
+      description: int, reference to wagtailimages_image. Image that will be used
+        where the course is featured or linked.
+    - name: video_url
+      description: str, URL to the video to be displayed for this program. It can
+        be an HLS or Youtube video URL.
+    - name: faculty_section_title
+      description: str, the title text to display in the faculty cards section of
+        the product page.
+
+  - name: raw__mitxonline__app__postgres__cms_instructorpage
+    columns:
+    - name: page_ptr_id
+      description: int, foreign key to wagtailcore_page
+    - name: instructor_name
+      description: str, the name of the instructor.
+    - name: instructor_title
+      description: str, the instructor's title (academic or otherwise).
+    - name: instructor_bio_short
+      description: str, a short biography of the instructor.
+    - name: instructor_bio_long
+      description: str, a longer biography of the instructor.
+    - name: feature_image_id
+      description: int, reference to wagtailimages_image. Image is used where the
+        instructor is featured or linked.
+
+  - name: raw__mitxonline__app__postgres__cms_instructorpagelink
+    columns:
+    - name: page_id
+      description: int, foreign key to wagtail_page referring to the course page
+    - name: linked_instructor_page_id
+      description: int, foreign key to wagtail_page referring to the linked instructor
+        page
+
+  - name: raw__mitxonline__app__postgres__courses_coursestopic
+    columns:
+    - name: id
+      description: int, primary key for courses_coursetopic
     - name: name
-      description: str, type of event triggered. When this field is present for an
-        event, it supersedes the event_type field.
-    - name: event
-      description: object, it includes member fields that identify specifics of each
-        triggered event. Different member fields are supplied for different events.
-    - name: page
-      description: str, url of the page the user was visiting when the event was emitted.
-    - name: session
-      description: "str, 32-character value to identify the user’s session. All browser\
-        \ events and the server 'enrollment' events include a session value. Other\
-        \ server events and mobile events do not include a session value."
-    - name: ip
-      description: str, IP address of the user who triggered the event. Empty for
-        mobile events.
-    - name: host
-      description: str, the site visited by the user. e.g. courses.mitxonline.mit.edu
-    - name: time
-      description: str, time at which the event was emitted. It has inconsistent formats
-        due to log collector switches, YYYY-MM-DD HH:mm:ss.SSSSSS for older records,
-        YYYY-MM-ddTHH:mm:ss.SSSSSS for newer records
-    - name: agent
-      description: str, browser agent string of the user who triggered the event.
-    - name: accept_language
-      description: str, value from the HTTP Accept-Language request-header field
-    - name: referer
-      description: str, URI from the HTTP Referer request-header field
-    - name: log_file
-      description: str, internal used field for log file location
-    - name: _ab_source_file_url
-      description: str, url path for the raw log file
-    - name: vector_timestamp
-      description: str, time when Vector processed this record. Blank for old records.
-    - name: environment
-      description: str, internal used field to indicate environment for the event.
-        e.g. mitxonline-production
+      description: str, name of a course topic
+    - name: parent_id
+      description: int, id for the parent coursetopic of the subtopic. For example
+        'Computer Science' is the parent topic of 'AI'
+    - name: created_on
+      description: timestamp, specifying when a course topic was initially created
+    - name: updated_on
+      description: timestamp, specifying when a course topic was most recently updated
+
+  - name: raw__mitxonline__app__postgres__cms_coursepage_topics
+    columns:
+    - name: id
+      description: int, primary key for cms_coursepage_topics
+    - name: coursepage_id
+      description: int, foreign key to cms_coursepage
+    - name: coursetopic_id
+      description: int, foreign key to courses_coursetopic
+
+  - name: raw__mitxonline__openedx__mysql__coursewarehistoryextended_studentmodulehistoryextended
+    description: History of studentmodule in MITx Online platform
+    columns:
+    - name: id
+      description: int, primary key in this table
+    - name: student_module_id
+      description: int, foreign key to courseware_studentmodule
+    - name: state
+      description: str, JSON text indicating the learner's state for the corresponding
+        module such as course, chapter, problemset, sequential, videosequence, etc.
+    - name: grade
+      description: str, floating point value indicating the total unweighted grade
+        for this problem that the learner has scored. e.g. how many responses they
+        got right within the problem. This data is also available in courseactivity_problemcheck
+    - name: max_grade
+      description: str, floating point value indicating the total possible unweighted
+        grade for this problem, or basically the number of responses that are in this
+        problem. This data is also available in courseactivity_problemcheck
+    - name: created
+      description: timestamp, datetime when this row was created
+    - name: version
+      description: str, the version of the student module history extended
+
+  - name: raw__mitxonline__openedx__mysql__completion_blockcompletion
+    description: History of user block completion in a course such as video, problem,
+      survey on the MITx Online platform
+    columns:
+    - name: id
+      description: int, primary key in this table
+    - name: created
+      description: timestamp, datetime when this row was created
+    - name: user_id
+      description: int, foreign key to the users_user table
+    - name: modified
+      description: timestamp, datetime when this row was last updated. A change in
+        this field implies that there was a state change.
+    - name: block_key
+      description: string, foreign key to dim_course_content, referencing the block
+        ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
+        code}.
+    - name: block_type
+      description: string, category/type of the content block. Possible values are
+        course, chapter, sequential, vertical, discussion, html, problem, video, etc.
+    - name: completion
+      description: integer, will be 1 if the learner completed the block otherwise
+        it will be 0
+    - name: course_key
+      description: string, unique string to identify a course run on the corresponding
+        platform.
+
+  - name: raw__mitxonline__app__postgres__openedx_openedxuser
+    description: Mapping of MITx Online users to open edX users
+    columns:
+    - name: id
+      description: int, the primary key for the openedx_openedxuser table
+    - name: user_id
+      description: int, the foreign key referencing the users_user table in the MITx
+        Online app
+    - name: platform
+      description: str, the platform where the user is registered. e.g. "edx"
+    - name: edx_username
+      description: str, the username of the user on the open edX platform
+    - name: has_been_synced
+      description: boolean, indicating whether a corresponding user has been created
+        on the open edX platform
+    - name: desired_edx_username
+      description: str, the desired username for the user on the open edX platform
+    - name: created_on
+      description: timestamp, date and time when this record was created
+    - name: updated_on
+      description: timestamp, date and time when this record was last updated
+
+  - name: raw__mitxonline__app__postgres__wagtailcore_revision
+    description: Wagtail page revisions in MITx Online CMS
+    columns:
+    - name: id
+      data_type: bigint
+      description: primary key for wagtailcore_revision
+    - name: content
+      data_type: varchar
+      description: content of the revision stored as a JSON string
+    - name: user_id
+      data_type: bigint
+      description: foreign key to users_user representing the user who made the revision
+    - name: object_id
+      data_type: varchar
+      description: foreign key to wagtailcore_page representing the page being revised
+    - name: object_str
+      data_type: varchar
+      description: title of the page being revised
+    - name: content_type_id
+      data_type: bigint
+      description: foreign key to django_contenttype representing the type of page
+        being revised
+    - name: base_content_type_id
+      data_type: bigint
+      description: foreign key to django_contenttype representing the base type of
+        page being revised
+    - name: approved_go_live_at
+      data_type: timestamp(6) with time zone
+      description: timestamp for when the revision was approved to go live
+    - name: created_at
+      data_type: timestamp(6) with time zone
+      description: timestamp for when the revision was created
+
+  - name: raw__mitxonline__app__postgres__cms_signatorypage
+    description: MITx Online CMS signatory pages
+    columns:
+    - name: name
+      data_type: varchar
+      description: the name of the signatory
+    - name: title_1
+      data_type: varchar
+      description: primary title of the signatory
+    - name: title_2
+      data_type: varchar
+      description: second title of the signatory
+    - name: title_3
+      data_type: varchar
+      description: third title of the signatory
+    - name: page_ptr_id
+      data_type: bigint
+      description: foreign key to wagtailcore_page
+    - name: organization
+      data_type: varchar
+      description: the organization of the signatory
+    - name: signature_image_id
+      data_type: bigint
+      description: foreign key to wagtailimages_image for the signature image
