@@ -1972,10 +1972,10 @@ models:
   - name: signatorypage_title_2
     description: str, secondary title of the signatory
   - name: signatorypage_title_3
-    description: third title of the signatory
+    description: str, third title of the signatory
   - name: wagtail_page_id
     description: int, foreign key to wagtailcore_page
-  - name: organization
+  - name: signatorypage_organization
     description: str, the organization of the signatory
   - name: wagtailimages_image_id
     description: int, foreign key to wagtailimages_image for the signature image

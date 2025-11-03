@@ -9,9 +9,9 @@ with source as (
         title_2 as signatorypage_title_2,
         title_3 as signatorypage_title_3,
         page_ptr_id as wagtail_page_id,
-        organization as organization,
+        organization as signatorypage_organization,
         signature_image_id as wagtailimages_image_id
     from source
 )
 
-select *from cleaned
+select * from cleaned
