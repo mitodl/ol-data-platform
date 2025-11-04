@@ -53,13 +53,13 @@ class OpenMetadataClient(ConfigurableResource):
 # Configuration for different environments
 OPENMETADATA_CONFIGS = {
     "dev": {
-        "base_url": "http://localhost:8585/api",
+        "base_url": "https://open-metadata-ci.ol.mit.edu",
     },
     "qa": {
-        "base_url": "https://openmetadata-qa.odl.mit.edu/api",
+        "base_url": "https://open-metadata-qa.ol.mit.edu/",
     },
     "production": {
-        "base_url": "https://openmetadata.odl.mit.edu/api",
+        "base_url": "https://data.ol.mit.edu",
     },
 }
 
