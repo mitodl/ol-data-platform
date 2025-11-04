@@ -417,7 +417,7 @@ def superset_metadata(
             "serviceConnection": {
                 "config": {
                     "type": "Superset",
-                    "hostPort": "https://superset.odl.mit.edu",
+                    "hostPort": "https://bi.ol.mit.edu",
                     "connection": {
                         "provider": "db",
                     },
@@ -649,7 +649,7 @@ def redash_metadata(
             "serviceConnection": {
                 "config": {
                     "type": "Redash",
-                    "hostPort": "https://redash.odl.mit.edu",
+                    "hostPort": "https://bi.odl.mit.edu",
                 }
             },
             "sourceConfig": {
