@@ -1979,3 +1979,30 @@ models:
     description: str, the organization of the signatory
   - name: wagtailimages_image_id
     description: int, foreign key to wagtailimages_image for the signature image
+
+  - name: stg__mitxonline__app__postgres__b2b_organizationpage
+    description: MITx Online B2B organization pages
+    columns:
+    - name: organization_key
+      data_type: varchar
+      description: short key used for the organization. e.g. demo, Eme502
+      tests:
+      - not_null
+      - unique
+    - name: organization_name
+      data_type: varchar
+      description: name of the organization
+      tests:
+      - not_null
+    - name: organization_logo
+      data_type: varchar
+      description: organization's logo
+    - name: organization_description
+      data_type: varchar
+      description: description of the organization
+    - name: wagtail_page_id
+      data_type: bigint
+      description: foreign key to cms_wagtail_page
+    - name: sso_organization_id
+      data_type: varchar
+      description: the UUID for the organization in the SSO provider

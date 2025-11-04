@@ -2031,3 +2031,25 @@ sources:
     - name: signature_image_id
       data_type: bigint
       description: foreign key to wagtailimages_image for the signature image
+
+  - name: raw__mitxonline__app__postgres__b2b_organizationpage
+    description: MITx Online B2B organization pages
+    columns:
+    - name: logo
+      data_type: varchar
+      description: logo image of the organization
+    - name: name
+      data_type: varchar
+      description: name of the organization
+    - name: org_key
+      data_type: varchar
+      description: short key used for the organization. e.g. demo, Eme502
+    - name: description
+      data_type: varchar
+      description: description of the organization
+    - name: page_ptr_id
+      data_type: bigint
+      description: foreign key to cms_wagtail_page
+    - name: sso_organization_id
+      data_type: varchar
+      description: the UUID for the organization in the SSO provider
