@@ -400,6 +400,7 @@ def dagster_metadata(
     key=["openmetadata", "superset", "metadata"],
     group_name="openmetadata",
     automation_condition=upstream_or_code_changes(),
+    required_resource_keys={"superset_api", "vault"},
 )
 def superset_metadata(
     context: AssetExecutionContext,
@@ -408,8 +409,30 @@ def superset_metadata(
     """Ingest metadata from Apache Superset.
 
     This asset ingests Superset dashboard, chart, and dataset definitions
-    into OpenMetadata.
+    into OpenMetadata. Authentication credentials are retrieved from Vault
+    via the SupersetApiClientFactory resource.
     """
+    superset_api = context.resources.superset_api
+    vault = context.resources.vault
+
+    # Get the base URL from the authenticated client
+    superset_client = superset_api.client
+    superset_url = superset_client.base_url
+
+    # Retrieve credentials from Vault (same path used by SupersetApiClientFactory)
+    try:
+        superset_creds = vault.client.secrets.kv.v1.read_secret(
+            path="superset-service-account", mount_point="secret-data"
+        )["data"]
+
+        username = superset_creds["username"]
+        password = superset_creds["password"]
+    except Exception:
+        context.log.exception("Failed to retrieve Superset credentials from Vault")
+        raise
+
+    context.log.info("Ingesting Superset metadata from %s", superset_url)
+
     workflow_config = {
         "source": {
             "type": "superset",
@@ -417,15 +440,18 @@ def superset_metadata(
             "serviceConnection": {
                 "config": {
                     "type": "Superset",
-                    "hostPort": "https://bi.ol.mit.edu",
+                    "hostPort": superset_url,
                     "connection": {
                         "provider": "db",
+                        "username": username,
+                        "password": password,
                     },
                 }
             },
             "sourceConfig": {
                 "config": {
                     "type": "DashboardMetadata",
+                    "includeDataModels": True,
                 }
             },
         },
