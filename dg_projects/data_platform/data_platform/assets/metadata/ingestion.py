@@ -469,6 +469,7 @@ def superset_metadata(
     key=["openmetadata", "airbyte", "metadata"],
     group_name="openmetadata",
     automation_condition=upstream_or_code_changes(),
+    required_resource_keys={"airbyte_workspace"},
 )
 def airbyte_metadata(
     context: AssetExecutionContext,
@@ -477,7 +478,16 @@ def airbyte_metadata(
     """Ingest metadata from Airbyte connections.
 
     This asset ingests Airbyte connection and sync information into OpenMetadata.
+    Authentication is handled via the AirbyteOSSWorkspace resource from
+    ol-orchestrate-lib.
     """
+    airbyte_workspace = context.resources.airbyte_workspace
+
+    # Get connection details from the workspace
+    airbyte_host = airbyte_workspace.api_server
+
+    context.log.info("Ingesting Airbyte metadata from %s", airbyte_host)
+
     workflow_config = {
         "source": {
             "type": "airbyte",
@@ -485,7 +495,9 @@ def airbyte_metadata(
             "serviceConnection": {
                 "config": {
                     "type": "Airbyte",
-                    "hostPort": "http://airbyte:8001",
+                    "hostPort": airbyte_host,
+                    "username": airbyte_workspace.username,
+                    "password": airbyte_workspace.password,
                 }
             },
             "sourceConfig": {

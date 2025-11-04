@@ -25,6 +25,7 @@ from dagster_dbt import (
 )
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.resources.airbyte import AirbyteOSSWorkspace
 from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
@@ -34,7 +35,6 @@ from lakehouse.assets.instructor_onboarding import (
 )
 from lakehouse.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
 from lakehouse.assets.superset import create_superset_asset
-from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 
 airbyte_host_map = {

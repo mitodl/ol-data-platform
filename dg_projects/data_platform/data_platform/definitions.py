@@ -16,6 +16,7 @@ from dagster import (
 from dagster_slack import make_slack_on_run_failure_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.resources.airbyte import AirbyteOSSWorkspace
 from ol_orchestrate.resources.secrets.vault import Vault
 from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
 
@@ -160,7 +161,15 @@ resources = {
     "vault": vault,
 }
 
-# Add OpenMetadata client if vault is authenticated
+# Determine Airbyte host based on environment
+airbyte_host_map = {
+    "dev": "https://airbyte-ci.odl.mit.edu",
+    "qa": "https://airbyte-qa.odl.mit.edu",
+    "production": "https://airbyte.odl.mit.edu",
+}
+airbyte_host = airbyte_host_map.get(DAGSTER_ENV, airbyte_host_map["production"])
+
+# Add OpenMetadata client and Airbyte workspace if vault is authenticated
 if vault_authenticated:
     try:
         openmetadata_config = get_openmetadata_config()
@@ -171,6 +180,18 @@ if vault_authenticated:
         # Add Superset API client factory from shared library
         resources["superset_api"] = SupersetApiClientFactory(
             vault=vault,
+        )
+
+        # Get Airbyte credentials from Vault
+        airbyte_password = vault.client.secrets.kv.v1.read_secret(
+            path="dagster-http-auth-password", mount_point="secret-data"
+        )["data"]["dagster_unhashed_password"]
+
+        resources["airbyte_workspace"] = AirbyteOSSWorkspace(
+            api_server=airbyte_host,
+            username="dagster",
+            password=airbyte_password,
+            request_timeout=60,
         )
     except Exception as e:  # noqa: BLE001
         import warnings
