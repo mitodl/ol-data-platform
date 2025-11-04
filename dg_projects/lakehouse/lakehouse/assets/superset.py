@@ -7,9 +7,9 @@ from dagster import (
 )
 from dagster_dbt import get_asset_key_for_model
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
 
 from lakehouse.assets.lakehouse.dbt import full_dbt_project
-from lakehouse.resources.superset_api import SupersetApiClientFactory
 
 
 def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
