@@ -17,6 +17,7 @@ from dagster_slack import make_slack_on_run_failure_sensor
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.resources.superset_api import SupersetApiClientFactory
 
 from data_platform.assets.metadata import ingestion
 from data_platform.resources.openmetadata import (
@@ -167,10 +168,14 @@ if vault_authenticated:
             vault=vault,
             **openmetadata_config,
         )
+        # Add Superset API client factory from shared library
+        resources["superset_api"] = SupersetApiClientFactory(
+            vault=vault,
+        )
     except Exception as e:  # noqa: BLE001
         import warnings
 
-        warnings.warn(f"Failed to create OpenMetadata client: {e}", stacklevel=2)
+        warnings.warn(f"Failed to create clients: {e}", stacklevel=2)
 
 # Create unified definitions
 defs = Definitions(
