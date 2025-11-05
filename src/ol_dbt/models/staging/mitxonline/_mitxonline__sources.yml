@@ -2053,3 +2053,44 @@ sources:
     - name: sso_organization_id
       data_type: varchar
       description: the UUID for the organization in the SSO provider
+
+  - name: raw__mitxonline__app__postgres__b2b_contractpage
+    description: MITx Online B2B contract pages
+    columns:
+    - name: name
+      data_type: varchar
+      description: name of the contract
+    - name: active
+      data_type: boolean
+      description: whether the contract is active or not. Date rules still apply.
+    - name: description
+      data_type: varchar
+      description: description of the contract
+    - name: page_ptr_id
+      data_type: bigint
+      description: foreign key to cms_wagtail_page
+    - name: contract_start
+      data_type: date
+      description: the start date of the contract
+    - name: contract_end
+      data_type: date
+      description: the end date of the contract
+    - name: max_learners
+      data_type: bigint
+      description: The maximum number of learners allowed under this contract, zero
+        or blank for unlimited.
+    - name: organization_id
+      data_type: bigint
+      description: foreign key to b2b_organizationpage. Organization that owns this
+        contract.
+    - name: integration_type
+      data_type: varchar
+      description: type of integration used for this contract. e.g. SSO, Non-SSO
+    - name: enrollment_fixed_price
+      data_type: double
+      description: fixed price for enrollment under this contract. Zero or blank for
+        free enrollments.
+    - name: membership_type
+      data_type: varchar
+      description: the method to use to manage membership in the contract. e.g. SSO,
+        Non-SSO
