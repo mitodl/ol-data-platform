@@ -8,7 +8,6 @@ with courseruns as (
 
 , b2b_organization as (
     select * from {{ ref('stg__mitxonline__app__postgres__b2b_organizationpage') }}
-
 )
 
 select
