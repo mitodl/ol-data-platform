@@ -6,33 +6,34 @@ access management.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 import polars as pl
 from dagster import (
     AssetExecutionContext,
     AssetIn,
     AssetKey,
-    MaterializeResult,
     Output,
     asset,
 )
+from dagster_dbt.asset_utils import get_asset_key_for_model
 from github.GithubException import UnknownObjectException
+from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.github import GithubApiClientFactory
+
+from lakehouse.assets.lakehouse.dbt import full_dbt_project
 
 
 @asset(
     name="instructor_onboarding_user_list",
     group_name="instructor_onboarding",
-    ins={
-        "int__combined__user_course_roles": AssetIn(
-            key=AssetKey(["int__combined__user_course_roles"])
-        )
-    },
+    deps=[
+        get_asset_key_for_model([full_dbt_project], "int__combined__user_course_roles")
+    ],
     description="Generates CSV file with user emails for access-forge repository",
 )
 def generate_instructor_onboarding_user_list(
     context: AssetExecutionContext,
-    int__combined__user_course_roles: pl.DataFrame,
 ) -> Output[str]:
     """Pull unique email addresses from user course roles and prepare for GitHub upload.
 
@@ -46,13 +47,16 @@ def generate_instructor_onboarding_user_list(
 
     Args:
         context: Dagster execution context
-        int__combined__user_course_roles: DataFrame from dbt model containing fields:
-            platform, user_username, user_email, user_full_name, courserun_readable_id,
-            organization, courseaccess_role
 
     Returns:
         Output containing CSV string content formatted for access-forge repo
     """
+    # Fetch the dbt model data from Glue
+    int__combined__user_course_roles = get_dbt_model_as_dataframe(
+        database_name="ol_warehouse_production_intermediate",
+        table_name="int__combined__user_course_roles",
+    )
+
     # Select unique email addresses and filter out nulls
     user_data = (
         int__combined__user_course_roles.select(["user_email"])
@@ -100,7 +104,7 @@ def update_access_forge_repo(
     context: AssetExecutionContext,
     github_api: GithubApiClientFactory,
     instructor_onboarding_user_list: str,
-) -> MaterializeResult:
+) -> Output[dict[str, Any]]:
     """Update access-forge repository with instructor user list.
 
     This asset updates or creates a CSV file in the private mitodl/access-forge
@@ -112,7 +116,7 @@ def update_access_forge_repo(
         instructor_onboarding_user_list: CSV string content from upstream asset
 
     Returns:
-        MaterializeResult containing metadata about the commit
+        Output containing metadata about the commit
 
     Raises:
         Exception: If GitHub API call fails or authentication issues occur
