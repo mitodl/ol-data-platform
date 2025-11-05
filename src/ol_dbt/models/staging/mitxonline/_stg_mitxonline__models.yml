@@ -968,6 +968,8 @@ models:
   - name: courserun_is_self_paced
     description: boolean, indicating whether users can take this course at their own
       pace and earn certificate at any time
+  - name: b2b_contract_id
+    description: int, foreign key to b2b_contract
   - name: courserun_start_on
     description: timestamp, specifying when the course begins
   - name: courserun_end_on
@@ -982,6 +984,8 @@ models:
   - name: courserun_upgrade_deadline
     description: timestamp, specifying the date time beyond which users can not enroll
       in paid course mode
+  - name: courserun_certificate_available_on
+    description: timestamp, specifying when certificates become available for users
   - name: courserun_created_on
     description: timestamp, specifying when a course run was initially created
   - name: courserun_updated_on
@@ -1983,6 +1987,12 @@ models:
 - name: stg__mitxonline__app__postgres__b2b_organizationpage
   description: MITx Online B2B organization pages
   columns:
+  - name: organization_id
+    data_type: bigint
+    description: primary key for this table. It is also the foreign key to cms_wagtail_page
+    data_tests:
+    - not_null
+    - unique
   - name: organization_key
     data_type: varchar
     description: short key used for the organization. e.g. demo, Eme502
@@ -2000,9 +2010,6 @@ models:
   - name: organization_description
     data_type: varchar
     description: description of the organization
-  - name: wagtail_page_id
-    data_type: bigint
-    description: foreign key to cms_wagtail_page
   - name: sso_organization_id
     data_type: varchar
     description: the UUID for the organization in the SSO provider
@@ -2010,27 +2017,30 @@ models:
 - name: stg__mitxonline__app__postgres__b2b_contractpage
   description: MITx Online B2B contract pages
   columns:
-  - name: contract_name
-    data_type: varchar
-    description: name of the contract
+  - name: b2b_contract_id
+    data_type: bigint
+    description: primary key for this table. It is also the foreign key to cms_wagtail_page
     data_tests:
     - not_null
-  - name: contract_is_active
+    - unique
+  - name: b2b_contract_name
+    data_type: varchar
+    description: name of the b2b contract
+    data_tests:
+    - not_null
+  - name: b2b_contract_is_active
     data_type: boolean
     description: whether the contract is active or not. Date rules still apply.
-  - name: contract_description
+  - name: b2b_contract_description
     data_type: varchar
     description: description of the contract
-  - name: page_ptr_id
-    data_type: bigint
-    description: foreign key to cms_wagtail_page
-  - name: contract_start_date
+  - name: b2b_contract_start_date
     data_type: date
     description: the start date of the contract
-  - name: contract_end_date
+  - name: b2b_contract_end_date
     data_type: date
     description: the end date of the contract
-  - name: contract_max_learners
+  - name: b2b_contract_max_learners
     data_type: bigint
     description: The maximum number of learners allowed under this contract, zero
       or blank for unlimited.
@@ -2038,14 +2048,14 @@ models:
     data_type: bigint
     description: foreign key to b2b_organizationpage. Organization that owns this
       contract.
-  - name: contract_integration_type
+  - name: b2b_contract_integration_type
     data_type: varchar
     description: type of integration used for this contract. e.g. SSO, Non-SSO
-  - name: contract_enrollment_fixed_price
+  - name: b2b_contract_enrollment_fixed_price
     data_type: double
     description: fixed price for enrollment under this contract. Zero or blank for
       free enrollments.
-  - name: contract_membership_type
+  - name: b2b_contract_membership_type
     data_type: varchar
     description: the method to use to manage membership in the contract. e.g. SSO,
       Non-SSO
