@@ -2142,20 +2142,38 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_id", "instructor_name"]
 
-- name: int__mitxonline__uai_customer_courserun_mapping
-  description: This table maps UAI customer organizations to their respective course
-    runs.
+- name: int__mitxonline__b2b_contract_to_courseruns
+  description: B2B contract maps to course runs on MITx Online
   columns:
   - name: courserun_readable_id
-    description: str, Open edX Course ID formatted as course-v1:UAI_{org}+{course
-      code}+{run_tag}
-    tests:
+    data_type: varchar
+    description: Open edX Course ID formatted as course-v1:UAI_{org}+{course code}+{run_tag}
+    data_tests:
     - not_null
-  - name: organization
-    description: str, UAI customer organization. For example, "HCCC" represents Hartford
-      Health Care, "ET" represents Emerging Talent.
-    tests:
+  - name: organization_key
+    data_type: varchar
+    description: short key used for the b2b customer organization. e.g. demo, Eme502
+    data_tests:
     - not_null
+  - name: organization_name
+    data_type: varchar
+    description: name of the b2b customer organization
+    data_tests:
+    - not_null
+  - name: b2b_contract_name
+    data_type: varchar
+    description: name of the b2b contract
+    data_tests:
+    - not_null
+  - name: b2b_contract_is_active
+    data_type: boolean
+    description: whether the contract is active or not. Date rules still apply.
+  - name: b2b_contract_start_date
+    data_type: date
+    description: the start date of the contract
+  - name: b2b_contract_end_date
+    data_type: date
+    description: the end date of the contract
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "organization"]
+      column_list: ["courserun_readable_id", "organization_key"]
