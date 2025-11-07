@@ -32,6 +32,12 @@ FROM python:3.13-slim-bookworm
 # It is important to use the image that matches the builder, as the path to the
 # Python executable must be the same.
 
+# Install ffmpeg for video processing (needed by yt-dlp)
+RUN apt-get update && \
+    apt-get install -y ffmpeg && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy the application from the builder
 COPY --from=builder /app/dg_projects/learning_resources /app
 
