@@ -223,14 +223,15 @@ edxorg_api_daily_schedule = ScheduleDefinition(
     job=define_asset_job(
         name="edxorg_api_daily_job",
         selection=AssetSelection.assets(
-            edxorg_program_metadata, edxorg_mitx_course_metadata
+            edxorg_program_metadata,
+            edxorg_mitx_course_metadata,
         ),
     ),
     cron_schedule="0 5 * * *",
     execution_timezone="UTC",
 )
 
-# Build sensor list
+# Build sensor list (filter None values from resilient loading)
 sensor_list = [
     edxorg_program_reports_sensor,
     edxorg_course_bundle_sensor,

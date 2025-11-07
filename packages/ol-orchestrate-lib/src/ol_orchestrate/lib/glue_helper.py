@@ -1,6 +1,9 @@
+"""Helper functions for AWS Glue operations and dbt model data retrieval."""
+
 import types
 
 import boto3
+import polars as pl
 
 TYPE_RENAME = types.MappingProxyType(
     {
@@ -83,3 +86,28 @@ def create_or_update_table(
         glue_client.create_table(DatabaseName=database_name, TableInput=table_input)
     except glue_client.exceptions.AlreadyExistsException:
         glue_client.update_table(DatabaseName=database_name, TableInput=table_input)
+
+
+def get_dbt_model_as_dataframe(database_name: str, table_name: str) -> pl.DataFrame:
+    """Retrieve a dbt model from AWS Glue as a Polars DataFrame.
+
+    This function fetches table metadata from AWS Glue and loads the Iceberg
+    table data into a Polars DataFrame.
+
+    Args:
+        database_name: The Glue database name containing the table
+        table_name: The name of the table to retrieve
+
+    Returns:
+        A Polars DataFrame containing the table data
+
+    Raises:
+        KeyError: If the table metadata doesn't contain the expected fields
+        boto3 exceptions: If the AWS Glue API call fails
+    """
+    glue = boto3.client("glue", region_name="us-east-1")
+    response = glue.get_table(DatabaseName=database_name, Name=table_name)
+    table_metadata = response["Table"]
+    metadata_location = table_metadata["Parameters"]["metadata_location"]
+
+    return pl.scan_iceberg(metadata_location).collect()

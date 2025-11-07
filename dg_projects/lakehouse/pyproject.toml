@@ -12,6 +12,7 @@ dependencies = [
     "dbt-trino ~= 1.9.0",
     "httpx ~= 0.28.0",
     "ol-orchestrate-lib",
+    "pygithub>=2.8.1",
 ]
 
 [project.entry-points]
