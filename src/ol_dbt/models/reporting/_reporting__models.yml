@@ -365,8 +365,7 @@ models:
   - name: chatbot_used_count
     description: int, a count of 1 if the user engaged with a chatbot otherwise 0
   - name: certificate_count
-    description: int, a count of 1 if the user earned a certificate that day otherwise
-      0
+    description: int, a count of 1 if the user earned a certificate that day otherwise 0
   - name: videos_watched
     description: int, a count of 1 if the user watched a video otherwise 0
   - name: problems_count
