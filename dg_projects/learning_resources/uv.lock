@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12, <3.14"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -1190,8 +1190,11 @@ dependencies = [
     { name = "dagster-aws" },
     { name = "dagster-k8s" },
     { name = "dagster-postgres" },
+    { name = "google-api-python-client" },
     { name = "jsonlines" },
     { name = "ol-orchestrate-lib" },
+    { name = "pyyaml" },
+    { name = "yt-dlp" },
 ]
 
 [package.dev-dependencies]
@@ -1206,8 +1209,11 @@ requires-dist = [
     { name = "dagster-aws", specifier = "~=0.28.0" },
     { name = "dagster-k8s", specifier = ">=0.27.15" },
     { name = "dagster-postgres", specifier = ">=0.27.13" },
+    { name = "google-api-python-client", specifier = ">=2.185.0" },
     { name = "jsonlines", specifier = "~=4.0.0" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "yt-dlp", specifier = ">=2025.10.14" },
 ]
 
 [package.metadata.requires-dev]
@@ -2758,4 +2764,13 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f9/cd/3d2877a5558fdad6de4166fa0160dc49cb1382820cd955753c67b56facd2/yaspin-3.3.0.tar.gz", hash = "sha256:505c9a44c6e3723a1bee8f7a17a055b17475176b74dd93e468fa8db48c172a41", size = 42411, upload-time = "2025-10-11T08:52:15.416Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2c/bd/980187b627f9c5126ecbe909cc23f7d2c23ea4b046b2d3511d80ea0a8b79/yaspin-3.3.0-py3-none-any.whl", hash = "sha256:ab5113be4b34ef33f7d4d97be9b6867101ad020c2fb02bc92e3137c75b06d712", size = 21800, upload-time = "2025-10-11T08:52:13.932Z" },
+]
+
+[[package]]
+name = "yt-dlp"
+version = "2025.10.14"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/03/b7/dab729345e22891e79294273bc59c5213a1ec87331f49cb82ccea2b1bc9f/yt_dlp-2025.10.14.tar.gz", hash = "sha256:b18436aa9bb6f04354fd78d31ad9eeaae8c81b6a859f07072b25c18cd6c25844", size = 3045272, upload-time = "2025-10-14T23:39:52.688Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/19/399c85d29bd7b366b31ede82698f7963374e5a3842ae9de0cde6514506b0/yt_dlp-2025.10.14-py3-none-any.whl", hash = "sha256:0b9da17eda1bbf48e2315130043d7993fd4ca1c5a35571f8231da1a910c9c115", size = 3248664, upload-time = "2025-10-14T23:39:49.95Z" },
 ]
