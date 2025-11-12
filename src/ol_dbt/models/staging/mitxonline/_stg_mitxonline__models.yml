@@ -1380,8 +1380,6 @@ models:
     description: json, JSON object indicating the user’s last known state in the course.
       It may contain any attributes for different module types - course, chapter,
       sequential, etc.
-    tests:
-    - not_null
   - name: studentmodule_problem_grade
     description: float, floating point value indicating the total unweighted grade
       for this problem that the learner has scored. e.g. how many responses they got
