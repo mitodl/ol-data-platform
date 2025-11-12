@@ -51,6 +51,12 @@ COPY --from=builder /app/src/ol_dbt /app/ol_dbt
 # Copy the dbt project from the builder
 COPY --from=builder /app/src/ol_dbt /opt/dbt
 
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y git && \
+    apt-get clean && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
