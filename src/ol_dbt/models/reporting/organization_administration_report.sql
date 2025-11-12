@@ -10,6 +10,22 @@ with enrollment_detail as (
     select * from {{ ref('tfact_chatbot_events') }}
 )
 
+, video_events as (
+    select * from {{ ref('tfact_video_events') }}
+)
+
+, problem_events as (
+    select * from {{ ref('tfact_problem_events') }}
+)
+
+, discussion_events as (
+    select * from {{ ref('tfact_discussion_events') }}
+)
+
+, navigation_events as (
+    select * from {{ ref('tfact_course_navigation_events') }}
+)
+
 , user as (
     select * from {{ ref('dim_user') }}
 )
@@ -23,8 +39,7 @@ with enrollment_detail as (
 
 , certificate_org_data as (
     select
-        distinct platform
-        , course_title
+        distinct course_title
         , courserun_readable_id
         , user_email
         , cast(substring(courseruncertificate_created_on, 1, 10) as date) as certificate_created_date
@@ -33,23 +48,106 @@ with enrollment_detail as (
 
 , enroll_data as (
     select
-        distinct platform
-        , course_title
+        course_title
         , courserun_readable_id
         , user_email
+        , max(case when courserunenrollment_enrollment_status is null then 1 else 0 end) as enrolled_count
     from enrollment_detail
+    group by
+        course_title
+        , courserun_readable_id
+        , user_email
 )
 
 , chatbot_data as (
     select
-        distinct user.email as user_email
+        user.email as user_email
         , cast(chatbot_events.event_timestamp as date) as activity_date
         , chatbot_events.courserun_readable_id
-        , 1 as chatbot_used_count
-        , 0 as certificate_count
+        , count(distinct chatbot_events.session_id || chatbot_events.block_id) as chatbot_used_count
     from chatbot_events
     inner join user
         on chatbot_events.user_fk = user.user_pk
+    where chatbot_events.event_type = 'ol_openedx_chat.drawer.submit'
+    group by
+        user.email
+        , cast(chatbot_events.event_timestamp as date)
+        , chatbot_events.courserun_readable_id
+)
+
+, video_data as (
+    select
+        user.email as user_email
+        , cast(video_events.event_timestamp as date) as activity_date
+        , video_events.courserun_readable_id
+        , count(distinct video_block_fk) as videos_watched
+    from video_events
+    inner join user
+        on video_events.user_fk = user.user_pk
+    where video_events.event_type = 'play_video'
+    group by
+        user.email
+        , cast(video_events.event_timestamp as date)
+        , video_events.courserun_readable_id
+)
+
+, problem_data as (
+    select
+        user.email as user_email
+        , cast(problem_events.event_timestamp as date) as activity_date
+        , problem_events.courserun_readable_id
+        , count(distinct problem_block_fk) as problems_count
+    from problem_events
+    inner join user
+        on problem_events.user_fk = user.user_pk
+    group by
+        user.email
+        , cast(problem_events.event_timestamp as date)
+        , problem_events.courserun_readable_id
+)
+
+, navigation_data as (
+    select
+        user.email as user_email
+        , cast(navigation_events.event_timestamp as date) as activity_date
+        , navigation_events.courserun_readable_id
+        , count(*) as navigation_count
+    from navigation_events
+    inner join user
+        on navigation_events.user_fk = user.user_pk
+    group by
+        user.email
+        , cast(navigation_events.event_timestamp as date)
+        , navigation_events.courserun_readable_id
+)
+
+, discussion_data as (
+    select
+        user.email as user_email
+        , cast(discussion_events.event_timestamp as date) as activity_date
+        , discussion_events.courserun_readable_id
+        , count(*) as discussion_count
+    from discussion_events
+    inner join user
+        on discussion_events.user_fk = user.user_pk
+    group by
+        user.email
+        , cast(discussion_events.event_timestamp as date)
+        , discussion_events.courserun_readable_id
+)
+
+, combined_data as (
+    select
+        distinct user_email
+        , activity_date
+        , courserun_readable_id
+        , chatbot_used_count
+        , 0 as certificate_count
+        , 0 as videos_watched
+        , 0 as problems_count
+        , 0 as navigation_count
+        , 0 as discussion_count
+    from chatbot_data
 
     union
 
@@ -59,9 +157,68 @@ with enrollment_detail as (
         , courserun_readable_id
         , 0 as chatbot_used_count
         , 1 as certificate_count
+        , 0 as videos_watched
+        , 0 as problems_count
+        , 0 as navigation_count
+        , 0 as discussion_count
     from certificate_org_data
     where certificate_created_date is not null
 
+    union
+
+    select
+        distinct user_email
+        , activity_date
+        , courserun_readable_id
+        , 0 as chatbot_used_count
+        , 0 as certificate_count
+        , videos_watched
+        , 0 as problems_count
+        , 0 as navigation_count
+        , 0 as discussion_count
+    from video_data
+
+    union
+
+    select
+        distinct user_email
+        , activity_date
+        , courserun_readable_id
+        , 0 as chatbot_used_count
+        , 0 as certificate_count
+        , 0 as videos_watched
+        , problems_count
+        , 0 as navigation_count
+        , 0 as discussion_count
+    from problem_data
+
+    union
+
+    select
+        distinct user_email
+        , activity_date
+        , courserun_readable_id
+        , 0 as chatbot_used_count
+        , 0 as certificate_count
+        , 0 as videos_watched
+        , 0 as problems_count
+        , navigation_count
+        , 0 as discussion_count
+    from navigation_data
+
+    union
+
+    select
+        distinct user_email
+        , activity_date
+        , courserun_readable_id
+        , 0 as chatbot_used_count
+        , 0 as certificate_count
+        , 0 as videos_watched
+        , 0 as problems_count
+        , 0 as navigation_count
+        , discussion_count
+    from discussion_data
 )
 
 , activity_day_data as (
@@ -69,9 +226,13 @@ with enrollment_detail as (
         user_email
         , activity_date
         , courserun_readable_id
-        , max(chatbot_used_count) as chatbot_used_count
+        , sum(chatbot_used_count) as chatbot_used_count
+        , sum(videos_watched) as videos_watched
+        , sum(problems_count) as problems_count
+        , sum(navigation_count) as navigation_count
+        , sum(discussion_count) as discussion_count
         , max(certificate_count) as certificate_count
-    from chatbot_data
+    from combined_data
     group by
         user_email
         , activity_date
@@ -80,14 +241,23 @@ with enrollment_detail as (
 
 
 select
-    enroll_data.platform
-    , enroll_data.course_title
+    enroll_data.course_title
     , enroll_data.courserun_readable_id
     , enroll_data.user_email
+    , enroll_data.enrolled_count
     , org_field.organization
     , activity_day_data.activity_date
     , activity_day_data.chatbot_used_count
     , activity_day_data.certificate_count
+    , activity_day_data.videos_watched
+    , activity_day_data.problems_count
+    , case when activity_day_data.navigation_count > 0
+        or activity_day_data.discussion_count > 0
+        or activity_day_data.videos_watched > 0
+        or activity_day_data.problems_count > 0
+        or activity_day_data.chatbot_used_count > 0
+        or activity_day_data.certificate_count > 0
+        then 1 else 0 end as active_count
 from enroll_data
 left join org_field
     on enroll_data.courserun_readable_id = org_field.courserun_readable_id
