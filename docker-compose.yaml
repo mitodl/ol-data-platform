@@ -263,6 +263,32 @@ services:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ./dg_projects/openedx/openedx:/app/openedx
 
+  # Code location: b2b_organization
+  dagster_b2b_organization:
+    container_name: dagster_b2b_organization
+    image: mitodl/dagster-b2b_organization:dev
+    build:
+      context: .
+      dockerfile: dg_projects/b2b_organization/Dockerfile
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4007",
+      "--module-name", "b2b_organization.definitions"]
+    ports:
+    - "4007:4007"
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-b2b_organization:dev"
+      DAGSTER_ENV: dev
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      B2B_ORGANIZATION_BUCKET: ${B2B_ORGANIZATION_BUCKET}
+      DAGSTER_PG_USERNAME: postgres
+      DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
+      DAGSTER_PG_HOST: postgres
+      DAGSTER_PG_DB: dagster
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./dg_projects/b2b_organization/b2b_organization:/app/b2b_organization
+
   postgres:
     image: postgres
     healthcheck:
