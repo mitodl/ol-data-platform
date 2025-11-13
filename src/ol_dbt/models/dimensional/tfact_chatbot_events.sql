@@ -9,6 +9,8 @@
 {% set canvas_chatbot_events = (
      'ol_openedx_chat_xblock.OLChat.submit'
     , 'ol_openedx_chat_xblock.OLChat.response'
+    , 'ol_openedx_chat_xblock.OLChat.rating.request'
+    , 'ol_openedx_chat_xblock.OLChat.rating.response'
    )
 %}
 
