@@ -1801,7 +1801,7 @@ dependencies = [
     { name = "pyathena" },
     { name = "pydantic" },
     { name = "pygsheets" },
-    { name = "pyiceberg" },
+    { name = "pyiceberg", extra = ["polars"] },
     { name = "pypika" },
     { name = "s3fs" },
     { name = "universal-pathlib" },
@@ -1823,7 +1823,7 @@ requires-dist = [
     { name = "pyathena", specifier = "~=3.21.0" },
     { name = "pydantic", specifier = "~=2.12.3" },
     { name = "pygsheets", specifier = "~=2.0.6" },
-    { name = "pyiceberg", specifier = ">=0.10.0" },
+    { name = "pyiceberg", extras = ["polars"], specifier = ">=0.10.0" },
     { name = "pypika", specifier = "~=0.48.9" },
     { name = "s3fs", specifier = ">=2025.2.0,<2026.0.0" },
     { name = "universal-pathlib", specifier = "~=0.3.1" },
@@ -2242,6 +2242,11 @@ dependencies = [
     { name = "tenacity" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a3/0e/90e61c38504f4fbd5ed79631f85da7d5ea5e5bf997bdeaa65b28ebf04cab/pyiceberg-0.10.0.tar.gz", hash = "sha256:2525afa5e7e5fc4e72b291f8e1cc219e982d2bda5ff17e62cd05b8d91c4139f5", size = 842633, upload-time = "2025-09-11T14:59:34.044Z" }
+
+[package.optional-dependencies]
+polars = [
+    { name = "polars" },
+]
 
 [[package]]
 name = "pyjwt"

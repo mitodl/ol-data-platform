@@ -6,6 +6,7 @@ access management.
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import polars as pl
@@ -77,15 +78,15 @@ def generate_instructor_onboarding_user_list(
     user_data = user_data.select(["email", "role", "sent_invite"])
 
     # Convert to CSV string
-    csv_content = user_data.write_csv()
+    csv_content = Path("user_data.csv")
+    user_data.sink_csv(csv_content)
 
     context.log.info("Generated CSV content with %s unique users", len(user_data))
 
     return Output(
-        value=csv_content,
+        value=csv_content.read_text(),
         metadata={
             "num_users": len(user_data),
-            "preview": csv_content[:500],
         },
     )
 

@@ -1485,7 +1485,7 @@ dependencies = [
     { name = "pyathena" },
     { name = "pydantic" },
     { name = "pygsheets" },
-    { name = "pyiceberg" },
+    { name = "pyiceberg", extra = ["polars"] },
     { name = "pypika" },
     { name = "s3fs" },
     { name = "universal-pathlib" },
@@ -1507,7 +1507,7 @@ requires-dist = [
     { name = "pyathena", specifier = "~=3.21.0" },
     { name = "pydantic", specifier = "~=2.12.3" },
     { name = "pygsheets", specifier = "~=2.0.6" },
-    { name = "pyiceberg", specifier = ">=0.10.0" },
+    { name = "pyiceberg", extras = ["polars"], specifier = ">=0.10.0" },
     { name = "pypika", specifier = "~=0.48.9" },
     { name = "s3fs", specifier = ">=2025.2.0,<2026.0.0" },
     { name = "universal-pathlib", specifier = "~=0.3.1" },
@@ -1960,6 +1960,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f5/2b/756a74c80db6edd82c8d3f23c3ae13e7d6620300b87ef792c2a4d3935b30/pyiceberg-0.10.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:6979dd741cee263c1235595f71888c73365f2725697411027c4bd81046db3294", size = 1377048, upload-time = "2025-09-11T14:59:20.541Z" },
     { url = "https://files.pythonhosted.org/packages/bb/35/9c18cb4ddc7d371db63714abb2f5e8414bc7a4d63f474644a2aea2933fe6/pyiceberg-0.10.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:13fd03ec3da6eb4d3b55ff94b647946a7749bede5d743c75b39deaad26421200", size = 1369921, upload-time = "2025-09-11T14:59:22.134Z" },
     { url = "https://files.pythonhosted.org/packages/7b/b3/c012dc6b5bc3d0a84821936789c753f5c44aec619b64fbcf7f90038d172e/pyiceberg-0.10.0-cp312-cp312-win_amd64.whl", hash = "sha256:33367c84bcb0a2fbbe54cbbfe062691ab93b91a2e3d319bb546ec5b9b45b6057", size = 617722, upload-time = "2025-09-11T14:59:23.67Z" },
+]
+
+[package.optional-dependencies]
+polars = [
+    { name = "polars" },
 ]
 
 [[package]]
