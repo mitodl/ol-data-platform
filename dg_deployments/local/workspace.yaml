@@ -30,3 +30,7 @@ load_from:
     host: dagster_openedx
     port: 4006
     location_name: 'openedx'
+- grpc_server:
+    host: dagster_b2b_organization
+    port: 4007
+    location_name: 'b2b_organization'

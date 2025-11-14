@@ -1,0 +1,6 @@
+---
+# Build context is set to repository root to access packages/ol-orchestrate-lib
+directory: ../..
+# The Dockerfile is located in the b2b_organization directory
+dockerfile: dg_projects/b2b_organization/Dockerfile
+registry: mitodl/dagster-b2b_organization

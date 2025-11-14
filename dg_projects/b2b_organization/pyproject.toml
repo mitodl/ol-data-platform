@@ -1,0 +1,42 @@
+[project]
+name = "b2b_organization"
+requires-python = ">=3.12,<3.14"
+version = "0.1.0"
+dependencies = [
+    "dagster>=1.11.13",
+    "dagster-dbt ~=0.28.0",
+    "dagster-aws ~=0.28.0",
+    "dagster-k8s>=0.27.15",
+    "dagster-postgres>=0.27.13",
+    "httpx ~= 0.28.0",
+    "ol-orchestrate-lib",
+]
+
+[project.entry-points]
+"dagster.components" = { b2b_organization = "b2b_organization.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.11.13",
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "b2b_organization.definitions"
+project_name = "b2b_organization"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "b2b_organization"
+
+[tool.setuptools.packages.find]
+exclude=["b2b_organization_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
