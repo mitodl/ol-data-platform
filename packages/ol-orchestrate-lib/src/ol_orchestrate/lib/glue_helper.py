@@ -106,7 +106,7 @@ def get_dbt_model_as_dataframe(database_name: str, table_name: str) -> pl.LazyFr
         KeyError: If the table metadata doesn't contain the expected fields
         boto3 exceptions: If the AWS Glue API call fails
     """
-    glue = GlueCatalog("default")
+    glue = GlueCatalog("default", client=boto3.client("glue", region_name="us-east-1"))
     table = glue.load_table(f"{database_name}.{table_name}")
 
     return table.to_polars()
