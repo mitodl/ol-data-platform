@@ -347,8 +347,6 @@ models:
   description: A report showing certificates/completions for later roll-up at the
     organizational level.
   columns:
-  - name: course_title
-    description: str, title of the course.
   - name: courserun_readable_id
     description: string, unique string to identify a course run
   - name: user_email
