@@ -23,7 +23,7 @@ def b2b_organization_list_sensor(context):
         database_name="ol_warehouse_production_intermediate",
         table_name="int__mitxonline__b2b_contract_to_courseruns",
     )
-    organization_keys = {row["organization_key"] for row in organization_df.to_dicts()}
+    organization_keys = set(organization_df["organization_key"].unique().to_list())
 
     # Get existing dynamic partitions
     existing_partitions = set(
