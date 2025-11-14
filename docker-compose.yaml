@@ -280,8 +280,6 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_REGION: us-east-1
-      AWS_DEFAULT_REGION: us-east-1
       B2B_ORGANIZATION_BUCKET: ${B2B_ORGANIZATION_BUCKET}
       DAGSTER_PG_USERNAME: postgres
       DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
