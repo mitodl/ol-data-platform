@@ -40,7 +40,7 @@ RUN /app/dg_projects/lakehouse/.venv/bin/dbt deps && \
     /app/dg_projects/lakehouse/.venv/bin/dbt compile --target dev
 
 # Then, use a final image without uv
-FROM python:3.13-slim-bookworm
+FROM python:3.14-slim-bookworm
 # It is important to use the image that matches the builder, as the path to the
 # Python executable must be the same.
 
