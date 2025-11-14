@@ -42,10 +42,10 @@ def export_b2b_organization_data(context: AssetExecutionContext):
         organization_key,
     )
 
-    export_timestamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
+    export_date = datetime.now(tz=UTC).strftime("%Y-%m-%d")
 
     organizational_data_file = Path(
-        f"{organization_key}_{dbt_report_name}_{export_timestamp}.csv"
+        f"{organization_key}_{dbt_report_name}_{export_date}.csv"
     )
     organizational_data_df.write_csv(organizational_data_file)
 
@@ -62,8 +62,8 @@ def export_b2b_organization_data(context: AssetExecutionContext):
 
     organizational_data_object_key = (
         f"{organization_key}/"
-        f"{dbt_report_name}/"
-        f"{export_timestamp}-{organizational_data_version}.csv"
+        f"{export_date}/"
+        f"{dbt_report_name}-{organizational_data_version}.csv"
     )
 
     yield Output(
@@ -74,6 +74,6 @@ def export_b2b_organization_data(context: AssetExecutionContext):
             "object_key": organizational_data_object_key,
             "row_count": num_rows,
             "file_size_in_bytes": organizational_data_file.stat().st_size,
-            "materialization_timestamp": export_timestamp,
+            "materialization_timestamp": datetime.now(tz=UTC).isoformat(),
         },
     )
