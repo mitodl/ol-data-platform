@@ -1,5 +1,7 @@
 import os
 
+from b2b_organization.assets.data_export import export_b2b_organization_data
+from b2b_organization.sensors.b2b_organization import b2b_organization_list_sensor
 from dagster import (
     Definitions,
     define_asset_job,
@@ -11,9 +13,6 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_io_manager,
 )
 from ol_orchestrate.lib.utils import authenticate_vault
-
-from b2b_organization.assets.data_export import export_b2b_organization_data
-from b2b_organization.sensors.b2b_organization import b2b_organization_list_sensor
 
 b2b_org_bucket = os.environ.get(
     "B2B_ORGANIZATION_BUCKET", "ol-data-lake-landing-zone-production"
