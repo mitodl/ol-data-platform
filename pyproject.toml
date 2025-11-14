@@ -31,7 +31,7 @@ dev = [
     "dagster-webserver>=1.11.13",
     "mypy",
     "pre-commit>=4.0.0,<5",
-    "pytest>=8.0.0,<9",
+    "pytest>=9.0.1,<10",
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
     "sqlfluff>=3.0.0,<4",
