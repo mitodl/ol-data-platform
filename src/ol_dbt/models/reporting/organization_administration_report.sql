@@ -30,6 +30,10 @@ with enrollment_detail as (
     select * from {{ ref('dim_user') }}
 )
 
+, b2b_contract_to_courseruns as (
+    select * from {{ ref('int__mitxonline__b2b_contract_to_courseruns') }}
+)
+
 , org_field as (
     select
         distinct courserun_readable_id
@@ -39,8 +43,7 @@ with enrollment_detail as (
 
 , certificate_org_data as (
     select
-        distinct course_title
-        , courserun_readable_id
+        distinct courserun_readable_id
         , user_email
         , cast(substring(courseruncertificate_created_on, 1, 10) as date) as certificate_created_date
     from enrollment_detail
@@ -48,14 +51,12 @@ with enrollment_detail as (
 
 , enroll_data as (
     select
-        course_title
-        , courserun_readable_id
+        courserun_readable_id
         , user_email
         , max(case when courserunenrollment_enrollment_status is null then 1 else 0 end) as enrolled_count
     from enrollment_detail
     group by
-        course_title
-        , courserun_readable_id
+        courserun_readable_id
         , user_email
 )
 
@@ -241,11 +242,11 @@ with enrollment_detail as (
 
 
 select
-    enroll_data.course_title
-    , enroll_data.courserun_readable_id
+    enroll_data.courserun_readable_id
     , enroll_data.user_email
     , enroll_data.enrolled_count
-    , org_field.organization
+    , coalesce(b2b_contract_to_courseruns.organization_key, org_field.organization) as organization_key
+    , b2b_contract_to_courseruns.organization_name
     , activity_day_data.activity_date
     , activity_day_data.chatbot_used_count
     , activity_day_data.certificate_count
@@ -265,3 +266,5 @@ left join activity_day_data
     on
         enroll_data.user_email = activity_day_data.user_email
         and enroll_data.courserun_readable_id = activity_day_data.courserun_readable_id
+left join b2b_contract_to_courseruns
+    on enroll_data.courserun_readable_id = b2b_contract_to_courseruns.courserun_readable_id

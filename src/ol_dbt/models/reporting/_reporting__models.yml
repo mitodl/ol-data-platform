@@ -347,16 +347,17 @@ models:
   description: A report showing certificates/completions for later roll-up at the
     organizational level.
   columns:
-  - name: course_title
-    description: str, title of the course.
   - name: courserun_readable_id
     description: string, unique string to identify a course run
   - name: user_email
     description: string, user email that user registered
   - name: enrolled_count
     description: int, a count of 1 means the learner enrolled otherwise 0
-  - name: organization
-    description: str, organization that lists the course. e.g. MITx, MITxT, null
+  - name: organization_key
+    description: str, key of the organization that lists the course. e.g. MITx, MITxT,
+      null
+  - name: organization_name
+    description: str, name of the organization that lists the course.
   - name: activity_date
     description: date, date the user engaged in an activity
   - name: chatbot_used_count
@@ -372,4 +373,4 @@ models:
     description: int, a count of 1 if the user engaged with the course otherwise 0
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "organization", "user_email", "activity_date"]
+      column_list: ["courserun_readable_id", "organization_key", "user_email", "activity_date"]
