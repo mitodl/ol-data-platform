@@ -353,15 +353,16 @@ models:
     description: string, user email that user registered
   - name: enrolled_count
     description: int, a count of 1 means the learner enrolled otherwise 0
-  - name: organization
-    description: str, organization that lists the course. e.g. MITx, MITxT, null
+  - name: organization_key
+    description: str, key of the organization that lists the course. e.g. MITx, MITxT, null
+  - name: organization_name
+    description: str, name of the organization that lists the course.
   - name: activity_date
     description: date, date the user engaged in an activity
   - name: chatbot_used_count
     description: int, a count of 1 if the user engaged with a chatbot otherwise 0
   - name: certificate_count
-    description: int, a count of 1 if the user earned a certificate that day otherwise
-      0
+    description: int, a count of 1 if the user earned a certificate that day otherwise 0
   - name: videos_watched
     description: int, a count of 1 if the user watched a video otherwise 0
   - name: problems_count
