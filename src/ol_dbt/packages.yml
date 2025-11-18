@@ -3,7 +3,7 @@ packages:
 - package: emilyriederer/dbtplyr
   version: [">=0.3.0", "<0.4.0"]
 - package: dbt-labs/codegen
-  version: [">=0.13.0", "<0.14.0"]
+  version: [">=0.14.0", "<0.15.0"]
 - package: metaplane/dbt_expectations
   version: [">=0.10.0", "<0.11.0"]
 - package: tnightengale/dbt_meta_testing
