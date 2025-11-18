@@ -95,7 +95,7 @@ class AirbyteOSSClient(AirbyteClient):
                 url=url,
                 data=data,
                 params=params,
-                include_additional_request_params=include_additional_request_params,
+                include_additional_request_headers=include_additional_request_params,
             )
 
             # Handle different response structures
