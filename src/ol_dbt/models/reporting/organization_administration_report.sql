@@ -1,3 +1,12 @@
+{{ config (
+    materialized='table',
+    properties= {
+      "format": "'PARQUET'",
+      "partitioning": "ARRAY['organization_key']",
+    }
+)
+}}
+
 with enrollment_detail as (
     select * from {{ ref('marts__combined_course_enrollment_detail') }}
 )
