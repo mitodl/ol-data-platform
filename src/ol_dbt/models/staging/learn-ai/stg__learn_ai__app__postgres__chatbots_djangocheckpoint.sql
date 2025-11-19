@@ -18,6 +18,8 @@ with source as (
         , json_query(metadata, 'lax $.writes.__start__.messages.kwargs.content' omit quotes) as human_message
         , json_query(metadata, 'lax $.writes.agent.messages.kwargs.content' omit quotes) as agent_message
         , json_query(metadata, 'lax $.source' omit quotes) as checkpoint_source
+        , {{ cast_timestamp_to_iso8601('created_on') }} as checkpoint_created_on
+        , {{ cast_timestamp_to_iso8601('updated_on') }} as checkpoint_updated_on
     from most_recent_source
 )
 

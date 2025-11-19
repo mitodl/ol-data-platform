@@ -6,6 +6,10 @@ with chatsession as (
     select * from {{ ref('stg__learn_ai__app__postgres__chatbots_djangocheckpoint') }}
 )
 
+, responserating as (
+    select * from {{ ref('stg__learn_ai__app__postgres__chatbots_chatresponserating') }}
+)
+
 , users as (
     select * from {{ ref('stg__learn_ai__app__postgres__users_user') }}
 )
@@ -63,6 +67,10 @@ select
     , djangocheckpoint.parent_checkpoint_id
     , djangocheckpoint.checkpoint_namespace
     , djangocheckpoint.checkpoint_type
+    , responserating.rating
+    , responserating.rating_reason
+    , djangocheckpoint.djangocheckpoint_created_on
+    , djangocheckpoint.djangocheckpoint_updated_on
     , chatsession.chatsession_created_on
     , chatsession.chatsession_updated_on
     , coalesce(
@@ -72,6 +80,7 @@ select
     ) as courserun_readable_id
 from djangocheckpoint
 inner join chatsession on djangocheckpoint.chatsession_thread_id = chatsession.chatsession_thread_id
+left join responserating on djangocheckpoint.djangocheckpoint_id = responserating.djangocheckpoint_id
 left join users on chatsession.user_id = users.user_id
 left join videos_with_ranking
     on
