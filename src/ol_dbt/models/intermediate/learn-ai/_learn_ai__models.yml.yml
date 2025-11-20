@@ -106,12 +106,22 @@ models:
   - name: parent_checkpoint_id
     description: str, checkpoint ID of the parent checkpoint. Null if this is the
       first checkpoint in the thread.
+  - name: rating
+    data_type: varchar
+    description: user rating for the chatbot response. E.g., like, dislike, '' for
+      no rating.
+  - name: rating_reason
+    data_type: varchar
+    description: user provided reason for the rating.
+  - name: checkpoint_created_on
+    data_type: timestamp
+    description: date and time when the checkpoint in the chat session was created.
   - name: chatsession_created_on
-    description: timestamp, date and time when the record was created.
+    description: timestamp, date and time when the chat session was created.
     tests:
     - not_null
   - name: chatsession_updated_on
-    description: timestamp, date and time when the record was last updated.
+    description: timestamp, date and time when the chat session was last updated.
     tests:
     - not_null
   tests:
