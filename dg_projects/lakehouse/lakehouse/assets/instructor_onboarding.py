@@ -6,7 +6,7 @@ access management.
 """
 
 from datetime import UTC, datetime
-from pathlib import Path
+from io import StringIO
 from typing import Any
 
 import polars as pl
@@ -80,16 +80,17 @@ def generate_instructor_onboarding_user_list(
     # Collect the LazyFrame before operations that need materialization
     user_data_collected = user_data.collect()
 
-    # Convert to CSV string
-    csv_content = Path("user_data.csv")
-    user_data_collected.write_csv(csv_content)
+    # Convert to CSV string using StringIO (no file I/O)
+    csv_buffer = StringIO()
+    user_data_collected.write_csv(csv_buffer)
+    csv_content = csv_buffer.getvalue()
 
     context.log.info(
         "Generated CSV content with %s unique users", len(user_data_collected)
     )
 
     return Output(
-        value=csv_content.read_text(),
+        value=csv_content,
         metadata={
             "num_users": len(user_data_collected),
         },
