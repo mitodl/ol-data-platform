@@ -1,5 +1,3 @@
-import os
-
 from b2b_organization.assets.data_export import export_b2b_organization_data
 from b2b_organization.sensors.b2b_organization import b2b_organization_list_sensor
 from dagster import (
@@ -14,15 +12,11 @@ from ol_orchestrate.lib.dagster_helpers import (
 )
 from ol_orchestrate.lib.utils import authenticate_vault
 
-b2b_org_bucket = os.environ.get(
-    "B2B_ORGANIZATION_BUCKET", "ol-data-lake-landing-zone-production"
-)
-
 b2b_bucket_map = {
     "dev": {"bucket": "ol-devops-sandbox", "prefix": "pipeline-storage"},
-    "ci": {"bucket": "ol-data-lake-landing-zone-ci", "prefix": "b2b-organization-data"},
-    "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": "b2b-organization-data"},
-    "production": {"bucket": b2b_org_bucket, "prefix": ""},
+    "ci": {"bucket": "ol-b2b-partners-storage-ci", "prefix": ""},
+    "qa": {"bucket": "ol-b2b-partners-storage-qa", "prefix": ""},
+    "production": {"bucket": "ol-b2b-partners-storage-production", "prefix": ""},
 }
 
 # Initialize vault with resilient loading
