@@ -19,7 +19,11 @@ class GithubApiClientFactory(ConfigurableResource):
         default="secret-data", description="Vault mount point for secrets"
     )
     vault_secret_path: str = Field(
-        default="pipelines/github/api", description="Path to GitHub API token in Vault"
+        default="pipelines/github",
+        description="Path to GitHub secret in Vault (without key name)",
+    )
+    vault_secret_key: str = Field(
+        default="api", description="Key name within the Vault secret"
     )
 
     _client: Github | None = PrivateAttr(default=None)
@@ -32,10 +36,12 @@ class GithubApiClientFactory(ConfigurableResource):
                 GitHub API.
         """
         if self._client is None:
+            # KV v1: secret_data["data"] contains the keys directly
             secret_data = self.vault.client.secrets.kv.v1.read_secret(
                 mount_point=self.vault_mount_point, path=self.vault_secret_path
             )
-            token = secret_data["data"]["token"]
+            # In KV v1, keys are at ["data"][key_name]
+            token = secret_data["data"][self.vault_secret_key]
             self._client = Github(token)
 
         return self._client
