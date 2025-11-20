@@ -70,7 +70,6 @@ select
     , responserating.rating
     , responserating.rating_reason
     , djangocheckpoint.djangocheckpoint_created_on
-    , djangocheckpoint.djangocheckpoint_updated_on
     , chatsession.chatsession_created_on
     , chatsession.chatsession_updated_on
     , coalesce(

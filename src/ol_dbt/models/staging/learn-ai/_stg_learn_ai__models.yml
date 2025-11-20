@@ -131,9 +131,6 @@ models:
   - name: checkpoint_created_on
     data_type: timestamp
     description: date and time when the checkpoint was created.
-  - name: checkpoint_updated_on
-    data_type: timestamp
-    description: date and time when the checkpoint was last updated.
 
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:

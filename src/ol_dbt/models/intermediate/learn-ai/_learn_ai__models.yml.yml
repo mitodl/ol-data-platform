@@ -115,16 +115,13 @@ models:
     description: user provided reason for the rating.
   - name: checkpoint_created_on
     data_type: timestamp
-    description: date and time when the checkpoint was created.
-  - name: checkpoint_updated_on
-    data_type: timestamp
-    description: date and time when the checkpoint was last updated.
+    description: date and time when the checkpoint in the chat session was created.
   - name: chatsession_created_on
-    description: timestamp, date and time when the record was created.
+    description: timestamp, date and time when the chat session was created.
     tests:
     - not_null
   - name: chatsession_updated_on
-    description: timestamp, date and time when the record was last updated.
+    description: timestamp, date and time when the chat session was last updated.
     tests:
     - not_null
   tests:
