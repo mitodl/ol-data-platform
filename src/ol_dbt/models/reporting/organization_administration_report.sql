@@ -69,7 +69,7 @@ with enrollment_detail as (
 )
 
 , enroll_activity as (
-    select 
+    select
         user_email
         , courserun_readable_id
         , min(cast(substring(courserunenrollment_created_on, 1, 10) as date)) as enroll_date
@@ -159,7 +159,7 @@ with enrollment_detail as (
 )
 
 , combined_data as (
-    select 
+    select
         distinct user_email
         , activity_date
         , courserun_readable_id
@@ -174,7 +174,7 @@ with enrollment_detail as (
 
     union
 
-    select 
+    select
         distinct user_email
         , certificate_created_date as activity_date
         , courserun_readable_id
@@ -190,7 +190,7 @@ with enrollment_detail as (
 
     union
 
-    select 
+    select
         distinct user_email
         , activity_date
         , courserun_readable_id
@@ -205,7 +205,7 @@ with enrollment_detail as (
 
     union
 
-    select 
+    select
         distinct user_email
         , activity_date
         , courserun_readable_id
@@ -220,7 +220,7 @@ with enrollment_detail as (
 
     union
 
-    select 
+    select
         distinct user_email
         , activity_date
         , courserun_readable_id
@@ -235,7 +235,7 @@ with enrollment_detail as (
 
     union
 
-    select 
+    select
         distinct user_email
         , activity_date
         , courserun_readable_id
@@ -265,7 +265,7 @@ with enrollment_detail as (
 )
 
 , activity_day_data as (
-    select 
+    select
         user_email
         , activity_date
         , courserun_readable_id
@@ -296,17 +296,17 @@ select
     , activity_day_data.videos_watched
     , activity_day_data.problems_count
     , case when activity_day_data.navigation_count > 0
-        or activity_day_data.discussion_count > 0 
+        or activity_day_data.discussion_count > 0
         or activity_day_data.videos_watched > 0
-        or activity_day_data.problems_count > 0 
-        or activity_day_data.chatbot_used_count > 0 
+        or activity_day_data.problems_count > 0
+        or activity_day_data.chatbot_used_count > 0
         or activity_day_data.certificate_count > 0
         then 1 else 0 end as active_count
 from enroll_data
 left join org_field
     on enroll_data.courserun_readable_id = org_field.courserun_readable_id
 left join activity_day_data
-    on 
+    on
         enroll_data.user_email = activity_day_data.user_email
         and enroll_data.courserun_readable_id = activity_day_data.courserun_readable_id
 left join b2b_contract_to_courseruns
