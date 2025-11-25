@@ -62,12 +62,24 @@ with enrollment_detail as (
     select
         courserun_readable_id
         , user_email
-        , max(case when courserunenrollment_enrollment_status is null then 1 else 0 end) as enrolled_count
     from enrollment_detail
     group by
         courserun_readable_id
         , user_email
 )
+
+, enroll_activity as (
+    select
+        user_email
+        , courserun_readable_id
+        , min(cast(substring(courserunenrollment_created_on, 1, 10) as date)) as enroll_date
+    from enrollment_detail
+    where courserunenrollment_enrollment_status is null
+    group by
+        user_email
+        , courserun_readable_id
+)
+
 
 , chatbot_data as (
     select
@@ -157,6 +169,7 @@ with enrollment_detail as (
         , 0 as problems_count
         , 0 as navigation_count
         , 0 as discussion_count
+        , 0 as enrolled_count
     from chatbot_data
 
     union
@@ -171,6 +184,7 @@ with enrollment_detail as (
         , 0 as problems_count
         , 0 as navigation_count
         , 0 as discussion_count
+        , 0 as enrolled_count
     from certificate_org_data
     where certificate_created_date is not null
 
@@ -186,6 +200,7 @@ with enrollment_detail as (
         , 0 as problems_count
         , 0 as navigation_count
         , 0 as discussion_count
+        , 0 as enrolled_count
     from video_data
 
     union
@@ -200,6 +215,7 @@ with enrollment_detail as (
         , problems_count
         , 0 as navigation_count
         , 0 as discussion_count
+        , 0 as enrolled_count
     from problem_data
 
     union
@@ -214,6 +230,7 @@ with enrollment_detail as (
         , 0 as problems_count
         , navigation_count
         , 0 as discussion_count
+        , 0 as enrolled_count
     from navigation_data
 
     union
@@ -228,7 +245,23 @@ with enrollment_detail as (
         , 0 as problems_count
         , 0 as navigation_count
         , discussion_count
+        , 0 as enrolled_count
     from discussion_data
+
+    union
+
+    select
+        distinct user_email
+        , enroll_date as activity_date
+        , courserun_readable_id
+        , 0 as chatbot_used_count
+        , 0 as certificate_count
+        , 0 as videos_watched
+        , 0 as problems_count
+        , 0 as navigation_count
+        , 0 as discussion_count
+        , 1 as enrolled_count
+    from enroll_activity
 )
 
 , activity_day_data as (
@@ -242,6 +275,7 @@ with enrollment_detail as (
         , sum(navigation_count) as navigation_count
         , sum(discussion_count) as discussion_count
         , max(certificate_count) as certificate_count
+        , max(enrolled_count) as enrolled_count
     from combined_data
     group by
         user_email
@@ -253,7 +287,7 @@ with enrollment_detail as (
 select
     enroll_data.courserun_readable_id
     , enroll_data.user_email
-    , enroll_data.enrolled_count
+    , activity_day_data.enrolled_count
     , coalesce(b2b_contract_to_courseruns.organization_key, org_field.organization) as organization_key
     , b2b_contract_to_courseruns.organization_name
     , activity_day_data.activity_date
