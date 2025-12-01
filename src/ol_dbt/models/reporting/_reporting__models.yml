@@ -374,3 +374,30 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "organization_key", "user_email", "activity_date"]
+
+- name: instructor_module_report
+  description: A report showing chatbot data for later roll-up at the
+    instructor level.
+  columns:
+  - name: user_email
+    description: string, user email that user registered
+  - name: activity_date
+    description: date, date the user engaged in an activity
+  - name: courserun_readable_id
+    description: string, unique string to identify a course run
+  - name: chatbot_used_count
+    description: int, a count of how many times the user engaged with a chatbot
+  - name: block_category
+    description: string, category/type of the content block. Possible values are course,
+      chapter, sequential, vertical, discussion, html, problem, video, etc.
+  - name: block_title
+    description: string, title of the course content block. It is the name field for
+      the section, subsection, or unit on the Studio 'Course Outline' page.
+  - name: section_title
+    description: string, title of the course content block. It is the name field for
+      the section.
+  - name: subsection_title
+    description: string, title of the course content block. It is the name field for
+      the subsection.
+  - name: chatbot_type
+    description: string, type of the chatbot. e.g. Syllabus, Tutor, etc.
