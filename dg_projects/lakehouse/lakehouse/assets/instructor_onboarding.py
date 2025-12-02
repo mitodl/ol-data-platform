@@ -130,7 +130,7 @@ def update_access_forge_repo(
         Exception: If GitHub API call fails or authentication issues occur
     """
     repo_name = "mitodl/access-forge"
-    file_path = "users/ci/users.csv"
+    file_path = "users/production/users.csv"
     base_branch = "main"
 
     # Create unique branch name with timestamp
