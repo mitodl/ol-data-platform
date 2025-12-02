@@ -1721,9 +1721,7 @@ models:
       1-3 hours per week).
   - name: course_price
     description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
-      available)
-    tests:
-    - not_null
+      available). May be NULL for unpublished courses.
   - name: course_prerequisites
     description: text, a short description indicating prerequisites of this course.
   - name: course_faq_url
