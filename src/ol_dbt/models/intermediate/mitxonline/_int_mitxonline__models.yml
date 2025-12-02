@@ -915,6 +915,9 @@ models:
   - name: course_price
     description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
       available)
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "course_page_is_live=true"
   - name: course_length
     description: str, a short description indicating how long it takes to complete
       (e.g. '4 weeks').
