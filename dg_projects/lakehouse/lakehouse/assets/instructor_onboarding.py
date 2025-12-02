@@ -18,7 +18,6 @@ from dagster import (
     asset,
 )
 from dagster_dbt.asset_utils import get_asset_key_for_model
-from github.GithubException import UnknownObjectException
 from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.github import GithubApiClientFactory
 
@@ -116,8 +115,8 @@ def update_access_forge_repo(
 ) -> Output[dict[str, Any]]:
     """Update access-forge repository with instructor user list.
 
-    This asset updates or creates a CSV file in the private mitodl/access-forge
-    repository with the user list generated from the dbt model.
+    This asset merges new users with existing users in the access-forge repository,
+    avoiding duplicates and preserving existing entries.
 
     Args:
         context: Dagster execution context
@@ -138,7 +137,7 @@ def update_access_forge_repo(
     timestamp = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S")
     new_branch = f"dagster/update-user-list-{timestamp}"
 
-    commit_message = "dagster-pipeline - update user list from ol-data-platform"
+    commit_message = "dagster-pipeline - append new users to user list"
 
     try:
         github_client = github_api.get_client()
@@ -152,38 +151,54 @@ def update_access_forge_repo(
         repo.create_git_ref(ref=f"refs/heads/{new_branch}", sha=base_sha)
         context.log.info("Created branch %s", new_branch)
 
-        # Try to get existing file to update it, or create new file
-        try:
-            contents = repo.get_contents(file_path, ref=base_branch)
-            repo.update_file(
-                path=file_path,
-                message=commit_message,
-                content=instructor_onboarding_user_list,
-                sha=contents.sha,
-                branch=new_branch,
-            )
-            context.log.info("Updated file %s in branch %s", file_path, new_branch)
-            action = "updated"
-        except UnknownObjectException:
-            # File doesn't exist, create it
-            repo.create_file(
-                path=file_path,
-                message=commit_message,
-                content=instructor_onboarding_user_list,
-                branch=new_branch,
-            )
-            context.log.info("Created file %s in branch %s", file_path, new_branch)
-            action = "created"
+        # Get existing file content
+        contents = repo.get_contents(file_path, ref=base_branch)
+        existing_csv = contents.decoded_content.decode("utf-8")
+
+        # Parse existing CSV
+        existing_df = pl.read_csv(StringIO(existing_csv))
+        context.log.info("Found %s existing users", len(existing_df))
+
+        # Parse new CSV
+        new_df = pl.read_csv(StringIO(instructor_onboarding_user_list))
+        context.log.info("Processing %s new users", len(new_df))
+
+        # Merge: keep all existing users, add new ones not already present
+        merged_df = (
+            pl.concat([existing_df, new_df])
+            .unique(subset=["email"], keep="first")
+            .sort("email")
+        )
+
+        # Convert merged dataframe to CSV
+        csv_buffer = StringIO()
+        merged_df.write_csv(csv_buffer)
+        merged_csv_content = csv_buffer.getvalue()
+
+        num_added = len(merged_df) - len(existing_df)
+        context.log.info(
+            "Merged result: %s total users (%s new)", len(merged_df), num_added
+        )
+
+        # Update file with merged content
+        repo.update_file(
+            path=file_path,
+            message=commit_message,
+            content=merged_csv_content,
+            sha=contents.sha,
+            branch=new_branch,
+        )
+        context.log.info("Updated file %s in branch %s", file_path, new_branch)
 
         # Create pull request
         pr = repo.create_pull(
-            title=f"Update user list - {timestamp}",
+            title=f"Add new users to list - {timestamp}",
             body=(
                 "Automated update of user list from ol-data-platform Dagster "
                 f"pipeline.\n\n"
-                f"- Action: {action} file\n"
                 f"- File: {file_path}\n"
-                f"- Users: {instructor_onboarding_user_list.count(chr(10)) - 1} entries"
+                f"- New users added: {num_added}\n"
+                f"- Total users: {len(merged_df)}"
             ),
             head=new_branch,
             base=base_branch,
@@ -195,17 +210,19 @@ def update_access_forge_repo(
             value={
                 "repo": repo_name,
                 "file_path": file_path,
-                "action": action,
                 "branch": new_branch,
                 "pr_number": pr.number,
                 "pr_url": pr.html_url,
+                "users_added": num_added,
+                "total_users": len(merged_df),
             },
             metadata={
                 "repository": repo_name,
                 "file_path": file_path,
-                "action": action,
                 "pr_number": pr.number,
                 "pr_url": pr.html_url,
+                "users_added": num_added,
+                "total_users": len(merged_df),
             },
         )
 
