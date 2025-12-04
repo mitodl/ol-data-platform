@@ -26,6 +26,22 @@ with openedx_events as (
         , json_query(useractivity_context_object, 'lax $.module.usage_key' omit quotes) as block_id
         , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as block_name
         , json_query(useractivity_event_object, 'lax $.value' omit quotes) as event_value
+        , coalesce(
+              json_query(useractivity_event_object, 'lax $.thread_id' omit quotes),
+              regexp_extract(
+                  json_query(useractivity_event_object, 'lax $.value' omit quotes),
+                  '"thread_id": "([^"]+)"',
+                  1
+              )
+         ) AS thread_id
+         , coalesce(
+              json_query(useractivity_event_object, 'lax $.checkpoint_pk' omit quotes),
+              regexp_extract(
+                  json_query(useractivity_event_object, 'lax $.value' omit quotes),
+                  '"checkpoint_pk": ([0-9]+)',
+                  1
+              )
+         ) AS checkpoint_pk
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
@@ -55,11 +71,22 @@ with openedx_events as (
                )
           else json_query(useractivity_event_object, 'lax $.value' omit quotes)
         end as event_value
-        , regexp_extract(
-             json_query(useractivity_event_object, 'lax $.value' omit quotes)
-             , '"thread_id": "([^"]+)"'
-             , 1
-        ) AS thread_id
+        , coalesce(
+              json_query(useractivity_event_object, 'lax $.thread_id' omit quotes),
+              regexp_extract(
+                  json_query(useractivity_event_object, 'lax $.value' omit quotes),
+                  '"thread_id": "([^"]+)"',
+                  1
+              )
+         ) AS thread_id
+         , coalesce(
+              json_query(useractivity_event_object, 'lax $.checkpoint_pk' omit quotes),
+              regexp_extract(
+                  json_query(useractivity_event_object, 'lax $.value' omit quotes),
+                  '"checkpoint_pk": ([0-9]+)',
+                  1
+              )
+         ) AS checkpoint_pk
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -114,6 +141,8 @@ with openedx_events as (
             , event_value
             , event_timestamp
             , event_json
+            , thread_id as learn_ai_thread_id
+            , checkpoint_pk as learn_ai_checkpoint_pk
     from openedx_events
 
     union
@@ -132,6 +161,8 @@ with openedx_events as (
         , event_value
         , event_timestamp
         , event_json
+        , thread_id as learn_ai_thread_id
+        , checkpoint_pk as learn_ai_checkpoint_pk
     from canvas_events_filled
 )
 
@@ -150,6 +181,8 @@ select
     , combined.event_value
     , combined.event_timestamp
     , combined.event_json
+    , combined.learn_ai_thread_id
+    , combined.learn_ai_checkpoint_pk
 from combined
 left join users
     on combined.openedx_user_id = users.mitlearn_openedx_user_id
