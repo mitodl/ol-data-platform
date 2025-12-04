@@ -27,7 +27,8 @@ models:
   - name: enrollment_start
     description: timestamp, the course enrollment start date.
   - name: enrollment_end
-    description: timestamp, the course enrollment end date.
+    description: timestamp, either the course enrollment end date or the course end
+      date if no enrollment end date is specified
   - name: start_date
     description: timestamp, The date on which the course starts
   - name: end_date
