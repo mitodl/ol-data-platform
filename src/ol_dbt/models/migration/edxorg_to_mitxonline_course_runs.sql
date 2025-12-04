@@ -62,7 +62,9 @@ select distinct
     , edx_courseruns.courseware_id
     , edx_courseruns.run_tag
     , from_iso8601_timestamp(edx_courseruns.courserun_enrollment_start_date) as enrollment_start
-    , from_iso8601_timestamp(edx_courseruns.courserun_enrollment_end_date) as enrollment_end
+    , from_iso8601_timestamp(
+       coalesce(edx_courseruns.courserun_enrollment_end_date, edx_courseruns.courserun_end_date)
+    ) as enrollment_end
     , from_iso8601_timestamp(edx_courseruns.courserun_start_date) as start_date
     , from_iso8601_timestamp(edx_courseruns.courserun_end_date) as end_date
     , coalesce(
