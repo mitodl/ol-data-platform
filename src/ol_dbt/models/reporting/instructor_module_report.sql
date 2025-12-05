@@ -84,7 +84,7 @@ with chatbot_events as (
 , video_views_table as (
     select
         a.courserun_readable_id
-        , a.video_block_fk 
+        , a.video_block_fk
         , v.block_category
         , v.block_title
         , cc_section.block_title as section_title
@@ -119,7 +119,7 @@ with chatbot_events as (
             and cc_section.is_latest = true
     group by
         a.courserun_readable_id
-        , a.video_block_fk 
+        , a.video_block_fk
         , v.block_category
         , v.block_title
         , cc_section.block_title
@@ -128,7 +128,7 @@ with chatbot_events as (
 )
 
 , combined_data as (
-    select 
+    select
         video_views_table.email
         , video_watches.activity_date
         , video_views_table.courserun_readable_id
@@ -144,7 +144,7 @@ with chatbot_events as (
         , 1 as video_watched_count
     from video_views_table
     inner join video_watches
-        on 
+        on
             video_views_table.courserun_readable_id = video_watches.courserun_readable_id
             and video_views_table.video_block_fk = video_watches.video_block_fk
             and video_views_table.email = video_watches.email
@@ -169,21 +169,21 @@ with chatbot_events as (
     inner join user
         on chatbot_events.user_fk = user.user_pk
     left join course_content as c
-        on 
+        on
             chatbot_events.block_id = c.block_id
             and c.is_latest = true
     left join course_content as section
-        on 
+        on
             c.chapter_block_id = section.block_id
             and section.is_latest = true
     left join course_content as subsection
-        on 
+        on
             c.sequential_block_id = subsection.block_id
             and subsection.is_latest = true
     where chatbot_events.event_type = 'ol_openedx_chat.drawer.submit'
-    group by    
-        user.email 
-        , cast(chatbot_events.event_timestamp as date) 
+    group by
+        user.email
+        , cast(chatbot_events.event_timestamp as date)
         , chatbot_events.courserun_readable_id
         , c.block_category
         , c.block_title
@@ -197,7 +197,7 @@ with chatbot_events as (
         , 0
 )
 
-select 
+select
     user_email
     , activity_date
     , courserun_readable_id
