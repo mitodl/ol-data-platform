@@ -69,15 +69,15 @@ with combined_enrollments as (
 )
 
 , edx_to_mitxonline_certificate_revision as (
-    select
+    select distinct
         edx_signatories.courserun_readable_id
         , edx_signatories.signatory_names
         , mitxonline_certificate_page.courserun_id
         , mitxonline_certificate_revision.wagtailcore_revision_id
     from edx_signatories
-    left join mitxonline_certificate_page
+    inner join mitxonline_certificate_page
         on mitxonline_certificate_page.courserun_readable_id = edx_signatories.courserun_readable_id
-    left join mitxonline_certificate_revision
+    inner join mitxonline_certificate_revision
         on mitxonline_certificate_page.certificate_page_id = mitxonline_certificate_revision.certificate_page_id
         and edx_signatories.signatory_ids = mitxonline_certificate_revision.signatory_ids
 )
