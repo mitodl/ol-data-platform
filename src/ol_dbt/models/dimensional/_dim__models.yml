@@ -859,3 +859,7 @@ models:
       the event occurred
     tests:
     - not_null
+  - name: learn_ai_thread_id
+    description: string, unique identifier for the chat thread in the Learn AI database.
+  - name: learn_ai_checkpoint_pk
+    description: int, foreign key to chatbots_djangocheckpoint in Learn AI database
