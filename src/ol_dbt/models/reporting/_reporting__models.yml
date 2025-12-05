@@ -376,7 +376,8 @@ models:
       column_list: ["courserun_readable_id", "organization_key", "user_email", "activity_date"]
 
 - name: instructor_module_report
-  description: A report showing chatbot data for later roll-up at the instructor level.
+  description: A report showing chatbot data for later roll-up at the
+    instructor level.
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -400,3 +401,11 @@ models:
       the subsection.
   - name: chatbot_type
     description: string, type of the chatbot. e.g. Syllabus, Tutor, etc.
+  - name: estimated_time_played
+    description: int, estimated video seconds played
+  - name: video_duration
+    description: int, legth of the video in seconds
+  - name: rewatch_indicator
+    description: boolean, true if the learner is rewatching the video
+  - name: video_watched_count
+    description: int, count of videos watched
