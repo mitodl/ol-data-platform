@@ -63,7 +63,7 @@ models:
   - name: courserun_id
     description: int, foreign key representing a single course run on the corresponding
       platform.
-  - name: course_readable_id
+  - name: courserun_readable_id
     description: str, Open edX readable ID
   - name: courserunenrollment_enrollment_mode
     description: string, enrollment mode for user on the corresponding platform
@@ -81,7 +81,7 @@ models:
   - name: certificate_page_revision_id
     description: int, certificate page revision id on mitxonline
   - name: signatory_names
-    description: string, the names of the signatories for the course certificate
+    description: array of strings, the names of the signatories for the course certificate
 
 - name: edxorg_to_mitxonline_users
   description: edX.org certificate learners who not yet have account on MITx Online

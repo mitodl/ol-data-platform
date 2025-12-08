@@ -26,11 +26,11 @@ with combined_enrollments as (
        , certificate_page.wagtail_page_id as certificate_page_id
    from mitxonline__course_runs
     join course_pages
-        on mitxonline__course_runs.course_id = mitxonline__course_runs.course_id
+        on mitxonline__course_runs.course_id = course_pages.course_id
     join wagtail_page
        on course_pages.wagtail_page_id = wagtail_page.wagtail_page_id
    join wagtail_page as certificate_page
-       on certificate_page.wagtail_page_path like certificate_page.wagtail_page_path || '%'
+       on certificate_page.wagtail_page_path like wagtail_page.wagtail_page_path || '%'
         and certificate_page.wagtail_page_path <> wagtail_page.wagtail_page_path
 
 )
