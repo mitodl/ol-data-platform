@@ -10,17 +10,85 @@ with combined_enrollments as (
     select * from {{ ref('int__mitxonline__course_runs') }}
 )
 
-, mitxonline_enrollment as (
+, course_pages as (
+    select * from {{ ref('stg__mitxonline__app__postgres__cms_coursepage') }}
+)
+
+, wagtail_page as (
+    select * from {{ ref('stg__mitxonline__app__postgres__cms_wagtail_page') }}
+)
+
+, mitxonline_certificate_page as (
+
+   select
+       mitxonline__course_runs.courserun_id
+       , mitxonline__course_runs.courserun_readable_id
+       , certificate_page.wagtail_page_id as certificate_page_id
+   from mitxonline__course_runs
+    join course_pages
+        on mitxonline__course_runs.course_id = course_pages.course_id
+    join wagtail_page
+       on course_pages.wagtail_page_id = wagtail_page.wagtail_page_id
+   join wagtail_page as certificate_page
+       on certificate_page.wagtail_page_path like wagtail_page.wagtail_page_path || '%'
+        and certificate_page.wagtail_page_path <> wagtail_page.wagtail_page_path
+
+)
+
+, edx_signatories as (
     select
+        courserun_readable_id
+        , array_agg(signatory_normalized_name order by signatory_normalized_name)
+            filter (where signatory_normalized_name <> '') as signatory_names
+        , array_sort(
+            array_agg(mitxonline_signatory.wagtail_page_id)
+            filter (where mitxonline_signatory.wagtail_page_id is not null)
+          ) AS signatory_ids
+    from {{ ref('stg__edxorg__s3__course_certificate_signatory') }} edx_signatory
+    left join {{ ref('stg__mitxonline__app__postgres__cms_signatorypage') }} as mitxonline_signatory
+        on edx_signatory.signatory_normalized_name = mitxonline_signatory.signatorypage_name
+    group by courserun_readable_id
+)
+
+, mitxonline_certificate_revision as (
+    select
+        revision.wagtailcore_revision_id
+        , cast(revision.wagtail_page_id as bigint) as certificate_page_id
+        , array_sort(
+            transform(
+                cast(
+                 json_parse(json_query(wagtailcore_revision_content, 'lax $.signatories' omit quotes)) as array(json)
+                )
+                , x ->  CAST(json_extract_scalar(x, '$.value') as integer)
+            )
+        ) AS signatory_ids
+    from {{ ref('stg__mitxonline__app__postgres__cms_wagtailcore_revision') }} as revision
+    inner join {{ ref('stg__mitxonline__app__postgres__django_contenttype') }} as contenttype
+        on revision.contenttype_id = contenttype.contenttype_id
+    where contenttype.contenttype_full_name = 'cms_certificatepage'
+)
+
+, edx_to_mitxonline_certificate_revision as (
+    select distinct
+        edx_signatories.courserun_readable_id
+        , edx_signatories.signatory_names
+        , mitxonline_certificate_page.courserun_id
+        , mitxonline_certificate_revision.wagtailcore_revision_id
+    from edx_signatories
+    inner join mitxonline_certificate_page
+        on mitxonline_certificate_page.courserun_readable_id = edx_signatories.courserun_readable_id
+    inner join mitxonline_certificate_revision
+        on mitxonline_certificate_page.certificate_page_id = mitxonline_certificate_revision.certificate_page_id
+        and edx_signatories.signatory_ids = mitxonline_certificate_revision.signatory_ids
+)
+
+, mitxonline_enrollment as (
+    select distinct
         combined_enrollments.courserun_readable_id
         , combined_enrollments.user_email
         , combined_enrollments.course_readable_id
     from combined_enrollments
     where combined_enrollments.platform = '{{ var("mitxonline") }}'
-    group by
-        combined_enrollments.courserun_readable_id
-        , combined_enrollments.user_email
-        , combined_enrollments.course_readable_id
 )
 
 , edxorg_enrollment as (
@@ -28,7 +96,7 @@ with combined_enrollments as (
         combined_enrollments.courserunenrollment_created_on
         , combined_enrollments.courserunenrollment_enrollment_mode
         , combined_enrollments.user_id
-        , combined_enrollments.courserun_readable_id
+        , {{ format_course_id('combined_enrollments.courserun_readable_id', false) }} as courserun_readable_id
         , combined_enrollments.course_readable_id
         , combined_enrollments.user_email
         , combined_enrollments.courseruncertificate_created_on
@@ -42,24 +110,24 @@ select
     edxorg_enrollment.user_id as user_edxorg_id
     , mitx__users.user_mitxonline_id
     , edxorg_enrollment.user_email
-    , mitxonline__course_runs.courserun_id
-    , {{ format_course_id('edxorg_enrollment.courserun_readable_id', false) }} as courserun_readable_id
+    , edx_to_mitxonline_certificate_revision.courserun_id
+    , edxorg_enrollment.courserun_readable_id
     , edxorg_enrollment.courserunenrollment_enrollment_mode
     , edxorg_enrollment.courserungrade_grade
     , edxorg_enrollment.courserungrade_is_passing
     , edxorg_enrollment.courserunenrollment_created_on
     , edxorg_enrollment.courseruncertificate_created_on
+    , edx_to_mitxonline_certificate_revision.wagtailcore_revision_id as certificate_page_revision_id
+    , edx_to_mitxonline_certificate_revision.signatory_names
 from edxorg_enrollment
 left join mitxonline_enrollment
     on
         edxorg_enrollment.user_email = mitxonline_enrollment.user_email
-        and edxorg_enrollment.course_readable_id = mitxonline_enrollment.course_readable_id
-        and substring(edxorg_enrollment.courserun_readable_id, length(edxorg_enrollment.courserun_readable_id) - 5)
-            = substring(mitxonline_enrollment.courserun_readable_id, length(mitxonline_enrollment.courserun_readable_id) - 5)
+       and edxorg_enrollment.courserun_readable_id = mitxonline_enrollment.courserun_readable_id
 left join mitx__users
     on edxorg_enrollment.user_id = cast(mitx__users.user_edxorg_id as varchar)
-left join mitxonline__course_runs
-    on edxorg_enrollment.courserun_readable_id = mitxonline__course_runs.courserun_edx_readable_id
+left join edx_to_mitxonline_certificate_revision
+    on edxorg_enrollment.courserun_readable_id = edx_to_mitxonline_certificate_revision.courserun_readable_id
 where
     edxorg_enrollment.courseruncertificate_created_on is not null
     and mitxonline_enrollment.user_email is null
