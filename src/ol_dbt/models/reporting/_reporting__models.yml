@@ -271,13 +271,22 @@ models:
   - name: chapter_name
     description: string, title of the course content block. It is the name field for
       the chapter.
+  - name: sequential_name
+    description: string, title of the course content block. It is the name field for
+      the sequential.
   - name: exam_indicator
     description: boolean, If the name field for the unit on the Studio 'Course Outline'
       page contains the word 'exam' then this is true otherwise it's false.
-  - name: max_grade
+  - name: hw_indicator
+    description: boolean, If the name field for the unit on the Studio 'Course Outline'
+      page contains the word 'homework' then this is true otherwise it's false.
+  - name: max_possible_grade
     description: number, maximum possible grade value for the problem
   - name: attempts_on_problem
     description: int, max attempt number generated when parsing answer submissions
+  - name: max_learner_grade
+    description: number, max of how many responses the learner got right within the
+      problem.
   - name: grades
     description: number, current values indicating the total unweighted grades for
       this problem that the learner has scored. e.g. how many responses they got right
@@ -290,3 +299,112 @@ models:
   - name: courserungrade_grade
     description: float, course grade on edX.org or MITxOnline or xPro range from 0
       to 1
+  - name: user_avg_hw_grade
+    description: number, avg of grades the learner got for all homework problems
+  - name: user_avg_exam_grade
+    description: number, avg of grades the learner got for all exam problems
+  - name: user_hw_median_solving_time
+    description: string, the estimated median amount of time the learner spent on
+      all homework problems.
+  - name: user_exam_median_solving_time
+    description: string, the estimated median amount of time the learner spent on
+      all exam problems.
+  - name: user_hw_attempts_on_problem
+    description: int, total learner attempts generated when parsing answer submissions
+      on homework problems
+  - name: user_exam_time_flags
+    description: int, total times a learner gets a performance time flag when their
+      exam problem solving time was below the 10th percentile of time taken by all
+      students to solve an exam problem
+
+- name: chatbot_usage_report
+  description: AI chatbot interactions from Learn AI application including TutorBot,
+    ResourceRecommendationBot, SyllabusBot and VideoGPTBot. No personal information
+    is included in this report.
+  columns:
+  - name: ai_agent
+    description: str, indicates the type of chatbot agent used in the session. Possible
+      values - TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot
+    tests:
+    - not_null
+  - name: thread_id
+    description: str, unique identifier for the chat thread.
+    tests:
+    - not_null
+  - name: resource_id
+    description: str, course ID, video transcript asset ID, or edX module ID depending
+      on the ai_agent. May be blank for ResourceRecommendationBot.
+  - name: human_message
+    description: str, the human message
+  - name: agent_message
+    description: str, the agent message
+  - name: message_index
+    description: int, the order of the message in the chat session.
+  - name: created_on
+    description: timestamp, date and time when the chat session was created.
+
+- name: organization_administration_report
+  description: A report showing certificates/completions for later roll-up at the
+    organizational level.
+  columns:
+  - name: courserun_readable_id
+    description: string, unique string to identify a course run
+  - name: user_email
+    description: string, user email that user registered
+  - name: enrolled_count
+    description: int, a count of 1 means the learner enrolled otherwise 0
+  - name: organization_key
+    description: str, key of the organization that lists the course. e.g. MITx, MITxT,
+      null
+  - name: organization_name
+    description: str, name of the organization that lists the course.
+  - name: activity_date
+    description: date, date the user engaged in an activity
+  - name: chatbot_used_count
+    description: int, a count of 1 if the user engaged with a chatbot otherwise 0
+  - name: certificate_count
+    description: int, a count of 1 if the user earned a certificate that day otherwise
+      0
+  - name: videos_watched
+    description: int, a count of 1 if the user watched a video otherwise 0
+  - name: problems_count
+    description: int, a count of 1 if the user tried a problem otherwise 0
+  - name: active_count
+    description: int, a count of 1 if the user engaged with the course otherwise 0
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "organization_key", "user_email", "activity_date"]
+
+- name: instructor_module_report
+  description: A report showing chatbot data for later roll-up at the instructor level.
+  columns:
+  - name: user_email
+    description: string, user email that user registered
+  - name: activity_date
+    description: date, date the user engaged in an activity
+  - name: courserun_readable_id
+    description: string, unique string to identify a course run
+  - name: chatbot_used_count
+    description: int, a count of how many times the user engaged with a chatbot
+  - name: block_category
+    description: string, category/type of the content block. Possible values are course,
+      chapter, sequential, vertical, discussion, html, problem, video, etc.
+  - name: block_title
+    description: string, title of the course content block. It is the name field for
+      the section, subsection, or unit on the Studio 'Course Outline' page.
+  - name: section_title
+    description: string, title of the course content block. It is the name field for
+      the section.
+  - name: subsection_title
+    description: string, title of the course content block. It is the name field for
+      the subsection.
+  - name: chatbot_type
+    description: string, type of the chatbot. e.g. Syllabus, Tutor, etc.
+  - name: estimated_time_played
+    description: int, estimated video seconds played
+  - name: video_duration
+    description: int, legth of the video in seconds
+  - name: rewatch_indicator
+    description: boolean, true if the learner is rewatching the video
+  - name: video_watched_count
+    description: int, count of videos watched

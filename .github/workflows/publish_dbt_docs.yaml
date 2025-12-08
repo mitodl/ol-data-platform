@@ -17,7 +17,7 @@ jobs:
     steps:
     - name: "Step 01 - Checkout current branch"
       id: step-01
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: "Step 02 - Install dbt"
       id: step-02
@@ -51,7 +51,7 @@ jobs:
 
     - name: "Step 06 - Upload pages to artifact"
       id: step-06
-      uses: actions/upload-pages-artifact@v3
+      uses: actions/upload-pages-artifact@v4
       with:
         path: ${{ github.workspace }}/dbt_docs
 
@@ -61,7 +61,7 @@ jobs:
 
     - name: "Step 08 - Upload artifact for deployment job"
       id: step-08
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: dbt_docs
         path: dbt_docs.zip

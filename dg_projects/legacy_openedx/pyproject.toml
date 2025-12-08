@@ -1,0 +1,45 @@
+[project]
+name = "legacy_openedx"
+requires-python = ">=3.12,<3.14"
+version = "0.1.0"
+dependencies = [
+    "dagster>=1.11.13",
+    "dagster-aws ~=0.28.0",
+    "dagster-k8s>=0.27.15",
+    "dagster-postgres>=0.27.13",
+    "flatten-dict ~= 0.4.2",
+    "httpx ~= 0.28.0",
+    "jsonlines ~= 4.0.0",
+    "ol-orchestrate-lib",
+    "pymysql ~= 1.1",
+    "PyPika ~= 0.48.9",
+]
+
+[project.entry-points]
+"dagster.components" = { legacy_openedx = "legacy_openedx.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.11.13",
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "legacy_openedx.definitions"
+project_name = "legacy_openedx"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "legacy_openedx"
+
+[tool.setuptools.packages.find]
+exclude=["legacy_openedx_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

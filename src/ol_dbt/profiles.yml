@@ -26,9 +26,7 @@ open_learning:
       threads: 4
     dev_qa:
       type: trino
-      method: ldap
-      user: '{{ env_var("DBT_TRINO_USERNAME") }}'
-      password: '{{ env_var("DBT_TRINO_PASSWORD") }}'
+      method: oauth
       database: ol_data_lake_qa
       port: 443
       schema: ol_warehouse_qa{{ "_{}".format(var('schema_suffix')) }}
@@ -37,9 +35,7 @@ open_learning:
       threads: 4
     dev_production:
       type: trino
-      method: ldap
-      user: '{{ env_var("DBT_TRINO_USERNAME") }}'
-      password: '{{ env_var("DBT_TRINO_PASSWORD") }}'
+      method: oauth
       database: ol_data_lake_production
       port: 443
       schema: ol_warehouse_production{{ "_{}".format(var('schema_suffix')) }}

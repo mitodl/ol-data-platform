@@ -1,0 +1,101 @@
+---
+version: 2
+
+models:
+- name: edxorg_to_mitxonline_course_runs
+  description: Course runs not yet migrated to MITx Online from edx.org
+  columns:
+  - name: mitxonline_course_id
+    description: int, foreign key to courses table in the mitxonline database
+  - name: course_readable_id
+    description: str, edX course readable id formatted as {org}+{course code}
+    tests:
+    - not_null
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+  - name: courserun_title
+    description: str, the title of the course run
+    tests:
+    - not_null
+  - name: courseware_id
+    description: str, the edx course run readable id formatted as course-v1:{org}+{course
+      code}+{run tag}
+    tests:
+    - not_null
+  - name: enrollment_start
+    description: timestamp, the course enrollment start date.
+  - name: enrollment_end
+    description: timestamp, either the course enrollment end date or the course end
+      date if no enrollment end date is specified
+  - name: start_date
+    description: timestamp, The date on which the course starts
+  - name: end_date
+    description: timestamp, The date on which the course ends
+  - name: is_self_paced
+    description: boolean, indicate whether or not the course is self paced
+  - name: is_published
+    description: boolean, indicating whether the course run is published and open
+      for enrollment
+  - name: run_tag
+    description: str, the edX course run tag. e.g. 2T2024
+    tests:
+    - not_null
+  - name: department_name
+    description: str, the course department name
+  - name: signatory_names
+    description: array, the names of the signatories for the course certificate
+  - name: enrollment_count
+    description: int,  count of users enrolled in the course run
+  - name: certificate_count
+    description: int, count of users who have earned a certificate in the course run
+
+- name: edxorg_to_mitxonline_enrollments
+  description: Enrollments not yet migrated to MITx Online from edx.org
+  columns:
+  - name: user_edxorg_id
+    description: int, user ID on the edxorg platform.
+  - name: user_mitxonline_id
+    description: int, user ID on the mitxonline platform.
+  - name: user_email
+    description: string, user email that user registered on the corresponding platform.
+  - name: courserun_id
+    description: int, foreign key representing a single course run on the corresponding
+      platform.
+  - name: courserun_readable_id
+    description: str, Open edX readable ID
+  - name: courserunenrollment_enrollment_mode
+    description: string, enrollment mode for user on the corresponding platform
+  - name: courserungrade_grade
+    description: float, course grade on edX.org or MITxOnline or xPro range from 0
+      to 1
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on edX.org or MITxOnline or xPro
+  - name: courserunenrollment_created_on
+    description: timestamp, specifying when the enrollment was initially
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when the course certificate was initially
+      created
+  - name: certificate_page_revision_id
+    description: int, certificate page revision id on mitxonline
+  - name: signatory_names
+    description: array of strings, the names of the signatories for the course certificate
+
+- name: edxorg_to_mitxonline_users
+  description: edX.org certificate learners who not yet have account on MITx Online
+  columns:
+  - name: user_email
+    description: string, user email that user registered on edX.org platform.
+    tests:
+    - not_null
+    - unique
+  - name: user_full_name
+    description: string, user full name on edX.org platform
+  - name: user_gender
+    description: string, user gender
+  - name: user_birth_year
+    description: int, user birth year
+  - name: user_country
+    description: string, user country

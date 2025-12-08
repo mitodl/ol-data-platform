@@ -11,8 +11,6 @@ with source as (
         , country as user_address_country
         , state as user_address_state
         , user_id
-        , first_name as user_first_name
-        , last_name as user_last_name
     from source
 )
 

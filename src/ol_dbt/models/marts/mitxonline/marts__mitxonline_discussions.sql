@@ -29,4 +29,6 @@ select
     , course_runs.courserun_end_on
 from discussions
 inner join course_runs on discussions.courserun_readable_id = course_runs.courserun_readable_id
-left join users on discussions.user_username = users.user_username
+left join users on
+    discussions.user_username = users.user_username
+    and discussions.openedx_user_id = users.openedx_user_id

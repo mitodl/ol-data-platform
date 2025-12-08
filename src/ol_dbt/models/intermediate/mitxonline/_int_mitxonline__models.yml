@@ -915,6 +915,9 @@ models:
   - name: course_price
     description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
       available)
+    tests:
+    - dbt_expectations.expect_column_values_to_not_be_null:
+        row_condition: "course_page_is_live=true"
   - name: course_length
     description: str, a short description indicating how long it takes to complete
       (e.g. '4 weeks').
@@ -1410,13 +1413,12 @@ models:
     tests:
     - unique
   - name: openedx_user_id
-    description: int, foreign key to open edX users. Not all app users have openedx_user_id
-      due to username or email mismatch between app and open edX. Also, there may
-      be multiple mitxonline users matching with same open edx user.
+    description: int, foreign key to open edX users. Not all app users have openedx_user_id.
   - name: user_username
-    description: string, username
+    description: string, username on the MITx Online open edx platform. If user doesn't
+      have an open edX account, it defaults to username on the MITx Online application,
+      which is their email address.
     tests:
-    - unique
     - not_null
   - name: user_full_name
     description: string, full name
@@ -1493,6 +1495,8 @@ models:
     description: boolean, indicating if learner is identified as Other (not Professional,
       Student, or Educator)
   tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "openedx_user_id"]
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
       compare_model: ref('stg__mitxonline__app__postgres__users_user')
 
@@ -2141,20 +2145,38 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_id", "instructor_name"]
 
-- name: int__mitxonline__uai_customer_courserun_mapping
-  description: This table maps UAI customer organizations to their respective course
-    runs.
+- name: int__mitxonline__b2b_contract_to_courseruns
+  description: B2B contract maps to course runs on MITx Online
   columns:
   - name: courserun_readable_id
-    description: str, Open edX Course ID formatted as course-v1:UAI_{org}+{course
-      code}+{run_tag}
-    tests:
+    data_type: varchar
+    description: Open edX Course ID formatted as course-v1:UAI_{org}+{course code}+{run_tag}
+    data_tests:
     - not_null
-  - name: organization
-    description: str, UAI customer organization. For example, "HCCC" represents Hartford
-      Health Care, "ET" represents Emerging Talent.
-    tests:
+  - name: organization_key
+    data_type: varchar
+    description: short key used for the b2b customer organization. e.g. demo, Eme502
+    data_tests:
     - not_null
+  - name: organization_name
+    data_type: varchar
+    description: name of the b2b customer organization
+    data_tests:
+    - not_null
+  - name: b2b_contract_name
+    data_type: varchar
+    description: name of the b2b contract
+    data_tests:
+    - not_null
+  - name: b2b_contract_is_active
+    data_type: boolean
+    description: whether the contract is active or not. Date rules still apply.
+  - name: b2b_contract_start_date
+    data_type: date
+    description: the start date of the contract
+  - name: b2b_contract_end_date
+    data_type: date
+    description: the end date of the contract
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "organization"]
+      column_list: ["courserun_readable_id", "organization_key"]

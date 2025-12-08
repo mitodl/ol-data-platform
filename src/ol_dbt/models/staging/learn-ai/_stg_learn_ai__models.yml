@@ -72,6 +72,9 @@ models:
   - name: chatsession_object_id
     description: str, course ID, video transcript asset ID, or edX module ID depending
       on the chatsession_agent. May be blank for ResourceRecommendationBot.
+  - name: canvas_course_id
+    description: str, Canvas course ID for the chat session, e.g. 34625-15.060_FA25
+      May be blank for non-Canvas
   - name: chatsession_django_session_key
     description: str, Django session key for the chat session.
   - name: chatsession_created_on
@@ -125,6 +128,10 @@ models:
   - name: checkpoint_source
     description: str, the source of the checkpoint extracted from the metadata. e.g.
       'input', 'loop'
+  - name: checkpoint_created_on
+    data_type: timestamp
+    description: date and time when the checkpoint was created.
+
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["checkpoint_namespace", "chatsession_thread_id", "checkpoint_id"]
@@ -143,3 +150,23 @@ models:
     - not_null
   - name: tutorbot_chat_json
     description: json string, the chat history and internal state of the TutorBot.
+
+- name: stg__learn_ai__app__postgres__chatbots_chatresponserating
+  description: User ratings for AI chatbot responses
+  columns:
+  - name: djangocheckpoint_id
+    data_type: integer
+    description: foreign key to ai_chatbots_djangocheckpoint.
+  - name: rating
+    data_type: varchar
+    description: user rating for the chatbot response. E.g., like, dislike, '' for
+      no rating.
+  - name: rating_reason
+    data_type: varchar
+    description: user provided reason for the rating.
+  - name: rating_created_on
+    data_type: timestamp
+    description: date and time when the rating was created.
+  - name: rating_updated_on
+    data_type: timestamp
+    description: date and time when the rating was last updated.

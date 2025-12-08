@@ -668,8 +668,6 @@ models:
     - unique
   - name: user_scim_username
     description: str, The username for the SCIM resource
-    tests:
-    - unique
   - name: user_scim_external_id
     description: str, a string identifier for the SCIM resource as defined by the
       provisioning client
@@ -712,14 +710,6 @@ models:
     description: int, foreign key to users_user
     tests:
     - unique
-    - not_null
-  - name: user_last_name
-    description: string, user last name
-    tests:
-    - not_null
-  - name: user_first_name
-    description: string, user first name
-    tests:
     - not_null
 
 - name: stg__mitxonline__app__postgres__users_userprofile
@@ -892,12 +882,13 @@ models:
         to: ref('stg__mitxonline__app__postgres__courses_program')
         field: program_id
   - name: programrequirement_node_type
-    description: str, there are 3 types of nodes that exist in a requirement tree
-      - program_root (represent a program) - course (represent a reference to a course)
-      - operator (represent a logical operation over a set of courses)
+    description: str, different types of nodes that exist in a requirement tree -
+      program_root (represent a program) - course (represent a reference to a course)
+      - program (represent a reference to a program) - operator (represent a logical
+      operation over a set of courses)
     tests:
     - accepted_values:
-        values: ["program_root", "course", "operator"]
+        values: ["program_root", "course", "program", "operator"]
   - name: programrequirement_path
     description: str, the full materialized path for each node (readonly) e.g. 0001
       is root path, 00010001 is the path to a node in this requirement tree
@@ -977,6 +968,8 @@ models:
   - name: courserun_is_self_paced
     description: boolean, indicating whether users can take this course at their own
       pace and earn certificate at any time
+  - name: b2b_contract_id
+    description: int, foreign key to b2b_contract
   - name: courserun_start_on
     description: timestamp, specifying when the course begins
   - name: courserun_end_on
@@ -991,6 +984,8 @@ models:
   - name: courserun_upgrade_deadline
     description: timestamp, specifying the date time beyond which users can not enroll
       in paid course mode
+  - name: courserun_certificate_available_on
+    description: timestamp, specifying when certificates become available for users
   - name: courserun_created_on
     description: timestamp, specifying when a course run was initially created
   - name: courserun_updated_on
@@ -1095,8 +1090,8 @@ models:
     description: str, foreign key to users_user representing a single user
     tests:
     - not_null
-  - name: certificate_page_revision_id
-    description: int, foreign key to wagtailcore_pagerevision (could be blank)
+  - name: wagtailcore_revision_id
+    description: int, foreign key to wagtailcore_revision
   - name: courseruncertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: courseruncertificate_updated_on
@@ -1385,8 +1380,6 @@ models:
     description: json, JSON object indicating the user’s last known state in the course.
       It may contain any attributes for different module types - course, chapter,
       sequential, etc.
-    tests:
-    - not_null
   - name: studentmodule_problem_grade
     description: float, floating point value indicating the total unweighted grade
       for this problem that the learner has scored. e.g. how many responses they got
@@ -1728,9 +1721,7 @@ models:
       1-3 hours per week).
   - name: course_price
     description: str, product price in plain text. e.g. $250 - $1000 (financial assistance
-      available)
-    tests:
-    - not_null
+      available). May be NULL for unpublished courses.
   - name: course_prerequisites
     description: text, a short description indicating prerequisites of this course.
   - name: course_faq_url
@@ -1935,3 +1926,132 @@ models:
       description: timestamp, date and time when this record was created
     - name: openedxuser_updated_on
       description: timestamp, date and time when this record was last updated
+
+- name: stg__mitxonline__app__postgres__cms_wagtailcore_revision
+  description: Wagtail page revisions in MITx Online CMS
+  columns:
+  - name: wagtailcore_revision_id
+    description: int, primary key for wagtailcore_revision
+    tests:
+    - unique
+    - not_null
+  - name: wagtailcore_revision_content
+    description: str, content of the revision stored as a JSON string
+    tests:
+    - not_null
+  - name: user_id
+    description: int, foreign key to users_user representing the user who made the
+      revision
+  - name: wagtail_page_id
+    description: int, foreign key to wagtailcore_page representing the page being
+      revised
+    tests:
+    - not_null
+  - name: wagtail_page_title
+    description: str, title of the page being revised
+  - name: contenttype_id
+    description: int, foreign key to django_contenttype representing the type of page
+      being revised
+    tests:
+    - not_null
+  - name: base_contenttype_id
+    description: int, foreign key to django_contenttype representing the base type
+      of page being revised
+  - name: wagtailcore_revision_created_on
+    description: timestamp for when the revision was created
+
+- name: stg__mitxonline__app__postgres__cms_signatorypage
+  description: Signatory page metadata from Wagtail CMS
+  columns:
+  - name: signatorypage_name
+    description: str, name of the signatory
+    tests:
+    - not_null
+  - name: signatorypage_title_1
+    description: str, primary title of the signatory
+  - name: signatorypage_title_2
+    description: str, secondary title of the signatory
+  - name: signatorypage_title_3
+    description: str, third title of the signatory
+  - name: wagtail_page_id
+    description: int, foreign key to wagtailcore_page
+  - name: signatorypage_organization
+    description: str, the organization of the signatory
+  - name: wagtailimages_image_id
+    description: int, foreign key to wagtailimages_image for the signature image
+
+- name: stg__mitxonline__app__postgres__b2b_organizationpage
+  description: MITx Online B2B organization pages
+  columns:
+  - name: organization_id
+    data_type: bigint
+    description: primary key for this table. It is also the foreign key to cms_wagtail_page
+    data_tests:
+    - not_null
+    - unique
+  - name: organization_key
+    data_type: varchar
+    description: short key used for the organization. e.g. demo, Eme502
+    data_tests:
+    - not_null
+    - unique
+  - name: organization_name
+    data_type: varchar
+    description: name of the organization
+    data_tests:
+    - not_null
+  - name: organization_logo
+    data_type: varchar
+    description: organization's logo
+  - name: organization_description
+    data_type: varchar
+    description: description of the organization
+  - name: sso_organization_id
+    data_type: varchar
+    description: the UUID for the organization in the SSO provider
+
+- name: stg__mitxonline__app__postgres__b2b_contractpage
+  description: MITx Online B2B contract pages
+  columns:
+  - name: b2b_contract_id
+    data_type: bigint
+    description: primary key for this table. It is also the foreign key to cms_wagtail_page
+    data_tests:
+    - not_null
+    - unique
+  - name: b2b_contract_name
+    data_type: varchar
+    description: name of the b2b contract
+    data_tests:
+    - not_null
+  - name: b2b_contract_is_active
+    data_type: boolean
+    description: whether the contract is active or not. Date rules still apply.
+  - name: b2b_contract_description
+    data_type: varchar
+    description: description of the contract
+  - name: b2b_contract_start_date
+    data_type: date
+    description: the start date of the contract
+  - name: b2b_contract_end_date
+    data_type: date
+    description: the end date of the contract
+  - name: b2b_contract_max_learners
+    data_type: bigint
+    description: The maximum number of learners allowed under this contract, zero
+      or blank for unlimited.
+  - name: organization_id
+    data_type: bigint
+    description: foreign key to b2b_organizationpage. Organization that owns this
+      contract.
+  - name: b2b_contract_integration_type
+    data_type: varchar
+    description: type of integration used for this contract. e.g. SSO, Non-SSO
+  - name: b2b_contract_enrollment_fixed_price
+    data_type: double
+    description: fixed price for enrollment under this contract. Zero or blank for
+      free enrollments.
+  - name: b2b_contract_membership_type
+    data_type: varchar
+    description: the method to use to manage membership in the contract. e.g. SSO,
+      Non-SSO

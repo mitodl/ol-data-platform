@@ -79,6 +79,12 @@ sources:
     - name: parent_checkpoint_id
       description: str, checkpoint ID of the parent checkpoint. Null if this is the
         first checkpoint in the thread.
+    - name: created_at
+      data_type: timestamp
+      description: date and time when the checkpoint was created.
+    - name: updated_at
+      data_type: timestamp
+      description: date and time when the checkpoint was last updated.
 
   - name: raw__learn_ai__app__postgres__ai_chatbots_tutorbotoutput
     description: TutorBot chat history
@@ -89,3 +95,23 @@ sources:
       description: str, unique identifier for the chat thread.
     - name: chat_json
       description: json string, the chat history and internal state of the TutorBot.
+
+  - name: raw__learn_ai__app__postgres__ai_chatbots_chatresponserating
+    description: User ratings for AI chatbot responses
+    columns:
+    - name: checkpoint_id
+      data_type: integer
+      description: foreign key to ai_chatbots_djangocheckpoint.
+    - name: rating
+      data_type: varchar
+      description: user rating for the chatbot response. E.g., like, dislike, '' for
+        no rating.
+    - name: rating_reason
+      data_type: varchar
+      description: user provided reason for the rating.
+    - name: created_at
+      data_type: timestamp
+      description: date and time when the rating was created.
+    - name: updated_at
+      data_type: timestamp
+      description: date and time when the rating was last updated.

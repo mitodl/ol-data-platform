@@ -24,8 +24,7 @@ models:
   - name: edx_module_id
     description: str, edX module ID for the chat session
   - name: courserun_readable_id
-    description: str, the course ID for the chat session. May be blank for Canvas
-      courses
+    description: str, the course ID for the chat session
   - name: user_id
     description: int, user ID in learn AI application. Null if the user is not logged
       in.
@@ -50,6 +49,10 @@ models:
   description: Intermediate model for Learn AI RecommendationBot, SyllabusBot and
     VideoGPTBot
   columns:
+  - name: djangocheckpoint_id
+    description: int, foreign key to chatbots_djangocheckpoint
+    tests:
+    - not_null
   - name: checkpoint_id
     description: str, unique identifier for the chatbots checkpoint.
     tests:
@@ -66,7 +69,8 @@ models:
   - name: chatsession_object_id
     description: str, course ID or video transcript asset ID. May be blank for ResourceRecommendationBot.
   - name: courserun_readable_id
-    description: str, the course readable ID for the chat session. Populated for VideoGPTBot.
+    description: str, the course readable ID for the chat session. Populated for VideoGPTBot
+      and TutorBot in a course context.
   - name: user_id
     description: int, user ID in learn AI application. Null if the user is not logged
       in.
@@ -102,12 +106,22 @@ models:
   - name: parent_checkpoint_id
     description: str, checkpoint ID of the parent checkpoint. Null if this is the
       first checkpoint in the thread.
+  - name: rating
+    data_type: varchar
+    description: user rating for the chatbot response. E.g., like, dislike, '' for
+      no rating.
+  - name: rating_reason
+    data_type: varchar
+    description: user provided reason for the rating.
+  - name: checkpoint_created_on
+    data_type: timestamp
+    description: date and time when the checkpoint in the chat session was created.
   - name: chatsession_created_on
-    description: timestamp, date and time when the record was created.
+    description: timestamp, date and time when the chat session was created.
     tests:
     - not_null
   - name: chatsession_updated_on
-    description: timestamp, date and time when the record was last updated.
+    description: timestamp, date and time when the chat session was last updated.
     tests:
     - not_null
   tests:

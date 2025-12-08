@@ -126,11 +126,11 @@ with combined_enrollments as (
     from combined_enrollments
     left join combined_users
         on
-            combined_enrollments.user_username = combined_users.user_username
+            combined_enrollments.user_id = combined_users.user_id
             and combined_enrollments.platform = combined_users.platform
     left join mitxonline_completed_orders
         on
-            combined_enrollments.user_username = mitxonline_completed_orders.user_username
+            combined_enrollments.user_id = cast(mitxonline_completed_orders.user_id as varchar)
             and combined_enrollments.courserun_id = mitxonline_completed_orders.courserun_id
             and mitxonline_completed_orders.row_num = 1
     left join combined_courseruns

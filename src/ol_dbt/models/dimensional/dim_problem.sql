@@ -101,6 +101,7 @@ with problems as (
     from problems
     left join problem_type_metadata
         on problems.block_id = problem_type_metadata.problem_block_id
+         and problems.courserun_readable_id = problem_type_metadata.courserun_readable_id
     where problems.row_num = 1
 )
 

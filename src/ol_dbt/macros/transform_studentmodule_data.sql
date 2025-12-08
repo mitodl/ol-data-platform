@@ -1,4 +1,4 @@
-{% macro generate_studentmodule_problem_events(studentmodule_table, studentmodulehistory_table, user_id_field) %}
+{% macro generate_studentmodule_problem_events(studentmodule_table, studentmodulehistory_table, user_id_field, platform='mitxonline') %}
   with studentmodule as (
     select
       studentmodule_id
@@ -11,9 +11,16 @@
       , cast(studentmodule_problem_max_grade as varchar) as max_grade
       , from_iso8601_timestamp_nanos(studentmodule_created_on) as studentmodule_created_on
       , from_iso8601_timestamp_nanos(studentmodule_updated_on) as studentmodule_updated_on
-      , cast(json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as int) as attempt
+      , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
     from {{ studentmodule_table }}
     where coursestructure_block_category = 'problem'
+    {% if is_incremental %}
+      and from_iso8601_timestamp_nanos(studentmodule_created_on) > (
+          select max(event_timestamp) from {{ this }}
+          where platform = '{{ platform }}'
+      )
+    {% endif %}
+
   )
 
   , studentmodulehistoryextended as (
@@ -24,8 +31,15 @@
       , cast(studentmodule_problem_grade as varchar) as grade
       , cast(studentmodule_problem_max_grade as varchar) as max_grade
       , from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) as studentmodule_created_on
-      , cast(json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as int) as attempt
+      , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
     from {{ studentmodulehistory_table }}
+    {% if is_incremental %}
+      where from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) > (
+          select max(event_timestamp) from {{ this }}
+            where platform = '{{ platform }}'
+      )
+    {% endif %}
+
   )
 
     -- Pull out arrays from the state data
@@ -41,7 +55,7 @@
       , coalesce(smhe.grade, sm.grade) as grade
       , coalesce(smhe.max_grade, sm.max_grade) as max_grade
       , coalesce(smhe.studentmodule_created_on, sm.studentmodule_updated_on) as event_timestamp
-      , cast(smhe.attempt as varchar) as attempt
+      , smhe.attempt as attempt
       , if(
             coalesce(smhe.grade, sm.grade) is not null
             and coalesce(smhe.max_grade, sm.max_grade) is not null

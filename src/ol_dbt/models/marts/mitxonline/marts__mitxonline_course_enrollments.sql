@@ -26,4 +26,4 @@ select
     , users.user_job_title
     , users.user_industry
 from enrollments
-left join users on enrollments.user_mitxonline_username = users.user_username
+left join users on enrollments.user_email = users.user_email

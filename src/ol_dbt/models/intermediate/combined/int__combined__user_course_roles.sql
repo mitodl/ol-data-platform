@@ -6,6 +6,10 @@ with mitxonline_courseroles as (
     select * from {{ ref('stg__mitxonline__app__postgres__users_user') }}
 )
 
+, mitxonline_openedxuser_mapping as (
+    select * from {{ ref('stg__mitxonline__app__postgres__openedx_openedxuser') }}
+)
+
 , mitxonline_openedx_users as (
     select * from {{ ref('stg__mitxonline__openedx__mysql__auth_user') }}
 )
@@ -59,10 +63,10 @@ with mitxonline_courseroles as (
     from mitxonline_courseroles
     inner join mitxonline_openedx_users
         on mitxonline_courseroles.openedx_user_id = mitxonline_openedx_users.openedx_user_id
+    left join mitxonline_openedxuser_mapping
+        on mitxonline_openedx_users.user_username = mitxonline_openedxuser_mapping.openedxuser_username
     left join mitxonline_app_users
-        on
-            mitxonline_openedx_users.user_username = mitxonline_app_users.user_username
-            or mitxonline_openedx_users.user_email = mitxonline_app_users.user_email
+        on mitxonline_openedxuser_mapping.user_id = mitxonline_app_users.user_id
 
     union all
 

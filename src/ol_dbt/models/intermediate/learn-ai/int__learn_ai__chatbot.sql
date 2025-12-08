@@ -6,6 +6,10 @@ with chatsession as (
     select * from {{ ref('stg__learn_ai__app__postgres__chatbots_djangocheckpoint') }}
 )
 
+, responserating as (
+    select * from {{ ref('stg__learn_ai__app__postgres__chatbots_chatresponserating') }}
+)
+
 , users as (
     select * from {{ ref('stg__learn_ai__app__postgres__users_user') }}
 )
@@ -36,16 +40,19 @@ with chatsession as (
                 replace(chatsession.chatsession_object_id, 'asset-v1:', ''), 1
                 , strpos(replace(chatsession.chatsession_object_id, 'asset-v1:', ''), '+type@asset+block@') - 1
             )
-            and chatsession.chatsession_created_on < video.retrieved_at
+)
+
+, problem as (
+    select * from {{ ref('dim_problem') }}
 )
 
 select
-    djangocheckpoint.checkpoint_id
+    djangocheckpoint.djangocheckpoint_id
+    , djangocheckpoint.checkpoint_id
     , djangocheckpoint.chatsession_thread_id
     , chatsession.chatsession_agent
     , chatsession.chatsession_title
     , chatsession.chatsession_object_id
-    , videos_with_ranking.courserun_readable_id
     , chatsession.user_id
     , users.user_email
     , users.user_full_name
@@ -60,12 +67,22 @@ select
     , djangocheckpoint.parent_checkpoint_id
     , djangocheckpoint.checkpoint_namespace
     , djangocheckpoint.checkpoint_type
+    , responserating.rating
+    , responserating.rating_reason
+    , djangocheckpoint.checkpoint_created_on
     , chatsession.chatsession_created_on
     , chatsession.chatsession_updated_on
+    , coalesce(
+        chatsession.canvas_course_id
+        , videos_with_ranking.courserun_readable_id
+        , problem.courserun_readable_id
+    ) as courserun_readable_id
 from djangocheckpoint
 inner join chatsession on djangocheckpoint.chatsession_thread_id = chatsession.chatsession_thread_id
+left join responserating on djangocheckpoint.djangocheckpoint_id = responserating.djangocheckpoint_id
 left join users on chatsession.user_id = users.user_id
 left join videos_with_ranking
     on
         chatsession.chatsession_object_id = videos_with_ranking.chatsession_object_id
         and videos_with_ranking.row_num = 1
+left join problem on chatsession.chatsession_object_id = problem.problem_block_pk

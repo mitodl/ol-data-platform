@@ -205,3 +205,70 @@ models:
         the user
       tests:
       - not_null
+
+  - name: stg__mitlearn__app__postgres__learning_resources_userlist
+    description: MIT Learn user-created lists for organizing learning resources
+    columns:
+    - name: userlist_id
+      description: int, unique identifier for the user list
+      tests:
+      - unique
+      - not_null
+    - name: userlist_title
+      description: str, title or name of the user list
+    - name: userlist_author_user_id
+      description: int, foreign key referencing the user who created this list
+    - name: userlist_description
+      description: str, description or summary of the user list content
+    - name: userlist_privacy_level
+      description: str, privacy setting for the list (public, private, etc.)
+    - name: userlist_created_on
+      description: timestamp, date and time when this user list was created
+      tests:
+      - not_null
+    - name: userlist_updated_on
+      description: timestamp, date and time when this user list was last updated
+      tests:
+      - not_null
+
+  - name: stg__mitlearn__app__postgres__learning_resources_userlist_topics
+    description: Association table linking user lists to learning resource topics
+      for categorization and filtering
+    columns:
+    - name: userlisttopics_id
+      description: int, unique identifier for the user list topic association
+      tests:
+      - unique
+      - not_null
+    - name: userlist_id
+      description: int, foreign key referencing the user list
+      tests:
+      - not_null
+    - name: learningresourcetopic_id
+      description: int, foreign key referencing the learning resource topic
+      tests:
+      - not_null
+
+  - name: stg__mitlearn__app__postgres__learning_resources_userlistrelationship
+    description: Relationships between user lists, defining parent-child hierarchies
+      and positioning
+    columns:
+    - name: userlistrelationship_id
+      description: int, unique identifier for the user list relationship
+      tests:
+      - unique
+      - not_null
+    - name: userlistrelationship_child_id
+      description: int, foreign key referencing the child user list in the relationship
+    - name: userlistrelationship_position
+      description: int, position or order of the child list within the parent list
+    - name: userlistrelationship_parent_id
+      description: int, foreign key referencing the parent user list in the relationship
+    - name: userlistrelationship_created_on
+      description: timestamp, date and time when this relationship was created
+      tests:
+      - not_null
+    - name: userlistrelationship_updated_on
+      description: timestamp, date and time when this relationship was last updated
+      tests:
+      - not_null

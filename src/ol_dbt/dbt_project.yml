@@ -52,7 +52,7 @@ vars:
     dedp_mitxonline_good_economics_for_hard_times_course_number: '14.009x'
     dedp_mitxonline_good_economics_for_hard_times_internation_development_cutoff: '2023-08-01'
     ocw_production_url: 'https://ocw.mit.edu/'
-    mitxonline_openedx_url: 'https://courses.mitxonline.mit.edu'
+    mitxonline_openedx_url: 'https://courses.learn.mit.edu'
     mitxpro_openedx_url: 'https://courses.xpro.mit.edu'
 
     highest_education_values: ['Doctorate', "Master''s or professional degree", "Bachelor''s\
@@ -75,41 +75,51 @@ models:
       format: "'PARQUET'"
     +required_docs: true
     +grants:
-      select: ['read_only_production', 'production_analyst']
-      insert: ['production_analyst']
-      update: ['production_analyst']
-      delete: ['production_analyst']
-      all privileges: ['accountadmin']
+      select: ['read_only_production', 'ol_data_analyst', production_analyst', 'ol_data_engineer']
+      insert: ['production_analyst', 'ol_data_engineer']
+      update: ['production_analyst', 'ol_data_engineer']
+      delete: ['production_analyst', 'ol_data_engineer']
+      all privileges: ['accountadmin', 'ol_platform_admin']
     staging:
       +materialized: table
       +schema: staging
       +grants:
-        select: ['read_only_production', 'reverse_etl']
+        select: ['read_only_production', 'ol_data_analyst', 'reverse_etl']
+    migration:
+      +materialized: table
+      +schema: migration
+      +grants:
+        select: ['read_only_production', 'ol_data_analyst', 'reverse_etl']
     dimensional:
       +materialized: table
       +schema: dimensional
       +grants:
-        select: ['read_only_production', 'business_intelligence', 'reverse_etl']
+        select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
+          'ol_business_analyst', 'reverse_etl']
     intermediate:
       +materialized: table
       +schema: intermediate
       +grants:
-        select: ['read_only_production', 'business_intelligence', 'reverse_etl']
+        select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
+          'ol_business_analyst', 'reverse_etl']
     marts:
       +materialized: table
       +schema: mart
       +grants:
-        select: ['read_only_production', 'business_intelligence', 'reverse_etl', 'finance']
+        select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
+          'ol_business_analyst', 'reverse_etl', 'finance']
     reporting:
       +materialized: table
       +schema: reporting
       +grants:
-        select: ['read_only_production', 'business_intelligence', 'reverse_etl']
+        select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
+          'ol_business_analyst', 'reverse_etl']
     external:
       +materialized: table
       +schema: external
       +grants:
-        select: ['read_only_production', 'business_intelligence', 'reverse_etl', 'mit_irx']
+        select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
+          'ol_business_analyst', 'reverse_etl', 'mit_irx']
     sample:
 
 
@@ -118,3 +128,6 @@ models:
 tests:
   open_learning:
     +error_if: ">10"
+
+flags:
+  require_certificate_validation: true
