@@ -41,6 +41,7 @@ class MySQLClient:
             port=port,
             db=db_name,
             cursorclass=DictCursor,
+            ssl={"cipher": "TLSv1.2"},
         )
 
     def run_query(self, query: Query) -> tuple[list[str], list[dict[Any, Any]]]:
