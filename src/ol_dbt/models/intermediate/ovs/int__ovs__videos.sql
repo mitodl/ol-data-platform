@@ -36,7 +36,7 @@ select
     , videos.video_title
     , videos.video_status
     , videos.video_created_on
-    , video_encodejobs.video_duration
+    , coalesce(video_encodejobs.video_duration, videos.video_duration) as video_duration
     , case
         when edxendpoints.edxendpoint_base_url = '{{ var("mitxonline_openedx_url") }}'
             then '{{ var("mitxonline") }}'
