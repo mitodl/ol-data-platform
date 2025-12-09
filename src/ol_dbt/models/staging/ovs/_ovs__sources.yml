@@ -73,6 +73,8 @@ sources:
         page.
     - name: schedule_retranscode
       description: boolean, this field is to support re-encoding videos for some collections.
+    - name: duration
+      description: float, duration of the video in seconds.
     - name: created_at
       description: timestamp, date and time when the record was created.
     - name: updated_at
