@@ -32,7 +32,7 @@ models:
     tests:
     - not_null
   - name: video_duration
-    description: int, the length of the video, in seconds.
+    description: float, the length of the video, in seconds.
     tests:
     - not_null
   - name: video_created_on
