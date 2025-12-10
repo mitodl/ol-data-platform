@@ -81,6 +81,9 @@ select
     , micromasters_profile.user_profile_id as user_micromasters_profile_id
     , micromasters_users.user_edxorg_username
     , coalesce(openedx_users.user_username, users.user_username) as user_username
+    , cast(null as varchar) as user_street_address
+    , cast(null as varchar) as user_address_city
+    , cast(null as varchar) as user_address_postal_code
 from users
 left join users_legaladdress on users.user_id = users_legaladdress.user_id
 left join users_profile on users.user_id = users_profile.user_id

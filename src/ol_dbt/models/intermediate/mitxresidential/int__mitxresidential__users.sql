@@ -21,5 +21,8 @@ select
     , profiles.user_gender
     , profiles.user_highest_education
     , coalesce(users.user_full_name, profiles.user_full_name) as user_full_name
+    , cast(null as varchar) as user_street_address
+    , cast(null as varchar) as user_address_state_or_territory
+    , cast(null as varchar) as user_address_postal_code
 from users
 left join profiles on users.user_id = profiles.user_id
