@@ -18,6 +18,7 @@ with source as (
         , is_logged_in_only as video_is_logged_in_only
         , is_public as video_is_public
         , is_private as video_is_private
+        , duration as video_duration
         ,{{ cast_timestamp_to_iso8601('created_at') }} as video_created_on
         ,{{ cast_timestamp_to_iso8601('updated_at') }} as video_updated_on
 

@@ -104,6 +104,8 @@ models:
     description: boolean, indicating if this video is private.
     tests:
     - not_null
+  - name: video_duration
+    description: float, the length of the video, in seconds.
   - name: video_created_on
     description: timestamp, date and time when the record was created.
     tests:
