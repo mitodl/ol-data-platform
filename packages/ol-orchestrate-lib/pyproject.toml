@@ -13,6 +13,7 @@ dependencies = [
     "PyAthena ~=3.29.2",
     "boto3 ~=1.42.0",
     "dagster ~= 1.11",
+    "dagster-airbyte>=0.28.6",
     "dagster-aws ~=0.28.0",
     "fsspec (>=2026.0.0,<2027.0.0)",
     "gcsfs (>=2026.0.0,<2027.0.0)",
