@@ -14,10 +14,7 @@ from typing import Annotated
 
 from cyclopts import App, Parameter
 
-app = App(
-    help="Run uv commands across all code locations",
-    default_parameter=Parameter(negative=""),
-)
+app = App(help="Run uv commands across all code locations")
 
 
 class Colors:
@@ -74,51 +71,21 @@ def run_uv_command(location: Path, uv_args: list[str], verbose: bool = False) ->
         sys.exit(1)
 
 
-@app.default
-def run_uv_operations(  # noqa: C901
-    *uv_command: Annotated[
-        str,
-        Parameter(
-            show=False,
-            help="The uv command and arguments to run (e.g., sync, lock --upgrade)",
-        ),
-    ],
-    code_locations_dir: Annotated[
-        Path,
-        Parameter(
-            help="Base directory containing code locations",
-        ),
-    ] = Path(__file__).parent.parent / "dg_projects",
-    continue_on_error: Annotated[
-        bool,
-        Parameter(
-            help="Continue running even if some locations fail",
-        ),
-    ] = False,
-    verbose: Annotated[
-        bool,
-        Parameter(
-            help="Print verbose output",
-        ),
-    ] = False,
+def run_across_locations(
+    uv_args: list[str],
+    code_locations_dir: Path,
+    continue_on_error: bool,
+    verbose: bool,
 ) -> None:
     """
-    Run uv commands across all code locations.
+    Run a uv command across all code locations.
 
-    Examples:
-        uv-operations sync
-        uv-operations lock --upgrade
-        uv-operations build
-        uv-operations pip list
+    Args:
+        uv_args: Arguments to pass to uv.
+        code_locations_dir: Base directory containing code locations.
+        continue_on_error: Whether to continue if a location fails.
+        verbose: Whether to print verbose output.
     """
-    if not uv_command:
-        print(f"{Colors.RED}Error: No uv command specified{Colors.NC}")
-        print("\nUsage examples:")
-        print("  uv-operations sync")
-        print("  uv-operations lock --upgrade")
-        print("  uv-operations build")
-        sys.exit(1)
-
     base_dir = code_locations_dir.resolve()
 
     if not base_dir.exists():
@@ -149,7 +116,7 @@ def run_uv_operations(  # noqa: C901
         print(f"{Colors.BLUE}Processing: {location.name}{Colors.NC}")
         print(f"{Colors.BLUE}{'=' * 40}{Colors.NC}")
 
-        success = run_uv_command(location, list(uv_command), verbose=verbose)
+        success = run_uv_command(location, uv_args, verbose=verbose)
 
         if success:
             print(f"{Colors.GREEN}✓ Success: {location.name}{Colors.NC}")
@@ -185,6 +152,123 @@ def run_uv_operations(  # noqa: C901
         sys.exit(1)
     else:
         print(f"\n{Colors.GREEN}All operations completed successfully!{Colors.NC}")
+
+
+@app.command
+def sync(
+    code_locations_dir: Annotated[
+        Path,
+        Parameter(
+            help="Base directory containing code locations",
+        ),
+    ] = Path(__file__).parent.parent / "dg_projects",
+    continue_on_error: Annotated[
+        bool,
+        Parameter(
+            help="Continue running even if some locations fail",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        Parameter(
+            help="Print verbose output",
+        ),
+    ] = False,
+) -> None:
+    """Sync dependencies in all code locations."""
+    run_across_locations(["sync"], code_locations_dir, continue_on_error, verbose)
+
+
+@app.command
+def lock(
+    upgrade: Annotated[
+        bool,
+        Parameter(
+            help="Upgrade all dependencies to latest versions",
+        ),
+    ] = False,
+    code_locations_dir: Annotated[
+        Path,
+        Parameter(
+            help="Base directory containing code locations",
+        ),
+    ] = Path(__file__).parent.parent / "dg_projects",
+    continue_on_error: Annotated[
+        bool,
+        Parameter(
+            help="Continue running even if some locations fail",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        Parameter(
+            help="Print verbose output",
+        ),
+    ] = False,
+) -> None:
+    """Lock dependencies in all code locations."""
+    uv_args = ["lock"]
+    if upgrade:
+        uv_args.append("--upgrade")
+    run_across_locations(uv_args, code_locations_dir, continue_on_error, verbose)
+
+
+@app.command
+def build(
+    code_locations_dir: Annotated[
+        Path,
+        Parameter(
+            help="Base directory containing code locations",
+        ),
+    ] = Path(__file__).parent.parent / "dg_projects",
+    continue_on_error: Annotated[
+        bool,
+        Parameter(
+            help="Continue running even if some locations fail",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        Parameter(
+            help="Print verbose output",
+        ),
+    ] = False,
+) -> None:
+    """Build packages in all code locations."""
+    run_across_locations(["build"], code_locations_dir, continue_on_error, verbose)
+
+
+@app.command
+def pip(
+    pip_command: Annotated[
+        str,
+        Parameter(
+            help="The pip subcommand to run (e.g., list, freeze)",
+        ),
+    ],
+    code_locations_dir: Annotated[
+        Path,
+        Parameter(
+            help="Base directory containing code locations",
+        ),
+    ] = Path(__file__).parent.parent / "dg_projects",
+    continue_on_error: Annotated[
+        bool,
+        Parameter(
+            help="Continue running even if some locations fail",
+        ),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        Parameter(
+            help="Print verbose output",
+        ),
+    ] = False,
+) -> None:
+    """Run pip commands in all code locations."""
+    run_across_locations(
+        ["pip", pip_command], code_locations_dir, continue_on_error, verbose
+    )
 
 
 if __name__ == "__main__":
