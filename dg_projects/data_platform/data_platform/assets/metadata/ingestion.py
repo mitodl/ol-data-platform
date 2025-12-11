@@ -400,7 +400,6 @@ def dagster_metadata(
     key=["openmetadata", "superset", "metadata"],
     group_name="openmetadata",
     automation_condition=upstream_or_code_changes(),
-    required_resource_keys={"superset_api", "vault"},
 )
 def superset_metadata(
     context: AssetExecutionContext,
@@ -469,7 +468,6 @@ def superset_metadata(
     key=["openmetadata", "airbyte", "metadata"],
     group_name="openmetadata",
     automation_condition=upstream_or_code_changes(),
-    required_resource_keys={"airbyte_workspace"},
 )
 def airbyte_metadata(
     context: AssetExecutionContext,
@@ -481,9 +479,8 @@ def airbyte_metadata(
     Authentication is handled via the AirbyteOSSWorkspace resource from
     ol-orchestrate-lib.
     """
-    airbyte_workspace = context.resources.airbyte_workspace
-
     # Get connection details from the workspace
+    airbyte_workspace = context.resources.airbyte_workspace
     airbyte_host = airbyte_workspace.api_server
 
     context.log.info("Ingesting Airbyte metadata from %s", airbyte_host)

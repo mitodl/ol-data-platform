@@ -580,6 +580,19 @@ wheels = [
 ]
 
 [[package]]
+name = "dagster-airbyte"
+version = "0.28.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dagster" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/79/40/d4e1265f9f7539893afdcc8bbe8a6152b065a77e1c36f9f67492a8f1e37d/dagster_airbyte-0.28.6.tar.gz", hash = "sha256:c3a3ad7c4419cd9176c1871ec470f79e688d24db2fddee598f0beeb338d63120", size = 108882, upload-time = "2025-12-11T20:32:18.848Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/6f/6f1611eed9e22572bb83a479ea5729447c70efb030f5aa3c91d660dcc83e/dagster_airbyte-0.28.6-py3-none-any.whl", hash = "sha256:061f03f8d76cc49ddf29df5ab27c873ba0295eeeaf1586416f8eb2bb5840581c", size = 117254, upload-time = "2025-12-11T20:32:17.113Z" },
+]
+
+[[package]]
 name = "dagster-aws"
 version = "0.28.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2127,6 +2140,7 @@ source = { editable = "../../packages/ol-orchestrate-lib" }
 dependencies = [
     { name = "boto3" },
     { name = "dagster" },
+    { name = "dagster-airbyte" },
     { name = "dagster-aws" },
     { name = "fsspec" },
     { name = "gcsfs" },
@@ -2149,6 +2163,7 @@ dependencies = [
 requires-dist = [
     { name = "boto3", specifier = "~=1.41.5" },
     { name = "dagster", specifier = "~=1.11" },
+    { name = "dagster-airbyte", specifier = ">=0.28.6" },
     { name = "dagster-aws", specifier = "~=0.28.0" },
     { name = "fsspec", specifier = "~=2025.12.0" },
     { name = "gcsfs", specifier = ">=2025.2.0,<2026.0.0" },

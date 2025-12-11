@@ -1952,6 +1952,7 @@ source = { editable = "../../packages/ol-orchestrate-lib" }
 dependencies = [
     { name = "boto3" },
     { name = "dagster" },
+    { name = "dagster-airbyte" },
     { name = "dagster-aws" },
     { name = "fsspec" },
     { name = "gcsfs" },
@@ -1974,6 +1975,7 @@ dependencies = [
 requires-dist = [
     { name = "boto3", specifier = "~=1.41.5" },
     { name = "dagster", specifier = "~=1.11" },
+    { name = "dagster-airbyte", specifier = ">=0.28.6" },
     { name = "dagster-aws", specifier = "~=0.28.0" },
     { name = "fsspec", specifier = "~=2025.12.0" },
     { name = "gcsfs", specifier = ">=2025.2.0,<2026.0.0" },

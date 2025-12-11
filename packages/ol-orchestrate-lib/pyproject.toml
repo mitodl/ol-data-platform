@@ -14,6 +14,7 @@ dependencies = [
     "PyPika ~= 0.48.9",
     "boto3 ~=1.41.5",
     "dagster ~= 1.11",
+    "dagster-airbyte>=0.28.6",
     "dagster-aws ~=0.28.0",
     "fsspec ~=2025.12.0",
     "gcsfs (>=2025.2.0,<2026.0.0)",
