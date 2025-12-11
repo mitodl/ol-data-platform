@@ -74,8 +74,8 @@ def run_uv_command(location: Path, uv_args: list[str], verbose: bool = False) ->
 def run_across_locations(
     uv_args: list[str],
     code_locations_dir: Path,
-    continue_on_error: bool,
-    verbose: bool,
+    continue_on_error: bool,  # noqa: FBT001
+    verbose: bool,  # noqa: FBT001
 ) -> None:
     """
     Run a uv command across all code locations.
@@ -162,13 +162,13 @@ def sync(
             help="Base directory containing code locations",
         ),
     ] = Path(__file__).parent.parent / "dg_projects",
-    continue_on_error: Annotated[
+    continue_on_error: Annotated[  # noqa: FBT002
         bool,
         Parameter(
             help="Continue running even if some locations fail",
         ),
     ] = False,
-    verbose: Annotated[
+    verbose: Annotated[  # noqa: FBT002
         bool,
         Parameter(
             help="Print verbose output",
@@ -181,7 +181,7 @@ def sync(
 
 @app.command
 def lock(
-    upgrade: Annotated[
+    upgrade: Annotated[  # noqa: FBT002
         bool,
         Parameter(
             help="Upgrade all dependencies to latest versions",
@@ -193,13 +193,13 @@ def lock(
             help="Base directory containing code locations",
         ),
     ] = Path(__file__).parent.parent / "dg_projects",
-    continue_on_error: Annotated[
+    continue_on_error: Annotated[  # noqa: FBT002
         bool,
         Parameter(
             help="Continue running even if some locations fail",
         ),
     ] = False,
-    verbose: Annotated[
+    verbose: Annotated[  # noqa: FBT002
         bool,
         Parameter(
             help="Print verbose output",
@@ -221,13 +221,13 @@ def build(
             help="Base directory containing code locations",
         ),
     ] = Path(__file__).parent.parent / "dg_projects",
-    continue_on_error: Annotated[
+    continue_on_error: Annotated[  # noqa: FBT002
         bool,
         Parameter(
             help="Continue running even if some locations fail",
         ),
     ] = False,
-    verbose: Annotated[
+    verbose: Annotated[  # noqa: FBT002
         bool,
         Parameter(
             help="Print verbose output",
@@ -252,13 +252,13 @@ def pip(
             help="Base directory containing code locations",
         ),
     ] = Path(__file__).parent.parent / "dg_projects",
-    continue_on_error: Annotated[
+    continue_on_error: Annotated[  # noqa: FBT002
         bool,
         Parameter(
             help="Continue running even if some locations fail",
         ),
     ] = False,
-    verbose: Annotated[
+    verbose: Annotated[  # noqa: FBT002
         bool,
         Parameter(
             help="Print verbose output",
