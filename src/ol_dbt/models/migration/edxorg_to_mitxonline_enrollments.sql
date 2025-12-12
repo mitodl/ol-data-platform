@@ -32,6 +32,7 @@ with combined_enrollments as (
    join wagtail_page as certificate_page
        on certificate_page.wagtail_page_path like wagtail_page.wagtail_page_path || '%'
         and certificate_page.wagtail_page_path <> wagtail_page.wagtail_page_path
+        and certificate_page.wagtail_page_slug like 'certificate%'
 
 )
 
@@ -68,18 +69,31 @@ with combined_enrollments as (
     where contenttype.contenttype_full_name = 'cms_certificatepage'
 )
 
+,  ranked_revisions AS (
+    select
+        certificate_page_id
+        , signatory_ids
+        , wagtailcore_revision_id
+        , row_number() over (
+            partition by certificate_page_id, signatory_ids
+            order by wagtailcore_revision_id desc
+        ) as row_number
+    from mitxonline_certificate_revision
+)
+
 , edx_to_mitxonline_certificate_revision as (
     select distinct
         edx_signatories.courserun_readable_id
         , edx_signatories.signatory_names
         , mitxonline_certificate_page.courserun_id
-        , mitxonline_certificate_revision.wagtailcore_revision_id
+        , ranked_revisions.wagtailcore_revision_id
     from edx_signatories
     inner join mitxonline_certificate_page
         on mitxonline_certificate_page.courserun_readable_id = edx_signatories.courserun_readable_id
-    inner join mitxonline_certificate_revision
-        on mitxonline_certificate_page.certificate_page_id = mitxonline_certificate_revision.certificate_page_id
-        and edx_signatories.signatory_ids = mitxonline_certificate_revision.signatory_ids
+    inner join ranked_revisions
+        on mitxonline_certificate_page.certificate_page_id = ranked_revisions.certificate_page_id
+        and edx_signatories.signatory_ids = ranked_revisions.signatory_ids
+        and ranked_revisions.row_number = 1
 )
 
 , mitxonline_enrollment as (
