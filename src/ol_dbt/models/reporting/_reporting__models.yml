@@ -408,3 +408,160 @@ models:
     description: boolean, true if the learner is rewatching the video
   - name: video_watched_count
     description: int, count of videos watched
+
+- name: course_engagement_detail_report
+  description: Comprehensive enrollment and engagement detail report that combines
+    enrollment information with video, problem, and daily activity engagement metrics.
+    This report consolidates data from marts__combined_course_enrollment_detail, marts__combined__users,
+    and platform-specific engagement models to provide a complete view of learner
+    activity.
+  columns:
+  - name: platform
+    description: string, application where the enrollment is from
+    tests:
+    - not_null
+  - name: courserunenrollment_id
+    description: int, internal ID for the courserun enrollment
+  - name: combined_orders_hash_id
+    description: string, hash ID combining order_id, line_id and platform
+  - name: course_readable_id
+    description: str, Open edX course ID
+  - name: course_title
+    description: str, title of the course
+  - name: course_number
+    description: str, course number (e.g., 6.00.2x)
+  - name: courserun_id
+    description: int, internal ID for the course run
+  - name: courserun_is_current
+    description: boolean, true if course run is currently active
+  - name: courserun_readable_id
+    description: str, Open edX course run ID
+  - name: courserun_start_on
+    description: timestamp, course run start date and time
+  - name: courserun_end_on
+    description: timestamp, course run end date and time
+  - name: courserun_title
+    description: string, title of the course run
+  - name: courserun_upgrade_deadline
+    description: timestamp, deadline for upgrading to verified track
+  - name: courseruncertificate_created_on
+    description: timestamp, when the certificate was created
+  - name: courseruncertificate_is_earned
+    description: boolean, whether learner earned a certificate
+  - name: courseruncertificate_url
+    description: str, URL to the certificate
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate
+  - name: courserunenrollment_created_on
+    description: timestamp, when the enrollment was created
+  - name: courserunenrollment_created_on_date
+    description: date, enrollment creation date (YYYY-MM-DD format)
+  - name: courserunenrollment_enrollment_mode
+    description: string, enrollment mode (audit, verified, etc.)
+  - name: courserunenrollment_enrollment_status
+    description: string, enrollment status
+  - name: courserunenrollment_is_active
+    description: boolean, whether enrollment is active
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, whether enrolled via edX
+  - name: courserunenrollment_upgraded_on
+    description: timestamp, when enrollment was upgraded to verified
+  - name: courserungrade_grade
+    description: float, final course grade (0-1 scale)
+  - name: courserungrade_is_passing
+    description: boolean, whether learner passed the course
+  - name: line_id
+    description: int, order line item ID
+  - name: order_id
+    description: int, ecommerce order ID
+  - name: order_reference_number
+    description: string, order reference number
+  - name: user_hashed_id
+    description: string, hashed user identifier combining user_id/email and platform
+  - name: user_id
+    description: string, user ID on the platform
+  - name: user_username
+    description: string, username on the platform
+  - name: user_email
+    description: string, user email address
+  - name: user_full_name
+    description: str, user's full name
+  - name: user_gender
+    description: str, user's gender (empty strings converted to null)
+  - name: user_birth_year
+    description: int, user's birth year
+  - name: user_company
+    description: str, user's company
+  - name: user_job_title
+    description: str, user's job title
+  - name: user_industry
+    description: str, user's industry
+  - name: user_country_code
+    description: str, user's country code
+  - name: user_address_city
+    description: str, user's city
+  - name: user_address_state_or_territory
+    description: str, user's state or territory
+  - name: user_address_postal_code
+    description: str, user's postal code
+  - name: user_street_address
+    description: str, user's street address
+  - name: user_highest_education
+    description: str, user's highest education level
+  - name: user_joined_on
+    description: timestamp, when user created their account
+  - name: user_last_login
+    description: timestamp, user's last login date/time
+  - name: user_is_active_on_platform
+    description: boolean, whether user account is active
+  - name: num_of_course_enrolled
+    description: int, total courses user has enrolled in across platforms
+  - name: num_of_course_passed
+    description: int, total courses user has passed across platforms
+  - name: first_course_start_datetime
+    description: timestamp, start date of user's first course
+  - name: last_course_start_datetime
+    description: timestamp, start date of user's most recent course
+  - name: number_of_courserun_certificates
+    description: int, total certificates earned by user
+  - name: total_amount_paid_orders
+    description: numeric, total amount user has paid across all orders
+  - name: has_program_certificate
+    description: boolean, whether user has earned any program certificate
+  - name: has_dedp_program_certificate
+    description: boolean, whether user has earned DEDP program certificate
+  - name: total_videos_watched
+    description: int, count of distinct videos watched in this courserun
+  - name: videos_played_count
+    description: int, count of distinct videos with play events
+  - name: videos_completed_count
+    description: int, count of distinct videos with complete events
+  - name: sections_with_video_activity
+    description: int, count of distinct course sections with video activity
+  - name: max_video_block_index_reached
+    description: int, highest video sequence index reached in course
+  - name: total_days_active
+    description: int, number of distinct days with courserun activity
+  - name: total_activity_events
+    description: int, total count of all activity events
+  - name: total_problems_submitted
+    description: int, total problem submissions across all days
+  - name: total_video_plays
+    description: int, total video play events across all days
+  - name: total_discussion_participations
+    description: int, total discussion participation events
+  - name: first_activity_date
+    description: date, first date of activity in this courserun
+  - name: last_activity_date
+    description: date, most recent date of activity in this courserun
+  - name: total_problems_attempted
+    description: int, count of distinct problems attempted
+  - name: problems_correct_count
+    description: int, count of distinct problems answered correctly (most recent attempt)
+  - name: problems_incorrect_count
+    description: int, count of distinct problems answered incorrectly (most recent
+      attempt)
+  - name: total_problem_attempts
+    description: int, sum of all attempts across all problems
+  - name: avg_problem_score_pct
+    description: float, average problem score as percentage (0-1 scale)
