@@ -82,6 +82,10 @@ models:
     description: int, certificate page revision id on mitxonline
   - name: signatory_names
     description: array of strings, the names of the signatories for the course certificate
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "courserun_readable_id"]
+
 
 - name: edxorg_to_mitxonline_users
   description: edX.org certificate learners who not yet have account on MITx Online
