@@ -69,7 +69,7 @@ with combined_enrollments as (
     where contenttype.contenttype_full_name = 'cms_certificatepage'
 )
 
-,  ranked_revisions AS (
+, ranked_revisions AS (
     select
         certificate_page_id
         , signatory_ids
