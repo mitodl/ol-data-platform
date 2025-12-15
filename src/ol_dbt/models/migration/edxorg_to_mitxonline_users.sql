@@ -5,10 +5,6 @@ with edx_certificate as (
     from {{ ref('int__edxorg__mitx_courserun_certificates') }}
 )
 
-, edx_run as (
-    select * from {{ ref('edxorg_to_mitxonline_course_runs') }}
-)
-
 , mitx_user as (
     select * from {{ ref('int__mitx__users') }}
 )
