@@ -24,8 +24,6 @@ with edx_certificate as (
         ) as row_number
     from edx_certificate
     inner join mitx_user on edx_certificate.user_email = mitx_user.user_edxorg_email
-    inner join edx_run on edx_certificate.courseware_id = edx_run.courseware_id ---match only the migrated course runs
-
 )
 
 select
