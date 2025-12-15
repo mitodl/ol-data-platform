@@ -5,10 +5,6 @@ with edx_certificate as (
     from {{ ref('int__edxorg__mitx_courserun_certificates') }}
 )
 
-, edx_run as (
-    select * from {{ ref('edxorg_to_mitxonline_course_runs') }}
-)
-
 , mitx_user as (
     select * from {{ ref('int__mitx__users') }}
 )
@@ -24,8 +20,6 @@ with edx_certificate as (
         ) as row_number
     from edx_certificate
     inner join mitx_user on edx_certificate.user_email = mitx_user.user_edxorg_email
-    inner join edx_run on edx_certificate.courseware_id = edx_run.courseware_id ---match only the migrated course runs
-
 )
 
 select
