@@ -41,8 +41,9 @@ seeds:
     - not_null
 
 - name: legacy_edx_certificate_revision_mapping
-  description: Mapping of legacy edX certificate to MITx Online certificate revisions
-    for legacy edX courses that were missing signatory information
+  description: Mapping edX certificates to MITx Online certificate revisions for legacy
+    edX courses that were missing signatory information from edX course export.These
+    signatories are manually created in the CMS.
   columns:
   - name: courserun_readable_id
     description: string, the open edX course run ID formatted as course-v1:{org}+{course
