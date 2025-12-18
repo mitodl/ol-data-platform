@@ -30,7 +30,7 @@ select
     , edx_certificate_user.user_address_country
 from edx_certificate_user
 left join mitx_user as mitx_user1 on edx_certificate_user.user_mitxonline_username = mitx_user1.user_mitxonline_username
-left join mitx_user as mitx_user2 on edx_certificate_user.user_email = mitx_user2.user_mitxonline_email
+left join mitx_user as mitx_user2 on lower(edx_certificate_user.user_email) = lower(mitx_user2.user_mitxonline_email)
 where
     edx_certificate_user.row_number = 1
     and mitx_user1.user_mitxonline_username is null
