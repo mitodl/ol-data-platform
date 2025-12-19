@@ -108,12 +108,7 @@ with combined_enrollments as (
 )
 
 , mitxonline_enrollment as (
-    select distinct
-        combined_enrollments.courserun_readable_id
-        , combined_enrollments.user_email
-        , combined_enrollments.course_readable_id
-    from combined_enrollments
-    where combined_enrollments.platform = '{{ var("mitxonline") }}'
+    select * from {{ ref('int__mitxonline__courserunenrollments') }}
 )
 
 , edxorg_enrollment as (
