@@ -18,6 +18,10 @@ with combined_enrollments as (
     select * from {{ ref('stg__mitxonline__app__postgres__cms_wagtail_page') }}
 )
 
+, missing_signatories_revision_mapping as (
+    select * from {{ ref('legacy_edx_certificate_revision_mapping') }}
+)
+
 , mitxonline_certificate_page as (
 
    select
@@ -85,7 +89,6 @@ with combined_enrollments as (
     select distinct
         edx_signatories.courserun_readable_id
         , edx_signatories.signatory_names
-        , mitxonline_certificate_page.courserun_id
         , ranked_revisions.wagtailcore_revision_id
     from edx_signatories
     inner join mitxonline_certificate_page
@@ -94,15 +97,18 @@ with combined_enrollments as (
         on mitxonline_certificate_page.certificate_page_id = ranked_revisions.certificate_page_id
         and edx_signatories.signatory_ids = ranked_revisions.signatory_ids
         and ranked_revisions.row_number = 1
+
+    union all
+
+    select
+        courserun_readable_id
+        , null as signatory_names
+        , certificate_page_revision_id
+    from missing_signatories_revision_mapping
 )
 
 , mitxonline_enrollment as (
-    select distinct
-        combined_enrollments.courserun_readable_id
-        , combined_enrollments.user_email
-        , combined_enrollments.course_readable_id
-    from combined_enrollments
-    where combined_enrollments.platform = '{{ var("mitxonline") }}'
+    select * from {{ ref('int__mitxonline__courserunenrollments') }}
 )
 
 , edxorg_enrollment as (
@@ -124,7 +130,7 @@ select
     edxorg_enrollment.user_id as user_edxorg_id
     , mitx__users.user_mitxonline_id
     , edxorg_enrollment.user_email
-    , edx_to_mitxonline_certificate_revision.courserun_id
+    , mitxonline__course_runs.courserun_id
     , edxorg_enrollment.courserun_readable_id
     , edxorg_enrollment.courserunenrollment_enrollment_mode
     , edxorg_enrollment.courserungrade_grade
@@ -138,6 +144,8 @@ left join mitxonline_enrollment
     on
         edxorg_enrollment.user_email = mitxonline_enrollment.user_email
        and edxorg_enrollment.courserun_readable_id = mitxonline_enrollment.courserun_readable_id
+left join mitxonline__course_runs
+    on edxorg_enrollment.courserun_readable_id = mitxonline__course_runs.courserun_readable_id
 left join mitx__users
     on edxorg_enrollment.user_id = cast(mitx__users.user_edxorg_id as varchar)
 left join edx_to_mitxonline_certificate_revision
