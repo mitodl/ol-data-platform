@@ -803,7 +803,7 @@ wheels = [
 
 [[package]]
 name = "dbt-trino"
-version = "1.9.3"
+version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dbt-adapters" },
@@ -811,9 +811,9 @@ dependencies = [
     { name = "dbt-core" },
     { name = "trino" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c1/6e/eaffec45a9fdc7512c4f8d90893c9c36975182a2e9c0b89782a54cdbe6e8/dbt_trino-1.9.3.tar.gz", hash = "sha256:36e6d33ba6da0c9cda527b5f42f1d090bca14573dc08c7e5b784e0ffb329b7ae", size = 30846, upload-time = "2025-07-22T21:01:22.171Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/80/58/a6b48d87e53d13865e8649e6f840c8de22a76713b951561b422879d0bc5c/dbt_trino-1.10.0.tar.gz", hash = "sha256:3f4a537bebe463df66d6784dad6bd12976bd6d3bf2aa55baf73fc0e034520516", size = 32805, upload-time = "2025-12-16T15:23:00.009Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/c1/d5ad99cf8628c2700c25f0b5d24114be9ecaf48fc034a434645e179ed774/dbt_trino-1.9.3-py3-none-any.whl", hash = "sha256:eb7bbe3e16375dd98a7445d22e4bca80dea1ded25d6bec35796d8a32866ec19e", size = 36519, upload-time = "2025-07-22T21:01:20.918Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/19/ba52a4176635f445bd61519fdcdcda20483e7d0d28275a93ee8f4df4e8bf/dbt_trino-1.10.0-py3-none-any.whl", hash = "sha256:ab026eab3736025686d9449b01dc455ed5d737a0d991de215aef6c610fad861e", size = 39890, upload-time = "2025-12-16T15:22:59.251Z" },
 ]
 
 [[package]]
@@ -1590,7 +1590,7 @@ requires-dist = [
     { name = "dagster-k8s", specifier = ">=0.27.15" },
     { name = "dagster-postgres", specifier = ">=0.27.13" },
     { name = "dbt-duckdb", specifier = "~=1.10.0" },
-    { name = "dbt-trino", specifier = "~=1.9.0" },
+    { name = "dbt-trino", specifier = "~=1.10.0" },
     { name = "httpx", specifier = "~=0.28.0" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
     { name = "pygithub", specifier = ">=2.8.1" },
