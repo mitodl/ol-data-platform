@@ -22,6 +22,36 @@ with chatbot_events as (
     select * from {{ ref('dim_video') }}
 )
 
+, enrollment_detail as (
+    select * from {{ ref('marts__combined_course_enrollment_detail') }}
+)
+
+, org_data as (
+    select * from {{ ref('organization_administration_report') }}
+)
+
+, any_activity as (
+    select
+        user_email
+        , courserun_readable_id
+    from org_data
+    where active_count = 1
+    group by
+        user_email
+        , courserun_readable_id
+)
+
+, enroll_activity as (
+    select
+        user_email
+        , courserun_readable_id
+    from enrollment_detail
+    where courserunenrollment_enrollment_status is null
+    group by
+        user_email
+        , courserun_readable_id
+)
+
 , video_pre_query as (
     select
         video_events.user_fk
@@ -73,7 +103,7 @@ with chatbot_events as (
 , video_views_table as (
     select
         a.courserun_readable_id
-        , a.video_block_fk
+        , a.video_block_fk 
         , v.block_category
         , v.block_title
         , cc_section.block_title as section_title
@@ -108,7 +138,7 @@ with chatbot_events as (
             and cc_section.is_latest = true
     group by
         a.courserun_readable_id
-        , a.video_block_fk
+        , a.video_block_fk 
         , v.block_category
         , v.block_title
         , cc_section.block_title
@@ -117,7 +147,7 @@ with chatbot_events as (
 )
 
 , combined_data as (
-    select
+    select 
         video_views_table.email as user_email
         , video_watches.activity_date
         , video_views_table.courserun_readable_id
@@ -133,7 +163,7 @@ with chatbot_events as (
         , 1 as video_watched_count
     from video_views_table
     inner join video_watches
-        on
+        on 
             video_views_table.courserun_readable_id = video_watches.courserun_readable_id
             and video_views_table.video_block_fk = video_watches.video_block_fk
             and video_views_table.email = video_watches.email
@@ -158,21 +188,21 @@ with chatbot_events as (
     inner join user
         on chatbot_events.user_fk = user.user_pk
     left join course_content as c
-        on
+        on 
             chatbot_events.block_id = c.block_id
             and c.is_latest = true
     left join course_content as section
-        on
+        on 
             c.chapter_block_id = section.block_id
             and section.is_latest = true
     left join course_content as subsection
-        on
+        on 
             c.sequential_block_id = subsection.block_id
             and subsection.is_latest = true
     where chatbot_events.event_type = 'ol_openedx_chat.drawer.submit'
-    group by
+    group by    
         user.email
-        , cast(chatbot_events.event_timestamp as date)
+        , cast(chatbot_events.event_timestamp as date) 
         , chatbot_events.courserun_readable_id
         , c.block_category
         , c.block_title
@@ -181,7 +211,7 @@ with chatbot_events as (
         , chatbot_events.chatbot_type
 )
 
-select
+select 
     user_email
     , activity_date
     , courserun_readable_id
@@ -195,4 +225,14 @@ select
     , video_duration
     , rewatch_indicator
     , video_watched_count
+    , case when enroll_activity.user_email is not null then true else false as enrolled_ind
+    , case when any_activity.user_email is not null then true else false as ever_active_ind
 from combined_data
+left join enroll_activity
+    on 
+        combined_data.user_email = enroll_activity.user_email
+        and combined_data.courserun_readable_id = enroll_activity.courserun_readable_id
+left join any_activity
+    on 
+        combined_data.user_email = any_activity.user_email
+        and combined_data.courserun_readable_id = any_activity.courserun_readable_id
