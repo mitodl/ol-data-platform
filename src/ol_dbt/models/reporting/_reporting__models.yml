@@ -376,7 +376,8 @@ models:
       column_list: ["courserun_readable_id", "organization_key", "user_email", "activity_date"]
 
 - name: instructor_module_report
-  description: A report showing chatbot data for later roll-up at the instructor level.
+  description: A report showing chatbot data for later roll-up at the
+    instructor level.
   columns:
   - name: user_email
     description: string, user email that user registered
@@ -409,8 +410,7 @@ models:
   - name: video_watched_count
     description: int, count of videos watched
   - name: enrolled_ind
-    description: boolean, true if courserunenrollment_enrollment_status is null else
-      false
+    description: boolean, true if courserunenrollment_enrollment_status is null else false
   - name: ever_active_ind
-    description: boolean, true if user had any video, problem, navigation, discussion,
-      chatbot , unique_course_certificate_earners otherwise false
+    description: boolean, true if user had any video, problem, navigation, discussion, chatbot
+      , unique_course_certificate_earners otherwise false
