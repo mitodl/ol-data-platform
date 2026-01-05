@@ -408,3 +408,9 @@ models:
     description: boolean, true if the learner is rewatching the video
   - name: video_watched_count
     description: int, count of videos watched
+  - name: enrolled_indicator
+    description: boolean, true if courserunenrollment_enrollment_status is null else
+      false
+  - name: ever_active_indicator
+    description: boolean, true if user had any video, problem, navigation, discussion,
+      chatbot , unique_course_certificate_earners otherwise false

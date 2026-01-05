@@ -22,6 +22,32 @@ with chatbot_events as (
     select * from {{ ref('dim_video') }}
 )
 
+, org_data as (
+    select * from {{ ref('organization_administration_report') }}
+)
+
+, any_activity as (
+    select
+        user_email
+        , courserun_readable_id
+    from org_data
+    where active_count = 1
+    group by
+        user_email
+        , courserun_readable_id
+)
+
+, enroll_activity as (
+    select
+        user_email
+        , courserun_readable_id
+    from enrollment_detail
+    where courserunenrollment_enrollment_status is null
+    group by
+        user_email
+        , courserun_readable_id
+)
+
 , video_pre_query as (
     select
         video_events.user_fk
@@ -182,17 +208,27 @@ with chatbot_events as (
 )
 
 select
-    user_email
-    , activity_date
-    , courserun_readable_id
-    , chatbot_used_count
-    , block_category
-    , block_title
-    , section_title
-    , subsection_title
-    , chatbot_type
-    , estimated_time_played
-    , video_duration
-    , rewatch_indicator
-    , video_watched_count
+    combined_data.user_email
+    , combined_data.activity_date
+    , combined_data.courserun_readable_id
+    , combined_data.chatbot_used_count
+    , combined_data.block_category
+    , combined_data.block_title
+    , combined_data.section_title
+    , combined_data.subsection_title
+    , combined_data.chatbot_type
+    , combined_data.estimated_time_played
+    , combined_data.video_duration
+    , combined_data.rewatch_indicator
+    , combined_data.video_watched_count
+    , case when enroll_activity.user_email is not null then true else false end as enrolled_ind
+    , case when any_activity.user_email is not null then true else false end as ever_active_ind
 from combined_data
+left join enroll_activity
+    on
+        combined_data.user_email = enroll_activity.user_email
+        and combined_data.courserun_readable_id = enroll_activity.courserun_readable_id
+left join any_activity
+    on
+        combined_data.user_email = any_activity.user_email
+        and combined_data.courserun_readable_id = any_activity.courserun_readable_id
