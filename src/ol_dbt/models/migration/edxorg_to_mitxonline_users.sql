@@ -3,6 +3,7 @@ with edx_certificate as (
         *
         ,  {{ format_course_id('courserun_readable_id', false) }} as courseware_id
     from {{ ref('int__edxorg__mitx_courserun_certificates') }}
+    where user_email not like 'retired__user%' and user_username not like 'retired__user%'
 )
 
 , mitx_user as (
@@ -35,4 +36,3 @@ where
     edx_certificate_user.row_number = 1
     and mitx_user1.user_mitxonline_username is null
     and mitx_user2.user_mitxonline_email is null
-    and edx_certificate_user.user_email not like 'retired__user%'
