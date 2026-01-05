@@ -3,6 +3,7 @@ with edx_certificate as (
         *
         ,  {{ format_course_id('courserun_readable_id', false) }} as courseware_id
     from {{ ref('int__edxorg__mitx_courserun_certificates') }}
+    where user_email not like 'retired__user%' and user_username not like 'retired__user%'
 )
 
 , mitx_user as (
@@ -23,7 +24,7 @@ with edx_certificate as (
 )
 
 select
-    edx_certificate_user.user_email
+    lower(edx_certificate_user.user_email) as user_email
     , edx_certificate_user.user_full_name
     , edx_certificate_user.user_gender
     , edx_certificate_user.user_birth_year
