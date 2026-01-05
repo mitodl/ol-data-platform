@@ -2,7 +2,7 @@ with exam_unit_grades as (
     select * from {{ ref('int__mitxonline__courserun_subsection_grades') }}
     where
         lower(coursestructure_block_title) = 'proctored exam'
-        and subsectiongrade_total_graded_score > 0
+        and subsectiongrade_total_earned_graded_score > 0
 )
 
 , exam_courserun_grades as (
