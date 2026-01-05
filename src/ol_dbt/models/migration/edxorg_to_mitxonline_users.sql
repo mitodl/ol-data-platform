@@ -23,7 +23,7 @@ with edx_certificate as (
 )
 
 select
-    edx_certificate_user.user_email
+    lower(edx_certificate_user.user_email) as user_email
     , edx_certificate_user.user_full_name
     , edx_certificate_user.user_gender
     , edx_certificate_user.user_birth_year
@@ -35,3 +35,4 @@ where
     edx_certificate_user.row_number = 1
     and mitx_user1.user_mitxonline_username is null
     and mitx_user2.user_mitxonline_email is null
+    and edx_certificate_user.user_email not like 'retired__user%'
