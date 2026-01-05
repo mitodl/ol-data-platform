@@ -86,10 +86,10 @@ with mitxonline_users as (
         , user_joined_on
         , user_last_login
         , user_is_active
-        , null as user_street_address
-        , null as user_address_city
+        , user_street_address
+        , user_address_city
         , user_address_state as user_address_state_or_territory
-        , null as user_address_postal_code
+        , user_address_postal_code
     from mitxonline_users
 
     union all
@@ -239,10 +239,10 @@ with mitxonline_users as (
         , user_joined_on
         , user_last_login
         , user_is_active
-        , null as user_street_address
+        , user_street_address
         , user_address_city
-        , null as user_address_state_or_territory
-        , null as user_address_postal_code
+        , user_address_state_or_territory
+        , user_address_postal_code
     from residential_users
 )
 
