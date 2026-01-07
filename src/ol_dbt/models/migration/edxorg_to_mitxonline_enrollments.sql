@@ -2,6 +2,10 @@ with combined_enrollments as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
+, edxorg_runs as (
+    select * from {{ ref('int__edxorg__mitx_courseruns') }}
+)
+
 , mitx__users as (
     select * from {{ ref('int__mitx__users') }}
 )
@@ -123,7 +127,12 @@ with combined_enrollments as (
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
     from combined_enrollments
+    left join edxorg_runs
+       on combined_enrollments.courserun_readable_id = edxorg_runs.courserun_readable_id
     where combined_enrollments.platform = '{{ var("edxorg") }}'
+    --- exclude DEDP Micromasters program courses as those are already migrated
+    and (edxorg_runs.micromasters_program_id != {{ var("dedp_micromasters_program_id") }}
+    or edxorg_runs.micromasters_program_id is null)
 )
 
 select
