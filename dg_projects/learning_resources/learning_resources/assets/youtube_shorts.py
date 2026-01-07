@@ -1,15 +1,15 @@
-"""Assets for processing YouTube Shorts videos."""
+"""Assets for processing Video Shorts videos from Google Sheets."""
 
 import hashlib
 import json
+import os
+import shutil
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
 import httpx
-import yaml
-import yt_dlp
 from dagster import (
     AssetExecutionContext,
     AssetIn,
@@ -28,145 +28,90 @@ from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from upath import UPath
 
-from learning_resources.lib.youtube import (
-    get_highest_quality_thumbnail,
-    get_videos_to_process,
+from learning_resources.lib.contants import (
+    VIDEO_SHORT_THUMB_LARGE_HEIGHT,
+    VIDEO_SHORT_THUMB_LARGE_WIDTH,
+    VIDEO_SHORT_THUMB_SMALL_HEIGHT,
+    VIDEO_SHORT_THUMB_SMALL_WIDTH,
 )
-from learning_resources.resources.youtube_api import YouTubeApiClientFactory
-
-# Configuration
-YOUTUBE_SHORTS_CONFIG_URL = (
-    "https://raw.githubusercontent.com/mitodl/open-video-data/"
-    "refs/heads/mitopen/youtube/shorts.yaml"
+from learning_resources.lib.google_sheets import (
+    convert_dropbox_link_to_direct,
+    fetch_video_shorts_from_google_sheet,
+    generate_video_thumbnail,
 )
 
 # Process top 12 most recent videos
 MAX_VIDEOS_TO_PROCESS = 12
 
 # Dynamic partitions for video IDs
-youtube_video_ids = DynamicPartitionsDefinition(name="youtube_video_ids")
+video_short_ids = DynamicPartitionsDefinition(name="video_short_ids")
 
 # Asset keys
-playlist_config_key = AssetKey(["youtube_shorts", "playlist_config"])
-playlist_api_key = AssetKey(["youtube_shorts", "playlist_api"])
+sheets_api_key = AssetKey(["video_shorts", "sheets_api"])
 
 
 @asset(
-    key=playlist_config_key,
-    group_name="youtube_shorts",
+    key=sheets_api_key,
+    group_name="video_shorts",
     description=(
-        "YouTube playlist configuration file from the open-video-data "
-        "GitHub repository. This YAML file defines which playlists to "
-        "monitor for video shorts."
+        "Google Sheets data containing video metadata. "
+        "This sheet defines which videos to process with fields: "
+        "Pub date, Video name, File name, Dropbox link."
     ),
-    code_version="youtube_shorts_api_v1",
+    code_version="video_shorts_sheets_v2",
     retry_policy=RetryPolicy(
         max_retries=3,
         delay=2.0,
         backoff=Backoff.EXPONENTIAL,
         jitter=Jitter.PLUS_MINUS,
     ),
+    required_resource_keys={"video_shorts_sheet_config"},
 )
-def youtube_playlist_config(
+def google_sheets_api(
     context: AssetExecutionContext,
-) -> Output[list[dict[str, Any]]]:
-    """Fetch and parse the YouTube Shorts playlist configuration from GitHub."""
-    context.log.info("Fetching playlist config from %s", YOUTUBE_SHORTS_CONFIG_URL)
-    response = httpx.get(YOUTUBE_SHORTS_CONFIG_URL)
-    response.raise_for_status()
-    config = yaml.safe_load(response.text)
-
-    # Create a stable hash for versioning
-    config_text = yaml.safe_dump(config, sort_keys=True)
-    data_version = hashlib.sha256(config_text.encode("utf-8")).hexdigest()
-
-    playlist_count = sum(len(channel.get("playlists", [])) for channel in config)
-
-    context.log.info("Fetched playlist config with %d playlists", playlist_count)
-
-    return Output(
-        value=config,
-        data_version=DataVersion(data_version),
-        metadata={
-            "config_url": YOUTUBE_SHORTS_CONFIG_URL,
-            "playlist_count": playlist_count,
-            "config_hash": data_version,
-        },
-    )
-
-
-@asset(
-    key=playlist_api_key,
-    group_name="youtube_shorts",
-    ins={"playlist_config": AssetIn(key=playlist_config_key)},
-    code_version="youtube_shorts_api_v1",
-    description=(
-        "YouTube API response for configured playlists. "
-        "Contains video and playlist metadata from YouTube Data API."
-    ),
-    retry_policy=RetryPolicy(
-        max_retries=3,
-        delay=2.0,
-        backoff=Backoff.EXPONENTIAL,
-        jitter=Jitter.PLUS_MINUS,
-    ),
-)
-def youtube_playlist_api(
-    context: AssetExecutionContext,
-    youtube_api: YouTubeApiClientFactory,
-    playlist_config: list[dict[str, Any]],
 ) -> Generator[Output[dict[str, Any]], None, None]:
-    """Fetch playlist and video metadata from YouTube API based on config."""
-    context.log.info("Fetching playlist and video data from YouTube API")
+    """Fetch and parse video metadata from Google Sheets."""
+    # Fetch and parse video metadata from Google Sheets
+    all_videos = fetch_video_shorts_from_google_sheet(context)
+    context.log.info("Parsed %d valid videos from sheet", len(all_videos))
 
-    result = get_videos_to_process(
-        youtube_client=youtube_api.client,
-        config=playlist_config,
-        max_videos=MAX_VIDEOS_TO_PROCESS,
-    )
+    # Take top N videos (already sorted by pub_date descending)
+    videos_to_process = all_videos[:MAX_VIDEOS_TO_PROCESS]
 
-    # Extract key information
-    playlist_ids = result["playlist_ids"]
-    playlist_metadata = result["playlist_metadata"]
-    all_video_ids = result["all_video_ids"]
-    videos_to_process = result["videos_to_process"]
+    # Create data version from sheet content hash
+    sheet_content = json.dumps(videos_to_process, sort_keys=True, default=str)
+    data_version = hashlib.sha256(sheet_content.encode("utf-8")).hexdigest()
 
-    # Create data version from playlist ETags (indicates API data changed)
-    etags = "|".join(
-        playlist_metadata.get(pid, {}).get("etag", "")
-        for pid in sorted(playlist_ids)  # Sort for stability
-    )
-    api_data_version = hashlib.sha256(etags.encode("utf-8")).hexdigest()
+    # Extract partition keys for metadata
+    partition_keys = [video["partition_key"] for video in videos_to_process]
 
-    # Create mapping of video_id -> etag for change detection
-    video_etags = {
-        video_id: result["video_metadata"].get(video_id, {}).get("etag", "")
-        for video_id in videos_to_process
+    result = {
+        "all_videos": all_videos,
+        "videos_to_process": videos_to_process,
+        "partition_keys": partition_keys,
     }
 
     yield Output(
         value=result,
-        data_version=DataVersion(api_data_version),
+        data_version=DataVersion(data_version),
         metadata={
-            "playlist_count": len(playlist_ids),
-            "playlist_ids": MetadataValue.json(playlist_ids),
-            "total_video_count": len(all_video_ids),
+            "total_video_count": len(all_videos),
             "videos_to_process_count": len(videos_to_process),
-            "videos_to_process_ids": MetadataValue.json(
-                sorted(videos_to_process)[:MAX_VIDEOS_TO_PROCESS]
-            ),  # Top N videos to process
-            "video_etags": MetadataValue.json(video_etags),
-            "api_data_version": api_data_version,
+            "partition_keys": MetadataValue.json(partition_keys),
+            "data_version": data_version,
         },
     )
 
 
 @asset(
-    code_version="youtube_shorts_metadata_v1",
-    key=AssetKey(["youtube_shorts", "video_metadata"]),
-    group_name="youtube_shorts",
-    description="Fetch and store YouTube video metadata with ETag-based versioning.",
-    partitions_def=youtube_video_ids,
+    code_version="video_shorts_metadata_v2",
+    key=AssetKey(["video_shorts", "video_metadata"]),
+    group_name="video_shorts",
+    description="Video metadata from Google Sheets with partition-based versioning.",
+    partitions_def=video_short_ids,
+    ins={
+        "sheets_data": AssetIn(key=sheets_api_key),
+    },
     automation_condition=(
         upstream_or_code_changes()
         | AutomationCondition.on_missing()
@@ -180,40 +125,60 @@ def youtube_playlist_api(
         jitter=Jitter.PLUS_MINUS,
     ),
 )
-def youtube_video_metadata(
-    context: AssetExecutionContext, youtube_api: YouTubeApiClientFactory
+def video_short_metadata(
+    context: AssetExecutionContext,
+    sheets_data: dict[str, Any],
 ) -> Generator[Output[tuple[Path, str]], None, None]:
     """
-    Fetch video metadata from YouTube API and store with ETag-based data versioning.
+    Fetch video metadata from upstream sheets_api asset.
 
-    This asset periodically re-fetches metadata from YouTube API (hourly) to detect
-    changes. When the video's ETag changes, the data_version updates automatically,
-    triggering downstream assets to re-process the video content.
+    This asset stores metadata for each video partition, providing
+    data needed for downstream video download and thumbnail generation.
     """
     video_id = context.partition_key
-    context.log.info("Fetching metadata for video ID: %s", video_id)
+    context.log.info("Processing metadata for partition: %s", video_id)
 
-    # Fetch video metadata from YouTube API
-    videos = youtube_api.client.get_videos([video_id])
-    if not videos:
-        msg = f"No video found for ID: {video_id}"
+    # Find the video data for this partition
+    videos_to_process = sheets_data["videos_to_process"]
+    video_data = None
+    for video in videos_to_process:
+        if video["partition_key"] == video_id:
+            video_data = video
+            break
+
+    if not video_data:
+        msg = f"No video data found for partition: {video_id}"
         raise ValueError(msg)
 
-    video_metadata = videos[0]
+    # Use the video_id as the data version
+    data_version = video_id
 
-    # Use YouTube API ETag as data version for change detection
-    video_etag = video_metadata.get("etag", "")
-    if not video_etag:
-        msg = f"No etag found in video metadata for ID: {video_id}"
-        raise ValueError(msg)
-
-    # Save processed metadata as JSON
+    # Save full metadata as JSON (includes all fields from Google Sheets)
+    video_ext = Path(video_data["file_name"]).suffix.lstrip(".")
+    path_prefix = os.environ.get("LEARN_SHORTS_PREFIX", "shorts").rstrip("/")
     processed_metadata = {
         "video_id": video_id,
-        "video_title": video_metadata.get("snippet", {}).get("title", ""),
-        "data_version": video_etag,
-        "video_etag": video_etag,
-        "youtube_metadata": video_metadata,
+        "pub_date": video_data["pub_date_str"],
+        "video_name": video_data["video_name"],
+        "file_name": video_data["file_name"],
+        "dropbox_link": video_data["dropbox_link"],
+        "data_version": data_version,
+        "video_metadata": {
+            "video_id": video_id,
+            "video_url": f"/{path_prefix}/{video_id}/{video_id}.{video_ext}",
+            "title": video_data["video_name"],
+            "published_at": video_data["pub_date_str"],
+            "thumbnail_small": {
+                "width": VIDEO_SHORT_THUMB_SMALL_WIDTH,
+                "height": VIDEO_SHORT_THUMB_SMALL_HEIGHT,
+                "url": f"/{path_prefix}/{video_id}/{video_id}_small.jpg",
+            },
+            "thumbnail_large": {
+                "width": VIDEO_SHORT_THUMB_LARGE_WIDTH,
+                "height": VIDEO_SHORT_THUMB_LARGE_HEIGHT,
+                "url": f"/{path_prefix}/{video_id}/{video_id}_large.jpg",
+            },
+        },
     }
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -221,25 +186,25 @@ def youtube_video_metadata(
         with metadata_file.open("w") as f:
             json.dump(processed_metadata, f, indent=2)
 
-        # S3 path: youtube_shorts/{video_id}/{video_id}.json
+        # S3 path: shorts/{video_id}/{video_id}.json
         metadata_s3_path = f"{video_id}/{video_id}.json"
 
         context.log.info("Metadata saved: %s -> %s", metadata_file, metadata_s3_path)
 
         yield Output(
             value=(metadata_file, metadata_s3_path),
-            data_version=DataVersion(video_etag),
+            data_version=DataVersion(video_id),
         )
 
 
 @asset(
-    code_version="youtube_shorts_content_v1",
-    key=AssetKey(["youtube_shorts", "video_content"]),
-    group_name="youtube_shorts",
-    description="Download YouTube video content using yt-dlp.",
-    partitions_def=youtube_video_ids,
+    code_version="video_shorts_content_v2",
+    key=AssetKey(["video_shorts", "video_content"]),
+    group_name="video_shorts",
+    description="Download video content from Dropbox.",
+    partitions_def=video_short_ids,
     ins={
-        "video_metadata": AssetIn(key=AssetKey(["youtube_shorts", "video_metadata"])),
+        "video_metadata": AssetIn(key=AssetKey(["video_shorts", "video_metadata"])),
     },
     automation_condition=upstream_or_code_changes() | AutomationCondition.on_missing(),
     io_manager_key="yt_s3file_io_manager",
@@ -250,55 +215,56 @@ def youtube_video_metadata(
         jitter=Jitter.PLUS_MINUS,
     ),
 )
-def youtube_video_content(
+def video_short_content(
     context: AssetExecutionContext,
     video_metadata: UPath,
 ) -> Generator[Output[tuple[Path, str]], None, None]:
     """
-    Download video content using yt-dlp.
+    Download video content from Dropbox.
 
     This asset depends on video_metadata and will automatically re-run
-    when the video's ETag changes (indicating metadata updates).
+    when metadata changes.
     """
     # Load metadata from the stored JSON file
     with video_metadata.open("r") as f:
         metadata = json.load(f)
 
     video_id = metadata["video_id"]
-    video_title = metadata["video_title"]
     data_version = metadata["data_version"]
+    dropbox_link = metadata["dropbox_link"]
+    file_name = metadata["file_name"]
+    video_ext = Path(file_name).suffix.lstrip(".")
 
-    context.log.info("Downloading video: %s", video_title)
+    context.log.info("Downloading video from Dropbox for partition: %s", video_id)
+    context.log.info("Video: %s", metadata["video_name"])
 
-    # Download video using yt-dlp
+    # Convert Dropbox share link to direct download link
+    direct_url = convert_dropbox_link_to_direct(dropbox_link)
+    context.log.info("Direct download URL: %s", direct_url)
+
+    # Download video
     with tempfile.TemporaryDirectory() as temp_dir:
-        video_output_template = str(Path(temp_dir) / f"{video_id}.%(ext)s")
+        video_file = Path(temp_dir) / file_name
 
-        ydl_opts = {
-            "format": "best[ext=mp4]",
-            "outtmpl": video_output_template,
-            "quiet": True,
-            "no_warnings": True,
-            "postprocessor_args": {
-                # Recommended for fast streaming
-                "ffmpeg": ["-movflags", "faststart"]
-            },
-        }
+        context.log.info("Downloading from %s to %s", direct_url, video_file)
+        with httpx.stream(
+            "GET",
+            direct_url,
+            follow_redirects=True,
+            timeout=300.0,
+        ) as response:
+            response.raise_for_status()
+            with video_file.open("wb") as output_file:
+                for chunk in response.iter_bytes(1024 * 1024):
+                    if chunk:
+                        output_file.write(chunk)
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(
-                f"https://www.youtube.com/watch?v={video_id}", download=True
-            )
-            video_ext = info.get("ext", "mp4")
-            video_file = Path(temp_dir) / f"{video_id}.{video_ext}"
-
-        if not video_file.exists():
+        if not video_file.exists() or video_file.stat().st_size == 0:
             msg = f"Failed to download video: {video_id}"
             raise RuntimeError(msg)
 
-        # S3 path: youtube_shorts/{video_id}/{video_id}.mp4
+        # Full S3 path: shorts/{video_id}/{video_id}.{mp4}
         video_s3_path = f"{video_id}/{video_id}.{video_ext}"
-
         context.log.info("Video downloaded: %s -> %s", video_file, video_s3_path)
 
         yield Output(
@@ -308,13 +274,14 @@ def youtube_video_content(
 
 
 @asset(
-    code_version="youtube_shorts_thumbnail_v1",
-    key=AssetKey(["youtube_shorts", "video_thumbnail"]),
-    group_name="youtube_shorts",
-    description="Download YouTube video thumbnail.",
-    partitions_def=youtube_video_ids,
+    code_version="video_shorts_thumbnail_small_v1",
+    key=AssetKey(["video_shorts", "video_thumbnail_small"]),
+    group_name="video_shorts",
+    description="Generate small thumbnail (270x480) from video file.",
+    partitions_def=video_short_ids,
     ins={
-        "video_metadata": AssetIn(key=AssetKey(["youtube_shorts", "video_metadata"])),
+        "video_content": AssetIn(key=AssetKey(["video_shorts", "video_content"])),
+        "video_metadata": AssetIn(key=AssetKey(["video_shorts", "video_metadata"])),
     },
     automation_condition=upstream_or_code_changes() | AutomationCondition.on_missing(),
     io_manager_key="yt_s3file_io_manager",
@@ -325,15 +292,16 @@ def youtube_video_content(
         jitter=Jitter.PLUS_MINUS,
     ),
 )
-def youtube_video_thumbnail(
+def video_short_thumbnail_small(
     context: AssetExecutionContext,
+    video_content: UPath,
     video_metadata: UPath,
 ) -> Generator[Output[tuple[Path, str]], None, None]:
     """
-    Download video thumbnail.
+    Generate small thumbnail (270x480) from video file.
 
-    This asset depends on video_metadata and will automatically re-run
-    when the video's ETag changes.
+    This asset depends on video_content and will automatically re-run
+    when the video changes.
     """
     # Load metadata from the stored JSON file
     with video_metadata.open("r") as f:
@@ -341,31 +309,35 @@ def youtube_video_thumbnail(
 
     video_id = metadata["video_id"]
     data_version = metadata["data_version"]
-    youtube_metadata = metadata["youtube_metadata"]
 
-    # Download thumbnail
-    thumbnail_info = get_highest_quality_thumbnail(youtube_metadata)
-    thumbnail_url = thumbnail_info.get("url")
+    context.log.info("Generating small thumbnail for partition: %s", video_id)
 
-    if not thumbnail_url:
-        msg = f"No thumbnail found for video: {video_id}"
-        raise ValueError(msg)
-
-    context.log.info("Downloading thumbnail from: %s", thumbnail_url)
-    thumbnail_response = httpx.get(thumbnail_url)
-    thumbnail_response.raise_for_status()
-
-    # Always use .jpg extension for consistency
-    thumbnail_ext = "jpg"
-
+    # Download video file temporarily to generate thumbnail
     with tempfile.TemporaryDirectory() as temp_dir:
-        thumbnail_file = Path(temp_dir) / f"{video_id}.{thumbnail_ext}"
-        thumbnail_file.write_bytes(thumbnail_response.content)
+        # Copy video from S3 to temp location without loading entire file in memory
+        video_temp_path = Path(temp_dir) / "video.mp4"
+        with video_content.open("rb") as src, video_temp_path.open("wb") as dst:
+            shutil.copyfileobj(src, dst, 1024 * 1024)
 
-        # S3 path: youtube_shorts/{video_id}/{video_id}.jpg
-        thumbnail_s3_path = f"{video_id}/{video_id}.{thumbnail_ext}"
+        # Generate small thumbnail
+        thumbnail_file = Path(temp_dir) / f"{video_id}_small.jpg"
+        generate_video_thumbnail(
+            video_path=video_temp_path,
+            thumbnail_path=thumbnail_file,
+            width=VIDEO_SHORT_THUMB_SMALL_WIDTH,
+            height=VIDEO_SHORT_THUMB_SMALL_HEIGHT,
+        )
 
-        context.log.info("Thumbnail saved: %s -> %s", thumbnail_file, thumbnail_s3_path)
+        if not thumbnail_file.exists():
+            msg = f"Failed to generate small thumbnail for: {video_id}"
+            raise RuntimeError(msg)
+
+        # S3 path: video_shorts/{video_id}/{video_id}_small.jpg
+        thumbnail_s3_path = f"{video_id}/{video_id}_small.jpg"
+
+        context.log.info(
+            "Small thumbnail saved: %s -> %s", thumbnail_file, thumbnail_s3_path
+        )
 
         yield Output(
             value=(thumbnail_file, thumbnail_s3_path),
@@ -374,15 +346,92 @@ def youtube_video_thumbnail(
 
 
 @asset(
-    code_version="youtube_shorts_webhook_v1",
-    key=AssetKey(["youtube_shorts", "video_webhook"]),
-    group_name="youtube_shorts",
-    description="Send webhook to Learn API after YouTube video processing.",
-    partitions_def=youtube_video_ids,
+    code_version="video_shorts_thumbnail_large_v1",
+    key=AssetKey(["video_shorts", "video_thumbnail_large"]),
+    group_name="video_shorts",
+    description="Generate large thumbnail (1080x1920) from video file.",
+    partitions_def=video_short_ids,
     ins={
-        "video_content": AssetIn(key=AssetKey(["youtube_shorts", "video_content"])),
-        "video_thumbnail": AssetIn(key=AssetKey(["youtube_shorts", "video_thumbnail"])),
-        "video_metadata": AssetIn(key=AssetKey(["youtube_shorts", "video_metadata"])),
+        "video_content": AssetIn(key=AssetKey(["video_shorts", "video_content"])),
+        "video_metadata": AssetIn(key=AssetKey(["video_shorts", "video_metadata"])),
+    },
+    automation_condition=upstream_or_code_changes() | AutomationCondition.on_missing(),
+    io_manager_key="yt_s3file_io_manager",
+    retry_policy=RetryPolicy(
+        max_retries=3,
+        delay=5.0,
+        backoff=Backoff.EXPONENTIAL,
+        jitter=Jitter.PLUS_MINUS,
+    ),
+)
+def video_short_thumbnail_large(
+    context: AssetExecutionContext,
+    video_content: UPath,
+    video_metadata: UPath,
+) -> Generator[Output[tuple[Path, str]], None, None]:
+    """
+    Generate large thumbnail (1080x1920) from video file.
+
+    This asset depends on video_content and will automatically re-run
+    when the video changes.
+    """
+    # Load metadata from the stored JSON file
+    with video_metadata.open("r") as f:
+        metadata = json.load(f)
+
+    video_id = metadata["video_id"]
+    data_version = metadata["data_version"]
+
+    context.log.info("Generating large thumbnail for partition: %s", video_id)
+
+    # Download video file temporarily to generate thumbnail
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Copy video from S3 to temp location without loading entire file in memory
+        video_temp_path = Path(temp_dir) / "video.mp4"
+        with video_content.open("rb") as src, video_temp_path.open("wb") as dst:
+            shutil.copyfileobj(src, dst, 1024 * 1024)
+
+        # Generate large thumbnail
+        thumbnail_file = Path(temp_dir) / f"{video_id}_large.jpg"
+        generate_video_thumbnail(
+            video_path=video_temp_path,
+            thumbnail_path=thumbnail_file,
+            width=VIDEO_SHORT_THUMB_LARGE_WIDTH,
+            height=VIDEO_SHORT_THUMB_LARGE_HEIGHT,
+        )
+
+        if not thumbnail_file.exists():
+            msg = f"Failed to generate large thumbnail for: {video_id}"
+            raise RuntimeError(msg)
+
+        # S3 path: video_shorts/{video_id}/{video_id}_large.jpg
+        thumbnail_s3_path = f"{video_id}/{video_id}_large.jpg"
+
+        context.log.info(
+            "Large thumbnail saved: %s -> %s", thumbnail_file, thumbnail_s3_path
+        )
+
+        yield Output(
+            value=(thumbnail_file, thumbnail_s3_path),
+            data_version=DataVersion(data_version),
+        )
+
+
+@asset(
+    code_version="video_shorts_webhook_v3",
+    key=AssetKey(["video_shorts", "video_webhook"]),
+    group_name="video_shorts",
+    description="Send webhook to Learn API after video processing.",
+    partitions_def=video_short_ids,
+    ins={
+        "video_content": AssetIn(key=AssetKey(["video_shorts", "video_content"])),
+        "video_thumbnail_small": AssetIn(
+            key=AssetKey(["video_shorts", "video_thumbnail_small"])
+        ),
+        "video_thumbnail_large": AssetIn(
+            key=AssetKey(["video_shorts", "video_thumbnail_large"])
+        ),
+        "video_metadata": AssetIn(key=AssetKey(["video_shorts", "video_metadata"])),
     },
     automation_condition=upstream_or_code_changes(),
     retry_policy=RetryPolicy(
@@ -392,19 +441,19 @@ def youtube_video_thumbnail(
         jitter=Jitter.PLUS_MINUS,
     ),
 )
-def youtube_video_webhook(
+def video_short_webhook(  # noqa: PLR0913
     context: AssetExecutionContext,
     learn_api: ApiClientFactory,
     video_content: UPath,  # noqa: ARG001
-    video_thumbnail: UPath,  # noqa: ARG001
+    video_thumbnail_small: UPath,  # noqa: ARG001
+    video_thumbnail_large: UPath,  # noqa: ARG001
     video_metadata: UPath,
 ) -> dict[str, Any]:
     """
     Send webhook notification to Learn API after video assets are ready.
 
-    This asset depends on all three video assets (content, thumbnail, metadata)
-    and only executes after they complete successfully. It sends the YouTube
-    metadata JSON to the Learn API webhook endpoint.
+    This asset depends on all video assets (content, both thumbnails, metadata)
+    and only executes after they complete successfully.
     """
     video_id = context.partition_key
 
@@ -412,11 +461,11 @@ def youtube_video_webhook(
     metadata_content = video_metadata.read_text()
     processed_metadata = json.loads(metadata_content)
 
-    # Construct webhook payload with YouTube metadata
+    # Construct webhook payload
     webhook_data = {
         "video_id": video_id,
-        "youtube_metadata": processed_metadata["youtube_metadata"],
-        "source": "youtube_shorts",
+        "video_metadata": processed_metadata["video_metadata"],
+        "source": "video_shorts",
     }
 
     context.log.info("Webhook payload for %s: %s", video_id, webhook_data)
