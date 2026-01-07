@@ -6,7 +6,7 @@ with source as (
 , source_sorted as (
     select
         *
-        , dense_rank() over (partition by course_id order by _airbyte_extracted_at desc) as dense_row
+        , dense_rank() over (partition by course_id order by _ab_source_file_last_modified desc) as dense_row
     from source
 )
 
