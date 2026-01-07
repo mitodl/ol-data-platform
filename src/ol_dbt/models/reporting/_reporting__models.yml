@@ -414,3 +414,27 @@ models:
   - name: ever_active_indicator
     description: boolean, true if user had any video, problem, navigation, discussion,
       chatbot , unique_course_certificate_earners otherwise false
+
+- name: mitxonline_video_engagements_w_video_counts
+  description: A report that contains mitxonline video engagement data.
+  columns:
+  - name: user_email
+    description: string, user email that user registered
+  - name: section_title
+    description: string, title of the course content block. It is the name field for
+      the section.
+  - name: courserun_readable_id
+    description: string, unique string to identify a course run on the corresponding
+      platform.
+  - name: total_video_count
+    description: int, count of videos within a course run and course section
+  - name: platform
+    description: string, the platform name currently defaulted to MITx Online
+  - name: courserun_is_current
+    description: boolean, true if the current date is between the course run start and end dates otherwise false
+  - name: course_readable_id
+    description: string, unique string to identify a course on the corresponding platform.
+  - name: user_watched_video_count
+    description: int, count of videos a user watched
+  - name: max_coursestructure_block_index
+    description: int, max position of the course content block within a course
