@@ -79,9 +79,9 @@ class VideoShortsSheetConfig(ConfigurableResource):
     """Configuration for Video Shorts Google Sheet."""
 
     service_account_json: dict[str, Any]  # Service account JSON credentials
-    sheet_id: str = os.environ.get(
-        "VIDEO_SHORTS_GOOGLE_SHEETS_ID",
-        "16RpyKIWqqAs2vlu1BZtfldje5Ft030A6pnMG76ysBWc",  # pragma: allowlist secret
+    sheet_id: str = (
+        os.environ.get("VIDEO_SHORTS_GOOGLE_SHEETS_ID")
+        or "16RpyKIWqqAs2vlu1BZtfldje5Ft030A6pnMG76ysBWc"  # pragma: allowlist secret
     )
 
 
