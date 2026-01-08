@@ -15,6 +15,18 @@ with source as (
     where dense_row = 1
 )
 
+, deduplicated as (
+    select
+        *
+        , row_number() over (partition by id, course_id order by _airbyte_extracted_at desc) as row_num
+    from most_recent_source
+)
+
+, final_source as (
+    select * from deduplicated
+    where row_num = 1
+)
+
 , cleaned as (
 
     select
@@ -26,7 +38,7 @@ with source as (
         , trim(name) as signatory_name
         , regexp_replace(trim(name), '^(Professor |Dr\. )', '') as signatory_normalized_name
         , concat('https://courses.edx.org', nullif(signature_image_path, '')) as signatory_image_url
-    from most_recent_source
+    from final_source
 )
 
 select * from cleaned
