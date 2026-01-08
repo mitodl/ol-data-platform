@@ -19,16 +19,16 @@ with mitxonline_video_engagements as (
         , courserun_readable_id
 )
 
-select 
+select
     mitxonline_video_engagements.user_email
     , mitxonline_video_engagements.section_title
     , mitxonline_video_engagements.courserun_readable_id
     , subq_video_engagements.total_video_count
     , 'MITx Online' as platform
     , case
-        when 
+        when
                 cast(substring(mitxonline_video_engagements.courserun_start_on, 1, 10) as date) <= current_date
-            and 
+            and
                 (mitxonline_video_engagements.courserun_end_on is null
                 or cast(substring(mitxonline_video_engagements.courserun_end_on, 1, 10) as date) >= current_date)
         then true
@@ -38,8 +38,8 @@ select
     , max(mitxonline_video_engagements.coursestructure_block_index) as max_coursestructure_block_index
 from mitxonline_video_engagements
 join subq_video_engagements
-    on 
-        mitxonline_video_engagements.section_title = subq_video_engagements.section_title 
+    on
+        mitxonline_video_engagements.section_title = subq_video_engagements.section_title
         and mitxonline_video_engagements.courserun_readable_id = subq_video_engagements.courserun_readable_id
 where mitxonline_video_engagements.video_event_type = 'play_video'
 group by
@@ -49,11 +49,10 @@ group by
     , subq_video_engagements.total_video_count
     , 'MITx Online'
     , case
-        when 
+        when
                 cast(substring(mitxonline_video_engagements.courserun_start_on, 1, 10) as date) <= current_date
-            and 
+            and
                 (mitxonline_video_engagements.courserun_end_on is null
                 or cast(substring(mitxonline_video_engagements.courserun_end_on, 1, 10) as date) >= current_date)
         then true
         else false end
-
