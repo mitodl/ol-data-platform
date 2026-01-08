@@ -431,11 +431,13 @@ models:
   - name: platform
     description: string, the platform name currently defaulted to MITx Online
   - name: courserun_is_current
-    description: boolean, true if the current date is between the course run start
-      and end dates otherwise false
+    description: boolean, true if the current date is between the course run start and end dates otherwise false
   - name: course_readable_id
     description: string, unique string to identify a course on the corresponding platform.
   - name: user_watched_video_count
     description: int, count of videos a user watched
   - name: max_coursestructure_block_index
     description: int, max position of the course content block within a course
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "user_email", "section_title"]
