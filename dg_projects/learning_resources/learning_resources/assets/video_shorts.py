@@ -113,9 +113,7 @@ def google_sheets_api(
         "sheets_data": AssetIn(key=sheets_api_key),
     },
     automation_condition=(
-        upstream_or_code_changes()
-        | AutomationCondition.on_missing()
-        | AutomationCondition.on_cron("0 * * * *")  # Check hourly for metadata changes
+        upstream_or_code_changes() | AutomationCondition.on_missing()
     ),
     io_manager_key="yt_s3file_io_manager",
     retry_policy=RetryPolicy(

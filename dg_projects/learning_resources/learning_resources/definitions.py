@@ -20,6 +20,7 @@ from dagster_aws.s3 import S3Resource
 from ol_orchestrate.io_managers.filepath import S3FileObjectIOManager
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
+    default_file_object_io_manager,
     default_io_manager,
 )
 from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
@@ -131,7 +132,8 @@ defs = Definitions(
             bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
             path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
         ),
-        "yt_s3file_io_manager": S3FileObjectIOManager(
+        "yt_s3file_io_manager": default_file_object_io_manager(
+            dagster_env=DAGSTER_ENV,
             bucket=(
                 os.environ.get("VIDEO_SHORTS_BUCKET")
                 or f"ol-mitlearn-app-storage-{MIT_LEARN_BUCKET_SUFFIXES[DAGSTER_ENV]}"
