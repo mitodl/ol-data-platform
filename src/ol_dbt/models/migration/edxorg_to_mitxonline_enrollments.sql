@@ -147,7 +147,7 @@ select
     , edxorg_enrollment.courserunenrollment_created_on
     , edxorg_enrollment.courseruncertificate_created_on
     , edx_to_mitxonline_certificate_revision.wagtailcore_revision_id as certificate_page_revision_id
-    , edx_to_mitxonline_certificate_revision.signatory_names
+    , edx_signatories.signatory_names
 from edxorg_enrollment
 left join mitxonline_enrollment
     on
@@ -159,6 +159,8 @@ left join mitx__users
     on edxorg_enrollment.user_id = cast(mitx__users.user_edxorg_id as varchar)
 left join edx_to_mitxonline_certificate_revision
     on edxorg_enrollment.courserun_readable_id = edx_to_mitxonline_certificate_revision.courserun_readable_id
+left join edx_signatories
+    on edxorg_enrollment.courserun_readable_id = edx_signatories.courserun_readable_id
 where
     edxorg_enrollment.courseruncertificate_created_on is not null
     and mitxonline_enrollment.user_email is null
