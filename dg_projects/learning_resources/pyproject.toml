@@ -9,9 +9,10 @@ dependencies = [
     "dagster-postgres>=0.27.13",
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
-    "google-api-python-client>=2.185.0",
-    "yt-dlp>=2025.10.14",
+    "pygsheets>=2.0.6",
+    "ffmpeg-python>=0.2.0",
     "pyyaml>=6.0.3",
+    "python-dateutil>=2.8.2",
 ]
 
 [project.entry-points]

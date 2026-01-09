@@ -2,14 +2,16 @@
 
 Extracts course and program metadata from various learning platforms:
 - MIT Sloan Executive Education API
-- YouTube Shorts video processing
+- Video Shorts video processing
 - Open Learning Library (future)
 """
 
 import os
+from typing import Any
 
 from dagster import (
     AssetSelection,
+    ConfigurableResource,
     Definitions,
     ScheduleDefinition,
     define_asset_job,
@@ -26,17 +28,16 @@ from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 
 from learning_resources.assets.sloan_api import sloan_course_metadata
-from learning_resources.assets.youtube_shorts import (
-    youtube_playlist_api,
-    youtube_playlist_config,
-    youtube_video_content,
-    youtube_video_metadata,
-    youtube_video_thumbnail,
-    youtube_video_webhook,
+from learning_resources.assets.video_shorts import (
+    google_sheets_api,
+    video_short_content,
+    video_short_metadata,
+    video_short_thumbnail_large,
+    video_short_thumbnail_small,
+    video_short_webhook,
 )
-from learning_resources.resources.youtube_api import YouTubeApiClientFactory
-from learning_resources.sensors.youtube_shorts import (
-    youtube_shorts_discovery_sensor,
+from learning_resources.sensors.video_shorts import (
+    video_shorts_discovery_sensor,
 )
 
 MIT_LEARN_BUCKET_SUFFIXES = {
@@ -62,6 +63,29 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     vault = Vault(vault_addr=VAULT_ADDRESS, vault_auth_type="github")
     vault_authenticated = False
 
+# Get Google Sheets credentials for Video Shorts
+try:
+    if vault_authenticated:
+        gs_secrets = vault.client.secrets.kv.v1.read_secret(
+            mount_point="secret-data",
+            path="pipelines/google-service-account",
+        )["data"]
+    else:
+        gs_secrets = {}
+except Exception:  # noqa: BLE001
+    gs_secrets = {}
+
+
+class VideoShortsSheetConfig(ConfigurableResource):
+    """Configuration for Video Shorts Google Sheet."""
+
+    service_account_json: dict[str, Any]  # Service account JSON credentials
+    sheet_id: str = (
+        os.environ.get("VIDEO_SHORTS_GOOGLE_SHEETS_ID")
+        or "16RpyKIWqqAs2vlu1BZtfldje5Ft030A6pnMG76ysBWc"  # pragma: allowlist secret
+    )
+
+
 # Daily schedule for learning resource API extraction
 extract_api_daily_schedule = ScheduleDefinition(
     name="learning_resource_api_schedule",
@@ -70,32 +94,32 @@ extract_api_daily_schedule = ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
-# YouTube Shorts jobs for manual triggering
-youtube_shorts_api_job = define_asset_job(
-    name="youtube_shorts_api_job",
-    description="Materialize playlist config and API data to discover new videos",
+# Video Shorts jobs for manual triggering
+video_shorts_api_job = define_asset_job(
+    name="video_shorts_api_job",
+    description="Materialize Google Sheets API data to discover new videos",
     selection=AssetSelection.keys(
-        ["youtube_shorts", "playlist_config"],
-        ["youtube_shorts", "playlist_api"],
+        ["video_shorts", "sheets_api"],
     ),
 )
 
-youtube_shorts_video_job = define_asset_job(
-    name="youtube_shorts_video_job",
-    description="Materialize YouTube video assets for specific partitions",
+video_shorts_video_job = define_asset_job(
+    name="video_shorts_video_job",
+    description="Materialize Video Shorts video assets for specific partitions",
     selection=AssetSelection.keys(
-        ["youtube_shorts", "video_metadata"],
-        ["youtube_shorts", "video_content"],
-        ["youtube_shorts", "video_thumbnail"],
-        ["youtube_shorts", "video_webhook"],
+        ["video_shorts", "video_metadata"],
+        ["video_shorts", "video_content"],
+        ["video_shorts", "video_thumbnail_small"],
+        ["video_shorts", "video_thumbnail_large"],
+        ["video_shorts", "video_webhook"],
     ),
 )
 
 
-# YouTube Shorts schedule for periodic discovery
-youtube_shorts_api_schedule = ScheduleDefinition(
-    name="youtube_shorts_api_schedule",
-    target=youtube_shorts_api_job,
+# Video Shorts schedule for periodic discovery
+video_shorts_api_schedule = ScheduleDefinition(
+    name="video_shorts_api_schedule",
+    target=video_shorts_api_job,
     cron_schedule="0 */1 * * *",  # Every hour
     execution_timezone="Etc/UTC",
 )
@@ -111,7 +135,7 @@ defs = Definitions(
         "yt_s3file_io_manager": default_file_object_io_manager(
             dagster_env=DAGSTER_ENV,
             bucket=(
-                os.environ.get("YOUTUBE_SHORTS_BUCKET")
+                os.environ.get("VIDEO_SHORTS_BUCKET")
                 or f"ol-mitlearn-app-storage-{MIT_LEARN_BUCKET_SUFFIXES[DAGSTER_ENV]}"
             ),
             path_prefix=os.environ.get("LEARN_SHORTS_PREFIX", "shorts/"),
@@ -119,7 +143,9 @@ defs = Definitions(
         "vault": vault,
         "s3": S3Resource(),
         "sloan_api": OAuthApiClientFactory(deployment="sloan", vault=vault),
-        "youtube_api": YouTubeApiClientFactory(vault=vault),
+        "video_shorts_sheet_config": VideoShortsSheetConfig(
+            service_account_json=gs_secrets
+        ),
         "learn_api": ApiClientFactory(
             deployment="mit-learn",
             client_class="MITLearnApiClient",
@@ -131,19 +157,19 @@ defs = Definitions(
     },
     assets=[
         sloan_course_metadata,
-        youtube_playlist_config,
-        youtube_playlist_api,
-        youtube_video_metadata,
-        youtube_video_content,
-        youtube_video_thumbnail,
-        youtube_video_webhook,
+        google_sheets_api,
+        video_short_metadata,
+        video_short_content,
+        video_short_thumbnail_small,
+        video_short_thumbnail_large,
+        video_short_webhook,
     ],
-    schedules=[extract_api_daily_schedule, youtube_shorts_api_schedule],
+    schedules=[extract_api_daily_schedule, video_shorts_api_schedule],
     sensors=[
-        youtube_shorts_discovery_sensor,
+        video_shorts_discovery_sensor,
     ],
     jobs=[
-        youtube_shorts_api_job,
-        youtube_shorts_video_job,
+        video_shorts_api_job,
+        video_shorts_video_job,
     ],
 )

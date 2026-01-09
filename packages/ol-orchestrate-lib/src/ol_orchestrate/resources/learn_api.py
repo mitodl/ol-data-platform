@@ -38,7 +38,7 @@ class MITLearnApiClient(BaseApiClient):
         return response.json()
 
     def notify_video_shorts(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Send webhook notification for YouTube Shorts video processing."""
+        """Send webhook notification for Video Shorts processing."""
         payload_string = json.dumps(data, separators=(",", ":"))  # remove extra spaces
         signature = hmac.new(
             self.token.encode(), payload_string.encode(), hashlib.sha256
