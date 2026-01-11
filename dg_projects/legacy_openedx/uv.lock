@@ -1272,7 +1272,7 @@ requires-dist = [
     { name = "jsonlines", specifier = "~=4.0.0" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
     { name = "pymysql", specifier = "~=1.1" },
-    { name = "pypika", specifier = "~=0.48.9" },
+    { name = "pypika", git = "https://github.com/kayak/pypika?rev=28c4b9c84dcb340af14cf2cd78617ba158c1c224" },
 ]
 
 [package.metadata.requires-dev]
@@ -2014,8 +2014,7 @@ wheels = [
 [[package]]
 name = "pypika"
 version = "0.48.9"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c7/2c/94ed7b91db81d61d7096ac8f2d325ec562fc75e35f3baea8749c85b28784/PyPika-0.48.9.tar.gz", hash = "sha256:838836a61747e7c8380cd1b7ff638694b7a7335345d0f559b04b2cd832ad5378", size = 67259, upload-time = "2022-03-15T11:22:57.066Z" }
+source = { git = "https://github.com/kayak/pypika?rev=28c4b9c84dcb340af14cf2cd78617ba158c1c224#28c4b9c84dcb340af14cf2cd78617ba158c1c224" }
 
 [[package]]
 name = "pyreadline3"
