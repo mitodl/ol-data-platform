@@ -11,7 +11,6 @@ classifiers = [
 ]
 dependencies = [
     "PyAthena ~=3.24.0",
-    "PyPika ~= 0.48.9",
     "boto3 ~=1.41.5",
     "dagster ~= 1.11",
     "dagster-aws ~=0.28.0",
@@ -26,6 +25,7 @@ dependencies = [
     "pydantic ~=2.12.3",
     "pygsheets ~= 2.0.6",
     "pyiceberg[polars]>=0.10.0",
+    "pypika",
     "s3fs (>=2026.0.0,<2027.0.0)",
     "universal-pathlib ~= 0.3.1",
 ]
@@ -37,3 +37,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ol_orchestrate"]
+
+[tool.uv.sources]
+pypika = { git = "https://github.com/kayak/pypika", rev = "28c4b9c84dcb340af14cf2cd78617ba158c1c224" }

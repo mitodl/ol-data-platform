@@ -12,7 +12,7 @@ dependencies = [
     "httpx ~= 0.28.0",
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
-    "PyPika ~= 0.48.9",
+    "pypika",
     "universal-pathlib ~= 0.3.1",
 ]
 
@@ -44,3 +44,4 @@ exclude=["openedx_tests"]
 
 [tool.uv.sources]
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
+pypika = { git = "https://github.com/kayak/pypika", rev = "28c4b9c84dcb340af14cf2cd78617ba158c1c224" }
