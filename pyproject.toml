@@ -27,8 +27,8 @@ package = false  # This is a workspace root, not a package
 
 [dependency-groups]
 dev = [
-    "dagster-dg-cli>=1.11.13",
-    "dagster-webserver>=1.11.13",
+    "dagster-dg-cli>=1.12.10",
+    "dagster-webserver>=1.12.10",
     "mypy",
     "pre-commit>=4.0.0,<5",
     "pytest>=9.0.1,<10",

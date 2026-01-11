@@ -3,7 +3,7 @@ name = "legacy_openedx"
 requires-python = ">=3.12,<3.14"
 version = "0.1.0"
 dependencies = [
-    "dagster>=1.11.13",
+    "dagster>=1.12.10",
     "dagster-aws ~=0.28.0",
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
@@ -20,7 +20,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "dagster-dg-cli>=1.11.13",
+    "dagster-dg-cli>=1.12.10",
     "dagster-webserver",
 ]
 
