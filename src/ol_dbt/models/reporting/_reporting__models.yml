@@ -431,8 +431,7 @@ models:
   - name: platform
     description: string, the platform name currently defaulted to MITx Online
   - name: courserun_is_current
-    description: boolean, true if the current date is between the course run start
-      and end dates otherwise false
+    description: boolean, true if the current date is between the course run start and end dates otherwise false
   - name: user_watched_video_count
     description: int, count of videos a user watched
   - name: max_coursestructure_block_index
@@ -440,3 +439,47 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "user_email", "section_title"]
+
+- name: Enrollment_Activity_Counts_Dataset
+  description: A report that contains enrollment activity metrics
+  columns:
+  - name: user_email
+    description: string, user email that user registered
+  - name: user_gender
+    description: str, gender selected by the user
+  - name: user_country_code
+    description: str, country code on the platform user enrolled. May be blank.
+  - name: user_highest_education
+    description: str, user's highest education on the platform user enrolled. May
+      be blank.
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+  - name: platform
+    description: str, open edx platform, e.g., MITx Online, edX.org, xPro, Residential
+      MITx., etc
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online, xPro or Residential courses, {org}/{course} for edX.org courses.
+  - name: courserun_readable_id
+    description: str, the open edX course ID formatted as course-v1:{org}+{course
+      code}+{run_tag} for MITxOnline, xPro, Residential courses, {org}/{course}/{run_tag}
+      for edX.org courses.
+  - name: activity_date
+    description: date, date that user engaged in an activity realted to the course
+  - name: certificate_count
+    description: int, count of certificates granted on that particular activity date for a user and courserun
+  - name: enrollment_count
+    description: int, count of enrollments on that particular activity date for a user and courserun
+  - name: unenrolled_count
+    description: int, count of unenrollments on that particular activity date for a user and courserun
+  - name: audit_count
+    description: int, count of enrollments that have a enrollment mode status of audit
+      on that particular activity date for a user and courserun
+  - name: verified_count
+    description: int, count of enrollments that have a enrollment mode status of verified
+      on that particular activity date for a user and courserun
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "user_email", "platform", "course_readable_id", "activity_date"]
