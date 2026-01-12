@@ -1451,7 +1451,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "pygsheets" },
     { name = "pyiceberg", extra = ["polars"] },
-    { name = "pypika" },
     { name = "s3fs" },
     { name = "universal-pathlib" },
 ]
@@ -1473,7 +1472,6 @@ requires-dist = [
     { name = "pydantic", specifier = "~=2.12.3" },
     { name = "pygsheets", specifier = "~=2.0.6" },
     { name = "pyiceberg", extras = ["polars"], specifier = ">=0.10.0" },
-    { name = "pypika", git = "https://github.com/kayak/pypika?rev=28c4b9c84dcb340af14cf2cd78617ba158c1c224" },
     { name = "s3fs", specifier = ">=2026.0.0,<2027.0.0" },
     { name = "universal-pathlib", specifier = "~=0.3.1" },
 ]

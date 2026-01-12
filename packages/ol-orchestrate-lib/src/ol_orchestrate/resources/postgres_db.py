@@ -4,7 +4,6 @@ import pandas  # noqa: ICN001
 import psycopg2
 import pyarrow  # noqa: ICN001
 from dagster import Field, InitResourceContext, Int, String, resource
-from pypika import Query
 
 DEFAULT_POSTGRES_PORT = 5432
 DEFAULT_POSTGRES_QUERY_CHUNKSIZE = 5000
@@ -44,16 +43,16 @@ class PostgresClient:
             port=port,
         )
 
-    def run_chunked_query(self, query: Query, chunksize: Int) -> pyarrow.Table:
+    def run_chunked_query(self, query: str, chunksize: Int) -> pyarrow.Table:
         """Execute the passed query against the Postgres connection.
 
         Executes a query against the target Postgres database and yields the row data as
         an Arrow Table.
 
-        :param query: PyPika query object that specifies the desired query
-        :type query: Query
+        :param query: SQL query string to execute
+        :type query: str
 
-        :param chunksize: PyPika query object that specifies the desired query
+        :param chunksize: Number of rows to fetch per chunk
         :type chunksize: Int
 
         :yields: chunked Query results as arrow table
@@ -61,21 +60,21 @@ class PostgresClient:
         :rtype: Table
         """
         for chunk in pandas.read_sql_query(
-            str(query),
+            query,
             self.connection,
             chunksize=chunksize,
         ):
             arrow_table = pyarrow.Table.from_pandas(chunk)
             yield arrow_table
 
-    def run_write_query(self, query: Query):
+    def run_write_query(self, query: str):
         """Execute the passed write query.
 
-        :param query: PyPika query object that specifies the desired query
-        :type query: Query
+        :param query: SQL query string to execute
+        :type query: str
         """
         with self.connection.cursor() as db_cursor:
-            db_cursor.execute(str(query))
+            db_cursor.execute(query)
             self.connection.commit()
 
 

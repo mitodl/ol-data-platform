@@ -2,7 +2,6 @@ import sqlite3
 from typing import Any
 
 from dagster import Field, InitResourceContext, String, resource
-from pypika import Query
 
 DEFAULT_MYSQL_PORT = 3306
 
@@ -17,14 +16,14 @@ class SQLiteClient:
         self.connection = sqlite3.connect(db_name)
         self.connection.row_factory = sqlite3.Row
 
-    def run_query(self, query: Query) -> tuple[list[str], list[dict[Any, Any]]]:
+    def run_query(self, query: str) -> tuple[list[str], list[dict[Any, Any]]]:
         """Execute the passed query against the SQLite database connection.
 
         Executes a query on the configured SQLite database and returns the row data as a
         dictionary.
 
-        :param query: PyPika query object that specifies the desired query
-        :type query: Query
+        :param query: SQL query string to execute
+        :type query: str
 
         :returns: Query results as a list of dictionaries
 
@@ -32,7 +31,7 @@ class SQLiteClient:
         """
         with self.connection:
             cursor = self.connection.cursor()
-            cursor.execute(str(query))
+            cursor.execute(query)
             query_fields = [field[0] for field in cursor.description]
             return query_fields, cursor.fetchall()
 

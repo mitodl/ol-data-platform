@@ -234,7 +234,7 @@ def enrolled_users(
         )
         .where(course_enrollment.course_id.isin(edx_course_ids))
     )
-    query_fields, users_data = context.resources.sqldb.run_query(users_query)
+    query_fields, users_data = context.resources.sqldb.run_query(str(users_query))
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
     enrollments_path = context.resources.results_dir.path.joinpath("users_query.csv")
     write_csv(query_fields, users_data, enrollments_path)
@@ -301,7 +301,7 @@ def student_submissions(
             .where(studentmodule.course_id == course_id)
         )
         query_fields, submission_data = context.resources.sqldb.run_query(
-            submission_query
+            str(submission_query)
         )
         submissions_count += len(submission_data)
         write_csv(query_fields, submission_data, submissions_path)
@@ -350,7 +350,9 @@ def course_enrollments(
         .select("id", "user_id", "course_id", "created", "is_active", "mode")
         .where(enrollment.course_id.isin(edx_course_ids))
     )
-    query_fields, enrollment_data = context.resources.sqldb.run_query(enrollments_query)
+    query_fields, enrollment_data = context.resources.sqldb.run_query(
+        str(enrollments_query)
+    )
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
     enrollments_path = context.resources.results_dir.path.joinpath(
         "enrollment_query.csv"
@@ -400,7 +402,7 @@ def course_roles(
         .select("id", "user_id", "org", "course_id", "role")
         .where(access_role.course_id.isin(edx_course_ids))
     )
-    query_fields, roles_data = context.resources.sqldb.run_query(roles_query)
+    query_fields, roles_data = context.resources.sqldb.run_query(str(roles_query))
     # Maintaining previous file name for compatibility (TMM 2020-05-01)
     roles_path = context.resources.results_dir.path.joinpath("role_query.csv")
     write_csv(query_fields, roles_data, roles_path)
@@ -465,7 +467,9 @@ def user_roles(
         )
         .where(role.course_id.isin(edx_course_ids))
     )
-    query_fields, user_roles_data = context.resources.sqldb.run_query(user_roles_query)
+    query_fields, user_roles_data = context.resources.sqldb.run_query(
+        str(user_roles_query)
+    )
     user_roles_path = context.resources.results_dir.path.joinpath("role_users.csv")
     write_csv(query_fields, user_roles_data, user_roles_path)
     yield ExpectationResult(

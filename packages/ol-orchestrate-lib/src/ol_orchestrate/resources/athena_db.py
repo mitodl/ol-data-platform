@@ -3,7 +3,6 @@
 import pyathena
 from dagster import Field, InitResourceContext, Noneable, String, resource
 from pyathena.cursor import DictCursor
-from pypika import Query
 
 
 class AthenaClient:
@@ -42,18 +41,18 @@ class AthenaClient:
             schema_name=schema_name,
         ).cursor()
 
-    def run_query(self, query: Query) -> DictCursor:
+    def run_query(self, query: str) -> DictCursor:
         """Execute the passed query against the Athena connection.
 
         Execute a query on the target Athena database and yield the row data as
         DictCursor.
 
-        :param query: PyPika query object that specifies the desired query
-        :type query: Query
+        :param query: SQL query string to execute
+        :type query: str
 
         :returns: DictCursor
         """
-        return self.cursor.execute(str(query))
+        return self.cursor.execute(query)
 
 
 @resource(

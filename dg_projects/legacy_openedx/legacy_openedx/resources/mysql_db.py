@@ -3,7 +3,6 @@ from typing import Any
 import pymysql
 from dagster import Field, InitResourceContext, Int, String, resource
 from pymysql.cursors import DictCursor
-from pypika import Query
 
 DEFAULT_MYSQL_PORT = 3306
 
@@ -44,21 +43,21 @@ class MySQLClient:
             ssl={"cipher": "TLSv1.2"},
         )
 
-    def run_query(self, query: Query) -> tuple[list[str], list[dict[Any, Any]]]:
+    def run_query(self, query: str) -> tuple[list[str], list[dict[Any, Any]]]:
         """Execute the passed query against the MySQL database connection.
 
         Execute a query on the configured MySQL database and return the row data as a
         dictionary.
 
-        :param query: PyPika query object that specifies the desired query
-        :type query: Query
+        :param query: SQL query string to execute
+        :type query: str
 
         :returns: Query results as a list of dictionaries
 
         :rtype: List[Dict]
         """
         with self.connection.cursor() as db_cursor:
-            db_cursor.execute(str(query))
+            db_cursor.execute(query)
             query_fields = [field[0] for field in db_cursor.description]
             return query_fields, db_cursor.fetchall()  # type: ignore[return-value]
 
