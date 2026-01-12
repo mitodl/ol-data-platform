@@ -431,7 +431,8 @@ models:
   - name: platform
     description: string, the platform name currently defaulted to MITx Online
   - name: courserun_is_current
-    description: boolean, true if the current date is between the course run start and end dates otherwise false
+    description: boolean, true if the current date is between the course run start
+      and end dates otherwise false
   - name: user_watched_video_count
     description: int, count of videos a user watched
   - name: max_coursestructure_block_index
@@ -469,11 +470,14 @@ models:
   - name: activity_date
     description: date, date that user engaged in an activity realted to the course
   - name: certificate_count
-    description: int, count of certificates granted on that particular activity date for a user and courserun
+    description: int, count of certificates granted on that particular activity date
+      for a user and courserun
   - name: enrollment_count
-    description: int, count of enrollments on that particular activity date for a user and courserun
+    description: int, count of enrollments on that particular activity date for a
+      user and courserun
   - name: unenrolled_count
-    description: int, count of unenrollments on that particular activity date for a user and courserun
+    description: int, count of unenrollments on that particular activity date for
+      a user and courserun
   - name: audit_count
     description: int, count of enrollments that have a enrollment mode status of audit
       on that particular activity date for a user and courserun
@@ -482,4 +486,5 @@ models:
       on that particular activity date for a user and courserun
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "user_email", "platform", "course_readable_id", "activity_date"]
+      column_list: ["courserun_readable_id", "user_email", "platform", "course_readable_id",
+        "activity_date"]
