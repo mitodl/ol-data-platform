@@ -1,6 +1,6 @@
 [project]
 name = "lakehouse"
-requires-python = ">=3.14,<3.15"
+requires-python = ">=3.13,<3.14"
 version = "0.1.0"
 dependencies = [
     "dagster>=1.12.10",
@@ -8,8 +8,8 @@ dependencies = [
     "dagster-dbt ~=0.28.0",
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
-    "dbt-duckdb ~=1.10.0",
-    "dbt-trino ~=1.10.0",
+    "dbt-duckdb >=1.10.0",
+    "dbt-trino >=1.10.0",
     "httpx ~= 0.28.0",
     "ol-orchestrate-lib",
     "pygithub>=2.8.1",

@@ -12,8 +12,8 @@ classifiers = [
 dependencies = [
     "PyPika ~= 0.48.9",
     "cyclopts~=4.4.0",
-    "dbt-duckdb>=1.9.6",
-    "dbt-trino>=1.9.3",
+    "dbt-duckdb>=1.10.0",
+    "dbt-trino>=1.10.0",
     "trino[external-authentication-token-cache]>=0.336.0",
     "universal-pathlib ~=0.3.1",
 ]

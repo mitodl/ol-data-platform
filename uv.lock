@@ -1905,8 +1905,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cyclopts", specifier = "~=4.4.0" },
-    { name = "dbt-duckdb", specifier = ">=1.9.6" },
-    { name = "dbt-trino", specifier = ">=1.9.3" },
+    { name = "dbt-duckdb", specifier = ">=1.10.0" },
+    { name = "dbt-trino", specifier = ">=1.10.0" },
     { name = "pypika", specifier = "~=0.48.9" },
     { name = "trino", extras = ["external-authentication-token-cache"], specifier = ">=0.336.0" },
     { name = "universal-pathlib", specifier = "~=0.3.1" },

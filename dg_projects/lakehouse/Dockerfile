@@ -1,7 +1,8 @@
 # Based on: https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
 
 # First, build the application in the `/app` directory.
-FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS builder
+# Using Python 3.13 due to dbt-core 1.11 mashumaro constraint incompatibility with Python 3.14
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 # Disable Python downloads, because we want to use the system interpreter
@@ -42,7 +43,8 @@ RUN /app/dg_projects/lakehouse/.venv/bin/dbt deps && \
     /app/dg_projects/lakehouse/.venv/bin/dbt compile --target dev
 
 # Then, use a final image without uv
-FROM python:3.14-slim-bookworm
+# Using Python 3.13 to match builder image
+FROM python:3.13-slim-bookworm
 # It is important to use the image that matches the builder, as the path to the
 # Python executable must be the same.
 
