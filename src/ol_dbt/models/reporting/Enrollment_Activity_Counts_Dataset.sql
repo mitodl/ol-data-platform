@@ -7,7 +7,7 @@ with enroll_dtl as (
 )
 
 , combined_result as (
-    select
+    select 
         enroll_dtl.user_email
         , enroll_dtl.user_gender
         , enroll_dtl.user_country_code
@@ -22,8 +22,8 @@ with enroll_dtl as (
             as enrollment_count
         , case when enroll_dtl.courserunenrollment_enrollment_status = 'unenrolled' then 1 else 0 end
             as unenrolled_count
-        , max(case when enroll_dtl.courserunenrollment_enrollment_mode = 'audit'
-            and (enroll_dtl.courserunenrollment_enrollment_status is null
+        , max(case when enroll_dtl.courserunenrollment_enrollment_mode = 'audit' 
+            and (enroll_dtl.courserunenrollment_enrollment_status is null 
             or enroll_dtl.courserunenrollment_enrollment_status <> 'unenrolled')
             then 1 else 0 end) as audit_count
         , 0 as verified_count
@@ -38,14 +38,12 @@ with enroll_dtl as (
         , enroll_dtl.course_readable_id
         , enroll_dtl.courserun_readable_id
         , substring(enroll_dtl.courserunenrollment_created_on, 1, 10)
-        , 0
         , case when enroll_dtl.courserunenrollment_enrollment_status = 'unenrolled' then 0 else 1 end
         , case when enroll_dtl.courserunenrollment_enrollment_status = 'unenrolled' then 1 else 0 end
-        , 0
 
-    union
+    union 
 
-    select
+    select  
         en_dtl.user_email
         , en_dtl.user_gender
         , en_dtl.user_country_code
@@ -62,7 +60,7 @@ with enroll_dtl as (
         , 0 as verified_count
     from enroll_dtl as en_dtl
     where en_dtl.courseruncertificate_created_on is not null
-        and (en_dtl.courserunenrollment_enrollment_status is null
+        and (en_dtl.courserunenrollment_enrollment_status is null 
         or en_dtl.courserunenrollment_enrollment_status <> 'unenrolled')
     group by
         en_dtl.user_email
@@ -74,12 +72,8 @@ with enroll_dtl as (
         , en_dtl.course_readable_id
         , en_dtl.courserun_readable_id
         , substring(en_dtl.courseruncertificate_created_on, 1, 10)
-        , 0
-        , 0
-        , 0
-        , 0
 
-    union
+    union 
 
     select
         a.user_email
@@ -103,7 +97,7 @@ with enroll_dtl as (
         and a.line_id = combined__orders.line_id
         and a.platform = combined__orders.platform
     where a.courserunenrollment_enrollment_mode = 'verified'
-        and (courserunenrollment_enrollment_status is null
+        and (courserunenrollment_enrollment_status is null 
         or courserunenrollment_enrollment_status <> 'unenrolled')
     group by
         a.user_email
@@ -116,14 +110,9 @@ with enroll_dtl as (
         , a.courserun_readable_id
         , substring(coalesce(combined__orders.receipt_payment_timestamp
         , combined__orders.order_created_on, a.courserunenrollment_created_on), 1, 10)
-        , 0
-        , 0
-        , 0
-        , 0
-        , 1
 )
 
-select
+select 
     user_email
     , user_gender
     , user_country_code
