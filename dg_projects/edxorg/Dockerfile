@@ -10,6 +10,11 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 # for an example.
 ENV UV_PYTHON_DOWNLOADS=0
 
+# Install build dependencies required for compiling C extensions (e.g., pyroaring)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy the entire workspace structure needed for uv
