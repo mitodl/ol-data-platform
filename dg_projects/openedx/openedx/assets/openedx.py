@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 
+import httpx
 import jsonlines
 from dagster import (
     AssetExecutionContext,
@@ -293,3 +294,96 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
         },
     )
     course_xml_path.unlink()
+
+
+@asset(
+    code_version="openedx_course_export_webhook_v1",
+    key=AssetKey(["openedx", "course_content_webhook"]),
+    group_name="course_content_metadata",
+    description="Notify Learn API via webhook after Open edX course export.",
+    automation_condition=upstream_or_code_changes(),
+    ins={
+        "course_xml": AssetIn(key=AssetKey(["openedx", "raw_data", "course_xml"])),
+    },
+    required_resource_keys={"openedx", "learn_api"},
+    output_required=False,
+)
+def openedx_course_content_webhook(
+    context: AssetExecutionContext, course_xml: UPath | None
+):
+    """Send webhook notification to Learn API after Open edX course XML export.
+
+    Sends a notification for xpro, mitxonline, and edxorg deployments.
+    Skips notification for mitx deployment.
+    """
+    course_id = context.partition_key
+    source = context.resources.openedx.deployment
+
+    # Skip webhook for mitx deployment
+    if source == "mitx":
+        context.log.info(
+            "Skipping webhook notification for mitx deployment (course_id=%s)",
+            course_id,
+        )
+        return None
+
+    # Skip if no course_xml was produced (e.g., course not found)
+    if course_xml is None:
+        context.log.info(
+            "No course XML available for course_id=%s, skipping webhook",
+            course_id,
+        )
+        return None
+
+    # Build the content path from the course_xml UPath
+    # Path format: openedx/raw_data/course_xml/{course_id}/{hash}.xml.tar.gz
+    content_path = str(course_xml).split("://", 1)[-1]  # Remove s3:// prefix if present
+    # Extract just the relative path portion
+    if "/" in content_path:
+        # Path is like: bucket/prefix/openedx/raw_data/course_xml/...
+        # We want: openedx/raw_data/course_xml/...
+        parts = content_path.split("/")
+        try:
+            openedx_idx = parts.index("openedx")
+            content_path = "/".join(parts[openedx_idx:])
+        except ValueError:
+            # If 'openedx' not found, use the full path
+            pass
+
+    data = {
+        "course_id": course_id,
+        "course_readable_id": course_id,
+        "content_path": content_path,
+        "source": source,
+    }
+
+    context.log.info(
+        "Sending webhook notification to Learn API for course_id=%s and data=%s",
+        course_id,
+        data,
+    )
+
+    try:
+        response = context.resources.learn_api.client.notify_course_export(data)
+        context.log.info(
+            "Learn API webhook notification succeeded for course_id=%s, response=%s",
+            course_id,
+            response,
+        )
+        return Output(
+            value={"course_id": course_id},
+            metadata={
+                "status": "success",
+                "course_id": course_id,
+                "source": source,
+                "response": response,
+            },
+        )
+
+    except httpx.HTTPStatusError as error:
+        error_message = (
+            f"Learn API webhook notification failed for course_id={course_id} "
+            f"with status code {error.response.status_code} and error: {error!s}"
+        )
+        context.log.exception(error_message)
+        raise Exception(error_message) from error  # noqa: TRY002

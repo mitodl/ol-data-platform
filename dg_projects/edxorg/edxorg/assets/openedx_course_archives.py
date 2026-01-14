@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+import httpx
 import jsonlines
 from dagster import (
     AssetExecutionContext,
@@ -155,3 +156,92 @@ def extract_edxorg_courserun_metadata(
         },
     )
     course_xml_path.unlink()
+
+
+@asset(
+    code_version="edxorg_course_export_webhook_v1",
+    key=AssetKey(["edxorg", "course_content_webhook"]),
+    group_name="course_content_metadata",
+    description="Notify Learn API via webhook after edx.org course XML export.",
+    automation_condition=upstream_or_code_changes(),
+    partitions_def=course_and_source_partitions,
+    ins={
+        "course_archive": AssetIn(key=AssetKey(["edxorg", "raw_data", "course_xml"])),
+    },
+    required_resource_keys={"learn_api"},
+    output_required=False,
+)
+def edxorg_course_content_webhook(
+    context: AssetExecutionContext, course_archive: UPath | None
+):
+    """Send webhook notification to Learn API after edx.org course XML export."""
+    # Parse the multipartition key to extract course_id
+    partition_parts = context.partition_key.split(MULTIPARTITION_KEY_DELIMITER)
+    partition_dict = {}
+    for partition_part in partition_parts:
+        if partition_part in ("prod", "edge"):
+            partition_dict["source_system"] = partition_part
+        else:
+            partition_dict["course_id"] = partition_part
+
+    course_id = partition_dict.get("course_id", context.partition_key)
+
+    # Skip if no course_archive was produced
+    if course_archive is None:
+        context.log.info(
+            "No course XML available for course_id=%s, skipping webhook",
+            course_id,
+        )
+        return None
+
+    # Build the content path from the course_archive UPath
+    content_path = str(course_archive).split("://", 1)[-1]  # Remove s3:// prefix
+    # Extract just the relative path portion
+    if "/" in content_path:
+        # Path is like: bucket/prefix/edxorg/raw_data/course_xml/...
+        # We want: edxorg/raw_data/course_xml/...
+        parts = content_path.split("/")
+        try:
+            edxorg_idx = parts.index("edxorg")
+            content_path = "/".join(parts[edxorg_idx:])
+        except ValueError:
+            # If 'edxorg' not found, use the full path
+            pass
+
+    data = {
+        "course_id": course_id,
+        "course_readable_id": course_id,
+        "content_path": content_path,
+        "source": "edxorg",
+    }
+
+    context.log.info(
+        "Sending webhook notification to Learn API for course_id=%s and data=%s",
+        course_id,
+        data,
+    )
+
+    try:
+        response = context.resources.learn_api.client.notify_course_export(data)
+        context.log.info(
+            "Learn API webhook notification succeeded for course_id=%s, response=%s",
+            course_id,
+            response,
+        )
+        return Output(
+            value={"course_id": course_id},
+            metadata={
+                "status": "success",
+                "course_id": course_id,
+                "source": "edxorg",
+                "response": response,
+            },
+        )
+
+    except httpx.HTTPStatusError as error:
+        error_message = (
+            f"Learn API webhook notification failed for course_id={course_id} "
+            f"with status code {error.response.status_code} and error: {error!s}"
+        )
+        context.log.exception(error_message)
+        raise Exception(error_message) from error  # noqa: TRY002
