@@ -18,6 +18,7 @@ from openedx.assets.openedx import (
     course_structure,
     course_xml,
     extract_courserun_details,
+    openedx_course_content_webhook,
     openedx_live_courseware,
 )
 from openedx.lib.assets_helper import (
@@ -79,11 +80,19 @@ class OpenEdxDeploymentComponent:
             OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
         )
 
+        course_content_webhook_asset = late_bind_partition_to_asset(
+            add_prefix_to_asset_keys(
+                openedx_course_content_webhook, self.deployment_name
+            ),
+            OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
+        )
+
         return [
             course_version_asset,
             course_structure_asset,
             course_xml_asset,
             courserun_detail_asset,
+            course_content_webhook_asset,
         ]
 
     def build_sensors(self, assets: list[AssetsDefinition]) -> list[SensorDefinition]:

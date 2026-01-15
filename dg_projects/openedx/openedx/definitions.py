@@ -19,6 +19,7 @@ from ol_orchestrate.lib.dagster_helpers import (
     default_io_manager,
 )
 from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
 from openedx.components import OpenEdxDeploymentComponent
@@ -156,6 +157,14 @@ shared_resources = {
     "vault": vault,
     "s3": S3Resource(),
     "duckdb": DuckDBResource.configure_at_launch(),
+    "learn_api": ApiClientFactory(
+        deployment="mit-learn",
+        client_class="MITLearnApiClient",
+        mount_point="secret-global",
+        config_path="shared_hmac",
+        kv_version="2",
+        vault=vault,
+    ),
 }
 
 # Create a repository for each OpenEdX deployment

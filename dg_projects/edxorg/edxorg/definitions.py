@@ -27,6 +27,7 @@ from ol_orchestrate.io_managers.filepath import (
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import default_io_manager
 from ol_orchestrate.lib.utils import authenticate_vault
+from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.gcp_gcs import GCSConnection
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
 from ol_orchestrate.resources.outputs import DailyResultsDir, SimpleResultsDir
@@ -52,6 +53,7 @@ from edxorg.assets.edxorg_archive import (
 )
 from edxorg.assets.openedx_course_archives import (
     dummy_edxorg_course_xml,
+    edxorg_course_content_webhook,
     extract_edxorg_courserun_metadata,
 )
 from edxorg.io_managers.gcs import GCSFileIOManager
@@ -254,6 +256,14 @@ defs = Definitions(
         "gcp_gcs": gcs_connection,
         "vault": vault,
         "edxorg_api": OpenEdxApiClientFactory(deployment="edxorg", vault=vault),
+        "learn_api": ApiClientFactory(
+            deployment="mit-learn",
+            client_class="MITLearnApiClient",
+            mount_point="secret-global",
+            config_path="shared_hmac",
+            kv_version="2",
+            vault=vault,
+        ),
         "s3": S3Resource(profile_name="edxorg"),
         "s3_download": S3Resource(profile_name="edxorg"),
         "s3_upload": S3Resource(),
@@ -274,6 +284,7 @@ defs = Definitions(
         flatten_edxorg_course_structure,
         extract_edxorg_courserun_metadata,
         dummy_edxorg_course_xml,
+        edxorg_course_content_webhook,
         edxorg_program_metadata,
         edxorg_mitx_course_metadata,
     ],
