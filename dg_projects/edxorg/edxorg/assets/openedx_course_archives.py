@@ -233,7 +233,7 @@ def edxorg_course_content_webhook(
             metadata={
                 "status": "success",
                 "course_id": course_id,
-                "source": "edxorg",
+                "source": "mit_edx",  # to match Learn API source naming
                 "response": response,
             },
         )
