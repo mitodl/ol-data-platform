@@ -212,7 +212,7 @@ def edxorg_course_content_webhook(
         "course_id": course_id,
         "course_readable_id": course_id,
         "content_path": content_path,
-        "source": "edxorg",
+        "source": "mit_edx",
     }
 
     context.log.info(
