@@ -1,0 +1,43 @@
+[project]
+name = "student_risk_probability"
+requires-python = ">=3.14,<3.15"
+version = "0.1.0"
+dependencies = [
+    "dagster>=1.12.10",
+    "dagster-dbt ~=0.28.0",
+    "dagster-aws ~=0.28.0",
+    "dagster-k8s>=0.27.15",
+    "dagster-postgres>=0.27.13",
+    "httpx ~= 0.28.0",
+    "scikit-learn>=1.2.2",
+    "ol-orchestrate-lib",
+]
+
+[project.entry-points]
+"dagster.components" = { student_risk_probability = "student_risk_probability.lib"}
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.12.10",
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "student_risk_probability.definitions"
+project_name = "student_risk_probability"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "student_risk_probability"
+
+[tool.setuptools.packages.find]
+exclude=["student_risk_probability_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
