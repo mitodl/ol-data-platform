@@ -72,6 +72,36 @@ with problem_events as (
     where overall_grade.verified_cnt > 0
 )
 
+ , flagged as (
+    select
+        *
+        , coalesce(
+            upper(unit_name) like '%FINAL EXAM%'
+            or upper(chapter_name) like '%FINAL EXAM%'
+        , false) as final_exam_indicator
+        , coalesce((
+                upper(unit_name) like '%EXAM%'
+                and upper(unit_name) not like '%EXAMPLE%'
+                and upper(unit_name) not like '%EXAMINING%'
+                and upper(unit_name) not like '%PRACTICE%'
+            )
+            or (
+                upper(chapter_name) like '%EXAM%'
+                and upper(chapter_name) not like '%EXAMPLE%'
+                and upper(chapter_name) not like '%EXAMINING%'
+                and upper(chapter_name) not like '%PRACTICE%'
+            )
+            or upper(chapter_name) like '%EXAM %'
+            or upper(unit_name) like '%EXAM %', true
+        ) as exam_indicator
+        , coalesce((
+            unit_metadata like '%"format":"Homework"%'
+            or problem_metadata like '%"format":"Homework"%'
+            or sequential_metadata like '%"format":"Homework"%')
+        , false) as hw_indicator
+    from problems_joined
+)
+
 , final as (
     select
         platform
@@ -81,25 +111,9 @@ with problem_events as (
         , unit_name
         , chapter_name
         , sequential_name
-        , coalesce((
-            upper(unit_name) like '%EXAM%'
-            and upper(unit_name) not like '%EXAMPLE%'
-            and upper(unit_name) not like '%EXAMINING%'
-            and upper(unit_name) not like '%PRACTICE%'
-        )
-        or (
-            upper(chapter_name) like '%EXAM%'
-            and upper(chapter_name) not like '%EXAMPLE%'
-            and upper(chapter_name) not like '%EXAMINING%'
-            and upper(chapter_name) not like '%PRACTICE%'
-        )
-        or upper(chapter_name) like '%EXAM %'
-        or upper(unit_name) like '%EXAM %', true
-        ) as exam_indicator
-        , coalesce((unit_metadata like '%"format":"Homework"%'
-        or problem_metadata like '%"format":"Homework"%'
-        or sequential_metadata like '%"format":"Homework"%'), true
-        ) as hw_indicator
+        , exam_indicator
+        , hw_indicator
+        , final_exam_indicator
         , max(max_grade) as max_possible_grade
         , max(attempt) as attempts_on_problem
         , max(grade) as max_learner_grade
@@ -120,7 +134,7 @@ with problem_events as (
             end
         ) as time_spent_on_problem_nolimit
         , max(courserungrade_grade) as courserungrade_grade
-    from problems_joined
+    from flagged
     group by
         platform
         , openedx_user_id
@@ -129,25 +143,9 @@ with problem_events as (
         , unit_name
         , chapter_name
         , sequential_name
-        , coalesce((
-            upper(unit_name) like '%EXAM%'
-            and upper(unit_name) not like '%EXAMPLE%'
-            and upper(unit_name) not like '%EXAMINING%'
-            and upper(unit_name) not like '%PRACTICE%'
-        )
-        or (
-            upper(chapter_name) like '%EXAM%'
-            and upper(chapter_name) not like '%EXAMPLE%'
-            and upper(chapter_name) not like '%EXAMINING%'
-            and upper(chapter_name) not like '%PRACTICE%'
-        )
-        or upper(chapter_name) like '%EXAM %'
-        or upper(unit_name) like '%EXAM %', true
-        )
-        , coalesce((unit_metadata like '%"format":"Homework"%'
-        or problem_metadata like '%"format":"Homework"%'
-        or sequential_metadata like '%"format":"Homework"%'), true
-        )
+        , exam_indicator
+        , hw_indicator
+        , final_exam_indicator
 )
 
 , ten_percent_time as (
@@ -220,6 +218,29 @@ with problem_events as (
         , openedx_user_id
 )
 
+, non_exam_grouping as (
+    select
+        platform
+        , courserun_readable_id
+        , openedx_user_id
+        , count(distinct problem_block_fk) as non_exam_problem_count
+    from final
+    where final_exam_indicator = false
+    group by
+        platform
+        , courserun_readable_id
+        , openedx_user_id
+)
+
+, final_exam_grouping as (
+    select distinct
+        platform
+        , courserun_readable_id
+        , openedx_user_id
+    from final
+    where final_exam_indicator = true
+)
+
 select
     final.platform
     , final.openedx_user_id
@@ -243,6 +264,11 @@ select
     , exam_grouping.user_exam_median_solving_time
     , hw_grouping.user_hw_attempts_on_problem
     , exam_grouping.user_exam_time_flags
+    , non_exam_grouping.non_exam_problem_count
+    , case
+        when final_exam_grouping.openedx_user_id is not null then true
+        else false
+      end as user_taken_final_exam
 from final
 left join hw_grouping
     on
@@ -254,3 +280,13 @@ left join exam_grouping
         final.platform = exam_grouping.platform
         and final.openedx_user_id = exam_grouping.openedx_user_id
         and final.courserun_readable_id = exam_grouping.courserun_readable_id
+left join non_exam_grouping
+    on
+        final.platform = non_exam_grouping.platform
+        and final.openedx_user_id = non_exam_grouping.openedx_user_id
+        and final.courserun_readable_id = non_exam_grouping.courserun_readable_id
+left join final_exam_grouping
+    on
+        final.platform = final_exam_grouping.platform
+        and final.openedx_user_id = final_exam_grouping.openedx_user_id
+        and final.courserun_readable_id = final_exam_grouping.courserun_readable_id
