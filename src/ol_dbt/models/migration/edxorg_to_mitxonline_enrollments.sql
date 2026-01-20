@@ -133,6 +133,9 @@ with combined_enrollments as (
     --- exclude DEDP Micromasters program courses as those are already migrated
     and (edxorg_runs.micromasters_program_id != {{ var("dedp_micromasters_program_id") }}
     or edxorg_runs.micromasters_program_id is null)
+    --- Exclude PEx runs as these are transient and don't need to be migrated. Anyone who earned a certificate
+      -- in them also earned a certificate in the corresponding non-PEx version of the course
+    and combined_enrollments.courserun_readable_id not like '%PEx%'
 )
 
 select
