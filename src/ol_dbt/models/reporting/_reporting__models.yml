@@ -316,6 +316,13 @@ models:
     description: int, total times a learner gets a performance time flag when their
       exam problem solving time was below the 10th percentile of time taken by all
       students to solve an exam problem
+  - name: non_exam_problem_count
+    description: int, count of non-exam problems the learner attempted in the course
+  - name: user_taken_final_exam
+    description: boolean, true if the learner has taken the final exam in the course
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "openedx_user_id", "courserun_readable_id", "problem_block_fk"]
 
 - name: chatbot_usage_report
   description: AI chatbot interactions from Learn AI application including TutorBot,
@@ -474,6 +481,14 @@ models:
     description: int, count of enrollments on that particular activity date for a user and courserun
   - name: unenrolled_count
     description: int, count of unenrollments on that particular activity date for a user and courserun
+    description: int, count of certificates granted on that particular activity date
+      for a user and courserun
+  - name: enrollment_count
+    description: int, count of enrollments on that particular activity date for a
+      user and courserun
+  - name: unenrolled_count
+    description: int, count of unenrollments on that particular activity date for
+      a user and courserun
   - name: audit_count
     description: int, count of enrollments that have a enrollment mode status of audit
       on that particular activity date for a user and courserun
@@ -532,3 +547,5 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_hashed_id"]
+      column_list: ["courserun_readable_id", "user_email", "platform", "course_readable_id",
+        "activity_date"]

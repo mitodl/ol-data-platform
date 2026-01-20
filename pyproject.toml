@@ -3,15 +3,15 @@ name = "ol-data-platform"
 version = "0.6.1"
 description = "Code and configuration for powering the MIT Open Learning data platform"
 authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
-requires-python = "~=3.14,<3.15"
+requires-python = "~=3.13,<3.14"
 license = "BSD-3-Clause"
 classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "PyPika ~= 0.48.9",
-    "cyclopts~=4.4.0",
+    "PyPika ~=0.50.0",
+    "cyclopts~=4.5.0",
     "dbt-duckdb>=1.10.0",
     "dbt-trino>=1.10.0",
     "trino[external-authentication-token-cache]>=0.336.0",
@@ -34,7 +34,7 @@ dev = [
     "pytest>=9.0.1,<10",
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
-    "sqlfluff>=3.0.0,<4",
+    "sqlfluff[rs]>=4.0.0",
 ]
 
 # The ol_orchestrate package has been moved to packages/ol-orchestrate-lib/

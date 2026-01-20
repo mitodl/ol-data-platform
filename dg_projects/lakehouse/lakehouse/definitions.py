@@ -197,7 +197,7 @@ if DAGSTER_ENV == "production":
 airbyte_asset_jobs = []
 airbyte_update_schedules = []
 group_count = len(group_names)
-for count, group_name in enumerate(group_names, start=1):
+for group_name in group_names:
     job = define_asset_job(
         name=f"sync_and_stage_{group_name}",
         selection=AssetSelection.groups(group_name)
@@ -205,9 +205,10 @@ for count, group_name in enumerate(group_names, start=1):
         .required_multi_asset_neighbors(),
     )
     interval = group_name_to_interval.get(group_name, 24)  # default to 24 hours
-    start_hour = count % max(1, len(group_names) // 4)
+    # No offset needed - K8s autoscaling handles concurrent syncs
+    start_hour = 0
 
-    # Compute explicit run hours (e.g. [1, 13] for 12-hour interval starting at 1)
+    # Compute explicit run hours (e.g. [0, 12] for 12-hour interval starting at 0)
     hours = [(start_hour + i * interval) % 24 for i in range(24 // interval)]
     hours_str = ",".join(str(h) for h in sorted(hours))
 
@@ -267,7 +268,7 @@ defs = Definitions(
     sensors=[
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",
-            minimum_interval_seconds=3600,
+            minimum_interval_seconds=14400,  # 4 hours - reduced from 1 hour
             # exclude staging as they are already handled by "sync_and_stage_" job
             target=(
                 AssetSelection.assets(full_dbt_project)
