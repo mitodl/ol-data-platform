@@ -15,19 +15,19 @@ with combined__users as (
 )
 
 , dedp_indicators as (
-    select 
+    select
         user_hashed_id
         , 1 as Any_DEDP_Program_Indicator
-        , count(distinct case 
+        , count(distinct case
             when program_title =
             'Data, Economics, and Design of Policy: International Development'
             then user_hashed_id else null end) as DEDP_International_Program_Indicator
-        , count (distinct case 
+        , count (distinct case
             when program_title =
             'Data, Economics, and Design of Policy: Public Policy'
             then user_hashed_id else null end) as DEDP_Public_Policy_Program_Indicator
     from program_enrollment_detail
-    where program_title in 
+    where program_title in
         ('Data, Economics, and Design of Policy'
         , 'Data, Economics, and Design of Policy: International Development'
         , 'Data, Economics, and Design of Policy: Public Policy')
@@ -37,7 +37,7 @@ with combined__users as (
 )
 
 , dedp_certs as (
-    select 
+    select
         combined_course_enrollment_detail.user_hashed_id
         , count(distinct combined_course_enrollment_detail.course_readable_id) as DEDP_Course_Cert_Count
     from combined_course_enrollment_detail
