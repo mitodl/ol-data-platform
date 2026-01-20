@@ -316,6 +316,13 @@ models:
     description: int, total times a learner gets a performance time flag when their
       exam problem solving time was below the 10th percentile of time taken by all
       students to solve an exam problem
+  - name: non_exam_problem_count
+    description: int, count of non-exam problems the learner attempted in the course
+  - name: user_taken_final_exam
+    description: boolean, true if the learner has taken the final exam in the course
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "openedx_user_id", "courserun_readable_id", "problem_block_fk"]
 
 - name: chatbot_usage_report
   description: AI chatbot interactions from Learn AI application including TutorBot,
