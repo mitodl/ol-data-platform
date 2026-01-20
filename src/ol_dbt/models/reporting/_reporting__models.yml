@@ -495,3 +495,55 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "user_email", "platform", "course_readable_id",
         "activity_date"]
+
+- name: learner_demographics_and_cert_info
+  description: A report that contains learner demographics and cerificate information
+  columns:
+  - name: user_hashed_id
+    description: str, user primary key
+  - name: user_full_name
+    description: str, user full name on the platform user enrolled.
+  - name: user_birth_year
+    description: int, user's birth year
+  - name: user_gender
+    description: str, gender selected by the user on their profile
+  - name: user_email
+    description: str, user email associated with their account
+  - name: user_edxorg_username
+    description: string, username on edX.org
+  - name: user_mitxonline_username
+    description: string, username on MITxOnline
+  - name: user_address_country
+    description: str, country code provided by the user
+  - name: user_highest_education
+    description: str, user's highest education. May be blank.
+  - name: user_job_title
+    description: str, user's job title
+  - name: user_company
+    description: str, user's company. May be blank.
+  - name: user_industry
+    description: str, user's job industry
+  - name: latest_income_usd
+    description: int, the users latest income in usd. May be blank.
+  - name: first_course_start_datetime
+    description: string, year and term from the users first course enrollment
+  - name: last_course_start_datetime
+    description: string, year and term from the users latest course enrollment
+  - name: num_of_course_enrolled
+    description: number, the number of courses learner enrolled based on their emails
+      so this counts as same person if they use the email to register on different
+      platforms
+  - name: dedp_course_cert_count
+    description: int, count of the number of times the user has recieved a DEDP course
+      credential
+  - name: any_dedp_program_cert_ind
+    description: str, indictor showing if the user has recieved any DEDP program credentials
+  - name: dedp_international_program_cert_ind
+    description: str, indictor showing if the user has recieved any DEDP Inernational
+      program credentials
+  - name: dedp_public_policy_program_cert_ind
+    description: str, indictor showing if the user has recieved any DEDP Public Policy
+      program credentials
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_hashed_id"]
