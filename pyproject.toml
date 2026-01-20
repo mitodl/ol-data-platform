@@ -34,7 +34,7 @@ dev = [
     "pytest>=9.0.1,<10",
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
-    "sqlfluff>=3.0.0,<4",
+    "sqlfluff[rs]>=4.0.0",
 ]
 
 # The ol_orchestrate package has been moved to packages/ol-orchestrate-lib/

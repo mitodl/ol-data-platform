@@ -1825,7 +1825,7 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
     { name = "shandy-sqlfmt", extra = ["jinjafmt"] },
-    { name = "sqlfluff" },
+    { name = "sqlfluff", extra = ["rs"] },
 ]
 
 [package.metadata]
@@ -1847,7 +1847,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.1,<10" },
     { name = "ruff" },
     { name = "shandy-sqlfmt", extras = ["jinjafmt"], specifier = ">=0.27.0" },
-    { name = "sqlfluff", specifier = ">=3.0.0,<4" },
+    { name = "sqlfluff", extras = ["rs"], specifier = ">=4.0.0" },
 ]
 
 [[package]]
@@ -2834,7 +2834,7 @@ wheels = [
 
 [[package]]
 name = "sqlfluff"
-version = "3.5.0"
+version = "4.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "chardet" },
@@ -2850,9 +2850,43 @@ dependencies = [
     { name = "tblib" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4c/a8/d3dc6c510cc3bba9abbf7a3052a96d5ce6771b71dda141846003fa37277a/sqlfluff-3.5.0.tar.gz", hash = "sha256:2d0a546078ffb021de7021b9a6c2a50e5eef590daa820d5f1b082d24a1d5e1d4", size = 921199, upload-time = "2025-10-18T19:33:07.778Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/19/6fc25b5fe612f079c744a6253ed31f231dc61fdff9eba778f314de1e6efe/sqlfluff-4.0.0.tar.gz", hash = "sha256:b2478983adbeff096327f20763c78ddc36c5b48871c0ea6b084d296136dc4e3e", size = 941606, upload-time = "2026-01-15T20:58:43.332Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/d5/83c3eacdd6c3249fb5f8a0b5612ab10b661862e0df869951f45fd837448d/sqlfluff-3.5.0-py3-none-any.whl", hash = "sha256:6e5fb7a0c491676ded68912245fc0627e88f8b0e6290bd4b54a65ce735f69716", size = 921597, upload-time = "2025-10-18T19:33:05.839Z" },
+    { url = "https://files.pythonhosted.org/packages/54/5f/7f182eb1e70ae4fe2431ff484616e127c3d32a9406dd25428942f2265597/sqlfluff-4.0.0-py3-none-any.whl", hash = "sha256:f1fc7e8aa5f9430f099bf81ded08edcfd1fc3d1b05e123b303f70ebf6c1d7654", size = 940494, upload-time = "2026-01-15T20:58:41.594Z" },
+]
+
+[package.optional-dependencies]
+rs = [
+    { name = "sqlfluffrs" },
+]
+
+[[package]]
+name = "sqlfluffrs"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1c/4d/36e46a5caf7c15d1e4904507487c3e961f4636763c8527eeff11553f586c/sqlfluffrs-4.0.0.tar.gz", hash = "sha256:521ca895ce5d702a08434c1554b1f71f523a6faf73916201bbc36973ac73bfed", size = 4301431, upload-time = "2026-01-15T21:39:41.865Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/3e/ce79a7995cebd3a09c4aa299eea63a818eb6d6df0b1284c55693eeba6852/sqlfluffrs-4.0.0-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:5cfed766ae5bb9ed646781e68fe02b4818715049a0268db6e7434426a7203e23", size = 4795054, upload-time = "2026-01-15T21:38:02.289Z" },
+    { url = "https://files.pythonhosted.org/packages/58/77/582a8a9be1597a8b779143b3f727951f411e3ca4a0eaf0dbb26fd7576a4c/sqlfluffrs-4.0.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:1939baeaf707f9338d1ff0c826242c2ca18761b27ebc21d0b765d40fd2888259", size = 5276258, upload-time = "2026-01-15T21:37:56.591Z" },
+    { url = "https://files.pythonhosted.org/packages/52/bd/48bbdf4cbba706173ece43852e5ed06299e3b06c03ee40c393659a863ef9/sqlfluffrs-4.0.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b8a4c0684e83fffa063e0a76cf96fe12aaef58989716d3f728d6800f5b9292a6", size = 23126823, upload-time = "2026-01-15T21:35:48.986Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/1b/8c84ec2034367b4def926bdde6ca24683e1ef4e6f35da3a03d4ba0f93304/sqlfluffrs-4.0.0-cp313-cp313-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:5cceb4b71a790dd45d6b663576a98cf1290586fe89a9b5c2410a215d43fe5cce", size = 20496107, upload-time = "2026-01-15T21:36:14.353Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/3e/8638ae5c7b70522cf36907b55fa922c7efc03f1cdb0f6ae4535153ce7ec0/sqlfluffrs-4.0.0-cp313-cp313-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:52b9d5b7100035ed7b91e0edc8f3cc4fa664631e28a2548bfa9dcf551b899a96", size = 23586708, upload-time = "2026-01-15T21:36:38.755Z" },
+    { url = "https://files.pythonhosted.org/packages/85/ba/345f7db1ef1419627b0453ccb0f6e7fd8836f91e659e2f175309e2959d84/sqlfluffrs-4.0.0-cp313-cp313-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:46861d3dd6e6d6aeeaf8b3aa037edd3bb7633a85750e5d493eacdd0f79e54cb6", size = 23106843, upload-time = "2026-01-15T21:37:04.718Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/47/f00c822968965bb2a7d8084e312fa48011f575b52cbcf4cefa3d131f6eab/sqlfluffrs-4.0.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c5935a7b1f64637757cb7c03be63daa171603cbac33e1c31b575c6d5ec8d6ba2", size = 24262643, upload-time = "2026-01-15T21:37:45.518Z" },
+    { url = "https://files.pythonhosted.org/packages/29/6a/fffde0eabde487c4b5e2fca083f5701e43be826c955f6f9f73e5cac9e18f/sqlfluffrs-4.0.0-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:bebda2b9c563580e28a283b2197cba961ac83a725897e55a22077e9cf907d4eb", size = 21799183, upload-time = "2026-01-15T21:37:30.318Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/c9/f011a1b9dbeb7bc7c0d22be71e4d8e5c861e13387d433f19122f039b8f2e/sqlfluffrs-4.0.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:a9286401e4ca78c9906123df3b7179aca0cfbdacd1ac62fd7f7412b9bb53ee12", size = 23298126, upload-time = "2026-01-15T21:38:11.598Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/79/eb2f91c6b5984449e6b33467d9c75788069905c3243b2401b1d05561d27f/sqlfluffrs-4.0.0-cp313-cp313-musllinux_1_2_armv7l.whl", hash = "sha256:078e1c5134ce43c1543e8f7b81ed80708b81596e6ea4934ffab712c53c02b719", size = 20764497, upload-time = "2026-01-15T21:38:35.856Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/f6/e92e5bc909add526f114b9ad68014591457247fc5f09066aab7f945a1a23/sqlfluffrs-4.0.0-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:f4c55f95d74b89a16fbf756a075f3c77c997847454beea2bf2a808acba5969bc", size = 21586979, upload-time = "2026-01-15T21:38:59.601Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/71/0f96a912ce788be0fa36d9c2a9edb527cd568e413af397252b5795f2316b/sqlfluffrs-4.0.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:6076ad84ffb3b73b7d3a6e5aa1c9665daa02918e757103fdd300e90807006311", size = 23620218, upload-time = "2026-01-15T21:39:23.593Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/db/aadf84ad5b8990e51b1417e52f582ef9ccc2032286b8892c970820c4fcfe/sqlfluffrs-4.0.0-cp313-cp313-win_amd64.whl", hash = "sha256:a4e51e4f3b1d1b66e0abfcc8c5bbf453d95ef952da5de7065ccf17a6db1bf7f6", size = 4636555, upload-time = "2026-01-15T21:39:47.067Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/5d/f67499daf9ba306b1d17dba598b31f97f86c5777ccedeeaada41a4de3288/sqlfluffrs-4.0.0-cp313-cp313t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:82487130eb38dd2233add34f9727b2cf631d119d06a1016de7506b5163b9e3fe", size = 23134326, upload-time = "2026-01-15T21:35:51.045Z" },
+    { url = "https://files.pythonhosted.org/packages/75/9a/2e780089cfe2d87258a2b2cf2cf4364960d825262e19d0f244290a08fd63/sqlfluffrs-4.0.0-cp313-cp313t-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:6c3c2243ef861ace043c721c5a82bdf766b36403783d6677ec6028310a77dc76", size = 20474480, upload-time = "2026-01-15T21:36:16.74Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/e8/2ec295a461be42e27a3375c7bd191e1eadc06a3913b13c1a82e60bf3db85/sqlfluffrs-4.0.0-cp313-cp313t-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:21123b85c3d3410df1ca609f32913e56e196785cc0cb31cf599dd007fe137acf", size = 23600581, upload-time = "2026-01-15T21:36:41.717Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/99/f4b7f6efde735fa7746bfb4dca81b99ce4a41cb8be9e4238817301645464/sqlfluffrs-4.0.0-cp313-cp313t-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:0e504c9d77f6eb8371302fc88fc85d6252d5b7e34fe30e3a99ada0793f794da7", size = 23093164, upload-time = "2026-01-15T21:37:08.118Z" },
+    { url = "https://files.pythonhosted.org/packages/6c/47/1a060db964f832198f396a18a30b4247f3edc59c23041b8bd1fdf2d02e5d/sqlfluffrs-4.0.0-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:862180420e1da8fc3444d02ca548a6bd0787bd108147c67078460aa5e65cf583", size = 23299774, upload-time = "2026-01-15T21:38:13.646Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/77/a858b8207fb2d4d02075714b10f0f74fb40cf9d9beeb97c1f3a5044a7502/sqlfluffrs-4.0.0-cp313-cp313t-musllinux_1_2_armv7l.whl", hash = "sha256:ecfac69e10e6642f94b8fc55549a9781045159a7ce412f8301502b712bddff9e", size = 20744893, upload-time = "2026-01-15T21:38:37.821Z" },
+    { url = "https://files.pythonhosted.org/packages/78/41/33745617b0e9232584aa0145bd336d4014bac7f7eda04bbe7a510764afde/sqlfluffrs-4.0.0-cp313-cp313t-musllinux_1_2_i686.whl", hash = "sha256:30b82538087c349d612f53e43f9886191c5216be36b4f726406de6212bf54e68", size = 21594161, upload-time = "2026-01-15T21:39:01.644Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/9d/d55b259cf1495346d636ce627ebda448c04d0eca56be9aba2a6c0d64b393/sqlfluffrs-4.0.0-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:9396e5c38f280102fabab7aa49f0864480baa47ddd399fc1613372acee0f4b22", size = 23634424, upload-time = "2026-01-15T21:39:26.024Z" },
 ]
 
 [[package]]
