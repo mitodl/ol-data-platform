@@ -92,13 +92,13 @@ with problem_events as (
                 and upper(chapter_name) not like '%PRACTICE%'
             )
             or upper(chapter_name) like '%EXAM %'
-            or upper(unit_name) like '%EXAM %', true
-        ) as exam_indicator
+            or upper(unit_name) like '%EXAM %'
+        , true) as exam_indicator
         , coalesce((
             unit_metadata like '%"format":"Homework"%'
             or problem_metadata like '%"format":"Homework"%'
             or sequential_metadata like '%"format":"Homework"%')
-        , false) as hw_indicator
+        , true) as hw_indicator
     from problems_joined
 )
 
@@ -225,7 +225,7 @@ with problem_events as (
         , openedx_user_id
         , count(distinct problem_block_fk) as non_exam_problem_count
     from final
-    where final_exam_indicator = false
+    where exam_indicator = false
     group by
         platform
         , courserun_readable_id
