@@ -173,7 +173,7 @@ def extract_edxorg_courserun_metadata(
 )
 def edxorg_course_content_webhook(
     context: AssetExecutionContext, course_archive: UPath | None
-):
+) -> None:
     """Send webhook notification to Learn API after edx.org course XML export."""
     # Parse the multipartition key to extract course_id
     partition_parts = context.partition_key.split(MULTIPARTITION_KEY_DELIMITER)
@@ -185,14 +185,6 @@ def edxorg_course_content_webhook(
             partition_dict["course_id"] = partition_part
 
     course_id = partition_dict.get("course_id", context.partition_key)
-
-    # Skip if no course_archive was produced
-    if course_archive is None:
-        context.log.info(
-            "No course XML available for course_id=%s, skipping webhook",
-            course_id,
-        )
-        return
 
     # Build the content path from the course_archive UPath
     content_path = str(course_archive).split("://", 1)[-1]  # Remove s3:// prefix
@@ -235,4 +227,3 @@ def edxorg_course_content_webhook(
         )
         context.log.exception(error_message)
         raise Exception(error_message) from error  # noqa: TRY002
-    return
