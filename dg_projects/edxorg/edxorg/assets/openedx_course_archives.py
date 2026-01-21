@@ -169,7 +169,7 @@ def extract_edxorg_courserun_metadata(
         "course_archive": AssetIn(key=AssetKey(["edxorg", "raw_data", "course_xml"])),
     },
     required_resource_keys={"learn_api"},
-    output_required=False,
+    io_manager_key="default_io_manager",
 )
 def edxorg_course_content_webhook(
     context: AssetExecutionContext, course_archive: UPath | None
@@ -185,14 +185,6 @@ def edxorg_course_content_webhook(
             partition_dict["course_id"] = partition_part
 
     course_id = partition_dict.get("course_id", context.partition_key)
-
-    # Skip if no course_archive was produced
-    if course_archive is None:
-        context.log.info(
-            "No course XML available for course_id=%s, skipping webhook",
-            course_id,
-        )
-        return None
 
     # Build the content path from the course_archive UPath
     content_path = str(course_archive).split("://", 1)[-1]  # Remove s3:// prefix
@@ -233,7 +225,7 @@ def edxorg_course_content_webhook(
             metadata={
                 "status": "success",
                 "course_id": course_id,
-                "source": "mit_edx",  # to match Learn API source naming
+                "source": "mit_edx",
                 "response": response,
             },
         )

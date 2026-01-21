@@ -248,6 +248,7 @@ defs = Definitions(
             vault=vault,
             vault_gcs_token_path="secret-data/pipelines/edx/org/gcp-oauth-client",  # noqa: S106
         ),
+        "default_io_manager": default_io_manager(DAGSTER_ENV),
         "s3file_io_manager": S3FileObjectIOManager(
             bucket=s3_uploads_bucket(DAGSTER_ENV)["bucket"],
             path_prefix=s3_uploads_bucket(DAGSTER_ENV)["prefix"],
