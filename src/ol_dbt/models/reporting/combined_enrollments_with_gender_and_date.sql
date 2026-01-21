@@ -6,7 +6,7 @@ with combined_users as (
     select * from {{ ref('marts__combined_course_enrollment_detail') }}
 )
 
-select 
+select
     enrollment_detail.platform
     , enrollment_detail.courserunenrollment_id
     , enrollment_detail.combined_orders_hash_id
@@ -49,6 +49,3 @@ select
 from enrollment_detail
 left join combined_users
     on enrollment_detail.user_hashed_id = combined_users.user_hashed_id
-
-
-

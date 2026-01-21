@@ -549,7 +549,8 @@ models:
       column_list: ["user_hashed_id"]
 
 - name: combined_enrollments_with_gender_and_date
-  description: A report that contains learner enrollment details with demographic information
+  description: A report that contains learner enrollment details with demographic
+    information
   columns:
   - name: platform
     description: str, name of the platform
@@ -657,5 +658,5 @@ models:
     description: str, user's job industry
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "courserunenrollment_id", "combined_orders_hash_id", "user_hashed_id"
-        , "line_id", "courserun_readable_id"]
+      column_list: ["platform", "courserunenrollment_id", "combined_orders_hash_id",
+        "user_hashed_id", "line_id", "courserun_readable_id"]
