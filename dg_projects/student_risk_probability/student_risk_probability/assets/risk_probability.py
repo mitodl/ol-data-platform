@@ -47,7 +47,7 @@ def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
 
     # Lazy selection and cleanup
     features_lazy = (
-        df.filter(pl.col("user_taken_final_exam"))
+        df.filter(pl.col("user_taken_final_exam").eq(True))  # noqa: FBT003
         .select(id_cols + feature_numeric_cols)
         .unique(subset=id_cols)
         .drop_nulls(subset=feature_numeric_cols)
@@ -66,7 +66,7 @@ def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
     # build results dataframe
     results_df = pl.concat(
         [
-            scaled_df.select(id_cols),  # Polars DataFrame of IDs (eager)
+            scaled_df.select(id_cols),
             probabilities.rename(
                 "risk_probability"
             ).to_frame(),  # Polars DataFrame of probabilities
