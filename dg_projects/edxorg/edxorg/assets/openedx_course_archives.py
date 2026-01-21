@@ -169,11 +169,11 @@ def extract_edxorg_courserun_metadata(
         "course_archive": AssetIn(key=AssetKey(["edxorg", "raw_data", "course_xml"])),
     },
     required_resource_keys={"learn_api"},
-    output_required=False,
+    io_manager_key="default_io_manager",
 )
 def edxorg_course_content_webhook(
     context: AssetExecutionContext, course_archive: UPath | None
-) -> None:
+):
     """Send webhook notification to Learn API after edx.org course XML export."""
     # Parse the multipartition key to extract course_id
     partition_parts = context.partition_key.split(MULTIPARTITION_KEY_DELIMITER)
@@ -220,6 +220,16 @@ def edxorg_course_content_webhook(
             course_id,
             response,
         )
+        return Output(
+            value={"course_id": course_id},
+            metadata={
+                "status": "success",
+                "course_id": course_id,
+                "source": "mit_edx",
+                "response": response,
+            },
+        )
+
     except httpx.HTTPStatusError as error:
         error_message = (
             f"Learn API webhook notification failed for course_id={course_id} "

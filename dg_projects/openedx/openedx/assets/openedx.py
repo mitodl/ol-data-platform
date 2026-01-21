@@ -327,14 +327,6 @@ def openedx_course_content_webhook(
         )
         return None
 
-    # Skip if no course_xml was produced (e.g., course not found)
-    if course_xml is None:
-        context.log.info(
-            "No course XML available for course_id=%s, skipping webhook",
-            course_id,
-        )
-        return None
-
     # Build the content path from the course_xml UPath
     # Path format: openedx/raw_data/course_xml/{course_id}/{hash}.xml.tar.gz
     content_path = str(course_xml).split("://", 1)[-1]  # Remove s3:// prefix if present
