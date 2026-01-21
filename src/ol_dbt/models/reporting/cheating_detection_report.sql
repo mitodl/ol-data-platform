@@ -223,7 +223,7 @@ with problem_events as (
         platform
         , courserun_readable_id
         , openedx_user_id
-        , count(distinct problem_block_fk) as non_exam_problem_count
+        , count(distinct problem_block_fk) as user_non_exam_problem_count
     from final
     where exam_indicator = false
     group by
@@ -264,7 +264,7 @@ select
     , exam_grouping.user_exam_median_solving_time
     , hw_grouping.user_hw_attempts_on_problem
     , exam_grouping.user_exam_time_flags
-    , non_exam_grouping.non_exam_problem_count
+    , non_exam_grouping.user_non_exam_problem_count
     , case
         when final_exam_grouping.openedx_user_id is not null then true
         else false
