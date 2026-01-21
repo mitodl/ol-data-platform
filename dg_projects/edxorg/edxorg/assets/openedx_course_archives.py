@@ -173,7 +173,7 @@ def extract_edxorg_courserun_metadata(
 )
 def edxorg_course_content_webhook(
     context: AssetExecutionContext, course_archive: UPath | None
-) -> None:
+):
     """Send webhook notification to Learn API after edx.org course XML export."""
     # Parse the multipartition key to extract course_id
     partition_parts = context.partition_key.split(MULTIPARTITION_KEY_DELIMITER)
