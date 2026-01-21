@@ -47,14 +47,12 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install MongoDB tools (required for edx_course_pipeline forum export)
-RUN apt-get update && \
-    apt-get install -y wget gnupg software-properties-common && \
-    wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/mongodb-7.0.gpg && \
-    echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list && \
-    apt-get update && \
-    apt-get install -y mongodb-database-tools && \
-    apt-get clean && \
-    apt-get autoremove -y && \
+RUN wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] http://repo.mongodb.org/apt/debian bookworm/mongodb-org/7.0 main" > /etc/apt/sources.list.d/mongodb-org-7.0.list && \
+    apt update && \
+    apt install -y mongodb-org-tools && \
+    apt clean && \
+    apt autoremove && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the application from the builder
