@@ -191,7 +191,7 @@ def edxorg_course_content_webhook(
     # Extract just the relative path portion
     if "/" in content_path:
         # Path is like: bucket/prefix/edxorg/raw_data/course_xml/...
-        # We want: edxorg/raw_data/course_xml/...
+        # We want: /edxorg/raw_data/course_xml/...
         parts = content_path.split("/")
         try:
             edxorg_idx = parts.index("edxorg")
@@ -199,6 +199,9 @@ def edxorg_course_content_webhook(
         except ValueError:
             # If 'edxorg' not found, use the full path
             pass
+
+    # Make sure path starts with a slash
+    content_path = f"/{content_path.lstrip('/')}"
 
     data = {
         "course_id": course_id,

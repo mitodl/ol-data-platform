@@ -328,15 +328,15 @@ def openedx_course_content_webhook(
         return None
 
     # Build the content path from the course_xml UPath
-    # Path format: openedx/raw_data/course_xml/{course_id}/{hash}.xml.tar.gz
+    # Path format: {source}/openedx/raw_data/course_xml/{course_id}/{hash}.xml.tar.gz
     content_path = str(course_xml).split("://", 1)[-1]  # Remove s3:// prefix if present
     # Extract just the relative path portion
     if "/" in content_path:
         # Path is like: bucket/prefix/openedx/raw_data/course_xml/...
-        # We want: openedx/raw_data/course_xml/...
+        # We want: {source}/openedx/raw_data/course_xml/...
         parts = content_path.split("/")
         try:
-            openedx_idx = parts.index("openedx")
+            openedx_idx = parts.index(source)
             content_path = "/".join(parts[openedx_idx:])
         except ValueError:
             # If 'openedx' not found, use the full path
