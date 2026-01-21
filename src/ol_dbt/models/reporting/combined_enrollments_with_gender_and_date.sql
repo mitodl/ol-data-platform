@@ -49,6 +49,3 @@ select
 from enrollment_detail
 left join combined_users
     on enrollment_detail.user_hashed_id = combined_users.user_hashed_id
-
-
-

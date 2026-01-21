@@ -549,7 +549,8 @@ models:
       column_list: ["user_hashed_id"]
 
 - name: combined_enrollments_with_gender_and_date
-  description: A report that contains learner enrollment details with demographic information
+  description: A report that contains learner enrollment details with demographic
+    information
   columns:
   - name: platform
     description: str, name of the platform
