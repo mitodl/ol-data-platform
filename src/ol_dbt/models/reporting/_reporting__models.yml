@@ -316,7 +316,7 @@ models:
     description: int, total times a learner gets a performance time flag when their
       exam problem solving time was below the 10th percentile of time taken by all
       students to solve an exam problem
-  - name: non_exam_problem_count
+  - name: user_non_exam_problem_count
     description: int, count of non-exam problems the learner attempted in the course
   - name: user_taken_final_exam
     description: boolean, true if the learner has taken the final exam in the course
