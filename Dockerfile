@@ -14,13 +14,16 @@ RUN apt update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install packages needed to talk to edxapp mongodb
-RUN wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | apt-key add - && \
-    echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/5.0 main" > /etc/apt/sources.list.d/mongodb-org-5.0.list && \
-    apt update && \
-    apt install -y mongodb-org-tools && \
-    apt clean && \
-    apt autoremove && \
-    rm -rf /var/lib/apt/lists/*
+#RUN apt-get update && \
+#    apt-get install -y wget gnupg software-properties-common && \
+#    wget -qO - https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/mongodb-7.0.gpg && \
+#    echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list && \
+#    apt-get update && \
+#    apt-get install -y mongodb-database-tools && \
+#    apt-get clean && \
+#    apt-get autoremove -y && \
+#    rm -rf /var/lib/apt/lists/*
+
 
 ENV DAGSTER_HOME=/opt/dagster/dagster_home/
 

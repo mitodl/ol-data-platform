@@ -289,6 +289,31 @@ services:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ./dg_projects/b2b_organization/b2b_organization:/app/b2b_organization
 
+    # Code location: student_risk_probability
+  dagster_student_risk_probability:
+    container_name: dagster_student_risk_probability
+    image: mitodl/dagster-student_risk_probability:dev
+    build:
+      context: .
+      dockerfile: dg_projects/student_risk_probability/Dockerfile
+    entrypoint: ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4008",
+      "--module-name", "student_risk_probability.definitions"]
+    ports:
+    - "4008:4008"
+    environment:
+      DAGSTER_CURRENT_IMAGE: "mitodl/dagster-student_risk_probability:dev"
+      DAGSTER_ENV: dev
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      DAGSTER_PG_USERNAME: postgres
+      DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
+      DAGSTER_PG_HOST: postgres
+      DAGSTER_PG_DB: dagster
+    volumes:
+    - /tmp/io_manager_storage:/tmp/io_manager_storage
+    - ./dg_projects/student_risk_probability/student_risk_probability:/app/student_risk_probability
+
   postgres:
     image: postgres
     healthcheck:

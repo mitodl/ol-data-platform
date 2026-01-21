@@ -1,0 +1,6 @@
+---
+# Build context is set to repository root to access packages/ol-orchestrate-lib
+directory: ../..
+# The Dockerfile is located in the student_risk_probability directory
+dockerfile: dg_projects/student_risk_probability/Dockerfile
+registry: mitodl/dagster-student_risk_probability
