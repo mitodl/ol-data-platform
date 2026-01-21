@@ -192,7 +192,7 @@ def edxorg_course_content_webhook(
             "No course XML available for course_id=%s, skipping webhook",
             course_id,
         )
-        return None
+        return
 
     # Build the content path from the course_archive UPath
     content_path = str(course_archive).split("://", 1)[-1]  # Remove s3:// prefix
@@ -228,16 +228,6 @@ def edxorg_course_content_webhook(
             course_id,
             response,
         )
-        return Output(
-            value={"course_id": course_id},
-            metadata={
-                "status": "success",
-                "course_id": course_id,
-                "source": "mit_edx",  # to match Learn API source naming
-                "response": response,
-            },
-        )
-
     except httpx.HTTPStatusError as error:
         error_message = (
             f"Learn API webhook notification failed for course_id={course_id} "
@@ -245,3 +235,4 @@ def edxorg_course_content_webhook(
         )
         context.log.exception(error_message)
         raise Exception(error_message) from error  # noqa: TRY002
+    return
