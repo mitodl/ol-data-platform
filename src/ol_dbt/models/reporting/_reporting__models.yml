@@ -547,3 +547,131 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_hashed_id"]
+
+- name: combined_enrollments_with_gender_and_date
+  description: A report that contains learner enrollment details with demographic
+    information
+  columns:
+  - name: platform
+    description: str, name of the platform
+  - name: courserunenrollment_id
+    description: int, internal ID and foreign key to courserunenrollments on the corresponding
+      platform. Null for enrollments on edX.org.
+  - name: combined_orders_hash_id
+    description: int, primary key for this table. At the grain of order id, line id,
+      and platform.
+  - name: course_readable_id
+    description: str, Open edX ID formatted as course-v1:{org}+{course code} for MITx
+      Online, xPro or Residential courses, and {org}/{course} for edX.org courses.
+      May be null for some Bootcamps courses. Examples include MITx/6.00.2x and course-v1:MITxT+14.740x.
+  - name: course_title
+    description: str, title of the course.
+  - name: courserun_id
+    description: int, foreign key in courses_courserun. Null for edX.org.
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+  - name: courserun_readable_id
+    description: str, Open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITxOnline and xPro courses, {org}/{course}/{run_tag} for edX.org courses
+  - name: courserun_start_on
+    description: timestamp, date and time when the course run starts. May be Null.
+  - name: courserun_end_on
+    description: timestamp, datetime on when the course ends
+  - name: courserun_title
+    description: str, title of the course run
+  - name: courserun_upgrade_deadline
+    description: timestamp, specifying the date time beyond which users can not enroll
+      in paid course mode
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when the course certificate was initially
+      created
+  - name: courseruncertificate_is_earned
+    description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
+      edX.org or xpro.mit.edu.
+  - name: courseruncertificate_url
+    description: str, URL to the course certificate for users who earned the certificate
+      on mitxonline.mit.edu, edX.org or xpro.mit.edu.
+  - name: courseruncertificate_uuid
+    description: str, unique identifier for the certificate on the corresponding platform
+  - name: courserunenrollment_created_on
+    description: timestamp, specifying when the enrollment was initially created
+  - name: courserunenrollment_enrollment_mode
+    description: string, enrollment mode for user on the corresponding platform
+  - name: courserunenrollment_enrollment_status
+    description: string, enrollment status for users whose enrollment changed on the
+      corresponding platform
+  - name: courserunenrollment_is_active
+    description: boolean, indicating whether the enrollment is active
+  - name: courserunenrollment_is_edx_enrolled
+    description: boolean, indicating whether the user is enrolled on edX platform.
+      For edx.org course enrollment, it would always be true. Null for Bootcamps as
+      it doesn't apply.
+  - name: courserunenrollment_upgraded_on
+    description: timestamp, date and time when the learner upgraded to the verified
+      track course mode. May be the same as the date when the course enrollment was
+      created for xPro.
+  - name: courserungrade_grade
+    description: float, course grade on edX.org or MITxOnline or xPro range from 0
+      to 1
+  - name: courserungrade_is_passing
+    description: boolean, indicating whether the user has passed the passing score
+      set for this course on edX.org or MITxOnline or xPro
+  - name: line_id
+    description: int, foreign key to ecommerce line table for fulfilled or refunded
+      orders on the corresponding platform. For edX.org, it refers to line table in
+      MicroMasters application.
+  - name: order_id
+    description: int, foreign key to ecommerce order table for fulfilled or refunded
+      orders on the corresponding platform. Note that this does not include orders
+      from edX.org, for which we do not have data.
+  - name: order_reference_number
+    description: string, order reference number to identify a fulfilled or refunded
+      order on the corresponding platform, e.g. mitxonline-production-20
+  - name: user_company
+    description: str, user's company pulled on the platform user enrolled. May be
+      blank.
+  - name: user_country_code
+    description: str, country code on the platform user enrolled. May be blank.
+  - name: user_email
+    description: string, user email that user registered on the corresponding platform.
+      May be null for some xPRO Emeritus learners.
+  - name: user_full_name
+    description: str, user full name on the platform user enrolled.
+  - name: user_highest_education
+    description: str, user's highest education on the platform user enrolled. May
+      be blank.
+  - name: user_hashed_id
+    description: str, foreign key to combined_users to identify the user
+  - name: user_id
+    description: int, user ID on the corresponding platform
+  - name: user_username
+    description: string, username on the corresponding platform
+  - name: user_gender
+    description: str, gender on the corresponding platform
+  - name: courserunenrollment_created_on_date
+    description: date, specifying when the enrollment was initially created
+  - name: user_job_title
+    description: str, user's job title
+  - name: user_industry
+    description: str, user's job industry
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_hashed_id", "courserun_readable_id"]
+      row_condition: "platform='edX.org'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserunenrollment_id", "user_hashed_id"]
+      row_condition: "platform ='MITx Online'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserunenrollment_id", "combined_orders_hash_id", "user_hashed_id"]
+      row_condition: "platform ='xPro'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_hashed_id", "courserun_readable_id"]
+      row_condition: "platform ='xPRO Global Alumni'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserunenrollment_id", "order_reference_number", "user_hashed_id"]
+      row_condition: "platform='Bootcamps'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserunenrollment_id", "user_hashed_id"]
+      row_condition: "platform ='Residential MITx'"
