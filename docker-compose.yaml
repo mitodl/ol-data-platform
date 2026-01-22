@@ -303,6 +303,7 @@ services:
     environment:
       DAGSTER_CURRENT_IMAGE: "mitodl/dagster-student_risk_probability:dev"
       DAGSTER_ENV: dev
+      DBT_SCHEMA_SUFFIX: ${DBT_SCHEMA_SUFFIX}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}

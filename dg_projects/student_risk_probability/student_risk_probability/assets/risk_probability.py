@@ -1,16 +1,21 @@
-import hashlib
-from pathlib import Path
+import os
+from datetime import UTC, datetime
 
 import polars as pl
 from dagster import (
     AssetExecutionContext,
     AssetKey,
-    DataVersion,
     Output,
     asset,
 )
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
+from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.glue_helper import (
+    get_dbt_model_as_dataframe,
+    get_or_create_iceberg_table,
+)
+from pyiceberg.schema import NestedField, Schema
+from pyiceberg.types import DoubleType, LongType, StringType, TimestamptzType
 from student_risk_probability.lib.helper import (
     risk_probability,
     scaled_features,
@@ -22,18 +27,27 @@ from student_risk_probability.lib.helper import (
     group_name="student_risk_probability",
     deps=[AssetKey(["reporting", "cheating_detection_report"])],
     automation_condition=upstream_or_code_changes(),
-    io_manager_key="s3file_io_manager",
-    key=AssetKey(["student_risk_probability", "feature"]),
+    io_manager_key="io_manager",
+    key=AssetKey(["student_risk_probability", "risk_scores"]),
 )
-def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
+def student_risk_probability(context: AssetExecutionContext):
     """
     Feature engineering for student risk probability (per course, per student).
-    scale numeric features, calculate risk probabilities, and write to CSV.
+    scale numeric features, calculate risk probabilities, and write to Iceberg table.
     """
+    if DAGSTER_ENV == "dev":
+        database_name = (
+            f"ol_warehouse_production_{os.environ.get('DBT_SCHEMA_SUFFIX')}_reporting"
+        )
+    else:
+        database_name = "ol_warehouse_production_reporting"
+
+    source_table_name = "cheating_detection_report"
+    output_table_name = "student_risk_probability"
 
     df = get_dbt_model_as_dataframe(
-        database_name="ol_warehouse_production_reporting",
-        table_name="cheating_detection_report",
+        database_name=database_name,
+        table_name=source_table_name,
     )
 
     id_cols = ["courserun_readable_id", "openedx_user_id"]
@@ -67,24 +81,37 @@ def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
     results_df = pl.concat(
         [
             scaled_df.select(id_cols),
-            probabilities.rename(
-                "risk_probability"
-            ).to_frame(),  # Polars DataFrame of probabilities
+            probabilities.rename("risk_probability").to_frame(),
         ],
         how="horizontal",
+    ).with_columns(pl.lit(datetime.now(UTC)).alias("created_timestamp"))
+
+    iceberg_schema = Schema(
+        NestedField(1, "courserun_readable_id", StringType(), required=False),
+        NestedField(2, "openedx_user_id", LongType(), required=False),
+        NestedField(3, "risk_probability", DoubleType(), required=False),
+        NestedField(4, "created_timestamp", TimestamptzType(), required=False),
     )
 
-    data_version = hashlib.sha256(
-        results_df.write_csv(file=None).encode("utf-8")
-    ).hexdigest()
-    target_path = f"{'/'.join(context.asset_key.path)}/{data_version}.csv"
-    data_file = Path(f"student_risk_probability/{data_version}.csv")
+    context.log.info(
+        "Appending %d rows to Iceberg table student_risk_probability",
+        results_df.height,
+    )
 
-    results_df.lazy().sink_csv(str(data_file))
+    table = get_or_create_iceberg_table(
+        database_name=database_name,
+        table_name=output_table_name,
+        schema=iceberg_schema,
+    )
 
-    context.log.info("Exported student risk probabilities to %s", data_file)
+    arrow_table = results_df.to_arrow()
+    # full overwrite for now
+    table.overwrite(arrow_table)
 
-    yield Output(
-        value=(data_file, target_path),
-        data_version=DataVersion(data_version),
+    return Output(
+        value={"table_name": {output_table_name}},
+        metadata={
+            "row_count": results_df.height,
+            "table_name": f"{database_name}.{output_table_name}",
+        },
     )
