@@ -6,7 +6,7 @@ from dagster import (
 )
 from dagster_aws.s3 import S3Resource
 from dagster_iceberg.config import IcebergCatalogConfig
-from dagster_iceberg.io_manager.arrow import PyArrowIcebergIOManager
+from dagster_iceberg.io_manager.polars import PolarsIcebergIOManager
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.dagster_helpers import (
     default_file_object_io_manager,
@@ -45,7 +45,7 @@ data_export_job = define_asset_job(
 # Create unified definitions
 defs = Definitions(
     resources={
-        "io_manager": PyArrowIcebergIOManager(
+        "io_manager": PolarsIcebergIOManager(
             name="iceberg_io_manager",
             config=IcebergCatalogConfig(
                 properties={

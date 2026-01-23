@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
 
 import polars as pl
-import pyarrow as pa
 from dagster import (
     AssetExecutionContext,
     AssetKey,
@@ -25,7 +24,7 @@ from student_risk_probability.lib.helper import (
     io_manager_key="io_manager",
     key=AssetKey(["student_risk_probability"]),
 )
-def student_risk_probability(context: AssetExecutionContext) -> pa.Table:
+def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
     """
     Calculate student risk probabilities based on cheating_detection_report.
     Scales numeric features and applies logistic regression weights to compute
@@ -78,4 +77,4 @@ def student_risk_probability(context: AssetExecutionContext) -> pa.Table:
         results_df.height,
     )
 
-    return results_df.to_arrow()
+    return results_df
