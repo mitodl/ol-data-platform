@@ -675,3 +675,24 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserunenrollment_id", "user_hashed_id"]
       row_condition: "platform ='Residential MITx'"
+
+- name: student_risk_probability_report
+  description: A report that contains student risk probability scores and course grade
+  columns:
+  - name: platform
+    description: str, name of the platform
+  - name: courserun_readable_id
+    description: str, open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
+      for MITxOnline and xPro courses, {org}/{course}/{run_tag} for edX.org courses
+  - name: openedx_user_id
+    description: int, user ID on the corresponding open edX platform
+  - name: risk_probability
+    description: float, probability scores between 0 and 1 representing the model-estimated
+      probability that a student exhibits suspicious behavior. Higher values indicate
+      a higher likelihood of suspicious behavior, while values closer to 0 indicate
+      normal behavior.
+  - name: created_timestamp
+    description: timestamp, date and time when probability was calculated
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courserun_readable_id", "openedx_user_id", "platform"]
