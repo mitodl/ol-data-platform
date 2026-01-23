@@ -5,9 +5,6 @@ import types
 import boto3
 import polars as pl
 from pyiceberg.catalog.glue import GlueCatalog
-from pyiceberg.exceptions import NoSuchTableError
-from pyiceberg.schema import Schema
-from pyiceberg.table import Table
 
 TYPE_RENAME = types.MappingProxyType(
     {
@@ -113,33 +110,3 @@ def get_dbt_model_as_dataframe(database_name: str, table_name: str) -> pl.LazyFr
     table = glue.load_table(f"{database_name}.{table_name}")
 
     return table.to_polars()
-
-
-def get_or_create_iceberg_table(
-    database_name: str,
-    table_name: str,
-    schema: Schema,
-) -> Table:
-    """
-    Create an Iceberg table in AWS Glue if it does not exist
-
-    Args:
-        database_name: Glue database name
-        table_name: Iceberg table name
-        schema: Iceberg schema
-
-    Returns:
-        pyiceberg.table.Table
-    """
-    glue = GlueCatalog("default", client=boto3.client("glue", region_name="us-east-1"))
-    table_identifier = f"{database_name}.{table_name}"
-
-    try:
-        table = glue.load_table(table_identifier)
-    except NoSuchTableError:
-        table = glue.create_table(
-            identifier=table_identifier,
-            schema=schema,
-        )
-
-    return table

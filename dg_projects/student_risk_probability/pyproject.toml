@@ -8,6 +8,7 @@ dependencies = [
     "dagster-aws ~=0.28.0",
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
+    "dagster-iceberg>=0.3.8",
     "httpx ~= 0.28.0",
     "scikit-learn>=1.2.2",
     "ol-orchestrate-lib",
