@@ -37,9 +37,9 @@ with f_problem_engagement as (
         stg_mitxonline_course.course_title
         , stg_mitxonline_courserun.courserun_readable_id
     from stg_mitxonline_courserun
-    inner join stg_mitxonline_course 
+    inner join stg_mitxonline_course
         on stg_mitxonline_courserun.course_id = stg_mitxonline_course.course_id
-    group by 
+    group by
         stg_mitxonline_course.course_title
         , stg_mitxonline_courserun.courserun_readable_id
 )
@@ -52,14 +52,14 @@ select
     , d_course_content.block_index as subsection_block_index
     , f_problem_engagement.chapter_block_fk
     , count(distinct
-        (case when 
-            cast(f_problem_engagement.num_of_attempts as int)> 0 
+        (case when
+            cast(f_problem_engagement.num_of_attempts as int)> 0
                 then f_problem_engagement.problem_block_fk else null end
         )
     ) as problems_attempted
     , max(problems_in_block.problem_numb) as number_of_problems
     , cast(count(distinct
-        (case when cast(f_problem_engagement.num_of_attempts as int)> 0 
+        (case when cast(f_problem_engagement.num_of_attempts as int)> 0
             then f_problem_engagement.problem_block_fk else null end)) as decimal(30,10))
         /cast(max(problems_in_block.problem_numb) as decimal(30,10)) as percent_problems_attempted
 from f_problem_engagement
@@ -70,7 +70,7 @@ inner join d_user
 left join course_to_courserun_ref
     on f_problem_engagement.courserun_readable_id = course_to_courserun_ref.courserun_readable_id
 inner join d_course_content
-    on 
+    on
         f_problem_engagement.sequential_block_fk = d_course_content.block_id
         and d_course_content.is_latest = true
 group by
