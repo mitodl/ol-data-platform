@@ -29,25 +29,10 @@ with mitxonline_products as (
     from {{ ref('int__mitxpro__ecommerce_product') }}
 )
 
-, bootcamps_products as (
-    select
-        product_id
-        , product_type
-        , courserun_id
-        , null as program_id
-        , product_price
-        , product_is_active
-        , product_created_on
-        , '{{ var("bootcamps") }}' as platform
-    from {{ ref('int__bootcamps__ecommerce_product') }}
-)
-
 , combined_products as (
     select * from mitxonline_products
     union all
     select * from mitxpro_products
-    union all
-    select * from bootcamps_products
 )
 
 -- Join to get courserun_fk and program_fk

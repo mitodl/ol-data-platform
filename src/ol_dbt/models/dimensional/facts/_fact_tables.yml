@@ -2,7 +2,7 @@
 version: 2
 
 models:
-- name: fct_enrollment
+- name: tfact_enrollment
   description: >
     Transaction fact table capturing enrollment events across all platforms.
     Grain: One row per enrollment (course run or program).
@@ -61,7 +61,7 @@ models:
   - name: enrollment_status
     description: Enrollment status
 
-- name: fct_order
+- name: tfact_order
   description: >
     Transaction fact table for e-commerce orders across platforms.
     Grain: One row per order.
@@ -116,7 +116,7 @@ models:
   - name: order_reference_number
     description: Order reference/confirmation number
 
-- name: fct_payment
+- name: tfact_payment
   description: >
     Transaction fact table for payments/transactions.
     Grain: One row per payment transaction.
@@ -136,7 +136,7 @@ models:
     tests:
     - not_null
   - name: order_id
-    description: Associated order ID (for joining to fct_order)
+    description: Associated order ID (for joining to tfact_order)
   - name: payment_date_key
     description: Foreign key to dim_date for payment date
     tests:
@@ -171,7 +171,7 @@ models:
   - name: transaction_status
     description: Transaction status (success, failed, pending)
 
-- name: fct_certificate
+- name: tfact_certificate
   description: >
     Transaction fact table for certificate issuance events.
     Grain: One row per certificate issued.

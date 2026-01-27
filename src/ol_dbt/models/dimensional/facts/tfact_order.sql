@@ -31,25 +31,10 @@ with mitxonline_orders as (
     from {{ ref('int__mitxpro__ecommerce_order') }}
 )
 
-, bootcamps_orders as (
-    select
-        order_id
-        , user_id
-        , order_state
-        , order_total_price_paid
-        , order_reference_number
-        , order_created_on
-        , order_updated_on
-        , '{{ var("bootcamps") }}' as platform
-    from {{ ref('int__bootcamps__ecommerce_order') }}
-)
-
 , combined_orders as (
     select * from mitxonline_orders
     union all
     select * from mitxpro_orders
-    union all
-    select * from bootcamps_orders
 )
 
 -- Join to dimensions for FKs

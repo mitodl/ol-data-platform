@@ -9,11 +9,11 @@ with mitxonline_payments as (
     select
         transaction_id as payment_id
         , order_id
-        , user_id
+        , null as user_id
         , transaction_amount
         , transaction_type
         , transaction_status
-        , payment_method
+        , transaction_payment_method as payment_method
         , transaction_created_on
         , '{{ var("mitxonline") }}' as platform
     from {{ ref('int__mitxonline__ecommerce_transaction') }}
@@ -21,16 +21,16 @@ with mitxonline_payments as (
 
 , mitxpro_payments as (
     select
-        transaction_id as payment_id
+        receipt_id as payment_id
         , order_id
-        , user_id
-        , transaction_amount
-        , transaction_type
-        , transaction_status
-        , payment_method
-        , transaction_created_on
+        , null as user_id
+        , receipt_payment_amount as transaction_amount
+        , receipt_transaction_type as transaction_type
+        , receipt_transaction_status as transaction_status
+        , receipt_payment_method as payment_method
+        , receipt_created_on as transaction_created_on
         , '{{ var("mitxpro") }}' as platform
-    from {{ ref('int__mitxpro__ecommerce_transaction') }}
+    from {{ ref('int__mitxpro__ecommerce_receipt') }}
 )
 
 , combined_payments as (
@@ -40,11 +40,6 @@ with mitxonline_payments as (
 )
 
 -- Join to dimensions for FKs
-, dim_user as (
-    select user_pk, mitxonline_user_id, mitxpro_user_id
-    from {{ ref('dim_user') }}
-)
-
 , dim_platform as (
     select platform_pk, platform_readable_id
     from {{ ref('dim_platform') }}
@@ -58,16 +53,11 @@ with mitxonline_payments as (
 , payments_with_fks as (
     select
         combined_payments.*
-        , dim_user.user_pk as user_fk
         , dim_platform.platform_pk as platform_fk
         , dim_payment_method.payment_method_pk as payment_method_fk
         , cast(format_datetime(transaction_created_on, 'yyyyMMdd') as integer) as payment_date_key
     from combined_payments
     left join dim_platform on combined_payments.platform = dim_platform.platform_readable_id
-    left join dim_user
-        on
-            (combined_payments.platform = '{{ var("mitxonline") }}' and combined_payments.user_id = dim_user.mitxonline_user_id)
-            or (combined_payments.platform = '{{ var("mitxpro") }}' and combined_payments.user_id = dim_user.mitxpro_user_id)
     left join dim_payment_method on combined_payments.payment_method = dim_payment_method.payment_method_code
 )
 
@@ -80,7 +70,6 @@ with mitxonline_payments as (
         , payment_id
         , order_id
         , payment_date_key
-        , user_fk
         , platform_fk
         , payment_method_fk
         , transaction_amount

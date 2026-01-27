@@ -29,18 +29,6 @@ with mitxonline_courses as (
     from {{ ref('int__mitxpro__courses') }}
 )
 
-, edxorg_courses as (
-    select
-        course_readable_id
-        , course_id as source_id
-        , course_title
-        , course_number
-        , course_description
-        , true as course_is_live  -- Assume live if on edX.org
-        , '{{ var("edxorg") }}' as platform
-    from {{ ref('int__edxorg__mitx_courses') }}
-)
-
 , ocw_courses as (
     select
         concat('ocw-', cast(course_id as varchar)) as course_readable_id
@@ -58,8 +46,6 @@ with mitxonline_courses as (
     union all
     select * from mitxpro_courses
     union all
-    select * from edxorg_courses
-    union all
     select * from ocw_courses
 )
 
@@ -73,8 +59,7 @@ with mitxonline_courses as (
                 case platform
                     when '{{ var("mitxonline") }}' then 1
                     when '{{ var("mitxpro") }}' then 2
-                    when '{{ var("edxorg") }}' then 3
-                    when '{{ var("ocw") }}' then 4
+                    when '{{ var("ocw") }}' then 3
                 end
         ) as row_num
     from combined_courses
