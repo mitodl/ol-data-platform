@@ -676,23 +676,33 @@ models:
       column_list: ["courserunenrollment_id", "user_hashed_id"]
       row_condition: "platform ='Residential MITx'"
 
-- name: student_risk_probability_report
-  description: A report that contains student risk probability scores and course grade
+- name: engagement_problem_completion_summary
+  description: A report that contains learner engagement details with problem completion
+    information
   columns:
-  - name: platform
-    description: str, name of the platform
+  - name: user_email
+    description: string, user email that user registered
+  - name: course_title
+    description: str, title of the course.
   - name: courserun_readable_id
-    description: str, open edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
-      for MITxOnline and xPro courses, {org}/{course}/{run_tag} for edX.org courses
-  - name: openedx_user_id
-    description: int, user ID on the corresponding open edX platform
-  - name: risk_probability
-    description: float, probability scores between 0 and 1 representing the model-estimated
-      probability that a student exhibits suspicious behavior. Higher values indicate
-      a higher likelihood of suspicious behavior, while values closer to 0 indicate
-      normal behavior.
-  - name: created_timestamp
-    description: timestamp, date and time when probability was calculated
+    description: string, unique string to identify a course run on the corresponding
+      platform.
+  - name: subsection_title
+    description: str, title of the subsection within the course
+  - name: subsection_block_index
+    description: int, sequence number giving order in which this subsection appears
+      within the course
+  - name: chapter_block_fk
+    description: string, foreign key to dim_course_content, referencing the chapter
+      block ID within which this vertical belongs to.
+  - name: problems_attempted
+    description: int, count of the number of times the user attempted the problems
+  - name: number_of_problems
+    description: int, count of the total number of problems
+  - name: percent_problems_attempted
+    description: decimal, percentage of problems the user attempted out of the total
+      number of problems
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "openedx_user_id", "platform"]
+      column_list: ["user_email", "course_title", "courserun_readable_id", "subsection_block_index",
+        "chapter_block_fk"]
