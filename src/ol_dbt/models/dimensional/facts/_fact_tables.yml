@@ -1,0 +1,225 @@
+---
+version: 2
+
+models:
+- name: fct_enrollment
+  description: >
+    Transaction fact table capturing enrollment events across all platforms.
+    Grain: One row per enrollment (course run or program).
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - enrollment_id
+      - platform_fk
+  columns:
+  - name: enrollment_key
+    description: Surrogate key for enrollment
+    tests:
+    - unique
+    - not_null
+  - name: enrollment_id
+    description: Source system enrollment ID
+    tests:
+    - not_null
+  - name: enrollment_date_key
+    description: Foreign key to dim_date for enrollment creation date
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: user_fk
+    description: Foreign key to dim_user
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+  - name: courserun_fk
+    description: Foreign key to dim_course_run (null for program enrollments)
+    tests:
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+  - name: program_fk
+    description: Foreign key to dim_program (null for course enrollments)
+    tests:
+    - relationships:
+        to: ref('dim_program')
+        field: program_pk
+  - name: platform_fk
+    description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
+  - name: enrollment_is_active
+    description: Boolean indicating if enrollment is currently active
+  - name: enrollment_mode
+    description: Enrollment mode (audit, verified, etc.)
+  - name: enrollment_status
+    description: Enrollment status
+
+- name: fct_order
+  description: >
+    Transaction fact table for e-commerce orders across platforms.
+    Grain: One row per order.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - order_id
+      - platform_fk
+  columns:
+  - name: order_key
+    description: Surrogate key for order
+    tests:
+    - unique
+    - not_null
+  - name: order_id
+    description: Source system order ID
+    tests:
+    - not_null
+  - name: order_date_key
+    description: Foreign key to dim_date for order creation date
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: order_updated_date_key
+    description: Foreign key to dim_date for order last update date
+    tests:
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: user_fk
+    description: Foreign key to dim_user
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+  - name: platform_fk
+    description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
+  - name: order_state
+    description: Order state (fulfilled, cancelled, etc.)
+    tests:
+    - not_null
+  - name: order_total_price_paid
+    description: Total amount paid for order (additive measure)
+  - name: order_reference_number
+    description: Order reference/confirmation number
+
+- name: fct_payment
+  description: >
+    Transaction fact table for payments/transactions.
+    Grain: One row per payment transaction.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - payment_id
+      - platform_fk
+  columns:
+  - name: payment_key
+    description: Surrogate key for payment
+    tests:
+    - unique
+    - not_null
+  - name: payment_id
+    description: Source system payment/transaction ID
+    tests:
+    - not_null
+  - name: order_id
+    description: Associated order ID (for joining to fct_order)
+  - name: payment_date_key
+    description: Foreign key to dim_date for payment date
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: user_fk
+    description: Foreign key to dim_user
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+  - name: platform_fk
+    description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
+  - name: payment_method_fk
+    description: Foreign key to dim_payment_method
+    tests:
+    - relationships:
+        to: ref('dim_payment_method')
+        field: payment_method_pk
+  - name: transaction_amount
+    description: Transaction amount (additive measure)
+  - name: transaction_type
+    description: Type of transaction (payment, refund, etc.)
+  - name: transaction_status
+    description: Transaction status (success, failed, pending)
+
+- name: fct_certificate
+  description: >
+    Transaction fact table for certificate issuance events.
+    Grain: One row per certificate issued.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - certificate_id
+      - platform_fk
+  columns:
+  - name: certificate_key
+    description: Surrogate key for certificate
+    tests:
+    - unique
+    - not_null
+  - name: certificate_id
+    description: Source system certificate ID
+    tests:
+    - not_null
+  - name: certificate_date_key
+    description: Foreign key to dim_date for certificate issuance date
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: user_fk
+    description: Foreign key to dim_user
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+  - name: courserun_fk
+    description: Foreign key to dim_course_run
+    tests:
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+  - name: platform_fk
+    description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
+  - name: certificate_uuid
+    description: Universally unique identifier for certificate
+  - name: certificate_is_revoked
+    description: Boolean indicating if certificate has been revoked
+    tests:
+    - not_null
