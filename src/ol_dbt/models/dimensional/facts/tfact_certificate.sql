@@ -7,38 +7,38 @@
 -- Consolidate certificates from all platforms
 with mitxonline_certificates as (
     select
-        certificate_id
+        courseruncertificate_id as certificate_id
         , user_id
         , courserun_id
-        , certificate_uuid
-        , certificate_is_revoked
-        , certificate_created_on
+        , courseruncertificate_uuid as certificate_uuid
+        , courseruncertificate_is_revoked as certificate_is_revoked
+        , courseruncertificate_created_on as certificate_created_on
         , '{{ var("mitxonline") }}' as platform
-    from {{ ref('int__mitxonline__course_certificates') }}
+    from {{ ref('int__mitxonline__courserun_certificates') }}
 )
 
 , mitxpro_certificates as (
     select
-        certificate_id
+        courseruncertificate_id as certificate_id
         , user_id
         , courserun_id
-        , certificate_uuid
-        , certificate_is_revoked
-        , certificate_created_on
+        , courseruncertificate_uuid as certificate_uuid
+        , courseruncertificate_is_revoked as certificate_is_revoked
+        , courseruncertificate_created_on as certificate_created_on
         , '{{ var("mitxpro") }}' as platform
-    from {{ ref('int__mitxpro__course_certificates') }}
+    from {{ ref('int__mitxpro__courserun_certificates') }}
 )
 
 , edxorg_certificates as (
     select
-        certificate_id
+        mitx_courseruncertificate_id as certificate_id
         , user_id
         , null as courserun_id
-        , certificate_key as certificate_uuid
+        , mitx_courseruncertificate_uuid as certificate_uuid
         , false as certificate_is_revoked
-        , certificate_created_date as certificate_created_on
+        , mitx_courseruncertificate_created_on as certificate_created_on
         , '{{ var("edxorg") }}' as platform
-    from {{ ref('int__edxorg__mitx_certificates') }}
+    from {{ ref('int__edxorg__mitx_courserun_certificates') }}
 )
 
 , combined_certificates as (
