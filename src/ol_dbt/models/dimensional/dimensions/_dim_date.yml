@@ -1,0 +1,43 @@
+---
+version: 2
+
+models:
+- name: dim_date
+  description: >
+    Standard date dimension for consistent time-based analysis across all facts.
+    Includes MIT fiscal calendar (July-June) and academic terms (Fall, IAP, Spring,
+    Summer).
+  columns:
+  - name: date_key
+    description: Integer primary key in YYYYMMDD format for efficient joins
+    tests:
+    - unique
+    - not_null
+  - name: date
+    description: Actual calendar date
+    tests:
+    - not_null
+  - name: year
+    description: Calendar year (YYYY)
+  - name: quarter
+    description: Calendar quarter (1-4)
+  - name: month
+    description: Calendar month (1-12)
+  - name: day
+    description: Day of month (1-31)
+  - name: day_of_week
+    description: Day of week (1=Monday, 7=Sunday)
+  - name: day_name
+    description: Full day name (Monday, Tuesday, etc.)
+  - name: week_of_year
+    description: ISO week number (1-53)
+  - name: is_weekend
+    description: Boolean indicating Saturday or Sunday
+  - name: fiscal_year
+    description: MIT fiscal year (July 1 - June 30)
+  - name: fiscal_quarter
+    description: MIT fiscal quarter (Q1=Jul-Sep, Q2=Oct-Dec, Q3=Jan-Mar, Q4=Apr-Jun)
+  - name: academic_term
+    description: MIT academic term (Fall, IAP, Spring, Summer)
+  - name: academic_year
+    description: MIT academic year (September start)

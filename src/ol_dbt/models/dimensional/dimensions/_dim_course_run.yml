@@ -1,0 +1,63 @@
+---
+version: 2
+
+models:
+- name: dim_course_run
+  description: >
+    Specific course offering/run dimension (SCD Type 2). One course (dim_course) may
+    have
+    multiple runs over time. This dimension captures the specific instance of a course
+    with start/end dates, enrollment windows, etc.
+  columns:
+  - name: courserun_pk
+    description: Surrogate key primary key
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: Business key - unique identifier for course run
+    tests:
+    - not_null
+  - name: course_fk
+    description: Foreign key to dim_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: platform_fk
+    description: Foreign key to dim_platform
+    tests:
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
+  - name: courserun_title
+    description: Title of this specific course run
+  - name: start_date_key
+    description: Foreign key to dim_date for course run start
+    tests:
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: end_date_key
+    description: Foreign key to dim_date for course run end
+    tests:
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: enrollment_start_date_key
+    description: Foreign key to dim_date for enrollment period start
+  - name: enrollment_end_date_key
+    description: Foreign key to dim_date for enrollment period end
+  - name: courserun_is_live
+    description: Boolean indicating if course run is live
+  - name: effective_date
+    description: SCD Type 2 effective timestamp
+    tests:
+    - not_null
+  - name: end_date
+    description: SCD Type 2 end timestamp (null if current)
+  - name: is_current
+    description: Boolean indicating current version
+    tests:
+    - not_null
