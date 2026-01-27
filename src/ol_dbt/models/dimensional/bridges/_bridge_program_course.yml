@@ -1,0 +1,35 @@
+---
+version: 2
+
+models:
+- name: bridge_program_course
+  description: >
+    Many-to-many bridge table connecting programs to their required courses.
+    Allows analysis of program composition and cross-program course sharing.
+  tests:
+      # Ensure no duplicate program-course pairs
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - program_fk
+      - course_fk
+  columns:
+  - name: program_fk
+    description: Foreign key to dim_program
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_program')
+        field: program_pk
+  - name: course_fk
+    description: Foreign key to dim_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: is_required
+    description: Boolean indicating if course is required for program completion
+    tests:
+    - not_null
+  - name: course_order
+    description: Sequence/order of course within program curriculum
