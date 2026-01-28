@@ -22,7 +22,7 @@ with mitxonline_products as (
         , product_type
         , courserun_id
         , program_id
-        , product_price
+        , product_list_price as product_price
         , product_is_active
         , product_created_on
         , '{{ var("mitxpro") }}' as platform
@@ -47,26 +47,30 @@ with mitxonline_products as (
     from {{ ref('dim_program') }}
 )
 
-, dim_platform as (
-    select platform_pk, platform_readable_id
-    from {{ ref('dim_platform') }}
-)
+-- dim_platform not in Phase 1-2, setting platform_fk to null
+--, dim_platform as (
+--    select platform_pk, platform_readable_id
+--    from {{ ref('dim_platform') }}
+--)
 
 , products_with_fks as (
     select
         combined_products.*
         , dim_course_run.courserun_pk as courserun_fk
         , dim_program.program_pk as program_fk
-        , dim_platform.platform_pk as platform_fk
-        , cast(format_datetime(product_created_on, 'yyyyMMdd') as integer) as created_date_key
+        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , case when product_created_on is not null
+            then cast(date_format(
+                case when length(product_created_on) = 10
+                    then date_parse(product_created_on, '%Y-%m-%d')
+                    else date_parse(substr(product_created_on, 1, 19), '%Y-%m-%dT%H:%i:%s')
+                end, '%Y%m%d') as integer)
+            else null end as created_date_key
     from combined_products
-    left join dim_platform on combined_products.platform = dim_platform.platform_readable_id
     left join dim_course_run
         on combined_products.courserun_id = dim_course_run.source_id
-        and dim_platform.platform_pk = dim_course_run.platform_fk
     left join dim_program
         on combined_products.program_id = dim_program.source_id
-        and dim_platform.platform_pk = dim_program.platform_fk
 )
 
 , final as (
