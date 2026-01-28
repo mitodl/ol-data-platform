@@ -35,7 +35,7 @@ with mitxonline_enrollments as (
 
 , edxorg_enrollments as (
     select
-        courserunenrollment_id
+        cast(null as integer) as courserunenrollment_id  -- edxorg doesn't have enrollment_id
         , user_id
         , null as courserun_id
         , null as program_id
@@ -72,10 +72,11 @@ with mitxonline_enrollments as (
 )
 
 -- Join to dimensions for FKs
-, dim_user as (
-    select user_pk, mitxonline_openedx_user_id, mitxpro_openedx_user_id, edxorg_openedx_user_id
-    from {{ ref('dim_user') }}
-)
+-- dim_user not in Phase 1-2
+--, dim_user as (
+--    select user_pk, mitxonline_openedx_user_id, mitxpro_openedx_user_id, edxorg_openedx_user_id
+--    from {{ ref('dim_user') }}
+--)
 
 , dim_course_run as (
     select courserun_pk, source_id, platform_fk
@@ -88,32 +89,31 @@ with mitxonline_enrollments as (
     from {{ ref('dim_program') }}
 )
 
-, dim_platform as (
-    select platform_pk, platform_readable_id
-    from {{ ref('dim_platform') }}
-)
+-- dim_platform not in Phase 1-2
+--, dim_platform as (
+--    select platform_pk, platform_readable_id
+--    from {{ ref('dim_platform') }}
+--)
 
 , enrollments_with_fks as (
     select
         combined_enrollments.*
-        , dim_user.user_pk as user_fk
+        , cast(null as varchar) as user_fk  -- dim_user not in Phase 1-2
         , dim_course_run.courserun_pk as courserun_fk
         , dim_program.program_pk as program_fk
-        , dim_platform.platform_pk as platform_fk
-        , cast(format_datetime(enrollment_created_on, 'yyyyMMdd') as integer) as enrollment_date_key
+        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , case when enrollment_created_on is not null
+            then cast(date_format(
+                case when length(enrollment_created_on) = 10
+                    then date_parse(enrollment_created_on, '%Y-%m-%d')
+                    else date_parse(substr(enrollment_created_on, 1, 19), '%Y-%m-%dT%H:%i:%s')
+                end, '%Y%m%d') as integer)
+            else null end as enrollment_date_key
     from combined_enrollments
-    left join dim_platform on combined_enrollments.platform = dim_platform.platform_readable_id
-    left join dim_user
-        on
-            (combined_enrollments.platform = '{{ var("mitxonline") }}' and combined_enrollments.user_id = dim_user.mitxonline_openedx_user_id)
-            or (combined_enrollments.platform = '{{ var("mitxpro") }}' and combined_enrollments.user_id = dim_user.mitxpro_openedx_user_id)
-            or (combined_enrollments.platform = '{{ var("edxorg") }}' and combined_enrollments.user_id = dim_user.edxorg_openedx_user_id)
     left join dim_course_run
         on combined_enrollments.courserun_id = dim_course_run.source_id
-        and dim_platform.platform_pk = dim_course_run.platform_fk
     left join dim_program
         on combined_enrollments.program_id = dim_program.source_id
-        and dim_platform.platform_pk = dim_program.platform_fk
 )
 
 , final as (
