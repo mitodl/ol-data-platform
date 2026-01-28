@@ -62,6 +62,7 @@ with mitxonline_courses as (
             'cast(current_timestamp as varchar)'
         ]) }} as course_pk
         , course_readable_id
+        , source_id
         , course_number
         , course_title
         , course_description
