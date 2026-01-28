@@ -40,11 +40,6 @@ with mitxonline_payments as (
 )
 
 -- Join to dimensions for FKs
-, dim_platform as (
-    select platform_pk, platform_readable_id
-    from {{ ref('dim_platform') }}
-)
-
 , dim_payment_method as (
     select payment_method_pk, payment_method_code
     from {{ ref('dim_payment_method') }}
@@ -53,11 +48,12 @@ with mitxonline_payments as (
 , payments_with_fks as (
     select
         combined_payments.*
-        , dim_platform.platform_pk as platform_fk
+        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
         , dim_payment_method.payment_method_pk as payment_method_fk
-        , cast(format_datetime(transaction_created_on, 'yyyyMMdd') as integer) as payment_date_key
+        , case when transaction_created_on is not null
+            then cast(date_format(date_parse(substr(transaction_created_on, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
+            else null end as payment_date_key
     from combined_payments
-    left join dim_platform on combined_payments.platform = dim_platform.platform_readable_id
     left join dim_payment_method on combined_payments.payment_method = dim_payment_method.payment_method_code
 )
 
