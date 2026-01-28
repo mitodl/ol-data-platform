@@ -66,28 +66,28 @@ with mitxonline_programs as (
 , micromasters_programs as (
     select
         program_id as source_id
-        , program_readable_id
+        , cast(program_id as varchar) as program_readable_id  -- micromasters doesn't have readable_id
         , program_title as program_name
         , program_title
         , 'MicroMasters' as program_type
-        , program_track
+        , cast(null as varchar) as program_track  -- micromasters doesn't have track
         , 'MicroMasters Credential' as certification_type
-        , program_is_dedp
+        , false as program_is_dedp  -- micromasters doesn't have dedp flag
         , true as program_is_micromasters
         , 'dated' as program_availability
-        , null as program_price
-        , program_length
-        , null as program_effort
+        , cast(null as double) as program_price  -- micromasters doesn't have price
+        , cast(null as varchar) as program_length  -- micromasters doesn't have length
+        , cast(null as varchar) as program_effort
         , program_description
-        , program_what_you_learn
-        , program_prerequisites
+        , cast(null as varchar) as program_what_you_learn  -- micromasters doesn't have this
+        , cast(null as varchar) as program_prerequisites  -- micromasters doesn't have this
         , program_is_live as is_active
         , false as is_external
-        , null as partner_platform_name
+        , cast(null as varchar) as partner_platform_name
         , 'MITx Online' as platform_readable_id
-        , null as first_published_date
-        , null as enrollment_start_date
-        , null as enrollment_end_date
+        , cast(null as date) as first_published_date
+        , cast(null as date) as enrollment_start_date
+        , cast(null as date) as enrollment_end_date
     from {{ ref('int__micromasters__programs') }}
 )
 

@@ -22,31 +22,17 @@ with mitxonline_courses as (
         course_readable_id
         , course_id as source_id
         , course_title
-        , course_number
-        , course_description
+        , cast(null as varchar) as course_number  -- mitxpro doesn't have course_number
+        , cast(null as varchar) as course_description  -- mitxpro doesn't have course_description
         , course_is_live
         , '{{ var("mitxpro") }}' as platform
     from {{ ref('int__mitxpro__courses') }}
-)
-
-, ocw_courses as (
-    select
-        concat('ocw-', cast(course_id as varchar)) as course_readable_id
-        , course_id as source_id
-        , course_title
-        , course_number
-        , course_description
-        , true as course_is_live
-        , '{{ var("ocw") }}' as platform
-    from {{ ref('int__ocw__courses') }}
 )
 
 , combined_courses as (
     select * from mitxonline_courses
     union all
     select * from mitxpro_courses
-    union all
-    select * from ocw_courses
 )
 
 -- Deduplicate by course_readable_id (prefer most recent platform)
@@ -59,7 +45,6 @@ with mitxonline_courses as (
                 case platform
                     when '{{ var("mitxonline") }}' then 1
                     when '{{ var("mitxpro") }}' then 2
-                    when '{{ var("ocw") }}' then 3
                 end
         ) as row_num
     from combined_courses
