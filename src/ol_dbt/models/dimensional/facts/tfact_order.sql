@@ -13,7 +13,7 @@ with mitxonline_orders as (
         , order_total_price_paid
         , order_reference_number
         , order_created_on
-        , order_updated_on
+        , order_created_on as order_updated_on  -- mitxonline doesn't have updated_on, use created_on
         , '{{ var("mitxonline") }}' as platform
     from {{ ref('int__mitxonline__ecommerce_order') }}
 )
@@ -21,10 +21,10 @@ with mitxonline_orders as (
 , mitxpro_orders as (
     select
         order_id
-        , user_id
+        , order_purchaser_user_id as user_id  -- mitxpro calls it order_purchaser_user_id
         , order_state
         , order_total_price_paid
-        , order_reference_number
+        , cast(null as varchar) as order_reference_number  -- mitxpro doesn't have reference_number
         , order_created_on
         , order_updated_on
         , '{{ var("mitxpro") }}' as platform
@@ -38,29 +38,18 @@ with mitxonline_orders as (
 )
 
 -- Join to dimensions for FKs
-, dim_user as (
-    select user_pk, mitxonline_user_id, mitxpro_user_id
-    from {{ ref('dim_user') }}
-)
-
-, dim_platform as (
-    select platform_pk, platform_readable_id
-    from {{ ref('dim_platform') }}
-)
-
 , orders_with_fks as (
     select
         combined_orders.*
-        , dim_user.user_pk as user_fk
-        , dim_platform.platform_pk as platform_fk
-        , cast(format_datetime(order_created_on, 'yyyyMMdd') as integer) as order_date_key
-        , cast(format_datetime(order_updated_on, 'yyyyMMdd') as integer) as order_updated_date_key
+        , cast(null as integer) as user_fk  -- dim_user not in Phase 1-2
+        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , case when order_created_on is not null
+            then cast(date_format(date_parse(substr(order_created_on, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
+            else null end as order_date_key
+        , case when order_updated_on is not null
+            then cast(date_format(date_parse(substr(order_updated_on, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
+            else null end as order_updated_date_key
     from combined_orders
-    left join dim_platform on combined_orders.platform = dim_platform.platform_readable_id
-    left join dim_user
-        on
-            (combined_orders.platform = '{{ var("mitxonline") }}' and combined_orders.user_id = dim_user.mitxonline_user_id)
-            or (combined_orders.platform = '{{ var("mitxpro") }}' and combined_orders.user_id = dim_user.mitxpro_user_id)
 )
 
 , final as (
