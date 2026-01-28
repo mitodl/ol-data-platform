@@ -707,8 +707,8 @@ models:
       column_list: ["user_email", "course_title", "courserun_readable_id", "subsection_block_index",
         "chapter_block_fk"]
 
-  - name: engagement_problem_completion_raw
-  description: A report that contains learner engagement details with problem data
+- name: engagement_problem_completion_raw
+  description: A report that contains learner engagement info with problem data
   columns:
   - name: platform
     description: str, name of the platform
