@@ -12,8 +12,8 @@ with mitxonline_courseruns as (
         , courserun_title
         , courserun_start_on
         , courserun_end_on
-        , courserun_enrollment_start as enrollment_start
-        , courserun_enrollment_end as enrollment_end
+        , courserun_enrollment_start_on as enrollment_start
+        , courserun_enrollment_end_on as enrollment_end
         , courserun_is_live
         , '{{ var("mitxonline") }}' as platform
     from {{ ref('int__mitxonline__course_runs') }}
@@ -27,8 +27,8 @@ with mitxonline_courseruns as (
         , courserun_title
         , courserun_start_on
         , courserun_end_on
-        , courserun_enrollment_start as enrollment_start
-        , courserun_enrollment_end as enrollment_end
+        , courserun_enrollment_start_on as enrollment_start
+        , courserun_enrollment_end_on as enrollment_end
         , courserun_is_live
         , '{{ var("mitxpro") }}' as platform
     from {{ ref('int__mitxpro__course_runs') }}
