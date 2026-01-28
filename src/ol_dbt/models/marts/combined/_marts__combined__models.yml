@@ -19,6 +19,8 @@ models:
     description: str, name of the program. If program is split over multiple tracks,
       the program name is the same for all tracks. e.g. Data, Economics, and Design
       of Policy
+    tests:
+    - not_null
   - name: program_id
     description: int, foreign key representing a single program
   - name: course_readable_id

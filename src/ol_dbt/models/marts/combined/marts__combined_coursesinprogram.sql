@@ -26,7 +26,7 @@ select
     '{{ var("mitxonline") }}' as platform
     , mitx__courses.course_title
     , mitx_programs.program_title
-    , mitxonline__programs.program_name
+    , coalesce(mitxonline__programs.program_name, mitx_programs.program_title) as program_name
     , mitx_programs.mitxonline_program_id as program_id
     , mitx__courses.course_readable_id
     , mitxonline__programs.program_readable_id
