@@ -37,14 +37,14 @@ with mitxonline_courseruns as (
 , edxorg_courseruns as (
     select
         courserun_readable_id
-        , null as source_id
-        , null as course_id
+        , cast(null as integer) as source_id
+        , cast(null as integer) as course_id
         , courserun_title
-        , courserun_start_on
-        , courserun_end_on
-        , null as enrollment_start
-        , null as enrollment_end
-        , true as courserun_is_live
+        , courserun_start_date as courserun_start_on  -- edxorg uses _date suffix
+        , courserun_end_date as courserun_end_on
+        , courserun_enrollment_start_date as enrollment_start
+        , courserun_enrollment_end_date as enrollment_end
+        , courserun_is_published as courserun_is_live
         , '{{ var("edxorg") }}' as platform
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
@@ -85,24 +85,24 @@ with mitxonline_courseruns as (
             end = dim_course.course_readable_id
 )
 
-, dim_platform as (
-    select
-        platform_pk
-        , platform_readable_id
-    from {{ ref('dim_platform') }}
-)
-
 , courseruns_with_all_fks as (
     select
         courseruns_with_fk.*
-        , dim_platform.platform_pk as platform_fk
-        -- Create date keys for date dimension joins
-        , cast(format_datetime(courserun_start_on, 'yyyyMMdd') as integer) as start_date_key
-        , cast(format_datetime(courserun_end_on, 'yyyyMMdd') as integer) as end_date_key
-        , cast(format_datetime(enrollment_start, 'yyyyMMdd') as integer) as enrollment_start_date_key
-        , cast(format_datetime(enrollment_end, 'yyyyMMdd') as integer) as enrollment_end_date_key
+        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        -- Create date keys for date dimension joins (use date_parse to avoid DST issues)
+        , case when courserun_start_on is not null
+            then cast(date_format(date_parse(substr(courserun_start_on, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
+            else null end as start_date_key
+        , case when courserun_end_on is not null
+            then cast(date_format(date_parse(substr(courserun_end_on, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
+            else null end as end_date_key
+        , case when enrollment_start is not null
+            then cast(date_format(date_parse(substr(enrollment_start, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
+            else null end as enrollment_start_date_key
+        , case when enrollment_end is not null
+            then cast(date_format(date_parse(substr(enrollment_end, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
+            else null end as enrollment_end_date_key
     from courseruns_with_fk
-    left join dim_platform on courseruns_with_fk.platform = dim_platform.platform_readable_id
 )
 
 , final as (
