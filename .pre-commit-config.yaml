@@ -9,6 +9,7 @@ repos:
   rev: v6.0.0
   hooks:
   - id: trailing-whitespace
+    exclude: src/ol_superset/assets
   - id: end-of-file-fixer
   - id: check-yaml
   - id: check-added-large-files
@@ -19,6 +20,7 @@ repos:
   rev: 0.2.3
   hooks:
   - id: yamlfmt
+    exclude: src/ol_superset/assets
     args:
     - --mapping
     - '2'
@@ -33,11 +35,13 @@ repos:
   rev: v1.38.0
   hooks:
   - id: yamllint
+    exclude: src/ol_superset/assets
     args: [--format, parsable, -d, relaxed]
 - repo: https://github.com/Yelp/detect-secrets
   rev: v1.5.0
   hooks:
   - id: detect-secrets
+    exclude: src/ol_superset/assets
     args:
     - --exclude-files
     - uv.lock

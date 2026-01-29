@@ -20,16 +20,16 @@ echo "Setting instance to $INSTANCE_NAME..."
 sup instance use "$INSTANCE_NAME"
 
 echo ""
-echo "Step 1: Exporting all datasets..."
-sup dataset pull "$ASSETS_DIR" --instance "$INSTANCE_NAME" --overwrite --limit 1000
+echo "Step 1: Exporting all datasets (via pagination)..."
+sup dataset pull "$ASSETS_DIR" --instance "$INSTANCE_NAME" --overwrite
 
 echo ""
-echo "Step 2: Exporting all charts..."
-sup chart pull "$ASSETS_DIR" --instance "$INSTANCE_NAME" --overwrite --limit 1000
+echo "Step 2: Exporting all charts (via pagination)..."
+sup chart pull "$ASSETS_DIR" --instance "$INSTANCE_NAME" --overwrite
 
 echo ""
-echo "Step 3: Exporting all dashboards..."
-sup dashboard pull "$ASSETS_DIR" --instance "$INSTANCE_NAME" --overwrite --limit 1000
+echo "Step 3: Exporting all dashboards (via pagination)..."
+sup dashboard pull "$ASSETS_DIR" --instance "$INSTANCE_NAME" --overwrite
 
 echo ""
 echo "================================================"

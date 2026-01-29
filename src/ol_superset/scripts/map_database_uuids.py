@@ -6,7 +6,10 @@ Fetches database configurations from target Superset instance and rewrites
 all database_uuid references in exported assets to match the target environment.
 """
 
+import argparse
 import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -20,24 +23,20 @@ def get_target_databases(instance_name: str) -> dict[str, str]:
     Returns:
         Dict mapping database_name to uuid
     """
-    import re
-    import subprocess
-
     # Get all databases with JSON output in one call
-    result = subprocess.run(
-        ["sup", "database", "list", "--instance", instance_name, "--json"],
+    result = subprocess.run(  # noqa: S603
+        ["sup", "database", "list", "--instance", instance_name, "--json"],  # noqa: S607
         capture_output=True,
         text=True,
+        check=False,
     )
 
     if result.returncode != 0:
-        print(f"❌ Failed to fetch databases: {result.stderr}", file=sys.stderr)
         sys.exit(1)
 
     # Find the start of JSON array (skip spinner output)
     start_idx = result.stdout.find("[")
     if start_idx == -1:
-        print("❌ No JSON found in database list output", file=sys.stderr)
         sys.exit(1)
 
     # Find the end of JSON array
@@ -57,7 +56,6 @@ def get_target_databases(instance_name: str) -> dict[str, str]:
     except json.JSONDecodeError:
         # Fall back: extract UUID/name pairs using regex
         # (CLI wraps long lines which breaks JSON string values)
-        databases = {}
 
         # Extract database_name and uuid pairs using regex
         # Look for patterns across potential line breaks
@@ -69,16 +67,10 @@ def get_target_databases(instance_name: str) -> dict[str, str]:
 
         # Match them up (assuming they appear in order)
         if len(names) == len(uuids):
-            databases = dict(zip(names, uuids))
-            return databases
+            return dict(zip(names, uuids))
 
-        print(
-            f"❌ Could not extract database information (found {len(names)} names, {len(uuids)} UUIDs)",
-            file=sys.stderr,
-        )
-        debug_file = Path("/tmp/database_list_debug.json")
+        debug_file = Path("/tmp/database_list_debug.json")  # noqa: S108
         debug_file.write_text(json_text)
-        print(f"📝 JSON output written to {debug_file} for debugging", file=sys.stderr)
         sys.exit(1)
 
 
@@ -91,12 +83,11 @@ def load_source_databases(assets_dir: Path) -> dict[str, str]:
     """
     db_dir = assets_dir / "databases"
     if not db_dir.exists():
-        print(f"❌ No databases directory found in {assets_dir}", file=sys.stderr)
         sys.exit(1)
 
     databases = {}
     for db_file in db_dir.glob("*.yaml"):
-        with open(db_file) as f:
+        with db_file.open() as f:
             config = yaml.safe_load(f)
             databases[config["database_name"]] = config["uuid"]
 
@@ -114,23 +105,13 @@ def build_uuid_mapping(
     """
     mapping = {}
 
-    print(f"\nSource databases: {source_dbs}")
-    print(f"Target databases: {target_dbs}\n")
-
     for db_name, source_uuid in source_dbs.items():
         if db_name not in target_dbs:
-            print(
-                f"⚠️  Warning: Database '{db_name}' not found in target environment",
-                file=sys.stderr,
-            )
             continue
 
         target_uuid = target_dbs[db_name]
         if source_uuid != target_uuid:
             mapping[source_uuid] = target_uuid
-            print(f"📋 {db_name}: {source_uuid} → {target_uuid}")
-        else:
-            print(f"✓  {db_name}: UUID matches ({source_uuid})")
 
     return mapping
 
@@ -142,7 +123,7 @@ def rewrite_uuids_in_file(file_path: Path, uuid_mapping: dict[str, str]) -> int:
     Returns:
         Number of replacements made
     """
-    with open(file_path) as f:
+    with file_path.open() as f:
         content = f.read()
 
     replacements = 0
@@ -152,7 +133,7 @@ def rewrite_uuids_in_file(file_path: Path, uuid_mapping: dict[str, str]) -> int:
             replacements += 1
 
     if replacements > 0:
-        with open(file_path, "w") as f:
+        with file_path.open("w") as f:
             f.write(content)
 
     return replacements
@@ -186,12 +167,9 @@ def rewrite_all_assets(assets_dir: Path, uuid_mapping: dict[str, str]) -> None:
                 total_files += 1
                 total_replacements += replacements
 
-    print(f"\n✅ Updated {total_replacements} UUID references in {total_files} files")
-
 
 def main():
-    import argparse
-
+    """Execute the database UUID mapping process."""
     parser = argparse.ArgumentParser(
         description="Map database UUIDs from exported assets to target environment"
     )
@@ -208,34 +186,18 @@ def main():
     assets_dir = Path(args.assets_dir)
 
     if not assets_dir.exists():
-        print("❌ Assets directory not found", file=sys.stderr)
         sys.exit(1)
 
-    print("================================================")
-    print("Mapping Database UUIDs for Target Environment")
-    print("================================================\n")
-
-    print("📥 Loading source databases from assets...")
     source_dbs = load_source_databases(assets_dir)
-    print(f"   Found {len(source_dbs)} source databases\n")
 
-    print(f"📥 Fetching target databases from {args.target_instance}...")
     target_dbs = get_target_databases(args.target_instance)
-    print(f"   Found {len(target_dbs)} target databases\n")
 
-    print("🔄 Building UUID mapping...")
     uuid_mapping = build_uuid_mapping(source_dbs, target_dbs)
 
     if not uuid_mapping:
-        print("\n✅ No UUID changes needed - all databases match!")
         return
 
-    print("\n📝 Rewriting UUIDs in asset files...")
     rewrite_all_assets(assets_dir, uuid_mapping)
-
-    print("\n================================================")
-    print("UUID Mapping Complete!")
-    print("================================================")
 
 
 if __name__ == "__main__":

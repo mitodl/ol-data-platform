@@ -1,0 +1,85 @@
+---
+slice_name: Enrollment Activity
+description:
+certified_by:
+certification_details:
+viz_type: echarts_timeseries_line
+params:
+  adhoc_filters: []
+  annotation_layers: []
+  color_scheme: supersetColors
+  dashboards:
+  - 16
+  datasource: 38__table
+  extra_form_data: {}
+  groupby: []
+  legendOrientation: top
+  legendType: scroll
+  metrics:
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: verified_count
+    optionName: metric_vjx5f5o5s1_5acgqppo467
+    sqlExpression: sum(case when courserunenrollment_enrollment_mode= 'verified' then
+      1 else 0 end)
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: audit_count
+    optionName: metric_twpw4trjrfe_xh8ncdhqdto
+    sqlExpression: sum(case when courserunenrollment_enrollment_mode= 'audit' then
+      1 else 0 end)
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: enrollment_count
+    optionName: metric_rqfrhut3enq_z4mczfs4bc
+    sqlExpression: count(*)
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: certs_earned_count
+    optionName: metric_in7yx2eq8qa_b8llqtpxtqd
+    sqlExpression: SUM(case when courseruncertificate_is_earned= true then 1 else
+      0 end)
+  rich_tooltip: true
+  row_limit: 10000
+  seriesType: line
+  show_empty_columns: true
+  show_legend: true
+  slice_id: 28
+  sort_series_type: sum
+  tooltipTimeFormat: smart_date
+  truncateXAxis: true
+  truncate_metric: true
+  viz_type: echarts_timeseries_line
+  x_axis: courserunenrollment_created_on_date
+  x_axis_sort: name
+  x_axis_sort_asc: true
+  x_axis_time_format: smart_date
+  x_axis_title_margin: 15
+  y_axis_format: SMART_NUMBER
+  y_axis_title_margin: 15
+  y_axis_title_position: Left
+  zoomable: true
+query_context: '{"datasource":{"id":38,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":[{"columnType":"BASE_AXIS","sqlExpression":"courserunenrollment_created_on_date","label":"courserunenrollment_created_on_date","expressionType":"SQL"}],"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"verified_count","optionName":"metric_vjx5f5o5s1_5acgqppo467","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''verified'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"audit_count","optionName":"metric_twpw4trjrfe_xh8ncdhqdto","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''audit'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"enrollment_count","optionName":"metric_rqfrhut3enq_z4mczfs4bc","sqlExpression":"count(*)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"certs_earned_count","optionName":"metric_in7yx2eq8qa_b8llqtpxtqd","sqlExpression":"SUM(case
+  when courseruncertificate_is_earned= true then 1 else 0 end)"}],"orderby":[[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"verified_count","optionName":"metric_vjx5f5o5s1_5acgqppo467","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''verified'' then 1 else 0 end)"},false]],"annotation_layers":[],"row_limit":10000,"series_columns":[],"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"time_offsets":[],"post_processing":[{"operation":"pivot","options":{"index":["courserunenrollment_created_on_date"],"columns":[],"aggregates":{"verified_count":{"operator":"mean"},"audit_count":{"operator":"mean"},"enrollment_count":{"operator":"mean"},"certs_earned_count":{"operator":"mean"__JINJA2_CLOSE__,"drop_missing_columns":false__JINJA2_CLOSE__,{"operation":"flatten"}]}],"form_data":{"datasource":"38__table","viz_type":"echarts_timeseries_line","slice_id":28,"x_axis":"courserunenrollment_created_on_date","x_axis_sort_series":"name","x_axis_sort_series_ascending":true,"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"verified_count","optionName":"metric_vjx5f5o5s1_5acgqppo467","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''verified'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"audit_count","optionName":"metric_twpw4trjrfe_xh8ncdhqdto","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''audit'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"enrollment_count","optionName":"metric_rqfrhut3enq_z4mczfs4bc","sqlExpression":"count(*)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"certs_earned_count","optionName":"metric_in7yx2eq8qa_b8llqtpxtqd","sqlExpression":"SUM(case
+  when courseruncertificate_is_earned= true then 1 else 0 end)"}],"groupby":[],"adhoc_filters":[],"row_limit":10000,"truncate_metric":true,"show_empty_columns":true,"annotation_layers":[],"x_axis_title_margin":15,"y_axis_title_margin":15,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","seriesType":"line","zoomable":true,"show_legend":true,"legendType":"scroll","legendOrientation":"top","x_axis_time_format":"smart_date","rich_tooltip":true,"tooltipTimeFormat":"smart_date","y_axis_format":"SMART_NUMBER","truncateXAxis":true,"extra_form_data":{},"dashboards":[16],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: b7056cdf-6d2a-43c0-b0a8-b66ab3f3980c
+version: 1.0.0
+dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000

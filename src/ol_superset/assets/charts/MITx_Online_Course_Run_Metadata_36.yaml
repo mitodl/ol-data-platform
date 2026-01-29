@@ -1,0 +1,45 @@
+---
+slice_name: MITx Online Course Run Metadata
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 10__table
+  viz_type: table
+  query_mode: aggregate
+  groupby:
+  - course_number
+  - courserun_title
+  - courserun_readable_id
+  - courserun_start_on
+  - courserun_end_on
+  time_grain_sqla: P1D
+  temporal_columns_lookup:
+    courseactivity_date: true
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters:
+  - clause: WHERE
+    subject: courseactivity_date
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    expressionType: SIMPLE
+  order_by_cols: []
+  row_limit: 1000
+  server_page_length: 10
+  order_desc: true
+  table_timestamp_format: smart_date
+  show_cell_bars: true
+  color_pn: true
+  extra_form_data: {}
+  dashboards:
+  - 16
+  comparison_type: values
+query_context: '{"datasource":{"id":10,"type":"table"},"force":false,"queries":[{"filters":[{"col":"courseactivity_date","op":"TEMPORAL_RANGE","val":"No
+  filter"}],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":["course_number","courserun_title","courserun_readable_id","courserun_start_on","courserun_end_on"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[]}],"form_data":{"datasource":"10__table","viz_type":"table","query_mode":"aggregate","groupby":["course_number","courserun_title","courserun_readable_id","courserun_start_on","courserun_end_on"],"time_grain_sqla":"P1D","temporal_columns_lookup":{"courseactivity_date":true},"all_columns":[],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","subject":"courseactivity_date","operator":"TEMPORAL_RANGE","comparator":"No
+  filter","expressionType":"SIMPLE"}],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","show_cell_bars":true,"color_pn":true,"extra_form_data":{},"dashboards":[16],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: c46d73a1-16c3-450b-a43d-63383fad7be2
+version: 1.0.0
+dataset_uuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8
