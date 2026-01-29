@@ -1,0 +1,376 @@
+---
+table_name: marts__combined__products
+main_dttm_col:
+description:
+default_endpoint:
+offset: 0
+cache_timeout:
+catalog: ol_data_lake_production
+schema: ol_warehouse_production_mart
+sql: ''
+params:
+template_params:
+filter_select_enabled: true
+fetch_values_predicate:
+extra:
+normalize_columns: false
+always_filter_main_dttm: false
+folders:
+uuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description:
+  d3format:
+  currency:
+  extra: {}
+  warning_text:
+columns:
+- column_name: courserun_is_current
+  verbose_name: ''
+  is_dttm: false
+  is_active: true
+  type:
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: "      case\n            when\n                end_on is null\n    \
+    \            and from_iso8601_timestamp(start_on) <= current_date\n          \
+    \      then true\n            when\n                from_iso8601_timestamp(start_on)\
+    \ <= current_date\n                and from_iso8601_timestamp(end_on) > current_date\n\
+    \                then true\n            else false\n        end "
+  description:
+  python_date_format:
+  extra: {}
+- column_name: courserun_is_enrollable
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type:
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: "      case\n            when \n               is_live = true\n    \
+    \            and from_iso8601_timestamp(enrollment_start_on) <= current_date\n\
+    \                and (enrollment_end_on is null or from_iso8601_timestamp(enrollment_end_on)\
+    \ > current_date)\n             then true\n      \n            else false\n  \
+    \      end "
+  description:
+  python_date_format:
+  extra: {}
+- column_name: list_price
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: product_readable_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: product_created_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: enrollment_start_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: enrollment_end_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: upgrade_deadline
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: certification_type
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: product_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: product_platform
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: start_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: offered_by
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: product_description
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: product_type
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: time_commitment
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: end_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: pace
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: duration
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: platform
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: instructors
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: topics
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: delivery
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: product_is_active
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: product_is_private
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: is_live
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: continuing_education_credits
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: DOUBLE
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+- column_name: product_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra: {}
+version: 1.0.0
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

@@ -1,0 +1,79 @@
+---
+slice_name: Chatbot data for Saliha
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 141__table
+  viz_type: table
+  slice_id: 129
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - datasourceWarning: false
+    expressionType: SQL
+    label: ai_agent
+    sqlExpression: chatsession_agent
+  - datasourceWarning: false
+    expressionType: SQL
+    label: resource_id
+    sqlExpression: chatsession_object_id
+  - courserun_readable_id
+  - datasourceWarning: false
+    expressionType: SQL
+    label: thread_id
+    sqlExpression: chatsession_thread_id
+  - agent_message
+  - human_message
+  - user_email
+  - user_global_id
+  - user_full_name
+  - checkpoint_step
+  percent_metrics: []
+  adhoc_filters:
+  - clause: WHERE
+    comparator:
+    datasourceWarning: false
+    expressionType: SQL
+    filterOptionName: filter_8yfzr917w53_c5maucjrni7
+    isExtra: false
+    isNew: false
+    operator:
+    sqlExpression: "chatsession_object_id LIKE '%UAI_ET+UAI.1+2025_C503%'\n   OR chatsession_object_id\
+      \ LIKE '%UAI_ET+UAI.2+2025_C503%'\n   OR chatsession_object_id LIKE '%UAI_ET+UAI.3+2025_C503%'\n\
+      \   OR chatsession_object_id LIKE '%UAI_ET+UAI.4+2025_C503%'"
+    subject:
+  - clause: WHERE
+    comparator:
+    datasourceWarning: false
+    expressionType: SQL
+    filterOptionName: filter_c2y2d3x3vgu_ncnv9hmyl89
+    isExtra: false
+    isNew: false
+    operator:
+    sqlExpression: coalesce(agent_message, '') != '' or human_message is not null
+    subject:
+  order_by_cols: []
+  row_limit: 50000
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  extra_form_data: {}
+  dashboards: []
+query_context: '{"datasource":{"id":141,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":"(chatsession_object_id
+  LIKE ''%UAI_ET+UAI.1+2025_C503%''\n   OR chatsession_object_id LIKE ''%UAI_ET+UAI.2+2025_C503%''\n   OR
+  chatsession_object_id LIKE ''%UAI_ET+UAI.3+2025_C503%''\n   OR chatsession_object_id
+  LIKE ''%UAI_ET+UAI.4+2025_C503%'') AND (coalesce(agent_message, '''') != '''' or
+  human_message is not null)"},"applied_time_extras":{},"columns":[{"datasourceWarning":false,"expressionType":"SQL","label":"ai_agent","sqlExpression":"chatsession_agent"},{"datasourceWarning":false,"expressionType":"SQL","label":"resource_id","sqlExpression":"chatsession_object_id"},"courserun_readable_id",{"datasourceWarning":false,"expressionType":"SQL","label":"thread_id","sqlExpression":"chatsession_thread_id"},"agent_message","human_message","user_email","user_global_id","user_full_name","checkpoint_step"],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"141__table","viz_type":"table","slice_id":129,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":[{"datasourceWarning":false,"expressionType":"SQL","label":"ai_agent","sqlExpression":"chatsession_agent"},{"datasourceWarning":false,"expressionType":"SQL","label":"resource_id","sqlExpression":"chatsession_object_id"},"courserun_readable_id",{"datasourceWarning":false,"expressionType":"SQL","label":"thread_id","sqlExpression":"chatsession_thread_id"},"agent_message","human_message","user_email","user_global_id","user_full_name","checkpoint_step"],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":null,"datasourceWarning":false,"expressionType":"SQL","filterOptionName":"filter_8yfzr917w53_c5maucjrni7","isExtra":false,"isNew":false,"operator":null,"sqlExpression":"chatsession_object_id
+  LIKE ''%UAI_ET+UAI.1+2025_C503%''\n   OR chatsession_object_id LIKE ''%UAI_ET+UAI.2+2025_C503%''\n   OR
+  chatsession_object_id LIKE ''%UAI_ET+UAI.3+2025_C503%''\n   OR chatsession_object_id
+  LIKE ''%UAI_ET+UAI.4+2025_C503%''","subject":null},{"clause":"WHERE","comparator":null,"datasourceWarning":false,"expressionType":"SQL","filterOptionName":"filter_c2y2d3x3vgu_ncnv9hmyl89","isExtra":false,"isNew":false,"operator":null,"sqlExpression":"coalesce(agent_message,
+  '''') != '''' or human_message is not null","subject":null}],"order_by_cols":[],"row_limit":50000,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout: -1
+uuid: 8fb96290-8e60-48c0-93c1-bf0f5b3c1823
+version: 1.0.0
+dataset_uuid: f1ec896e-86d4-451a-84cc-841d234e70a6

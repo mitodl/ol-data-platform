@@ -1,0 +1,45 @@
+---
+slice_name: Latest Product Created Date
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 44__table
+  viz_type: table
+  slice_id: 71
+  query_mode: aggregate
+  groupby: []
+  time_grain_sqla: P1D
+  temporal_columns_lookup: {}
+  metrics:
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Latest_Product_Created_Day
+    optionName: metric_evdqiyxmpdf_98jri27y13b
+    sqlExpression: MAX(substring(product_created_on, 1, 10))
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 1000
+  server_page_length: 10
+  order_desc: true
+  table_timestamp_format: smart_date
+  show_cell_bars: true
+  color_pn: true
+  extra_form_data: {}
+  dashboards:
+  - 25
+  comparison_type: values
+query_context: '{"datasource":{"id":44,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":[],"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Latest_Product_Created_Day","optionName":"metric_evdqiyxmpdf_98jri27y13b","sqlExpression":"MAX(substring(product_created_on,
+  1, 10))"}],"orderby":[[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Latest_Product_Created_Day","optionName":"metric_evdqiyxmpdf_98jri27y13b","sqlExpression":"MAX(substring(product_created_on,
+  1, 10))"},false]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[]}],"form_data":{"datasource":"44__table","viz_type":"table","slice_id":71,"query_mode":"aggregate","groupby":[],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Latest_Product_Created_Day","optionName":"metric_evdqiyxmpdf_98jri27y13b","sqlExpression":"MAX(substring(product_created_on,
+  1, 10))"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","show_cell_bars":true,"color_pn":true,"extra_form_data":{},"dashboards":[25],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: cdba7fac-5019-4d70-9f0c-817fb7f194d8
+version: 1.0.0
+dataset_uuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b

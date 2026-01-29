@@ -1,0 +1,392 @@
+---
+table_name: tables
+main_dttm_col: created_on
+description:
+default_endpoint:
+offset: 0
+cache_timeout:
+catalog: superset
+schema: public
+sql:
+params:
+template_params:
+filter_select_enabled: true
+fetch_values_predicate:
+extra:
+normalize_columns: false
+always_filter_main_dttm: false
+folders:
+uuid: 3b10e411-e497-4e8c-8132-08f673e8d72d
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description:
+  d3format:
+  currency:
+  extra:
+  warning_text:
+columns:
+- column_name: created_on
+  verbose_name:
+  is_dttm: true
+  is_active: true
+  type: TIMESTAMP WITHOUT TIME ZONE
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: changed_on
+  verbose_name:
+  is_dttm: true
+  is_active: true
+  type: TIMESTAMP WITHOUT TIME ZONE
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: catalog_perm
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR(1000)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: schema_perm
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR(1000)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: perm
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR(1000)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: main_dttm_col
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR(250)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: table_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR(250)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: schema
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR(255)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: catalog
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR(256)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: always_filter_main_dttm
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: is_managed_externally
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: filter_select_enabled
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: is_sqllab_view
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: normalize_columns
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: is_featured
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: uuid
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: UUID
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: created_by_fk
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: changed_by_fk
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: database_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: cache_timeout
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: offset
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: fetch_values_predicate
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: TEXT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: template_params
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: TEXT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: default_endpoint
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: TEXT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: external_url
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: TEXT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: params
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: TEXT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: extra
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: TEXT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: description
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: TEXT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: sql
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: TEXT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+version: 1.0.0
+database_uuid: 6a4ddc2b-cd25-464d-99b4-f6c611eabb99

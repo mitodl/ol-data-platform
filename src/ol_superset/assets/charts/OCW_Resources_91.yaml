@@ -1,0 +1,64 @@
+---
+slice_name: OCW Resources
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 60__table
+  viz_type: table
+  slice_id: 91
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - course_name
+  - course_live_url
+  - course_uuid
+  - content_type
+  - learning_resource_types
+  - metadata
+  - resource_draft
+  - resource_filename
+  - resource_title
+  - resource_type
+  - resource_uuid
+  - website_title
+  - external_resource_is_broken
+  - external_resource_license_warning
+  - external_resource_url_status_code
+  - external_resource_backup_url_status_code
+  - course_number
+  - course_term
+  - course_title
+  - course_year
+  - resource_live_url
+  - studio_url
+  - external_resource_backup_url
+  - external_resource_url
+  - image_alt_text
+  - image_caption
+  - image_credit
+  - video_youtube_id
+  - video_youtube_speakers
+  - video_youtube_tags
+  - video_archive_url
+  - video_captions_file
+  - video_thumbnail_file
+  - video_transcript_file
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: '500000'
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  extra_form_data: {}
+  dashboards: []
+query_context: '{"datasource":{"id":60,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["course_name","course_live_url","course_uuid","content_type","learning_resource_types","metadata","resource_draft","resource_filename","resource_title","resource_type","resource_uuid","website_title","external_resource_is_broken","external_resource_license_warning","external_resource_url_status_code","external_resource_backup_url_status_code","course_number","course_term","course_title","course_year","resource_live_url","studio_url","external_resource_backup_url","external_resource_url","image_alt_text","image_caption","image_credit","video_youtube_id","video_youtube_speakers","video_youtube_tags","video_archive_url","video_captions_file","video_thumbnail_file","video_transcript_file"],"orderby":[],"annotation_layers":[],"row_limit":500000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"60__table","viz_type":"table","slice_id":91,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["course_name","course_live_url","course_uuid","content_type","learning_resource_types","metadata","resource_draft","resource_filename","resource_title","resource_type","resource_uuid","website_title","external_resource_is_broken","external_resource_license_warning","external_resource_url_status_code","external_resource_backup_url_status_code","course_number","course_term","course_title","course_year","resource_live_url","studio_url","external_resource_backup_url","external_resource_url","image_alt_text","image_caption","image_credit","video_youtube_id","video_youtube_speakers","video_youtube_tags","video_archive_url","video_captions_file","video_thumbnail_file","video_transcript_file"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":"500000","table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: c697af06-b2be-4653-9680-e9af0c822e38
+version: 1.0.0
+dataset_uuid: 8bb67686-3d31-4418-bda9-87fdeb25b665

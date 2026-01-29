@@ -1,0 +1,43 @@
+---
+slice_name: Learner Page Engagement
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 82__table
+  viz_type: table
+  slice_id: 94
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - user_email
+  - full_name
+  - platform
+  - course_title
+  - courserun_readable_id
+  - section_title
+  - subsection_title
+  - unit_title
+  - num_of_views
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols:
+  - '["section_block_index", true]'
+  - '["subsection_block_index", true]'
+  row_limit: 1000
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  extra_form_data: {}
+  dashboards:
+  - 45
+query_context: '{"datasource":{"id":82,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["user_email","full_name","platform","course_title","courserun_readable_id","section_title","subsection_title","unit_title","num_of_views"],"orderby":[["section_block_index",true],["subsection_block_index",true]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"82__table","viz_type":"table","slice_id":94,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["user_email","full_name","platform","course_title","courserun_readable_id","section_title","subsection_title","unit_title","num_of_views"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":["[\"section_block_index\",
+  true]","[\"subsection_block_index\", true]"],"row_limit":1000,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","extra_form_data":{},"dashboards":[45],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 9bd2269c-fd5c-463d-b63e-14fa63e90a55
+version: 1.0.0
+dataset_uuid: c3182341-5246-40c2-8f04-885369c38093

@@ -1,0 +1,843 @@
+---
+table_name: combined_learners_enrollment_detail
+main_dttm_col:
+description:
+default_endpoint:
+offset: 0
+cache_timeout:
+catalog: ol_data_lake_production
+schema: ol_warehouse_production_mart
+sql: "with enrollments as (\n SELECT * FROM ol_warehouse_production_mart.marts__combined_course_enrollment_detail\
+  \ \n)\n\n, orders as (\n    SELECT * FROM  ol_warehouse_production_mart.marts__combined__orders\n\
+  )\n\n--- TO DO: this should move to dbt \n, programs as (\n    select distinct program_enrollments.platform_name,\
+  \ program_enrollments.program_name, program_enrollments.user_email, coursesinprogram.course_readable_id\n\
+  \    from ol_warehouse_production_mart.marts__combined_program_enrollment_detail\
+  \ as program_enrollments \n    join ol_warehouse_production_mart.marts__combined_coursesinprogram\
+  \ as coursesinprogram \n        on program_enrollments.platform_name=coursesinprogram.platform\
+  \ \n        and program_enrollments.program_name=coursesinprogram.program_name\n\
+  \        and program_enrollments.program_id = coursesinprogram.program_id\n  WHERE\
+  \ coursesinprogram.program_name <> 'Computer Science'\n)\n\n, course_passed_counts\
+  \ as (\n    select \n      count(distinct course_title) as num_of_course_passed,\
+  \ user_email\n    from enrollments\n    where courserungrade_is_passing = true\n\
+  \    group by user_email\n)\n\nSELECT \n    enrollments.platform\n    , enrollments.courserunenrollment_id\n\
+  \    , enrollments.course_readable_id\n    , enrollments.course_title\n    , enrollments.courserun_id\n\
+  \    , enrollments.courserun_is_current\n    , enrollments.courserun_readable_id\n\
+  \    , enrollments.courserun_start_on\n    , enrollments.courserun_end_on\n    ,\
+  \ enrollments.courserun_title\n    , enrollments.courseruncertificate_created_on\n\
+  \    , enrollments.courseruncertificate_is_earned\n    , enrollments.courseruncertificate_url\n\
+  \    , enrollments.courseruncertificate_uuid\n    , enrollments.courserunenrollment_created_on\n\
+  \    , enrollments.courserunenrollment_enrollment_mode\n    , enrollments.courserunenrollment_enrollment_status\n\
+  \    , enrollments.courserunenrollment_is_active\n    , enrollments.courserunenrollment_is_edx_enrolled\n\
+  \    , enrollments.courserunenrollment_upgraded_on\n    , enrollments.courserungrade_grade\n\
+  \    , enrollments.courserungrade_is_passing\n    , enrollments.order_id\n    ,\
+  \ enrollments.order_reference_number\n    , enrollments.user_company\n    , enrollments.user_country_code\n\
+  \    , lower(enrollments.user_email) as user_email\n    , enrollments.user_full_name\n\
+  \    , enrollments.user_highest_education\n    , enrollments.user_id\n    , enrollments.user_hashed_id\n\
+  \    , enrollments.user_username\n    , course_passed_counts.num_of_course_passed\n\
+  \    , orders.coupon_code\n    , orders.coupon_id\n    , orders.coupon_name\n  \
+  \  , orders.coupon_type\n    , orders.discount\n    , orders.order_total_price_paid_plus_tax\n\
+  \    , orders.order_created_on\n    , orders.order_state\n    , orders.receipt_authorization_code\n\
+  \    , orders.receipt_bill_to_address_state\n    , orders.receipt_bill_to_address_country\n\
+  \    , orders.receipt_payment_method\n    , orders.receipt_payment_amount\n    ,\
+  \ orders.receipt_payment_currency\n    , orders.receipt_payment_card_number\n  \
+  \  , orders.receipt_payment_card_type\n    , orders.receipt_payment_transaction_type\n\
+  \    , orders.receipt_payment_transaction_uuid\n    , orders.receipt_payer_name\n\
+  \    , orders.receipt_payer_email\n    , orders.receipt_payer_ip_address\n    ,\
+  \ orders.receipt_payment_timestamp\n    , orders.receipt_transaction_id\n    , orders.unit_price\n\
+  \    , programs.program_name\n    , if(enrollments.platform ='MITx Online'\n   \
+  \    , concat('https://mitxonline.mit.edu/orders/receipt/', cast(orders.order_id\
+  \ as varchar))\n       , null) as receipt_url\nFROM enrollments\nleft join orders\
+  \ \n   on enrollments.order_id=orders.order_id and enrollments.platform=orders.platform\n\
+  left join course_passed_counts on enrollments.user_email = course_passed_counts.user_email\n\
+  left join programs\n  on enrollments.platform=programs.platform_name\n and enrollments.course_readable_id\
+  \ = programs.course_readable_id\n and enrollments.user_email = programs.user_email"
+params:
+template_params:
+filter_select_enabled: true
+fetch_values_predicate:
+extra:
+normalize_columns: false
+always_filter_main_dttm: false
+folders:
+uuid: b579034e-2b79-4d3a-ba84-94c9fcfa0cc5
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description:
+  d3format:
+  currency:
+  extra:
+    warning_markdown: ''
+  warning_text:
+columns:
+- column_name: order_total_price_paid_plus_tax
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payment_amount
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: unit_price
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_bill_to_address_state
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_bill_to_address_country
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payment_transaction_uuid
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payment_transaction_type
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payment_card_number
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payment_card_type
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payer_ip_address
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserun_readable_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: course_readable_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courseruncertificate_created_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_authorization_code
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_transaction_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payer_email
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payment_timestamp
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payer_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payment_currency
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserunenrollment_created_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserunenrollment_upgraded_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: order_created_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_payment_method
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_highest_education
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserunenrollment_enrollment_status
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserun_start_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_hashed_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_full_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: order_reference_number
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_country_code
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserunenrollment_enrollment_mode
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserun_end_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: program_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courseruncertificate_uuid
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courseruncertificate_url
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: coupon_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_company
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: order_state
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_username
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_email
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: coupon_code
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserun_title
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: course_title
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: receipt_url
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: coupon_type
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: platform
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: discount
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserunenrollment_is_edx_enrolled
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courseruncertificate_is_earned
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserungrade_is_passing
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserunenrollment_is_active
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserun_is_current
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserungrade_grade
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: DOUBLE
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: num_of_course_passed
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserunenrollment_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserun_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: coupon_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: order_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+version: 1.0.0
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

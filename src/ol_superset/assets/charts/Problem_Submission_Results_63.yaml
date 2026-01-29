@@ -1,0 +1,82 @@
+---
+slice_name: Problem Submission Results
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 49__table
+  viz_type: table
+  slice_id: 63
+  query_mode: aggregate
+  groupby:
+  - course_readable_id
+  - problem_name
+  temporal_columns_lookup: {}
+  metrics:
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Problem_Correct_Count
+    optionName: metric_kr5x7l369n_2yt59v0iht9
+    sqlExpression: SUM(case when problem_success= 'correct' then 1 else 0 end)
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Problem_Incorrect_Count
+    optionName: metric_xmpelsopnza_mf2xev2uy8j
+    sqlExpression: SUM(case when problem_success= 'incorrect' then 1 else 0 end)
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Correct%
+    optionName: metric_i88s1ewi78_vq6dr3574xh
+    sqlExpression: "     ROUND(SUM(case\n               when problem_success= 'correct'\
+      \ then 1\n               else 0\n           end)  * 100.0 / count(*), 1)"
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Incorrect%
+    optionName: metric_4um0opruu4d_oqzdnqf2cue
+    sqlExpression: "     ROUND(SUM(case\n               when problem_success= 'incorrect'\
+      \ then 1\n               else 0\n           end)  * 100.0 / count(*), 1)"
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 1000
+  order_desc: true
+  table_timestamp_format: smart_date
+  show_cell_bars: false
+  color_pn: true
+  conditional_formatting: []
+  extra_form_data: {}
+  dashboards:
+  - 27
+  comparison_type: values
+query_context: '{"datasource":{"id":49,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["course_readable_id","problem_name"],"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Problem_Correct_Count","optionName":"metric_kr5x7l369n_2yt59v0iht9","sqlExpression":"SUM(case
+  when problem_success= ''correct'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Problem_Incorrect_Count","optionName":"metric_xmpelsopnza_mf2xev2uy8j","sqlExpression":"SUM(case
+  when problem_success= ''incorrect'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Correct%","optionName":"metric_i88s1ewi78_vq6dr3574xh","sqlExpression":"     ROUND(SUM(case\n               when
+  problem_success= ''correct'' then 1\n               else 0\n           end)  * 100.0
+  / count(*), 1)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Incorrect%","optionName":"metric_4um0opruu4d_oqzdnqf2cue","sqlExpression":"     ROUND(SUM(case\n               when
+  problem_success= ''incorrect'' then 1\n               else 0\n           end)  *
+  100.0 / count(*), 1)"}],"orderby":[[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Problem_Correct_Count","optionName":"metric_kr5x7l369n_2yt59v0iht9","sqlExpression":"SUM(case
+  when problem_success= ''correct'' then 1 else 0 end)"},false]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[]}],"form_data":{"datasource":"49__table","viz_type":"table","slice_id":63,"query_mode":"aggregate","groupby":["course_readable_id","problem_name"],"temporal_columns_lookup":{},"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Problem_Correct_Count","optionName":"metric_kr5x7l369n_2yt59v0iht9","sqlExpression":"SUM(case
+  when problem_success= ''correct'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Problem_Incorrect_Count","optionName":"metric_xmpelsopnza_mf2xev2uy8j","sqlExpression":"SUM(case
+  when problem_success= ''incorrect'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Correct%","optionName":"metric_i88s1ewi78_vq6dr3574xh","sqlExpression":"     ROUND(SUM(case\n               when
+  problem_success= ''correct'' then 1\n               else 0\n           end)  * 100.0
+  / count(*), 1)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Incorrect%","optionName":"metric_4um0opruu4d_oqzdnqf2cue","sqlExpression":"     ROUND(SUM(case\n               when
+  problem_success= ''incorrect'' then 1\n               else 0\n           end)  *
+  100.0 / count(*), 1)"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"order_desc":true,"table_timestamp_format":"smart_date","show_cell_bars":false,"color_pn":true,"conditional_formatting":[],"extra_form_data":{},"dashboards":[27],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: d0bcae8d-1f6a-415b-a3af-52323e8eeee2
+version: 1.0.0
+dataset_uuid: 70adedf0-bc96-4922-a720-d579f2b4065c

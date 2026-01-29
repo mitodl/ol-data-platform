@@ -1,0 +1,257 @@
+---
+slice_name: Video Engagement by Section
+description:
+certified_by:
+certification_details:
+viz_type: echarts_timeseries_bar
+params:
+  adhoc_filters: []
+  color_scheme: supersetColors
+  comparison_type: values
+  contributionMode:
+  dashboards:
+  - 27
+  datasource: 48__table
+  extra_form_data: {}
+  form_data_bak:
+    adhoc_filters: []
+    bottom_margin: auto
+    color_scheme: supersetColors
+    columns: []
+    dashboards:
+    - 27
+    datasource: 48__table
+    extra_form_data: {}
+    groupby:
+    - chapter_title
+    metrics:
+    - aggregate:
+      column:
+      datasourceWarning: false
+      expressionType: SQL
+      hasCustomLabel: true
+      label: Viewed at least one Video
+      optionName: metric_jizlug4ic8o_u1gjok3yr5
+      sqlExpression: count(distinct(case when user_watched_video_count > 0 then user_email
+        else null end))
+    - aggregate:
+      column:
+      datasourceWarning: false
+      expressionType: SQL
+      hasCustomLabel: true
+      label: Viewed All Videos
+      optionName: metric_xhjwxh5mzl_e422ptihyqu
+      sqlExpression: count(distinct(case when user_watched_video_count = total_video_count
+        then user_email else null end))
+    order_desc: false
+    rich_tooltip: true
+    row_limit: 10000
+    show_legend: true
+    slice_id: 60
+    timeseries_limit_metric:
+      aggregate: MIN
+      column:
+        advanced_data_type:
+        certification_details:
+        certified_by:
+        column_name: max_video_index
+        description:
+        expression:
+        filterable: true
+        groupby: true
+        id: 734
+        is_certified: false
+        is_dttm: false
+        python_date_format:
+        type: BIGINT
+        type_generic: 0
+        verbose_name:
+        warning_markdown:
+      datasourceWarning: false
+      expressionType: SIMPLE
+      hasCustomLabel: false
+      label: MIN(max_video_index)
+      optionName: metric_cs4tjxplik5_5vg1p07gjfm
+      sqlExpression:
+    viz_type: dist_bar
+    x_ticks_layout: auto
+    y_axis_bounds:
+    - 
+    - 
+    y_axis_format: SMART_NUMBER
+  groupby: []
+  markerEnabled: false
+  metrics:
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Viewed at least one Video
+    optionName: metric_jizlug4ic8o_u1gjok3yr5
+    sqlExpression: count(distinct(case when user_watched_video_count > 0 then user_email
+      else null end))
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Viewed All Videos
+    optionName: metric_xhjwxh5mzl_e422ptihyqu
+    sqlExpression: count(distinct(case when user_watched_video_count = total_video_count
+      then user_email else null end))
+  order_desc: false
+  queries_bak:
+  - annotation_layers: []
+    applied_time_extras: {}
+    columns:
+    - chapter_title
+    custom_form_data: {}
+    custom_params: {}
+    extras:
+      having: ''
+      where: ''
+    filters: []
+    metrics:
+    - aggregate:
+      column:
+      datasourceWarning: false
+      expressionType: SQL
+      hasCustomLabel: true
+      label: Viewed at least one Video
+      optionName: metric_jizlug4ic8o_u1gjok3yr5
+      sqlExpression: count(distinct(case when user_watched_video_count > 0 then user_email
+        else null end))
+    - aggregate:
+      column:
+      datasourceWarning: false
+      expressionType: SQL
+      hasCustomLabel: true
+      label: Viewed All Videos
+      optionName: metric_xhjwxh5mzl_e422ptihyqu
+      sqlExpression: count(distinct(case when user_watched_video_count = total_video_count
+        then user_email else null end))
+    order_desc: false
+    row_limit: 10000
+    series_limit: 0
+    series_limit_metric:
+      aggregate: MIN
+      column:
+        advanced_data_type:
+        certification_details:
+        certified_by:
+        column_name: max_video_index
+        description:
+        expression:
+        filterable: true
+        groupby: true
+        id: 734
+        is_certified: false
+        is_dttm: false
+        python_date_format:
+        type: BIGINT
+        type_generic: 0
+        verbose_name:
+        warning_markdown:
+      datasourceWarning: false
+      expressionType: SIMPLE
+      hasCustomLabel: false
+      label: MIN(max_video_index)
+      optionName: metric_cs4tjxplik5_5vg1p07gjfm
+      sqlExpression:
+    url_params: {}
+  rich_tooltip: true
+  row_limit: 10000
+  show_legend: true
+  slice_id: 60
+  stack:
+  timeseries_limit_metric:
+    aggregate: MIN
+    column:
+      advanced_data_type:
+      certification_details:
+      certified_by:
+      column_name: max_video_index
+      description:
+      expression:
+      filterable: true
+      groupby: true
+      id: 734
+      is_certified: false
+      is_dttm: false
+      python_date_format:
+      type: BIGINT
+      type_generic: 0
+      verbose_name:
+      warning_markdown:
+    datasourceWarning: false
+    expressionType: SIMPLE
+    hasCustomLabel: false
+    label: MIN(max_video_index)
+    optionName: metric_cs4tjxplik5_5vg1p07gjfm
+    sqlExpression:
+  truncateYAxis: true
+  viz_type: echarts_timeseries_bar
+  xAxisLabelRotation: 45
+  x_axis: chapter_title
+  x_axis_title_margin: auto
+  y_axis_bounds:
+  - 
+  - 
+  y_axis_format: SMART_NUMBER
+  zoomable: false
+query_context: '{"datasource": {"id": 48, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "columns": [{"columnType": "BASE_AXIS", "sqlExpression": "chapter_title", "label":
+  "chapter_title", "expressionType": "SQL"}], "metrics": [{"aggregate": null, "column":
+  null, "datasourceWarning": false, "expressionType": "SQL", "hasCustomLabel": true,
+  "label": "Viewed at least one Video", "optionName": "metric_jizlug4ic8o_u1gjok3yr5",
+  "sqlExpression": "count(distinct(case when user_watched_video_count > 0 then user_email
+  else null end))"}, {"aggregate": null, "column": null, "datasourceWarning": false,
+  "expressionType": "SQL", "hasCustomLabel": true, "label": "Viewed All Videos", "optionName":
+  "metric_xhjwxh5mzl_e422ptihyqu", "sqlExpression": "count(distinct(case when user_watched_video_count
+  = total_video_count then user_email else null end))"}], "annotation_layers": [],
+  "row_limit": 10000, "series_limit": 0, "order_desc": false, "url_params": {}, "custom_params":
+  {}, "series_limit_metric": {"aggregate": "MIN", "column": {"advanced_data_type":
+  null, "certification_details": null, "certified_by": null, "column_name": "max_video_index",
+  "description": null, "expression": null, "filterable": true, "groupby": true, "id":
+  734, "is_certified": false, "is_dttm": false, "python_date_format": null, "type":
+  "BIGINT", "type_generic": 0, "verbose_name": null, "warning_markdown": null}, "datasourceWarning":
+  false, "expressionType": "SIMPLE", "hasCustomLabel": false, "label": "MIN(max_video_index)",
+  "optionName": "metric_cs4tjxplik5_5vg1p07gjfm", "sqlExpression": null}, "custom_form_data":
+  {}, "series_columns": [], "orderby": [[{"aggregate": "MIN", "column": {"advanced_data_type":
+  null, "certification_details": null, "certified_by": null, "column_name": "max_video_index",
+  "description": null, "expression": null, "filterable": true, "groupby": true, "id":
+  734, "is_certified": false, "is_dttm": false, "python_date_format": null, "type":
+  "BIGINT", "type_generic": 0, "verbose_name": null, "warning_markdown": null}, "datasourceWarning":
+  false, "expressionType": "SIMPLE", "hasCustomLabel": false, "label": "MIN(max_video_index)",
+  "optionName": "metric_cs4tjxplik5_5vg1p07gjfm", "sqlExpression": null}, true]],
+  "time_offsets": [], "post_processing": [{"operation": "pivot", "options": {"index":
+  ["chapter_title"], "columns": [], "aggregates": {"Viewed at least one Video": {"operator":
+  "mean"}, "Viewed All Videos": {"operator": "mean"__JINJA2_CLOSE__, "drop_missing_columns":
+  true__JINJA2_CLOSE__, {"operation": "flatten"}]}], "form_data": {"datasource": "48__table",
+  "viz_type": "echarts_timeseries_bar", "slice_id": 60, "metrics": [{"aggregate":
+  null, "column": null, "datasourceWarning": false, "expressionType": "SQL", "hasCustomLabel":
+  true, "label": "Viewed at least one Video", "optionName": "metric_jizlug4ic8o_u1gjok3yr5",
+  "sqlExpression": "count(distinct(case when user_watched_video_count > 0 then user_email
+  else null end))"}, {"aggregate": null, "column": null, "datasourceWarning": false,
+  "expressionType": "SQL", "hasCustomLabel": true, "label": "Viewed All Videos", "optionName":
+  "metric_xhjwxh5mzl_e422ptihyqu", "sqlExpression": "count(distinct(case when user_watched_video_count
+  = total_video_count then user_email else null end))"}], "adhoc_filters": [], "groupby":
+  [], "row_limit": 10000, "timeseries_limit_metric": {"aggregate": "MIN", "column":
+  {"advanced_data_type": null, "certification_details": null, "certified_by": null,
+  "column_name": "max_video_index", "description": null, "expression": null, "filterable":
+  true, "groupby": true, "id": 734, "is_certified": false, "is_dttm": false, "python_date_format":
+  null, "type": "BIGINT", "type_generic": 0, "verbose_name": null, "warning_markdown":
+  null}, "datasourceWarning": false, "expressionType": "SIMPLE", "hasCustomLabel":
+  false, "label": "MIN(max_video_index)", "optionName": "metric_cs4tjxplik5_5vg1p07gjfm",
+  "sqlExpression": null}, "order_desc": false, "color_scheme": "supersetColors", "show_legend":
+  true, "rich_tooltip": true, "y_axis_format": "SMART_NUMBER", "y_axis_bounds": [null,
+  null], "x_axis_title_margin": "auto", "xAxisLabelRotation": 45, "extra_form_data":
+  {}, "dashboards": [27], "contributionMode": null, "zoomable": false, "markerEnabled":
+  false, "truncateYAxis": true, "comparison_type": "values", "x_axis": "chapter_title",
+  "stack": null}, "result_format": "json", "result_type": "full"}'
+cache_timeout:
+uuid: ebcf2551-ca8e-4fce-b04b-55e382b1c963
+version: 1.0.0
+dataset_uuid: 42f063d3-3c06-4834-b993-777fdbc6dea7

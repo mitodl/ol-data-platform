@@ -1,0 +1,485 @@
+---
+dashboard_title: Enrollment Detail by Learner
+description:
+css: ''
+slug:
+certified_by: ''
+certification_details: ''
+published: true
+uuid: da9e03d3-e1bb-45b8-981f-208deca90e7a
+position:
+  CHART-KkyyS2N5s777Egpf_DTJa:
+    children: []
+    id: CHART-KkyyS2N5s777Egpf_DTJa
+    meta:
+      chartId: 111
+      height: 50
+      sliceName: Enrollment Detail Dashboard (Last Updated)
+      uuid: 1ed19d7a-4f9b-4c13-a6f9-ba348f1c4d3d
+      width: 6
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    - ROW-Qv1MQqwT3w
+    type: CHART
+  CHART-explore-108-1:
+    children: []
+    id: CHART-explore-108-1
+    meta:
+      chartId: 108
+      height: 92
+      sliceName: Enrollment Detail
+      uuid: 1cf394ec-8561-4b0d-9d9b-f394a6029b33
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-t1-4mh38qE
+    - ROW-dYqhPM1G6v4wJjCXLBkoi
+    type: CHART
+  CHART-rQKV1it9gO:
+    children: []
+    id: CHART-rQKV1it9gO
+    meta:
+      chartId: 64
+      height: 76
+      sliceName: Learner Deferred Report
+      uuid: 5ce15be9-994b-4377-8c99-21d35267a2dd
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-pWPKo4rBS
+    - ROW-3dEH5sPi2h
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children: []
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Enrollment Detail by Learner
+    type: HEADER
+  MARKDOWN-49jpOJGrDnO_Ql5sw7tKg:
+    children: []
+    id: MARKDOWN-49jpOJGrDnO_Ql5sw7tKg
+    meta:
+      code: "### Change Log: \n1/13/26 moved course to program refrence tab to Products\
+        \ Dashboard"
+      height: 50
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    - ROW-2L92uIzpQUQWkMN0gDT6J
+    type: MARKDOWN
+  MARKDOWN-UwcBhYwtzJ:
+    children: []
+    id: MARKDOWN-UwcBhYwtzJ
+    meta:
+      code: "\n<a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined_course_enrollment_detail#description'\
+        \ target='_blank'>Enrollment column definition</a>\n\n\n<a href=\"https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined__orders\"\
+        \ target=\"_blank\">Order column definition</a>\n\n<br>\n\nThis dashboard\
+        \ contains data from:\n  - marts__combined_course_enrollment_detail\n  - marts__combined__orders\n\
+        \  - marts__combined_coursesinprogram"
+      height: 50
+      width: 6
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    - ROW-Qv1MQqwT3w
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - TABS-poyCgBsAnk
+    id: ROOT_ID
+    type: ROOT
+  ROW-2L92uIzpQUQWkMN0gDT6J:
+    children:
+    - MARKDOWN-49jpOJGrDnO_Ql5sw7tKg
+    id: ROW-2L92uIzpQUQWkMN0gDT6J
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    type: ROW
+  ROW-3dEH5sPi2h:
+    children:
+    - CHART-rQKV1it9gO
+    id: ROW-3dEH5sPi2h
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-pWPKo4rBS
+    type: ROW
+  ROW-Qv1MQqwT3w:
+    children:
+    - MARKDOWN-UwcBhYwtzJ
+    - CHART-KkyyS2N5s777Egpf_DTJa
+    id: ROW-Qv1MQqwT3w
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    type: ROW
+  ROW-dYqhPM1G6v4wJjCXLBkoi:
+    children:
+    - CHART-explore-108-1
+    id: ROW-dYqhPM1G6v4wJjCXLBkoi
+    meta:
+      '0': ROOT_ID
+      '1': TABS-poyCgBsAnk
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-t1-4mh38qE
+    type: ROW
+  TAB-pWPKo4rBS:
+    children:
+    - ROW-3dEH5sPi2h
+    id: TAB-pWPKo4rBS
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Learners Deferred
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    type: TAB
+  TAB-t1-4mh38qE:
+    children:
+    - ROW-dYqhPM1G6v4wJjCXLBkoi
+    id: TAB-t1-4mh38qE
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Enrollment
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    type: TAB
+  TAB-tFB9eF2Ur:
+    children:
+    - ROW-Qv1MQqwT3w
+    - ROW-2L92uIzpQUQWkMN0gDT6J
+    id: TAB-tFB9eF2Ur
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    type: TAB
+  TABS-poyCgBsAnk:
+    children:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-tFB9eF2Ur
+    id: TABS-poyCgBsAnk
+    meta: {}
+    parents:
+    - ROOT_ID
+    type: TABS
+metadata:
+  chart_configuration:
+    '64':
+      id: 64
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 108
+        - 111
+    '108':
+      id: 108
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 64
+        - 111
+    '111':
+      id: 111
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 64
+        - 108
+  global_chart_configuration:
+    scope:
+      rootPath:
+      - TAB-pWPKo4rBS
+      - TAB-Eyu1xfak5
+      - TAB-tFB9eF2Ur
+      - TAB-t1-4mh38qE
+      excluded: []
+    chartsInScope:
+    - 64
+    - 108
+    - 111
+  color_scheme: ''
+  refresh_frequency: 86400
+  expanded_slices: {}
+  label_colors: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  native_filter_configuration:
+  - id: NATIVE_FILTER-zp-lAphrX
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: true
+      inverseSelection: false
+    name: Platform
+    filterType: filter_select
+    targets:
+    - column:
+        name: platform
+      datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 64
+    - 67
+    - 70
+    - 108
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-Eyu1xfak5
+    - TAB-tFB9eF2Ur
+  - id: NATIVE_FILTER-wdOFV8c7Q2d1JWooPJCGV
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: true
+      inverseSelection: false
+    name: Learner Email
+    filterType: filter_select
+    targets:
+    - column:
+        name: user_email
+      datasetUuid: b579034e-2b79-4d3a-ba84-94c9fcfa0cc5
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 64
+    - 67
+    - 70
+    - 108
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-Eyu1xfak5
+    - TAB-tFB9eF2Ur
+  - id: NATIVE_FILTER-rtf0SLxia
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: true
+      inverseSelection: false
+    name: Learner name
+    filterType: filter_select
+    targets:
+    - column:
+        name: user_full_name
+      datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 64
+    - 67
+    - 70
+    - 108
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-Eyu1xfak5
+    - TAB-tFB9eF2Ur
+  - id: NATIVE_FILTER-8eiua81W1
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: true
+      inverseSelection: false
+    name: Course
+    filterType: filter_select
+    targets:
+    - column:
+        name: course_readable_id
+      datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds:
+    - NATIVE_FILTER-zp-lAphrX
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 64
+    - 67
+    - 70
+    - 108
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-Eyu1xfak5
+    - TAB-tFB9eF2Ur
+  - id: NATIVE_FILTER-Vz_eMSTIHKEPhUEzbKfeq
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: true
+      inverseSelection: false
+    name: Course Run Readable ID
+    filterType: filter_select
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: b579034e-2b79-4d3a-ba84-94c9fcfa0cc5
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds:
+    - NATIVE_FILTER-zp-lAphrX
+    scope:
+      rootPath:
+      - TAB-pWPKo4rBS
+      - TAB-t1-4mh38qE
+      - TAB-Eyu1xfak5
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 108
+    - 64
+    - 67
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-Eyu1xfak5
+  - id: NATIVE_FILTER-dhv0VgoCz
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: true
+      inverseSelection: false
+    name: Coupon Code
+    filterType: filter_select
+    targets:
+    - column:
+        name: coupon_code
+      datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds:
+    - NATIVE_FILTER-zp-lAphrX
+    - NATIVE_FILTER-rtf0SLxia
+    - NATIVE_FILTER-8eiua81W1
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded:
+      - 67
+      - 70
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 64
+    - 108
+    tabsInScope:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+  - id: NATIVE_FILTER-6CrkxwX9-8iWfg4P5H44q
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Course Run Certificate Is Earned
+    filterType: filter_select
+    targets:
+    - column:
+        name: courseruncertificate_is_earned
+      datasetUuid: b579034e-2b79-4d3a-ba84-94c9fcfa0cc5
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - TAB-pWPKo4rBS
+      - TAB-tFB9eF2Ur
+      - TAB-t1-4mh38qE
+      - TAB-Eyu1xfak5
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 64
+    - 70
+    tabsInScope:
+    - TAB-pWPKo4rBS
+    - TAB-tFB9eF2Ur
+  default_filters: '{}'
+  shared_label_colors: []
+  color_scheme_domain: []
+  map_label_colors: {}
+theme_uuid:
+version: 1.0.0

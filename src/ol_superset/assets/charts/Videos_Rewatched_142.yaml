@@ -1,0 +1,103 @@
+---
+slice_name: Videos Rewatched
+description:
+certified_by:
+certification_details:
+viz_type: echarts_timeseries_bar
+params:
+  datasource: 154__table
+  viz_type: echarts_timeseries_bar
+  slice_id: 142
+  x_axis:
+    label: activity_date
+    sqlExpression: date_format(activity_date, '%c-%Y')
+    expressionType: SQL
+  time_grain_sqla: P1D
+  metrics:
+  - aggregate: SUM
+    column:
+      advanced_data_type:
+      certification_details:
+      certified_by:
+      column_name: video_watched_count
+      description:
+      expression: ''
+      filterable: true
+      groupby: true
+      id: 2295
+      is_certified: false
+      is_dttm: false
+      python_date_format:
+      type: INTEGER
+      type_generic: 0
+      verbose_name:
+      warning_markdown:
+    datasourceWarning: false
+    expressionType: SIMPLE
+    hasCustomLabel: false
+    label: SUM(video_watched_count)
+    optionName: metric_knao1ykoowr_klxfnut5jug
+    sqlExpression:
+  groupby: []
+  adhoc_filters:
+  - expressionType: SIMPLE
+    subject: activity_date
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    clause: WHERE
+    sqlExpression:
+    isExtra: false
+    isNew: false
+    datasourceWarning: false
+    filterOptionName: filter_vvowmjjvkfq_8bbndwvtoz3
+  - expressionType: SIMPLE
+    subject: rewatch_indicator
+    operator: IN
+    operatorId: IN
+    comparator:
+    - true
+    clause: WHERE
+    sqlExpression:
+    isExtra: false
+    isNew: false
+    datasourceWarning: false
+    filterOptionName: filter_iut5t2py3wf_gy58nofd9it
+  row_limit: 10000
+  truncate_metric: true
+  show_empty_columns: true
+  comparison_type: values
+  annotation_layers: []
+  forecastPeriods: 10
+  forecastInterval: 0.8
+  orientation: vertical
+  x_axis_title_margin: 15
+  y_axis_title_margin: 30
+  y_axis_title_position: Left
+  sort_series_type: sum
+  color_scheme: supersetColors
+  time_shift_color: true
+  only_total: true
+  show_legend: true
+  legendType: scroll
+  legendOrientation: top
+  x_axis_time_format: smart_date
+  y_axis_format: SMART_NUMBER
+  y_axis_bounds:
+  - 
+  - 
+  truncateXAxis: true
+  rich_tooltip: true
+  showTooltipTotal: true
+  tooltipTimeFormat: smart_date
+  extra_form_data: {}
+  dashboards:
+  - 59
+query_context: '{"datasource":{"id":154,"type":"table"},"force":false,"queries":[{"filters":[{"col":"activity_date","op":"TEMPORAL_RANGE","val":"No
+  filter"},{"col":"rewatch_indicator","op":"IN","val":[true]}],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":[{"timeGrain":"P1D","columnType":"BASE_AXIS","label":"activity_date","sqlExpression":"date_format(activity_date,
+  ''%c-%Y'')","expressionType":"SQL"}],"metrics":[{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"video_watched_count","description":null,"expression":"","filterable":true,"groupby":true,"id":2295,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"INTEGER","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"SUM(video_watched_count)","optionName":"metric_knao1ykoowr_klxfnut5jug","sqlExpression":null}],"orderby":[[{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"video_watched_count","description":null,"expression":"","filterable":true,"groupby":true,"id":2295,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"INTEGER","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"SUM(video_watched_count)","optionName":"metric_knao1ykoowr_klxfnut5jug","sqlExpression":null},false]],"annotation_layers":[],"row_limit":10000,"series_columns":[],"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"time_offsets":[],"post_processing":[{"operation":"pivot","options":{"index":["activity_date"],"columns":[],"aggregates":{"SUM(video_watched_count)":{"operator":"mean"}},"drop_missing_columns":false}},{"operation":"flatten"}]}],"form_data":{"datasource":"154__table","viz_type":"echarts_timeseries_bar","slice_id":142,"x_axis":{"label":"activity_date","sqlExpression":"date_format(activity_date,
+  ''%c-%Y'')","expressionType":"SQL"},"time_grain_sqla":"P1D","metrics":[{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"video_watched_count","description":null,"expression":"","filterable":true,"groupby":true,"id":2295,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"INTEGER","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"SUM(video_watched_count)","optionName":"metric_knao1ykoowr_klxfnut5jug","sqlExpression":null}],"groupby":[],"adhoc_filters":[{"expressionType":"SIMPLE","subject":"activity_date","operator":"TEMPORAL_RANGE","comparator":"No
+  filter","clause":"WHERE","sqlExpression":null,"isExtra":false,"isNew":false,"datasourceWarning":false,"filterOptionName":"filter_vvowmjjvkfq_8bbndwvtoz3"},{"expressionType":"SIMPLE","subject":"rewatch_indicator","operator":"IN","operatorId":"IN","comparator":[true],"clause":"WHERE","sqlExpression":null,"isExtra":false,"isNew":false,"datasourceWarning":false,"filterOptionName":"filter_iut5t2py3wf_gy58nofd9it"}],"row_limit":10000,"truncate_metric":true,"show_empty_columns":true,"comparison_type":"values","annotation_layers":[],"forecastPeriods":10,"forecastInterval":0.8,"orientation":"vertical","x_axis_title_margin":15,"y_axis_title_margin":30,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","time_shift_color":true,"only_total":true,"show_legend":true,"legendType":"scroll","legendOrientation":"top","x_axis_time_format":"smart_date","y_axis_format":"SMART_NUMBER","y_axis_bounds":[null,null],"truncateXAxis":true,"rich_tooltip":true,"showTooltipTotal":true,"tooltipTimeFormat":"smart_date","extra_form_data":{},"dashboards":[59],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 397698ec-916f-46e4-bd4c-cae296806b10
+version: 1.0.0
+dataset_uuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91

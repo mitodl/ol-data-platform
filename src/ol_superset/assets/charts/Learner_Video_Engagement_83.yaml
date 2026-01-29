@@ -1,0 +1,74 @@
+---
+slice_name: Learner Video Engagement
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 92__table
+  viz_type: table
+  slice_id: 83
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - user_email
+  - course_title
+  - courserun_readable_id
+  - section_title
+  - subsection_title
+  - label: Percent_Watched
+    sqlExpression: case when estimated_time_played < 0 then null when estimated_time_played>=video_duration
+      then 1 when (video_duration is null or video_duration= 0 or estimated_time_played
+      is null) then null else estimated_time_played/video_duration end
+    expressionType: SQL
+  - label: estimated_time_played(seconds)
+    sqlExpression: case when estimated_time_played < 0 then null when estimated_time_played
+      > video_duration then cast(video_duration as int) else cast(estimated_time_played
+      as int) end
+    expressionType: SQL
+  - datasourceWarning: false
+    expressionType: SQL
+    label: video_duration(seconds)
+    sqlExpression: cast(video_duration as int)
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 10000
+  server_page_length: 10
+  order_desc: true
+  table_timestamp_format: smart_date
+  include_search: true
+  allow_render_html: true
+  column_config:
+    Percent_Watched:
+      d3NumberFormat: ',.1%'
+    estimated_time_played(seconds):
+      showCellBars: false
+    video_duration(seconds):
+      showCellBars: false
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 45
+query_context: '{"datasource":{"id":92,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["user_email","course_title","courserun_readable_id","section_title","subsection_title",{"label":"Percent_Watched","sqlExpression":"case
+  when estimated_time_played < 0 then null when estimated_time_played>=video_duration
+  then 1 when (video_duration is null or video_duration= 0 or estimated_time_played
+  is null) then null else estimated_time_played/video_duration end","expressionType":"SQL"},{"label":"estimated_time_played(seconds)","sqlExpression":"case
+  when estimated_time_played < 0 then null when estimated_time_played > video_duration
+  then cast(video_duration as int) else cast(estimated_time_played as int) end","expressionType":"SQL"},{"datasourceWarning":false,"expressionType":"SQL","label":"video_duration(seconds)","sqlExpression":"cast(video_duration
+  as int)"}],"orderby":[],"annotation_layers":[],"row_limit":10000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"92__table","viz_type":"table","slice_id":83,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["user_email","course_title","courserun_readable_id","section_title","subsection_title",{"label":"Percent_Watched","sqlExpression":"case
+  when estimated_time_played < 0 then null when estimated_time_played>=video_duration
+  then 1 when (video_duration is null or video_duration= 0 or estimated_time_played
+  is null) then null else estimated_time_played/video_duration end","expressionType":"SQL"},{"label":"estimated_time_played(seconds)","sqlExpression":"case
+  when estimated_time_played < 0 then null when estimated_time_played > video_duration
+  then cast(video_duration as int) else cast(estimated_time_played as int) end","expressionType":"SQL"},{"datasourceWarning":false,"expressionType":"SQL","label":"video_duration(seconds)","sqlExpression":"cast(video_duration
+  as int)"}],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":10000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"column_config":{"Percent_Watched":{"d3NumberFormat":",.1%"},"estimated_time_played(seconds)":{"showCellBars":false},"video_duration(seconds)":{"showCellBars":false}},"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[45],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 3c5fdc59-85d7-484b-9fdf-170336c8a4c0
+version: 1.0.0
+dataset_uuid: 4752cd11-a13e-4a8e-be31-4d9227b07ca2

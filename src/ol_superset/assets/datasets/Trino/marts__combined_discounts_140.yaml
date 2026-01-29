@@ -1,0 +1,296 @@
+---
+table_name: marts__combined_discounts
+main_dttm_col:
+description:
+default_endpoint:
+offset: 0
+cache_timeout:
+catalog: ol_data_lake_production
+schema: ol_warehouse_production_mart
+sql:
+params:
+template_params:
+filter_select_enabled: true
+fetch_values_predicate:
+extra:
+normalize_columns: false
+always_filter_main_dttm: false
+folders:
+uuid: a5df905c-0480-4227-b234-1a1064672b32
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description:
+  d3format:
+  currency:
+  extra:
+  warning_text:
+columns:
+- column_name: b2b_contract_number
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: b2breceipt_reference_number
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: b2bcoupon_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: product_readable_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_activated_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_created_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_amount_text
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_expires_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: payment_transaction
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: couponpayment_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: company_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_code
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_source
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_type
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: platform
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: redeemed
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_max_redemptions
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: num_discount_codes
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discounts_used_count
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: couponpaymentversion_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+- column_name: discount_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+version: 1.0.0
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

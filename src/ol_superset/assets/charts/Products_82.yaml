@@ -1,0 +1,85 @@
+---
+slice_name: Products
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 44__table
+  viz_type: table
+  slice_id: 49
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - product_platform
+  - product_type
+  - product_readable_id
+  - product_name
+  - list_price
+  - datasourceWarning: false
+    expressionType: SQL
+    label: start_on
+    sqlExpression: 'substring(start_on, 6, 2) || ''/'' || substring(start_on, 9, 2)
+      || ''/'' || substring(start_on, 1, 4) '
+  - datasourceWarning: false
+    expressionType: SQL
+    label: end_on
+    sqlExpression: 'substring(end_on, 6, 2) || ''/'' || substring(end_on, 9, 2) ||
+      ''/'' || substring(end_on, 1, 4) '
+  - datasourceWarning: false
+    expressionType: SQL
+    label: enrollment_start_on
+    sqlExpression: enrollment_start_on
+  - datasourceWarning: false
+    expressionType: SQL
+    label: enrollment_end_on
+    sqlExpression: enrollment_end_on
+  - datasourceWarning: false
+    expressionType: SQL
+    label: upgrade_deadline
+    sqlExpression: upgrade_deadline
+  - pace
+  - duration
+  - time_commitment
+  - certification_type
+  - delivery
+  - continuing_education_credits
+  - topics
+  - instructors
+  - offered_by
+  - product_created_on
+  - product_is_active
+  - product_is_private
+  - is_live
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols:
+  - '["platform", true]'
+  - '["product_id", true]'
+  - '["product_is_active", true]'
+  row_limit: 10000
+  table_timestamp_format: smart_date
+  include_search: true
+  allow_render_html: true
+  column_config:
+    start_on:
+      horizontalAlign: left
+  show_cell_bars: false
+  color_pn: true
+  conditional_formatting: []
+  extra_form_data: {}
+  dashboards:
+  - 25
+query_context: '{"datasource":{"id":44,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["product_platform","product_type","product_readable_id","product_name","list_price",{"datasourceWarning":false,"expressionType":"SQL","label":"start_on","sqlExpression":"substring(start_on,
+  6, 2) || ''/'' || substring(start_on, 9, 2) || ''/'' || substring(start_on, 1, 4)
+  "},{"datasourceWarning":false,"expressionType":"SQL","label":"end_on","sqlExpression":"substring(end_on,
+  6, 2) || ''/'' || substring(end_on, 9, 2) || ''/'' || substring(end_on, 1, 4) "},{"datasourceWarning":false,"expressionType":"SQL","label":"enrollment_start_on","sqlExpression":"enrollment_start_on"},{"datasourceWarning":false,"expressionType":"SQL","label":"enrollment_end_on","sqlExpression":"enrollment_end_on"},{"datasourceWarning":false,"expressionType":"SQL","label":"upgrade_deadline","sqlExpression":"upgrade_deadline"},"pace","duration","time_commitment","certification_type","delivery","continuing_education_credits","topics","instructors","offered_by","product_created_on","product_is_active","product_is_private","is_live"],"orderby":[["platform",true],["product_id",true],["product_is_active",true]],"annotation_layers":[],"row_limit":10000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"44__table","viz_type":"table","slice_id":49,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["product_platform","product_type","product_readable_id","product_name","list_price",{"datasourceWarning":false,"expressionType":"SQL","label":"start_on","sqlExpression":"substring(start_on,
+  6, 2) || ''/'' || substring(start_on, 9, 2) || ''/'' || substring(start_on, 1, 4)
+  "},{"datasourceWarning":false,"expressionType":"SQL","label":"end_on","sqlExpression":"substring(end_on,
+  6, 2) || ''/'' || substring(end_on, 9, 2) || ''/'' || substring(end_on, 1, 4) "},{"datasourceWarning":false,"expressionType":"SQL","label":"enrollment_start_on","sqlExpression":"enrollment_start_on"},{"datasourceWarning":false,"expressionType":"SQL","label":"enrollment_end_on","sqlExpression":"enrollment_end_on"},{"datasourceWarning":false,"expressionType":"SQL","label":"upgrade_deadline","sqlExpression":"upgrade_deadline"},"pace","duration","time_commitment","certification_type","delivery","continuing_education_credits","topics","instructors","offered_by","product_created_on","product_is_active","product_is_private","is_live"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":["[\"platform\",
+  true]","[\"product_id\", true]","[\"product_is_active\", true]"],"row_limit":10000,"table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"column_config":{"start_on":{"horizontalAlign":"left"}},"show_cell_bars":false,"color_pn":true,"conditional_formatting":[],"extra_form_data":{},"dashboards":[25],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 36ade680-7ae9-4d35-89b0-a46235139418
+version: 1.0.0
+dataset_uuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b

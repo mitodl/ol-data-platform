@@ -1,0 +1,452 @@
+---
+table_name: int__ocw__resources
+main_dttm_col:
+description:
+default_endpoint:
+offset: 0
+cache_timeout:
+catalog: ol_data_lake_production
+schema: ol_warehouse_production_intermediate
+sql:
+params:
+template_params:
+filter_select_enabled: true
+fetch_values_predicate:
+extra:
+normalize_columns: false
+always_filter_main_dttm: false
+folders:
+uuid: 8bb67686-3d31-4418-bda9-87fdeb25b665
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description:
+  d3format:
+  currency:
+  extra:
+  warning_text:
+columns:
+- column_name: external_resource_backup_url_status_code
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: external_resource_url_status_code
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: external_resource_backup_url
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: image_alt_text
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: video_youtube_speakers
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: video_thumbnail_file
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: video_youtube_tags
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: video_captions_file
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: video_transcript_file
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: video_archive_url
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: learning_resource_types
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: external_resource_url
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: video_youtube_description
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: video_youtube_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: resource_live_url
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: course_live_url
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: image_caption
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: image_credit
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: resource_filename
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: course_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: course_year
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: course_number
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: website_title
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: resource_uuid
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: course_uuid
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: resource_title
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: resource_type
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: course_title
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: course_term
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: content_type
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: studio_url
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: metadata
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: external_resource_license_warning
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: external_resource_is_broken
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+- column_name: resource_draft
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+version: 1.0.0
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

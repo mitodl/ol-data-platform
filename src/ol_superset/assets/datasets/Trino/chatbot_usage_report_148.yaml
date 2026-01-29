@@ -1,0 +1,124 @@
+---
+table_name: chatbot_usage_report
+main_dttm_col:
+description:
+default_endpoint:
+offset: 0
+cache_timeout:
+catalog: ol_data_lake_production
+schema: ol_warehouse_production_reporting
+sql: ''
+params:
+template_params:
+filter_select_enabled: true
+fetch_values_predicate:
+extra:
+normalize_columns: false
+always_filter_main_dttm: false
+folders:
+uuid: b1f7c663-9faf-4c95-bdeb-d786a3f4cd3c
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description:
+  d3format:
+  currency:
+  extra:
+    warning_markdown: ''
+  warning_text:
+columns:
+- column_name: human_message
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: ai_message
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: ai_agent
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: created_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: thread_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: resource_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: message_index
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression: ''
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+version: 1.0.0
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

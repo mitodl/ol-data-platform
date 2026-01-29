@@ -1,0 +1,44 @@
+---
+slice_name: Tutorbot
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 121__table
+  viz_type: table
+  slice_id: 116
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - tutorbotoutput_id
+  - chatsession_thread_id
+  - tutorbot_chat_json
+  - chatsession_agent
+  - chatsession_title
+  - courserun_readable_id
+  - edx_module_id
+  - user_id
+  - user_email
+  - user_full_name
+  - user_username
+  - user_global_id
+  - chatsession_created_on
+  - chatsession_updated_on
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 50000
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  extra_form_data: {}
+  dashboards: []
+query_context: '{"datasource":{"id":121,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["tutorbotoutput_id","chatsession_thread_id","tutorbot_chat_json","chatsession_agent","chatsession_title","courserun_readable_id","edx_module_id","user_id","user_email","user_full_name","user_username","user_global_id","chatsession_created_on","chatsession_updated_on"],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"121__table","viz_type":"table","slice_id":116,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["tutorbotoutput_id","chatsession_thread_id","tutorbot_chat_json","chatsession_agent","chatsession_title","courserun_readable_id","edx_module_id","user_id","user_email","user_full_name","user_username","user_global_id","chatsession_created_on","chatsession_updated_on"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":50000,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: c1d81d88-a705-4c90-a816-f488f7cbbaea
+version: 1.0.0
+dataset_uuid: 4fe652f8-e672-4e71-89da-fb964985847b

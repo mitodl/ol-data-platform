@@ -1,0 +1,259 @@
+---
+dashboard_title: Coupons
+description:
+css: ''
+slug:
+certified_by: ''
+certification_details: ''
+published: true
+uuid: 06b246fd-65db-440b-9a98-183ca37a2660
+position:
+  CHART-GIoELOquos60t9gabSJgV:
+    children: []
+    id: CHART-GIoELOquos60t9gabSJgV
+    meta:
+      chartId: 120
+      height: 64
+      sliceName: Coupon/Discount Summary
+      uuid: 2e066386-dc90-48e3-859b-2b665b3cb257
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-g4YGSdi0Kg0Zcf9JdGWYQ
+    - TAB-l2qbT4z5D0BVJjGwusrsv
+    - ROW-kaTvbFKRf2NwUpEXBMXG1
+    type: CHART
+  CHART-hiM8gxP0MAGBAp83LUSII:
+    children: []
+    id: CHART-hiM8gxP0MAGBAp83LUSII
+    meta:
+      chartId: 113
+      height: 81
+      sliceName: Coupon Dashboard (Last Updated)
+      uuid: a468ef05-11af-4a02-b61c-f928f36f17fb
+      width: 7
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-g4YGSdi0Kg0Zcf9JdGWYQ
+    - TAB-l8ENKQb7QZoz_4mxD19Ag
+    - ROW-5q2W3fdlUKY4lY1s2-awC
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - TABS-g4YGSdi0Kg0Zcf9JdGWYQ
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Coupons
+    type: HEADER
+  MARKDOWN-BCtgZWidGOdgErvaUonL5:
+    children: []
+    id: MARKDOWN-BCtgZWidGOdgErvaUonL5
+    meta:
+      code: '### Change Log'
+      height: 73
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-g4YGSdi0Kg0Zcf9JdGWYQ
+    - TAB-l8ENKQb7QZoz_4mxD19Ag
+    - ROW-5q2W3fdlUKY4lY1s2-awC
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-5q2W3fdlUKY4lY1s2-awC:
+    children:
+    - MARKDOWN-BCtgZWidGOdgErvaUonL5
+    - CHART-hiM8gxP0MAGBAp83LUSII
+    id: ROW-5q2W3fdlUKY4lY1s2-awC
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-g4YGSdi0Kg0Zcf9JdGWYQ
+    - TAB-l8ENKQb7QZoz_4mxD19Ag
+    type: ROW
+  ROW-kaTvbFKRf2NwUpEXBMXG1:
+    children:
+    - CHART-GIoELOquos60t9gabSJgV
+    id: ROW-kaTvbFKRf2NwUpEXBMXG1
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-g4YGSdi0Kg0Zcf9JdGWYQ
+    - TAB-l2qbT4z5D0BVJjGwusrsv
+    type: ROW
+  TAB-l2qbT4z5D0BVJjGwusrsv:
+    children:
+    - ROW-kaTvbFKRf2NwUpEXBMXG1
+    id: TAB-l2qbT4z5D0BVJjGwusrsv
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Data
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-g4YGSdi0Kg0Zcf9JdGWYQ
+    type: TAB
+  TAB-l8ENKQb7QZoz_4mxD19Ag:
+    children:
+    - ROW-5q2W3fdlUKY4lY1s2-awC
+    id: TAB-l8ENKQb7QZoz_4mxD19Ag
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-g4YGSdi0Kg0Zcf9JdGWYQ
+    type: TAB
+  TABS-g4YGSdi0Kg0Zcf9JdGWYQ:
+    children:
+    - TAB-l2qbT4z5D0BVJjGwusrsv
+    - TAB-l8ENKQb7QZoz_4mxD19Ag
+    id: TABS-g4YGSdi0Kg0Zcf9JdGWYQ
+    meta: {}
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: TABS
+metadata:
+  chart_configuration:
+    '113':
+      id: 113
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 120
+    '120':
+      id: 120
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 113
+  global_chart_configuration:
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    chartsInScope:
+    - 113
+    - 120
+  color_scheme: ''
+  refresh_frequency: 0
+  expanded_slices: {}
+  label_colors: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  native_filter_configuration:
+  - id: NATIVE_FILTER-UxurmeTHiVs0aju3EQxNT
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Platform
+    filterType: filter_select
+    targets:
+    - column:
+        name: platform
+      datasetUuid: a5df905c-0480-4227-b234-1a1064672b32
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded:
+      - 113
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 120
+    tabsInScope:
+    - TAB-l2qbT4z5D0BVJjGwusrsv
+  - id: NATIVE_FILTER-R5Skmo4dKv5X_BPVfSPSh
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Coupon Code
+    filterType: filter_select
+    targets:
+    - column:
+        name: discount_code
+      datasetUuid: a5df905c-0480-4227-b234-1a1064672b32
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 113
+    - 120
+    tabsInScope:
+    - TAB-l8ENKQb7QZoz_4mxD19Ag
+    - TAB-l2qbT4z5D0BVJjGwusrsv
+  - id: NATIVE_FILTER-BHyUHmuFFj7Nsx6dMK7YS
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Coupon Name
+    filterType: filter_select
+    targets:
+    - column:
+        name: discount_name
+      datasetUuid: a5df905c-0480-4227-b234-1a1064672b32
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 113
+    - 120
+    tabsInScope:
+    - TAB-l8ENKQb7QZoz_4mxD19Ag
+    - TAB-l2qbT4z5D0BVJjGwusrsv
+  shared_label_colors: []
+  map_label_colors: {}
+  color_scheme_domain: []
+theme_uuid:
+version: 1.0.0

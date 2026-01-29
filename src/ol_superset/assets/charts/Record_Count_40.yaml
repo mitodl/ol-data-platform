@@ -1,0 +1,33 @@
+---
+slice_name: Record Count
+description:
+certified_by:
+certification_details:
+viz_type: big_number_total
+params:
+  datasource: 38__table
+  viz_type: big_number_total
+  slice_id: 40
+  metric:
+    expressionType: SQL
+    sqlExpression: COUNT(*)
+    column:
+    aggregate:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: Record Count
+    optionName: metric_odjay9cgkon_z1khg8fnb8o
+  adhoc_filters: []
+  header_font_size: 0.4
+  subheader_font_size: 0.15
+  y_axis_format: SMART_NUMBER
+  time_format: smart_date
+  extra_form_data: {}
+  dashboards: []
+query_context: '{"datasource":{"id":38,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":[],"metrics":[{"expressionType":"SQL","sqlExpression":"COUNT(*)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Record
+  Count","optionName":"metric_odjay9cgkon_z1khg8fnb8o"}],"annotation_layers":[],"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{}}],"form_data":{"datasource":"38__table","viz_type":"big_number_total","slice_id":40,"metric":{"expressionType":"SQL","sqlExpression":"COUNT(*)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Record
+  Count","optionName":"metric_odjay9cgkon_z1khg8fnb8o"},"adhoc_filters":[],"header_font_size":0.4,"subheader_font_size":0.15,"y_axis_format":"SMART_NUMBER","time_format":"smart_date","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 1e441a91-5d1a-4f4f-9bf8-90fcc9d12988
+version: 1.0.0
+dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000

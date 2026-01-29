@@ -1,0 +1,127 @@
+---
+slice_name: Problem Engagement by Section
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 66__table
+  viz_type: table
+  slice_id: 87
+  query_mode: aggregate
+  groupby:
+  - section_title
+  temporal_columns_lookup: {}
+  metrics:
+  - aggregate: AVG
+    column:
+      advanced_data_type:
+      certification_details:
+      certified_by:
+      column_name: percetage_problems_attempted
+      description:
+      expression:
+      filterable: true
+      groupby: true
+      id: 1080
+      is_certified: false
+      is_dttm: false
+      python_date_format:
+      type: DECIMAL(38, 10)
+      type_generic: 0
+      verbose_name:
+      warning_markdown:
+    datasourceWarning: false
+    expressionType: SIMPLE
+    hasCustomLabel: true
+    label: Avg_%_Problems_Attempted
+    optionName: metric_da4t3fzlcf_elzwzyp1f74
+    sqlExpression:
+  - aggregate: AVG
+    column:
+      advanced_data_type:
+      certification_details:
+      certified_by:
+      column_name: percetage_problems_correct
+      description:
+      expression:
+      filterable: true
+      groupby: true
+      id: 1090
+      is_certified: false
+      is_dttm: false
+      python_date_format:
+      type: DECIMAL(38, 10)
+      type_generic: 0
+      verbose_name:
+      warning_markdown:
+    datasourceWarning: false
+    expressionType: SIMPLE
+    hasCustomLabel: true
+    label: Avg_%_Problems_Correct
+    optionName: metric_3yhbb64246s_wpobohqc7rp
+    sqlExpression:
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Avg_attempts_per_problem
+    optionName: metric_mzrkir38yml_wy7s5chfb2
+    sqlExpression: AVG(number_of_total_attempts/number_of_problems)
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  timeseries_limit_metric:
+    aggregate: MIN
+    column:
+      advanced_data_type:
+      certification_details:
+      certified_by:
+      column_name: section_block_index
+      description:
+      expression:
+      filterable: true
+      groupby: true
+      id: 1112
+      is_certified: false
+      is_dttm: false
+      python_date_format:
+      type: BIGINT
+      type_generic: 0
+      verbose_name:
+      warning_markdown:
+    datasourceWarning: false
+    expressionType: SIMPLE
+    hasCustomLabel: false
+    label: MIN(section_block_index)
+    optionName: metric_mnwvvmodw4r_ilyz28a3rin
+    sqlExpression:
+  order_by_cols: []
+  row_limit: 1000
+  server_page_length: 10
+  order_desc: false
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  column_config:
+    Avg_%_Problems_Attempted:
+      d3NumberFormat: ',.1%'
+    Avg_%_Problems_Correct:
+      d3NumberFormat: ',.1%'
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 45
+query_context: '{"datasource":{"id":66,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["section_title"],"metrics":[{"aggregate":"AVG","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"percetage_problems_attempted","description":null,"expression":null,"filterable":true,"groupby":true,"id":1080,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"DECIMAL(38,
+  10)","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"Avg_%_Problems_Attempted","optionName":"metric_da4t3fzlcf_elzwzyp1f74","sqlExpression":null},{"aggregate":"AVG","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"percetage_problems_correct","description":null,"expression":null,"filterable":true,"groupby":true,"id":1090,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"DECIMAL(38,
+  10)","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"Avg_%_Problems_Correct","optionName":"metric_3yhbb64246s_wpobohqc7rp","sqlExpression":null},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Avg_attempts_per_problem","optionName":"metric_mzrkir38yml_wy7s5chfb2","sqlExpression":"AVG(number_of_total_attempts/number_of_problems)"}],"orderby":[[{"aggregate":"MIN","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"section_block_index","description":null,"expression":null,"filterable":true,"groupby":true,"id":1112,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MIN(section_block_index)","optionName":"metric_mnwvvmodw4r_ilyz28a3rin","sqlExpression":null},true]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"series_limit_metric":{"aggregate":"MIN","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"section_block_index","description":null,"expression":null,"filterable":true,"groupby":true,"id":1112,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MIN(section_block_index)","optionName":"metric_mnwvvmodw4r_ilyz28a3rin","sqlExpression":null},"order_desc":false,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"66__table","viz_type":"table","slice_id":87,"query_mode":"aggregate","groupby":["section_title"],"temporal_columns_lookup":{},"metrics":[{"aggregate":"AVG","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"percetage_problems_attempted","description":null,"expression":null,"filterable":true,"groupby":true,"id":1080,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"DECIMAL(38,
+  10)","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"Avg_%_Problems_Attempted","optionName":"metric_da4t3fzlcf_elzwzyp1f74","sqlExpression":null},{"aggregate":"AVG","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"percetage_problems_correct","description":null,"expression":null,"filterable":true,"groupby":true,"id":1090,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"DECIMAL(38,
+  10)","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"Avg_%_Problems_Correct","optionName":"metric_3yhbb64246s_wpobohqc7rp","sqlExpression":null},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Avg_attempts_per_problem","optionName":"metric_mzrkir38yml_wy7s5chfb2","sqlExpression":"AVG(number_of_total_attempts/number_of_problems)"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"timeseries_limit_metric":{"aggregate":"MIN","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"section_block_index","description":null,"expression":null,"filterable":true,"groupby":true,"id":1112,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MIN(section_block_index)","optionName":"metric_mnwvvmodw4r_ilyz28a3rin","sqlExpression":null},"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":false,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"Avg_%_Problems_Attempted":{"d3NumberFormat":",.1%"},"Avg_%_Problems_Correct":{"d3NumberFormat":",.1%"}},"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[45],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: ec8dc53c-60d0-4bd1-9913-4388b41ca53d
+version: 1.0.0
+dataset_uuid: d763f86e-5c1b-4996-9b35-f8cb13947f11

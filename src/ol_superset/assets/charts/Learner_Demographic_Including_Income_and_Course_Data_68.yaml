@@ -1,0 +1,53 @@
+---
+slice_name: Learner Demographic Including Income and Course Data
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 53__table
+  viz_type: table
+  slice_id: 68
+  query_mode: aggregate
+  groupby:
+  - user_full_name
+  - user_birth_year
+  - user_gender
+  - user_email
+  - user_edxorg_username
+  - user_mitxonline_username
+  - user_address_country
+  - user_highest_education
+  - user_job_title
+  - user_company
+  - user_industry
+  - latest_income_usd
+  - first_course_start_datetime
+  - last_course_start_datetime
+  - num_of_course_enrolled
+  - DEDP_Course_Cert_Count
+  - Any_DEDP_Program_Cert_Ind
+  - DEDP_International_Program_Cert_Ind
+  - DEDP_Public_Policy_Program_Cert_Ind
+  temporal_columns_lookup: {}
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: '500000'
+  order_desc: true
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 33
+query_context: '{"datasource":{"id":53,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["user_full_name","user_birth_year","user_gender","user_email","user_edxorg_username","user_mitxonline_username","user_address_country","user_highest_education","user_job_title","user_company","user_industry","latest_income_usd","first_course_start_datetime","last_course_start_datetime","num_of_course_enrolled","DEDP_Course_Cert_Count","Any_DEDP_Program_Cert_Ind","DEDP_International_Program_Cert_Ind","DEDP_Public_Policy_Program_Cert_Ind"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":500000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"53__table","viz_type":"table","slice_id":68,"query_mode":"aggregate","groupby":["user_full_name","user_birth_year","user_gender","user_email","user_edxorg_username","user_mitxonline_username","user_address_country","user_highest_education","user_job_title","user_company","user_industry","latest_income_usd","first_course_start_datetime","last_course_start_datetime","num_of_course_enrolled","DEDP_Course_Cert_Count","Any_DEDP_Program_Cert_Ind","DEDP_International_Program_Cert_Ind","DEDP_Public_Policy_Program_Cert_Ind"],"temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":"500000","order_desc":true,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[33],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 11b1455f-25f1-45aa-8358-b8449013bb24
+version: 1.0.0
+dataset_uuid: 232090f5-bb02-4327-9067-2ae49b64074b

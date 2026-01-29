@@ -1,0 +1,70 @@
+---
+slice_name: Learn User Profile
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 84__table
+  viz_type: table
+  slice_id: 123
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - user_global_id
+  - mitlearn_user_id
+  - email
+  - full_name
+  - highest_education
+  - topic_interests
+  - goals
+  - certificate_desired
+  - delivery_preference
+  - completed_onboarding
+  - user_joined_on_mitlearn
+  - user_is_active_on_mitlearn
+  percent_metrics: []
+  adhoc_filters:
+  - clause: WHERE
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_6kj0gtlj4vo_wgmlznswubf
+    isExtra: false
+    isNew: false
+    operator: IS NOT NULL
+    operatorId: IS_NOT_NULL
+    sqlExpression:
+    subject: mitlearn_user_id
+  order_by_cols:
+  - '["user_joined_on_mitlearn", false]'
+  row_limit: 50000
+  table_timestamp_format: smart_date
+  include_search: true
+  allow_rearrange_columns: true
+  allow_render_html: false
+  column_config:
+    goals:
+      horizontalAlign: left
+      truncateLongCells: false
+    mitlearn_user_id:
+      horizontalAlign: left
+      showCellBars: false
+    topic_interests:
+      columnWidth:
+      horizontalAlign: left
+      truncateLongCells: false
+  show_cell_bars: true
+  color_pn: false
+  conditional_formatting: []
+  extra_form_data: {}
+  dashboards:
+  - 49
+query_context: '{"datasource":{"id":84,"type":"table"},"force":false,"queries":[{"filters":[{"col":"mitlearn_user_id","op":"IS
+  NOT NULL"}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["user_global_id","mitlearn_user_id","email","full_name","highest_education","topic_interests","goals","certificate_desired","delivery_preference","completed_onboarding","user_joined_on_mitlearn","user_is_active_on_mitlearn"],"orderby":[["user_joined_on_mitlearn",false]],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"84__table","viz_type":"table","slice_id":123,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["user_global_id","mitlearn_user_id","email","full_name","highest_education","topic_interests","goals","certificate_desired","delivery_preference","completed_onboarding","user_joined_on_mitlearn","user_is_active_on_mitlearn"],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_6kj0gtlj4vo_wgmlznswubf","isExtra":false,"isNew":false,"operator":"IS
+  NOT NULL","operatorId":"IS_NOT_NULL","sqlExpression":null,"subject":"mitlearn_user_id"}],"order_by_cols":["[\"user_joined_on_mitlearn\",
+  false]"],"row_limit":50000,"table_timestamp_format":"smart_date","include_search":true,"allow_rearrange_columns":true,"allow_render_html":false,"column_config":{"goals":{"horizontalAlign":"left","truncateLongCells":false},"mitlearn_user_id":{"horizontalAlign":"left","showCellBars":false},"topic_interests":{"columnWidth":null,"horizontalAlign":"left","truncateLongCells":false}},"show_cell_bars":true,"color_pn":false,"conditional_formatting":[],"extra_form_data":{},"dashboards":[49],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 2e3e900a-3782-4738-80fe-0d60802d4461
+version: 1.0.0
+dataset_uuid: 7f46cdba-1bf0-4f10-9606-a41b77b9e77c

@@ -1,0 +1,15 @@
+---
+database_name: Superset Metadata DB
+sqlalchemy_uri: postgresql+psycopg2://superset_metadata_reader:XXXXXXXXXX@ol-superset-db-production-replica.cbnm7ajau6mi.us-east-1.rds.amazonaws.com:5432/superset?sslmode=require
+cache_timeout:
+expose_in_sqllab: true
+allow_run_async: true
+allow_ctas: false
+allow_cvas: false
+allow_dml: false
+allow_file_upload: false
+extra:
+  allows_virtual_table_explore: true
+impersonate_user: false
+uuid: 6a4ddc2b-cd25-464d-99b4-f6c611eabb99
+version: 1.0.0
