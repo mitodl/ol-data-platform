@@ -37,13 +37,13 @@ with mitxonline_products as (
 
 -- Join to get courserun_fk and program_fk
 , dim_course_run as (
-    select courserun_pk, source_id, platform_fk
+    select courserun_pk, source_id, platform_fk, platform
     from {{ ref('dim_course_run') }}
     where is_current = true
 )
 
 , dim_program as (
-    select program_pk, source_id, platform_fk
+    select program_pk, source_id, platform_fk, platform
     from {{ ref('dim_program') }}
 )
 
@@ -69,8 +69,10 @@ with mitxonline_products as (
     from combined_products
     left join dim_course_run
         on combined_products.courserun_id = dim_course_run.source_id
+        and combined_products.platform = dim_course_run.platform
     left join dim_program
         on combined_products.program_id = dim_program.source_id
+        and combined_products.platform = dim_program.platform
 )
 
 , final as (
@@ -85,6 +87,7 @@ with mitxonline_products as (
         , courserun_fk
         , program_fk
         , platform_fk
+        , platform
         , product_price
         , 'USD' as product_currency
         , product_is_active
@@ -101,7 +104,7 @@ with mitxonline_products as (
         from {{ this }} as existing
         where
             existing.source_product_id = products_with_fks.product_id
-            and existing.platform_fk = products_with_fks.platform_fk
+            and existing.platform = products_with_fks.platform
             and existing.is_current = true
             and existing.product_price = products_with_fks.product_price
     )

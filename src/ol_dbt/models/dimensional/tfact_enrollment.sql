@@ -35,7 +35,7 @@ with mitxonline_enrollments as (
 
 , edxorg_enrollments as (
     select
-        cast(null as integer) as courserunenrollment_id  -- edxorg doesn't have enrollment_id
+        row_number() over (order by user_id, courserunenrollment_created_on) as courserunenrollment_id  -- synthetic ID since edxorg doesn't have enrollment_id
         , user_id
         , null as courserun_id
         , null as program_id
@@ -79,13 +79,13 @@ with mitxonline_enrollments as (
 --)
 
 , dim_course_run as (
-    select courserun_pk, source_id, platform_fk
+    select courserun_pk, source_id, platform_fk, platform
     from {{ ref('dim_course_run') }}
     where is_current = true
 )
 
 , dim_program as (
-    select program_pk, source_id, platform_fk
+    select program_pk, source_id, platform_fk, platform
     from {{ ref('dim_program') }}
 )
 
@@ -112,8 +112,10 @@ with mitxonline_enrollments as (
     from combined_enrollments
     left join dim_course_run
         on combined_enrollments.courserun_id = dim_course_run.source_id
+        and combined_enrollments.platform = dim_course_run.platform
     left join dim_program
         on combined_enrollments.program_id = dim_program.source_id
+        and combined_enrollments.platform = dim_program.platform
 )
 
 , final as (
@@ -128,9 +130,11 @@ with mitxonline_enrollments as (
         , courserun_fk
         , program_fk
         , platform_fk
+        , platform
         , enrollment_is_active
         , enrollment_mode
         , enrollment_status
+        , enrollment_created_on
     from enrollments_with_fks
 
     {% if is_incremental() %}

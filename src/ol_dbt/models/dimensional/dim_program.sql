@@ -40,7 +40,7 @@ with mitxonline_programs as (
         , program_title
         , 'Professional' as program_type  -- xPro is professional development
         , cast(null as varchar) as program_track
-        , cast(null as varchar) as certification_type
+        , cast(null as varchar) as program_certification_type
         , false as program_is_dedp
         , false as program_is_micromasters
         , 'anytime' as program_availability
@@ -54,7 +54,7 @@ with mitxonline_programs as (
         , program_is_external
         , platform_name as partner_platform_name
         , CASE
-            WHEN program_is_external THEN CONCAT('xPRO ', platform_name)
+            WHEN program_is_external THEN 'xPRO ' || platform_name
             ELSE 'xPro'
           END as platform_readable_id
         , cms_programpage_first_published_on as first_published_date  -- Keep as VARCHAR
@@ -105,9 +105,9 @@ with mitxonline_programs as (
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
         , {{ safe_parse_iso8601_date('first_published_date') }} as published_date
         , CAST(
-            FORMAT_DATETIME(
+            date_format(
                 {{ safe_parse_iso8601_date('first_published_date') }},
-                'yyyyMMdd'
+                '%Y%m%d'
             ) AS INTEGER
           ) as published_date_key
     from combined
