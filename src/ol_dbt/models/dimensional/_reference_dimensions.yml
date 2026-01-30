@@ -1,0 +1,70 @@
+---
+version: 2
+
+models:
+- name: dim_payment_method
+  description: >
+    Reference dimension for payment methods. Small static lookup table
+    defining accepted payment types across platforms.
+  columns:
+  - name: payment_method_pk
+    description: Primary key
+    tests:
+    - unique
+    - not_null
+  - name: payment_method_code
+    description: Code identifier for payment method
+    tests:
+    - unique
+    - not_null
+  - name: payment_method_name
+    description: Display name for payment method
+    tests:
+    - not_null
+  - name: payment_method_type
+    description: Category of payment method (card, wallet, bank_transfer, voucher)
+  - name: payment_method_provider
+    description: Payment processor/provider name
+
+- name: dim_discount_type
+  description: >
+    Reference dimension for discount types. Defines how discounts are calculated.
+  columns:
+  - name: discount_type_pk
+    description: Primary key
+    tests:
+    - unique
+    - not_null
+  - name: discount_type_code
+    description: Code identifier for discount type
+    tests:
+    - unique
+    - not_null
+  - name: discount_type_name
+    description: Display name for discount type
+    tests:
+    - not_null
+
+- name: dim_certificate_type
+  description: >
+    Reference dimension for certificate types. Defines types of certificates
+    awarded to learners upon course/program completion.
+  columns:
+  - name: certificate_type_pk
+    description: Primary key
+    tests:
+    - unique
+    - not_null
+  - name: certificate_type_code
+    description: Code identifier for certificate type
+    tests:
+    - unique
+    - not_null
+  - name: certificate_type_name
+    description: Display name for certificate type
+    tests:
+    - not_null
+  - name: certificate_requires_id_verification
+    description: Boolean indicating if certificate requires identity verification
+    tests:
+    - not_null

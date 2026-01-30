@@ -1,0 +1,80 @@
+---
+version: 2
+
+models:
+- name: dim_program
+  description: >
+    Master program catalog dimension. Programs do not have distinct runs like courses.
+    Represents program offerings across MIT Open Learning platforms including
+    MicroMasters, Professional Certificates, and other program types.
+  columns:
+  - name: program_pk
+    description: Surrogate key primary key
+    tests:
+    - unique
+    - not_null
+  - name: source_id
+    description: Program ID from source system
+    tests:
+    - not_null
+  - name: program_readable_id
+    description: Business key - readable program identifier
+    tests:
+    - not_null
+  - name: program_name
+    description: Program name
+  - name: program_title
+    description: Program title
+    tests:
+    - not_null
+  - name: program_type
+    description: Type of program (MicroMasters, Professional, etc.)
+    tests:
+    - accepted_values:
+        values: ['MicroMasters', 'Series', 'Professional', 'Certificate']
+  - name: program_track
+    description: Specific track within program
+  - name: program_certification_type
+    description: Type of certification awarded
+  - name: program_is_dedp
+    description: Boolean indicating Digital Education for Professional Development
+  - name: program_is_micromasters
+    description: Boolean indicating MicroMasters program
+  - name: program_availability
+    description: Availability type (anytime, dated, etc.)
+  - name: program_price
+    description: Program price
+  - name: program_length
+    description: Expected program length/duration
+  - name: program_effort
+    description: Expected time commitment
+  - name: program_description
+    description: Program description text
+  - name: program_what_you_learn
+    description: Learning outcomes description
+  - name: program_prerequisites
+    description: Prerequisites for program
+  - name: is_active
+    description: Boolean indicating if program is currently active
+  - name: is_external
+    description: Boolean indicating if program is hosted externally
+  - name: partner_platform_name
+    description: External partner platform name if applicable
+  - name: platform_readable_id
+    description: Platform identifier
+  - name: platform_fk
+    description: Foreign key to dim_platform (Phase 3+)
+  - name: first_published_date
+    description: Original VARCHAR published date from source
+  - name: published_date
+    description: Parsed published date
+  - name: published_date_key
+    description: Foreign key to dim_date for published date
+    tests:
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: enrollment_start_date
+    description: Program enrollment start date
+  - name: enrollment_end_date
+    description: Program enrollment end date

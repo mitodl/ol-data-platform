@@ -1,0 +1,55 @@
+---
+version: 2
+
+models:
+- name: dim_course
+  description: >
+    Master course catalog dimension (SCD Type 2) representing abstract course concepts
+    across all platforms. One course may have multiple runs (see dim_course_run).
+    Tracks historical changes to course metadata.
+  meta:
+    owner: data_team
+  columns:
+  - name: course_pk
+    description: Surrogate key primary key
+    tests:
+    - unique
+    - not_null
+  - name: course_readable_id
+    description: Business key - readable course ID (e.g., course-v1:MITx+6.00.1x)
+    tests:
+    - not_null
+  - name: course_number
+    description: Course number (e.g., 6.00.1x)
+  - name: course_title
+    description: Course title
+    tests:
+    - not_null
+  - name: course_description
+    description: Course description text
+  - name: course_is_live
+    description: Boolean indicating if course is currently live/published
+  - name: primary_platform
+    description: Primary platform hosting this course
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['mitxonline', 'mitxpro', 'edxorg', 'ocw', 'residential']
+  - name: effective_date
+    description: Timestamp when this version became effective (SCD Type 2)
+    tests:
+    - not_null
+  - name: end_date
+    description: Timestamp when this version was superseded (null if current)
+  - name: is_current
+    description: Boolean indicating current version
+    tests:
+    - not_null
+
+  tests:
+      # Ensure only one current record per course_readable_id
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - course_readable_id
+      - is_current
+      where: "is_current = true"
