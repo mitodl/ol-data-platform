@@ -10,6 +10,10 @@ with problem_events as (
     select * from {{ ref('dim_course_content') }}
 )
 
+, users as (
+    select * from {{ ref('dim_user') }}
+)
+
 , overall_grade as (
     select
         user_id
@@ -26,6 +30,7 @@ with problem_events as (
     select
         problem_events.platform
         , problem_events.openedx_user_id
+        , problem_events.user_fk
         , problem_events.courserun_readable_id
         , problem_events.problem_block_fk
         , problem_events.event_timestamp
@@ -106,6 +111,7 @@ with problem_events as (
     select
         platform
         , openedx_user_id
+        , max(user_fk) as user_fk
         , courserun_readable_id
         , problem_block_fk
         , unit_name
@@ -244,6 +250,7 @@ with problem_events as (
 select
     final.platform
     , final.openedx_user_id
+    , users.email
     , final.courserun_readable_id
     , final.problem_block_fk
     , final.unit_name
@@ -270,6 +277,9 @@ select
         else false
       end as user_taken_final_exam
 from final
+left join users
+    on
+        final.user_fk = users.user_pk
 left join hw_grouping
     on
         final.platform = hw_grouping.platform
