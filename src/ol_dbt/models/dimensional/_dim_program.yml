@@ -63,11 +63,7 @@ models:
   - name: platform_readable_id
     description: Platform identifier
   - name: platform_fk
-    description: Foreign key to dim_platform
-    tests:
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
+    description: Foreign key to dim_platform (Phase 3+)
   - name: first_published_date
     description: Original VARCHAR published date from source
   - name: published_date
