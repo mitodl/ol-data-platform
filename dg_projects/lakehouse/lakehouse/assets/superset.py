@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import httpx
 from dagster import (
     AssetExecutionContext,
@@ -45,12 +47,21 @@ def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
             )
 
         try:
+            # Refresh columns
             superset_api.client.refresh_dataset(int(dataset_id))
             context.log.info(
                 "Successfully refreshed dataset: %s.%s",
                 dbt_asset_group_name,
                 dbt_model_name,
             )
+
+            timestamp = datetime.now(UTC).isoformat()
+            # Touch dataset metadata (updates changed_on)
+            superset_api.client.update_dataset(
+                dataset_id=int(dataset_id),
+                payload={"description": f"Auto refreshed at {timestamp}"},
+            )
+
             return Output(
                 value={"superset_dataset_id": dataset_id},
                 metadata={

@@ -83,12 +83,12 @@ class SupersetApiClient(OAuthApiClient):
             response_data = self.fetch_with_auth(
                 request_url, extra_params={"q": query_string}
             )
-            dataset_result = response_data["result"]  # type: ignore[call-overload]
-            total_fetched += len(dataset_result)  # type: ignore[arg-type]
+            dataset_result = response_data["result"]
+            total_fetched += len(dataset_result)
 
-            yield dataset_result  # type: ignore[misc]
+            yield dataset_result
 
-            count = response_data.get("count", 0)  # type: ignore[union-attr]
+            count = response_data.get("count", 0)
             if total_fetched >= count:
                 break
 
@@ -126,7 +126,7 @@ class SupersetApiClient(OAuthApiClient):
         return response_data.get("result", {}).get("table_id")
 
     def refresh_dataset(self, dataset_id: int) -> dict[str, Any]:
-        """Refresh or update metadata for a dataset in Superset."""
+        """Refresh and update columns for a dataset in Superset."""
         request_url = f"{self.base_url}/api/v1/dataset/{dataset_id}/refresh"
         response = self.http_client.put(
             request_url,
@@ -136,6 +136,27 @@ class SupersetApiClient(OAuthApiClient):
                 "Referer": self._csrf_token_url,
                 "Content-Type": "application/json",
             },
+            timeout=300,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def update_dataset(
+        self, dataset_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Update dataset metadata in Superset
+        """
+        request_url = f"{self.base_url}/api/v1/dataset/{dataset_id}"
+        response = self.http_client.put(
+            request_url,
+            headers={
+                "Authorization": f"{self.token_type} {self._fetch_access_token()}",
+                "X-CSRFToken": self._get_csrf_token(),
+                "Referer": self._csrf_token_url,
+                "Content-Type": "application/json",
+            },
+            json=payload,
             timeout=300,
         )
         response.raise_for_status()
