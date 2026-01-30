@@ -57,7 +57,7 @@ with mitxonline_certificates as (
 --)
 
 , dim_course_run as (
-    select courserun_pk, source_id
+    select courserun_pk, source_id, platform
     from {{ ref('dim_course_run') }}
     where is_current = true
 )
@@ -84,6 +84,7 @@ with mitxonline_certificates as (
     from combined_certificates
     left join dim_course_run
         on combined_certificates.courserun_id = dim_course_run.source_id
+        and combined_certificates.platform = dim_course_run.platform
 )
 
 , final as (
@@ -97,8 +98,10 @@ with mitxonline_certificates as (
         , user_fk
         , courserun_fk
         , platform_fk
+        , platform
         , certificate_uuid
         , certificate_is_revoked
+        , certificate_created_on
     from certificates_with_fks
 
     {% if is_incremental() %}

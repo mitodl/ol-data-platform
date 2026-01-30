@@ -26,11 +26,11 @@ models:
         to: ref('dim_course')
         field: course_pk
   - name: platform_fk
-    description: Foreign key to dim_platform
+    description: Foreign key to dim_platform (Phase 3+)
+  - name: platform
+    description: Platform identifier string
     tests:
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
+    - not_null
   - name: courserun_title
     description: Title of this specific course run
   - name: start_date_key

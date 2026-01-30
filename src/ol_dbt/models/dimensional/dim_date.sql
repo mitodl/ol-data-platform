@@ -29,8 +29,7 @@ select
       end as fiscal_year
     , case
         when month(date_day) >= 7 then quarter(date_day) - 2
-        when month(date_day) <= 3 then quarter(date_day) + 2
-        else quarter(date_day)
+        else quarter(date_day) + 2
       end as fiscal_quarter
     -- MIT Academic Terms
     , case

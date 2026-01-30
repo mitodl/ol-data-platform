@@ -63,9 +63,11 @@ with mitxonline_orders as (
         , order_updated_date_key
         , user_fk
         , platform_fk
+        , platform
         , order_state
         , order_total_price_paid
         , order_reference_number
+        , order_updated_on
     from orders_with_fks
 
     {% if is_incremental() %}

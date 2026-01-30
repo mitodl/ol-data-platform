@@ -89,7 +89,7 @@ with mitxonline_courseruns as (
     select
         courseruns_with_fk.*
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
-        -- Create date keys for date dimension joins (use date_parse to avoid DST issues)
+        -- Create date keys for date dimension joins (parse to timestamp then format as YYYYMMDD)
         , case when courserun_start_on is not null
             then cast(date_format(
                 case when length(courserun_start_on) = 10
@@ -131,6 +131,7 @@ with mitxonline_courseruns as (
         , source_id
         , course_fk
         , platform_fk
+        , platform
         , courserun_title
         , start_date_key
         , end_date_key
