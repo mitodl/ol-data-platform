@@ -259,6 +259,8 @@ models:
       MITx.
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
+  - name: email
+    description: str, user email
   - name: courserun_readable_id
     description: string, foreign key to dim_course_content, referencing the edX course
       run ID
