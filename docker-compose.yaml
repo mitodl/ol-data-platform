@@ -194,6 +194,10 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      DAGSTER_PG_USERNAME: postgres
+      DAGSTER_PG_PASSWORD: postgres # pragma: allowlist secret
+      DAGSTER_PG_HOST: postgres
+      DAGSTER_PG_DB: dagster
     volumes:
     - /tmp/io_manager_storage:/tmp/io_manager_storage
     - ./dg_projects/lakehouse/lakehouse:/app/lakehouse
