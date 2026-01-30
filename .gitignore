@@ -13,3 +13,10 @@ bin/pants
 .env
 **/*.egg-info/
 progress.log
+# dlt specific
+**/.dlt/secrets.toml
+**/.dlt/data/
+**/.dlt/.sources
+**/.dlt/.pipelines
+**/.dlt/state/
+
