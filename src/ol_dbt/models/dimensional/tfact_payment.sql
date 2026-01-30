@@ -66,11 +66,14 @@ with mitxonline_payments as (
         , payment_id
         , order_id
         , payment_date_key
+        , user_fk
         , platform_fk
+        , platform
         , payment_method_fk
         , transaction_amount
         , transaction_type
         , transaction_status
+        , transaction_created_on
     from payments_with_fks
 
     {% if is_incremental() %}

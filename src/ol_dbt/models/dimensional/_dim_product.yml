@@ -33,12 +33,11 @@ models:
         to: ref('dim_program')
         field: program_pk
   - name: platform_fk
-    description: Foreign key to dim_platform
+    description: Foreign key to dim_platform (Phase 3+)
+  - name: platform
+    description: Platform identifier string
     tests:
     - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
   - name: product_price
     description: Product price in product_currency
   - name: product_currency

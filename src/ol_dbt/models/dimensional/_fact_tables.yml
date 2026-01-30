@@ -10,7 +10,7 @@ models:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
       - enrollment_id
-      - platform_fk
+      - platform
   columns:
   - name: enrollment_key
     description: Surrogate key for enrollment
@@ -29,12 +29,7 @@ models:
         to: ref('dim_date')
         field: date_key
   - name: user_fk
-    description: Foreign key to dim_user
-    tests:
-    - not_null
-    - relationships:
-        to: ref('dim_user')
-        field: user_pk
+    description: Foreign key to dim_user (Phase 3+)
   - name: courserun_fk
     description: Foreign key to dim_course_run (null for program enrollments)
     tests:
@@ -48,18 +43,19 @@ models:
         to: ref('dim_program')
         field: program_pk
   - name: platform_fk
-    description: Foreign key to dim_platform
+    description: Foreign key to dim_platform (Phase 3+)
+  - name: platform
+    description: Platform identifier string
     tests:
     - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
   - name: enrollment_is_active
     description: Boolean indicating if enrollment is currently active
   - name: enrollment_mode
     description: Enrollment mode (audit, verified, etc.)
   - name: enrollment_status
     description: Enrollment status
+  - name: enrollment_created_on
+    description: Enrollment creation timestamp (for incremental processing)
 
 - name: tfact_order
   description: >
@@ -69,7 +65,7 @@ models:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
       - order_id
-      - platform_fk
+      - platform
   columns:
   - name: order_key
     description: Surrogate key for order
@@ -94,19 +90,13 @@ models:
         to: ref('dim_date')
         field: date_key
   - name: user_fk
-    description: Foreign key to dim_user
-    tests:
-    - not_null
-    - relationships:
-        to: ref('dim_user')
-        field: user_pk
+    description: Foreign key to dim_user (Phase 3+)
   - name: platform_fk
-    description: Foreign key to dim_platform
+    description: Foreign key to dim_platform (Phase 3+)
+  - name: platform
+    description: Platform identifier string
     tests:
     - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
   - name: order_state
     description: Order state (fulfilled, cancelled, etc.)
     tests:
@@ -115,6 +105,8 @@ models:
     description: Total amount paid for order (additive measure)
   - name: order_reference_number
     description: Order reference/confirmation number
+  - name: order_updated_on
+    description: Order last update timestamp (for incremental processing)
 
 - name: tfact_payment
   description: >
@@ -124,7 +116,7 @@ models:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
       - payment_id
-      - platform_fk
+      - platform
   columns:
   - name: payment_key
     description: Surrogate key for payment
@@ -145,19 +137,13 @@ models:
         to: ref('dim_date')
         field: date_key
   - name: user_fk
-    description: Foreign key to dim_user
-    tests:
-    - not_null
-    - relationships:
-        to: ref('dim_user')
-        field: user_pk
+    description: Foreign key to dim_user (Phase 3+)
   - name: platform_fk
-    description: Foreign key to dim_platform
+    description: Foreign key to dim_platform (Phase 3+)
+  - name: platform
+    description: Platform identifier string
     tests:
     - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
   - name: payment_method_fk
     description: Foreign key to dim_payment_method
     tests:
@@ -170,6 +156,8 @@ models:
     description: Type of transaction (payment, refund, etc.)
   - name: transaction_status
     description: Transaction status (success, failed, pending)
+  - name: transaction_created_on
+    description: Transaction creation timestamp (for incremental processing)
 
 - name: tfact_certificate
   description: >
@@ -179,7 +167,7 @@ models:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
       - certificate_id
-      - platform_fk
+      - platform
   columns:
   - name: certificate_key
     description: Surrogate key for certificate
@@ -198,12 +186,7 @@ models:
         to: ref('dim_date')
         field: date_key
   - name: user_fk
-    description: Foreign key to dim_user
-    tests:
-    - not_null
-    - relationships:
-        to: ref('dim_user')
-        field: user_pk
+    description: Foreign key to dim_user (Phase 3+)
   - name: courserun_fk
     description: Foreign key to dim_course_run
     tests:
@@ -211,15 +194,16 @@ models:
         to: ref('dim_course_run')
         field: courserun_pk
   - name: platform_fk
-    description: Foreign key to dim_platform
+    description: Foreign key to dim_platform (Phase 3+)
+  - name: platform
+    description: Platform identifier string
     tests:
     - not_null
-    - relationships:
-        to: ref('dim_platform')
-        field: platform_pk
   - name: certificate_uuid
     description: Universally unique identifier for certificate
   - name: certificate_is_revoked
     description: Boolean indicating if certificate has been revoked
     tests:
     - not_null
+  - name: certificate_created_on
+    description: Certificate creation timestamp (for incremental processing)

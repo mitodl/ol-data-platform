@@ -42,15 +42,13 @@ with mitxonline_program_requirements as (
         dim_program.program_pk as program_fk
         , dim_course.course_pk as course_fk
         , combined_requirements.is_required
-        , ROW_NUMBER() OVER (
-            PARTITION BY dim_program.program_pk, dim_course.course_pk
-            ORDER BY combined_requirements.program_id
-          ) as course_order
+        , 1 as course_order
     from combined_requirements
     inner join dim_program
         on combined_requirements.program_id = dim_program.source_id
     inner join dim_course
         on combined_requirements.course_id = dim_course.source_id
+        and dim_program.platform_readable_id = dim_course.primary_platform
 )
 
 select
