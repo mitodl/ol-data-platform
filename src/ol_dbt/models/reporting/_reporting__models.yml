@@ -706,3 +706,40 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "course_title", "courserun_readable_id", "subsection_block_index",
         "chapter_block_fk"]
+
+- name: engagement_problem_completion_raw
+  description: A report that contains learner engagement info with problem data
+  columns:
+  - name: platform
+    description: str, name of the platform
+  - name: user_email
+    description: string, user email that user registered on the corresponding platform.
+      May be null for some xPRO Emeritus learners.
+  - name: course_title
+    description: str, title of the course.
+  - name: courserun_readable_id
+    description: string, unique string to identify a course run on the corresponding
+      platform.
+  - name: section_title
+    description: str, title of the section within the course
+  - name: section_block_index
+    description: int, sequence number giving order in which this section appears within
+      the course
+  - name: problems_correct
+    description: int, count of the number of correct problem attempts
+  - name: problems_attempted
+    description: int, count of the number of problem attempted
+  - name: number_of_problems
+    description: int, count of the total number of problems
+  - name: number_of_total_attempts
+    description: int, number of attempts on a problem
+  - name: percent_problems_correct
+    description: decimal, percentage of problems the user got correct out of the total
+      number of problems
+  - name: percent_problems_attempted
+    description: decimal, percentage of problems the user attempted out of the total
+      number of problems
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "platform", "courserun_readable_id", "course_title",
+        "section_title", "section_block_index"]
