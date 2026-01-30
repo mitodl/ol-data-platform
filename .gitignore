@@ -12,3 +12,11 @@ bin/pants
 .aider*
 .env
 **/*.egg-info/
+
+# dlt specific
+**/.dlt/secrets.toml
+**/.dlt/data/
+**/.dlt/.sources
+**/.dlt/.pipelines
+**/.dlt/state/
+
