@@ -23,10 +23,10 @@ def set_env(env: str):
     if env not in ["local", "production"]:
         print(f"Error: Invalid environment '{env}'. Must be 'local' or 'production'.")
         sys.exit(1)
-    
+
     # For the current shell session
     os.environ["DLT_DESTINATION_ENV"] = env
-    
+
     # Print export command for user to run
     print(f"To set environment for your shell, run:")
     print(f"  export DLT_DESTINATION_ENV={env}")
@@ -39,14 +39,14 @@ def show_status():
     """Show current dlt environment configuration."""
     env = os.getenv("DLT_DESTINATION_ENV", "local")
     project_root = get_project_root()
-    
+
     print("=" * 60)
     print("dlt Environment Status")
     print("=" * 60)
     print(f"Current Environment: {env}")
     print(f"Project Root: {project_root}")
     print()
-    
+
     if env == "local":
         data_dir = project_root / ".dlt" / "data"
         print(f"Destination: Local filesystem")
@@ -59,7 +59,7 @@ def show_status():
         print(f"Destination: AWS S3")
         print(f"Check .dlt/config.toml for bucket configuration")
         print(f"Catalog: AWS Glue")
-    
+
     print()
     print("Available commands:")
     print("  python scripts/dlt_env.py local       - Switch to local development")
@@ -71,9 +71,9 @@ def main():
     if len(sys.argv) < 2:
         show_status()
         return
-    
+
     command = sys.argv[1].lower()
-    
+
     if command == "status":
         show_status()
     elif command in ["local", "production"]:

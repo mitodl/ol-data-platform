@@ -9,7 +9,7 @@ s3://ol-data-lake-landing-zone-production/edxorg-raw-data/edxorg/raw_data/db_tab
 
 Tables include:
 - auth_user, auth_userprofile
-- student_courseenrollment, courseware_studentmodule  
+- student_courseenrollment, courseware_studentmodule
 - certificates_generatedcertificate
 - submissions_*, assessment_*
 - And many more...
@@ -17,13 +17,13 @@ Tables include:
 Usage (standalone):
     # Local development (default - writes to .dlt/data/)
     python -m lakehouse.defs.edxorg_s3_ingestion.loads
-    
+
     # Production (writes to S3)
     DLT_DESTINATION_ENV=production python -m lakehouse.defs.edxorg_s3_ingestion.loads
 """
 
 import os
-from typing import Iterator
+from collections.abc import Iterator
 
 import dlt
 from dlt.sources.filesystem import filesystem, read_csv
@@ -38,18 +38,18 @@ def edxorg_s3_source(
 ):
     """
     Load edxorg CSV/TSV data from S3.
-    
+
     Args:
         bucket_url: S3 bucket URL (e.g., s3://bucket-name/path/prefix)
         aws_access_key_id: AWS access key
         aws_secret_access_key: AWS secret key
         tables: Optional list of specific tables to load. If None, loads all tables.
                 Examples: ["auth_user", "student_courseenrollment"]
-    
+
     Yields:
         dlt resources for each table type found in S3
     """
-    
+
     # Available table names from edxorg_archive.py
     all_tables = [
         "assessment_assessment",
@@ -93,10 +93,10 @@ def edxorg_s3_source(
         "workflow_assessmentworkflow",
         "workflow_assessmentworkflowstep",
     ]
-    
+
     # Filter to requested tables if specified
     tables_to_load = tables if tables is not None else all_tables
-    
+
     for table_name in tables_to_load:
         # Create a resource for each table
         @dlt.resource(
@@ -106,11 +106,11 @@ def edxorg_s3_source(
         )
         def load_table(table=table_name) -> Iterator[dict]:
             """Load TSV files for a specific table from S3."""
-            
+
             # Pattern to match all TSV files for this table
             # Matches: db_table/{table_name}/*/*.tsv (source_system/course_id/*.tsv)
             file_glob = f"db_table/{table}/**/*.tsv"
-            
+
             # Use dlt's filesystem source to discover files
             files = filesystem(
                 bucket_url=bucket_url,
@@ -120,7 +120,7 @@ def edxorg_s3_source(
                     "aws_secret_access_key": aws_secret_access_key,
                 },
             )
-            
+
             # Read and yield data from each TSV file
             for file_item in files:
                 # Read TSV with appropriate settings
@@ -129,7 +129,7 @@ def edxorg_s3_source(
                     delimiter="\t",  # TSV files use tabs
                     chunksize=1000,  # Process in chunks for memory efficiency
                 )
-                
+
                 for chunk in csv_reader:
                     # Convert chunk to records and yield
                     for record in chunk.to_dict(orient="records"):
@@ -137,7 +137,7 @@ def edxorg_s3_source(
                         record["_dlt_file_path"] = file_item["file_name"]
                         record["_dlt_load_timestamp"] = dlt.current.load_id()
                         yield record
-        
+
         yield load_table
 
 
@@ -156,32 +156,30 @@ edxorg_s3_pipeline = dlt.pipeline(
 def run_pipeline(tables: list[str] | None = None):
     """
     Execute the edxorg S3 pipeline.
-    
+
     Args:
         tables: Optional list of specific tables to load.
                 If None, loads all tables (can be slow!).
                 Example: ["auth_user", "student_courseenrollment"]
     """
     print(f"Running edxorg S3 pipeline with destination: {destination_env}")
-    
+
     if tables:
         print(f"Loading specific tables: {', '.join(tables)}")
     else:
         print("Loading all available tables (this may take a while)")
-    
-    load_info = edxorg_s3_pipeline.run(
-        edxorg_s3_source(tables=tables)
-    )
+
+    load_info = edxorg_s3_pipeline.run(edxorg_s3_source(tables=tables))
     print(load_info)
-    
+
     return load_info
 
 
 if __name__ == "__main__":
     # For testing, only load a small subset of tables
     test_tables = ["auth_user", "student_courseenrollment"]
-    
+
     print("Running with test tables for faster execution.")
     print("To load all tables, call run_pipeline(tables=None)")
-    
+
     run_pipeline(tables=test_tables)

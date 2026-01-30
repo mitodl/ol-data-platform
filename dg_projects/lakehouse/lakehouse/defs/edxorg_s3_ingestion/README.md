@@ -105,7 +105,7 @@ Edit `loads.py` to specify which tables to load:
 if __name__ == "__main__":
     # Load only specific tables
     run_pipeline(tables=["auth_user", "student_courseenrollment"])
-    
+
     # Or load all tables (warning: slow and large!)
     # run_pipeline(tables=None)
 ```
@@ -120,7 +120,7 @@ SELECT * FROM read_parquet('.dlt/data/edxorg_auth_user/*.parquet') LIMIT 10;
 
 # Count enrollments
 duckdb -c "
-SELECT COUNT(*) as enrollment_count 
+SELECT COUNT(*) as enrollment_count
 FROM read_parquet('.dlt/data/edxorg_student_courseenrollment/*.parquet');
 "
 
@@ -207,7 +207,7 @@ botocore.exceptions.NoCredentialsError: Unable to locate credentials
 FileNotFoundError: No files found matching pattern
 ```
 
-**Solution**: 
+**Solution**:
 - Verify S3 bucket URL is correct
 - Check table name spelling
 - Ensure AWS credentials have S3 read permissions
@@ -218,7 +218,7 @@ FileNotFoundError: No files found matching pattern
 MemoryError: Unable to allocate array
 ```
 
-**Solution**: 
+**Solution**:
 - Load fewer tables at once
 - Reduce chunk size in `read_csv(chunksize=...)`
 - Use production environment with more resources
@@ -260,7 +260,7 @@ for record in chunk.to_dict(orient="records"):
     # Transform data
     record["email"] = record.get("email", "").lower()
     record["processed_date"] = datetime.now()
-    
+
     yield record
 ```
 
