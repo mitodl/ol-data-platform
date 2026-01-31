@@ -58,7 +58,7 @@ Create or update `.dlt/secrets.toml` in the lakehouse root:
 [sources.edxorg_s3]
 bucket_url = "s3://ol-data-lake-landing-zone-production/edxorg-raw-data/edxorg/raw_data/"
 aws_access_key_id = "YOUR_AWS_ACCESS_KEY"
-aws_secret_access_key = "YOUR_AWS_SECRET_KEY"
+aws_secret_access_key = "YOUR_AWS_SECRET_KEY"  # pragma: allowlist secret
 ```
 
 For local development with AWS CLI configured:
