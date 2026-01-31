@@ -22,11 +22,14 @@ Usage (standalone):
     DLT_DESTINATION_ENV=production python -m lakehouse.defs.edxorg_s3_ingestion.loads
 """
 
+import logging
 import os
 from collections.abc import Iterator
 
 import dlt
 from dlt.sources.filesystem import filesystem, read_csv
+
+logger = logging.getLogger(__name__)
 
 
 @dlt.source
@@ -104,7 +107,7 @@ def edxorg_s3_source(
             write_disposition="merge",
             primary_key=None,  # TSV files don't have consistent primary keys
         )
-        def load_table(table=table_name) -> Iterator[dict]:
+        def load_table(table=table_name) -> Iterator[dict[str, str]]:
             """Load TSV files for a specific table from S3."""
 
             # Pattern to match all TSV files for this table
@@ -162,24 +165,25 @@ def run_pipeline(tables: list[str] | None = None):
                 If None, loads all tables (can be slow!).
                 Example: ["auth_user", "student_courseenrollment"]
     """
-    print(f"Running edxorg S3 pipeline with destination: {destination_env}")
+    logger.info("Running edxorg S3 pipeline with destination: %s", destination_env)
 
     if tables:
-        print(f"Loading specific tables: {', '.join(tables)}")
+        logger.info("Loading specific tables: %s", ", ".join(tables))
     else:
-        print("Loading all available tables (this may take a while)")
+        logger.info("Loading all available tables (this may take a while)")
 
     load_info = edxorg_s3_pipeline.run(edxorg_s3_source(tables=tables))
-    print(load_info)
+    logger.info("Pipeline completed: %s", load_info)
 
     return load_info
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     # For testing, only load a small subset of tables
     test_tables = ["auth_user", "student_courseenrollment"]
 
-    print("Running with test tables for faster execution.")
-    print("To load all tables, call run_pipeline(tables=None)")
+    logger.info("Running with test tables for faster execution.")
+    logger.info("To load all tables, call run_pipeline(tables=None)")
 
     run_pipeline(tables=test_tables)
