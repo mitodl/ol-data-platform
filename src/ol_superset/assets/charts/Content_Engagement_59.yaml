@@ -1,0 +1,145 @@
+---
+slice_name: Content Engagement
+description:
+certified_by:
+certification_details:
+viz_type: echarts_timeseries_line
+params:
+  adhoc_filters:
+  - clause: WHERE
+    comparator: No filter
+    expressionType: SIMPLE
+    operator: TEMPORAL_RANGE
+    subject: courseactivity_date
+  annotation_layers: []
+  color_scheme: supersetColors
+  comparison_type: values
+  dashboards:
+  - 27
+  datasource: 47__table
+  extra_form_data: {}
+  forecastInterval: 0.8
+  forecastPeriods: 10
+  groupby: []
+  legendOrientation: top
+  legendType: scroll
+  markerEnabled: true
+  markerSize: 6
+  metrics:
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Watched_a_video
+    optionName: metric_dbwq09vzfs8_i6m93r7z48
+    sqlExpression: COUNT(DISTINCT(CASE WHEN num_video_played> 0 THEN user_email ELSE
+      null END))
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Tried_a_problem
+    optionName: metric_fc9iy7qj0ih_7iecfw62ccm
+    sqlExpression: COUNT(DISTINCT (case when num_problem_submitted> 0 then user_email
+      else null end))
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Participated_in_discussion
+    optionName: metric_2gbwr6eyc6u_b9rcf5q4lf4
+    sqlExpression: COUNT(DISTINCT (case when num_discussion_participated> 0 then user_email
+      else null end))
+  - aggregate: COUNT_DISTINCT
+    column:
+      advanced_data_type:
+      certification_details:
+      certified_by:
+      column_name: user_email
+      description:
+      expression:
+      filterable: true
+      groupby: true
+      id: 717
+      is_certified: false
+      is_dttm: false
+      python_date_format:
+      type: VARCHAR
+      type_generic: 1
+      verbose_name:
+      warning_markdown:
+    datasourceWarning: false
+    expressionType: SIMPLE
+    hasCustomLabel: true
+    label: Learner_Engaged_count
+    optionName: metric_h3mhtugsrtu_pfth2r3i53
+    sqlExpression:
+  only_total: true
+  opacity: 0.2
+  order_desc: true
+  rich_tooltip: true
+  rolling_type:
+  row_limit: 10000
+  seriesType: line
+  show_empty_columns: true
+  show_legend: true
+  slice_id: 59
+  sort_series_type: sum
+  time_grain_sqla: P1W
+  timeseries_limit_metric:
+    aggregate: MAX
+    column:
+      advanced_data_type:
+      certification_details:
+      certified_by:
+      column_name: courseactivity_date
+      description:
+      expression:
+      filterable: true
+      groupby: true
+      id: 711
+      is_certified: false
+      is_dttm: true
+      python_date_format:
+      type: DATE
+      type_generic: 2
+      verbose_name:
+      warning_markdown:
+    datasourceWarning: false
+    expressionType: SIMPLE
+    hasCustomLabel: false
+    label: MAX(courseactivity_date)
+    optionName: metric_nmzsule9cof_b9gtm7uul
+    sqlExpression:
+  tooltipTimeFormat: smart_date
+  truncateXAxis: true
+  truncate_metric: true
+  viz_type: echarts_timeseries_line
+  x_axis: courseactivity_date
+  x_axis_sort: name
+  x_axis_sort_asc: true
+  x_axis_time_format: smart_date
+  x_axis_title_margin: 15
+  y_axis_bounds:
+  - 
+  - 
+  y_axis_format: SMART_NUMBER
+  y_axis_title_margin: 15
+  y_axis_title_position: Left
+  zoomable: true
+query_context: '{"datasource":{"id":47,"type":"table"},"force":false,"queries":[{"filters":[{"col":"courseactivity_date","op":"TEMPORAL_RANGE","val":"No
+  filter"}],"extras":{"time_grain_sqla":"P1W","having":"","where":""},"applied_time_extras":{},"columns":[{"timeGrain":"P1W","columnType":"BASE_AXIS","sqlExpression":"courseactivity_date","label":"courseactivity_date","expressionType":"SQL"}],"metrics":[{"expressionType":"SQL","sqlExpression":"COUNT(DISTINCT(CASE
+  WHEN num_video_played> 0 THEN user_email ELSE null END))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Watched_a_video","optionName":"metric_dbwq09vzfs8_i6m93r7z48"},{"expressionType":"SQL","sqlExpression":"COUNT(DISTINCT
+  (case when num_problem_submitted> 0 then user_email else null end))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Tried_a_problem","optionName":"metric_fc9iy7qj0ih_7iecfw62ccm"},{"expressionType":"SQL","sqlExpression":"COUNT(DISTINCT
+  (case when num_discussion_participated> 0 then user_email else null end))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Participated_in_discussion","optionName":"metric_2gbwr6eyc6u_b9rcf5q4lf4"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"user_email","description":null,"expression":null,"filterable":true,"groupby":true,"id":717,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"aggregate":"COUNT_DISTINCT","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Learner_Engaged_count","optionName":"metric_h3mhtugsrtu_pfth2r3i53"}],"orderby":[[{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"courseactivity_date","description":null,"expression":null,"filterable":true,"groupby":true,"id":711,"is_certified":false,"is_dttm":true,"python_date_format":null,"type":"DATE","type_generic":2,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MAX(courseactivity_date)","optionName":"metric_nmzsule9cof_b9gtm7uul","sqlExpression":null},false]],"annotation_layers":[],"row_limit":10000,"series_columns":[],"series_limit":0,"series_limit_metric":{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"courseactivity_date","description":null,"expression":null,"filterable":true,"groupby":true,"id":711,"is_certified":false,"is_dttm":true,"python_date_format":null,"type":"DATE","type_generic":2,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MAX(courseactivity_date)","optionName":"metric_nmzsule9cof_b9gtm7uul","sqlExpression":null},"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"time_offsets":[],"post_processing":[{"operation":"pivot","options":{"index":["courseactivity_date"],"columns":[],"aggregates":{"Watched_a_video":{"operator":"mean"},"Tried_a_problem":{"operator":"mean"},"Participated_in_discussion":{"operator":"mean"},"Learner_Engaged_count":{"operator":"mean"__JINJA2_CLOSE__,"drop_missing_columns":false__JINJA2_CLOSE__,{"operation":"flatten"}]}],"form_data":{"datasource":"47__table","viz_type":"echarts_timeseries_line","slice_id":59,"x_axis":"courseactivity_date","time_grain_sqla":"P1W","x_axis_sort_asc":true,"x_axis_sort_series":"name","x_axis_sort_series_ascending":true,"metrics":[{"expressionType":"SQL","sqlExpression":"COUNT(DISTINCT(CASE
+  WHEN num_video_played> 0 THEN user_email ELSE null END))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Watched_a_video","optionName":"metric_dbwq09vzfs8_i6m93r7z48"},{"expressionType":"SQL","sqlExpression":"COUNT(DISTINCT
+  (case when num_problem_submitted> 0 then user_email else null end))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Tried_a_problem","optionName":"metric_fc9iy7qj0ih_7iecfw62ccm"},{"expressionType":"SQL","sqlExpression":"COUNT(DISTINCT
+  (case when num_discussion_participated> 0 then user_email else null end))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Participated_in_discussion","optionName":"metric_2gbwr6eyc6u_b9rcf5q4lf4"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"user_email","description":null,"expression":null,"filterable":true,"groupby":true,"id":717,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"aggregate":"COUNT_DISTINCT","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Learner_Engaged_count","optionName":"metric_h3mhtugsrtu_pfth2r3i53"}],"groupby":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
+  filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"courseactivity_date"}],"timeseries_limit_metric":{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"courseactivity_date","description":null,"expression":null,"filterable":true,"groupby":true,"id":711,"is_certified":false,"is_dttm":true,"python_date_format":null,"type":"DATE","type_generic":2,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MAX(courseactivity_date)","optionName":"metric_nmzsule9cof_b9gtm7uul","sqlExpression":null},"order_desc":true,"row_limit":10000,"truncate_metric":true,"show_empty_columns":true,"rolling_type":null,"comparison_type":"values","annotation_layers":[],"forecastPeriods":10,"forecastInterval":0.8,"x_axis_title_margin":15,"y_axis_title_margin":15,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","seriesType":"line","only_total":true,"opacity":0.2,"markerEnabled":true,"markerSize":6,"zoomable":true,"show_legend":true,"legendType":"scroll","legendOrientation":"top","x_axis_time_format":"smart_date","rich_tooltip":true,"tooltipTimeFormat":"smart_date","y_axis_format":"SMART_NUMBER","truncateXAxis":true,"y_axis_bounds":[null,null],"extra_form_data":{},"dashboards":[27],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: aa66927b-cc60-4950-8ad8-f79081736841
+version: 1.0.0
+dataset_uuid: f221af29-5df4-4025-8355-401041f94835

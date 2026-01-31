@@ -1,0 +1,146 @@
+---
+# Superset Asset Synchronization Configuration
+# Self-hosted instances: bi.ol.mit.edu (production) ⇄ bi-qa.ol.mit.edu (QA)
+#
+# NOTE: The `sup sync` command is designed for Preset Cloud workspaces with workspace_id.
+# For self-hosted instances, use manual push commands or the provided scripts.
+#
+# This file serves as documentation for sync strategies and transformations.
+
+# =============================================================================
+# WORKFLOW STRATEGIES
+# =============================================================================
+
+# Primary Workflow: QA → Production (Recommended)
+# ------------------------------------------------
+# Develop and test in QA, then promote to production
+#
+# Flow:
+#   1. Edit dashboards in QA UI (bi-qa.ol.mit.edu)
+#   2. Export: ./scripts/export_from_qa.sh
+#   3. Review & Commit: git diff && git commit
+#   4. Promote: ./scripts/promote_to_production.sh
+#   5. Manual import via production Superset UI
+#
+# Benefits:
+#   - Changes tested before production
+#   - Clear promotion path
+#   - Version-controlled approval process
+
+# Alternative Workflow: Production → QA (Mirroring)
+# --------------------------------------------------
+# Mirror production to QA for testing changes
+#
+# Flow:
+#   1. Export: ./scripts/export_all.sh (from production)
+#   2. Review & Commit: git diff && git commit
+#   3. Deploy: ./scripts/sync_to_qa.sh
+#
+# Use cases:
+#   - Copying production dashboards to QA
+#   - Testing changes on production data structure
+#   - Disaster recovery backups
+
+# =============================================================================
+# ENVIRONMENT CONFIGURATION
+# =============================================================================
+
+# Production Environment
+production:
+  name: superset-production
+  url: https://bi.ol.mit.edu
+  instance: superset-production
+  catalog: ol_data_lake_production
+  schema_prefix: ol_warehouse_production
+
+# QA Environment
+qa:
+  name: superset-qa
+  url: https://bi-qa.ol.mit.edu
+  instance: superset-qa
+  catalog: ol_data_lake_qa
+  schema_prefix: ol_warehouse_qa
+
+# =============================================================================
+# ASSET SELECTION STRATEGY
+# =============================================================================
+selection:
+  dashboards:
+    # Include only published dashboards (exclude untitled/draft)
+    published_only: true
+    exclude_patterns:
+    - "untitled_dashboard_*"
+
+  datasets:
+    # Exclude internal Superset metadata
+    exclude_databases:
+    - "Superset_Metadata_DB"
+
+  databases:
+    # Database configs are included but require manual credential setup in QA
+    include: true
+
+# =============================================================================
+# ENVIRONMENT-SPECIFIC TRANSFORMATIONS
+# =============================================================================
+
+# When promoting QA → Production:
+# Replace QA-specific references with production equivalents
+qa_to_production_transformations:
+- field: sqlalchemy_uri
+  pattern: "ol_data_lake_qa"
+  replacement: "ol_data_lake_production"
+
+- field: sql
+  pattern: "ol_data_lake_qa"
+  replacement: "ol_data_lake_production"
+
+- field: schema
+  pattern: "ol_warehouse_qa"
+  replacement: "ol_warehouse_production"
+
+- field: table_name
+  pattern: "_qa_"
+  replacement: "_production_"
+
+# When deploying Production → QA:
+# Replace production-specific references with QA equivalents
+production_to_qa_transformations:
+- field: sqlalchemy_uri
+  pattern: "ol_data_lake_production"
+  replacement: "ol_data_lake_qa"
+
+- field: sql
+  pattern: "ol_data_lake_production"
+  replacement: "ol_data_lake_qa"
+
+- field: schema
+  pattern: "ol_warehouse_production"
+  replacement: "ol_warehouse_qa"
+
+- field: table_name
+  pattern: "_production_"
+  replacement: "_qa_"
+
+# =============================================================================
+# MANUAL SYNC INSTRUCTIONS
+# =============================================================================
+
+# QA → Production (Primary workflow):
+# 1. Export from QA: sup instance use superset-qa && sup dashboard pull assets/
+# 2. Apply transformations (manual or scripted per qa_to_production_transformations above)
+# 3. Import to production via Superset UI: Dashboard → Import Dashboard
+# 4. Verify with production data
+
+# Production → QA (Mirroring workflow):
+# 1. Export from production: sup instance use superset-production && sup dashboard pull assets/
+# 2. Apply transformations (manual or scripted per production_to_qa_transformations above)
+# 3. Import to QA via Superset UI: Dashboard → Import Dashboard
+# 4. Test changes in QA environment
+
+# =============================================================================
+# SECURITY NOTES
+# =============================================================================
+# - Database passwords are NOT included in exports
+# - Must configure Trino credentials manually in each environment
+# - OAuth credentials for Superset instances are managed separately via `sup config`

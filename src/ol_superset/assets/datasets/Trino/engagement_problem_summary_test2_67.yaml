@@ -1,0 +1,157 @@
+---
+table_name: engagement_problem_summary_test2
+main_dttm_col:
+description:
+default_endpoint:
+offset: 0
+cache_timeout:
+catalog: ol_data_lake_production
+schema: ol_warehouse_production_intermediate
+sql: "select u.email\n, course_title\n, a.courserun_readable_id\n, d.block_title as\
+  \ subsection_title\n, d.block_index as subsection_block_index\n, a.chapter_block_fk\n\
+  , count(distinct (case when cast(a.num_of_attempts as int)> 0 then a.problem_block_fk\
+  \ else null end)) problems_attempted\n, max(problem_numb) number_of_problems\n,\
+  \ cast(count(distinct (case when cast(a.num_of_attempts as int)> 0 then a.problem_block_fk\
+  \ else null end)) as decimal(30,10))\n/cast(max(problem_numb) as decimal(30,10))\
+  \ as percetage_problems_attempted\nfrom ol_warehouse_production_dimensional.afact_problem_engagement\
+  \ a\nleft join (select c.sequential_block_id, count(p.problem_block_pk) as problem_numb\n\
+  from ol_warehouse_production_dimensional.dim_problem p\ninner join ol_warehouse_production_dimensional.dim_course_content\
+  \ c\non p.content_block_fk=c.content_block_pk\ngroup by 1) c\non a.sequential_block_fk=c.sequential_block_id\n\
+  inner join ol_warehouse_production_dimensional.dim_user u\non a.openedx_user_id\
+  \ = u.mitxonline_openedx_user_id\nleft join (select\n    courses.course_title\n\
+  \    , runs.courserun_readable_id\nfrom ol_warehouse_production_staging.stg__mitxonline__app__postgres__courses_courserun\
+  \ runs\ninner join ol_warehouse_production_staging.stg__mitxonline__app__postgres__courses_course\
+  \ courses \non runs.course_id = courses.course_id\ngroup by \n    courses.course_title\n\
+  \    , runs.courserun_readable_id) h\n    on a.courserun_readable_id = h.courserun_readable_id\n\
+  inner join ol_warehouse_production_dimensional.dim_course_content d\non a.sequential_block_fk\
+  \ =d.block_id\nand d.is_latest = true\ngroup by 1, 2, 3, 4, 5, 6"
+params:
+template_params:
+filter_select_enabled: true
+fetch_values_predicate:
+extra:
+normalize_columns: false
+always_filter_main_dttm: false
+folders:
+uuid: a2198d6f-df2d-492c-b30b-9e3279466bdb
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description:
+  d3format:
+  currency:
+  extra: {}
+  warning_text:
+columns:
+- column_name: percetage_problems_attempted
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 10)
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: courserun_readable_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: chapter_block_fk
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: subsection_title
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: course_title
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: email
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: subsection_block_index
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: number_of_problems
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: problems_attempted
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+version: 1.0.0
+database_uuid: 8702691f-d666-4dac-943b-9382c02233e3

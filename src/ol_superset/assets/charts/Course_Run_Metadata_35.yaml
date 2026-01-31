@@ -1,0 +1,40 @@
+---
+slice_name: Course Run Metadata
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 38__table
+  viz_type: table
+  slice_id: 35
+  query_mode: aggregate
+  groupby:
+  - course_title
+  - course_readable_id
+  - courserun_title
+  - courserun_readable_id
+  - platform
+  - courserun_start_on
+  - courserun_end_on
+  - courserun_upgrade_deadline
+  temporal_columns_lookup: {}
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 1000
+  order_desc: true
+  table_timestamp_format: smart_date
+  show_cell_bars: true
+  color_pn: true
+  extra_form_data: {}
+  dashboards:
+  - 16
+  - 24
+  comparison_type: values
+query_context: '{"datasource":{"id":38,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["course_title","course_readable_id","courserun_title","courserun_readable_id","platform","courserun_start_on","courserun_end_on","courserun_upgrade_deadline"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[]}],"form_data":{"datasource":"38__table","viz_type":"table","slice_id":35,"query_mode":"aggregate","groupby":["course_title","course_readable_id","courserun_title","courserun_readable_id","platform","courserun_start_on","courserun_end_on","courserun_upgrade_deadline"],"temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"order_desc":true,"table_timestamp_format":"smart_date","show_cell_bars":true,"color_pn":true,"extra_form_data":{},"dashboards":[16,24],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 01f0a8ee-45f0-40ef-a96e-250a40aebf10
+version: 1.0.0
+dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000

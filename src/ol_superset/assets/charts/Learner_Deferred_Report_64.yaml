@@ -1,0 +1,52 @@
+---
+slice_name: Learner Deferred Report
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 61__table
+  viz_type: table
+  slice_id: 64
+  query_mode: aggregate
+  groupby:
+  - platform
+  - course_title
+  - courserun_readable_id
+  - courserun_start_on
+  - user_email
+  - courserunenrollment_enrollment_status
+  - courserun_is_current
+  temporal_columns_lookup: {}
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters:
+  - clause: WHERE
+    comparator:
+    - deferred
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_3i1o0x2uzfr_kgx5rxk1vf
+    isExtra: false
+    isNew: false
+    operator: IN
+    operatorId: IN
+    sqlExpression:
+    subject: courserunenrollment_enrollment_status
+  order_by_cols: []
+  row_limit: 1000
+  order_desc: true
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 14
+query_context: '{"datasource":{"id":61,"type":"table"},"force":false,"queries":[{"filters":[{"col":"courserunenrollment_enrollment_status","op":"IN","val":["deferred"]}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform","course_title","courserun_readable_id","courserun_start_on","user_email","courserunenrollment_enrollment_status","courserun_is_current"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"61__table","viz_type":"table","slice_id":64,"query_mode":"aggregate","groupby":["platform","course_title","courserun_readable_id","courserun_start_on","user_email","courserunenrollment_enrollment_status","courserun_is_current"],"temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":["deferred"],"datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_3i1o0x2uzfr_kgx5rxk1vf","isExtra":false,"isNew":false,"operator":"IN","operatorId":"IN","sqlExpression":null,"subject":"courserunenrollment_enrollment_status"}],"order_by_cols":[],"row_limit":1000,"order_desc":true,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","comparison_type":"values","extra_form_data":{},"dashboards":[14],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 5ce15be9-994b-4377-8c99-21d35267a2dd
+version: 1.0.0
+dataset_uuid: b579034e-2b79-4d3a-ba84-94c9fcfa0cc5

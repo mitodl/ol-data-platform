@@ -1,0 +1,81 @@
+---
+slice_name: Coupon Summary
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 62__table
+  viz_type: table
+  slice_id: 81
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - couponpaymentversion_id
+  - coupon_code
+  - coupon_name
+  - b2border_contract_number
+  - coupon_type
+  - discount_source
+  - discount_amount
+  - company_name
+  - activated_on
+  - expires_on
+  - couponpayment_name
+  - redeemed
+  - datasourceWarning: false
+    expressionType: SQL
+    label: valid_now
+    sqlExpression: "case when cast(now() as date)>=cast(substring(activated_on, 1,\
+      \ 10) as date) \nand cast(now() as date)<=cast(substring(expires_on, 1, 10)\
+      \ as date) \nthen TRUE else FALSE end"
+  - datasourceWarning: false
+    expressionType: SQL
+    label: total_nr_coupons
+    sqlExpression: couponpaymentversion_num_coupon_codes* couponpaymentversion_max_redemptions
+  - expressionType: SQL
+    label: Coupons_left
+    sqlExpression: (couponpaymentversion_num_coupon_codes* couponpaymentversion_max_redemptions)
+      - coupons_used_count
+  - coupons_used_count
+  - b2breceipt_reference_number
+  - product_readable_id
+  - payment_transaction
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  order_desc: true
+  row_limit: 1000
+  server_page_length: 10
+  table_timestamp_format: smart_date
+  include_search: true
+  allow_render_html: true
+  column_config:
+    couponpaymentversion_id:
+      showCellBars: false
+    coupons_used_count:
+      showCellBars: false
+    total_nr_coupons:
+      showCellBars: false
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 44
+query_context: '{"datasource":{"id":62,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["couponpaymentversion_id","coupon_code","coupon_name","b2border_contract_number","coupon_type","discount_source","discount_amount","company_name","activated_on","expires_on","couponpayment_name","redeemed",{"datasourceWarning":false,"expressionType":"SQL","label":"valid_now","sqlExpression":"case
+  when cast(now() as date)>=cast(substring(activated_on, 1, 10) as date) \nand cast(now()
+  as date)<=cast(substring(expires_on, 1, 10) as date) \nthen TRUE else FALSE end"},{"datasourceWarning":false,"expressionType":"SQL","label":"total_nr_coupons","sqlExpression":"couponpaymentversion_num_coupon_codes*
+  couponpaymentversion_max_redemptions"},{"expressionType":"SQL","label":"Coupons_left","sqlExpression":"(couponpaymentversion_num_coupon_codes*
+  couponpaymentversion_max_redemptions) - coupons_used_count"},"coupons_used_count","b2breceipt_reference_number","product_readable_id","payment_transaction"],"orderby":[],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"62__table","viz_type":"table","slice_id":81,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["couponpaymentversion_id","coupon_code","coupon_name","b2border_contract_number","coupon_type","discount_source","discount_amount","company_name","activated_on","expires_on","couponpayment_name","redeemed",{"datasourceWarning":false,"expressionType":"SQL","label":"valid_now","sqlExpression":"case
+  when cast(now() as date)>=cast(substring(activated_on, 1, 10) as date) \nand cast(now()
+  as date)<=cast(substring(expires_on, 1, 10) as date) \nthen TRUE else FALSE end"},{"datasourceWarning":false,"expressionType":"SQL","label":"total_nr_coupons","sqlExpression":"couponpaymentversion_num_coupon_codes*
+  couponpaymentversion_max_redemptions"},{"expressionType":"SQL","label":"Coupons_left","sqlExpression":"(couponpaymentversion_num_coupon_codes*
+  couponpaymentversion_max_redemptions) - coupons_used_count"},"coupons_used_count","b2breceipt_reference_number","product_readable_id","payment_transaction"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"order_desc":true,"row_limit":1000,"server_page_length":10,"table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"column_config":{"couponpaymentversion_id":{"showCellBars":false},"coupons_used_count":{"showCellBars":false},"total_nr_coupons":{"showCellBars":false__JINJA2_CLOSE__,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[44],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: ae86fc71-d19e-4e6a-80b6-c68ca638b536
+version: 1.0.0
+dataset_uuid: 50998478-4b82-451d-82ed-5ea60fd48b05

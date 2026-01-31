@@ -1,0 +1,195 @@
+---
+slice_name: Engagement By Section And Subsection
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 92__table
+  viz_type: table
+  slice_id: 100
+  query_mode: aggregate
+  groupby:
+  - section_title
+  - subsection_title
+  temporal_columns_lookup: {}
+  metrics:
+  - expressionType: SIMPLE
+    column:
+      advanced_data_type:
+      changed_on: '2025-05-29T21:49:25.066410'
+      column_name: num_of_page_views
+      created_on: '2025-05-29T21:49:25.066405'
+      description:
+      expression:
+      extra:
+      filterable: true
+      groupby: true
+      id: 1250
+      is_active: true
+      is_dttm: false
+      python_date_format:
+      type: BIGINT
+      type_generic: 0
+      uuid: 369ccd5d-88e9-42a2-bb3e-ff18deb3f7ee
+      verbose_name:
+    aggregate: SUM
+    sqlExpression:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: Num_of_Page_Views
+    optionName: metric_4gduc5lvvb8_wgfud0g0wa9
+  - expressionType: SQL
+    sqlExpression: SUM(case when estimated_time_played > video_duration then cast(video_duration
+      as decimal(30,10)) else cast(estimated_time_played as decimal(30,10)) end)/SUM(cast(video_duration
+      as decimal(30,10)))
+    column:
+    aggregate:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: Percent_Watched
+    optionName: metric_nl6zruwpjig_92nwuue6vdb
+  - expressionType: SIMPLE
+    column:
+      advanced_data_type:
+      changed_on: '2025-05-29T21:49:25.066486'
+      column_name: percetage_problems_attempted
+      created_on: '2025-05-29T21:49:25.066485'
+      description:
+      expression:
+      extra:
+      filterable: true
+      groupby: true
+      id: 1255
+      is_active: true
+      is_dttm: false
+      python_date_format:
+      type: DECIMAL(38, 10)
+      type_generic: 0
+      uuid: 38d8f2e9-c84d-4017-aff8-8b31c3b74c01
+      verbose_name:
+    aggregate: AVG
+    sqlExpression:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: Avg_%_Problems_Attempted
+    optionName: metric_mpilubvu3g_limbdmehurj
+  - expressionType: SIMPLE
+    column:
+      advanced_data_type:
+      changed_on: '2025-05-29T21:49:25.066512'
+      column_name: posts_created
+      created_on: '2025-05-29T21:49:25.066511'
+      description:
+      expression:
+      extra:
+      filterable: true
+      groupby: true
+      id: 1257
+      is_active: true
+      is_dttm: false
+      python_date_format:
+      type: BIGINT
+      type_generic: 0
+      uuid: a59366e7-d913-42c8-999a-d3368ae1b672
+      verbose_name:
+    aggregate: SUM
+    sqlExpression:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: posts_created
+    optionName: metric_zaf2ymmohdr_p2b7hrwrk4
+  - expressionType: SIMPLE
+    column:
+      advanced_data_type:
+      changed_on: '2025-05-29T21:49:25.066524'
+      column_name: posts_replied
+      created_on: '2025-05-29T21:49:25.066524'
+      description:
+      expression:
+      extra:
+      filterable: true
+      groupby: true
+      id: 1258
+      is_active: true
+      is_dttm: false
+      python_date_format:
+      type: BIGINT
+      type_generic: 0
+      uuid: 3a488293-bfbe-4150-95ea-2bf1776b63c9
+      verbose_name:
+    aggregate: SUM
+    sqlExpression:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: posts_replied
+    optionName: metric_ut2bgsia8o_zrk3z98vlss
+  - expressionType: SIMPLE
+    column:
+      advanced_data_type:
+      changed_on: '2025-05-29T21:49:25.066499'
+      column_name: avg_percent_grade
+      created_on: '2025-05-29T21:49:25.066498'
+      description:
+      expression:
+      extra:
+      filterable: true
+      groupby: true
+      id: 1256
+      is_active: true
+      is_dttm: false
+      python_date_format:
+      type: DECIMAL(38, 10)
+      type_generic: 0
+      uuid: 54769c09-fdcf-4f28-a65b-4c6b4cdbf711
+      verbose_name:
+    aggregate: AVG
+    sqlExpression:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: Avg_%_Grade
+    optionName: metric_to9hbnexn6_znbqr4i55wp
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 1000
+  server_page_length: 10
+  order_desc: false
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  column_config:
+    Avg_%_Grade:
+      d3NumberFormat: ',.1%'
+      showCellBars: false
+    Avg_%_Problems_Attempted:
+      d3NumberFormat: ',.1%'
+      showCellBars: false
+    Num_of_Page_Views:
+      showCellBars: false
+    Percent_Watched:
+      d3NumberFormat: ',.1%'
+      showCellBars: false
+  show_cell_bars: false
+  color_pn: true
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 45
+query_context: '{"datasource":{"id":92,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["section_title","subsection_title"],"metrics":[{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066410","column_name":"num_of_page_views","created_on":"2025-05-29T21:49:25.066405","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1250,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"uuid":"369ccd5d-88e9-42a2-bb3e-ff18deb3f7ee","verbose_name":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Num_of_Page_Views","optionName":"metric_4gduc5lvvb8_wgfud0g0wa9"},{"expressionType":"SQL","sqlExpression":"SUM(case
+  when estimated_time_played > video_duration then cast(video_duration as decimal(30,10))
+  else cast(estimated_time_played as decimal(30,10)) end)/SUM(cast(video_duration
+  as decimal(30,10)))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Percent_Watched","optionName":"metric_nl6zruwpjig_92nwuue6vdb"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066486","column_name":"percetage_problems_attempted","created_on":"2025-05-29T21:49:25.066485","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1255,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"DECIMAL(38,
+  10)","type_generic":0,"uuid":"38d8f2e9-c84d-4017-aff8-8b31c3b74c01","verbose_name":null},"aggregate":"AVG","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Avg_%_Problems_Attempted","optionName":"metric_mpilubvu3g_limbdmehurj"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066512","column_name":"posts_created","created_on":"2025-05-29T21:49:25.066511","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1257,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"uuid":"a59366e7-d913-42c8-999a-d3368ae1b672","verbose_name":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"posts_created","optionName":"metric_zaf2ymmohdr_p2b7hrwrk4"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066524","column_name":"posts_replied","created_on":"2025-05-29T21:49:25.066524","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1258,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"uuid":"3a488293-bfbe-4150-95ea-2bf1776b63c9","verbose_name":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"posts_replied","optionName":"metric_ut2bgsia8o_zrk3z98vlss"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066499","column_name":"avg_percent_grade","created_on":"2025-05-29T21:49:25.066498","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1256,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"DECIMAL(38,
+  10)","type_generic":0,"uuid":"54769c09-fdcf-4f28-a65b-4c6b4cdbf711","verbose_name":null},"aggregate":"AVG","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Avg_%_Grade","optionName":"metric_to9hbnexn6_znbqr4i55wp"}],"orderby":[[{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066410","column_name":"num_of_page_views","created_on":"2025-05-29T21:49:25.066405","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1250,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"uuid":"369ccd5d-88e9-42a2-bb3e-ff18deb3f7ee","verbose_name":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Num_of_Page_Views","optionName":"metric_4gduc5lvvb8_wgfud0g0wa9"},false]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":false,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"92__table","viz_type":"table","slice_id":100,"query_mode":"aggregate","groupby":["section_title","subsection_title"],"temporal_columns_lookup":{},"metrics":[{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066410","column_name":"num_of_page_views","created_on":"2025-05-29T21:49:25.066405","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1250,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"uuid":"369ccd5d-88e9-42a2-bb3e-ff18deb3f7ee","verbose_name":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Num_of_Page_Views","optionName":"metric_4gduc5lvvb8_wgfud0g0wa9"},{"expressionType":"SQL","sqlExpression":"SUM(case
+  when estimated_time_played > video_duration then cast(video_duration as decimal(30,10))
+  else cast(estimated_time_played as decimal(30,10)) end)/SUM(cast(video_duration
+  as decimal(30,10)))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Percent_Watched","optionName":"metric_nl6zruwpjig_92nwuue6vdb"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066486","column_name":"percetage_problems_attempted","created_on":"2025-05-29T21:49:25.066485","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1255,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"DECIMAL(38,
+  10)","type_generic":0,"uuid":"38d8f2e9-c84d-4017-aff8-8b31c3b74c01","verbose_name":null},"aggregate":"AVG","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Avg_%_Problems_Attempted","optionName":"metric_mpilubvu3g_limbdmehurj"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066512","column_name":"posts_created","created_on":"2025-05-29T21:49:25.066511","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1257,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"uuid":"a59366e7-d913-42c8-999a-d3368ae1b672","verbose_name":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"posts_created","optionName":"metric_zaf2ymmohdr_p2b7hrwrk4"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066524","column_name":"posts_replied","created_on":"2025-05-29T21:49:25.066524","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1258,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"uuid":"3a488293-bfbe-4150-95ea-2bf1776b63c9","verbose_name":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"posts_replied","optionName":"metric_ut2bgsia8o_zrk3z98vlss"},{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2025-05-29T21:49:25.066499","column_name":"avg_percent_grade","created_on":"2025-05-29T21:49:25.066498","description":null,"expression":null,"extra":null,"filterable":true,"groupby":true,"id":1256,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"DECIMAL(38,
+  10)","type_generic":0,"uuid":"54769c09-fdcf-4f28-a65b-4c6b4cdbf711","verbose_name":null},"aggregate":"AVG","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Avg_%_Grade","optionName":"metric_to9hbnexn6_znbqr4i55wp"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":false,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"Avg_%_Grade":{"d3NumberFormat":",.1%","showCellBars":false},"Avg_%_Problems_Attempted":{"d3NumberFormat":",.1%","showCellBars":false},"Num_of_Page_Views":{"showCellBars":false},"Percent_Watched":{"d3NumberFormat":",.1%","showCellBars":false}},"show_cell_bars":false,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[45],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: b503879e-45e5-43aa-90eb-de7044e442b4
+version: 1.0.0
+dataset_uuid: 4752cd11-a13e-4a8e-be31-4d9227b07ca2

@@ -1,0 +1,65 @@
+---
+slice_name: Learner Course Engagement
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 47__table
+  viz_type: table
+  slice_id: 80
+  query_mode: raw
+  groupby:
+  - platform
+  - user_username
+  - courserun_readable_id
+  - num_events
+  - num_problem_submitted
+  - num_video_played
+  - num_discussion_participated
+  - courseactivity_date
+  time_grain_sqla: P1D
+  temporal_columns_lookup:
+    courseactivity_date: true
+  all_columns:
+  - user_full_name
+  - user_email
+  - courserun_readable_id
+  - courseactivity_date
+  - num_events
+  - num_problem_submitted
+  - num_video_played
+  - num_discussion_participated
+  percent_metrics: []
+  adhoc_filters:
+  - clause: WHERE
+    comparator: No filter
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_522x27a4t7w_cwj5z8kc6m
+    isExtra: false
+    isNew: false
+    operator: TEMPORAL_RANGE
+    sqlExpression:
+    subject: courseactivity_date
+  order_by_cols:
+  - '["courseactivity_date", false]'
+  server_pagination: false
+  row_limit: 50000
+  table_timestamp_format: smart_date
+  allow_render_html: false
+  show_cell_bars: false
+  color_pn: false
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  extra_form_data: {}
+  dashboards:
+  - 41
+query_context: '{"datasource":{"id":47,"type":"table"},"force":false,"queries":[{"filters":[{"col":"courseactivity_date","op":"TEMPORAL_RANGE","val":"No
+  filter"}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["user_full_name","user_email","courserun_readable_id","courseactivity_date","num_events","num_problem_submitted","num_video_played","num_discussion_participated"],"orderby":[["courseactivity_date",false]],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"47__table","viz_type":"table","slice_id":80,"query_mode":"raw","groupby":["platform","user_username","courserun_readable_id","num_events","num_problem_submitted","num_video_played","num_discussion_participated","courseactivity_date"],"time_grain_sqla":"P1D","temporal_columns_lookup":{"courseactivity_date":true},"all_columns":["user_full_name","user_email","courserun_readable_id","courseactivity_date","num_events","num_problem_submitted","num_video_played","num_discussion_participated"],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
+  filter","datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_522x27a4t7w_cwj5z8kc6m","isExtra":false,"isNew":false,"operator":"TEMPORAL_RANGE","sqlExpression":null,"subject":"courseactivity_date"}],"order_by_cols":["[\"courseactivity_date\",
+  false]"],"server_pagination":false,"row_limit":50000,"table_timestamp_format":"smart_date","allow_render_html":false,"show_cell_bars":false,"color_pn":false,"comparison_color_scheme":"Green","conditional_formatting":[],"extra_form_data":{},"dashboards":[41],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 6df62a4b-28e2-4d78-9e22-e3dfb56fd96a
+version: 1.0.0
+dataset_uuid: f221af29-5df4-4025-8355-401041f94835

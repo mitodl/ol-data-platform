@@ -1,0 +1,78 @@
+---
+slice_name: Program Enrollment and Certificate
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 59__table
+  viz_type: table
+  slice_id: 78
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
+  all_columns:
+  - platform_name
+  - program_type
+  - program_name
+  - program_track
+  - program_readable_id
+  - user_id
+  - user_full_name
+  - user_email
+  - programenrollment_enrollment_status
+  - programenrollment_is_active
+  - programenrollment_created_on
+  - expressionType: SQL
+    label: user_has_completed_program
+    sqlExpression: CASE WHEN programcertificate_created_on is not null then true else
+      user_has_completed_program end
+  - programcertificate_created_on
+  - programcertificate_url
+  - programcertificate_is_revoked
+  - program_is_live
+  - program_title
+  - user_industry
+  - user_company
+  - user_job_title
+  - user_highest_education
+  - program_complete_days
+  - courses_taken_in_program
+  - capstone_ind
+  - user_birth_year
+  - user_gender
+  - user_address_country
+  - user_street_address
+  - user_address_city
+  - user_address_state_or_territory
+  - user_address_postal_code
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 50000
+  table_timestamp_format: smart_date
+  include_search: true
+  allow_render_html: true
+  column_config:
+    courses_taken_in_program:
+      showCellBars: false
+    program_complete_days:
+      showCellBars: false
+    user_id:
+      showCellBars: false
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  extra_form_data: {}
+  dashboards:
+  - 34
+query_context: '{"datasource":{"id":59,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform_name","program_type","program_name","program_track","program_readable_id","user_id","user_full_name","user_email","programenrollment_enrollment_status","programenrollment_is_active","programenrollment_created_on",{"expressionType":"SQL","label":"user_has_completed_program","sqlExpression":"CASE
+  WHEN programcertificate_created_on is not null then true else user_has_completed_program
+  end"},"programcertificate_created_on","programcertificate_url","programcertificate_is_revoked","program_is_live","program_title","user_industry","user_company","user_job_title","user_highest_education","program_complete_days","courses_taken_in_program","capstone_ind","user_birth_year","user_gender","user_address_country","user_street_address","user_address_city","user_address_state_or_territory","user_address_postal_code"],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"59__table","viz_type":"table","slice_id":78,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["platform_name","program_type","program_name","program_track","program_readable_id","user_id","user_full_name","user_email","programenrollment_enrollment_status","programenrollment_is_active","programenrollment_created_on",{"expressionType":"SQL","label":"user_has_completed_program","sqlExpression":"CASE
+  WHEN programcertificate_created_on is not null then true else user_has_completed_program
+  end"},"programcertificate_created_on","programcertificate_url","programcertificate_is_revoked","program_is_live","program_title","user_industry","user_company","user_job_title","user_highest_education","program_complete_days","courses_taken_in_program","capstone_ind","user_birth_year","user_gender","user_address_country","user_street_address","user_address_city","user_address_state_or_territory","user_address_postal_code"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":50000,"table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"column_config":{"courses_taken_in_program":{"showCellBars":false},"program_complete_days":{"showCellBars":false},"user_id":{"showCellBars":false}},"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"extra_form_data":{},"dashboards":[34],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: d9047161-f8d8-4af2-adb0-283c74b639f2
+version: 1.0.0
+dataset_uuid: cc496da8-03f6-43ea-9b6c-900ba695e4b6

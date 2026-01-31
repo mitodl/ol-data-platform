@@ -1,0 +1,111 @@
+---
+slice_name: Daily Learner Enrollment
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 6__table
+  viz_type: table
+  slice_id: 2
+  query_mode: aggregate
+  groupby:
+  - courserun_readable_id
+  - expressionType: SQL
+    label: Date
+    sqlExpression: cast(substring(courserunenrollment_created_on, 1, 10) as date)
+  time_grain_sqla: P1D
+  temporal_columns_lookup: {}
+  metrics:
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: verified_count
+    optionName: metric_5kmpveidqmm_q47kux79caj
+    sqlExpression: sum(case when courserunenrollment_enrollment_mode= 'verified' then
+      1 else 0 end)
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: audit_count
+    optionName: metric_42tuy49eyvg_8ztyw2awxg3
+    sqlExpression: 'sum(case when courserunenrollment_enrollment_mode= ''audit'' then
+      1 else 0 end) '
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: total_enrollment_count
+    optionName: metric_b33l764uuf_jmuozogaf5
+    sqlExpression: count(*)
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters:
+  - clause: WHERE
+    comparator: MITx/6.86x/1T2023
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_hsj8304gbwi_kjd7f4u7vo9
+    isExtra: false
+    isNew: false
+    operator: ==
+    operatorId: EQUALS
+    sqlExpression:
+    subject: courserun_readable_id
+  timeseries_limit_metric:
+    aggregate: MIN
+    column:
+      advanced_data_type:
+      certification_details:
+      certified_by:
+      column_name: courserunenrollment_created_on
+      description:
+      expression:
+      filterable: true
+      groupby: true
+      id: 85
+      is_certified: false
+      is_dttm: false
+      python_date_format:
+      type: VARCHAR
+      type_generic: 1
+      verbose_name:
+      warning_markdown:
+    datasourceWarning: false
+    expressionType: SIMPLE
+    hasCustomLabel: false
+    label: MIN(courserunenrollment_created_on)
+    optionName: metric_rghlrsev3m_77zh26fx1yf
+    sqlExpression:
+  order_by_cols: []
+  row_limit: 50000
+  server_page_length: 10
+  order_desc: false
+  show_totals: true
+  table_timestamp_format: smart_date
+  show_cell_bars: true
+  color_pn: true
+  column_config:
+    courserunenrollment_created_on:
+      d3TimeFormat: '%m/%d/%Y'
+  conditional_formatting: []
+  extra_form_data: {}
+  dashboards: []
+  comparison_type: values
+query_context: '{"datasource":{"id":6,"type":"table"},"force":false,"queries":[{"filters":[{"col":"courserun_readable_id","op":"==","val":"MITx/6.86x/1T2023"}],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":["courserun_readable_id",{"expressionType":"SQL","label":"Date","sqlExpression":"cast(substring(courserunenrollment_created_on,
+  1, 10) as date)"}],"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"verified_count","optionName":"metric_5kmpveidqmm_q47kux79caj","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''verified'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"audit_count","optionName":"metric_42tuy49eyvg_8ztyw2awxg3","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''audit'' then 1 else 0 end) "},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"total_enrollment_count","optionName":"metric_b33l764uuf_jmuozogaf5","sqlExpression":"count(*)"}],"orderby":[[{"aggregate":"MIN","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"courserunenrollment_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":85,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MIN(courserunenrollment_created_on)","optionName":"metric_rghlrsev3m_77zh26fx1yf","sqlExpression":null},true]],"annotation_layers":[],"row_limit":50000,"series_limit":0,"series_limit_metric":{"aggregate":"MIN","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"courserunenrollment_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":85,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MIN(courserunenrollment_created_on)","optionName":"metric_rghlrsev3m_77zh26fx1yf","sqlExpression":null},"order_desc":false,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[]},{"filters":[{"col":"courserun_readable_id","op":"==","val":"MITx/6.86x/1T2023"}],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":[],"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"verified_count","optionName":"metric_5kmpveidqmm_q47kux79caj","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''verified'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"audit_count","optionName":"metric_42tuy49eyvg_8ztyw2awxg3","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''audit'' then 1 else 0 end) "},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"total_enrollment_count","optionName":"metric_b33l764uuf_jmuozogaf5","sqlExpression":"count(*)"}],"annotation_layers":[],"row_limit":0,"row_offset":0,"series_limit":0,"series_limit_metric":{"aggregate":"MIN","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"courserunenrollment_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":85,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MIN(courserunenrollment_created_on)","optionName":"metric_rghlrsev3m_77zh26fx1yf","sqlExpression":null},"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[]}],"form_data":{"datasource":"6__table","viz_type":"table","slice_id":2,"query_mode":"aggregate","groupby":["courserun_readable_id",{"expressionType":"SQL","label":"Date","sqlExpression":"cast(substring(courserunenrollment_created_on,
+  1, 10) as date)"}],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"verified_count","optionName":"metric_5kmpveidqmm_q47kux79caj","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''verified'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"audit_count","optionName":"metric_42tuy49eyvg_8ztyw2awxg3","sqlExpression":"sum(case
+  when courserunenrollment_enrollment_mode= ''audit'' then 1 else 0 end) "},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"total_enrollment_count","optionName":"metric_b33l764uuf_jmuozogaf5","sqlExpression":"count(*)"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":"MITx/6.86x/1T2023","datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_hsj8304gbwi_kjd7f4u7vo9","isExtra":false,"isNew":false,"operator":"==","operatorId":"EQUALS","sqlExpression":null,"subject":"courserun_readable_id"}],"timeseries_limit_metric":{"aggregate":"MIN","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"courserunenrollment_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":85,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MIN(courserunenrollment_created_on)","optionName":"metric_rghlrsev3m_77zh26fx1yf","sqlExpression":null},"order_by_cols":[],"row_limit":50000,"server_page_length":10,"order_desc":false,"show_totals":true,"table_timestamp_format":"smart_date","show_cell_bars":true,"color_pn":true,"column_config":{"courserunenrollment_created_on":{"d3TimeFormat":"%m/%d/%Y"__JINJA2_CLOSE__,"conditional_formatting":[],"extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 0805cae0-185d-4796-9ed4-a240ab047352
+version: 1.0.0

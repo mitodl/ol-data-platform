@@ -1,0 +1,81 @@
+---
+slice_name: Video Engagement By Courserun
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 92__table
+  viz_type: table
+  slice_id: 89
+  query_mode: aggregate
+  groupby:
+  - courserun_readable_id
+  temporal_columns_lookup: {}
+  metrics:
+  - expressionType: SQL
+    sqlExpression: SUM(case when estimated_time_played > video_duration then cast(video_duration
+      as decimal(30,10)) else cast(estimated_time_played as decimal(30,10)) end)/nullif(SUM(cast(video_duration
+      as decimal(30,10))), 0)
+    column:
+    aggregate:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: Percent_watched
+    optionName: metric_erzv2ib2du_paiagd9jik
+  - expressionType: SQL
+    sqlExpression: SUM(cast(video_duration as decimal(30,10)))
+    column:
+    aggregate:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: video_duration(seconds)
+    optionName: metric_oo01b3fragi_vpfvh3i5e1j
+  - expressionType: SQL
+    sqlExpression: SUM(case when estimated_time_played > video_duration then cast(video_duration
+      as DECIMAL(30,10)) else cast(estimated_time_played as DECIMAL(30,10)) end)
+    column:
+    aggregate:
+    datasourceWarning: false
+    hasCustomLabel: true
+    label: estimated_time_played(seconds)
+    optionName: metric_d9s5stqu148_n9bkk247ct9
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 1000
+  server_page_length: 10
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  column_config:
+    Percent_watched:
+      d3NumberFormat: ',.1%'
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 45
+query_context: '{"datasource":{"id":92,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["courserun_readable_id"],"metrics":[{"expressionType":"SQL","sqlExpression":"SUM(case
+  when estimated_time_played > video_duration then cast(video_duration as decimal(30,10))
+  else cast(estimated_time_played as decimal(30,10)) end)/nullif(SUM(cast(video_duration
+  as decimal(30,10))), 0)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Percent_watched","optionName":"metric_erzv2ib2du_paiagd9jik"},{"expressionType":"SQL","sqlExpression":"SUM(cast(video_duration
+  as decimal(30,10)))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"video_duration(seconds)","optionName":"metric_oo01b3fragi_vpfvh3i5e1j"},{"expressionType":"SQL","sqlExpression":"SUM(case
+  when estimated_time_played > video_duration then cast(video_duration as DECIMAL(30,10))
+  else cast(estimated_time_played as DECIMAL(30,10)) end)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"estimated_time_played(seconds)","optionName":"metric_d9s5stqu148_n9bkk247ct9"}],"orderby":[[{"expressionType":"SQL","sqlExpression":"SUM(case
+  when estimated_time_played > video_duration then cast(video_duration as decimal(30,10))
+  else cast(estimated_time_played as decimal(30,10)) end)/nullif(SUM(cast(video_duration
+  as decimal(30,10))), 0)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Percent_watched","optionName":"metric_erzv2ib2du_paiagd9jik"},false]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"92__table","viz_type":"table","slice_id":89,"query_mode":"aggregate","groupby":["courserun_readable_id"],"temporal_columns_lookup":{},"metrics":[{"expressionType":"SQL","sqlExpression":"SUM(case
+  when estimated_time_played > video_duration then cast(video_duration as decimal(30,10))
+  else cast(estimated_time_played as decimal(30,10)) end)/nullif(SUM(cast(video_duration
+  as decimal(30,10))), 0)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Percent_watched","optionName":"metric_erzv2ib2du_paiagd9jik"},{"expressionType":"SQL","sqlExpression":"SUM(cast(video_duration
+  as decimal(30,10)))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"video_duration(seconds)","optionName":"metric_oo01b3fragi_vpfvh3i5e1j"},{"expressionType":"SQL","sqlExpression":"SUM(case
+  when estimated_time_played > video_duration then cast(video_duration as DECIMAL(30,10))
+  else cast(estimated_time_played as DECIMAL(30,10)) end)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"estimated_time_played(seconds)","optionName":"metric_d9s5stqu148_n9bkk247ct9"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"Percent_watched":{"d3NumberFormat":",.1%"}},"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[45],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 93c228c1-4ad3-4268-830a-d99befebaaee
+version: 1.0.0
+dataset_uuid: 4752cd11-a13e-4a8e-be31-4d9227b07ca2

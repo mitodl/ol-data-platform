@@ -1,0 +1,397 @@
+---
+dashboard_title: Suspicious Behavior Report
+description:
+css: ''
+slug:
+certified_by:
+certification_details:
+published: true
+uuid: 1e2883d9-d122-4af6-aa33-43a0f0ac2c3b
+position:
+  CHART-avtPI5HqRH14QhZG4T9H6:
+    children: []
+    id: CHART-avtPI5HqRH14QhZG4T9H6
+    meta:
+      chartId: 124
+      height: 76
+      sliceName: Suspicious Behavior Report
+      uuid: 3acf6da0-1add-486f-9e70-884a1bb306f9
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    - TAB-fqinMmgScO5lzSdsEBgV2
+    - ROW-TOHyr7FZjZ4lS6ZQuN9ak
+    type: CHART
+  CHART-explore-150-1:
+    children: []
+    id: CHART-explore-150-1
+    meta:
+      chartId: 150
+      height: 94
+      sliceName: Student Level Course Grades
+      uuid: 1a78ac33-5081-4fb7-9593-89b1aed6daad
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-XTWquXFixByiYTirYL_Z4
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Suspicious Behavior Report
+    type: HEADER
+  MARKDOWN-ca_W7JJ1noAqRR1bKT3-8:
+    children: []
+    id: MARKDOWN-ca_W7JJ1noAqRR1bKT3-8
+    meta:
+      code: '### Change Log'
+      height: 50
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    - TAB-Er1foaK2n78kBYKHUaf80
+    - ROW-g0h2IRNxCSWsSHltO_KrK
+    type: MARKDOWN
+  MARKDOWN-ghW-SMibpAQxX3K_Ll9FM:
+    children: []
+    id: MARKDOWN-ghW-SMibpAQxX3K_Ll9FM
+    meta:
+      code: '[Report Definitions](https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.cheating_detection_report)'
+      height: 50
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    - TAB-Er1foaK2n78kBYKHUaf80
+    - ROW-g0h2IRNxCSWsSHltO_KrK
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-5YkndqYNyvukrwSbKdi8o:
+    children:
+    - CHART-explore-150-1
+    id: ROW-5YkndqYNyvukrwSbKdi8o
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    - TAB-ucYCSKy00-BM9ShbwB7Yl
+    type: ROW
+  ROW-TOHyr7FZjZ4lS6ZQuN9ak:
+    children:
+    - CHART-avtPI5HqRH14QhZG4T9H6
+    id: ROW-TOHyr7FZjZ4lS6ZQuN9ak
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    - TAB-fqinMmgScO5lzSdsEBgV2
+    type: ROW
+  ROW-g0h2IRNxCSWsSHltO_KrK:
+    children:
+    - MARKDOWN-ca_W7JJ1noAqRR1bKT3-8
+    - MARKDOWN-ghW-SMibpAQxX3K_Ll9FM
+    id: ROW-g0h2IRNxCSWsSHltO_KrK
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    - TAB-Er1foaK2n78kBYKHUaf80
+    type: ROW
+  TAB-Er1foaK2n78kBYKHUaf80:
+    children:
+    - ROW-g0h2IRNxCSWsSHltO_KrK
+    id: TAB-Er1foaK2n78kBYKHUaf80
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    type: TAB
+  TAB-fqinMmgScO5lzSdsEBgV2:
+    children:
+    - ROW-TOHyr7FZjZ4lS6ZQuN9ak
+    id: TAB-fqinMmgScO5lzSdsEBgV2
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Problem Level
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    type: TAB
+  TAB-ucYCSKy00-BM9ShbwB7Yl:
+    children:
+    - ROW-5YkndqYNyvukrwSbKdi8o
+    id: TAB-ucYCSKy00-BM9ShbwB7Yl
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Student Level
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    type: TAB
+  TABS-lUkDlANRnqkwJU2wmp6eg:
+    children:
+    - TAB-fqinMmgScO5lzSdsEBgV2
+    - TAB-ucYCSKy00-BM9ShbwB7Yl
+    - TAB-Er1foaK2n78kBYKHUaf80
+    id: TABS-lUkDlANRnqkwJU2wmp6eg
+    meta: {}
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: TABS
+metadata:
+  label_colors: {}
+  chart_configuration:
+    '124':
+      id: 124
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 150
+    '150':
+      id: 150
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 124
+  global_chart_configuration:
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    chartsInScope:
+    - 124
+    - 150
+  color_scheme: ''
+  refresh_frequency: 0
+  expanded_slices: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  native_filter_configuration:
+  - cascadeParentIds: []
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - TAB-fqinMmgScO5lzSdsEBgV2
+      - TAB-ucYCSKy00-BM9ShbwB7Yl
+    targets:
+    - column:
+        name: platform
+      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+    type: NATIVE_FILTER
+    chartsInScope:
+    - 124
+    - 125
+    tabsInScope:
+    - TAB-fqinMmgScO5lzSdsEBgV2
+    - TAB-ucYCSKy00-BM9ShbwB7Yl
+  - id: NATIVE_FILTER-W94SYs9sUYuVI_BFVxJOs
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Openedx User ID
+    filterType: filter_select
+    targets:
+    - column:
+        name: openedx_user_id
+      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds:
+    - NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
+    scope:
+      rootPath:
+      - TAB-fqinMmgScO5lzSdsEBgV2
+      - TAB-ucYCSKy00-BM9ShbwB7Yl
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 124
+    - 125
+    tabsInScope:
+    - TAB-fqinMmgScO5lzSdsEBgV2
+    - TAB-ucYCSKy00-BM9ShbwB7Yl
+  - cascadeParentIds:
+    - NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
+    - NATIVE_FILTER-W94SYs9sUYuVI_BFVxJOs
+    chartsInScope:
+    - 124
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-PflPeMlah9eX0yLJyNTIQ
+    name: Course Run Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
+    - NATIVE_FILTER-W94SYs9sUYuVI_BFVxJOs
+    - NATIVE_FILTER-PflPeMlah9eX0yLJyNTIQ
+    chartsInScope:
+    - 124
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-2WpcmAAMhEjGrjhMh2xBi
+    name: Chapter Name
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: chapter_name
+      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
+    - NATIVE_FILTER-W94SYs9sUYuVI_BFVxJOs
+    - NATIVE_FILTER-PflPeMlah9eX0yLJyNTIQ
+    - NATIVE_FILTER-2WpcmAAMhEjGrjhMh2xBi
+    chartsInScope:
+    - 124
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-_WSW136OzR1nHkkPDrRrb
+    name: Unit Name
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: unit_name
+      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+    type: NATIVE_FILTER
+  - id: NATIVE_FILTER-j3SktlYu7w7e_iEmwfnCm
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Exam Indicator
+    filterType: filter_select
+    targets:
+    - column:
+        name: exam_indicator
+      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds:
+    - NATIVE_FILTER-_WSW136OzR1nHkkPDrRrb
+    - NATIVE_FILTER-2WpcmAAMhEjGrjhMh2xBi
+    - NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
+    - NATIVE_FILTER-PflPeMlah9eX0yLJyNTIQ
+    - NATIVE_FILTER-W94SYs9sUYuVI_BFVxJOs
+    scope:
+      rootPath:
+      - TAB-fqinMmgScO5lzSdsEBgV2
+      - TAB-ucYCSKy00-BM9ShbwB7Yl
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 124
+    - 125
+    tabsInScope:
+    - TAB-fqinMmgScO5lzSdsEBgV2
+    - TAB-ucYCSKy00-BM9ShbwB7Yl
+  shared_label_colors: []
+  map_label_colors: {}
+  color_scheme_domain: []
+theme_uuid:
+version: 1.0.0

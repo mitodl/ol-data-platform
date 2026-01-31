@@ -1,0 +1,42 @@
+---
+slice_name: Combined Learners
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 112__table
+  viz_type: table
+  slice_id: 127
+  query_mode: aggregate
+  groupby:
+  - user_username
+  - user_email
+  - user_country_code
+  - user_full_name
+  temporal_columns_lookup: {}
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  order_desc: true
+  server_pagination: false
+  row_limit: 50000
+  server_page_length: 10
+  show_totals: true
+  table_timestamp_format: smart_date
+  include_search: true
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 11
+query_context: '{"datasource":{"id":112,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["user_username","user_email","user_country_code","user_full_name"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"112__table","viz_type":"table","slice_id":127,"query_mode":"aggregate","groupby":["user_username","user_email","user_country_code","user_full_name"],"temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"order_desc":true,"server_pagination":false,"row_limit":50000,"server_page_length":10,"show_totals":true,"table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[11],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 0cf1e9cf-4645-4397-ac5a-d9a7b75d0ad5
+version: 1.0.0
+dataset_uuid: 01f179b6-cb75-465f-8ceb-0525c24fa223

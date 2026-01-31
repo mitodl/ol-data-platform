@@ -1,0 +1,521 @@
+---
+dashboard_title: Course Engagement
+description:
+css: ''
+slug:
+certified_by: ''
+certification_details: ''
+published: true
+uuid: 2311d08c-60b3-4b6d-87d2-b417dccb64f7
+position:
+  CHART-O1--dVq0WF:
+    children: []
+    id: CHART-O1--dVq0WF
+    meta:
+      chartId: 53
+      height: 50
+      sliceName: Problem Results
+      uuid: f07a7065-db29-4749-a4c6-d2c75c9d55f8
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    - ROW-QUlcO7uR39
+    type: CHART
+  CHART-explore-118-1:
+    children: []
+    id: CHART-explore-118-1
+    meta:
+      chartId: 118
+      height: 73
+      sliceName: Video Engagement per Section
+      uuid: 52f9966c-2de9-41fd-b29a-ccd1781696cb
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    - ROW-H9zZ2xA7FbgsbeFjUqzjS
+    type: CHART
+  CHART-explore-147-1:
+    children: []
+    id: CHART-explore-147-1
+    meta:
+      chartId: 147
+      height: 31
+      sliceName: Course Run Metadata
+      uuid: 23fb7405-da8f-4983-839d-b1d7fb07e733
+      width: 10
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    - ROW-aTUVi4gd5b
+    type: CHART
+  CHART-explore-72-1:
+    children: []
+    id: CHART-explore-72-1
+    meta:
+      chartId: 72
+      height: 50
+      sliceName: Content Engagement
+      uuid: 984bd054-65c0-4f76-b7ee-7fb0608ccd6e
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    - ROW-1-jVF94rOPNBJNmtzxi1E
+    type: CHART
+  CHART-explore-73-1:
+    children: []
+    id: CHART-explore-73-1
+    meta:
+      chartId: 73
+      height: 50
+      sliceName: Engagement Totals
+      uuid: 24ea41c4-da94-443a-af6b-77bc7e09c303
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    - ROW-0F-BcRBmD25xVUJVjLPRR
+    type: CHART
+  CHART-hi-amt3MFS:
+    children: []
+    id: CHART-hi-amt3MFS
+    meta:
+      chartId: 56
+      height: 30
+      sliceName: Learners Enrolled
+      uuid: c0066291-5b04-437d-b41d-3a4412aa8c82
+      width: 2
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    - ROW-aTUVi4gd5b
+    type: CHART
+  CHART-vsfvuZT3xS:
+    children: []
+    id: CHART-vsfvuZT3xS
+    meta:
+      chartId: 54
+      height: 50
+      sliceName: Latest Dashboard Activity Recorded Date
+      uuid: af403a98-7ff4-407a-b1c9-5161ffc10522
+      width: 4
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-V8iVFkI6_
+    - ROW-Jy8_t6wsvq
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children: []
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Course Engagement
+    type: HEADER
+  MARKDOWN-NBlnARE3A_jrQ34WSXS-8:
+    children: []
+    id: MARKDOWN-NBlnARE3A_jrQ34WSXS-8
+    meta:
+      code: '### Change Log:
+
+        6/13/2025 changed the content engagement chart from weekly aggregation to
+        daily'
+      height: 50
+      width: 4
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-V8iVFkI6_
+    - ROW-Jy8_t6wsvq
+    type: MARKDOWN
+  MARKDOWN-d6V_tBs0Ck:
+    children: []
+    id: MARKDOWN-d6V_tBs0Ck
+    meta:
+      code: '
+
+        [EdX definitions](https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/tracking_logs/student_event_types.html)
+
+
+
+        [Video Engagement data platform column definition](https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__mitxonline_video_engagements)
+
+
+
+        [Content Engagment data platform column definition](https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__mitxonline_course_engagements_daily)
+
+
+        '
+      height: 50
+      width: 4
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-V8iVFkI6_
+    - ROW-Jy8_t6wsvq
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - TABS-kT76tZ5ILt
+    id: ROOT_ID
+    type: ROOT
+  ROW-0F-BcRBmD25xVUJVjLPRR:
+    children:
+    - CHART-explore-73-1
+    id: ROW-0F-BcRBmD25xVUJVjLPRR
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    type: ROW
+  ROW-1-jVF94rOPNBJNmtzxi1E:
+    children:
+    - CHART-explore-72-1
+    id: ROW-1-jVF94rOPNBJNmtzxi1E
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    type: ROW
+  ROW-H9zZ2xA7FbgsbeFjUqzjS:
+    children:
+    - CHART-explore-118-1
+    id: ROW-H9zZ2xA7FbgsbeFjUqzjS
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    type: ROW
+  ROW-Jy8_t6wsvq:
+    children:
+    - CHART-vsfvuZT3xS
+    - MARKDOWN-d6V_tBs0Ck
+    - MARKDOWN-NBlnARE3A_jrQ34WSXS-8
+    id: ROW-Jy8_t6wsvq
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-V8iVFkI6_
+    type: ROW
+  ROW-QUlcO7uR39:
+    children:
+    - CHART-O1--dVq0WF
+    id: ROW-QUlcO7uR39
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    type: ROW
+  ROW-aTUVi4gd5b:
+    children:
+    - CHART-hi-amt3MFS
+    - CHART-explore-147-1
+    id: ROW-aTUVi4gd5b
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    - TAB-pdDtuny7Pu
+    type: ROW
+  TAB-V8iVFkI6_:
+    children:
+    - ROW-Jy8_t6wsvq
+    id: TAB-V8iVFkI6_
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    type: TAB
+  TAB-pdDtuny7Pu:
+    children:
+    - ROW-aTUVi4gd5b
+    - ROW-H9zZ2xA7FbgsbeFjUqzjS
+    - ROW-1-jVF94rOPNBJNmtzxi1E
+    - ROW-0F-BcRBmD25xVUJVjLPRR
+    - ROW-QUlcO7uR39
+    id: TAB-pdDtuny7Pu
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Engagement
+    parents:
+    - ROOT_ID
+    - TABS-kT76tZ5ILt
+    type: TAB
+  TABS-kT76tZ5ILt:
+    children:
+    - TAB-pdDtuny7Pu
+    - TAB-V8iVFkI6_
+    id: TABS-kT76tZ5ILt
+    meta: {}
+    parents:
+    - ROOT_ID
+    type: TABS
+metadata:
+  chart_configuration:
+    '53':
+      id: 53
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 54
+        - 56
+        - 72
+        - 73
+        - 118
+        - 147
+    '54':
+      id: 54
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 53
+        - 56
+        - 72
+        - 73
+        - 118
+        - 147
+    '72':
+      id: 72
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 73
+        - 118
+        - 147
+    '73':
+      id: 73
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 72
+        - 118
+        - 147
+    '118':
+      id: 118
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 72
+        - 73
+        - 147
+    '147':
+      id: 147
+      crossFilters:
+        scope: global
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 72
+        - 73
+        - 118
+  global_chart_configuration:
+    scope:
+      rootPath:
+      - ROOT_ID
+      excluded: []
+    chartsInScope:
+    - 53
+    - 54
+    - 56
+    - 72
+    - 73
+    - 118
+    - 147
+  color_scheme: ''
+  refresh_frequency: 0
+  expanded_slices: {}
+  label_colors: {}
+  timed_refresh_immune_slices: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  native_filter_configuration:
+  - id: NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Platform
+    filterType: filter_select
+    targets:
+    - column:
+        name: Platform
+      datasetUuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - TAB-pdDtuny7Pu
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 72
+    - 73
+    - 57
+    - 56
+    - 53
+    - 55
+    - 118
+    tabsInScope:
+    - TAB-pdDtuny7Pu
+  - id: NATIVE_FILTER-tKDJyRftc
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Current Course Run
+    filterType: filter_select
+    targets:
+    - column:
+        name: courserun_is_current
+      datasetUuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds: []
+    scope:
+      rootPath:
+      - TAB-pdDtuny7Pu
+      - TAB-V8iVFkI6_
+      excluded: []
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 72
+    - 73
+    - 54
+    - 56
+    - 53
+    - 55
+    - 118
+    - 147
+    tabsInScope:
+    - TAB-pdDtuny7Pu
+    - TAB-V8iVFkI6_
+  - id: NATIVE_FILTER-kFdRjkZtp
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      creatable: true
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Course
+    filterType: filter_select
+    targets:
+    - column:
+        name: course_readable_id
+      datasetUuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds:
+    - NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    type: NATIVE_FILTER
+    description: ''
+  - id: NATIVE_FILTER-QesG8w9qh
+    controlValues:
+      enableEmptyFilter: false
+      defaultToFirstItem: false
+      creatable: true
+      multiSelect: true
+      searchAllOptions: false
+      inverseSelection: false
+    name: Course Run Readable ID
+    filterType: filter_select
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    cascadeParentIds:
+    - NATIVE_FILTER-kFdRjkZtp
+    - NATIVE_FILTER-tKDJyRftc
+    - NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    type: NATIVE_FILTER
+    description: ''
+    chartsInScope:
+    - 72
+    - 73
+    - 54
+    - 56
+    - 53
+    - 55
+    - 118
+    - 147
+    tabsInScope:
+    - TAB-pdDtuny7Pu
+    - TAB-V8iVFkI6_
+  shared_label_colors:
+  - Learner_count
+  - Participated_In_Discussion
+  - Tried_a_problem
+  - Watched_a_video
+  color_scheme_domain: []
+  map_label_colors:
+    Viewed At Least One Video: '#1FA8C9'
+    Viewed All Videos: '#454E7C'
+    Learner_count: '#1FA8C9'
+    Watched_a_video: '#454E7C'
+    Tried_a_problem: '#5AC189'
+    Participated_In_Discussion: '#FF7F44'
+theme_uuid:
+version: 1.0.0

@@ -1,0 +1,38 @@
+---
+slice_name: Combined Learners
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 112__table
+  viz_type: table
+  slice_id: 115
+  query_mode: aggregate
+  groupby:
+  - user_username
+  - user_email
+  - user_country_code
+  - user_full_name
+  temporal_columns_lookup: {}
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  server_pagination: false
+  row_limit: 50000
+  show_totals: true
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 11
+query_context: '{"datasource":{"id":112,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["user_username","user_email","user_country_code","user_full_name"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"112__table","viz_type":"table","slice_id":115,"query_mode":"aggregate","groupby":["user_username","user_email","user_country_code","user_full_name"],"temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"server_pagination":false,"row_limit":50000,"show_totals":true,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","comparison_type":"values","extra_form_data":{},"dashboards":[11],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: f2f10600-7302-4887-af04-d0aad29333ea
+version: 1.0.0
+dataset_uuid: 01f179b6-cb75-465f-8ceb-0525c24fa223

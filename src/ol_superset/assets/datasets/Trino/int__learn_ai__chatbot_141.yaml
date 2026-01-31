@@ -1,0 +1,296 @@
+---
+table_name: int__learn_ai__chatbot
+main_dttm_col:
+description:
+default_endpoint:
+offset: 0
+cache_timeout:
+catalog: ol_data_lake_production
+schema: ol_warehouse_production_intermediate
+sql: ''
+params:
+template_params:
+filter_select_enabled: true
+fetch_values_predicate:
+extra:
+normalize_columns: false
+always_filter_main_dttm: false
+folders:
+uuid: f1ec896e-86d4-451a-84cc-841d234e70a6
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description:
+  d3format:
+  currency:
+  extra: {}
+  warning_text:
+columns:
+- column_name: courserun_readable_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: chatsession_created_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: chatsession_thread_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: chatsession_updated_on
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: chatsession_object_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: user_global_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: parent_checkpoint_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: user_full_name
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: checkpoint_metadata
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: checkpoint_namespace
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: chatsession_agent
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: agent_message
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: human_message
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: chatsession_title
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: user_username
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: user_email
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: checkpoint_source
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: checkpoint_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: checkpoint_type
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: checkpoint_json
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: user_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+- column_name: checkpoint_step
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra: {}
+version: 1.0.0
+database_uuid: 8702691f-d666-4dac-943b-9382c02233e3

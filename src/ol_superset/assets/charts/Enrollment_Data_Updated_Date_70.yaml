@@ -1,0 +1,46 @@
+---
+slice_name: Enrollment Data Updated Date
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 61__table
+  viz_type: table
+  slice_id: 70
+  query_mode: aggregate
+  groupby: []
+  temporal_columns_lookup: {}
+  metrics:
+  - aggregate:
+    column:
+    datasourceWarning: false
+    expressionType: SQL
+    hasCustomLabel: true
+    label: Max_Course_Enrollment_Creation_Date
+    optionName: metric_mde4mrq2hq_x3teut1sl3g
+    sqlExpression: MAX(SUBSTRING(courserunenrollment_created_on, 1, 10))
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 1000
+  order_desc: true
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  comparison_color_scheme: Green
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 11
+  - 14
+query_context: '{"datasource":{"id":61,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":[],"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Max_Course_Enrollment_Creation_Date","optionName":"metric_mde4mrq2hq_x3teut1sl3g","sqlExpression":"MAX(SUBSTRING(courserunenrollment_created_on,
+  1, 10))"}],"orderby":[[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Max_Course_Enrollment_Creation_Date","optionName":"metric_mde4mrq2hq_x3teut1sl3g","sqlExpression":"MAX(SUBSTRING(courserunenrollment_created_on,
+  1, 10))"},false]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"61__table","viz_type":"table","slice_id":70,"query_mode":"aggregate","groupby":[],"temporal_columns_lookup":{},"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Max_Course_Enrollment_Creation_Date","optionName":"metric_mde4mrq2hq_x3teut1sl3g","sqlExpression":"MAX(SUBSTRING(courserunenrollment_created_on,
+  1, 10))"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"order_desc":true,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","comparison_type":"values","extra_form_data":{},"dashboards":[11,14],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 9eb01f0f-df02-421e-9c26-d5fdb8cff986
+version: 1.0.0
+dataset_uuid: b579034e-2b79-4d3a-ba84-94c9fcfa0cc5

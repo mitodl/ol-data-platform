@@ -1,0 +1,159 @@
+---
+table_name: marts__combined_video_engagements_w_video_counts
+main_dttm_col:
+description:
+default_endpoint:
+offset: 0
+cache_timeout:
+catalog: ol_data_lake_production
+schema: ol_warehouse_production_mart
+sql: "select a.user_email\n, a.chapter_title\n, a.courserun_readable_id\n, b.total_video_count\n\
+  , a.platform\n,case when \ncast(substring(courserun_start_on, 1, 10) as date) <=\
+  \ current_date\nand \n(courserun_end_on is null or \ncast(substring(courserun_end_on,\
+  \ 1, 10) as date) >= current_date)\nthen true\nelse false end as courserun_is_current\n\
+  ,a.course_readable_id\n, count(distinct a.video_title) user_watched_video_count\n\
+  , max(a.video_index) as max_video_index\nfrom ol_warehouse_production_mart.marts__combined_video_engagements\
+  \ a\njoin \n(select chapter_title, courserun_readable_id, count(distinct video_title)\
+  \ as total_video_count\nfrom ol_warehouse_production_mart.marts__combined_video_engagements\n\
+  group by 1, 2) b\non a.chapter_title=b.chapter_title and a.courserun_readable_id=b.courserun_readable_id\n\
+  where a.video_event_type = 'play_video'\ngroup by 1, 2, 3, 4, 5, 6, 7"
+params:
+template_params:
+filter_select_enabled: true
+fetch_values_predicate:
+extra:
+normalize_columns: false
+always_filter_main_dttm: false
+folders:
+uuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+metrics:
+- metric_name: count
+  verbose_name: COUNT(*)
+  metric_type: count
+  expression: COUNT(*)
+  description:
+  d3format:
+  currency:
+  extra:
+    warning_markdown: ''
+  warning_text:
+columns:
+- column_name: courserun_readable_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: course_readable_id
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: chapter_title
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_email
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: platform
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: courserun_is_current
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: user_watched_video_count
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: total_video_count
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+- column_name: max_video_index
+  verbose_name:
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type:
+  groupby: true
+  filterable: true
+  expression:
+  description:
+  python_date_format:
+  extra:
+    warning_markdown:
+version: 1.0.0
+database_uuid: 8702691f-d666-4dac-943b-9382c02233e3

@@ -1,0 +1,44 @@
+---
+slice_name: Program Summary
+description:
+certified_by:
+certification_details:
+viz_type: table
+params:
+  datasource: 55__table
+  viz_type: table
+  query_mode: raw
+  groupby: []
+  time_grain_sqla: P1D
+  temporal_columns_lookup: {}
+  all_columns:
+  - program_name
+  - total_enrollments
+  - unique_users
+  - unique_countries
+  - verified_enrollments
+  - unique_verified_users
+  - course_certificates
+  - unique_course_certificate_earners
+  - program_certificates
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 1000
+  server_page_length: 10
+  order_desc: true
+  table_timestamp_format: smart_date
+  allow_render_html: false
+  show_cell_bars: false
+  color_pn: false
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 34
+query_context: '{"datasource":{"id":55,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["program_name","total_enrollments","unique_users","unique_countries","verified_enrollments","unique_verified_users","course_certificates","unique_course_certificate_earners","program_certificates"],"orderby":[],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"55__table","viz_type":"table","query_mode":"raw","groupby":[],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"all_columns":["program_name","total_enrollments","unique_users","unique_countries","verified_enrollments","unique_verified_users","course_certificates","unique_course_certificate_earners","program_certificates"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","allow_render_html":false,"show_cell_bars":false,"color_pn":false,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[34],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout:
+uuid: 8350fe92-c02c-4e98-92ed-adabae3fb582
+version: 1.0.0
+dataset_uuid: 0d77ec2b-8489-47f8-b0c3-3abde0b1b8f3
