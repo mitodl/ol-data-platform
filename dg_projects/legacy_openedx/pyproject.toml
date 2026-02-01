@@ -12,7 +12,7 @@ dependencies = [
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
     "pymysql ~= 1.1",
-    "PyPika ~=0.50.0",
+    "PyPika ~=0.51.0",
 ]
 
 [project.entry-points]

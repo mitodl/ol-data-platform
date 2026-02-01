@@ -1230,7 +1230,7 @@ requires-dist = [
     { name = "jsonlines", specifier = "~=4.0.0" },
     { name = "ol-orchestrate-lib", editable = "../../packages/ol-orchestrate-lib" },
     { name = "pymysql", specifier = "~=1.1" },
-    { name = "pypika", specifier = "~=0.50.0" },
+    { name = "pypika", specifier = "~=0.51.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1474,7 +1474,7 @@ requires-dist = [
     { name = "polars", specifier = ">=1.35.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
     { name = "pyarrow", specifier = "~=23.0.0" },
-    { name = "pyathena", specifier = "~=3.25.0" },
+    { name = "pyathena", specifier = "~=3.26.0" },
     { name = "pydantic", specifier = "~=2.12.3" },
     { name = "pygsheets", specifier = "~=2.0.6" },
     { name = "pyiceberg", extras = ["polars"], specifier = ">=0.10.0" },
@@ -1720,7 +1720,7 @@ wheels = [
 
 [[package]]
 name = "pyathena"
-version = "3.25.0"
+version = "3.26.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
@@ -1729,9 +1729,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/66/42/9ce83fa64fdf607b5a792683ab5b41bec4ecfe846b132b0505f05b19054d/pyathena-3.25.0.tar.gz", hash = "sha256:60e735613454671353f88a9adaf647f10c1dc10da674919a0d5993392b05b7ab", size = 114304, upload-time = "2026-01-16T07:46:28.753Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/6f/175b48abd18c2a135c0ad2c093d340fdf75cb16cc25441a965c2fa04a727/pyathena-3.26.0.tar.gz", hash = "sha256:902380f52b953b73a10d6182b7145c4f739f2d0fcc050b408b4eb1a345b48016", size = 114457, upload-time = "2026-01-31T11:39:16.654Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/5d/4ac280ac9168d6a14c99a4324a9615cd4f19e9c76ecb2fa92a475f34b8b2/pyathena-3.25.0-py3-none-any.whl", hash = "sha256:01df17f0063cfcb7ca322cfdd0385e15f3387975cbed0836897191063c1792a2", size = 153364, upload-time = "2026-01-16T07:46:26.222Z" },
+    { url = "https://files.pythonhosted.org/packages/15/d5/543aabe44fe99cc22def83f3da6722625e3efd4cde86c19bd082d65ad224/pyathena-3.26.0-py3-none-any.whl", hash = "sha256:c679e5a90d8fe0bf5871e03df4af9bfe9a896c5fed3799fb95be93c664e45aa5", size = 153534, upload-time = "2026-01-31T11:39:14.607Z" },
 ]
 
 [[package]]
@@ -1878,11 +1878,11 @@ wheels = [
 
 [[package]]
 name = "pypika"
-version = "0.50.0"
+version = "0.51.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fb/fb/b7d5f29108b07c10c69fc3bb72e12f869d55a360a449749fba5a1f903525/pypika-0.50.0.tar.gz", hash = "sha256:2ff66a153adc8d8877879ff2abd5a3b050a5d2adfdf8659d3402076e385e35b3", size = 81033, upload-time = "2026-01-14T12:34:21.895Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b0/9b/76b931b449fee149359bda6ffc3bf711a7a2a2e9bfd7a32c2668e2069018/pypika-0.51.0.tar.gz", hash = "sha256:ba71a4e4f320221727619401b49b93491c589d794d5347a97bf1e8dfaf8676bb", size = 80932, upload-time = "2026-02-01T18:18:44.103Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/18/5b/419c5bb460cb27b52fcd3bc96830255c3265bc1859f55aafa3ff08fae8bd/pypika-0.50.0-py2.py3-none-any.whl", hash = "sha256:ed11b7e259bc38abbcfde00cfb31f8d00aa42ffa51e437b8f5ac2db12b0fe0f4", size = 60577, upload-time = "2026-01-14T12:34:20.078Z" },
+    { url = "https://files.pythonhosted.org/packages/99/1c/54b7a741a5e1bdd366d6767c28d74421c7191b2e2109d2b773d28d49ecc6/pypika-0.51.0-py2.py3-none-any.whl", hash = "sha256:219f14f2dcf3c0047e25bd47227d43e227fc59170ea9bb7d14f4e0945442ce3e", size = 60581, upload-time = "2026-02-01T18:18:42.187Z" },
 ]
 
 [[package]]
