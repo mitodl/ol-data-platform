@@ -1,8 +1,7 @@
----
 slice_name: Coupon/Discount Summary
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 140__table
@@ -65,7 +64,7 @@ query_context: '{"datasource":{"id":140,"type":"table"},"force":false,"queries":
   \nand cast(now() as date)<=cast(substring(discount_expires_on, 1, 10) as date) \nthen
   TRUE else FALSE end"},{"expressionType":"SQL","label":"total_nr_coupons","sqlExpression":"num_discount_codes*discount_max_redemptions"},{"expressionType":"SQL","label":"Coupons_left","sqlExpression":"(num_discount_codes*discount_max_redemptions)
   - discounts_used_count"},"discounts_used_count","b2breceipt_reference_number","product_readable_id","payment_transaction","discount_max_redemptions"],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"order_desc":true,"row_limit":1000,"server_page_length":10,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","comparison_type":"values","extra_form_data":{},"dashboards":[44],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 2e066386-dc90-48e3-859b-2b665b3cb257
 version: 1.0.0
 dataset_uuid: a5df905c-0480-4227-b234-1a1064672b32

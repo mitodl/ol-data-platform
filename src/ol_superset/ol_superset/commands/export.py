@@ -1,0 +1,99 @@
+"""Export command - export Superset assets from an instance."""
+
+from typing import Annotated
+
+from cyclopts import Parameter
+
+from ol_superset.lib.utils import count_assets, get_assets_dir, run_sup_command
+
+
+def export(
+    from_instance: Annotated[
+        str,
+        Parameter(name=["--from", "-f"], help="Instance to export from"),
+    ] = "superset-production",
+    output_dir: Annotated[
+        str | None,
+        Parameter(
+            name=["--output-dir", "-o"], help="Output directory (default: assets/)"
+        ),
+    ] = None,
+) -> None:
+    """
+    Export all Superset assets from specified instance.
+
+    Exports datasets, charts, dashboards, and database configurations
+    using automatic pagination to fetch all assets.
+
+    Examples:
+        Export from production (default):
+            ol-superset export
+
+        Export from QA:
+            ol-superset export --from superset-qa
+
+        Export to custom directory:
+            ol-superset export -f superset-qa -o /tmp/qa-backup
+    """
+    assets_dir = get_assets_dir(output_dir)
+
+    print("=" * 50)
+    print(f"Exporting Superset Assets from {from_instance}")
+    print("=" * 50)
+    print()
+
+    # Set the instance
+    print(f"Setting instance to {from_instance}...")
+    run_sup_command(["instance", "use", from_instance])
+
+    # Export datasets
+    print()
+    print("Step 1: Exporting all datasets (via pagination)...")
+    run_sup_command(
+        [
+            "dataset",
+            "pull",
+            str(assets_dir),
+            "--instance",
+            from_instance,
+            "--overwrite",
+        ]
+    )
+
+    # Export charts
+    print()
+    print("Step 2: Exporting all charts (via pagination)...")
+    run_sup_command(
+        ["chart", "pull", str(assets_dir), "--instance", from_instance, "--overwrite"]
+    )
+
+    # Export dashboards
+    print()
+    print("Step 3: Exporting all dashboards (via pagination)...")
+    run_sup_command(
+        [
+            "dashboard",
+            "pull",
+            str(assets_dir),
+            "--instance",
+            from_instance,
+            "--overwrite",
+        ]
+    )
+
+    # Show summary
+    print()
+    print("=" * 50)
+    print("Export Complete!")
+    print("=" * 50)
+    print()
+    print(f"Assets exported to: {assets_dir}")
+    print()
+
+    counts = count_assets(assets_dir)
+    print("Summary:")
+    print(f"  Datasets:   {counts['datasets']}")
+    print(f"  Charts:     {counts['charts']}")
+    print(f"  Dashboards: {counts['dashboards']}")
+    print(f"  Databases:  {counts['databases']}")
+    print()

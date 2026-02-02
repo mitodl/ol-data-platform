@@ -1,8 +1,7 @@
----
 dashboard_title: Learn User Profile
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -279,5 +278,5 @@ metadata:
   shared_label_colors: []
   map_label_colors:
     count: '#1FA8C9'
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

@@ -1,8 +1,7 @@
----
 slice_name: Percentage of Video Played
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 154__table
@@ -20,8 +19,8 @@ params:
     sqlExpression: AVG((case when estimated_time_played>= video_duration then video_duration
       else estimated_time_played end)/(case when video_duration = 0 then null else
       video_duration end))
-    column:
-    aggregate:
+    column: null
+    aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: Avg_%_Video_Played
@@ -34,7 +33,7 @@ params:
     operator: TEMPORAL_RANGE
     comparator: No filter
     clause: WHERE
-    sqlExpression:
+    sqlExpression: null
     isExtra: false
     isNew: false
     datasourceWarning: false
@@ -46,7 +45,7 @@ params:
     comparator:
     - video
     clause: WHERE
-    sqlExpression:
+    sqlExpression: null
     isExtra: false
     isNew: false
     datasourceWarning: false
@@ -77,7 +76,7 @@ query_context: '{"datasource":{"id":154,"type":"table"},"force":false,"queries":
   when estimated_time_played>= video_duration then video_duration else estimated_time_played
   end)/(case when video_duration = 0 then null else video_duration end))","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Avg_%_Video_Played","optionName":"metric_z3je25mgv1r_j1gf6wdybya"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[{"expressionType":"SIMPLE","subject":"activity_date","operator":"TEMPORAL_RANGE","comparator":"No
   filter","clause":"WHERE","sqlExpression":null,"isExtra":false,"isNew":false,"datasourceWarning":false,"filterOptionName":"filter_i78t0qa2vdc_uohfyrbt5d"},{"expressionType":"SIMPLE","subject":"block_category","operator":"IN","operatorId":"IN","comparator":["video"],"clause":"WHERE","sqlExpression":null,"isExtra":false,"isNew":false,"datasourceWarning":false,"filterOptionName":"filter_ow7wmcww8p_aya1tggllfg"}],"order_by_cols":[],"order_desc":true,"row_limit":1000,"server_page_length":10,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"Avg_%_Video_Played":{"d3NumberFormat":",.1%"}},"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[59],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 9bb14cc1-d787-4f47-b6d3-86adb3d4ec47
 version: 1.0.0
 dataset_uuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91

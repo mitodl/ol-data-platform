@@ -1,272 +1,271 @@
----
 table_name: learner_demographics_and_cert_info
-main_dttm_col:
-description:
-default_endpoint:
+main_dttm_col: null
+description: Auto refreshed at 2026-02-02T16:22:23.939212+00:00
+default_endpoint: null
 offset: 0
-cache_timeout:
+cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_reporting
-sql:
-params:
-template_params:
+sql: null
+params: null
+template_params: null
 filter_select_enabled: true
-fetch_values_predicate:
-extra:
+fetch_values_predicate: null
+extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-folders:
+folders: null
 uuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
   metric_type: count
   expression: COUNT(*)
-  description:
-  d3format:
-  currency:
-  extra:
-  warning_text:
+  description: null
+  d3format: null
+  currency: null
+  extra: null
+  warning_text: null
 columns:
 - column_name: dedp_public_policy_program_cert_ind
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: dedp_international_program_cert_ind
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: any_dedp_program_cert_ind
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: last_course_start_datetime
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: first_course_start_datetime
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_address_country
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_highest_education
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_hashed_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_edxorg_username
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_mitxonline_username
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_full_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_job_title
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_company
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_email
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_gender
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_industry
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: latest_income_usd
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: DOUBLE
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: dedp_course_cert_count
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BIGINT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: num_of_course_enrolled
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BIGINT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_birth_year
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BIGINT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 version: 1.0.0
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

@@ -1,8 +1,7 @@
----
 slice_name: Engagement Totals
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_timeseries_bar
 params:
   adhoc_filters:
@@ -21,12 +20,12 @@ params:
   forecastInterval: 0.8
   forecastPeriods: 10
   groupby: []
-  legendMargin:
+  legendMargin: null
   legendOrientation: top
   legendType: scroll
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -34,8 +33,8 @@ params:
     optionName: metric_059piu499ctj_v1biwm6w8a
     sqlExpression: COUNT(DISTINCT(CASE WHEN num_video_played> 0 THEN user_username
       ELSE null END))
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -43,8 +42,8 @@ params:
     optionName: metric_t4xk2kk9zxa_zdkc9h1us7h
     sqlExpression: COUNT(DISTINCT(case when num_problem_submitted> 0 then user_username
       else null end))
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -52,8 +51,8 @@ params:
     optionName: metric_8zaqrr5aljx_o1deaowi9rp
     sqlExpression: COUNT(DISTINCT(case when num_discussion_participated> 0 then user_username
       else null end))
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -81,8 +80,8 @@ params:
   x_axis_time_format: smart_date
   x_axis_title_margin: 15
   y_axis_bounds:
-  - 
-  - 
+  - null
+  - null
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: 15
   y_axis_title_position: Left
@@ -98,7 +97,7 @@ query_context: '{"datasource":{"id":10,"type":"table"},"force":false,"queries":[
   when num_discussion_participated> 0 then user_username else null end))"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Learner_count","optionName":"metric_653jots7vt7_l91azd98z0k","sqlExpression":"COUNT(DISTINCT
   user_username)"}],"groupby":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
   filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"courseactivity_date"}],"order_desc":true,"row_limit":10000,"truncate_metric":true,"show_empty_columns":true,"comparison_type":"values","annotation_layers":[],"forecastPeriods":10,"forecastInterval":0.8,"orientation":"vertical","x_axis_title_margin":15,"y_axis_title_margin":15,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","only_total":true,"show_legend":true,"legendType":"scroll","legendOrientation":"top","legendMargin":null,"x_axis_time_format":"smart_date","y_axis_format":"SMART_NUMBER","y_axis_bounds":[null,null],"truncateXAxis":true,"rich_tooltip":true,"showTooltipTotal":false,"showTooltipPercentage":false,"tooltipTimeFormat":"smart_date","extra_form_data":{},"dashboards":[26],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 24ea41c4-da94-443a-af6b-77bc7e09c303
 version: 1.0.0
 dataset_uuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8

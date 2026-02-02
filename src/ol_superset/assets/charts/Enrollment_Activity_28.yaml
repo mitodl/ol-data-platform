@@ -1,8 +1,7 @@
----
 slice_name: Enrollment Activity
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_timeseries_line
 params:
   adhoc_filters: []
@@ -16,8 +15,8 @@ params:
   legendOrientation: top
   legendType: scroll
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -25,8 +24,8 @@ params:
     optionName: metric_vjx5f5o5s1_5acgqppo467
     sqlExpression: sum(case when courserunenrollment_enrollment_mode= 'verified' then
       1 else 0 end)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -34,16 +33,16 @@ params:
     optionName: metric_twpw4trjrfe_xh8ncdhqdto
     sqlExpression: sum(case when courserunenrollment_enrollment_mode= 'audit' then
       1 else 0 end)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
     label: enrollment_count
     optionName: metric_rqfrhut3enq_z4mczfs4bc
     sqlExpression: count(*)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -79,7 +78,7 @@ query_context: '{"datasource":{"id":38,"type":"table"},"force":false,"queries":[
   when courserunenrollment_enrollment_mode= ''verified'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"audit_count","optionName":"metric_twpw4trjrfe_xh8ncdhqdto","sqlExpression":"sum(case
   when courserunenrollment_enrollment_mode= ''audit'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"enrollment_count","optionName":"metric_rqfrhut3enq_z4mczfs4bc","sqlExpression":"count(*)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"certs_earned_count","optionName":"metric_in7yx2eq8qa_b8llqtpxtqd","sqlExpression":"SUM(case
   when courseruncertificate_is_earned= true then 1 else 0 end)"}],"groupby":[],"adhoc_filters":[],"row_limit":10000,"truncate_metric":true,"show_empty_columns":true,"annotation_layers":[],"x_axis_title_margin":15,"y_axis_title_margin":15,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","seriesType":"line","zoomable":true,"show_legend":true,"legendType":"scroll","legendOrientation":"top","x_axis_time_format":"smart_date","rich_tooltip":true,"tooltipTimeFormat":"smart_date","y_axis_format":"SMART_NUMBER","truncateXAxis":true,"extra_form_data":{},"dashboards":[16],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: b7056cdf-6d2a-43c0-b0a8-b66ab3f3980c
 version: 1.0.0
 dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000

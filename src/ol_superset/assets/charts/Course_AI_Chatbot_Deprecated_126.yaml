@@ -1,8 +1,7 @@
----
 slice_name: Course AI Chatbot (Deprecated)
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 141__table
@@ -29,16 +28,16 @@ params:
   percent_metrics: []
   adhoc_filters:
   - clause: WHERE
-    comparator:
+    comparator: null
     datasourceWarning: false
     expressionType: SQL
     filterOptionName: filter_s4j4p8aqwz_qj2vtbjwpw
     isExtra: false
     isNew: false
-    operator:
+    operator: null
     sqlExpression: (agent_message IS NOT NULL AND agent_message != '' OR human_message
       IS NOT NULL)
-    subject:
+    subject: null
   order_by_cols:
   - '["chatsession_thread_id", true]'
   - '["checkpoint_step", true]'
@@ -62,7 +61,7 @@ query_context: '{"datasource":{"id":141,"type":"table"},"force":false,"queries":
   IS NOT NULL AND agent_message != '''' OR human_message IS NOT NULL))"},"applied_time_extras":{},"columns":[{"expressionType":"SQL","label":"ai_tool","sqlExpression":"chatsession_agent"},{"expressionType":"SQL","label":"resource_id","sqlExpression":"chatsession_object_id"},{"expressionType":"SQL","label":"thread_id","sqlExpression":"chatsession_thread_id"},"human_message","agent_message",{"expressionType":"SQL","label":"created_on","sqlExpression":"chatsession_created_on"}],"orderby":[["chatsession_thread_id",true],["checkpoint_step",true]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"141__table","viz_type":"table","slice_id":126,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":[{"expressionType":"SQL","label":"ai_tool","sqlExpression":"chatsession_agent"},{"expressionType":"SQL","label":"resource_id","sqlExpression":"chatsession_object_id"},{"expressionType":"SQL","label":"thread_id","sqlExpression":"chatsession_thread_id"},"human_message","agent_message",{"expressionType":"SQL","label":"created_on","sqlExpression":"chatsession_created_on"}],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":null,"datasourceWarning":false,"expressionType":"SQL","filterOptionName":"filter_s4j4p8aqwz_qj2vtbjwpw","isExtra":false,"isNew":false,"operator":null,"sqlExpression":"(agent_message
   IS NOT NULL AND agent_message != '''' OR human_message IS NOT NULL)","subject":null}],"order_by_cols":["[\"chatsession_thread_id\",
   true]","[\"checkpoint_step\", true]"],"order_desc":true,"row_limit":1000,"server_page_length":10,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"user_id":{"showCellBars":false__JINJA2_CLOSE__,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[55],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 148f6894-7e0b-4750-aef4-501db89a4543
 version: 1.0.0
 dataset_uuid: f1ec896e-86d4-451a-84cc-841d234e70a6

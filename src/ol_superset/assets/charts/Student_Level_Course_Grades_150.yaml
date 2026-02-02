@@ -1,8 +1,7 @@
----
 slice_name: Student Level Course Grades
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 160__table
@@ -15,11 +14,13 @@ params:
   all_columns:
   - platform
   - openedx_user_id
+  - email
   - courserun_readable_id
   - courserungrade_grade
   - expressionType: SQL
     label: suspiciousness_probability
     sqlExpression: risk_probability
+    datasourceWarning: false
   percent_metrics: []
   adhoc_filters:
   - clause: WHERE
@@ -36,15 +37,16 @@ params:
       showCellBars: false
   show_cell_bars: false
   color_pn: false
+  comparison_color_scheme: Green
   conditional_formatting: []
   comparison_type: values
   extra_form_data: {}
   dashboards:
   - 52
 query_context: '{"datasource":{"id":160,"type":"table"},"force":false,"queries":[{"filters":[{"col":"created_timestamp","op":"TEMPORAL_RANGE","val":"No
-  filter"}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform","openedx_user_id","courserun_readable_id","courserungrade_grade",{"expressionType":"SQL","label":"suspiciousness_probability","sqlExpression":"risk_probability"}],"orderby":[],"annotation_layers":[],"row_limit":500000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"160__table","viz_type":"table","slice_id":150,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{"created_timestamp":true},"all_columns":["platform","openedx_user_id","courserun_readable_id","courserungrade_grade",{"expressionType":"SQL","label":"suspiciousness_probability","sqlExpression":"risk_probability"}],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
-  filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"created_timestamp"}],"order_by_cols":[],"row_limit":500000,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"openedx_user_id":{"showCellBars":false}},"show_cell_bars":false,"color_pn":false,"conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[52],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout:
+  filter"}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform","openedx_user_id","email","courserun_readable_id","courserungrade_grade",{"expressionType":"SQL","label":"suspiciousness_probability","sqlExpression":"risk_probability","datasourceWarning":false}],"orderby":[],"annotation_layers":[],"row_limit":500000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"160__table","viz_type":"table","slice_id":150,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{"created_timestamp":true},"all_columns":["platform","openedx_user_id","email","courserun_readable_id","courserungrade_grade",{"expressionType":"SQL","label":"suspiciousness_probability","sqlExpression":"risk_probability","datasourceWarning":false}],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
+  filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"created_timestamp"}],"order_by_cols":[],"row_limit":500000,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"openedx_user_id":{"showCellBars":false}},"show_cell_bars":false,"color_pn":false,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[52],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout: null
 uuid: 1a78ac33-5081-4fb7-9593-89b1aed6daad
 version: 1.0.0
 dataset_uuid: ca346322-251e-455b-a2cc-b11976e69ce5

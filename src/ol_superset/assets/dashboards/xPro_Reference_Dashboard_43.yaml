@@ -1,8 +1,7 @@
----
 dashboard_title: xPro Reference Dashboard
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -164,5 +163,5 @@ metadata:
   timed_refresh_immune_slices: []
   cross_filters_enabled: true
   default_filters: '{}'
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

@@ -1,10 +1,10 @@
 # Superset Asset Management Workflows
 
-This document describes the workflows for managing Superset assets between environments (Production, QA).
+This document describes the workflows for managing Superset assets between environments (Production, QA) using the `ol-superset` CLI.
 
 ## Overview
 
-We use the `sup` CLI tool for automated asset export/import with OAuth authentication and database UUID mapping. The workflow supports bidirectional sync between environments with proper transformation.
+We use a unified `ol-superset` CLI built on the `sup` tool for automated asset export/import with OAuth authentication and database UUID mapping. The workflow supports bidirectional sync between environments with proper transformation.
 
 ## Quick Start
 
@@ -12,34 +12,130 @@ We use the `sup` CLI tool for automated asset export/import with OAuth authentic
 
 ```bash
 # Export from production (default)
-./scripts/export_all.sh
+ol-superset export
 
 # Export from QA
-./scripts/export_all.sh superset-qa
+ol-superset export --from superset-qa
 
 # Export to custom directory
-./scripts/export_all.sh superset-qa /tmp/qa-backup
+ol-superset export --from superset-qa --output-dir /tmp/qa-backup
+```
+
+### Validate Assets
+
+```bash
+# Validate assets in default directory
+ol-superset validate
+
+# Validate custom directory
+ol-superset validate --assets-dir /tmp/qa-backup
 ```
 
 ### Sync Assets Between Environments
 
 ```bash
 # Production → QA (most common)
-./scripts/export_all.sh superset-production
-./scripts/sync_assets.sh superset-production superset-qa
+ol-superset sync superset-production superset-qa
 
-# QA → Production (for testing changes)
-./scripts/export_all.sh superset-qa
-./scripts/sync_assets.sh superset-qa superset-production
+# QA → Production (after testing changes)
+ol-superset sync superset-qa superset-production
+
+# Preview changes with dry-run
+ol-superset sync superset-production superset-qa --dry-run
+```
+
+### Promote QA to Production (Recommended)
+
+```bash
+# Promote with all safety checks
+ol-superset promote
+
+# Preview what would be promoted
+ol-superset promote --dry-run
 ```
 
 ## Workflow Diagrams
 
-### Primary Workflow: Production → QA (Mirroring)
+### Primary Workflow: QA → Production (Recommended)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                Production → QA Sync Flow (Automated)                    │
+│              QA → Production Promotion Flow (Recommended)               │
+└─────────────────────────────────────────────────────────────────────────┘
+
+1. Development Phase (QA)
+   ┌──────────────────┐
+   │   QA Superset    │  Developer creates/edits dashboards
+   │ bi-qa.ol.mit.edu │  in QA environment for testing
+   └────────┬─────────┘
+            │
+            ▼
+   ┌──────────────────┐
+   │  Test & Iterate  │  Validate with QA data
+   └────────┬─────────┘
+            │
+            ▼
+
+2. Export & Validate Phase
+   ┌──────────────────────────┐
+   │ ol-superset export       │  Export from QA
+   │   --from superset-qa     │
+   └────────┬─────────────────┘
+            │
+            ▼
+   ┌──────────────────────────┐
+   │ ol-superset validate     │  Check YAML syntax
+   │                          │  Security validation
+   └────────┬─────────────────┘
+            │
+            ▼
+   ┌──────────────────┐
+   │  assets/ folder  │  YAML files on disk
+   │  (Git tracked)   │  - datasets/
+   └────────┬─────────┘  - charts/
+            │           - dashboards/
+            ▼           - databases/
+
+3. Review & Commit Phase
+   ┌──────────────────┐
+   │  git diff        │  Review changes
+   └────────┬─────────┘
+            │
+            ▼
+   ┌──────────────────┐
+   │  git add         │  Stage changes
+   │  git commit      │  Commit with description
+   │  git push        │  Push to remote
+   └────────┬─────────┘
+            │
+            ▼
+
+4. Promotion Phase (Safety Checks)
+   ┌──────────────────────────┐
+   │ ol-superset promote      │  Automated promotion with:
+   │                          │  ✓ Pre-flight validation
+   └────────┬─────────────────┘  ✓ Git status check
+            │                    ✓ Requires "PROMOTE" confirmation
+            ▼                    ✓ Creates manifest
+   ┌──────────────────────────┐
+   │ Production Superset      │  Assets imported automatically
+   │ bi.ol.mit.edu            │  via sup CLI with DB UUID mapping
+   └──────────────────────────┘
+
+Benefits:
+  ✓ Changes tested before production
+  ✓ Validation before promotion
+  ✓ Code review via git diff
+  ✓ Audit trail in version control
+  ✓ Multiple production safety checks
+  ✓ Promotion manifest created
+```
+
+### Alternative Workflow: Production → QA (Mirroring)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│              Production → QA Sync Flow (Mirroring)                      │
 └─────────────────────────────────────────────────────────────────────────┘
 
 1. Export Phase
@@ -50,9 +146,9 @@ We use the `sup` CLI tool for automated asset export/import with OAuth authentic
             │                    - 18+ dashboards
             ▼
    ┌──────────────────────────┐
-   │ ./scripts/               │  Automated export via sup CLI
-   │ export_all.sh            │  - Fetches ALL assets (pagination)
-   │ superset-production      │  - Includes dependencies
+   │ ol-superset export       │  Export via sup CLI
+   │   --from                 │  - Fetches ALL assets (pagination)
+   │   superset-production    │  - Includes dependencies
    └────────┬─────────────────┘  - OAuth authentication
             │
             ▼
@@ -63,22 +159,13 @@ We use the `sup` CLI tool for automated asset export/import with OAuth authentic
             │           - dashboards/
             ▼           - databases/
 
-2. UUID Mapping Phase (Automatic)
+2. Sync Phase (with UUID Mapping)
    ┌──────────────────────────┐
-   │ map_database_uuids.py    │  Rewrites database UUIDs
-   │                          │  - Prod Trino → QA Trino
-   └────────┬─────────────────┘  - Handles UUID mismatches
-            │
-            ▼
-
-3. Sync Phase
-   ┌──────────────────────────┐
-   │ ./scripts/               │  Automated push to QA
-   │ sync_assets.sh           │  - CSRF token handling
-   │ superset-production      │  - Overwrite confirmation
-   │ superset-qa              │  - Continue on error
-   └────────┬─────────────────┘
-            │
+   │ ol-superset sync         │  Automated push to QA
+   │   superset-production    │  - Auto DB UUID mapping
+   │   superset-qa            │  - CSRF token handling
+   └────────┬─────────────────┘  - Continue on error
+            │                    - Overwrite confirmation
             ▼
    ┌──────────────────────────┐
    │ QA Superset              │  Assets imported
@@ -95,113 +182,70 @@ Benefits:
   ✓ Git tracking for version control
 ```
 
-### Alternative Workflow: QA → Production (Development)
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                   QA → Production Promotion Flow                        │
-└─────────────────────────────────────────────────────────────────────────┘
-
-1. Development Phase (QA)
-   ┌──────────────────┐
-   │   QA Superset    │  Developer creates/edits dashboards
-   │ bi-qa.ol.mit.edu │  in QA environment for testing
-   └────────┬─────────┘
-            │
-            ▼
-   ┌──────────────────┐
-   │  Test & Iterate  │  Validate with QA data
-   └────────┬─────────┘
-            │
-            ▼
-
-2. Export Phase
-   ┌──────────────────────────┐
-   │ ./scripts/               │
-   │ export_all.sh            │  Exports from QA
-   │ superset-qa              │
-   └────────┬─────────────────┘
-            │
-            ▼
-   ┌──────────────────┐
-   │  assets/ folder  │  YAML files on disk
-   │  (Git tracked)   │
-   └────────┬─────────┘
-            │
-            ▼
-
-3. Review & Commit Phase
-   ┌──────────────────┐
-   │  git diff        │  Review changes
-   └────────┬─────────┘
-            │
-            ▼
-   ┌──────────────────┐
-   │  git commit      │  Commit with description
-   │  git push        │
-   └────────┬─────────┘
-            │
-            ▼
-
-4. Promotion Phase
-   ┌──────────────────────────┐
-   │ ./scripts/               │
-   │ sync_assets.sh           │  Automated push to production
-   │ superset-qa              │  (after confirmation)
-   │ superset-production      │
-   └────────┬─────────────────┘
-            │
-            ▼
-   ┌──────────────────────────┐
-   │ Production Superset      │  Assets imported automatically
-   │ bi.ol.mit.edu            │  via sup CLI
-   └──────────────────────────┘
-
-Benefits:
-  ✓ Changes tested before production
-  ✓ Code review via git diff
-  ✓ Audit trail in version control
-  ✓ Automated promotion with confirmation
-```
-
 ## Comparison
 
-| Aspect | Production → QA | QA → Production |
-|--------|----------------|-----------------|
-| **Primary Use** | Regular sync, backup | Dashboard development |
-| **Direction** | Production first, then QA | QA first, then production |
-| **Testing** | Production is source of truth | Changes tested in QA first |
-| **Frequency** | Weekly/as needed | Per dashboard change |
-| **Automation** | Fully automated | Automated with confirmation |
-| **Risk** | Low (safe to overwrite QA) | Medium (requires review) |
+| Aspect | QA → Production (Promote) | Production → QA (Sync) |
+|--------|---------------------------|------------------------|
+| **Primary Use** | Dashboard development | Regular sync, backup |
+| **Direction** | QA first, then production | Production first, then QA |
+| **Testing** | Changes tested in QA first | Production is source of truth |
+| **Frequency** | Per dashboard change | Weekly/as needed |
+| **Safety** | Multiple guardrails | Standard confirmation |
+| **Risk** | Medium (production impact) | Low (safe to overwrite QA) |
+| **Command** | `ol-superset promote` | `ol-superset sync` |
 
-## Script Reference
+## CLI Command Reference
 
-### Core Scripts
+### Core Commands
 
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `export_all.sh` | Export all assets from any instance | `./scripts/export_all.sh [instance] [output-dir]` |
-| `sync_assets.sh` | Sync assets between instances | `./scripts/sync_assets.sh <source> <target>` |
-| `map_database_uuids.py` | Map database UUIDs for target environment | Called automatically by sync_assets.sh |
+| Command | Purpose | Key Options |
+|---------|---------|-------------|
+| `export` | Export all assets from any instance | `--from`, `--output-dir` |
+| `validate` | Validate asset YAML files | `--assets-dir` |
+| `sync` | Sync assets between instances | `--yes`, `--dry-run` |
+| `promote` | Promote QA → Production with safety checks | `--force`, `--dry-run`, `--skip-validation` |
 
-### Examples
+### Detailed Examples
 
 ```bash
-# Export from production (default behavior)
-./scripts/export_all.sh
+# Export Operations
+ol-superset export                                    # Export from production
+ol-superset export --from superset-qa                 # Export from QA
+ol-superset export --from superset-qa -o /tmp/backup  # Custom output directory
 
-# Export from QA to separate directory
-./scripts/export_all.sh superset-qa /tmp/qa-backup
+# Validation
+ol-superset validate                                  # Validate default assets/
+ol-superset validate --assets-dir /tmp/backup         # Validate custom directory
 
-# Sync production to QA
-./scripts/export_all.sh superset-production
-./scripts/sync_assets.sh superset-production superset-qa
+# Sync Operations
+ol-superset sync superset-production superset-qa      # Standard sync
+ol-superset sync superset-production superset-qa -y   # Skip confirmation
+ol-superset sync superset-production superset-qa -n   # Dry-run (preview)
 
-# Sync QA to production (after testing)
-./scripts/export_all.sh superset-qa
-./scripts/sync_assets.sh superset-qa superset-production
+# Promotion (QA → Production)
+ol-superset promote                                   # Full promotion workflow
+ol-superset promote --dry-run                         # Preview promotion
+ol-superset promote --force                           # Skip safety checks (DANGEROUS)
 ```
+
+## Production Safety Features
+
+### `promote` Command Guardrails
+
+1. **Directional Lock**: Only allows QA → Production (hardcoded)
+2. **Pre-flight Validation**: Runs `validate` automatically
+3. **Git Status Check**: Warns about uncommitted changes
+4. **Explicit Confirmation**: Requires typing "PROMOTE" (case-sensitive)
+5. **Manifest Generation**: Creates record of what was promoted
+6. **Dry-Run Mode**: Preview changes without applying
+
+### `sync` Command Protections
+
+1. **Production Warning**: Clear alert when targeting production
+2. **Strong Confirmation**: Requires "SYNC TO PRODUCTION" for production targets
+3. **Standard Confirmation**: Yes/no prompt for all other targets
+4. **Dry-Run Mode**: Preview changes without applying
+5. **Skip Confirmation**: `--yes` flag for automation
 
 ## Technical Details
 
@@ -218,15 +262,17 @@ When syncing between environments, database UUIDs differ:
 - **Production Trino**: `8702691f-d666-4dac-943b-9382c02233e3`
 - **QA Trino**: `9a22a54c-8b2f-4c66-a866-3f23812ec929`
 
-The `map_database_uuids.py` script:
+The UUID mapping system:
 1. Fetches database list from target instance
 2. Matches by database name (e.g., "Trino")
 3. Rewrites all `database_uuid` references in assets
 4. Updates database config files with target UUIDs
 
+This is handled automatically by both `sync` and `promote` commands.
+
 ### Pagination
 
-The export scripts fetch ALL assets via pagination:
+The export command fetches ALL assets via pagination:
 - Default page size: 100 items
 - Automatically loops through all pages
 - Ensures no assets are missed
@@ -253,11 +299,16 @@ Typical production export:
 3. **CSRF Protection**: Fresh tokens fetched for each import operation
 4. **Git Tracking**: Only YAML definitions tracked; no sensitive data
 5. **Audit Trail**: All changes tracked in git with commit messages
+6. **Production Access**: Protected by multiple confirmation layers
 
 ## Troubleshooting
 
 ### "Assets not found" error
-→ Run `export_all.sh <instance>` first to export assets
+→ Run `ol-superset export --from <instance>` first to export assets
+
+### "Command not found: ol-superset"
+→ Ensure virtual environment is activated: `cd src/ol_superset && source .venv/bin/activate`
+→ Or install with: `cd src/ol_superset && uv sync`
 
 ### "Could not extract database information"
 → JSON parsing fallback handles this automatically via regex extraction
@@ -271,6 +322,55 @@ Typical production export:
 ### "Cannot connect to database" warning
 → Expected during import; connection validation is non-blocking
 
+## Typical Workflows
+
+### Weekly Production Backup
+
+```bash
+cd src/ol_superset
+
+# Export and commit
+ol-superset export
+git diff assets/
+git add assets/
+git commit -m "Weekly Superset production backup"
+git push
+```
+
+### Develop New Dashboard
+
+```bash
+# 1. Create in QA UI (https://bi-qa.ol.mit.edu)
+
+# 2. Export from QA
+ol-superset export --from superset-qa
+
+# 3. Validate
+ol-superset validate
+
+# 4. Review and commit
+git diff assets/
+git add assets/
+git commit -m "Add new enrollment dashboard"
+git push
+
+# 5. Promote to production
+ol-superset promote
+```
+
+### Mirror Production to QA
+
+```bash
+# 1. Export from production
+ol-superset export --from superset-production
+
+# 2. Review changes
+git diff assets/
+
+# 3. Sync to QA
+ol-superset sync superset-production superset-qa
+```
+
 ## Future Enhancements
 
 Potential improvements for this workflow:
@@ -278,6 +378,8 @@ Potential improvements for this workflow:
 1. ✅ **Automated Transformations**: Database UUID mapping implemented
 2. ✅ **API-Based Import**: Using sup CLI with OAuth + CSRF
 3. ✅ **Pagination**: Fetches all assets automatically
-4. ⏳ **CI/CD Integration**: GitHub Actions to automate sync on schedule
-5. ⏳ **Diff Viewer**: Enhanced diff tool for meaningful dashboard changes
-6. ⏳ **Rollback Automation**: One-command rollback to previous version
+4. ✅ **Unified CLI**: Single `ol-superset` command with subcommands
+5. ✅ **Production Safety**: Multiple guardrails for production deployments
+6. ⏳ **CI/CD Integration**: GitHub Actions to automate sync on schedule
+7. ⏳ **Diff Viewer**: Enhanced diff tool for meaningful dashboard changes
+8. ⏳ **Rollback Automation**: One-command rollback to previous version

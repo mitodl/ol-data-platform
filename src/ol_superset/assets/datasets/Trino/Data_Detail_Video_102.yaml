@@ -1,10 +1,9 @@
----
 table_name: Data_Detail_Video
 main_dttm_col: event_timestamp
-description:
-default_endpoint:
+description: null
+default_endpoint: null
 offset: 0
-cache_timeout:
+cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_dimensional
 sql: "select a.platform\n,h.course_title\n,a.courserun_readable_id\n,a.event_type\n\
@@ -13,122 +12,122 @@ sql: "select a.platform\n,h.course_title\n,a.courserun_readable_id\n,a.event_typ
   and a.video_block_fk = substring(c.video_block_pk, regexp_position(c.video_block_pk,\
   \ 'block@') + 6)\ninner join ol_warehouse_production_intermediate.int__combined__course_runs\
   \ h\n    on a.courserun_readable_id = h.courserun_readable_id\n\n"
-params:
-template_params:
+params: null
+template_params: null
 filter_select_enabled: true
-fetch_values_predicate:
-extra:
+fetch_values_predicate: null
+extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-folders:
+folders: null
 uuid: 3967f60c-2d80-41ad-8245-67dbf555bd82
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
   metric_type: count
   expression: COUNT(*)
-  description:
-  d3format:
-  currency:
+  description: null
+  d3format: null
+  currency: null
   extra:
     warning_markdown: ''
-  warning_text:
+  warning_text: null
 columns:
 - column_name: event_timestamp
-  verbose_name:
+  verbose_name: null
   is_dttm: true
   is_active: true
   type: TIMESTAMP(6) WITH TIME ZONE
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: video_duration
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: DECIMAL(38, 4)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: courserun_readable_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: video_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: course_title
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: video_position
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: event_type
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: platform
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 version: 1.0.0
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

@@ -1,10 +1,9 @@
----
 table_name: marts__mitxonline_video_engagements_w_video_counts
-main_dttm_col:
-description:
-default_endpoint:
+main_dttm_col: null
+description: null
+default_endpoint: null
 offset: 0
-cache_timeout:
+cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_mart
 sql: "select a.user_email\n, a.section_title\n, a.courserun_readable_id\n, b.total_video_count\n\
@@ -18,134 +17,134 @@ sql: "select a.user_email\n, a.section_title\n, a.courserun_readable_id\n, b.tot
   group by 1, 2) b\non a.section_title=b.section_title and a.courserun_readable_id=b.courserun_readable_id\n\
   left join  ol_warehouse_production_intermediate.int__mitx__courses c\non a.course_number=c.course_number\n\
   where a.video_event_type = 'play_video'\ngroup by 1, 2, 3, 4, 5, 6, 7\n"
-params:
-template_params:
+params: null
+template_params: null
 filter_select_enabled: true
-fetch_values_predicate:
-extra:
+fetch_values_predicate: null
+extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-folders:
+folders: null
 uuid: bf17ec0d-2a0a-4f97-ab5b-ae2df862d4b5
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
   metric_type: count
   expression: COUNT(*)
-  description:
-  d3format:
-  currency:
+  description: null
+  d3format: null
+  currency: null
   extra:
     warning_markdown: ''
-  warning_text:
+  warning_text: null
 columns:
 - column_name: Platform
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR(11)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: courserun_readable_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: course_readable_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: user_email
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: section_title
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: courserun_is_current
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: max_coursestructure_block_index
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BIGINT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: user_watched_video_count
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BIGINT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: total_video_count
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BIGINT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 version: 1.0.0
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

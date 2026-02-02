@@ -1,224 +1,223 @@
----
 table_name: tfact_chatbot_events
 main_dttm_col: event_timestamp
-description:
-default_endpoint:
+description: Auto refreshed at 2026-02-02T16:23:40.874810+00:00
+default_endpoint: null
 offset: 0
-cache_timeout:
+cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_dimensional
-sql:
-params:
-template_params:
+sql: null
+params: null
+template_params: null
 filter_select_enabled: true
-fetch_values_predicate:
-extra:
+fetch_values_predicate: null
+extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-folders:
+folders: null
 uuid: 83431f55-aaaf-4fe5-aa60-a3502e1442f9
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
   metric_type: count
   expression: COUNT(*)
-  description:
-  d3format:
-  currency:
-  extra:
-  warning_text:
+  description: null
+  d3format: null
+  currency: null
+  extra: null
+  warning_text: null
 columns:
 - column_name: event_timestamp
-  verbose_name:
+  verbose_name: null
   is_dttm: true
   is_active: true
   type: TIMESTAMP(6) WITH TIME ZONE
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: learn_ai_thread_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: learn_ai_checkpoint_pk
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: courserun_readable_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: chatbot_source
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: chatbot_type
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: block_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: event_value
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_username
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: block_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: session_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: org_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: event_type
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: event_json
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_fk
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: openedx_user_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: INTEGER
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 version: 1.0.0
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

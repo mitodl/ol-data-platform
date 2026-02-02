@@ -1,10 +1,9 @@
----
 dashboard_title: Suspicious Behavior Report
-description:
+description: null
 css: ''
-slug:
-certified_by:
-certification_details:
+slug: null
+certified_by: null
+certification_details: null
 published: true
 uuid: 1e2883d9-d122-4af6-aa33-43a0f0ac2c3b
 position:
@@ -393,5 +392,5 @@ metadata:
   shared_label_colors: []
   map_label_colors: {}
   color_scheme_domain: []
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

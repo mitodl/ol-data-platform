@@ -1,8 +1,7 @@
----
 slice_name: Learn New Users
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_timeseries_bar
 params:
   datasource: 84__table
@@ -22,7 +21,7 @@ params:
     isNew: false
     operator: IS NOT NULL
     operatorId: IS_NOT_NULL
-    sqlExpression:
+    sqlExpression: null
     subject: mitlearn_user_id
   - clause: WHERE
     comparator: No filter
@@ -46,23 +45,23 @@ params:
   sort_series_type: sum
   color_scheme: supersetColors
   show_value: false
-  stack:
+  stack: null
   minorTicks: false
   zoomable: true
   show_legend: true
   legendType: scroll
   legendOrientation: top
-  legendMargin:
+  legendMargin: null
   x_axis_time_format: smart_date
   y_axis_format: SMART_NUMBER
   logAxis: true
   y_axis_bounds:
-  - 
-  - 
+  - null
+  - null
   truncateXAxis: true
   xAxisBounds:
-  - 
-  - 
+  - null
+  - null
   rich_tooltip: true
   showTooltipTotal: true
   tooltipTimeFormat: smart_date
@@ -74,7 +73,7 @@ query_context: '{"datasource":{"id":84,"type":"table"},"force":false,"queries":[
   NOT NULL","operatorId":"IS_NOT_NULL","sqlExpression":null,"subject":"mitlearn_user_id"},{"clause":"WHERE","comparator":"No
   filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"date_joined_on_mitlearn"}],"row_limit":10000,"truncate_metric":true,"show_empty_columns":true,"rolling_type":"sum","comparison_type":"values","annotation_layers":[],"forecastPeriods":10,"forecastInterval":0.8,"orientation":"vertical","x_axis_title":"Account
   Created","x_axis_title_margin":50,"y_axis_title":"Number of Users","y_axis_title_margin":30,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","show_value":false,"stack":null,"minorTicks":false,"zoomable":true,"show_legend":true,"legendType":"scroll","legendOrientation":"top","legendMargin":null,"x_axis_time_format":"smart_date","y_axis_format":"SMART_NUMBER","logAxis":true,"y_axis_bounds":[null,null],"truncateXAxis":true,"xAxisBounds":[null,null],"rich_tooltip":true,"showTooltipTotal":true,"tooltipTimeFormat":"smart_date","extra_form_data":{},"dashboards":[49],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 5cba1239-2f4c-472b-82f6-788f18de0fd2
 version: 1.0.0
 dataset_uuid: 7f46cdba-1bf0-4f10-9606-a41b77b9e77c

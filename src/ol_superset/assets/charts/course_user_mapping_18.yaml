@@ -1,8 +1,7 @@
----
 slice_name: course_user_mapping
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 18__table
@@ -33,6 +32,6 @@ params:
   - 8
   comparison_type: values
 query_context: '{"datasource":{"id":18,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":["courserun_readable_id","courserun_title","course_number","user_full_name","user_email","program_title"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[]}],"form_data":{"datasource":"18__table","viz_type":"table","slice_id":18,"query_mode":"aggregate","groupby":["courserun_readable_id","courserun_title","course_number","user_full_name","user_email","program_title"],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","show_cell_bars":true,"color_pn":true,"extra_form_data":{},"dashboards":[8],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 08141743-0bc0-4a79-a3b4-39d34d221742
 version: 1.0.0

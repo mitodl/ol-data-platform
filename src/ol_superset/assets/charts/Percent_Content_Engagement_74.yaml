@@ -1,8 +1,7 @@
----
 slice_name: Percent Content Engagement
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 47__table
@@ -14,8 +13,8 @@ params:
   temporal_columns_lookup:
     courseactivity_date: true
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -25,8 +24,8 @@ params:
       ELSE null END)) AS decimal(10,2))/
 
       CAST(COUNT(DISTINCT user_username) as decimal(10,2))'
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -36,8 +35,8 @@ params:
       ELSE null END)) AS decimal(10,2))/
 
       CAST(COUNT(DISTINCT user_username) as decimal(10,2))'
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -92,7 +91,7 @@ query_context: '{"datasource":{"id":47,"type":"table"},"force":false,"queries":[
   (CASE WHEN num_discussion_participated> 0 THEN user_username ELSE null END)) AS
   decimal(10,2))/\nCAST(COUNT(DISTINCT user_username) as decimal(10,2))"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
   filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"courseactivity_date"}],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"%_of_Learners_Participated_In_Discussion":{"d3SmallNumberFormat":",.1%"},"%_of_Learners_That_Played_A_Video":{"d3NumberFormat":",.1%"},"%_of_Learners_That_Submitted_Problem":{"d3SmallNumberFormat":",.1%"__JINJA2_CLOSE__,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 822d24da-190a-49ea-9253-8a26637a89c8
 version: 1.0.0
 dataset_uuid: f221af29-5df4-4025-8355-401041f94835

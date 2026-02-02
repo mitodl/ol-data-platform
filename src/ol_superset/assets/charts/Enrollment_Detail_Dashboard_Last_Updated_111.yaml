@@ -1,8 +1,7 @@
----
 slice_name: Enrollment Detail Dashboard (Last Updated)
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 113__table
@@ -14,8 +13,8 @@ params:
     created_on: true
     changed_on: true
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: false
@@ -38,7 +37,7 @@ params:
     isNew: false
     operator: IN
     operatorId: IN
-    sqlExpression:
+    sqlExpression: null
     subject: table_name
   - clause: WHERE
     comparator: No filter

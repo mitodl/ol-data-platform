@@ -1,8 +1,7 @@
----
 slice_name: Program Enrollment and Certificate
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 52__table
@@ -45,7 +44,7 @@ params:
   dashboards:
   - 34
 query_context: '{"datasource":{"id":52,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform_name","program_type","program_name","program_track","program_readable_id","user_id","user_full_name","user_email","programenrollment_enrollment_status","programenrollment_is_active","programenrollment_created_on","user_has_completed_program","programcertificate_created_on","programcertificate_url","programcertificate_is_revoked","program_is_live","program_title"],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"52__table","viz_type":"table","slice_id":69,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["platform_name","program_type","program_name","program_track","program_readable_id","user_id","user_full_name","user_email","programenrollment_enrollment_status","programenrollment_is_active","programenrollment_created_on","user_has_completed_program","programcertificate_created_on","programcertificate_url","programcertificate_is_revoked","program_is_live","program_title"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":50000,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"user_id":{"showCellBars":false__JINJA2_CLOSE__,"show_cell_bars":true,"color_pn":true,"conditional_formatting":[],"extra_form_data":{},"dashboards":[34],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: b100bef9-c9f8-46f5-b6ef-20b2badecef4
 version: 1.0.0
 dataset_uuid: 0983d23f-8182-482a-9f0f-b32d69984efc

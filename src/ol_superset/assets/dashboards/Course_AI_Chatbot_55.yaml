@@ -1,8 +1,7 @@
----
 dashboard_title: Course AI Chatbot
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -216,5 +215,5 @@ metadata:
       - ROOT_ID
     type: NATIVE_FILTER
     description: ''
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

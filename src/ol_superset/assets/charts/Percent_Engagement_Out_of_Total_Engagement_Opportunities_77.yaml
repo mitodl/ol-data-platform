@@ -1,8 +1,7 @@
----
 slice_name: Percent Engagement Out of Total Engagement Opportunities
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 57__table
@@ -14,8 +13,8 @@ params:
   time_grain_sqla: P1D
   temporal_columns_lookup: {}
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -23,8 +22,8 @@ params:
     optionName: metric_3fzcijigbwq_2t7y5h574xm
     sqlExpression: "AVG(CASE WHEN total_courserun_videos> 0 \nTHEN cast(videos_user_watched\
       \ AS decimal(10,2))/cast(total_courserun_videos AS decimal(10,2)) END)"
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -32,8 +31,8 @@ params:
     optionName: metric_q1zxtsv7f8o_4tezx4gzhbi
     sqlExpression: "AVG(CASE WHEN total_courserun_problems> 0 \nTHEN cast(problems_user_submitted\
       \ AS decimal(10,2))/cast(total_courserun_problems AS decimal(10,2)) END)"
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -79,7 +78,7 @@ query_context: '{"datasource":{"id":57,"type":"table"},"force":false,"queries":[
   AS decimal(10,2)) END)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Avg_Percent_Discussions_Engaged_In","optionName":"metric_qg66l351ox_kqf9cnj5vk","sqlExpression":"AVG(CASE
   WHEN total_courserun_discussions> 0 \nTHEN cast(user_discussion_count AS decimal(10,2))/cast(total_courserun_discussions
   AS decimal(10,2)) END)"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"Avg_Percent_Discussions_Engaged_In":{"d3NumberFormat":",.1%"},"Avg_Percent_Problems_Submitted":{"d3NumberFormat":",.1%"},"Avg_Percent_Videos_Watched":{"d3NumberFormat":",.1%"__JINJA2_CLOSE__,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 3bc78cde-60af-405c-9d7d-13e61558c228
 version: 1.0.0
 dataset_uuid: edf21d6a-1f41-4812-a1aa-3fcbc8358466

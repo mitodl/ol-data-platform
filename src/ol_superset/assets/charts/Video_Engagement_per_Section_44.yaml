@@ -1,14 +1,13 @@
----
 slice_name: Video Engagement per Section
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_timeseries_bar
 params:
   adhoc_filters: []
   color_scheme: supersetColors
   comparison_type: values
-  contributionMode:
+  contributionMode: null
   dashboards:
   - 24
   datasource: 43__table
@@ -25,8 +24,8 @@ params:
     groupby:
     - section_title
     metrics:
-    - aggregate:
-      column:
+    - aggregate: null
+      column: null
       datasourceWarning: false
       expressionType: SQL
       hasCustomLabel: true
@@ -34,8 +33,8 @@ params:
       optionName: metric_ilmj7tjqf9l_3gzz1vtb7cf
       sqlExpression: count(distinct(case when user_watched_video_count > 0 then user_email
         else null end))
-    - aggregate:
-      column:
+    - aggregate: null
+      column: null
       datasourceWarning: false
       expressionType: SQL
       hasCustomLabel: true
@@ -51,39 +50,39 @@ params:
     timeseries_limit_metric:
       aggregate: MIN
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: max_coursestructure_block_index
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 661
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: false
       label: MIN(max_coursestructure_block_index)
       optionName: metric_l5fmf7i5xb_rbdvkyjo29h
-      sqlExpression:
+      sqlExpression: null
     viz_type: dist_bar
     x_ticks_layout: auto
     y_axis_bounds:
-    - 
-    - 
+    - null
+    - null
     y_axis_format: SMART_NUMBER
   groupby: []
   markerEnabled: false
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -91,8 +90,8 @@ params:
     optionName: metric_ilmj7tjqf9l_3gzz1vtb7cf
     sqlExpression: count(distinct(case when user_watched_video_count > 0 then user_email
       else null end))
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -113,8 +112,8 @@ params:
       where: ''
     filters: []
     metrics:
-    - aggregate:
-      column:
+    - aggregate: null
+      column: null
       datasourceWarning: false
       expressionType: SQL
       hasCustomLabel: true
@@ -122,8 +121,8 @@ params:
       optionName: metric_ilmj7tjqf9l_3gzz1vtb7cf
       sqlExpression: count(distinct(case when user_watched_video_count > 0 then user_email
         else null end))
-    - aggregate:
-      column:
+    - aggregate: null
+      column: null
       datasourceWarning: false
       expressionType: SQL
       hasCustomLabel: true
@@ -137,67 +136,67 @@ params:
     series_limit_metric:
       aggregate: MIN
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: max_coursestructure_block_index
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 661
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: false
       label: MIN(max_coursestructure_block_index)
       optionName: metric_l5fmf7i5xb_rbdvkyjo29h
-      sqlExpression:
+      sqlExpression: null
     url_params: {}
   rich_tooltip: true
   row_limit: 10000
   show_legend: true
   slice_id: 44
-  stack:
+  stack: null
   timeseries_limit_metric:
     aggregate: MIN
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: max_coursestructure_block_index
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 661
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: false
     label: MIN(max_coursestructure_block_index)
     optionName: metric_l5fmf7i5xb_rbdvkyjo29h
-    sqlExpression:
+    sqlExpression: null
   truncateYAxis: true
   viz_type: echarts_timeseries_bar
   xAxisLabelRotation: 45
   x_axis: section_title
   x_axis_title_margin: auto
   y_axis_bounds:
-  - 
-  - 
+  - null
+  - null
   y_axis_format: SMART_NUMBER
   zoomable: false
 query_context: '{"datasource": {"id": 43, "type": "table"}, "force": false, "queries":
@@ -252,7 +251,7 @@ query_context: '{"datasource": {"id": 43, "type": "table"}, "force": false, "que
   false, "markerEnabled": false, "truncateYAxis": true, "comparison_type": "values",
   "x_axis": "section_title", "stack": null}, "result_format": "json", "result_type":
   "full"}'
-cache_timeout:
+cache_timeout: null
 uuid: f9c49065-6eb1-4c47-ab2b-a03654cdcbc4
 version: 1.0.0
 dataset_uuid: bf17ec0d-2a0a-4f97-ab5b-ae2df862d4b5

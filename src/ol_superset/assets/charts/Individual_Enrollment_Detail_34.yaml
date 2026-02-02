@@ -1,8 +1,7 @@
----
 slice_name: Individual Enrollment Detail
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 38__table
@@ -52,7 +51,7 @@ params:
   dashboards:
   - 16
 query_context: '{"datasource":{"id":38,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform","user_email","user_username","user_full_name","user_highest_education","user_gender","course_readable_id","courserun_readable_id","course_title","courserunenrollment_created_on_date","courserunenrollment_upgraded_on","courserunenrollment_enrollment_mode","courserunenrollment_enrollment_status","courseruncertificate_url","courseruncertificate_created_on","courserungrade_grade","courserun_upgrade_deadline","user_job_title","user_industry","user_company"],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"38__table","viz_type":"table","slice_id":34,"query_mode":"raw","groupby":["user_username"],"temporal_columns_lookup":{},"all_columns":["platform","user_email","user_username","user_full_name","user_highest_education","user_gender","course_readable_id","courserun_readable_id","course_title","courserunenrollment_created_on_date","courserunenrollment_upgraded_on","courserunenrollment_enrollment_mode","courserunenrollment_enrollment_status","courseruncertificate_url","courseruncertificate_created_on","courserungrade_grade","courserun_upgrade_deadline","user_job_title","user_industry","user_company"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":50000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","include_search":true,"allow_rearrange_columns":true,"allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[16],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: f8aa5d0c-f838-4236-9057-4f118d340a53
 version: 1.0.0
 dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000

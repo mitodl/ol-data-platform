@@ -1,7 +1,6 @@
----
 database_name: Trino
 sqlalchemy_uri: trino://mitol-ol-data-interactive.trino.galaxy.starburst.io:443/ol_data_lake_production
-cache_timeout:
+cache_timeout: null
 expose_in_sqllab: true
 allow_run_async: true
 allow_ctas: false
@@ -13,5 +12,5 @@ extra:
   schema_options:
     expand_rows: true
 impersonate_user: false
-uuid: 8702691f-d666-4dac-943b-9382c02233e3
+uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929
 version: 1.0.0

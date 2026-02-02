@@ -1,8 +1,7 @@
----
 slice_name: Problem Submission Results
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 49__table
@@ -14,24 +13,24 @@ params:
   - problem_name
   temporal_columns_lookup: {}
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
     label: Problem_Correct_Count
     optionName: metric_kr5x7l369n_2yt59v0iht9
     sqlExpression: SUM(case when problem_success= 'correct' then 1 else 0 end)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
     label: Problem_Incorrect_Count
     optionName: metric_xmpelsopnza_mf2xev2uy8j
     sqlExpression: SUM(case when problem_success= 'incorrect' then 1 else 0 end)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -39,8 +38,8 @@ params:
     optionName: metric_i88s1ewi78_vq6dr3574xh
     sqlExpression: "     ROUND(SUM(case\n               when problem_success= 'correct'\
       \ then 1\n               else 0\n           end)  * 100.0 / count(*), 1)"
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -76,7 +75,7 @@ query_context: '{"datasource":{"id":49,"type":"table"},"force":false,"queries":[
   / count(*), 1)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Incorrect%","optionName":"metric_4um0opruu4d_oqzdnqf2cue","sqlExpression":"     ROUND(SUM(case\n               when
   problem_success= ''incorrect'' then 1\n               else 0\n           end)  *
   100.0 / count(*), 1)"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"order_desc":true,"table_timestamp_format":"smart_date","show_cell_bars":false,"color_pn":true,"conditional_formatting":[],"extra_form_data":{},"dashboards":[27],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: d0bcae8d-1f6a-415b-a3af-52323e8eeee2
 version: 1.0.0
 dataset_uuid: 70adedf0-bc96-4922-a720-d579f2b4065c

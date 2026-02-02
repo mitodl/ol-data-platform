@@ -1,8 +1,7 @@
----
 slice_name: Suspicious Behavior Report
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 145__table
@@ -59,7 +58,7 @@ query_context: '{"datasource":{"id":145,"type":"table"},"force":false,"queries":
   as DECIMAL(20,10)) end"}],"orderby":[],"annotation_layers":[],"row_limit":500000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"145__table","viz_type":"table","slice_id":124,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["platform","openedx_user_id","courserun_readable_id","problem_block_fk","unit_name","chapter_name","sequential_name","attempts_on_problem",{"expressionType":"SQL","label":"earned_scores","sqlExpression":"grades"},"time_spent_on_problem","time_spent_on_problem_nolimit","exam_indicator","max_possible_grade","max_learner_grade",{"expressionType":"SQL","label":"%_learner_grade_out_of_max","sqlExpression":"CASE
   WHEN max_possible_grade = ''0'' then 0 else cast(max_learner_grade as decimal(20,10))/cast(max_possible_grade
   as DECIMAL(20,10)) end"}],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"order_desc":true,"row_limit":"500000","server_page_length":10,"table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"column_config":{"%_learner_grade_out_of_max":{"d3NumberFormat":",.1%"},"openedx_user_id":{"showCellBars":false}},"show_cell_bars":false,"color_pn":false,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[52],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 3acf6da0-1add-486f-9e70-884a1bb306f9
 version: 1.0.0
 dataset_uuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81

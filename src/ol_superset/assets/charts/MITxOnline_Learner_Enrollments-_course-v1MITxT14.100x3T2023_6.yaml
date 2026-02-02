@@ -1,8 +1,7 @@
----
 slice_name: MITxOnline Learner Enrollments- course-v1:MITxT+14.100x+3T2023
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_area
 params:
   adhoc_filters:
@@ -15,7 +14,7 @@ params:
     isNew: false
     operator: ==
     operatorId: EQUALS
-    sqlExpression:
+    sqlExpression: null
     subject: courserun_id
   annotation_layers: []
   color_scheme: supersetColors
@@ -30,8 +29,8 @@ params:
   legendType: scroll
   markerSize: 6
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -39,8 +38,8 @@ params:
     optionName: metric_xa8dkyvc2g_zhsl5l9t3k
     sqlExpression: sum(case when courserunenrollment_enrollment_mode= 'verified' then
       1 else 0 end)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -48,8 +47,8 @@ params:
     optionName: metric_qsumaa2pde7_3gxypcd1u5m
     sqlExpression: 'sum(case when courserunenrollment_enrollment_mode= ''audit'' then
       1 else 0 end) '
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -71,28 +70,28 @@ params:
   timeseries_limit_metric:
     aggregate: MIN
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: courserunenrollment_created_on
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 36
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: VARCHAR
       type_generic: 1
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: false
     label: MIN(courserunenrollment_created_on)
     optionName: metric_ui1awwyv6k_72ybjbwgamf
-    sqlExpression:
+    sqlExpression: null
   tooltipTimeFormat: smart_date
   truncate_metric: true
   viz_type: echarts_area
@@ -105,8 +104,8 @@ params:
   x_axis_time_format: smart_date
   x_axis_title_margin: 15
   y_axis_bounds:
-  - 
-  - 
+  - null
+  - null
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: 15
   y_axis_title_position: Left
@@ -117,6 +116,6 @@ query_context: '{"datasource":{"id":3,"type":"table"},"force":false,"queries":[{
   1, 10) as date)"},"time_grain_sqla":"P1D","x_axis_sort_asc":true,"x_axis_sort_series":"name","x_axis_sort_series_ascending":true,"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"verified_count","optionName":"metric_xa8dkyvc2g_zhsl5l9t3k","sqlExpression":"sum(case
   when courserunenrollment_enrollment_mode= ''verified'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"audit_count","optionName":"metric_qsumaa2pde7_3gxypcd1u5m","sqlExpression":"sum(case
   when courserunenrollment_enrollment_mode= ''audit'' then 1 else 0 end) "},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"total_enrollment_count","optionName":"metric_7vr6wa9k7uv_r69aq2ikm3j","sqlExpression":"count(*)"}],"groupby":[],"adhoc_filters":[{"clause":"WHERE","comparator":185,"datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_nubyhjx1oe9_7kc3698xl7p","isExtra":false,"isNew":false,"operator":"==","operatorId":"EQUALS","sqlExpression":null,"subject":"courserun_id"}],"timeseries_limit_metric":{"aggregate":"MIN","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"courserunenrollment_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":36,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MIN(courserunenrollment_created_on)","optionName":"metric_ui1awwyv6k_72ybjbwgamf","sqlExpression":null},"order_desc":true,"row_limit":50000,"truncate_metric":true,"show_empty_columns":true,"rolling_type":"cumsum","comparison_type":"values","annotation_layers":[],"forecastPeriods":10,"forecastInterval":0.8,"x_axis_title_margin":15,"y_axis_title_margin":15,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","seriesType":"line","opacity":0.2,"only_total":true,"markerSize":6,"show_legend":true,"legendType":"scroll","legendOrientation":"top","x_axis_time_format":"smart_date","rich_tooltip":true,"tooltipTimeFormat":"smart_date","y_axis_format":"SMART_NUMBER","y_axis_bounds":[null,null],"extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 3b710d6c-6265-43ce-82ef-4c57409b8fda
 version: 1.0.0
