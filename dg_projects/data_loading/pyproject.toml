@@ -8,7 +8,7 @@ dependencies = [
     "dagster-dlt>=0.28.0",
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
-    "dlt[filesystem,parquet]>=1.6.0",
+    "dlt[filesystem,parquet,pyiceberg]>=1.21.0",
     "duckdb>=1.2.0",
     "ol-orchestrate-lib",
     "pyiceberg>=0.8.0",

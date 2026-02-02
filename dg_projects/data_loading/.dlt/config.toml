@@ -12,19 +12,42 @@ dlthub_telemetry = true
 bucket_url = "s3://ol-data-lake-landing-zone-production/edxorg-raw-data/edxorg/raw_data/"
 
 # Local Development Destination
-# Writes Iceberg-compatible Parquet files to local disk for fast iteration
+# Writes Parquet files to local disk for fast iteration
 [destination.filesystem.local]
-bucket_url = "file:///.dlt/data"  # Relative to project root
+bucket_url = "file:///.dlt/data"
 layout = "{table_name}/{load_id}.{file_id}.{ext}"
-file_format = "parquet"
 
-# Production Destination
-# Writes to S3 for production use with Glue catalog registration
+# QA Destination - Filesystem with Iceberg + Glue Catalog
+# Writes Iceberg tables to S3 and registers in ol_warehouse_qa_raw Glue database
+[destination.filesystem.qa]
+bucket_url = "s3://ol-data-lake-raw-qa/edxorg"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+# Production Destination - Filesystem with Iceberg + Glue Catalog
+# Writes Iceberg tables to S3 and registers in ol_warehouse_production_raw Glue database
 [destination.filesystem.production]
-bucket_url = "s3://ol-data-lake-production/lakehouse/dlt"
+bucket_url = "s3://ol-data-lake-raw-production/edxorg"
 layout = "{table_name}/{load_id}.{file_id}.{ext}"
-file_format = "parquet"
 
-# Note: Use DLT_DESTINATION_ENV environment variable to switch between destinations
-# Default: local
-# Example: DLT_DESTINATION_ENV=production python -m data_loading.defs.edxorg_s3_ingest.loads
+# Iceberg Catalog Configuration for QA
+[iceberg_catalog.qa]
+iceberg_catalog_name = "ol_warehouse_qa_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.qa.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-qa/edxorg"
+
+# Iceberg Catalog Configuration for Production
+[iceberg_catalog.production]
+iceberg_catalog_name = "ol_warehouse_production_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.production.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-production/edxorg"
+
+# Note: Destination is auto-selected based on DAGSTER_ENVIRONMENT:
+# - dev/ci -> local (filesystem, local disk, no Iceberg)
+# - qa -> qa (filesystem + Iceberg, S3 + ol_warehouse_qa_raw Glue catalog)
+# - production -> production (filesystem + Iceberg, S3 + ol_warehouse_production_raw Glue catalog)

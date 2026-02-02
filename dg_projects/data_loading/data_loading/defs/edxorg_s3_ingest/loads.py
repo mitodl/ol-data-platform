@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 def edxorg_s3_source(
     bucket_url: str = dlt.config.value,
     tables: list[str] | None = None,
+    table_format: str = "parquet",  # "parquet" for local, "iceberg" for QA/prod
 ):
     """
     Load edxorg CSV/TSV data from S3.
@@ -46,9 +47,9 @@ def edxorg_s3_source(
     - Production/K8s: Uses IRSA (IAM Roles for Service Accounts)
 
     Args:
-        bucket_url: S3 bucket URL (e.g., s3://bucket-name/path/prefix)
-        tables: Optional list of specific tables to load. If None, loads all tables.
-                Examples: ["auth_user", "student_courseenrollment"]
+        bucket_url: S3 bucket URL containing TSV files
+        tables: Optional list of specific tables to load (loads all if None)
+        table_format: "parquet" for local dev, "iceberg" for QA/production
 
     Yields:
         dlt resources for each table type found in S3
@@ -107,6 +108,7 @@ def edxorg_s3_source(
             name=f"edxorg_{table_name}",
             write_disposition="merge",
             primary_key=None,  # TSV files don't have consistent primary keys
+            table_format=table_format,  # Use iceberg for QA/prod, parquet for local
         )
         def load_table(table=table_name) -> Iterator[dict[str, str]]:
             """
@@ -158,18 +160,33 @@ def edxorg_s3_source(
         yield load_table
 
 
-# Determine destination environment (local or production)
-destination_env = os.getenv("DLT_DESTINATION_ENV", "local")
+# Determine environment and destination
+# Use DAGSTER_ENVIRONMENT to determine destination and Glue database
+dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
 
-# Create source instance - dlt resolves config from .dlt/config.toml
-# and secrets.toml at runtime, not definition time
-edxorg_s3_source_instance = edxorg_s3_source()
+# Map DAGSTER_ENVIRONMENT to destination config
+# dev/ci -> local filesystem (Parquet, no Iceberg, no Glue)
+# qa -> filesystem + Iceberg (S3 + ol_warehouse_qa_raw Glue database)
+# production -> filesystem + Iceberg (S3 + ol_warehouse_production_raw Glue database)
+if dagster_env in ("qa", "production"):
+    destination_env = dagster_env
+    dataset_name = f"ol_warehouse_{dagster_env}_raw"
+    table_format = "iceberg"
+else:
+    # dev, ci, or any other value uses local
+    destination_env = "local"
+    dataset_name = "edxorg_s3_local"
+    table_format = "parquet"
+
+# Create source instance with appropriate table format
+# dlt resolves config from .dlt/config.toml at runtime
+edxorg_s3_source_instance = edxorg_s3_source(table_format=table_format)
 
 # Create pipeline with environment-specific configuration
 edxorg_s3_pipeline = dlt.pipeline(
     pipeline_name="edxorg_s3",
     destination="filesystem",
-    dataset_name=f"edxorg_s3_{destination_env}",
+    dataset_name=dataset_name,
     progress="log",
 )
 
