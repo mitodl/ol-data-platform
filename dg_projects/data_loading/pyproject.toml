@@ -1,0 +1,46 @@
+[project]
+name = "data-loading"
+requires-python = "~=3.13,<3.14"
+version = "0.1.0"
+dependencies = [
+    "dagster>=1.11.12",
+    "dagster-aws ~=0.28.0",
+    "dagster-dlt>=0.28.0",
+    "dagster-k8s>=0.27.15",
+    "dagster-postgres>=0.27.13",
+    "dlt[filesystem,parquet]>=1.6.0",
+    "duckdb>=1.2.0",
+    "ol-orchestrate-lib",
+    "pyiceberg>=0.8.0",
+    "sqlalchemy>=2.0.46",
+]
+
+[project.entry-points]
+"dagster_dg_cli.registry_modules" = { data_loading = "data_loading.components"}
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli>=1.11.12",
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "data_loading.definitions"
+project_name = "data_loading"
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "data_loading"
+code_location_target_module = "data_loading.definitions"
+
+[tool.setuptools.packages.find]
+exclude=["data_loading_tests"]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }
