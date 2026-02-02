@@ -1,30 +1,26 @@
 [project]
-name = "lakehouse"
-requires-python = ">=3.13,<3.15"
+name = "data-loading"
+requires-python = "~=3.13,<3.14"
 version = "0.1.0"
 dependencies = [
-    "dagster>=1.12.10",
-    "dagster-airbyte ~=0.28.0",
-    "dagster-dbt ~=0.28.0",
+    "dagster>=1.11.12",
+    "dagster-aws ~=0.28.0",
     "dagster-dlt>=0.28.0",
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
-    "dbt-duckdb >=1.10.0",
-    "dbt-trino >=1.10.0",
     "dlt[filesystem,parquet]>=1.6.0",
     "duckdb>=1.2.0",
-    "httpx ~= 0.28.0",
     "ol-orchestrate-lib",
-    "pygithub>=2.8.1",
     "pyiceberg>=0.8.0",
+    "sqlalchemy>=2.0.46",
 ]
 
 [project.entry-points]
-"dagster.components" = { lakehouse = "lakehouse.lib"}
+"dagster_dg_cli.registry_modules" = { data_loading = "data_loading.components"}
 
 [dependency-groups]
 dev = [
-    "dagster-dg-cli>=1.12.10",
+    "dagster-dg-cli>=1.11.12",
     "dagster-webserver",
 ]
 
@@ -33,17 +29,18 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.dagster]
-module_name = "lakehouse.definitions"
-project_name = "lakehouse"
+module_name = "data_loading.definitions"
+project_name = "data_loading"
 
 [tool.dg]
 directory_type = "project"
 
 [tool.dg.project]
-root_module = "lakehouse"
+root_module = "data_loading"
+code_location_target_module = "data_loading.definitions"
 
 [tool.setuptools.packages.find]
-exclude=["lakehouse_tests"]
+exclude=["data_loading_tests"]
 
 [tool.uv.sources]
 ol-orchestrate-lib = { path = "../../packages/ol-orchestrate-lib", editable = true }

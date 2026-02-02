@@ -1,0 +1,30 @@
+# dlt Configuration
+# This file contains non-sensitive configuration that can be committed to git.
+# Credentials are managed via AWS IAM (IRSA for K8s, ~/.aws/credentials for local dev).
+
+[runtime]
+log_level = "INFO"
+dlthub_telemetry = true
+
+# EdX.org S3 Source Configuration
+# Path matches dlt's lookup: sources.<module_name>.<source_name>.<param>
+[sources.loads.edxorg_s3_source]
+bucket_url = "s3://ol-data-lake-landing-zone-production/edxorg-raw-data/edxorg/raw_data/"
+
+# Local Development Destination
+# Writes Iceberg-compatible Parquet files to local disk for fast iteration
+[destination.filesystem.local]
+bucket_url = "file:///.dlt/data"  # Relative to project root
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+file_format = "parquet"
+
+# Production Destination
+# Writes to S3 for production use with Glue catalog registration
+[destination.filesystem.production]
+bucket_url = "s3://ol-data-lake-production/lakehouse/dlt"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+file_format = "parquet"
+
+# Note: Use DLT_DESTINATION_ENV environment variable to switch between destinations
+# Default: local
+# Example: DLT_DESTINATION_ENV=production python -m data_loading.defs.edxorg_s3_ingest.loads

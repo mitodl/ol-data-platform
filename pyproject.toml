@@ -223,3 +223,6 @@ path = "dg_projects/data_platform"
 
 [[tool.dg.workspace.projects]]
 path = "dg_projects/learning_resources"
+
+[[tool.dg.workspace.projects]]
+path = "dg_projects/data_loading"
