@@ -1,8 +1,7 @@
----
 slice_name: Content Engagement
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_timeseries_line
 params:
   adhoc_filters:
@@ -14,7 +13,7 @@ params:
     isExtra: false
     isNew: false
     operator: TEMPORAL_RANGE
-    sqlExpression:
+    sqlExpression: null
     subject: courseactivity_date
   annotation_layers: []
   area: false
@@ -33,8 +32,8 @@ params:
   markerEnabled: true
   markerSize: 6
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -42,8 +41,8 @@ params:
     optionName: metric_nn1wefuu2db_mpukfx7sm3p
     sqlExpression: COUNT(DISTINCT (CASE WHEN num_video_played> 0 THEN user_username
       ELSE null END))
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -51,8 +50,8 @@ params:
     optionName: metric_5dkp4rc3smx_j5uh6anrsrg
     sqlExpression: COUNT(DISTINCT(case when num_problem_submitted> 0 then user_username
       else null end))
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -62,28 +61,28 @@ params:
       else null end))
   - aggregate: COUNT_DISTINCT
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: user_username
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 123
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: VARCHAR
       type_generic: 1
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: Learner_count
     optionName: metric_455ovz8nu4s_6b2gv5odit3
-    sqlExpression:
+    sqlExpression: null
   only_total: true
   opacity: 0.2
   order_desc: true
@@ -101,28 +100,28 @@ params:
   timeseries_limit_metric:
     aggregate: MAX
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: courseactivity_date
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 122
       is_certified: false
       is_dttm: true
-      python_date_format:
+      python_date_format: null
       type: DATE
       type_generic: 2
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: false
     label: MAX(courseactivity_date)
     optionName: metric_okhl5d9h4c_ah7l934rd7f
-    sqlExpression:
+    sqlExpression: null
   tooltipTimeFormat: smart_date
   truncateXAxis: true
   truncate_metric: false
@@ -136,8 +135,8 @@ params:
   x_axis_time_format: smart_date
   x_axis_title_margin: 15
   y_axis_bounds:
-  - 
-  - 
+  - null
+  - null
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: 15
   y_axis_title_position: Left
@@ -151,7 +150,7 @@ query_context: '{"datasource":{"id":10,"type":"table"},"force":false,"queries":[
   when num_problem_submitted> 0 then user_username else null end))"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Participated_In_Discussion","optionName":"metric_nyeto5r6o1_a3bqgmcrvng","sqlExpression":"COUNT(DISTINCT(case
   when num_discussion_participated> 0 then user_username else null end))"},{"aggregate":"COUNT_DISTINCT","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"user_username","description":null,"expression":null,"filterable":true,"groupby":true,"id":123,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"Learner_count","optionName":"metric_455ovz8nu4s_6b2gv5odit3","sqlExpression":null}],"groupby":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
   filter","datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_vmnxg0351v_lspf9hzyi4i","isExtra":false,"isNew":false,"operator":"TEMPORAL_RANGE","sqlExpression":null,"subject":"courseactivity_date"}],"timeseries_limit_metric":{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"courseactivity_date","description":null,"expression":null,"filterable":true,"groupby":true,"id":122,"is_certified":false,"is_dttm":true,"python_date_format":null,"type":"DATE","type_generic":2,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MAX(courseactivity_date)","optionName":"metric_okhl5d9h4c_ah7l934rd7f","sqlExpression":null},"order_desc":true,"row_limit":10000,"truncate_metric":false,"show_empty_columns":false,"comparison_type":"values","annotation_layers":[],"forecastPeriods":10,"forecastInterval":0.8,"x_axis_title_margin":15,"y_axis_title_margin":15,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","seriesType":"line","show_value":false,"only_total":true,"area":false,"opacity":0.2,"markerEnabled":true,"markerSize":6,"zoomable":true,"show_legend":true,"legendType":"scroll","legendOrientation":"top","x_axis_time_format":"smart_date","rich_tooltip":true,"showTooltipTotal":false,"showTooltipPercentage":false,"tooltipTimeFormat":"smart_date","y_axis_format":"SMART_NUMBER","logAxis":false,"truncateXAxis":true,"y_axis_bounds":[null,null],"extra_form_data":{},"dashboards":[26],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 984bd054-65c0-4f76-b7ee-7fb0608ccd6e
 version: 1.0.0
 dataset_uuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8

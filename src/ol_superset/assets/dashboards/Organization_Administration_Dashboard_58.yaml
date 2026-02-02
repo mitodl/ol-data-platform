@@ -1,8 +1,7 @@
----
 dashboard_title: Organization Administration Dashboard
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -423,5 +422,5 @@ metadata:
     SUM(enrolled_count): '#1FA8C9'
     SUM(videos_watched): '#1FA8C9'
     SUM(chatbot_used_count): '#1FA8C9'
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

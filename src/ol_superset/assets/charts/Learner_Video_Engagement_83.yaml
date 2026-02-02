@@ -1,8 +1,7 @@
----
 slice_name: Learner Video Engagement
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 92__table
@@ -68,7 +67,7 @@ query_context: '{"datasource":{"id":92,"type":"table"},"force":false,"queries":[
   when estimated_time_played < 0 then null when estimated_time_played > video_duration
   then cast(video_duration as int) else cast(estimated_time_played as int) end","expressionType":"SQL"},{"datasourceWarning":false,"expressionType":"SQL","label":"video_duration(seconds)","sqlExpression":"cast(video_duration
   as int)"}],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":10000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"column_config":{"Percent_Watched":{"d3NumberFormat":",.1%"},"estimated_time_played(seconds)":{"showCellBars":false},"video_duration(seconds)":{"showCellBars":false}},"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[45],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 3c5fdc59-85d7-484b-9fdf-170336c8a4c0
 version: 1.0.0
 dataset_uuid: 4752cd11-a13e-4a8e-be31-4d9227b07ca2

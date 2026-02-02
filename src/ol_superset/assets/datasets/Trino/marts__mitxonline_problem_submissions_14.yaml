@@ -1,237 +1,236 @@
----
 table_name: marts__mitxonline_problem_submissions
-main_dttm_col:
-description:
-default_endpoint:
+main_dttm_col: null
+description: Auto refreshed at 2026-02-02T16:23:16.754334+00:00
+default_endpoint: null
 offset: 0
-cache_timeout:
+cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_mart
 sql: ''
-params:
-template_params:
+params: null
+template_params: null
 filter_select_enabled: true
-fetch_values_predicate:
-extra:
+fetch_values_predicate: null
+extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-folders:
+folders: null
 uuid: 9e61277c-345a-4958-947b-2436eb4abf15
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
   metric_type: count
   expression: COUNT(*)
-  description:
-  d3format:
-  currency:
+  description: null
+  d3format: null
+  currency: null
   extra:
     warning_markdown: ''
-  warning_text:
+  warning_text: null
 columns:
 - column_name: courserun_readable_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: problem_max_grade
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: problem_submission_timestamp
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: courserun_start_on
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: user_full_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: courserun_end_on
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: problem_grade
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: problem_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: student_answers
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: user_username
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: user_email
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: num_attempts
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: problem_success
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: course_number
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: problem_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: courserun_title
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: is_most_recent_attempt
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra: {}
 version: 1.0.0
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

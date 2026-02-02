@@ -1,8 +1,7 @@
----
 slice_name: Enrollment Activity Over Time
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_timeseries_line
 params:
   adhoc_filters:
@@ -14,7 +13,7 @@ params:
   annotation_layers: []
   color_scheme: supersetColors
   comparison_type: values
-  contributionMode:
+  contributionMode: null
   dashboards:
   - 16
   datasource: 40__table
@@ -36,124 +35,124 @@ params:
     metrics:
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: enrollment_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 564
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: enrollment_count
       optionName: metric_wurf1d6t8ik_0r1cmgpbzn8
-      sqlExpression:
+      sqlExpression: null
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: audit_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 565
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: audit_count
       optionName: metric_vy3s5j2cbz_dsgulryde6t
-      sqlExpression:
+      sqlExpression: null
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: verified_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 566
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: verified_count
       optionName: metric_5exmo6pnp9_yq18r0iygzh
-      sqlExpression:
+      sqlExpression: null
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: certificate_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 567
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: certificate_count
       optionName: metric_ixpmqu8v1j_mut0hejx8h
-      sqlExpression:
+      sqlExpression: null
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: unenrolled_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 662
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: unenrolled_count
       optionName: metric_w78pl7muuh_3ejvcy3wl4q
-      sqlExpression:
+      sqlExpression: null
     order_desc: false
     rich_tooltip: true
     rolling_type: cumsum
@@ -166,159 +165,159 @@ params:
     timeseries_limit_metric:
       aggregate: MIN
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: activity_date
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 563
         is_certified: false
         is_dttm: true
-        python_date_format:
+        python_date_format: null
         type: VARCHAR
         type_generic: 2
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: false
       label: MIN(activity_date)
       optionName: metric_7y7ps45qslt_7jckfsm57wg
-      sqlExpression:
+      sqlExpression: null
     viz_type: line
     x_axis_format: smart_date
     x_axis_label: 'Disclaimer: user x price will not always = revenue'
     x_ticks_layout: auto
     y_axis_bounds:
-    - 
-    - 
+    - null
+    - null
     y_axis_format: SMART_NUMBER
   groupby: []
   markerEnabled: false
   metrics:
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: enrollment_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 564
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: enrollment_count
     optionName: metric_wurf1d6t8ik_0r1cmgpbzn8
-    sqlExpression:
+    sqlExpression: null
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: audit_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 565
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: audit_count
     optionName: metric_vy3s5j2cbz_dsgulryde6t
-    sqlExpression:
+    sqlExpression: null
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: verified_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 566
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: verified_count
     optionName: metric_5exmo6pnp9_yq18r0iygzh
-    sqlExpression:
+    sqlExpression: null
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: certificate_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 567
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: certificate_count
     optionName: metric_ixpmqu8v1j_mut0hejx8h
-    sqlExpression:
+    sqlExpression: null
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: unenrolled_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 662
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: unenrolled_count
     optionName: metric_w78pl7muuh_3ejvcy3wl4q
-    sqlExpression:
+    sqlExpression: null
   order_desc: false
   queries_bak:
   - annotation_layers: []
@@ -335,152 +334,152 @@ params:
     metrics:
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: enrollment_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 564
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: enrollment_count
       optionName: metric_wurf1d6t8ik_0r1cmgpbzn8
-      sqlExpression:
+      sqlExpression: null
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: audit_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 565
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: audit_count
       optionName: metric_vy3s5j2cbz_dsgulryde6t
-      sqlExpression:
+      sqlExpression: null
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: verified_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 566
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: verified_count
       optionName: metric_5exmo6pnp9_yq18r0iygzh
-      sqlExpression:
+      sqlExpression: null
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: certificate_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 567
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: certificate_count
       optionName: metric_ixpmqu8v1j_mut0hejx8h
-      sqlExpression:
+      sqlExpression: null
     - aggregate: SUM
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: unenrolled_count
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 662
         is_certified: false
         is_dttm: false
-        python_date_format:
+        python_date_format: null
         type: BIGINT
         type_generic: 0
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: true
       label: unenrolled_count
       optionName: metric_w78pl7muuh_3ejvcy3wl4q
-      sqlExpression:
+      sqlExpression: null
     order_desc: false
     row_limit: 50000
     series_limit: 0
     series_limit_metric:
       aggregate: MIN
       column:
-        advanced_data_type:
-        certification_details:
-        certified_by:
+        advanced_data_type: null
+        certification_details: null
+        certified_by: null
         column_name: activity_date
-        description:
-        expression:
+        description: null
+        expression: null
         filterable: true
         groupby: true
         id: 563
         is_certified: false
         is_dttm: true
-        python_date_format:
+        python_date_format: null
         type: VARCHAR
         type_generic: 2
-        verbose_name:
-        warning_markdown:
+        verbose_name: null
+        warning_markdown: null
       datasourceWarning: false
       expressionType: SIMPLE
       hasCustomLabel: false
       label: MIN(activity_date)
       optionName: metric_7y7ps45qslt_7jckfsm57wg
-      sqlExpression:
+      sqlExpression: null
     time_range: No filter
     url_params: {}
   rich_tooltip: true
@@ -492,28 +491,28 @@ params:
   timeseries_limit_metric:
     aggregate: MIN
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: activity_date
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 563
       is_certified: false
       is_dttm: true
-      python_date_format:
+      python_date_format: null
       type: VARCHAR
       type_generic: 2
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: false
     label: MIN(activity_date)
     optionName: metric_7y7ps45qslt_7jckfsm57wg
-    sqlExpression:
+    sqlExpression: null
   truncateYAxis: true
   viz_type: echarts_timeseries_line
   xAxisLabelRotation: 0
@@ -522,8 +521,8 @@ params:
   x_axis_title: 'Disclaimer: user x price will not always = revenue'
   x_axis_title_margin: 30
   y_axis_bounds:
-  - 
-  - 
+  - null
+  - null
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: auto
   zoomable: true
@@ -639,7 +638,7 @@ query_context: '{"datasource": {"id": 40, "type": "table"}, "force": false, "que
   [], "extra_form_data": {}, "dashboards": [16], "contributionMode": null, "zoomable":
   true, "markerEnabled": false, "truncateYAxis": true, "x_axis": "activity_date"},
   "result_format": "json", "result_type": "full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 07019136-a885-4261-8960-cfca368642d7
 version: 1.0.0
 dataset_uuid: a9301703-0ac1-4eb7-a409-f65da5d8cba1

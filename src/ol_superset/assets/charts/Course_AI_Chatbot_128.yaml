@@ -1,8 +1,7 @@
----
 slice_name: Course AI Chatbot
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 148__table

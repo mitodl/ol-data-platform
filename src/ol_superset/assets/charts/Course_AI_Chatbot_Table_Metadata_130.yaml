@@ -1,8 +1,7 @@
----
 slice_name: Course AI Chatbot Table Metadata
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 113__table
@@ -27,7 +26,7 @@ params:
     isExtra: false
     isNew: false
     operator: TEMPORAL_RANGE
-    sqlExpression:
+    sqlExpression: null
     subject: created_on
   - clause: WHERE
     comparator:
@@ -39,7 +38,7 @@ params:
     isNew: false
     operator: IN
     operatorId: IN
-    sqlExpression:
+    sqlExpression: null
     subject: table_name
   order_by_cols: []
   row_limit: 1000

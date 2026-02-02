@@ -1,8 +1,7 @@
----
 slice_name: MITxOnline Enrollment Activity
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_area
 params:
   adhoc_filters: []
@@ -20,8 +19,8 @@ params:
   legendType: scroll
   markerSize: 6
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -29,8 +28,8 @@ params:
     optionName: metric_n2jmx6hwai_dppg711uhn6
     sqlExpression: sum(case when courserunenrollment_enrollment_mode= 'verified' then
       1 else 0 end)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -38,8 +37,8 @@ params:
     optionName: metric_h6yl06zrsvi_ioalqftnb9s
     sqlExpression: sum(case when courserunenrollment_enrollment_mode= 'audit' then
       1 else 0 end)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -59,8 +58,8 @@ params:
   sort_series_type: sum
   time_grain_sqla: P1D
   timeseries_limit_metric:
-    aggregate:
-    column:
+    aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: false
@@ -79,8 +78,8 @@ params:
   x_axis_time_format: smart_date
   x_axis_title_margin: 15
   y_axis_bounds:
-  - 
-  - 
+  - null
+  - null
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: 15
   y_axis_title_position: Left
@@ -91,6 +90,6 @@ query_context: '{"datasource":{"id":2,"type":"table"},"force":false,"queries":[{
   1, 10) as date)"},"time_grain_sqla":"P1D","x_axis_sort_asc":true,"x_axis_sort_series":"name","x_axis_sort_series_ascending":true,"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"verified_count","optionName":"metric_n2jmx6hwai_dppg711uhn6","sqlExpression":"sum(case
   when courserunenrollment_enrollment_mode= ''verified'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"audit_count","optionName":"metric_h6yl06zrsvi_ioalqftnb9s","sqlExpression":"sum(case
   when courserunenrollment_enrollment_mode= ''audit'' then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"total_enrollment_count","optionName":"metric_yd4mcqx26io_cz6zy2hssf5","sqlExpression":"count(*)"}],"groupby":[],"adhoc_filters":[],"timeseries_limit_metric":{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":false,"label":"MIN(courserunenrollment_created_on)","optionName":"metric_q5qzyqzlh4b_a14q0ei293","sqlExpression":"MIN(courserunenrollment_created_on)"},"order_desc":true,"row_limit":10000,"truncate_metric":true,"show_empty_columns":true,"rolling_type":"cumsum","comparison_type":"values","annotation_layers":[],"forecastPeriods":10,"forecastInterval":0.8,"x_axis_title_margin":15,"y_axis_title_margin":15,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","seriesType":"line","opacity":0.2,"only_total":true,"markerSize":6,"show_legend":true,"legendType":"scroll","legendOrientation":"top","x_axis_time_format":"smart_date","rich_tooltip":true,"tooltipTimeFormat":"smart_date","y_axis_format":"SMART_NUMBER","y_axis_bounds":[null,null],"extra_form_data":{},"dashboards":[5],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 6fd11c69-4110-465f-8ed6-bfcdbe59b8b4
 version: 1.0.0

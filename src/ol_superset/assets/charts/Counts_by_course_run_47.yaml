@@ -1,8 +1,7 @@
----
 slice_name: Counts by course run
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_timeseries_bar
 params:
   adhoc_filters:
@@ -26,124 +25,124 @@ params:
   metrics:
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: enrollment_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 564
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: enrollment_count
     optionName: metric_vo0dy50k56o_ai3zqir9ovp
-    sqlExpression:
+    sqlExpression: null
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: certificate_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 567
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: certificate_count
     optionName: metric_63sti6wzfxv_ssma7tv5wkm
-    sqlExpression:
+    sqlExpression: null
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: audit_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 565
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: audit_count
     optionName: metric_n47jqnsz56_g9r85jwqx1
-    sqlExpression:
+    sqlExpression: null
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: verified_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 566
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: verified_count
     optionName: metric_rge755epv_dwzekpxt4wq
-    sqlExpression:
+    sqlExpression: null
   - aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: unenrolled_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 662
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: unenrolled_count
     optionName: metric_x6c02spgg6_goe7nba1d8f
-    sqlExpression:
+    sqlExpression: null
   only_total: true
   order_desc: true
   orientation: vertical
@@ -153,32 +152,32 @@ params:
   show_legend: true
   slice_id: 47
   sort_series_type: sum
-  stack:
+  stack: null
   timeseries_limit_metric:
     aggregate: SUM
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: enrollment_count
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 564
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: BIGINT
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: false
     label: SUM(enrollment_count)
     optionName: metric_kx96mts7ayh_xwtuog1qly
-    sqlExpression:
+    sqlExpression: null
   tooltipTimeFormat: smart_date
   truncateXAxis: true
   truncate_metric: true
@@ -189,15 +188,15 @@ params:
   x_axis_time_format: smart_date
   x_axis_title_margin: 15
   y_axis_bounds:
-  - 
-  - 
+  - null
+  - null
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: 15
   y_axis_title_position: Left
 query_context: '{"datasource":{"id":40,"type":"table"},"force":false,"queries":[{"filters":[{"col":"activity_date","op":"TEMPORAL_RANGE","val":"No
   filter"}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":[{"columnType":"BASE_AXIS","sqlExpression":"courserun_readable_id","label":"courserun_readable_id","expressionType":"SQL"}],"metrics":[{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"enrollment_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":564,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"enrollment_count","optionName":"metric_vo0dy50k56o_ai3zqir9ovp","sqlExpression":null},{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"certificate_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":567,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"certificate_count","optionName":"metric_63sti6wzfxv_ssma7tv5wkm","sqlExpression":null},{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"audit_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":565,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"audit_count","optionName":"metric_n47jqnsz56_g9r85jwqx1","sqlExpression":null},{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"verified_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":566,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"verified_count","optionName":"metric_rge755epv_dwzekpxt4wq","sqlExpression":null},{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"unenrolled_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":662,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"unenrolled_count","optionName":"metric_x6c02spgg6_goe7nba1d8f","sqlExpression":null}],"orderby":[[{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"enrollment_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":564,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"SUM(enrollment_count)","optionName":"metric_kx96mts7ayh_xwtuog1qly","sqlExpression":null},false]],"annotation_layers":[],"row_limit":10,"series_columns":[],"series_limit":0,"series_limit_metric":{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"enrollment_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":564,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"SUM(enrollment_count)","optionName":"metric_kx96mts7ayh_xwtuog1qly","sqlExpression":null},"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"time_offsets":[],"post_processing":[{"operation":"pivot","options":{"index":["courserun_readable_id"],"columns":[],"aggregates":{"enrollment_count":{"operator":"mean"},"certificate_count":{"operator":"mean"},"audit_count":{"operator":"mean"},"verified_count":{"operator":"mean"},"unenrolled_count":{"operator":"mean"}},"drop_missing_columns":false}},{"operation":"flatten"}]}],"form_data":{"datasource":"40__table","viz_type":"echarts_timeseries_bar","slice_id":47,"x_axis":"courserun_readable_id","x_axis_sort_asc":true,"x_axis_sort_series":"max","x_axis_sort_series_ascending":false,"metrics":[{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"enrollment_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":564,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"enrollment_count","optionName":"metric_vo0dy50k56o_ai3zqir9ovp","sqlExpression":null},{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"certificate_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":567,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"certificate_count","optionName":"metric_63sti6wzfxv_ssma7tv5wkm","sqlExpression":null},{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"audit_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":565,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"audit_count","optionName":"metric_n47jqnsz56_g9r85jwqx1","sqlExpression":null},{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"verified_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":566,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"verified_count","optionName":"metric_rge755epv_dwzekpxt4wq","sqlExpression":null},{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"unenrolled_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":662,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"unenrolled_count","optionName":"metric_x6c02spgg6_goe7nba1d8f","sqlExpression":null}],"groupby":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
   filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"activity_date"}],"timeseries_limit_metric":{"aggregate":"SUM","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"enrollment_count","description":null,"expression":null,"filterable":true,"groupby":true,"id":564,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"SUM(enrollment_count)","optionName":"metric_kx96mts7ayh_xwtuog1qly","sqlExpression":null},"order_desc":true,"row_limit":10,"truncate_metric":true,"show_empty_columns":true,"comparison_type":"values","annotation_layers":[],"forecastPeriods":10,"forecastInterval":0.8,"orientation":"vertical","x_axis_title_margin":15,"y_axis_title_margin":15,"y_axis_title_position":"Left","sort_series_type":"sum","color_scheme":"supersetColors","stack":null,"only_total":true,"show_legend":true,"legendType":"scroll","legendOrientation":"top","x_axis_time_format":"smart_date","y_axis_format":"SMART_NUMBER","truncateXAxis":true,"y_axis_bounds":[null,null],"rich_tooltip":true,"tooltipTimeFormat":"smart_date","extra_form_data":{},"dashboards":[16],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 5670e704-3dc6-4b28-a12c-20d4faabcd46
 version: 1.0.0
 dataset_uuid: a9301703-0ac1-4eb7-a409-f65da5d8cba1

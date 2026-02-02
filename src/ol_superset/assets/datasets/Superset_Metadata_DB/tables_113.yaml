@@ -1,392 +1,391 @@
----
 table_name: tables
 main_dttm_col: created_on
-description:
-default_endpoint:
+description: null
+default_endpoint: null
 offset: 0
-cache_timeout:
+cache_timeout: null
 catalog: superset
 schema: public
-sql:
-params:
-template_params:
+sql: null
+params: null
+template_params: null
 filter_select_enabled: true
-fetch_values_predicate:
-extra:
+fetch_values_predicate: null
+extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-folders:
+folders: null
 uuid: 3b10e411-e497-4e8c-8132-08f673e8d72d
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
   metric_type: count
   expression: COUNT(*)
-  description:
-  d3format:
-  currency:
-  extra:
-  warning_text:
+  description: null
+  d3format: null
+  currency: null
+  extra: null
+  warning_text: null
 columns:
 - column_name: created_on
-  verbose_name:
+  verbose_name: null
   is_dttm: true
   is_active: true
   type: TIMESTAMP WITHOUT TIME ZONE
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: changed_on
-  verbose_name:
+  verbose_name: null
   is_dttm: true
   is_active: true
   type: TIMESTAMP WITHOUT TIME ZONE
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: catalog_perm
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR(1000)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: schema_perm
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR(1000)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: perm
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR(1000)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: main_dttm_col
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR(250)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: table_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR(250)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: schema
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR(255)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: catalog
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR(256)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: always_filter_main_dttm
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: is_managed_externally
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: filter_select_enabled
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: is_sqllab_view
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: normalize_columns
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: is_featured
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: uuid
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: UUID
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: created_by_fk
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: INTEGER
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: changed_by_fk
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: INTEGER
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: database_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: INTEGER
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: cache_timeout
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: INTEGER
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: INTEGER
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: offset
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: INTEGER
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: fetch_values_predicate
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: TEXT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: template_params
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: TEXT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: default_endpoint
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: TEXT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: external_url
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: TEXT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: params
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: TEXT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: extra
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: TEXT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: description
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: TEXT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: sql
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: TEXT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 version: 1.0.0
 database_uuid: 6a4ddc2b-cd25-464d-99b4-f6c611eabb99

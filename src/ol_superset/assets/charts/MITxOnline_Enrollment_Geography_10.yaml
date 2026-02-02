@@ -1,8 +1,7 @@
----
 slice_name: MITxOnline Enrollment Geography
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: world_map
 params:
   datasource: 2__table
@@ -11,8 +10,8 @@ params:
   entity: user_address_country
   country_fieldtype: cca2
   metric:
-    aggregate:
-    column:
+    aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -34,6 +33,6 @@ params:
   extra_form_data: {}
   dashboards: []
 query_context: '{"datasource":{"id":2,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":[],"metrics":[{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Enrollment_count","optionName":"metric_cv1tgoykxs_dwk8dh8h8ew","sqlExpression":"count(*)"}],"annotation_layers":[],"row_limit":10000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{__JINJA2_CLOSE__],"form_data":{"datasource":"2__table","viz_type":"world_map","slice_id":10,"entity":"user_address_country","country_fieldtype":"cca2","metric":{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Enrollment_count","optionName":"metric_cv1tgoykxs_dwk8dh8h8ew","sqlExpression":"count(*)"},"adhoc_filters":[],"row_limit":10000,"max_bubble_size":"25","color_picker":{"a":1,"b":135,"g":122,"r":0},"color_by":"metric","linear_color_scheme":"superset_seq_1","color_scheme":"supersetColors","y_axis_format":"SMART_NUMBER","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: de62ba2c-c4c8-4973-99eb-f1a7bcbe16e6
 version: 1.0.0

@@ -1,8 +1,7 @@
----
 dashboard_title: Course Enrollment Activity
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -687,5 +686,5 @@ metadata:
     unenrolled_count: '#FF7F44'
     verified_count: '#666666'
     learner_count: '#1FA8C9'
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

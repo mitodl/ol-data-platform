@@ -1,8 +1,7 @@
----
 dashboard_title: Learner Demographic and Course Data
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -272,5 +271,5 @@ metadata:
     type: NATIVE_FILTER
     description: ''
   map_label_colors: {}
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

@@ -1,8 +1,7 @@
----
 dashboard_title: Enrollment Detail by Learner
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -481,5 +480,5 @@ metadata:
   shared_label_colors: []
   color_scheme_domain: []
   map_label_colors: {}
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

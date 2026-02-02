@@ -1,9 +1,8 @@
----
 slice_name: Latest Fulfilled Order Date
 description: Note that the edX.org data is pulled from MicroMasters for DEDP orders
   and has no longer been updated since 2022
-certified_by:
-certification_details:
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 41__table
@@ -16,28 +15,28 @@ params:
   metrics:
   - aggregate: MAX
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: order_created_on
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 588
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: VARCHAR
       type_generic: 1
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     datasourceWarning: false
     expressionType: SIMPLE
     hasCustomLabel: true
     label: Latest Fulfilled Order Created On
     optionName: metric_nx40l3x88w_zo1d39ut2ai
-    sqlExpression:
+    sqlExpression: null
   all_columns: []
   percent_metrics: []
   adhoc_filters:
@@ -52,29 +51,29 @@ params:
     isNew: false
     operator: IN
     operatorId: IN
-    sqlExpression:
+    sqlExpression: null
     subject: order_state
   timeseries_limit_metric:
     expressionType: SIMPLE
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: order_created_on
-      description:
-      expression:
+      description: null
+      expression: null
       filterable: true
       groupby: true
       id: 588
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: VARCHAR
       type_generic: 1
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     aggregate: MAX
-    sqlExpression:
+    sqlExpression: null
     datasourceWarning: false
     hasCustomLabel: false
     label: MAX(order_created_on)
@@ -99,7 +98,7 @@ query_context: '{"datasource":{"id":41,"type":"table"},"force":false,"queries":[
   Fulfilled Order Created On","optionName":"metric_nx40l3x88w_zo1d39ut2ai","sqlExpression":null}],"orderby":[[{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"order_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":588,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"aggregate":"MAX","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":false,"label":"MAX(order_created_on)","optionName":"metric_6pb81js4ukh_e3lk7v25qh4"},false]],"annotation_layers":[],"row_limit":50000,"series_limit":0,"series_limit_metric":{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"order_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":588,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"aggregate":"MAX","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":false,"label":"MAX(order_created_on)","optionName":"metric_6pb81js4ukh_e3lk7v25qh4"},"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"41__table","viz_type":"table","slice_id":39,"query_mode":"aggregate","groupby":["platform"],"temporal_columns_lookup":{},"metrics":[{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"order_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":588,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"Latest
   Fulfilled Order Created On","optionName":"metric_nx40l3x88w_zo1d39ut2ai","sqlExpression":null}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":["fulfilled","refunded"],"datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_l6zq1dpc1cn_w1kybwbzqu","isExtra":false,"isNew":false,"operator":"IN","operatorId":"IN","sqlExpression":null,"subject":"order_state"}],"timeseries_limit_metric":{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"order_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":588,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"aggregate":"MAX","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":false,"label":"MAX(order_created_on)","optionName":"metric_6pb81js4ukh_e3lk7v25qh4"},"order_by_cols":[],"row_limit":50000,"order_desc":true,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"Latest
   Fulfilled Order Created On":{"horizontalAlign":"left"}},"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[21],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 686fd4b2-e9f4-401b-bd85-b03f8b8824fd
 version: 1.0.0
 dataset_uuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555

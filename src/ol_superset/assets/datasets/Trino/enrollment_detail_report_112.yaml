@@ -1,540 +1,539 @@
----
 table_name: enrollment_detail_report
-main_dttm_col:
-description:
-default_endpoint:
+main_dttm_col: null
+description: Auto refreshed at 2026-02-02T16:22:10.548000+00:00
+default_endpoint: null
 offset: 0
-cache_timeout:
+cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_reporting
 sql: ''
-params:
-template_params:
+params: null
+template_params: null
 filter_select_enabled: true
-fetch_values_predicate:
+fetch_values_predicate: null
 extra:
   last_updated: today
 normalize_columns: false
 always_filter_main_dttm: false
-folders:
+folders: null
 uuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
   metric_type: count
   expression: COUNT(*)
-  description:
-  d3format:
-  currency:
+  description: null
+  d3format: null
+  currency: null
   extra:
     warning_markdown: ''
-  warning_text:
+  warning_text: null
 columns:
 - column_name: receipt_payment_amount
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: DECIMAL(38, 2)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: unit_price
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: DECIMAL(38, 2)
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserun_readable_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: course_readable_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courseruncertificate_created_on
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: receipt_payer_email
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: receipt_payment_timestamp
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserunenrollment_created_on
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserunenrollment_upgraded_on
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: order_created_on
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: receipt_payment_method
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserunenrollment_enrollment_status
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserun_start_on
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: user_full_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: order_reference_number
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: user_country_code
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserunenrollment_enrollment_mode
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserun_end_on
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: program_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courseruncertificate_url
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: coupon_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: order_state
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: user_username
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: user_email
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: coupon_code
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserun_title
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: course_title
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: receipt_url
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: platform
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: discount
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courseruncertificate_is_earned
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserungrade_is_passing
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserunenrollment_is_active
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserun_is_current
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BOOLEAN
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserungrade_grade
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: DOUBLE
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: num_of_course_passed
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BIGINT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: courserunenrollment_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BIGINT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: order_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: BIGINT
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
+  description: null
+  python_date_format: null
   extra:
-    warning_markdown:
+    warning_markdown: null
 - column_name: user_highest_education
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
-  description:
-  python_date_format:
-  extra:
+  description: null
+  python_date_format: null
+  extra: null
 version: 1.0.0
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

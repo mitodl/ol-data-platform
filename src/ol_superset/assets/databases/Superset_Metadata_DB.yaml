@@ -1,7 +1,6 @@
----
 database_name: Superset Metadata DB
 sqlalchemy_uri: postgresql+psycopg2://superset_metadata_reader:XXXXXXXXXX@ol-superset-db-production-replica.cbnm7ajau6mi.us-east-1.rds.amazonaws.com:5432/superset?sslmode=require
-cache_timeout:
+cache_timeout: null
 expose_in_sqllab: true
 allow_run_async: true
 allow_ctas: false

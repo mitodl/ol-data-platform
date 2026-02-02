@@ -1,8 +1,7 @@
----
 slice_name: '# of Watches By Video'
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 154__table
@@ -18,24 +17,24 @@ params:
   metrics:
   - expressionType: SIMPLE
     column:
-      advanced_data_type:
-      certification_details:
-      certified_by:
+      advanced_data_type: null
+      certification_details: null
+      certified_by: null
       column_name: video_watched_count
-      description:
+      description: null
       expression: ''
       filterable: true
       groupby: true
       id: 2295
       is_certified: false
       is_dttm: false
-      python_date_format:
+      python_date_format: null
       type: INTEGER
       type_generic: 0
-      verbose_name:
-      warning_markdown:
+      verbose_name: null
+      warning_markdown: null
     aggregate: SUM
-    sqlExpression:
+    sqlExpression: null
     datasourceWarning: false
     hasCustomLabel: false
     label: SUM(video_watched_count)
@@ -48,7 +47,7 @@ params:
     operator: TEMPORAL_RANGE
     comparator: No filter
     clause: WHERE
-    sqlExpression:
+    sqlExpression: null
     isExtra: false
     isNew: false
     datasourceWarning: false
@@ -60,7 +59,7 @@ params:
     comparator:
     - video
     clause: WHERE
-    sqlExpression:
+    sqlExpression: null
     isExtra: false
     isNew: false
     datasourceWarning: false
@@ -81,7 +80,7 @@ params:
 query_context: '{"datasource":{"id":154,"type":"table"},"force":false,"queries":[{"filters":[{"col":"activity_date","op":"TEMPORAL_RANGE","val":"No
   filter"},{"col":"block_category","op":"IN","val":["video"]}],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":["section_title","subsection_title","block_title"],"metrics":[{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"video_watched_count","description":null,"expression":"","filterable":true,"groupby":true,"id":2295,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"INTEGER","type_generic":0,"verbose_name":null,"warning_markdown":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":false,"label":"SUM(video_watched_count)","optionName":"metric_695thcugno5_b6mumkmdad"}],"orderby":[[{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"video_watched_count","description":null,"expression":"","filterable":true,"groupby":true,"id":2295,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"INTEGER","type_generic":0,"verbose_name":null,"warning_markdown":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":false,"label":"SUM(video_watched_count)","optionName":"metric_695thcugno5_b6mumkmdad"},false]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"154__table","viz_type":"table","query_mode":"aggregate","groupby":["section_title","subsection_title","block_title"],"time_grain_sqla":"P1D","temporal_columns_lookup":{"activity_date":true},"metrics":[{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"video_watched_count","description":null,"expression":"","filterable":true,"groupby":true,"id":2295,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"INTEGER","type_generic":0,"verbose_name":null,"warning_markdown":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":false,"label":"SUM(video_watched_count)","optionName":"metric_695thcugno5_b6mumkmdad"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[{"expressionType":"SIMPLE","subject":"activity_date","operator":"TEMPORAL_RANGE","comparator":"No
   filter","clause":"WHERE","sqlExpression":null,"isExtra":false,"isNew":false,"datasourceWarning":false,"filterOptionName":"filter_hycwsjgybfv_n5jvjcypipk"},{"expressionType":"SIMPLE","subject":"block_category","operator":"IN","operatorId":"IN","comparator":["video"],"clause":"WHERE","sqlExpression":null,"isExtra":false,"isNew":false,"datasourceWarning":false,"filterOptionName":"filter_jfr4kdsbaf8_ebbywy4d68u"}],"order_by_cols":[],"order_desc":true,"row_limit":1000,"server_page_length":10,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","comparison_type":"values","extra_form_data":{},"dashboards":[59],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: cb328531-f862-467c-b073-4a2cec5dfbe2
 version: 1.0.0
 dataset_uuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91

@@ -1,10 +1,9 @@
----
 table_name: Data_Detail_Problems
 main_dttm_col: event_timestamp
-description:
-default_endpoint:
+description: null
+default_endpoint: null
 offset: 0
-cache_timeout:
+cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_dimensional
 sql: "select \na.platform\n, h.course_title\n,a.courserun_readable_id\n,b.problem_name\n\
@@ -13,194 +12,194 @@ sql: "select \na.platform\n, h.course_title\n,a.courserun_readable_id\n,b.proble
   \ a\ninner join ol_warehouse_production_dimensional.dim_problem b\non a.problem_block_fk=b.problem_block_pk\n\
   inner join ol_warehouse_production_intermediate.int__combined__course_runs as h\n\
   \          on a.courserun_readable_id = h.courserun_readable_id\n\n"
-params:
-template_params:
+params: null
+template_params: null
 filter_select_enabled: true
-fetch_values_predicate:
-extra:
+fetch_values_predicate: null
+extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-folders:
+folders: null
 uuid: dc0886e8-1861-4bd9-a694-25a063adcf83
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
   metric_type: count
   expression: COUNT(*)
-  description:
-  d3format:
-  currency:
+  description: null
+  d3format: null
+  currency: null
   extra:
     warning_markdown: ''
-  warning_text:
+  warning_text: null
 columns:
 - column_name: event_timestamp
-  verbose_name:
+  verbose_name: null
   is_dttm: true
   is_active: true
   type: TIMESTAMP(6) WITH TIME ZONE
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: courserun_readable_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: max_grade
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: max_attempts
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: problem_name
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: course_title
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: event_type
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: grade
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: markdown
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: attempt
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: answers
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: platform
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: success
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 - column_name: weight
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
+  expression: null
+  description: null
+  python_date_format: null
   extra: {}
 version: 1.0.0
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

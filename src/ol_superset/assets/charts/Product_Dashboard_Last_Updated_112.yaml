@@ -1,8 +1,7 @@
----
 slice_name: Product Dashboard (Last Updated)
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 113__table
@@ -24,7 +23,7 @@ params:
     operator: TEMPORAL_RANGE
     comparator: No filter
     clause: WHERE
-    sqlExpression:
+    sqlExpression: null
     isExtra: false
     isNew: false
     datasourceWarning: false
@@ -36,7 +35,7 @@ params:
     comparator:
     - marts__combined__products
     clause: WHERE
-    sqlExpression:
+    sqlExpression: null
     isExtra: false
     isNew: false
     datasourceWarning: false

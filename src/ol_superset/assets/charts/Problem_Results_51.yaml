@@ -1,8 +1,7 @@
----
 slice_name: Problem Results
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 14__table
@@ -17,16 +16,16 @@ params:
   metrics:
   - expressionType: SQL
     sqlExpression: SUM(case when problem_success= 'correct' then 1 else 0 end)
-    column:
-    aggregate:
+    column: null
+    aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: Problem_Correct_Count
     optionName: metric_xj16o97mjh_2ccubhpfiei
   - expressionType: SQL
     sqlExpression: SUM(case when problem_success= 'incorrect' then 1 else 0 end)
-    column:
-    aggregate:
+    column: null
+    aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: Problem_Incorrect_Count
@@ -34,8 +33,8 @@ params:
   - expressionType: SQL
     sqlExpression: "     ROUND(SUM(case\n               when problem_success= 'correct'\
       \ then 1\n               else 0\n           end)  * 100.0 / count(*), 1)"
-    column:
-    aggregate:
+    column: null
+    aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: Correct%
@@ -43,8 +42,8 @@ params:
   - expressionType: SQL
     sqlExpression: "     ROUND(SUM(case\n               when problem_success= 'incorrect'\
       \ then 1\n               else 0\n           end)  * 100.0 / count(*), 1)"
-    column:
-    aggregate:
+    column: null
+    aggregate: null
     datasourceWarning: false
     hasCustomLabel: true
     label: Incorrect%
@@ -82,7 +81,7 @@ query_context: '{"datasource":{"id":14,"type":"table"},"force":false,"queries":[
   problem_success= ''incorrect'' then 1\n               else 0\n           end)  *
   100.0 / count(*), 1)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Incorrect%","optionName":"metric_u8nnhrkt6h_20hi6ju9pr6"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","show_cell_bars":true,"color_pn":true,"column_config":{"SUM(case
   when problem_success= ''correct'' then 1 else 0 end)/count(*)":{"d3NumberFormat":".2%"__JINJA2_CLOSE__,"conditional_formatting":[],"extra_form_data":{},"dashboards":[24],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 8247b593-276a-4e86-96e1-62869ec2c59b
 version: 1.0.0
 dataset_uuid: 9e61277c-345a-4958-947b-2436eb4abf15

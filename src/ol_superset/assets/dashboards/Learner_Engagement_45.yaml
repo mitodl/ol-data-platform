@@ -1,8 +1,7 @@
----
 dashboard_title: Learner Engagement
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -1209,5 +1208,5 @@ metadata:
     - 100
     tabsInScope:
     - TAB-NBsXEuDonrmINALjDWIDW
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

@@ -1,8 +1,7 @@
----
 slice_name: Products
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 44__table
@@ -79,7 +78,7 @@ query_context: '{"datasource":{"id":44,"type":"table"},"force":false,"queries":[
   "},{"datasourceWarning":false,"expressionType":"SQL","label":"end_on","sqlExpression":"substring(end_on,
   6, 2) || ''/'' || substring(end_on, 9, 2) || ''/'' || substring(end_on, 1, 4) "},{"datasourceWarning":false,"expressionType":"SQL","label":"enrollment_start_on","sqlExpression":"enrollment_start_on"},{"datasourceWarning":false,"expressionType":"SQL","label":"enrollment_end_on","sqlExpression":"enrollment_end_on"},{"datasourceWarning":false,"expressionType":"SQL","label":"upgrade_deadline","sqlExpression":"upgrade_deadline"},"pace","duration","time_commitment","certification_type","delivery","continuing_education_credits","topics","instructors","offered_by","product_created_on","product_is_active","product_is_private","is_live"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":["[\"platform\",
   true]","[\"product_id\", true]","[\"product_is_active\", true]"],"row_limit":10000,"table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"column_config":{"start_on":{"horizontalAlign":"left"}},"show_cell_bars":false,"color_pn":true,"conditional_formatting":[],"extra_form_data":{},"dashboards":[25],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 36ade680-7ae9-4d35-89b0-a46235139418
 version: 1.0.0
 dataset_uuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b

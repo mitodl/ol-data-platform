@@ -1,8 +1,7 @@
----
 dashboard_title: Course Engagement
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -517,5 +516,5 @@ metadata:
     Watched_a_video: '#454E7C'
     Tried_a_problem: '#5AC189'
     Participated_In_Discussion: '#FF7F44'
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

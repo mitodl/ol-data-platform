@@ -1,8 +1,7 @@
----
 slice_name: Data Detail Video
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 102__table
@@ -41,7 +40,7 @@ params:
 query_context: '{"datasource":{"id":102,"type":"table"},"force":false,"queries":[{"filters":[{"col":"event_timestamp","op":"TEMPORAL_RANGE","val":"No
   filter"}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform","course_title","courserun_readable_id","event_type","video_duration","video_position","video_name","event_timestamp"],"orderby":[],"annotation_layers":[],"row_limit":500000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"102__table","viz_type":"table","slice_id":103,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{"event_timestamp":true},"all_columns":["platform","course_title","courserun_readable_id","event_type","video_duration","video_position","video_name","event_timestamp"],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":"No
   filter","expressionType":"SIMPLE","operator":"TEMPORAL_RANGE","subject":"event_timestamp"}],"order_by_cols":[],"row_limit":"500000","table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":false,"color_pn":true,"conditional_formatting":[],"extra_form_data":{},"dashboards":[45],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 8cd66663-f93f-4751-be11-14c5d4c28ed5
 version: 1.0.0
 dataset_uuid: 3967f60c-2d80-41ad-8245-67dbf555bd82

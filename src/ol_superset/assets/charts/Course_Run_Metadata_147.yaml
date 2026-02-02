@@ -1,8 +1,7 @@
----
 slice_name: Course Run Metadata
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 38__table
@@ -37,7 +36,7 @@ params:
   dashboards:
   - 26
 query_context: '{"datasource":{"id":38,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["course_title","course_readable_id","courserun_title","courserun_readable_id","platform","courserun_start_on","courserun_end_on","courserun_upgrade_deadline","courserun_is_current"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":1000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"38__table","viz_type":"table","slice_id":55,"query_mode":"aggregate","groupby":["course_title","course_readable_id","courserun_title","courserun_readable_id","platform","courserun_start_on","courserun_end_on","courserun_upgrade_deadline","courserun_is_current"],"temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"server_page_length":10,"row_limit":1000,"percent_metric_calculation":"row_limit","table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","comparison_type":"values","extra_form_data":{},"dashboards":[26],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 23fb7405-da8f-4983-839d-b1d7fb07e733
 version: 1.0.0
 dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000

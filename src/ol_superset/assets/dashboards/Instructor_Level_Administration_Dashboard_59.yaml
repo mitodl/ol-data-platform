@@ -1,8 +1,7 @@
----
 dashboard_title: Instructor Level Administration Dashboard
-description:
+description: null
 css: ''
-slug:
+slug: null
 certified_by: ''
 certification_details: ''
 published: true
@@ -471,5 +470,5 @@ metadata:
     - 144
     tabsInScope:
     - TAB-8p1CGidw8lv4ZPPkTXA9q
-theme_uuid:
+theme_uuid: null
 version: 1.0.0

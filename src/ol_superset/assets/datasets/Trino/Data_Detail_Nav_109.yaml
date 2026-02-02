@@ -1,10 +1,9 @@
----
 table_name: Data_Detail_Nav
 main_dttm_col: event_timestamp
-description:
-default_endpoint:
+description: null
+default_endpoint: null
 offset: 0
-cache_timeout:
+cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_dimensional
 sql: "select \na.platform\n, h.course_title\n,a.courserun_readable_id\n,a.event_type\n\
@@ -12,109 +11,109 @@ sql: "select \na.platform\n, h.course_title\n,a.courserun_readable_id\n,a.event_
   \ a\n    inner join ol_warehouse_production_intermediate.int__combined__course_runs\
   \ as h\n     on a.courserun_readable_id = h.courserun_readable_id\nwhere a.platform\
   \ in ('edxorg', 'mitxonline')\n\n\n"
-params:
-template_params:
+params: null
+template_params: null
 filter_select_enabled: true
-fetch_values_predicate:
-extra:
+fetch_values_predicate: null
+extra: null
 normalize_columns: false
 always_filter_main_dttm: false
-folders:
+folders: null
 uuid: 32e283f5-fc02-403a-9c92-b8286352cdba
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
   metric_type: count
   expression: COUNT(*)
-  description:
-  d3format:
-  currency:
-  extra:
-  warning_text:
+  description: null
+  d3format: null
+  currency: null
+  extra: null
+  warning_text: null
 columns:
 - column_name: event_timestamp
-  verbose_name:
+  verbose_name: null
   is_dttm: true
   is_active: true
   type: TIMESTAMP(6) WITH TIME ZONE
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: courserun_readable_id
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: starting_position
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: course_title
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: ending_position
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: event_type
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: platform
-  verbose_name:
+  verbose_name: null
   is_dttm: false
   is_active: true
   type: VARCHAR
-  advanced_data_type:
+  advanced_data_type: null
   groupby: true
   filterable: true
-  expression:
-  description:
-  python_date_format:
-  extra:
+  expression: null
+  description: null
+  python_date_format: null
+  extra: null
 version: 1.0.0
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

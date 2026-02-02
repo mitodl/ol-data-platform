@@ -1,8 +1,7 @@
----
 slice_name: Course to Program Reference
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: table
 params:
   datasource: 51__table
@@ -31,7 +30,7 @@ params:
   dashboards: []
   comparison_type: values
 query_context: '{"datasource":{"id":51,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":["platform","course_title","course_readable_id","program_title","program_readable_id","program_id"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[]}],"form_data":{"datasource":"51__table","viz_type":"table","query_mode":"aggregate","groupby":["platform","course_title","course_readable_id","program_title","program_readable_id","program_id"],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","show_cell_bars":true,"color_pn":true,"extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: 5a5e1d10-7bbe-4329-891d-029255d6efe0
 version: 1.0.0
 dataset_uuid: f841a3e6-d864-4499-94dd-6ceafe8ac74f

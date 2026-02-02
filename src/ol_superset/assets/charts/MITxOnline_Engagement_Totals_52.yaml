@@ -1,8 +1,7 @@
----
 slice_name: MITxOnline Engagement Totals
-description:
-certified_by:
-certification_details:
+description: null
+certified_by: null
+certification_details: null
 viz_type: echarts_timeseries_bar
 params:
   adhoc_filters:
@@ -23,32 +22,32 @@ params:
   legendOrientation: top
   legendType: scroll
   metrics:
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
     label: Watched_a_video
     optionName: metric_059piu499ctj_v1biwm6w8a
     sqlExpression: SUM(CASE WHEN num_video_played> 0 THEN 1 ELSE 0 END)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
     label: Tried_a_problem
     optionName: metric_t4xk2kk9zxa_zdkc9h1us7h
     sqlExpression: SUM(case when num_problem_submitted> 0 then 1 else 0 end)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
     label: Participated_In_Discussion
     optionName: metric_8zaqrr5aljx_o1deaowi9rp
     sqlExpression: SUM(case when num_discussion_participated> 0 then 1 else 0 end)
-  - aggregate:
-    column:
+  - aggregate: null
+    column: null
     datasourceWarning: false
     expressionType: SQL
     hasCustomLabel: true
@@ -74,8 +73,8 @@ params:
   x_axis_time_format: smart_date
   x_axis_title_margin: 15
   y_axis_bounds:
-  - 
-  - 
+  - null
+  - null
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: 15
   y_axis_title_position: Left
@@ -91,7 +90,7 @@ query_context: '{"datasource":{"id":10,"type":"table"},"force":false,"queries":[
   when num_problem_submitted> 0 then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Participated_In_Discussion","optionName":"metric_8zaqrr5aljx_o1deaowi9rp","sqlExpression":"SUM(case
   when num_discussion_participated> 0 then 1 else 0 end)"},{"aggregate":null,"column":null,"datasourceWarning":false,"expressionType":"SQL","hasCustomLabel":true,"label":"Learner_count","optionName":"metric_653jots7vt7_l91azd98z0k","sqlExpression":"COUNT(DISTINCT
   user_username)"}],"only_total":true,"order_desc":true,"orientation":"vertical","rich_tooltip":true,"row_limit":10000,"show_empty_columns":true,"show_legend":true,"slice_id":52,"sort_series_type":"sum","time_grain_sqla":"P1D","tooltipTimeFormat":"smart_date","truncateXAxis":true,"truncate_metric":true,"viz_type":"echarts_timeseries_bar","x_axis":"courserun_readable_id","x_axis_sort_asc":true,"x_axis_sort_series":"name","x_axis_sort_series_ascending":true,"x_axis_time_format":"smart_date","x_axis_title_margin":15,"y_axis_bounds":[null,null],"y_axis_format":"SMART_NUMBER","y_axis_title_margin":15,"y_axis_title_position":"Left","force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout:
+cache_timeout: null
 uuid: c5db1f81-e676-4565-a158-ef68de95dfb1
 version: 1.0.0
 dataset_uuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8
