@@ -82,16 +82,48 @@ bucket_url = "s3://ol-data-lake-landing-zone-production/edxorg-raw-data/edxorg/r
 
 ### Destinations
 
-The pipeline supports two destinations configured via `DLT_DESTINATION_ENV`:
+The pipeline automatically selects the appropriate destination based on the `DAGSTER_ENVIRONMENT` variable:
 
-**Local Development** (default):
+**Local Development** (`DAGSTER_ENVIRONMENT=dev` or unset - default):
 - Writes to `.dlt/data/` as Parquet files
-- Fast iteration for testing
-- Query with DuckDB
+- No Iceberg overhead for fast iteration
+- Query with DuckDB for local testing
+- No Glue catalog registration
 
-**Production**:
-- Writes to S3 as Parquet files (configured in `.dlt/config.toml`)
-- Registers tables in AWS Glue catalog
+**QA Environment** (`DAGSTER_ENVIRONMENT=qa`):
+- Writes Iceberg tables to `s3://ol-data-lake-raw-qa/edxorg`
+- Registers tables in `ol_warehouse_qa_raw` Glue database
+- Full Iceberg format with schema evolution support
+- Queryable via Athena or Trino
+
+**Production Environment** (`DAGSTER_ENVIRONMENT=production`):
+- Writes Iceberg tables to `s3://ol-data-lake-raw-production/edxorg`
+- Registers tables in `ol_warehouse_production_raw` Glue database
+- Full Iceberg format with schema evolution support
+- Queryable via Athena or Trino
+
+**Environment configuration** (`.dlt/config.toml`):
+```toml
+# Local - Parquet only
+[destination.filesystem.local]
+bucket_url = "file:///.dlt/data"
+
+# QA - Iceberg + Glue catalog
+[destination.filesystem.qa]
+bucket_url = "s3://ol-data-lake-raw-qa/edxorg"
+
+[iceberg_catalog.qa]
+iceberg_catalog_name = "ol_warehouse_qa_raw"
+iceberg_catalog_type = "glue"
+
+# Production - Iceberg + Glue catalog
+[destination.filesystem.production]
+bucket_url = "s3://ol-data-lake-raw-production/edxorg"
+
+[iceberg_catalog.production]
+iceberg_catalog_name = "ol_warehouse_production_raw"
+iceberg_catalog_type = "glue"
+```
 
 ## Local Development
 
