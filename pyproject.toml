@@ -10,7 +10,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "PyPika ~=0.50.0",
+    "PyPika ~=0.51.0",
     "cyclopts~=4.5.0",
     "dbt-duckdb>=1.10.0",
     "dbt-trino>=1.10.0",
