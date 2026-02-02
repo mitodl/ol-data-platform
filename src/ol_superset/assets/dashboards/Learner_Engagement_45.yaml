@@ -330,10 +330,9 @@ position:
     children: []
     id: MARKDOWN-XawqPQL8D3MnkTWJ120IH
     meta:
-      code: '### Change Log:
-
-
-        6/2 added Data Detail tab and charts'
+      code: '### Change Log
+        
+        **2/2/26**: Standardized filter names: ''Learner Email'' → ''User Email'', ''Course Title'' → ''Course''; Enabled search on User Email and Course Run Readable ID filters'
       height: 50
       width: 6
     parents:

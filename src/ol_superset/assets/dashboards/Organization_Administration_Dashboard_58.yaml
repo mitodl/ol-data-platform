@@ -120,7 +120,9 @@ position:
     children: []
     id: MARKDOWN-1o1uJTcBdCkHg338Pa4rK
     meta:
-      code: '### Change Log:'
+      code: '### Change Log
+        
+        **2/2/26**: Enabled search functionality on Course Run Readable ID filter'
       height: 50
       width: 4
     parents:

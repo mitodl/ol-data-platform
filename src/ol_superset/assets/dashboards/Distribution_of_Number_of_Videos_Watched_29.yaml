@@ -38,7 +38,9 @@ position:
     children: []
     id: MARKDOWN-DlUhe7f_X4Uo3-EXDi78e
     meta:
-      code: '### Change Log'
+      code: '### Change Log
+        
+        **2/2/26**: Standardized filter name: ''Course Run Is Current'' → ''Current Course Run''; Enabled search on Course Run Readable ID filter'
       height: 50
       width: 12
     parents:

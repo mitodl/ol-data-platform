@@ -132,7 +132,9 @@ position:
     children: []
     id: MARKDOWN-ZZBx82IJA_TfZinxj8-ac
     meta:
-      code: '### Change Log:'
+      code: '### Change Log
+        
+        **2/2/26**: Enabled search functionality on Course Run Readable ID and User Email filters'
       height: 50
       width: 6
     parents:

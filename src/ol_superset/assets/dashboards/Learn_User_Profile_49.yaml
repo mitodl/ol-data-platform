@@ -85,6 +85,7 @@ position:
   ROW-WoLMbv-dcY3jnmhZyIgwf:
     children:
     - CHART-VpMT1dkQyJDBplwqMUJe9
+    - MARKDOWN-82d59f9235
     id: ROW-WoLMbv-dcY3jnmhZyIgwf
     meta:
       background: BACKGROUND_TRANSPARENT
@@ -150,6 +151,20 @@ position:
     parents:
     - ROOT_ID
     type: TABS
+  MARKDOWN-82d59f9235:
+    children: []
+    id: MARKDOWN-82d59f9235
+    meta:
+      code: "### Change Log\n\n        **2/2/26**: Standardized filter name: 'Full\
+        \ Name' → 'User Full Name'"
+      height: 50
+      width: 8
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    - TAB-4nklbbLEUosNKj4O2__fE
+    - ROW-WoLMbv-dcY3jnmhZyIgwf
+    type: MARKDOWN
 metadata:
   chart_configuration:
     '123':

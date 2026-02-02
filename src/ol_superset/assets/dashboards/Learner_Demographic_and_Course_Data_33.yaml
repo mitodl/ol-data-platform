@@ -40,7 +40,9 @@ position:
     children: []
     id: MARKDOWN-yete-lTFvEQ3OjsUKHP-h
     meta:
-      code: '### Change Log'
+      code: '### Change Log
+        
+        **2/2/26**: Enabled search functionality on User Email and User Full Name filters'
       height: 50
       width: 12
     parents:
