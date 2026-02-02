@@ -20,3 +20,4 @@ __pycache__/
 
 # Sync operation logs
 sync_*.log
+progress.log
