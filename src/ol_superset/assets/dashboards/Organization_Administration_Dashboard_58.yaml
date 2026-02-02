@@ -384,7 +384,7 @@ metadata:
       enableEmptyFilter: false
       defaultToFirstItem: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: Course Run Readable ID
     filterType: filter_select

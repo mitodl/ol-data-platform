@@ -226,7 +226,7 @@ metadata:
       defaultToFirstItem: false
       creatable: true
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: User Email
     filterType: filter_select
@@ -251,7 +251,7 @@ metadata:
       defaultToFirstItem: false
       creatable: true
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: User Full Name
     filterType: filter_select

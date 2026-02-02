@@ -1080,9 +1080,9 @@ metadata:
       enableEmptyFilter: false
       defaultToFirstItem: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
-    name: Learner Email
+    name: User Email
     filterType: filter_select
     targets:
     - column:
@@ -1130,7 +1130,7 @@ metadata:
       multiSelect: true
       searchAllOptions: false
       inverseSelection: false
-    name: Course Title
+    name: Course
     filterType: filter_select
     targets:
     - column:
@@ -1170,7 +1170,7 @@ metadata:
       enableEmptyFilter: false
       defaultToFirstItem: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: Course Run Readable ID
     filterType: filter_select

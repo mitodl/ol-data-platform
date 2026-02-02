@@ -273,7 +273,7 @@ metadata:
       enableEmptyFilter: false
       inverseSelection: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
     defaultDataMask:
       extraFormData: {}
       filterState: {}

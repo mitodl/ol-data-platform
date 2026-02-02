@@ -197,7 +197,7 @@ metadata:
       multiSelect: true
       searchAllOptions: true
       inverseSelection: false
-    name: Full Name
+    name: User Full Name
     filterType: filter_select
     targets:
     - column:

@@ -542,7 +542,7 @@ metadata:
       multiSelect: true
       searchAllOptions: false
       inverseSelection: false
-    name: Enrolled "Current" Course Run
+    name: Current Course Run
     filterType: filter_select
     targets:
     - column:
@@ -655,7 +655,7 @@ metadata:
       defaultToFirstItem: false
       creatable: true
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: Course Run Readable ID
     filterType: filter_select
