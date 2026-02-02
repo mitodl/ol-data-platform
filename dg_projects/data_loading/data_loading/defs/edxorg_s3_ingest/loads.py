@@ -27,6 +27,7 @@ import os
 from collections.abc import Iterator
 
 import dlt
+from dlt.sources import incremental
 from dlt.sources.filesystem import filesystem, read_csv
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,12 @@ def edxorg_s3_source(
             primary_key=None,  # TSV files don't have consistent primary keys
         )
         def load_table(table=table_name) -> Iterator[dict[str, str]]:
-            """Load TSV files for a specific table from S3."""
+            """
+            Load TSV files for a specific table from S3.
+
+            Uses incremental loading based on file modification_date to avoid
+            reprocessing unchanged files on subsequent runs.
+            """
 
             # Pattern to match all TSV files for this table
             # Matches: db_table/{table_name}/*/*.tsv (source_system/course_id/*.tsv)
@@ -123,6 +129,10 @@ def edxorg_s3_source(
                 bucket_url=bucket_url,
                 file_glob=file_glob,
             )
+
+            # Enable incremental loading based on file modification date
+            # Only processes files modified since the last successful run
+            files.apply_hints(incremental=incremental("modification_date"))
 
             # Read and yield data from each TSV file
             for file_item in files:
@@ -139,6 +149,10 @@ def edxorg_s3_source(
                         # Add metadata about source file
                         record["_dlt_file_path"] = file_item["file_name"]
                         record["_dlt_load_timestamp"] = dlt.current.load_id()
+                        # Include modification date for tracking
+                        record["_dlt_file_modified"] = file_item.get(
+                            "modification_date"
+                        )
                         yield record
 
         yield load_table
