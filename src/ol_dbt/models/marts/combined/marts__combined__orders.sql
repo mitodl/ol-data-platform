@@ -46,6 +46,10 @@ with bootcamps__ecommerce_order as (
     select * from {{ ref('int__micromasters__orders') }}
 )
 
+, mitxpro__users as (
+    select * from {{ ref('int__mitxpro__users') }}
+)
+
 , mitxonline_orders as (
     select
         mitxonline__ecommerce_order.order_id
@@ -173,6 +177,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_allorders.b2bcoupon_id
         , mitxpro__ecommerce_allorders.b2border_contract_number
         , mitxpro__ecommerce_allorders.order_id
+        , mitxpro__users.user_email as redeemed_emails
         , mitxpro__ecommerce_order.couponpaymentversion_payment_transaction
         , mitxpro__ecommerce_order.order_total_price_paid
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
@@ -194,6 +199,8 @@ with bootcamps__ecommerce_order as (
         on mitxpro__ecommerce_allorders.coupon_id = mitxpro__ecommerce_allcoupons.coupon_id
     left join mitxpro__programruns
         on mitxpro__lines.programrun_id = mitxpro__programruns.programrun_id
+    left join mitxpro__users
+        on mitxpro__ecommerce_order.order_purchaser_user_id = mitxpro__users.user_id
     where mitxpro__ecommerce_allorders.order_id is not null
 )
 
@@ -236,6 +243,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , null as redeemed_emails
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name
@@ -295,6 +303,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , redeemed_emails
         , order_tax_country_code
         , order_tax_rate
         , order_tax_rate_name
@@ -345,6 +354,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , null as redeemed_emails
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name
@@ -395,6 +405,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , null as redeemed_emails
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name
@@ -462,6 +473,7 @@ select
     , receipt_payer_email
     , receipt_payer_ip_address
     , receipt_transaction_id
+    , redeemed_emails
     , req_reference_number
     , unit_price
     , user_email

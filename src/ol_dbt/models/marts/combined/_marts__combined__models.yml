@@ -276,6 +276,8 @@ models:
     description: string, unique identifier - either transaction_id from cybersource
       payment or refund transaction, e.g., 3735553783662130706689, OR unique UUID
       if no payment required.
+  - name: redeemed_emails
+    description: string, email of MITxPRO purchaser
   - name: req_reference_number
     description: string, cybersource req_reference_number from cybersource payment
       transaction, e.g., mitxonline-production-1
