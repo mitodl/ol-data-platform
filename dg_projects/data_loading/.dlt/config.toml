@@ -15,7 +15,7 @@ bucket_url = "s3://ol-data-lake-landing-zone-production/edxorg-raw-data/edxorg/r
 # Writes Parquet files to local disk for fast iteration
 [destination.local]
 destination_type = "filesystem"
-bucket_url = "file:///.dlt/data"
+bucket_url = "file:///tmp/.dlt/data"
 layout = "{table_name}/{load_id}.{file_id}.{ext}"
 
 # QA Destination - Filesystem with Iceberg + Glue Catalog (named destination)
