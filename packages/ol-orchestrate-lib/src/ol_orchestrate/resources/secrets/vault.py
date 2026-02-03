@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -51,6 +52,58 @@ class Vault(ConfigurableResource):
             mount_point=self.auth_mount or "kubernetes",
         )
 
+    def _get_token_cache_path(self) -> Path:
+        """Get the path to the token cache file."""
+        cache_dir = Path.home() / ".vault" / "token_cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        # Use vault_addr and role to create unique cache file
+        cache_key = f"{self.vault_addr}_{self.vault_role or 'default'}".replace(
+            "/", "_"
+        ).replace(":", "_")
+        return cache_dir / f"{cache_key}.json"
+
+    def _load_cached_token(self) -> str | None:
+        """Load a cached token if it exists and is still valid."""
+        cache_path = self._get_token_cache_path()
+        if not cache_path.exists():
+            return None
+
+        try:
+            with cache_path.open() as f:
+                cache_data = json.load(f)
+
+            cached_token = cache_data.get("token")
+            if not cached_token:
+                return None
+
+            # Try using the cached token
+            self._client.token = cached_token
+
+            # Check if token is still valid by making a simple API call
+            if self._client.is_authenticated():
+                return cached_token
+
+            # Token is invalid, remove cache file
+            cache_path.unlink(missing_ok=True)
+
+        except (json.JSONDecodeError, OSError):
+            # Cache file is corrupted or unreadable, remove it
+            cache_path.unlink(missing_ok=True)
+
+        return None
+
+    def _save_token_to_cache(self, token: str):
+        """Save a token to the cache file."""
+        cache_path = self._get_token_cache_path()
+        try:
+            with cache_path.open("w") as f:
+                json.dump({"token": token}, f)
+            # Set restrictive permissions (owner read/write only)
+            cache_path.chmod(0o600)
+        except OSError:
+            # If we can't save the cache, continue anyway
+            pass
+
     def _auth_jwt(self):
         """Authenticate using JWT/OIDC with a pre-obtained JWT token.
 
@@ -89,11 +142,19 @@ class Vault(ConfigurableResource):
         This method requires an interactive environment with a web browser.
         It opens a browser window for authentication and handles the OAuth callback.
 
+        Tokens are cached in ~/.vault/token_cache/ to avoid repeated browser flows.
+        The cache is keyed by vault_addr and vault_role.
+
         Note: This method is not suitable for automated/non-interactive environments
         like Kubernetes pods or CI/CD pipelines. Use 'jwt' auth_type instead for
         those scenarios.
         """
         self._initialize_client()
+
+        # Try to use a cached token first
+        cached_token = self._load_cached_token()
+        if cached_token:
+            return
 
         # Import here to avoid dependency issues if not using interactive OIDC
         import urllib.parse  # noqa: PLC0415
@@ -187,6 +248,8 @@ window.onload = function load() {
         client_token = auth_result.get("auth", {}).get("client_token")
         if client_token:
             self._client.token = client_token
+            # Cache the token for future use
+            self._save_token_to_cache(client_token)
         else:
             err_msg = "Failed to obtain client token from OIDC authentication"
             raise ValueError(err_msg)
