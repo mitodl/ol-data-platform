@@ -369,12 +369,11 @@ for record in chunk.to_dict(orient="records"):
 
 ## References
 
-- [Upstream Asset: edxorg_archive.py](../../edxorg/edxorg/assets/edxorg_archive.py)
+- [Upstream Asset: edxorg_archive.py](../../../../edxorg/edxorg/assets/edxorg_archive.py)
 - [dlt Filesystem Source](https://dlthub.com/docs/dlt-ecosystem/verified-sources/filesystem)
 - [dlt CSV Reader](https://dlthub.com/docs/dlt-ecosystem/verified-sources/filesystem/basic#read-various-formats)
 - [S3 Integration Guide](https://dlthub.com/docs/dlt-ecosystem/destinations/filesystem#s3)
 
 ## Related Pipelines
 
-- **Qualtrics Ingestion**: REST API-based ingestion example
 - **edxorg_archive (upstream)**: Generates the TSV files this pipeline consumes
