@@ -113,7 +113,7 @@ def edxorg_s3_source(
         # Create a resource for each table with standardized naming
         @dlt.resource(
             name=f"raw__edxorg__s3__tables__{table_name}",
-            write_disposition="merge",
+            write_disposition="append",
             primary_key=None,  # TSV files don't have consistent primary keys
             table_format=table_format,  # Use iceberg for QA/prod, parquet for local
         )
@@ -147,28 +147,11 @@ def edxorg_s3_source(
             # Only processes files modified since the last successful run
             files.apply_hints(incremental=incremental("modification_date"))
 
-            # Read and yield data from each TSV file
-            for file_item in files:
-                # Read TSV with appropriate settings
-                csv_reader = read_csv_duckdb(
-                    file_item,
-                    use_pyarrow=True,
-                    delimiter="\t",  # TSV files use tabs
-                    ignore_errors=True,
-                    chunksize=5000,  # Process in chunks for memory efficiency
-                )
-
-                for chunk in csv_reader:
-                    # Convert chunk to records and yield
-                    for record in chunk.to_dict(orient="records"):
-                        # Add metadata about source file
-                        record["_dlt_file_path"] = file_item["file_name"]
-                        record["_dlt_load_timestamp"] = dlt.current.load_id()
-                        # Include modification date for tracking
-                        record["_dlt_file_modified"] = file_item.get(
-                            "modification_date"
-                        )
-                        yield record
+            return files | read_csv_duckdb(
+                use_pyarrow=True,
+                delimiter="\t",  # TSV files use tabs
+                ignore_errors=True,
+            )
 
         yield load_table
 
@@ -181,15 +164,14 @@ dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
 # dev/ci -> local filesystem (Parquet, no Iceberg, no Glue)
 # qa -> filesystem + Iceberg (S3 + ol_warehouse_qa_raw Glue database)
 # production -> filesystem + Iceberg (S3 + ol_warehouse_production_raw Glue database)
+table_format = "iceberg"
 if dagster_env in ("qa", "production"):
     destination_env = dagster_env
     dataset_name = f"ol_warehouse_{dagster_env}_raw"
-    table_format = "iceberg"
 else:
     # dev, ci, or any other value uses local
     destination_env = "local"
     dataset_name = "edxorg_s3_local"
-    table_format = "parquet"
 
 # Create source instance with appropriate table format
 # dlt resolves config from .dlt/config.toml at runtime
