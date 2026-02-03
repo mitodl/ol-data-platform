@@ -12,3 +12,4 @@ bin/pants
 .aider*
 .env
 **/*.egg-info/
+progress.log

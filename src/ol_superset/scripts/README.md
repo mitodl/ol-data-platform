@@ -1,99 +1,188 @@
-# Superset Asset Management Scripts
+# Superset Asset Management CLI
 
-Scripts for managing Superset assets (dashboards, charts, datasets) across environments.
+Modern CLI for managing Superset assets (dashboards, charts, datasets) across environments.
 
-## Quick Reference
+## Installation
+
+The CLI is automatically installed when you set up the ol_superset package:
 
 ```bash
-# Export all assets from production
-./export_all.sh
-
-# Export from QA
-./export_all.sh superset-qa
-
-# Sync production to QA
-./export_all.sh superset-production
-./sync_assets.sh superset-production superset-qa
-
-# Sync QA to production (after testing changes)
-./export_all.sh superset-qa
-./sync_assets.sh superset-qa superset-production
+cd src/ol_superset
+uv sync
 ```
 
-## Scripts
+This creates the `ol-superset` command in your virtual environment.
 
-### `export_all.sh [instance] [output-dir]`
+## Quick Start
 
-Exports all Superset assets from specified instance.
+```bash
+# Export production assets (backup)
+ol-superset export
 
-**Arguments:**
-- `instance` (optional): Instance name (default: `superset-production`)
-- `output-dir` (optional): Output directory (default: `../assets`)
+# Export from QA
+ol-superset export --from superset-qa
 
-**What it does:**
-- Fetches ALL datasets (with pagination)
-- Fetches ALL charts (with pagination)
-- Fetches ALL dashboards
-- Exports database configurations
-- Shows summary of exported assets
+# Validate assets
+ol-superset validate
+
+# Sync production to QA
+ol-superset sync superset-production superset-qa
+
+# Promote QA changes to production (with safety checks)
+ol-superset promote
+```
+
+## Commands
+
+### `ol-superset export`
+
+Export all assets from a Superset instance.
+
+**Options:**
+- `--from`, `-f`: Instance to export from (default: `superset-production`)
+- `--output-dir`, `-o`: Output directory (default: `assets/`)
 
 **Examples:**
 ```bash
 # Export from production (default)
-./export_all.sh
+ol-superset export
 
 # Export from QA
-./export_all.sh superset-qa
+ol-superset export --from superset-qa
 
 # Export to custom directory
-./export_all.sh superset-qa /tmp/qa-backup
+ol-superset export -f superset-qa -o /tmp/qa-backup
 ```
 
-### `sync_assets.sh <source-instance> <target-instance>`
+### `ol-superset validate`
 
-Syncs assets from one instance to another with automatic database UUID mapping.
+Validate asset YAML files for syntax errors and security issues.
+
+**Options:**
+- `--assets-dir`, `-d`: Assets directory to validate (default: `assets/`)
+
+**Examples:**
+```bash
+# Validate default assets directory
+ol-superset validate
+
+# Validate custom directory
+ol-superset validate --assets-dir /tmp/qa-backup
+```
+
+### `ol-superset sync`
+
+Sync assets from one instance to another with automatic database UUID mapping.
 
 **Arguments:**
-- `source-instance`: Source instance name (e.g., `superset-production`)
-- `target-instance`: Target instance name (e.g., `superset-qa`)
+- `SOURCE`: Source instance name (required)
+- `TARGET`: Target instance name (required)
 
-**What it does:**
-- Maps database UUIDs automatically
-- Pushes datasets to target
-- Pushes charts to target
-- Pushes dashboards to target
-- Continues on error (resilient)
-- Shows summary of synced assets
+**Options:**
+- `--assets-dir`, `-d`: Assets directory (default: `assets/`)
+- `--yes`, `-y`: Skip confirmation prompt
+- `--dry-run`, `-n`: Preview what would be synced without syncing
 
 **Examples:**
 ```bash
 # Sync production to QA (most common)
-./sync_assets.sh superset-production superset-qa
+ol-superset sync superset-production superset-qa
 
-# Sync QA to production
-./sync_assets.sh superset-qa superset-production
+# Sync with auto-confirmation (for CI/CD)
+ol-superset sync superset-production superset-qa --yes
+
+# Preview sync without making changes
+ol-superset sync superset-production superset-qa --dry-run
 ```
 
-### `map_database_uuids.py <target-instance>`
+### `ol-superset promote`
 
-Maps database UUIDs from source assets to target instance.
+Promote assets from QA to production with extensive safety checks.
 
-**Called automatically by `sync_assets.sh`** - you typically don't need to run this directly.
+**Safety Features:**
+- Validates assets before promoting
+- Checks for uncommitted git changes
+- Requires typing "PROMOTE" to confirm
+- Shows detailed summary of changes
+- Creates promotion manifest
 
-**What it does:**
-- Fetches database list from target instance
-- Matches databases by name
-- Rewrites all `database_uuid` references
-- Updates database config files
+**Options:**
+- `--assets-dir`, `-d`: Assets directory (default: `assets/`)
+- `--skip-validation`: Skip validation (not recommended)
+- `--force`, `-f`: Skip all safety checks (DANGEROUS)
+- `--dry-run`, `-n`: Preview what would be promoted
 
-**Example:**
+**Examples:**
 ```bash
-python3 map_database_uuids.py superset-qa
+# Standard promotion workflow
+ol-superset promote
+
+# Preview promotion
+ol-superset promote --dry-run
+
+# Emergency deployment (use with extreme caution)
+ol-superset promote --force
+```
+
+## Typical Workflows
+
+### Weekly Production Backup
+
+```bash
+cd /path/to/ol-data-platform/src/ol_superset
+
+# Export production assets
+ol-superset export
+
+# Review changes
+git diff assets/
+
+# Commit backup
+git add assets/
+git commit -m "Weekly Superset production backup"
+git push
+```
+
+### Sync Production to QA
+
+```bash
+# Export from production
+ol-superset export --from superset-production
+
+# Sync to QA
+ol-superset sync superset-production superset-qa
+
+# Verify in QA
+open https://bi-qa.ol.mit.edu/dashboard/list/
+```
+
+### Test Changes in QA, Then Promote to Production
+
+```bash
+# 1. Make changes in QA Superset UI
+#    https://bi-qa.ol.mit.edu
+
+# 2. Export from QA
+ol-superset export --from superset-qa
+
+# 3. Review changes
+git diff assets/
+
+# 4. Validate
+ol-superset validate
+
+# 5. Commit changes
+git add assets/
+git commit -m "Add new enrollment dashboard"
+git push
+
+# 6. After review, promote to production
+ol-superset promote
 ```
 
 ## Authentication
 
-Scripts use the `sup` CLI which requires configured instances:
+The CLI uses the `sup` CLI which requires configured instances:
 
 ```bash
 # List configured instances
@@ -108,64 +197,37 @@ sup instance use superset-production
 
 See `~/.sup/config.yml` for instance configurations.
 
-## Typical Workflows
+## Production Safety
 
-### Weekly Production Backup
+The `promote` command has multiple safeguards:
 
-```bash
-cd /path/to/ol-data-platform/src/ol_superset
+1. **QA → Production Only**: Hardcoded to only allow this direction
+2. **Validation**: Automatically validates assets before promoting
+3. **Git Check**: Warns about uncommitted changes
+4. **Confirmation**: Requires typing "PROMOTE" (exact, case-sensitive)
+5. **Manifest**: Creates a record of what was promoted
 
-# Export production assets
-./scripts/export_all.sh superset-production
+The `sync` command also protects production:
 
-# Review changes
-git diff assets/
-
-# Commit backup
-git add assets/
-git commit -m "Weekly Superset production backup"
-git push
-```
-
-### Sync Production to QA
-
-```bash
-cd /path/to/ol-data-platform/src/ol_superset
-
-# Export from production
-./scripts/export_all.sh superset-production
-
-# Sync to QA (with confirmation prompt)
-./scripts/sync_assets.sh superset-production superset-qa
-
-# Verify in QA
-open https://bi-qa.ol.mit.edu/dashboard/list/
-```
-
-### Test Changes in QA, Then Promote
-
-```bash
-# 1. Make changes in QA Superset UI
-#    https://bi-qa.ol.mit.edu
-
-# 2. Export from QA
-./scripts/export_all.sh superset-qa
-
-# 3. Review changes
-git diff assets/
-
-# 4. Commit changes
-git add assets/
-git commit -m "Add new enrollment dashboard"
-git push
-
-# 5. After review, promote to production
-./scripts/sync_assets.sh superset-qa superset-production
-```
+1. **Warning**: Shows clear warning when targeting production
+2. **Confirmation**: Requires typing "SYNC TO PRODUCTION" for production targets
+3. **Dry Run**: Always available to preview changes
 
 ## Troubleshooting
 
+### Command not found: ol-superset
+
+```bash
+# Make sure you're in the virtual environment
+cd src/ol_superset
+source .venv/bin/activate
+
+# Or use uv to run
+uv run ol-superset --help
+```
+
 ### Command not found: sup
+
 ```bash
 # Install sup CLI
 cd ~/src/superset-sup
@@ -173,32 +235,35 @@ uv tool install --force --reinstall .
 ```
 
 ### Authentication failed
+
 ```bash
 # Reconfigure instance
 sup config auth
 # Select self-hosted Superset and follow prompts
 ```
 
-### Only 50 assets exported
-The default page size is 50, but scripts use `--limit 1000` to fetch all assets via pagination.
+## Development
 
-### "Could not extract database information"
-The script has a regex fallback that handles malformed JSON from the CLI automatically.
+The CLI is structured as:
 
-### Import shows errors but completes
-This is expected - the `--continue-on-error` flag allows the import to skip problematic assets and continue with the rest.
+```
+ol_superset/
+├── cli.py              # Main entry point
+├── commands/           # Command implementations
+│   ├── export.py
+│   ├── sync.py
+│   ├── promote.py
+│   └── validate.py
+└── lib/                # Shared utilities
+    ├── utils.py
+    └── database_mapping.py
+```
 
-## Technical Details
-
-- **Authentication**: OAuth2 with PKCE flow
-- **CSRF Protection**: Tokens automatically fetched for POST requests
-- **Pagination**: Fetches all assets in 100-item pages
-- **UUID Mapping**: Automatic database UUID translation between environments
-- **Error Handling**: Continue-on-error for resilient imports
-- **Dependencies**: Database configs included automatically
+To add new commands, create a function in `commands/` and register it in `cli.py`.
 
 ## See Also
 
 - [WORKFLOWS.md](../WORKFLOWS.md) - Detailed workflow documentation
-- `sup --help` - CLI help
-- `sup <command> --help` - Command-specific help
+- [cyclopts documentation](https://cyclopts.readthedocs.io/) - CLI framework docs
+- `ol-superset --help` - Command help
+- `ol-superset <command> --help` - Command-specific help
