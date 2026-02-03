@@ -11,21 +11,24 @@ dlthub_telemetry = true
 [sources.loads.edxorg_s3_source]
 bucket_url = "s3://ol-data-lake-landing-zone-production/edxorg-raw-data/edxorg/raw_data/"
 
-# Local Development Destination
+# Local Development Destination (named destination)
 # Writes Parquet files to local disk for fast iteration
-[destination.filesystem.local]
+[destination.local]
+destination_type = "filesystem"
 bucket_url = "file:///.dlt/data"
 layout = "{table_name}/{load_id}.{file_id}.{ext}"
 
-# QA Destination - Filesystem with Iceberg + Glue Catalog
+# QA Destination - Filesystem with Iceberg + Glue Catalog (named destination)
 # Writes Iceberg tables to S3 and registers in ol_warehouse_qa_raw Glue database
-[destination.filesystem.qa]
+[destination.qa]
+destination_type = "filesystem"
 bucket_url = "s3://ol-data-lake-raw-qa/edxorg"
 layout = "{table_name}/{load_id}.{file_id}.{ext}"
 
-# Production Destination - Filesystem with Iceberg + Glue Catalog
+# Production Destination - Filesystem with Iceberg + Glue Catalog (named destination)
 # Writes Iceberg tables to S3 and registers in ol_warehouse_production_raw Glue database
-[destination.filesystem.production]
+[destination.production]
+destination_type = "filesystem"
 bucket_url = "s3://ol-data-lake-raw-production/edxorg"
 layout = "{table_name}/{load_id}.{file_id}.{ext}"
 
