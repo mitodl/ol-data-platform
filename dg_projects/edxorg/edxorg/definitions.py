@@ -51,6 +51,7 @@ from edxorg.assets.edxorg_archive import (
     gcs_edxorg_tracking_log_sensor,
     normalize_edxorg_tracking_log,
 )
+from edxorg.assets.edxorg_db_table_specs import edxorg_db_table_specs
 from edxorg.assets.openedx_course_archives import (
     dummy_edxorg_course_xml,
     edxorg_course_content_webhook,
@@ -288,6 +289,7 @@ defs = Definitions(
         edxorg_course_content_webhook,
         edxorg_program_metadata,
         edxorg_mitx_course_metadata,
+        *edxorg_db_table_specs,
     ],
     schedules=[edxorg_api_daily_schedule],
 )

@@ -29,7 +29,7 @@ from pathlib import Path
 
 import dlt
 from dlt.sources import incremental
-from dlt.sources.filesystem import filesystem, read_csv
+from dlt.sources.filesystem import filesystem, read_csv_duckdb
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +140,7 @@ def edxorg_s3_source(
             files = filesystem(
                 bucket_url=bucket_url,
                 file_glob=file_glob,
+                extract_content=True,
             )
 
             # Enable incremental loading based on file modification date
@@ -149,10 +150,12 @@ def edxorg_s3_source(
             # Read and yield data from each TSV file
             for file_item in files:
                 # Read TSV with appropriate settings
-                csv_reader = read_csv(
+                csv_reader = read_csv_duckdb(
                     file_item,
+                    use_pyarrow=True,
                     delimiter="\t",  # TSV files use tabs
-                    chunksize=1000,  # Process in chunks for memory efficiency
+                    ignore_errors=True,
+                    chunksize=5000,  # Process in chunks for memory efficiency
                 )
 
                 for chunk in csv_reader:
@@ -190,7 +193,9 @@ else:
 
 # Create source instance with appropriate table format
 # dlt resolves config from .dlt/config.toml at runtime
-edxorg_s3_source_instance = edxorg_s3_source(table_format=table_format)
+edxorg_s3_source_instance = edxorg_s3_source(
+    table_format=table_format,
+)
 
 # Create pipeline with environment-specific configuration
 edxorg_s3_pipeline = dlt.pipeline(
@@ -217,7 +222,10 @@ def run_pipeline(tables: list[str] | None = None):
     else:
         logger.info("Loading all available tables (this may take a while)")
 
-    load_info = edxorg_s3_pipeline.run(edxorg_s3_source(tables=tables))
+    load_info = edxorg_s3_pipeline.run(
+        edxorg_s3_source(tables=tables),
+        loader_file_format="parquet",
+    )
     logger.info("Pipeline completed: %s", load_info)
 
     return load_info

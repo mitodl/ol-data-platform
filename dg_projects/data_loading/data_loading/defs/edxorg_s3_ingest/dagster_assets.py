@@ -7,80 +7,56 @@ from all prod courses into a single table.
 """
 
 from dagster import (
+    AssetDep,
     AssetExecutionContext,
     AssetKey,
-    AssetOut,
-    Definitions,
-    multi_asset,
+    AssetSpec,
 )
-from dagster_dlt import DagsterDltResource
+from dagster_dlt import DagsterDltResource, DagsterDltTranslator, dlt_assets
+from dagster_dlt.translator import DltResourceTranslatorData
 
 from .loads import (
     edxorg_s3_pipeline,
     edxorg_s3_source_instance,
 )
 
-# List of all tables that will be created as assets
-ALL_TABLES = [
-    "assessment_assessment",
-    "assessment_assessmentfeedback",
-    "assessment_assessmentfeedback_assessments",
-    "assessment_assessmentfeedback_options",
-    "assessment_assessmentfeedbackoption",
-    "assessment_assessmentpart",
-    "assessment_criterion",
-    "assessment_criterionoption",
-    "assessment_peerworkflow",
-    "assessment_peerworkflowitem",
-    "assessment_rubric",
-    "assessment_studenttrainingworkflow",
-    "assessment_studenttrainingworkflowitem",
-    "assessment_trainingexample",
-    "assessment_trainingexample_options_selected",
-    "auth_user",
-    "auth_userprofile",
-    "certificates_generatedcertificate",
-    "course",
-    "course_groups_cohortmembership",
-    "courseware_studentmodule",
-    "grades_persistentcoursegrade",
-    "grades_persistentsubsectiongrade",
-    "student_anonymoususerid",
-    "student_courseaccessrole",
-    "student_courseenrollment",
-    "student_languageproficiency",
-    "submissions_score",
-    "submissions_scoresummary",
-    "submissions_studentitem",
-    "submissions_submission",
-    "teams",
-    "teams_membership",
-    "user_api_usercoursetag",
-    "user_id_map",
-    "wiki_article",
-    "wiki_articlerevision",
-    "workflow_assessmentworkflow",
-    "workflow_assessmentworkflowstep",
-]
 
+class EdxorgDltTranslator(DagsterDltTranslator):
+    """Custom translator for edxorg dlt assets with upstream dependencies."""
 
-# Create multi_asset that depends on all upstream partition combinations
-@multi_asset(
-    name="edxorg_s3_consolidated_tables",
-    outs={
-        table: AssetOut(
-            key=AssetKey(["edxorg", "tables", table]),
-            description=f"Consolidated edX.org {table} data from all prod courses",
+    def get_asset_spec(self, data: DltResourceTranslatorData) -> AssetSpec:
+        """
+        Map dlt resource to Dagster asset spec with one-to-one upstream deps.
+        """
+        # Get the default spec from parent
+        default_spec = super().get_asset_spec(data)
+
+        # The resource name is raw__edxorg__s3__tables__{table}
+        resource_name = data.resource.name
+
+        # Create asset key with ol_warehouse_raw_data prefix
+        asset_key = AssetKey(["ol_warehouse_raw_data", resource_name])
+
+        # Extract table name and create upstream dependency
+        deps = []
+        if resource_name.startswith("raw__edxorg__s3__tables__"):
+            table_name = resource_name.replace("raw__edxorg__s3__tables__", "")
+            # Add non-blocking dependency on upstream partitioned asset
+            deps = [AssetDep(AssetKey(["edxorg", "raw_data", "db_table", table_name]))]
+
+        return default_spec.replace_attributes(
+            key=asset_key,
+            deps=deps,
         )
-        for table in ALL_TABLES
-    },
-    # Depend on all upstream db_table assets (partitioned by course/source)
-    deps=[AssetKey(["edxorg", "raw_data", "db_table", table]) for table in ALL_TABLES],
-    # This asset is NOT partitioned - it consolidates all partitions
-    partitions_def=None,
-    can_subset=True,  # Allow materializing individual tables
+
+
+# Create dlt assets with upstream dependencies
+@dlt_assets(
+    dlt_source=edxorg_s3_source_instance,
+    dlt_pipeline=edxorg_s3_pipeline,
+    name="edxorg_s3_tables",
     group_name="ingestion",
-    compute_kind="dlt",
+    dagster_dlt_translator=EdxorgDltTranslator(),
 )
 def edxorg_s3_consolidated_tables(
     context: AssetExecutionContext, dlt: DagsterDltResource
@@ -89,21 +65,14 @@ def edxorg_s3_consolidated_tables(
     Load and consolidate EdX.org database tables from S3.
 
     Depends on upstream edxorg_archive assets (partitioned by course and source).
-    Filters to only 'prod' source data and consolidates across all courses into
-    non-partitioned Iceberg/Parquet tables.
+    Each downstream table has a one-to-one dependency on its corresponding upstream
+    partitioned asset. Filters to only 'prod' source data and consolidates across
+    all courses into non-partitioned Iceberg/Parquet tables.
 
     The dlt source automatically uses incremental loading based on file modification
     dates, so only new/modified files are processed on each run.
     """
-    # Run the dlt pipeline
-    # The source is already configured to only read prod files
-    yield from dlt.run(
-        context=context,
-        dlt_source=edxorg_s3_source_instance,
-        dlt_pipeline=edxorg_s3_pipeline,
-    )
+    yield from dlt.run(context=context)
 
 
-defs = Definitions(
-    assets=[edxorg_s3_consolidated_tables],
-)
+__all__ = ["edxorg_s3_consolidated_tables"]

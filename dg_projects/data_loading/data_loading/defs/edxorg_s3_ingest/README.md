@@ -144,11 +144,11 @@ The dlt assets created by this pipeline depend on upstream assets from the `edxo
 
 ### Downstream Assets (Non-Partitioned)
 - **Location**: `data_loading` code location
-- **Asset Keys**: `AssetKey(["edxorg", "tables", {table_name}])`
+- **Asset Keys**: `AssetKey(["ol_warehouse_raw_data", f"raw__edxorg__s3__tables__{table_name}"])`
 - **Table Names**: `raw__edxorg__s3__tables__{table_name}` (e.g., `raw__edxorg__s3__tables__auth_user`)
 - **Partitioning**: None - consolidates all upstream partitions
 - **Filtering**: Only processes `prod` source (excludes `edge`)
-- **Output**: Single table per database table combining all courses
+- **Output**: Single Iceberg/Parquet table per database table combining all courses
 
 ### How It Works
 
