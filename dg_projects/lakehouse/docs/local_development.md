@@ -4,7 +4,7 @@
 
 ### Speed Up Local Development
 
-By default, the lakehouse code location connects to Airbyte to discover and load assets. This can slow down local development when you're working on non-Airbyte changes (e.g., dbt models, dlt pipelines).
+By default, the lakehouse code location connects to Airbyte to discover and load assets. This can slow down local development when you're working on non-Airbyte changes (e.g., dbt models).
 
 To skip Airbyte asset loading for faster iteration:
 
@@ -18,7 +18,6 @@ dagster dev
 
 **When to use SKIP_AIRBYTE:**
 - Working on dbt models
-- Working on dlt pipelines
 - Testing Dagster configuration changes
 - Iterating on non-Airbyte assets
 
@@ -26,24 +25,6 @@ dagster dev
 - Making changes to Airbyte connections
 - Testing Airbyte asset jobs
 - Need to see complete asset graph with Airbyte dependencies
-
-### Running dlt Pipelines Locally
-
-dlt pipelines can run standalone without Dagster:
-
-```bash
-# Run with local destination (writes to .dlt/data/)
-python -m lakehouse.defs.qualtrics_ingestion.loads
-
-# Query results with DuckDB
-duckdb -c "
-INSTALL iceberg;
-LOAD iceberg;
-SELECT * FROM read_parquet('.dlt/data/surveys/*.parquet') LIMIT 10;
-"
-```
-
-See [dlt Integration Guide](./dlt_integration_guide.md) for more details.
 
 ## Environment Variables
 
@@ -78,20 +59,6 @@ dagster dev
 # Your dbt models will be available without waiting for Airbyte
 ```
 
-### Working on dlt Sources
-
-```bash
-# Run pipeline locally
-python -m lakehouse.defs.qualtrics_ingestion.loads
-
-# Iterate on source configuration in loads.py
-# Re-run to test changes
-
-# When ready, test in Dagster
-export SKIP_AIRBYTE=1  # Optional: skip Airbyte for faster loading
-dg list defs | grep qualtrics
-```
-
 ### Testing Airbyte Changes
 
 ```bash
@@ -101,24 +68,6 @@ unset SKIP_AIRBYTE
 # Now Airbyte assets will load
 dg list defs | grep airbyte
 dagster dev
-```
-
-## Helper Scripts
-
-### Check dlt Environment
-
-```bash
-python scripts/dlt_env.py status
-```
-
-### Switch dlt Destination
-
-```bash
-# Local development
-python scripts/dlt_env.py local
-
-# Production testing
-python scripts/dlt_env.py production
 ```
 
 ## Troubleshooting
@@ -134,10 +83,6 @@ export SKIP_AIRBYTE=1
 dg list defs
 ```
 
-### dlt Configuration Warnings
-
-**Problem**: Seeing warnings about missing configuration or placeholder values
-
 **Solution**: Configure credentials in `.dlt/secrets.toml` (see template at `.dlt/secrets.toml.template`)
 
 ### Missing Assets in Dagster
@@ -150,8 +95,3 @@ dg list defs
 unset SKIP_AIRBYTE
 dagster dev
 ```
-
-## References
-
-- [dlt Integration Guide](./dlt_integration_guide.md) - Complete guide to using dlt in lakehouse
-- [Qualtrics Example](../lakehouse/defs/qualtrics_ingestion/README.md) - Working example of a dlt pipeline
