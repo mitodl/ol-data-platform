@@ -197,10 +197,18 @@ edxorg_s3_source_instance = edxorg_s3_source(
     table_format=table_format,
 )
 
-# Create pipeline with environment-specific configuration
+# Rename config sections to match dlt's named destination pattern
+# For named destinations, dlt looks for [destination.<name>] with destination_type set
+
+# Update config.toml structure:
+# - [destination.local] with destination_type="filesystem"
+# - [destination.qa] with destination_type="filesystem"
+# - [destination.production] with destination_type="filesystem"
+
+# Create pipeline with environment-specific named destination
 edxorg_s3_pipeline = dlt.pipeline(
     pipeline_name="edxorg_s3",
-    destination="filesystem",
+    destination=destination_env,  # References [destination.<env>] in config.toml
     dataset_name=dataset_name,
     progress="log",
 )
