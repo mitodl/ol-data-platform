@@ -68,8 +68,8 @@ ALL_TABLES = [
 @multi_asset(
     name="edxorg_s3_consolidated_tables",
     outs={
-        f"edxorg_{table}": AssetOut(
-            key=AssetKey(["edxorg_s3_local", f"edxorg_{table}"]),
+        table: AssetOut(
+            key=AssetKey(["edxorg", "tables", table]),
             description=f"Consolidated edX.org {table} data from all prod courses",
         )
         for table in ALL_TABLES

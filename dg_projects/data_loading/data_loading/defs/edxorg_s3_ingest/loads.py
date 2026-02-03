@@ -110,9 +110,9 @@ def edxorg_s3_source(
     tables_to_load = tables if tables is not None else all_tables
 
     for table_name in tables_to_load:
-        # Create a resource for each table
+        # Create a resource for each table with standardized naming
         @dlt.resource(
-            name=f"edxorg_{table_name}",
+            name=f"raw__edxorg__s3__tables__{table_name}",
             write_disposition="merge",
             primary_key=None,  # TSV files don't have consistent primary keys
             table_format=table_format,  # Use iceberg for QA/prod, parquet for local
