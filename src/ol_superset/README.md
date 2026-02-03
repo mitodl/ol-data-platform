@@ -69,6 +69,17 @@ The CLI includes multiple safeguards for production deployments:
 - ✅ **Dry-run mode** for previewing changes
 - ✅ **Promotion manifest** creation
 
+## QA Environment Management
+
+When syncing assets to the QA environment, the CLI automatically:
+
+- ✅ **Disables external management** for all pushed assets
+- ✅ **Enables UI editing** of dashboards and charts
+- ✅ **Authenticates via OAuth2** with PKCE flow
+- ✅ **Updates via Superset REST API** (/api/v1/dashboard, /api/v1/chart)
+
+This ensures that assets synced to QA remain editable in the Superset UI for testing and iteration, while production assets remain locked to prevent accidental modifications.
+
 ## Authentication
 
 Uses the `sup` CLI for Superset API access. Configure with:

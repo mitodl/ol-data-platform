@@ -168,10 +168,17 @@ Benefits:
             │                    - Overwrite confirmation
             ▼
    ┌──────────────────────────┐
-   │ QA Superset              │  Assets imported
+   │ Post-Sync Processing     │  ✨ NEW: QA-specific processing
+   │ (QA targets only)        │  - Authenticates via OAuth2 PKCE
+   └────────┬─────────────────┘  - Sets is_managed_externally=false
+            │                    - Enables UI editing in QA
+            ▼
+   ┌──────────────────────────┐
+   │ QA Superset              │  Assets imported & editable
    │ bi-qa.ol.mit.edu         │  - All datasets synced
    │                          │  - All charts synced
    └──────────────────────────┘  - All dashboards synced
+                                  - UI editing enabled ✅
 
 Benefits:
   ✓ Fully automated (no manual import)
@@ -180,6 +187,7 @@ Benefits:
   ✓ Pagination fetches ALL assets
   ✓ Continue-on-error for resilience
   ✓ Git tracking for version control
+  ✓ QA assets remain editable via UI ✨ NEW
 ```
 
 ## Comparison
@@ -380,6 +388,162 @@ Potential improvements for this workflow:
 3. ✅ **Pagination**: Fetches all assets automatically
 4. ✅ **Unified CLI**: Single `ol-superset` command with subcommands
 5. ✅ **Production Safety**: Multiple guardrails for production deployments
-6. ⏳ **CI/CD Integration**: GitHub Actions to automate sync on schedule
-7. ⏳ **Diff Viewer**: Enhanced diff tool for meaningful dashboard changes
-8. ⏳ **Rollback Automation**: One-command rollback to previous version
+6. ✅ **QA UI Editing**: Automatic is_managed_externally flag management
+7. ⏳ **CI/CD Integration**: GitHub Actions to automate sync on schedule
+8. ⏳ **Diff Viewer**: Enhanced diff tool for meaningful dashboard changes
+9. ⏳ **Rollback Automation**: One-command rollback to previous version
+
+## QA Asset Management (New Feature)
+
+### Problem Statement
+
+When pushing Superset assets from YAML files using the `sup` CLI, all created/updated resources automatically get the `is_managed_externally` flag set to `True`. This flag locks the assets and prevents any modifications via the Superset UI, which is problematic for the QA environment where developers need to iterate and test dashboard changes.
+
+### Solution
+
+The `ol-superset sync` command now automatically updates the `is_managed_externally` flag to `false` for all assets pushed to QA targets (any instance with "qa" in the name). This enables full UI editing capabilities in the QA environment while keeping production assets locked.
+
+### How It Works
+
+1. **Asset Push**: Standard `sup` push operations complete as normal
+2. **OAuth Authentication**: Uses OAuth2 with PKCE flow to authenticate with Superset API
+3. **UUID Lookup**: Reads UUIDs from pushed YAML files and queries Superset API to get internal IDs
+4. **Flag Update**: Makes `PUT /api/v1/dashboard/{id}` and `PUT /api/v1/chart/{id}` calls to update each asset
+5. **CSRF Protection**: Automatically fetches and includes CSRF tokens in all API requests
+
+### API Endpoints Used
+
+- `GET /api/v1/security/csrf_token/` - Get CSRF token for authenticated requests
+- `GET /api/v1/dashboard/?q=...` - Look up dashboard by UUID
+- `GET /api/v1/chart/?q=...` - Look up chart by UUID
+- `PUT /api/v1/dashboard/{id}` - Update dashboard metadata (requires CSRF token + Referer header)
+- `PUT /api/v1/chart/{id}` - Update chart metadata (requires CSRF token + Referer header)
+
+### Usage
+
+The feature activates automatically when syncing to QA:
+
+```bash
+# Sync production to QA (automatically enables UI editing)
+ol-superset sync superset-production superset-qa
+```
+
+Output will include:
+
+```
+Step 5: Updating asset management flags for QA...
+
+==================================================
+Updating Asset Management Flags
+==================================================
+
+Setting is_managed_externally=false to enable UI editing in QA...
+
+  🔐 Authenticating with Superset API...
+  ✅ Authenticated to https://bi-qa.ol.mit.edu
+
+  Processing dashboards...
+    Found 18 dashboard(s)
+    ✅ Updated 18 dashboard(s)
+  Processing charts...
+    Found 123 chart(s)
+    ✅ Updated 123 chart(s)
+
+==================================================
+✅ Asset management flags updated for superset-qa
+==================================================
+```
+
+### OAuth Authentication Flow
+
+The implementation uses OAuth2 with PKCE (Proof Key for Code Exchange) for secure authentication:
+
+1. **Authorization Request**: Opens browser to Keycloak/SSO authorization page
+2. **User Authorization**: User logs in and approves access
+3. **Callback Handling**: Local HTTP server (localhost:8080) receives authorization code
+4. **Token Exchange**: Exchanges code for access token using PKCE code verifier
+5. **API Requests**: Uses Bearer token for all subsequent API calls
+6. **CSRF Protection**: Fetches CSRF token and includes it with Referer header in PUT requests
+
+### Configuration
+
+Authentication configuration is read from `~/.sup/config.yml` (managed by `sup` CLI):
+
+```yaml
+superset_instances:
+  superset-qa:
+    url: https://bi-qa.ol.mit.edu
+    auth_method: oauth
+    oauth_authorization_url: https://sso-qa.ol.mit.edu/realms/ol-data-platform/protocol/openid-connect/auth
+    oauth_token_url: https://sso-qa.ol.mit.edu/realms/ol-data-platform/protocol/openid-connect/token
+    oauth_client_id: ol-superset-cli
+    oauth_scope: openid profile email
+```
+
+### Production Behavior
+
+The flag update step is **skipped automatically** for production targets:
+
+```bash
+# Sync to production (skips flag update - keeps assets locked)
+ol-superset sync superset-qa superset-production
+```
+
+Output:
+
+```
+  ℹ️  Skipping external management flag update (not a QA instance: superset-production)
+```
+
+### Error Handling
+
+The flag update step is non-blocking:
+
+- If authentication fails, a warning is shown but sync completes successfully
+- If individual asset updates fail, they're logged but processing continues
+- Assets remain synced even if flag updates fail (they just won't be UI-editable)
+
+Example error output:
+
+```
+Step 5: Updating asset management flags for QA...
+  ⚠️  Warning: Could not update management flags: OAuth authentication failed
+      Assets are synced but may not be editable in UI
+```
+
+### Implementation Details
+
+The implementation is in `ol_superset/lib/superset_api.py` with these key functions:
+
+- `get_oauth_token_with_pkce()`: Implements OAuth2 PKCE flow
+- `create_authenticated_session()`: Creates requests.Session with Bearer token
+- `get_csrf_token()`: Fetches CSRF token from Superset
+- `get_asset_id_by_uuid()`: Looks up internal asset ID from UUID
+- `update_asset_external_management_flag()`: Updates individual asset via API
+- `update_pushed_assets_external_flag()`: Orchestrates the full update process
+
+### Testing
+
+To test the implementation without syncing actual assets:
+
+```python
+from pathlib import Path
+from ol_superset.lib.superset_api import update_pushed_assets_external_flag
+
+# Test with existing assets directory
+assets_dir = Path("assets")
+update_pushed_assets_external_flag("superset-qa", assets_dir)
+```
+
+### Limitations
+
+- Requires manual OAuth login (browser-based) on first run
+- OAuth tokens are not cached between runs (re-authentication required)
+- Only works for instances configured in `~/.sup/config.yml`
+- Depends on Superset API v1 (tested with Superset 4.0+)
+
+### See Also
+
+- [Superset REST API Documentation](https://superset.apache.org/docs/6.0.0/api/)
+- [OAuth 2.0 PKCE Specification (RFC 7636)](https://tools.ietf.org/html/rfc7636)
+- [sup CLI Configuration](https://github.com/mitodl/superset-sup)

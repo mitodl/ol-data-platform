@@ -6,6 +6,7 @@ from typing import Annotated
 from cyclopts import Parameter
 
 from ol_superset.lib.database_mapping import map_database_uuids
+from ol_superset.lib.superset_api import update_pushed_assets_external_flag
 from ol_superset.lib.utils import (
     confirm_action,
     count_assets,
@@ -184,6 +185,26 @@ def sync(
     print("Sync Complete!")
     print("=" * 50)
     print()
+
+    # Step 5: Update is_managed_externally flag for QA targets
+    if "qa" in target.lower():
+        print("Step 5: Updating asset management flags for QA...")
+        try:
+            update_pushed_assets_external_flag(
+                instance_name=target,
+                assets_dir=assets_dir,
+                skip_confirmation=skip_confirmation,
+            )
+        except Exception as e:
+            print(
+                f"  ⚠️  Warning: Could not update management flags: {e}",
+                file=sys.stderr,
+            )
+            print(
+                "      Assets are synced but may not be editable in UI",
+                file=sys.stderr,
+            )
+
     print("Verify at:")
     if "qa" in target.lower():
         print("  • Dashboards: https://bi-qa.ol.mit.edu/dashboard/list/")
