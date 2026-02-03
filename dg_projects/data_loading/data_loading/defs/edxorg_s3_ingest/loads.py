@@ -16,10 +16,10 @@ Tables include:
 
 Usage (standalone):
     # Local development (default - writes to .dlt/data/)
-    python -m lakehouse.defs.edxorg_s3_ingestion.loads
+    python -m data_loading.defs.edxorg_s3_ingest.loads
 
     # Production (writes to S3)
-    DLT_DESTINATION_ENV=production python -m lakehouse.defs.edxorg_s3_ingestion.loads
+    DAGSTER_ENVIRONMENT=production python -m data_loading.defs.edxorg_s3_ingest.loads
 """
 
 import logging
@@ -82,6 +82,7 @@ def edxorg_s3_source(
         "auth_user",
         "auth_userprofile",
         "certificates_generatedcertificate",
+        "course",
         "course_groups_cohortmembership",
         "courseware_studentmodule",
         "credit_crediteligibility",
