@@ -25,12 +25,19 @@ Usage (standalone):
 import logging
 import os
 from collections.abc import Iterator
+from pathlib import Path
 
 import dlt
 from dlt.sources import incremental
 from dlt.sources.filesystem import filesystem, read_csv
 
 logger = logging.getLogger(__name__)
+
+# Set dlt project directory to the data_loading project root
+# This ensures .dlt/config.toml is found when running from repo root
+DLT_PROJECT_DIR = Path(__file__).parent.parent.parent.parent
+if DLT_PROJECT_DIR.exists():
+    os.environ.setdefault("DLT_PROJECT_DIR", str(DLT_PROJECT_DIR))
 
 
 @dlt.source
