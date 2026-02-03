@@ -123,11 +123,14 @@ def edxorg_s3_source(
 
             Uses incremental loading based on file modification_date to avoid
             reprocessing unchanged files on subsequent runs.
+
+            Only processes 'prod' source files, excluding 'edge' staging environment.
             """
 
-            # Pattern to match all TSV files for this table
-            # Matches: db_table/{table_name}/*/*.tsv (source_system/course_id/*.tsv)
-            file_glob = f"db_table/{table}/**/*.tsv"
+            # Pattern to match ONLY prod TSV files for this table
+            # Matches: db_table/{table_name}/prod/*/*.tsv (prod/course_id/*.tsv)
+            # Excludes: db_table/{table_name}/edge/*/*.tsv (edge staging files)
+            file_glob = f"db_table/{table}/prod/**/*.tsv"
 
             # Use dlt's filesystem source to discover files
             # AWS credentials will be automatically discovered from:
