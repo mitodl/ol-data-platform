@@ -1,0 +1,6 @@
+---
+# Build context is set to repository root to access packages/ol-orchestrate-lib
+directory: ../..
+# The Dockerfile is located in the data_loading directory
+dockerfile: dg_projects/data_loading/Dockerfile
+registry: mitodl/dagster-data-loading
