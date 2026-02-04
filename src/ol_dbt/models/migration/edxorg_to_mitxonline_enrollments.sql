@@ -140,7 +140,7 @@ with combined_enrollments as (
 
 select
     edxorg_enrollment.user_id as user_edxorg_id
-    , mitx__users.user_mitxonline_id
+    , coalesce(mitx__users.user_mitxonline_id, mitx_users_by_email.user_mitxonline_id) as user_mitxonline_id
     , edxorg_enrollment.user_email
     , mitxonline__course_runs.courserun_id
     , edxorg_enrollment.courserun_readable_id
@@ -159,7 +159,9 @@ left join mitxonline_enrollment
 left join mitxonline__course_runs
     on edxorg_enrollment.courserun_readable_id = mitxonline__course_runs.courserun_readable_id
 left join mitx__users
-    on edxorg_enrollment.user_id = cast(mitx__users.user_edxorg_id as varchar)
+       on edxorg_enrollment.user_id = cast(mitx__users.user_edxorg_id as varchar)
+left join mitx__users as mitx_users_by_email
+       on lower(edxorg_enrollment.user_email) = lower(mitx_users_by_email.user_mitxonline_email)
 left join edx_to_mitxonline_certificate_revision
     on edxorg_enrollment.courserun_readable_id = edx_to_mitxonline_certificate_revision.courserun_readable_id
 left join edx_signatories
