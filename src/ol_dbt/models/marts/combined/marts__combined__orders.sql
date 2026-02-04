@@ -50,6 +50,14 @@ with bootcamps__ecommerce_order as (
     select * from {{ ref('int__mitxpro__users') }}
 )
 
+, mitxpro__ecommerce_couponpaymentversion as (
+    select * from {{ ref('int__mitxpro__ecommerce_couponpaymentversion') }}
+)
+
+, mitxpro__ecommerce_company as (
+    select * from {{ ref('int__mitxpro__ecommerce_company') }}
+)
+
 , mitxonline_orders as (
     select
         mitxonline__ecommerce_order.order_id
@@ -180,6 +188,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__users.user_email as redeemed_email
         , mitxpro__ecommerce_order.couponpaymentversion_payment_transaction
         , mitxpro__ecommerce_order.order_total_price_paid
+        , mitxpro__ecommerce_couponpaymentversion.couponpaymentversion_coupon_type
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
         , concat('xpro-b2c-production-', cast(mitxpro__ecommerce_allorders.order_id as varchar))
             as order_reference_number
@@ -188,6 +197,22 @@ with bootcamps__ecommerce_order as (
             , mitxpro__programruns.programrun_readable_id
             , mitxpro__ecommerce_allorders.program_readable_id
         ) as product_readable_id
+        , case 
+            when (mitxpro__ecommerce_company.company_name = 'MIT Open Learning' 
+                or mitxpro__ecommerce_order.couponpaymentversion_discount_source = 'staff' ) then 'staff'
+            else
+            case
+                when (mitxpro__ecommerce_company.company_name = 'BOEING_NO_MATCH_VOUCHER' 
+                    or mitxpro__ecommerce_company.company_name = 'Boeing') then 'Boeing'
+                else
+                    case
+                        when (mitxpro__ecommerce_couponpaymentversion.company_id is not null 
+                            or TRIM(mitxpro__ecommerce_order.couponpaymentversion_payment_transaction) != '') 
+                            then 'B2B'
+                            else 'B2C'
+                    end
+            end
+        end as order_type
     from mitxpro__ecommerce_allorders
     left join mitxpro__ecommerce_order
         on mitxpro__ecommerce_allorders.order_id = mitxpro__ecommerce_order.order_id
@@ -201,6 +226,11 @@ with bootcamps__ecommerce_order as (
         on mitxpro__lines.programrun_id = mitxpro__programruns.programrun_id
     left join mitxpro__users
         on mitxpro__ecommerce_order.order_purchaser_user_id = mitxpro__users.user_id
+    left join mitxpro__ecommerce_couponpaymentversion
+        on mitxpro__ecommerce_order.couponpaymentversion_id 
+            = mitxpro__ecommerce_couponpaymentversion.couponpaymentversion_id
+    left join mitxpro__ecommerce_company
+        on mitxpro__ecommerce_couponpaymentversion.company_id = mitxpro__ecommerce_company.company_id
     where mitxpro__ecommerce_allorders.order_id is not null
 )
 
@@ -243,6 +273,8 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , null as couponpaymentversion_coupon_type
+        , null as order_type
         , user_email as redeemed_email
         , null as order_tax_country_code
         , null as order_tax_rate
@@ -303,6 +335,8 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , couponpaymentversion_coupon_type
+        , order_type
         , redeemed_email
         , order_tax_country_code
         , order_tax_rate
@@ -354,6 +388,8 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , null as couponpaymentversion_coupon_type
+        , null as order_type
         , null as redeemed_email
         , null as order_tax_country_code
         , null as order_tax_rate
@@ -405,6 +441,8 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
+        , null as couponpaymentversion_coupon_type
+        , null as order_type
         , null as redeemed_email
         , null as order_tax_country_code
         , null as order_tax_rate
@@ -455,6 +493,7 @@ select
     , order_tax_rate_name
     , order_total_price_paid_plus_tax
     , order_total_price_paid
+    , order_type
     , product_id
     , product_readable_id
     , product_type
