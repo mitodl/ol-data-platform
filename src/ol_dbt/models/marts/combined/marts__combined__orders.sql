@@ -197,17 +197,17 @@ with bootcamps__ecommerce_order as (
             , mitxpro__programruns.programrun_readable_id
             , mitxpro__ecommerce_allorders.program_readable_id
         ) as product_readable_id
-        , case 
-            when (mitxpro__ecommerce_company.company_name = 'MIT Open Learning' 
+        , case
+            when (mitxpro__ecommerce_company.company_name = 'MIT Open Learning'
                 or mitxpro__ecommerce_order.couponpaymentversion_discount_source = 'staff' ) then 'staff'
             else
             case
-                when (mitxpro__ecommerce_company.company_name = 'BOEING_NO_MATCH_VOUCHER' 
+                when (mitxpro__ecommerce_company.company_name = 'BOEING_NO_MATCH_VOUCHER'
                     or mitxpro__ecommerce_company.company_name = 'Boeing') then 'Boeing'
                 else
                     case
-                        when (mitxpro__ecommerce_couponpaymentversion.company_id is not null 
-                            or TRIM(mitxpro__ecommerce_order.couponpaymentversion_payment_transaction) != '') 
+                        when (mitxpro__ecommerce_couponpaymentversion.company_id is not null
+                            or TRIM(mitxpro__ecommerce_order.couponpaymentversion_payment_transaction) != '')
                             then 'B2B'
                             else 'B2C'
                     end
@@ -227,7 +227,7 @@ with bootcamps__ecommerce_order as (
     left join mitxpro__users
         on mitxpro__ecommerce_order.order_purchaser_user_id = mitxpro__users.user_id
     left join mitxpro__ecommerce_couponpaymentversion
-        on mitxpro__ecommerce_order.couponpaymentversion_id 
+        on mitxpro__ecommerce_order.couponpaymentversion_id
             = mitxpro__ecommerce_couponpaymentversion.couponpaymentversion_id
     left join mitxpro__ecommerce_company
         on mitxpro__ecommerce_couponpaymentversion.company_id = mitxpro__ecommerce_company.company_id
