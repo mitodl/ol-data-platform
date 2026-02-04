@@ -177,7 +177,7 @@ with bootcamps__ecommerce_order as (
         , mitxpro__ecommerce_allorders.b2bcoupon_id
         , mitxpro__ecommerce_allorders.b2border_contract_number
         , mitxpro__ecommerce_allorders.order_id
-        , mitxpro__users.user_email as redeemed_emails
+        , mitxpro__users.user_email as redeemed_email
         , mitxpro__ecommerce_order.couponpaymentversion_payment_transaction
         , mitxpro__ecommerce_order.order_total_price_paid
         , mitxpro__ecommerce_order.couponpaymentversion_discount_amount_text as discount
@@ -243,7 +243,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
-        , null as redeemed_emails
+        , user_email as redeemed_email
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name
@@ -303,7 +303,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
-        , redeemed_emails
+        , redeemed_email
         , order_tax_country_code
         , order_tax_rate
         , order_tax_rate_name
@@ -354,7 +354,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
-        , null as redeemed_emails
+        , null as redeemed_email
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name
@@ -405,7 +405,7 @@ with bootcamps__ecommerce_order as (
         , order_created_on
         , order_reference_number
         , order_state
-        , null as redeemed_emails
+        , null as redeemed_email
         , null as order_tax_country_code
         , null as order_tax_rate
         , null as order_tax_rate_name
@@ -473,7 +473,7 @@ select
     , receipt_payer_email
     , receipt_payer_ip_address
     , receipt_transaction_id
-    , redeemed_emails
+    , redeemed_email
     , req_reference_number
     , unit_price
     , user_email
