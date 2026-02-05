@@ -446,8 +446,9 @@ sources:
         course
     - name: courseware_id
       description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-    - name: courseware_url_path
-      description: str, url location for the course run in MITx Online
+    - name: has_courseware_url
+      description: boolean, whether this course run should expose a courseware URL.Set
+        to False for test/placeholder runs
     - name: is_self_paced
       description: boolean, indicating whether users can take this course at their
         own pace and earn certificate at any time
