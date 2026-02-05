@@ -80,7 +80,7 @@ query_context: '{"datasource":{"id":14,"type":"table"},"force":false,"queries":[
   / count(*), 1)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Correct%","optionName":"metric_zuvu0a8x2os_w2hgh59mlan"},{"expressionType":"SQL","sqlExpression":"     ROUND(SUM(case\n               when
   problem_success= ''incorrect'' then 1\n               else 0\n           end)  *
   100.0 / count(*), 1)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Incorrect%","optionName":"metric_u8nnhrkt6h_20hi6ju9pr6"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","show_cell_bars":true,"color_pn":true,"column_config":{"SUM(case
-  when problem_success= ''correct'' then 1 else 0 end)/count(*)":{"d3NumberFormat":".2%"__JINJA2_CLOSE__,"conditional_formatting":[],"extra_form_data":{},"dashboards":[24],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+  when problem_success= ''correct'' then 1 else 0 end)/count(*)":{"d3NumberFormat":".2%"}},"conditional_formatting":[],"extra_form_data":{},"dashboards":[24],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
 cache_timeout: null
 uuid: 8247b593-276a-4e86-96e1-62869ec2c59b
 version: 1.0.0

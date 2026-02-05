@@ -227,8 +227,8 @@ query_context: '{"datasource": {"id": 48, "type": "table"}, "force": false, "que
   "optionName": "metric_cs4tjxplik5_5vg1p07gjfm", "sqlExpression": null}, true]],
   "time_offsets": [], "post_processing": [{"operation": "pivot", "options": {"index":
   ["chapter_title"], "columns": [], "aggregates": {"Viewed at least one Video": {"operator":
-  "mean"}, "Viewed All Videos": {"operator": "mean"__JINJA2_CLOSE__, "drop_missing_columns":
-  true__JINJA2_CLOSE__, {"operation": "flatten"}]}], "form_data": {"datasource": "48__table",
+  "mean"}, "Viewed All Videos": {"operator": "mean"}}, "drop_missing_columns":
+  true}}, {"operation": "flatten"}]}], "form_data": {"datasource": "48__table",
   "viz_type": "echarts_timeseries_bar", "slice_id": 60, "metrics": [{"aggregate":
   null, "column": null, "datasourceWarning": false, "expressionType": "SQL", "hasCustomLabel":
   true, "label": "Viewed at least one Video", "optionName": "metric_jizlug4ic8o_u1gjok3yr5",
