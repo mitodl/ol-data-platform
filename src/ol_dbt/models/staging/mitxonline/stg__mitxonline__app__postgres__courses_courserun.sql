@@ -11,7 +11,10 @@ with source as (
         , live as courserun_is_live
         , title as courserun_title
         , courseware_id as courserun_readable_id
-        , courseware_url_path as courserun_url
+        , if(has_courseware_url=true
+           , concat('{{ var("mitxonline_openedx_url") }}', '/learn/course/', courseware_id,'/home')
+            , null
+        ) as courserun_url
         , run_tag as courserun_tag
         , is_self_paced as courserun_is_self_paced
         , b2b_contract_id
