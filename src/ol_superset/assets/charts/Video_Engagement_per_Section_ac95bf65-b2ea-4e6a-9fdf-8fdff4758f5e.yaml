@@ -227,31 +227,30 @@ query_context: '{"datasource": {"id": 43, "type": "table"}, "force": false, "que
   "optionName": "metric_l5fmf7i5xb_rbdvkyjo29h", "sqlExpression": null}, true]], "time_offsets":
   [], "post_processing": [{"operation": "pivot", "options": {"index": ["section_title"],
   "columns": [], "aggregates": {"Viewed At Least One Video": {"operator": "mean"},
-  "Viewed All Videos": {"operator": "mean"}}, "drop_missing_columns":
-  true}}, {"operation": "flatten"}]}], "form_data": {"datasource": "43__table",
-  "viz_type": "echarts_timeseries_bar", "slice_id": 44, "metrics": [{"aggregate":
+  "Viewed All Videos": {"operator": "mean"}}, "drop_missing_columns": true}}, {"operation":
+  "flatten"}]}], "form_data": {"datasource": "43__table", "viz_type": "echarts_timeseries_bar",
+  "slice_id": 44, "metrics": [{"aggregate": null, "column": null, "datasourceWarning":
+  false, "expressionType": "SQL", "hasCustomLabel": true, "label": "Viewed At Least
+  One Video", "optionName": "metric_ilmj7tjqf9l_3gzz1vtb7cf", "sqlExpression": "count(distinct(case
+  when user_watched_video_count > 0 then user_email else null end))"}, {"aggregate":
   null, "column": null, "datasourceWarning": false, "expressionType": "SQL", "hasCustomLabel":
-  true, "label": "Viewed At Least One Video", "optionName": "metric_ilmj7tjqf9l_3gzz1vtb7cf",
-  "sqlExpression": "count(distinct(case when user_watched_video_count > 0 then user_email
-  else null end))"}, {"aggregate": null, "column": null, "datasourceWarning": false,
-  "expressionType": "SQL", "hasCustomLabel": true, "label": "Viewed All Videos", "optionName":
-  "metric_547rhhgzkqw_1i0h85x10p7", "sqlExpression": "count(distinct(case when user_watched_video_count
-  = total_video_count then user_email else null end))"}], "adhoc_filters": [], "groupby":
-  [], "row_limit": 10000, "timeseries_limit_metric": {"aggregate": "MIN", "column":
-  {"advanced_data_type": null, "certification_details": null, "certified_by": null,
-  "column_name": "max_coursestructure_block_index", "description": null, "expression":
-  null, "filterable": true, "groupby": true, "id": 661, "is_certified": false, "is_dttm":
-  false, "python_date_format": null, "type": "BIGINT", "type_generic": 0, "verbose_name":
-  null, "warning_markdown": null}, "datasourceWarning": false, "expressionType": "SIMPLE",
-  "hasCustomLabel": false, "label": "MIN(max_coursestructure_block_index)", "optionName":
-  "metric_l5fmf7i5xb_rbdvkyjo29h", "sqlExpression": null}, "order_desc": false, "color_scheme":
-  "supersetColors", "show_legend": true, "rich_tooltip": true, "y_axis_format": "SMART_NUMBER",
-  "y_axis_bounds": [null, null], "x_axis_title_margin": "auto", "xAxisLabelRotation":
-  45, "extra_form_data": {}, "dashboards": [24], "contributionMode": null, "zoomable":
-  false, "markerEnabled": false, "truncateYAxis": true, "comparison_type": "values",
-  "x_axis": "section_title", "stack": null}, "result_format": "json", "result_type":
+  true, "label": "Viewed All Videos", "optionName": "metric_547rhhgzkqw_1i0h85x10p7",
+  "sqlExpression": "count(distinct(case when user_watched_video_count = total_video_count
+  then user_email else null end))"}], "adhoc_filters": [], "groupby": [], "row_limit":
+  10000, "timeseries_limit_metric": {"aggregate": "MIN", "column": {"advanced_data_type":
+  null, "certification_details": null, "certified_by": null, "column_name": "max_coursestructure_block_index",
+  "description": null, "expression": null, "filterable": true, "groupby": true, "id":
+  661, "is_certified": false, "is_dttm": false, "python_date_format": null, "type":
+  "BIGINT", "type_generic": 0, "verbose_name": null, "warning_markdown": null}, "datasourceWarning":
+  false, "expressionType": "SIMPLE", "hasCustomLabel": false, "label": "MIN(max_coursestructure_block_index)",
+  "optionName": "metric_l5fmf7i5xb_rbdvkyjo29h", "sqlExpression": null}, "order_desc":
+  false, "color_scheme": "supersetColors", "show_legend": true, "rich_tooltip": true,
+  "y_axis_format": "SMART_NUMBER", "y_axis_bounds": [null, null], "x_axis_title_margin":
+  "auto", "xAxisLabelRotation": 45, "extra_form_data": {}, "dashboards": [24], "contributionMode":
+  null, "zoomable": false, "markerEnabled": false, "truncateYAxis": true, "comparison_type":
+  "values", "x_axis": "section_title", "stack": null}, "result_format": "json", "result_type":
   "full"}'
 cache_timeout: null
 uuid: ac95bf65-b2ea-4e6a-9fdf-8fdff4758f5e
 version: 1.0.0
-dataset_uuid: bf17ec0d-2a0a-4f97-ab5b-ae2df862d4b5
+dataset_uuid: 0514985b-ff21-490b-a34e-25ae356da7e9
