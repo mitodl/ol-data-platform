@@ -6,6 +6,7 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
+from ol_superset.lib.database_mapping import map_database_uuids
 from ol_superset.lib.utils import (
     check_git_status,
     confirm_action,
@@ -149,10 +150,11 @@ def promote(
         print("🔍 DRY RUN MODE - No changes will be made")
         print()
         print("Would perform:")
-        print("  1. Set instance to superset-production")
-        print(f"  2. Push {counts['charts']} charts with dependencies")
-        print(f"  3. Push {published} published dashboards")
-        print("  4. Create promotion manifest")
+        print("  1. Map database UUIDs from QA to production")
+        print("  2. Set instance to superset-production")
+        print(f"  3. Push {counts['charts']} charts with dependencies")
+        print(f"  4. Push {published} published dashboards")
+        print("  5. Create promotion manifest")
         return
 
     # Final confirmation (unless forced)
@@ -167,24 +169,35 @@ def promote(
             print("Promotion cancelled.")
             sys.exit(0)
 
+    # Map database UUIDs
+    print()
+    print("Step 3: Mapping database UUIDs for production...")
+    try:
+        map_database_uuids("superset-production", assets_dir)
+        print("  ✅ Database UUID mapping complete")
+    except Exception as e:
+        print(f"  ⚠️  Database mapping failed: {e}")
+        if not force and not confirm_action("Continue without database mapping?"):
+            print("Promotion cancelled")
+            sys.exit(1)
+
     # Set instance to production
     print()
-    print("Step 3: Setting instance to superset-production...")
+    print("Step 4: Setting instance to superset-production...")
     run_sup_command(["instance", "use", "superset-production"])
 
     print()
-    print("Step 4: Promoting assets to production...")
+    print("Step 5: Promoting assets to production...")
     print()
 
     # Push charts with dependencies
-    print("Step 4a: Pushing charts (includes datasets and databases)...")
+    print("Step 5a: Pushing charts (includes datasets and databases)...")
     if counts["charts"] > 0:
         result = run_sup_command(
             [
                 "chart",
                 "push",
                 str(assets_dir),
-                "--auto-map-databases",
                 "--overwrite",
                 "--continue-on-error",
                 "--force",
@@ -200,14 +213,13 @@ def promote(
 
     # Push dashboards
     print()
-    print("Step 4b: Pushing published dashboards...")
+    print("Step 5b: Pushing published dashboards...")
     if published > 0:
         result = run_sup_command(
             [
                 "dashboard",
                 "push",
                 str(assets_dir),
-                "--auto-map-databases",
                 "--overwrite",
                 "--continue-on-error",
                 "--force",

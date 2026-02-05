@@ -41,13 +41,41 @@ Export all assets from a Superset instance.
 **Options:**
 - `--from`, `-f`: Instance to export from (default: `superset-production`)
 - `--output-dir`, `-o`: Output directory (default: `assets/`)
+- `--skip-dedupe`: Skip automatic deduplication after export
 
 **Examples:**
 ```bash
-# Export from production (default)
+# Export from production (default, with auto-dedupe)
 ol-superset export
 
-# Export from QA
+# Export from QA (with auto-dedupe)
+ol-superset export --from superset-qa
+
+# Export without automatic deduplication
+ol-superset export --skip-dedupe
+
+# Export to custom directory
+ol-superset export -f superset-qa -o /tmp/qa-backup
+```
+
+**Behavior:**
+
+By default, the export command **automatically deduplicates** assets after exporting:
+
+1. Exports datasets, charts, dashboards from the instance
+2. Automatically runs dedupe logic to:
+   - Remove duplicate files with same UUID
+   - Rename all assets to UUID-based naming
+3. Shows final asset count
+
+This prevents the common problem of duplicate files when exporting from an
+instance that previously imported from another environment (e.g., QA imported
+from Production).
+
+**When to use `--skip-dedupe`:**
+- Exporting from a fresh instance with no imports
+- You want to manually review duplicates before deduplication
+- Debugging export/dedupe issues
 ol-superset export --from superset-qa
 
 # Export to custom directory
@@ -186,9 +214,90 @@ ol-superset dedupe --charts --dashboards
 ```
 
 **When to use:**
-- After exporting from an environment that imported assets from another environment
-- Before committing assets to avoid duplicate files in git
-- As part of your regular sync workflow between environments
+- You used `export --skip-dedupe` and now want to deduplicate manually
+- Working with assets exported by the `sup` CLI directly
+- Re-running deduplication after manual file manipulation
+- Debugging deduplication issues with `--dry-run`
+
+---
+
+### `ol-superset lock`
+
+Lock or unlock Superset assets to control manual editing in the UI.
+
+When assets are **locked** (is_managed_externally=true), they cannot be edited in the Superset UI. This enforces a "managed as code" workflow.
+
+When assets are **unlocked** (is_managed_externally=false), they can be edited in the Superset UI. Useful for QA environments.
+
+**Subcommands:**
+- `lock` - Lock assets (prevent UI editing)
+- `unlock` - Unlock assets (allow UI editing)
+
+**Options:**
+- `--all`, `-a`: Process all assets in the instance
+- `--uuid UUID`, `-u UUID`: Process specific asset(s) by UUID (repeatable)
+- `--local`, `-l`: Process assets found in local assets directory
+- `--dashboards-only`, `-d`: Process only dashboards
+- `--charts-only`, `-c`: Process only charts
+- `--assets-dir DIR`: Path to assets directory (for --local)
+- `--dry-run`, `-n`: Preview changes without applying
+
+**Examples:**
+
+```bash
+# Lock all production assets (enforce managed-as-code)
+ol-superset lock lock superset-production --all
+
+# Unlock all QA assets (enable UI editing for testing)
+ol-superset lock unlock superset-qa --all
+
+# Lock only dashboards in production
+ol-superset lock lock superset-production --all --dashboards-only
+
+# Unlock specific dashboard by UUID
+ol-superset lock unlock superset-qa --uuid abc123-def456-789...
+
+# Lock all assets in local directory (after export)
+ol-superset lock lock superset-production --local
+
+# Dry run to preview what would be locked
+ol-superset lock lock superset-production --all --dry-run
+```
+
+**Typical use cases:**
+
+1. **Production: Lock everything** to prevent accidental UI edits:
+   ```bash
+   ol-superset lock lock superset-production --all
+   ```
+
+2. **QA: Unlock everything** to allow experimentation:
+   ```bash
+   ol-superset lock unlock superset-qa --all
+   ```
+
+3. **After sync: Automatically unlock in QA** (done by `sync` command)
+   ```bash
+   ol-superset sync superset-production superset-qa
+   # Automatically unlocks synced assets in QA
+   ```
+
+4. **Lock specific production dashboards** while keeping others editable:
+   ```bash
+   ol-superset lock lock superset-production \
+     --uuid dashboard-uuid-1 \
+     --uuid dashboard-uuid-2
+   ```
+
+**When to use:**
+- After initial production setup: Lock all assets
+- Before QA testing: Unlock assets to enable UI editing
+- After promoting to production: Lock newly promoted assets
+- When certain assets must remain editable: Selectively unlock
+
+**Note:** The `sync` command automatically unlocks assets when syncing to QA environments, so you typically don't need to manually unlock after syncing.
+
+---
 
 ## Typical Workflows
 
@@ -228,25 +337,21 @@ open https://bi-qa.ol.mit.edu/dashboard/list/
 # 1. Make changes in QA Superset UI
 #    https://bi-qa.ol.mit.edu
 
-# 2. Export from QA
+# 2. Export from QA (auto-dedupes)
 ol-superset export --from superset-qa
 
-# 3. Deduplicate if needed (QA imported from production)
-ol-superset dedupe --dry-run  # Preview first
-ol-superset dedupe            # Apply changes
-
-# 4. Review changes
+# 3. Review changes
 git diff assets/
 
-# 5. Validate
+# 4. Validate
 ol-superset validate
 
-# 6. Commit changes
+# 5. Commit changes
 git add assets/
 git commit -m "Add new enrollment dashboard"
 git push
 
-# 7. After review, promote to production
+# 6. After review, promote to production
 ol-superset promote
 ```
 

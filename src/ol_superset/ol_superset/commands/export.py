@@ -4,6 +4,7 @@ from typing import Annotated
 
 from cyclopts import Parameter
 
+from ol_superset.commands.dedupe import dedupe
 from ol_superset.lib.utils import count_assets, get_assets_dir, run_sup_command
 
 
@@ -18,6 +19,13 @@ def export(
             name=["--output-dir", "-o"], help="Output directory (default: assets/)"
         ),
     ] = None,
+    skip_dedupe: Annotated[
+        bool,
+        Parameter(
+            name=["--skip-dedupe"],
+            help="Skip automatic deduplication after export",
+        ),
+    ] = False,
 ) -> None:
     """
     Export all Superset assets from specified instance.
@@ -25,12 +33,18 @@ def export(
     Exports datasets, charts, dashboards, and database configurations
     using automatic pagination to fetch all assets.
 
+    By default, automatically deduplicates and renames assets to UUID-based
+    naming to prevent duplicates from different environments.
+
     Examples:
-        Export from production (default):
+        Export from production (default, with auto-dedupe):
             ol-superset export
 
         Export from QA:
             ol-superset export --from superset-qa
+
+        Export without deduplication:
+            ol-superset export --skip-dedupe
 
         Export to custom directory:
             ol-superset export -f superset-qa -o /tmp/qa-backup
@@ -96,4 +110,33 @@ def export(
     print(f"  Charts:     {counts['charts']}")
     print(f"  Dashboards: {counts['dashboards']}")
     print(f"  Databases:  {counts['databases']}")
+    print()
+
+    # Auto-deduplicate unless skipped
+    if not skip_dedupe:
+        print()
+        print("=" * 50)
+        print("Step 4: Auto-deduplicating assets...")
+        print("=" * 50)
+        print()
+        print(
+            "Running dedupe to consolidate duplicates and rename to UUID-based naming"
+        )
+        print()
+
+        try:
+            dedupe(assets_dir=assets_dir, dry_run=False)
+            print()
+            print("✅ Deduplication complete!")
+        except Exception as e:
+            print()
+            print(f"⚠️  Deduplication failed: {e}")
+            print("Assets were exported but not deduplicated.")
+            print("You can manually run: ol-superset dedupe")
+    else:
+        print()
+        print("ℹ️  Skipped deduplication (--skip-dedupe flag used)")
+        print("   Note: You may have duplicate files if this instance imported")
+        print("   from another environment. Run 'ol-superset dedupe' to clean up.")
+
     print()
