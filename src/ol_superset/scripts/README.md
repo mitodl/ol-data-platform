@@ -124,6 +124,50 @@ ol-superset promote --dry-run
 ol-superset promote --force
 ```
 
+### `ol-superset dedupe`
+
+Deduplicate and rename assets to UUID-based naming to prevent file thrashing when syncing between environments.
+
+**Problem Solved:**
+When exporting from QA (which imported from Production), you get duplicate files with different database IDs but the same UUID:
+- `marts__combined__users_35.yaml` (Production database ID)
+- `marts__combined__users_127.yaml` (QA database ID)
+
+These are the SAME asset, just with different auto-increment IDs in each database.
+
+**Solution:**
+The `dedupe` command:
+1. Identifies duplicate files by UUID
+2. Removes duplicates (keeps first occurrence)
+3. Renames files to use UUID instead of database ID: `marts__combined__users_5f006731-f052-4586-88f2-ad1b3c904ca9.yaml`
+
+**Options:**
+- `--assets-dir`: Assets directory (default: `assets/`)
+- `--datasets`: Only process datasets
+- `--charts`: Only process charts
+- `--dashboards`: Only process dashboards
+- `--dry-run`: Preview changes without making them
+
+**Examples:**
+```bash
+# Preview what would be done (recommended first step)
+ol-superset dedupe --dry-run
+
+# Deduplicate and rename all assets
+ol-superset dedupe
+
+# Only process datasets
+ol-superset dedupe --datasets
+
+# Process charts and dashboards but not datasets
+ol-superset dedupe --charts --dashboards
+```
+
+**When to use:**
+- After exporting from an environment that imported assets from another environment
+- Before committing assets to avoid duplicate files in git
+- As part of your regular sync workflow between environments
+
 ## Typical Workflows
 
 ### Weekly Production Backup
@@ -165,19 +209,44 @@ open https://bi-qa.ol.mit.edu/dashboard/list/
 # 2. Export from QA
 ol-superset export --from superset-qa
 
-# 3. Review changes
+# 3. Deduplicate if needed (QA imported from production)
+ol-superset dedupe --dry-run  # Preview first
+ol-superset dedupe            # Apply changes
+
+# 4. Review changes
 git diff assets/
 
-# 4. Validate
+# 5. Validate
 ol-superset validate
 
-# 5. Commit changes
+# 6. Commit changes
 git add assets/
 git commit -m "Add new enrollment dashboard"
 git push
 
-# 6. After review, promote to production
+# 7. After review, promote to production
 ol-superset promote
+```
+
+### Handling Asset Duplication Between Environments
+
+If you're syncing assets between QA and Production, you may encounter duplicate files:
+
+```bash
+# Problem: After exporting from QA, you see duplicates:
+#   assets/datasets/Trino/marts__combined__users_35.yaml   (Production ID)
+#   assets/datasets/Trino/marts__combined__users_127.yaml  (QA ID)
+
+# Solution: Use dedupe to consolidate to UUID-based naming
+ol-superset dedupe --dry-run  # Preview changes
+ol-superset dedupe            # Apply changes
+
+# Result: Single file with UUID:
+#   assets/datasets/Trino/marts__combined__users_5f006731-f052-4586-88f2-ad1b3c904ca9.yaml
+
+# Commit the consolidated assets
+git add assets/
+git commit -m "chore: Deduplicate assets to UUID-based naming"
 ```
 
 ## Authentication

@@ -1,0 +1,65 @@
+slice_name: Data Detail Navigation
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  adhoc_filters:
+  - clause: WHERE
+    comparator: No filter
+    expressionType: SIMPLE
+    operator: TEMPORAL_RANGE
+    subject: event_timestamp
+  all_columns:
+  - platform
+  - course_title
+  - courserun_readable_id
+  - event_type
+  - starting_position
+  - ending_position
+  - event_timestamp
+  allow_render_html: true
+  color_pn: true
+  comparison_color_scheme: Green
+  comparison_type: values
+  dashboards: []
+  datasource: 30__table
+  extra_form_data: {}
+  groupby: []
+  metrics: []
+  order_by_cols: []
+  order_desc: true
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 1000
+  server_page_length: 10
+  show_cell_bars: true
+  slice_id: 105
+  table_timestamp_format: smart_date
+  temporal_columns_lookup:
+    event_timestamp: true
+  time_grain_sqla: P1D
+  viz_type: table
+  annotation_layers: []
+query_context: '{"datasource": {"id": 30, "type": "table"}, "force": false, "queries":
+  [{"filters": [{"col": "event_timestamp", "op": "TEMPORAL_RANGE", "val": "No filter"}],
+  "extras": {"having": "", "where": ""}, "applied_time_extras": {}, "columns": ["platform",
+  "course_title", "courserun_readable_id", "event_type", "starting_position", "ending_position",
+  "event_timestamp"], "orderby": [], "annotation_layers": [], "row_limit": 1000, "series_limit":
+  0, "order_desc": true, "url_params": {}, "custom_params": {}, "custom_form_data":
+  {}, "post_processing": [], "time_offsets": []}], "form_data": {"datasource": "30__table",
+  "viz_type": "table", "slice_id": 105, "query_mode": "raw", "groupby": [], "time_grain_sqla":
+  "P1D", "temporal_columns_lookup": {"event_timestamp": true}, "metrics": [], "all_columns":
+  ["platform", "course_title", "courserun_readable_id", "event_type", "starting_position",
+  "ending_position", "event_timestamp"], "percent_metrics": [], "adhoc_filters": [{"clause":
+  "WHERE", "comparator": "No filter", "expressionType": "SIMPLE", "operator": "TEMPORAL_RANGE",
+  "subject": "event_timestamp"}], "order_by_cols": [], "row_limit": 1000, "server_page_length":
+  10, "order_desc": true, "table_timestamp_format": "smart_date", "allow_render_html":
+  true, "show_cell_bars": true, "color_pn": true, "comparison_color_scheme": "Green",
+  "comparison_type": "values", "extra_form_data": {}, "dashboards": [], "force": false,
+  "result_format": "json", "result_type": "full", "include_time": false}, "result_format":
+  "json", "result_type": "full"}'
+cache_timeout: null
+uuid: cf8305f6-fe5d-4791-8185-3051b76f4738
+version: 1.0.0
+dataset_uuid: 32e283f5-fc02-403a-9c92-b8286352cdba

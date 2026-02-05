@@ -1,0 +1,282 @@
+dashboard_title: Distribution of Number of Videos Watched
+description: null
+css: ''
+slug: null
+certified_by: ''
+certification_details: ''
+published: true
+uuid: b54af54e-1da9-4835-a65b-3ba03c6b3e57
+position:
+  CHART-XHjTyrqJNN:
+    children: []
+    id: CHART-XHjTyrqJNN
+    meta:
+      chartId: 16
+      height: 86
+      sliceName: Distribution of Number of Videos Watched
+      uuid: 9bdb6168-d5c9-4651-af36-556e29f3b5db
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-v4Lfauho1o
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - TABS-D_EinesXK-87uWInKaaA-
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Distribution of Number of Videos Watched
+    type: HEADER
+  MARKDOWN-DlUhe7f_X4Uo3-EXDi78e:
+    children: []
+    id: MARKDOWN-DlUhe7f_X4Uo3-EXDi78e
+    meta:
+      code: "### Change Log\n**2/2/26**: Standardized filter name: 'Course Run Is\
+        \ Current' \u2192 'Current Course Run'; Enabled search on Course Run Readable\
+        \ ID filter"
+      height: 50
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-D_EinesXK-87uWInKaaA-
+    - TAB-u8knlguIfNzdbvzU7Hfyh
+    - ROW-oK85TLNi0jJ-E2JhlpACV
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-oK85TLNi0jJ-E2JhlpACV:
+    children:
+    - MARKDOWN-DlUhe7f_X4Uo3-EXDi78e
+    id: ROW-oK85TLNi0jJ-E2JhlpACV
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-D_EinesXK-87uWInKaaA-
+    - TAB-u8knlguIfNzdbvzU7Hfyh
+    type: ROW
+  ROW-qPOd6_AP_ygiHZJM_nxI1:
+    children:
+    - CHART-XHjTyrqJNN
+    id: ROW-qPOd6_AP_ygiHZJM_nxI1
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TAB-UBsFQ5Nlgxf9_fSG88KZP
+    type: ROW
+  TAB-UBsFQ5Nlgxf9_fSG88KZP:
+    children:
+    - ROW-qPOd6_AP_ygiHZJM_nxI1
+    id: TAB-UBsFQ5Nlgxf9_fSG88KZP
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Data
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: TAB
+  TAB-u8knlguIfNzdbvzU7Hfyh:
+    children:
+    - ROW-oK85TLNi0jJ-E2JhlpACV
+    id: TAB-u8knlguIfNzdbvzU7Hfyh
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-D_EinesXK-87uWInKaaA-
+    type: TAB
+  TABS-D_EinesXK-87uWInKaaA-:
+    children:
+    - TAB-UBsFQ5Nlgxf9_fSG88KZP
+    - TAB-u8knlguIfNzdbvzU7Hfyh
+    id: TABS-D_EinesXK-87uWInKaaA-
+    meta: {}
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: TABS
+metadata:
+  chart_configuration:
+    '16':
+      crossFilters:
+        chartsInScope: []
+        scope: global
+      id: 16
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 66
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 66
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-cLfD1wEVf
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: platform
+      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-cLfD1wEVf
+    chartsInScope:
+    - 66
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-ubSb6YzuZ
+    name: Course
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: course_readable_id
+      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 66
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-4iiLpCuWI
+    name: Current Course Run
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: courserun_is_current
+      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-cLfD1wEVf
+    - NATIVE_FILTER-ubSb6YzuZ
+    - NATIVE_FILTER-4iiLpCuWI
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-7hH7r7W5j
+    name: Course Run Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-cLfD1wEVf
+    - NATIVE_FILTER-ubSb6YzuZ
+    - NATIVE_FILTER-4iiLpCuWI
+    - NATIVE_FILTER-7hH7r7W5j
+    chartsInScope:
+    - 66
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-KwclAvQy4
+    name: Chapter Title
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: chapter_title
+      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
+theme_uuid: null
+version: 1.0.0

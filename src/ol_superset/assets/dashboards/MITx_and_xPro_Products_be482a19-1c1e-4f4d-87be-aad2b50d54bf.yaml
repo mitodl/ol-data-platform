@@ -1,0 +1,344 @@
+dashboard_title: MITx and xPro Products
+description: null
+css: ''
+slug: null
+certified_by: ''
+certification_details: ''
+published: false
+uuid: be482a19-1c1e-4f4d-87be-aad2b50d54bf
+position:
+  CHART-explore-71-1:
+    children: []
+    id: CHART-explore-71-1
+    meta:
+      chartId: 4
+      height: 24
+      sliceName: Latest Product Created Date
+      uuid: cdba7fac-5019-4d70-9f0c-817fb7f194d8
+      width: 4
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS--aJD-O9sVX
+    - TAB-tOcC680Uq
+    - ROW-WCMQIA1uod
+    type: CHART
+  CHART-explore-82-1:
+    children: []
+    id: CHART-explore-82-1
+    meta:
+      chartId: 52
+      height: 77
+      sliceName: Products
+      uuid: 36ade680-7ae9-4d35-89b0-a46235139418
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS--aJD-O9sVX
+    - TAB-I63TmRRqPi
+    - ROW-NXcMvlwcK7r5kzqQRNhyJ
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - TABS--aJD-O9sVX
+    - ROW-QcIv02Qbu6XycEwIRprHu
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: MITx and xPro Products
+    type: HEADER
+  MARKDOWN-H_WRv4CghwJRwqxiZayt4:
+    children: []
+    id: MARKDOWN-H_WRv4CghwJRwqxiZayt4
+    meta:
+      code: '### Change Log'
+      height: 50
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-QcIv02Qbu6XycEwIRprHu
+    type: MARKDOWN
+  MARKDOWN-r7f9h7s9PY:
+    children: []
+    id: MARKDOWN-r7f9h7s9PY
+    meta:
+      code: "## <a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined__products#columns'\
+        \ target='_blank'>Column Definitions</a>\n\n\n<br>\n\n\n\n### Mart tables\
+        \ used in this report: \n  - marts__combined__products"
+      height: 26
+      width: 6
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS--aJD-O9sVX
+    - TAB-tOcC680Uq
+    - ROW-WCMQIA1uod
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-NXcMvlwcK7r5kzqQRNhyJ:
+    children:
+    - CHART-explore-82-1
+    id: ROW-NXcMvlwcK7r5kzqQRNhyJ
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS--aJD-O9sVX
+    - TAB-I63TmRRqPi
+    type: ROW
+  ROW-QcIv02Qbu6XycEwIRprHu:
+    children:
+    - MARKDOWN-H_WRv4CghwJRwqxiZayt4
+    id: ROW-QcIv02Qbu6XycEwIRprHu
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: ROW
+  ROW-WCMQIA1uod:
+    children:
+    - MARKDOWN-r7f9h7s9PY
+    - CHART-explore-71-1
+    id: ROW-WCMQIA1uod
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS--aJD-O9sVX
+    - TAB-tOcC680Uq
+    type: ROW
+  TAB-I63TmRRqPi:
+    children:
+    - ROW-NXcMvlwcK7r5kzqQRNhyJ
+    id: TAB-I63TmRRqPi
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Product
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS--aJD-O9sVX
+    type: TAB
+  TAB-tOcC680Uq:
+    children:
+    - ROW-WCMQIA1uod
+    id: TAB-tOcC680Uq
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS--aJD-O9sVX
+    type: TAB
+  TABS--aJD-O9sVX:
+    children:
+    - TAB-I63TmRRqPi
+    - TAB-tOcC680Uq
+    id: TABS--aJD-O9sVX
+    meta: {}
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: TABS
+metadata:
+  chart_configuration:
+    '4':
+      crossFilters:
+        chartsInScope:
+        - 82
+        scope: global
+      id: 4
+    '52':
+      crossFilters:
+        chartsInScope:
+        - 71
+        scope: global
+      id: 52
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 71
+    - 82
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 49
+    - 71
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: false
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: Filter by courses that are open for enrollment
+    filterType: filter_select
+    id: NATIVE_FILTER-VLDelGNIm
+    name: Open for enrollment
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    - TAB-tOcC680Uq
+    targets:
+    - column:
+        name: courserun_is_enrollable
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 49
+    - 71
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-A2tykSpd1
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    - TAB-tOcC680Uq
+    targets:
+    - column:
+        name: platform
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-A2tykSpd1
+    chartsInScope:
+    - 49
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: e.g. Emeritus, xPro
+    filterType: filter_select
+    id: NATIVE_FILTER-Ie7vz8KIT
+    name: Product Platform
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    targets:
+    - column:
+        name: product_platform
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-A2tykSpd1
+    chartsInScope:
+    - 49
+    - 71
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-BIDv6yp-1
+    name: Product Type
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    - TAB-tOcC680Uq
+    targets:
+    - column:
+        name: product_type
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-A2tykSpd1
+    chartsInScope:
+    - 49
+    - 71
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-bI2AkYOwU
+    name: Product Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    - TAB-tOcC680Uq
+    targets:
+    - column:
+        name: product_readable_id
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  refresh_frequency: 86400
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
+theme_uuid: null
+version: 1.0.0

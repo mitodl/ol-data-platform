@@ -1,0 +1,277 @@
+dashboard_title: Learner Demographic and Course Data
+description: null
+css: ''
+slug: null
+certified_by: ''
+certification_details: ''
+published: true
+uuid: be0ba018-dff2-42a5-a12a-8215ff5bd75a
+position:
+  CHART-pMiEJRHITe:
+    children: []
+    id: CHART-pMiEJRHITe
+    meta:
+      chartId: 69
+      height: 81
+      sliceName: Learner Demographic Including Income and Course Data
+      uuid: 11b1455f-25f1-45aa-8358-b8449013bb24
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-PDK8qDKql02nHysdBXvpC
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    - ROW-Bal4OfFqKi9HisKnpLBi8
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children:
+    - TABS-PDK8qDKql02nHysdBXvpC
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Learner Demographic and Course Data
+    type: HEADER
+  MARKDOWN-yete-lTFvEQ3OjsUKHP-h:
+    children: []
+    id: MARKDOWN-yete-lTFvEQ3OjsUKHP-h
+    meta:
+      code: '### Change Log
+
+        **2/2/26**: Enabled search functionality on User Email and User Full Name
+        filters'
+      height: 50
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-PDK8qDKql02nHysdBXvpC
+    - TAB-4pl8hO1k3umXWQfF8hX7b
+    - ROW-sFtH7lQJOuQQW71DEuAGJ
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  ROW-Bal4OfFqKi9HisKnpLBi8:
+    children:
+    - CHART-pMiEJRHITe
+    id: ROW-Bal4OfFqKi9HisKnpLBi8
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-PDK8qDKql02nHysdBXvpC
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    type: ROW
+  ROW-sFtH7lQJOuQQW71DEuAGJ:
+    children:
+    - MARKDOWN-yete-lTFvEQ3OjsUKHP-h
+    id: ROW-sFtH7lQJOuQQW71DEuAGJ
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-PDK8qDKql02nHysdBXvpC
+    - TAB-4pl8hO1k3umXWQfF8hX7b
+    type: ROW
+  TAB-4pl8hO1k3umXWQfF8hX7b:
+    children:
+    - ROW-sFtH7lQJOuQQW71DEuAGJ
+    id: TAB-4pl8hO1k3umXWQfF8hX7b
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-PDK8qDKql02nHysdBXvpC
+    type: TAB
+  TAB-dhOB0wMgmenerPbUQNy7K:
+    children:
+    - ROW-Bal4OfFqKi9HisKnpLBi8
+    id: TAB-dhOB0wMgmenerPbUQNy7K
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Data
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-PDK8qDKql02nHysdBXvpC
+    type: TAB
+  TABS-PDK8qDKql02nHysdBXvpC:
+    children:
+    - TAB-dhOB0wMgmenerPbUQNy7K
+    - TAB-4pl8hO1k3umXWQfF8hX7b
+    id: TABS-PDK8qDKql02nHysdBXvpC
+    meta: {}
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    type: TABS
+metadata:
+  chart_configuration:
+    '69':
+      crossFilters:
+        chartsInScope: []
+        scope: global
+      id: 69
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 68
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 68
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-cKjlGY1Lq
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: platforms
+      datasetUuid: 5f006731-f052-4586-88f2-ad1b3c904ca9
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 68
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-fmY39vbUW
+    name: DEDP_Program_Cert_Indicator
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: Any_DEDP_Program_Cert_Ind
+      datasetUuid: 232090f5-bb02-4327-9067-2ae49b64074b
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 68
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-9bhoXBhyR7aJcZvlf8dkE
+    name: DEDP_Course_Cert_Count
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: DEDP_Course_Cert_Count
+      datasetUuid: 232090f5-bb02-4327-9067-2ae49b64074b
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-seugILSr1SV5spyT0UEO3
+    name: User Email
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    targets:
+    - column:
+        name: user_email
+      datasetUuid: 232090f5-bb02-4327-9067-2ae49b64074b
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-MEtUyM1j1fI4_NO5dVF4N
+    name: User Full Name
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    targets:
+    - column:
+        name: user_full_name
+      datasetUuid: 232090f5-bb02-4327-9067-2ae49b64074b
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
+theme_uuid: null
+version: 1.0.0

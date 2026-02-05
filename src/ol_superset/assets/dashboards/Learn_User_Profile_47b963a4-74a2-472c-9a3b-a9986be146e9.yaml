@@ -1,0 +1,296 @@
+dashboard_title: Learn User Profile
+description: null
+css: ''
+slug: null
+certified_by: ''
+certification_details: ''
+published: true
+uuid: 47b963a4-74a2-472c-9a3b-a9986be146e9
+position:
+  CHART-SoNjb0TVbnvYI20pJAbuv:
+    children: []
+    id: CHART-SoNjb0TVbnvYI20pJAbuv
+    meta:
+      chartId: 43
+      height: 93
+      sliceName: Learn New Users
+      uuid: 5cba1239-2f4c-472b-82f6-788f18de0fd2
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    - TAB-d9Pd3YrjRKV7ttvfJEU5Q
+    - ROW-fAwjWq6e9rrf9OSxyGLkd
+    type: CHART
+  CHART-VpMT1dkQyJDBplwqMUJe9:
+    children: []
+    id: CHART-VpMT1dkQyJDBplwqMUJe9
+    meta:
+      chartId: 68
+      height: 50
+      sliceName: dim_user last updated
+      sliceNameOverride: data last updated
+      uuid: 1e1419f1-f836-43de-964e-6ea9d9521645
+      width: 4
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    - TAB-4nklbbLEUosNKj4O2__fE
+    - ROW-WoLMbv-dcY3jnmhZyIgwf
+    type: CHART
+  CHART-explore-123-1:
+    children: []
+    id: CHART-explore-123-1
+    meta:
+      chartId: 32
+      height: 104
+      sliceName: Learn User Profile
+      uuid: 2e3e900a-3782-4738-80fe-0d60802d4461
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    - TAB-hjmJguaDltfDW5x3uRSTG
+    - ROW-JSoN2RbDSlsm5-gwx96YS
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children: []
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Learn User Profile
+    type: HEADER
+  MARKDOWN-82d59f9235:
+    children: []
+    id: MARKDOWN-82d59f9235
+    meta:
+      code: "### Change Log\n\n        **2/2/26**: Standardized filter name: 'Full\
+        \ Name' \u2192 'User Full Name'"
+      height: 50
+      width: 8
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    - TAB-4nklbbLEUosNKj4O2__fE
+    - ROW-WoLMbv-dcY3jnmhZyIgwf
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    id: ROOT_ID
+    type: ROOT
+  ROW-JSoN2RbDSlsm5-gwx96YS:
+    children:
+    - CHART-explore-123-1
+    id: ROW-JSoN2RbDSlsm5-gwx96YS
+    meta:
+      '0': ROOT_ID
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    - TAB-hjmJguaDltfDW5x3uRSTG
+    type: ROW
+  ROW-WoLMbv-dcY3jnmhZyIgwf:
+    children:
+    - CHART-VpMT1dkQyJDBplwqMUJe9
+    - MARKDOWN-82d59f9235
+    id: ROW-WoLMbv-dcY3jnmhZyIgwf
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    - TAB-4nklbbLEUosNKj4O2__fE
+    type: ROW
+  ROW-fAwjWq6e9rrf9OSxyGLkd:
+    children:
+    - CHART-SoNjb0TVbnvYI20pJAbuv
+    id: ROW-fAwjWq6e9rrf9OSxyGLkd
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    - TAB-d9Pd3YrjRKV7ttvfJEU5Q
+    type: ROW
+  TAB-4nklbbLEUosNKj4O2__fE:
+    children:
+    - ROW-WoLMbv-dcY3jnmhZyIgwf
+    id: TAB-4nklbbLEUosNKj4O2__fE
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    type: TAB
+  TAB-d9Pd3YrjRKV7ttvfJEU5Q:
+    children:
+    - ROW-fAwjWq6e9rrf9OSxyGLkd
+    id: TAB-d9Pd3YrjRKV7ttvfJEU5Q
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: New Users per Week
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    type: TAB
+  TAB-hjmJguaDltfDW5x3uRSTG:
+    children:
+    - ROW-JSoN2RbDSlsm5-gwx96YS
+    id: TAB-hjmJguaDltfDW5x3uRSTG
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Learn User Profile
+    parents:
+    - ROOT_ID
+    - TABS-27GXAAd_NBmrYoPV-pilC
+    type: TAB
+  TABS-27GXAAd_NBmrYoPV-pilC:
+    children:
+    - TAB-hjmJguaDltfDW5x3uRSTG
+    - TAB-d9Pd3YrjRKV7ttvfJEU5Q
+    - TAB-4nklbbLEUosNKj4O2__fE
+    id: TABS-27GXAAd_NBmrYoPV-pilC
+    meta: {}
+    parents:
+    - ROOT_ID
+    type: TABS
+metadata:
+  chart_configuration:
+    '32':
+      crossFilters:
+        chartsInScope:
+        - 131
+        - 146
+        scope: global
+      id: 32
+    '68':
+      crossFilters:
+        chartsInScope:
+        - 123
+        - 146
+        scope: global
+      id: 68
+    '43':
+      crossFilters:
+        chartsInScope:
+        - 123
+        - 131
+        scope: global
+      id: 43
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 123
+    - 131
+    - 146
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors:
+    count: '#1FA8C9'
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 123
+    - 131
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-LMCU1GRA0mob_RXJH64C4
+    name: User Full Name
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: full_name
+      datasetUuid: 7f46cdba-1bf0-4f10-9606-a41b77b9e77c
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 123
+    - 131
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-P5BwtgBP_ZCMawUtqTcgY
+    name: Email
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: email
+      datasetUuid: 7f46cdba-1bf0-4f10-9606-a41b77b9e77c
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 123
+    - 131
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-E9aeU0C6KGG6_gCNwHv1M
+    name: Global ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: user_global_id
+      datasetUuid: 7f46cdba-1bf0-4f10-9606-a41b77b9e77c
+    type: NATIVE_FILTER
+  refresh_frequency: 86400
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
+theme_uuid: null
+version: 1.0.0

@@ -1,0 +1,421 @@
+dashboard_title: Orders
+description: null
+css: ''
+slug: null
+certified_by: ''
+certification_details: ''
+published: true
+uuid: 7b9f141d-14d2-40c6-aa01-fef8a0375ce8
+position:
+  CHART-IjDCkMYB40:
+    children: []
+    id: CHART-IjDCkMYB40
+    meta:
+      chartId: 3
+      height: 42
+      sliceName: Latest Fulfilled Order Date
+      uuid: 686fd4b2-e9f4-401b-bd85-b03f8b8824fd
+      width: 6
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    - TAB-D_LxiXuGR
+    - ROW-sQXXSmAyW83LoWBTqoOMY
+    type: CHART
+  CHART-OvmWSuQBEyKWpRvCpuQwh:
+    children: []
+    id: CHART-OvmWSuQBEyKWpRvCpuQwh
+    meta:
+      chartId: 65
+      height: 50
+      sliceName: Order Dashboard (Last Updated)
+      uuid: 0ef1c6be-600c-4802-aa04-33f1b6dd9e9b
+      width: 6
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    - TAB-D_LxiXuGR
+    - ROW-od1lSWJOk
+    type: CHART
+  CHART-explore-135-1:
+    children: []
+    id: CHART-explore-135-1
+    meta:
+      chartId: 11
+      height: 68
+      sliceName: Order detail
+      uuid: fb906f1f-c07f-472f-9387-ad02f73cae55
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    - TAB-dTXAM_ZcZJ
+    - ROW-RF6m9YqhzEsQxLXOHTDp0
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children: []
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Orders
+    type: HEADER
+  MARKDOWN-jqUJsfZGh5XtIJ4W4pYzj:
+    children: []
+    id: MARKDOWN-jqUJsfZGh5XtIJ4W4pYzj
+    meta:
+      code: '### Change Log:
+
+        11/13/25 added b2b contract number field'
+      height: 43
+      width: 6
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    - TAB-D_LxiXuGR
+    - ROW-sQXXSmAyW83LoWBTqoOMY
+    type: MARKDOWN
+  MARKDOWN-sh-Mu5PLfC:
+    children: []
+    id: MARKDOWN-sh-Mu5PLfC
+    meta:
+      code: "<a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined__orders#columns'\
+        \ target='_blank'>Column definition</a>\n\n<br>\n\nThis report's data is pulled\
+        \ from the mart table:\n - marts__combined__orders\n\n"
+      height: 51
+      width: 6
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    - TAB-D_LxiXuGR
+    - ROW-od1lSWJOk
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - TABS-3Dq6e30xQ5
+    id: ROOT_ID
+    type: ROOT
+  ROW-RF6m9YqhzEsQxLXOHTDp0:
+    children:
+    - CHART-explore-135-1
+    id: ROW-RF6m9YqhzEsQxLXOHTDp0
+    meta:
+      '0': ROOT_ID
+      '1': TABS-3Dq6e30xQ5
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    - TAB-dTXAM_ZcZJ
+    type: ROW
+  ROW-od1lSWJOk:
+    children:
+    - MARKDOWN-sh-Mu5PLfC
+    - CHART-OvmWSuQBEyKWpRvCpuQwh
+    id: ROW-od1lSWJOk
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    - TAB-D_LxiXuGR
+    type: ROW
+  ROW-sQXXSmAyW83LoWBTqoOMY:
+    children:
+    - CHART-IjDCkMYB40
+    - MARKDOWN-jqUJsfZGh5XtIJ4W4pYzj
+    id: ROW-sQXXSmAyW83LoWBTqoOMY
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    - TAB-D_LxiXuGR
+    type: ROW
+  TAB-D_LxiXuGR:
+    children:
+    - ROW-od1lSWJOk
+    - ROW-sQXXSmAyW83LoWBTqoOMY
+    id: TAB-D_LxiXuGR
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    type: TAB
+  TAB-dTXAM_ZcZJ:
+    children:
+    - ROW-RF6m9YqhzEsQxLXOHTDp0
+    id: TAB-dTXAM_ZcZJ
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Order
+    parents:
+    - ROOT_ID
+    - TABS-3Dq6e30xQ5
+    type: TAB
+  TABS-3Dq6e30xQ5:
+    children:
+    - TAB-dTXAM_ZcZJ
+    - TAB-D_LxiXuGR
+    id: TABS-3Dq6e30xQ5
+    meta: {}
+    parents:
+    - ROOT_ID
+    type: TABS
+metadata:
+  chart_configuration:
+    '65':
+      crossFilters:
+        chartsInScope:
+        - 39
+        - 135
+        scope: global
+      id: 65
+    '11':
+      crossFilters:
+        chartsInScope:
+        - 39
+        - 114
+        scope: global
+      id: 11
+    '3':
+      crossFilters:
+        chartsInScope:
+        - 114
+        - 135
+        scope: global
+      id: 3
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices:
+    '3': true
+  global_chart_configuration:
+    chartsInScope:
+    - 39
+    - 114
+    - 135
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 114
+    - 38
+    - 39
+    - 135
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+      sortAscending: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-SqxLHh0bN
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-D_LxiXuGR
+    - TAB-dTXAM_ZcZJ
+    targets:
+    - column:
+        name: platform
+      datasetUuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-SqxLHh0bN
+    chartsInScope:
+    - 38
+    - 39
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-WUK21UZST
+    name: Course Run or Program
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-dTXAM_ZcZJ
+    - TAB-D_LxiXuGR
+    targets:
+    - column:
+        name: product_readable_id
+      datasetUuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-SqxLHh0bN
+    chartsInScope:
+    - 38
+    - 39
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData:
+        filters:
+        - col: order_state
+          op: IN
+          val:
+          - fulfilled
+          - refunded
+      filterState:
+        label: fulfilled, refunded
+        validateMessage: false
+        validateStatus: false
+        value:
+        - fulfilled
+        - refunded
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-0LL9zwYxy
+    name: Order State
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-dTXAM_ZcZJ
+    - TAB-D_LxiXuGR
+    targets:
+    - column:
+        name: order_state
+      datasetUuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 38
+    - 39
+    - 135
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-UFi-T7u6k9iNp__OHuJfb
+    name: User Email
+    scope:
+      excluded:
+      - 65
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-dTXAM_ZcZJ
+    - TAB-D_LxiXuGR
+    targets:
+    - column:
+        name: user_email
+      datasetUuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 38
+    - 39
+    - 135
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+      sortAscending: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-zYpB6Za-Nd78XsvN1ODmb
+    name: Year Of Order Created Date
+    scope:
+      excluded:
+      - 65
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-dTXAM_ZcZJ
+    - TAB-D_LxiXuGR
+    targets:
+    - column:
+        name: year_of_order_created_date
+      datasetUuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 38
+    - 39
+    - 135
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+      sortAscending: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-KMy75pR9w2B77EHe_tr1n
+    name: Month of Order Created Date
+    scope:
+      excluded:
+      - 65
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-dTXAM_ZcZJ
+    - TAB-D_LxiXuGR
+    targets:
+    - column:
+        name: month_of_order_created_date
+      datasetUuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555
+    type: NATIVE_FILTER
+  refresh_frequency: 86400
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
+theme_uuid: null
+version: 1.0.0

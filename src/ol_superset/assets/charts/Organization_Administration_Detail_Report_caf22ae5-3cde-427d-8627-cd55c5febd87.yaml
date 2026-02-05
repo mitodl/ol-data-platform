@@ -1,0 +1,65 @@
+slice_name: Organization Administration Detail Report
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  adhoc_filters:
+  - clause: WHERE
+    comparator: No filter
+    expressionType: SIMPLE
+    operator: TEMPORAL_RANGE
+    subject: certificate_created_date
+  all_columns:
+  - platform
+  - organization
+  - course_title
+  - courserun_readable_id
+  - user_email
+  - activity_date
+  - certificate_count
+  - chatbot_used_count
+  allow_render_html: true
+  annotation_layers: []
+  color_pn: true
+  comparison_color_scheme: Green
+  comparison_type: values
+  dashboards: []
+  datasource: 33__table
+  extra_form_data: {}
+  groupby: []
+  order_by_cols: []
+  order_desc: true
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 1000
+  server_page_length: 10
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup:
+    activity_date: true
+  time_grain_sqla: P1D
+  viz_type: table
+query_context: '{"datasource": {"id": 33, "type": "table"}, "force": false, "queries":
+  [{"filters": [{"col": "certificate_created_date", "op": "TEMPORAL_RANGE", "val":
+  "No filter"}], "extras": {"time_grain_sqla": "P1D", "having": "", "where": ""},
+  "applied_time_extras": {}, "columns": ["platform", "organization", "course_title",
+  "courserun_readable_id", "user_email", "activity_date", "certificate_count", "chatbot_used_count"],
+  "orderby": [], "annotation_layers": [], "row_limit": 1000, "series_limit": 0, "order_desc":
+  true, "url_params": {}, "custom_params": {}, "custom_form_data": {}, "post_processing":
+  [], "time_offsets": []}], "form_data": {"datasource": "33__table", "viz_type": "table",
+  "query_mode": "raw", "groupby": [], "time_grain_sqla": "P1D", "temporal_columns_lookup":
+  {"activity_date": true}, "all_columns": ["platform", "organization", "course_title",
+  "courserun_readable_id", "user_email", "activity_date", "certificate_count", "chatbot_used_count"],
+  "percent_metrics": [], "adhoc_filters": [{"clause": "WHERE", "subject": "certificate_created_date",
+  "operator": "TEMPORAL_RANGE", "comparator": "No filter", "expressionType": "SIMPLE"}],
+  "order_by_cols": [], "order_desc": true, "row_limit": 1000, "server_page_length":
+  10, "table_timestamp_format": "smart_date", "allow_render_html": true, "show_cell_bars":
+  true, "color_pn": true, "comparison_color_scheme": "Green", "comparison_type": "values",
+  "extra_form_data": {}, "dashboards": [], "force": false, "result_format": "json",
+  "result_type": "full", "include_time": false}, "result_format": "json", "result_type":
+  "full"}'
+cache_timeout: null
+uuid: caf22ae5-3cde-427d-8627-cd55c5febd87
+version: 1.0.0
+dataset_uuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8

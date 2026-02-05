@@ -4,6 +4,7 @@ import sys
 
 import cyclopts
 
+from ol_superset.commands.dedupe import dedupe_app
 from ol_superset.commands.export import export
 from ol_superset.commands.promote import promote
 from ol_superset.commands.sync import sync
@@ -40,6 +41,7 @@ app.command(export, name="export")
 app.command(validate, name="validate")
 app.command(sync, name="sync")
 app.command(promote, name="promote")
+app.command(dedupe_app, name="dedupe")
 
 
 def main() -> None:

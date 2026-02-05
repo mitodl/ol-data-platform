@@ -1,0 +1,95 @@
+slice_name: OCW Resources
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  adhoc_filters: []
+  all_columns:
+  - course_name
+  - course_live_url
+  - course_uuid
+  - content_type
+  - learning_resource_types
+  - metadata
+  - resource_draft
+  - resource_filename
+  - resource_title
+  - resource_type
+  - resource_uuid
+  - website_title
+  - external_resource_is_broken
+  - external_resource_license_warning
+  - external_resource_url_status_code
+  - external_resource_backup_url_status_code
+  - course_number
+  - course_term
+  - course_title
+  - course_year
+  - resource_live_url
+  - studio_url
+  - external_resource_backup_url
+  - external_resource_url
+  - image_alt_text
+  - image_caption
+  - video_youtube_description
+  - video_youtube_id
+  - video_youtube_speakers
+  - video_youtube_tags
+  - video_archive_url
+  - video_captions_file
+  - video_thumbnail_file
+  - video_transcript_file
+  allow_render_html: true
+  annotation_layers: []
+  color_pn: true
+  comparison_color_scheme: Green
+  comparison_type: values
+  dashboards: []
+  datasource: 74__table
+  extra_form_data: {}
+  groupby: []
+  order_by_cols: []
+  order_desc: true
+  percent_metrics: []
+  query_mode: raw
+  row_limit: '200000'
+  server_page_length: 10
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup: {}
+  time_grain_sqla: P1D
+  viz_type: table
+query_context: '{"datasource": {"id": 74, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "columns": ["course_name", "course_live_url", "course_uuid", "content_type", "learning_resource_types",
+  "metadata", "resource_draft", "resource_filename", "resource_title", "resource_type",
+  "resource_uuid", "website_title", "external_resource_is_broken", "external_resource_license_warning",
+  "external_resource_url_status_code", "external_resource_backup_url_status_code",
+  "course_number", "course_term", "course_title", "course_year", "resource_live_url",
+  "studio_url", "external_resource_backup_url", "external_resource_url", "image_alt_text",
+  "image_caption", "video_youtube_description", "video_youtube_id", "video_youtube_speakers",
+  "video_youtube_tags", "video_archive_url", "video_captions_file", "video_thumbnail_file",
+  "video_transcript_file"], "orderby": [], "annotation_layers": [], "row_limit": 200000,
+  "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params": {}, "custom_form_data":
+  {}, "post_processing": [], "time_offsets": []}], "form_data": {"datasource": "74__table",
+  "viz_type": "table", "query_mode": "raw", "groupby": [], "time_grain_sqla": "P1D",
+  "temporal_columns_lookup": {}, "all_columns": ["course_name", "course_live_url",
+  "course_uuid", "content_type", "learning_resource_types", "metadata", "resource_draft",
+  "resource_filename", "resource_title", "resource_type", "resource_uuid", "website_title",
+  "external_resource_is_broken", "external_resource_license_warning", "external_resource_url_status_code",
+  "external_resource_backup_url_status_code", "course_number", "course_term", "course_title",
+  "course_year", "resource_live_url", "studio_url", "external_resource_backup_url",
+  "external_resource_url", "image_alt_text", "image_caption", "video_youtube_description",
+  "video_youtube_id", "video_youtube_speakers", "video_youtube_tags", "video_archive_url",
+  "video_captions_file", "video_thumbnail_file", "video_transcript_file"], "percent_metrics":
+  [], "adhoc_filters": [], "order_by_cols": [], "row_limit": "200000", "server_page_length":
+  10, "order_desc": true, "table_timestamp_format": "smart_date", "allow_render_html":
+  true, "show_cell_bars": true, "color_pn": true, "comparison_color_scheme": "Green",
+  "comparison_type": "values", "extra_form_data": {}, "dashboards": [], "force": false,
+  "result_format": "json", "result_type": "full", "include_time": false}, "result_format":
+  "json", "result_type": "full"}'
+cache_timeout: null
+uuid: cd72f611-dac4-45a0-99ca-8b3c9e260597
+version: 1.0.0
+dataset_uuid: 8bb67686-3d31-4418-bda9-87fdeb25b665

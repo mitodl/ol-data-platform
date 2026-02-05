@@ -53,10 +53,35 @@ ol_superset/
 
 1. **Make changes** in Superset UI (QA or Production)
 2. **Export** assets with `ol-superset export --from <instance>`
-3. **Validate** with `ol-superset validate`
-4. **Review** changes with `git diff assets/`
-5. **Commit** to version control
-6. **Sync** to other environments as needed
+3. **Deduplicate** if syncing between environments: `ol-superset dedupe`
+4. **Validate** with `ol-superset validate`
+5. **Review** changes with `git diff assets/`
+6. **Commit** to version control
+7. **Sync** to other environments as needed
+
+### Preventing Asset Duplication
+
+When exporting assets from multiple environments (QA and Production), you may get duplicate files for the same asset because database IDs differ between environments while UUIDs remain consistent.
+
+**Problem**: `marts__combined__users_35.yaml` (Production ID) and `marts__combined__users_127.yaml` (QA ID) are the same asset.
+
+**Solution**: Use UUID-based naming with the `dedupe` command:
+
+```bash
+# Preview what would change (recommended first step)
+ol-superset dedupe --dry-run
+
+# Deduplicate and rename all assets to UUID-based naming
+ol-superset dedupe
+
+# Process only specific asset types
+ol-superset dedupe --datasets
+ol-superset dedupe --charts --dashboards
+```
+
+**Result**: Files are renamed to use UUIDs: `marts__combined__users_5f006731-f052-4586-88f2-ad1b3c904ca9.yaml`
+
+Run this after exporting from an environment that previously imported from another environment.
 
 ## Production Safety
 
