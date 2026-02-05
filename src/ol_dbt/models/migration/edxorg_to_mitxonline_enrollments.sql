@@ -140,7 +140,7 @@ with combined_enrollments as (
 
 select
     edxorg_enrollment.user_id as user_edxorg_id
-    , coalesce(mitx__users.user_mitxonline_id, mitx_users_by_email.user_mitxonline_id) as user_mitxonline_id
+    , coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id) as user_mitxonline_id
     , edxorg_enrollment.user_email
     , mitxonline__course_runs.courserun_id
     , edxorg_enrollment.courserun_readable_id
@@ -154,7 +154,7 @@ select
 from edxorg_enrollment
 left join mitxonline_enrollment
     on
-        edxorg_enrollment.user_email = mitxonline_enrollment.user_email
+        lower(edxorg_enrollment.user_email) = lower(mitxonline_enrollment.user_email)
        and edxorg_enrollment.courserun_readable_id = mitxonline_enrollment.courserun_readable_id
 left join mitxonline__course_runs
     on edxorg_enrollment.courserun_readable_id = mitxonline__course_runs.courserun_readable_id
