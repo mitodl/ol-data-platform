@@ -34,4 +34,3 @@ select
 from navigation_events
 left join course_runs
     on navigation_events.courserun_readable_id = course_runs.courserun_readable_id
-where navigation_events.platform in ('edxorg', 'mitxonline')
