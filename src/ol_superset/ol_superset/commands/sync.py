@@ -36,6 +36,13 @@ def sync(
             name=["--dry-run", "-n"], help="Show what would be synced without syncing"
         ),
     ] = False,
+    map_only: Annotated[
+        bool,
+        Parameter(
+            name=["--map-only", "-m"],
+            help="Only map database UUIDs, don't push assets to target",
+        ),
+    ] = False,
 ) -> None:
     """
     Sync Superset assets from source to target instance.
@@ -52,6 +59,9 @@ def sync(
 
         Dry run to preview changes:
             ol-superset sync superset-production superset-qa --dry-run
+
+        Only map database UUIDs without pushing:
+            ol-superset sync superset-production superset-qa --map-only
     """
     assets_dir = get_assets_dir(assets_dir_path)
 
@@ -89,9 +99,42 @@ def sync(
         print()
         print("Would perform:")
         print("  1. Map database UUIDs")
-        print(f"  2. Push {counts['datasets']} datasets")
-        print(f"  3. Push {counts['charts']} charts")
-        print(f"  4. Push {published} published dashboards")
+        if not map_only:
+            print(f"  2. Push {counts['datasets']} datasets")
+            print(f"  3. Push {counts['charts']} charts")
+            print(f"  4. Push {published} published dashboards")
+        return
+
+    if map_only:
+        print("🔧 MAP ONLY MODE - Will only update database UUIDs in asset files")
+        print()
+        print("This will rewrite database UUIDs in your local asset files to match")
+        print(f"the target instance ({target}).")
+        print()
+
+        if not skip_confirmation:
+            confirmed = confirm_action("Proceed with database UUID mapping?")
+            if not confirmed:
+                print("Mapping cancelled.")
+                sys.exit(0)
+
+        # Step 1: Map database UUIDs
+        print()
+        print("Mapping database UUIDs...")
+        map_database_uuids(target, assets_dir)
+
+        print()
+        print("=" * 50)
+        print("Database UUID Mapping Complete!")
+        print("=" * 50)
+        print()
+        print("Next steps:")
+        print("  1. Review changes: git diff")
+        print("  2. Push assets manually:")
+        print(f"     sup dataset push assets/ --instance {target} --overwrite")
+        print(f"     sup chart push assets/ --instance {target} --overwrite")
+        print(f"     sup dashboard push assets/ --instance {target} --overwrite")
+        print()
         return
 
     print("This will overwrite existing assets in the target if they share UUIDs.")
