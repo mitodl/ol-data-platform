@@ -1,21 +1,12 @@
-table_name: marts__combined_video_engagements_w_video_counts
+table_name: video_engagement_by_user_chapter
 main_dttm_col: null
-description: null
+description: Reporting view for video engagements with pre-aggregated video count metrics
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
-schema: ol_warehouse_production_mart
-sql: "select a.user_email\n, a.chapter_title\n, a.courserun_readable_id\n, b.total_video_count\n\
-  , a.platform\n,case when \ncast(substring(courserun_start_on, 1, 10) as date) <=\
-  \ current_date\nand \n(courserun_end_on is null or \ncast(substring(courserun_end_on,\
-  \ 1, 10) as date) >= current_date)\nthen true\nelse false end as courserun_is_current\n\
-  ,a.course_readable_id\n, count(distinct a.video_title) user_watched_video_count\n\
-  , max(a.video_index) as max_video_index\nfrom ol_warehouse_production_mart.marts__combined_video_engagements\
-  \ a\njoin \n(select chapter_title, courserun_readable_id, count(distinct video_title)\
-  \ as total_video_count\nfrom ol_warehouse_production_mart.marts__combined_video_engagements\n\
-  group by 1, 2) b\non a.chapter_title=b.chapter_title and a.courserun_readable_id=b.courserun_readable_id\n\
-  where a.video_event_type = 'play_video'\ngroup by 1, 2, 3, 4, 5, 6, 7"
+schema: ol_warehouse_production_reporting
+sql: null
 params: null
 template_params: null
 filter_select_enabled: true
