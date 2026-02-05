@@ -132,7 +132,9 @@ position:
     children: []
     id: MARKDOWN-ZZBx82IJA_TfZinxj8-ac
     meta:
-      code: '### Change Log:'
+      code: '### Change Log
+        
+        **2/2/26**: Enabled search functionality on Course Run Readable ID and User Email filters'
       height: 50
       width: 6
     parents:
@@ -341,7 +343,7 @@ metadata:
       enableEmptyFilter: false
       defaultToFirstItem: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: Course Run Readable ID
     filterType: filter_select
@@ -440,7 +442,7 @@ metadata:
       enableEmptyFilter: false
       defaultToFirstItem: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: User Email
     filterType: filter_select

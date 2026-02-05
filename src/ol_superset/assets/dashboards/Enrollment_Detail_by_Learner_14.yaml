@@ -68,8 +68,9 @@ position:
     children: []
     id: MARKDOWN-49jpOJGrDnO_Ql5sw7tKg
     meta:
-      code: "### Change Log: \n1/13/26 moved course to program refrence tab to Products\
-        \ Dashboard"
+      code: "### Change Log
+        
+        **2/2/26**: Standardized filter names: 'Learner Email' → 'User Email', 'Learner name' → 'User Full Name'"
       height: 50
       width: 12
     parents:
@@ -277,7 +278,7 @@ metadata:
       multiSelect: true
       searchAllOptions: true
       inverseSelection: false
-    name: Learner Email
+    name: User Email
     filterType: filter_select
     targets:
     - column:
@@ -311,7 +312,7 @@ metadata:
       multiSelect: true
       searchAllOptions: true
       inverseSelection: false
-    name: Learner name
+    name: User Full Name
     filterType: filter_select
     targets:
     - column:

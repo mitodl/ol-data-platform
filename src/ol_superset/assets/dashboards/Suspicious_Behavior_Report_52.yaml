@@ -54,7 +54,9 @@ position:
     children: []
     id: MARKDOWN-ca_W7JJ1noAqRR1bKT3-8
     meta:
-      code: '### Change Log'
+      code: '### Change Log
+        
+        **2/2/26**: Enabled search functionality on Course Run Readable ID filter'
       height: 50
       width: 4
     parents:
@@ -273,7 +275,7 @@ metadata:
       enableEmptyFilter: false
       inverseSelection: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
     defaultDataMask:
       extraFormData: {}
       filterState: {}

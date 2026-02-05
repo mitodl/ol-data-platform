@@ -68,7 +68,9 @@ position:
     children: []
     id: MARKDOWN-_cL9OAn4ltqfv_Lbg_wwO
     meta:
-      code: '### Change Log'
+      code: '### Change Log
+        
+        **2/2/26**: Standardized filter name: ''Enrolled "Current" Course Run'' → ''Current Course Run''; Enabled search on User Email filter'
       height: 33
       width: 12
     parents:
@@ -182,7 +184,7 @@ metadata:
       multiSelect: false
       searchAllOptions: false
       inverseSelection: false
-    name: Enrolled "Current" Course Run
+    name: Current Course Run
     filterType: filter_select
     targets:
     - column:
@@ -454,7 +456,7 @@ metadata:
       defaultToFirstItem: false
       creatable: true
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: User Email
     filterType: filter_select

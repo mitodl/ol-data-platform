@@ -40,7 +40,9 @@ position:
     children: []
     id: MARKDOWN-yete-lTFvEQ3OjsUKHP-h
     meta:
-      code: '### Change Log'
+      code: '### Change Log
+        
+        **2/2/26**: Enabled search functionality on User Email and User Full Name filters'
       height: 50
       width: 12
     parents:
@@ -226,7 +228,7 @@ metadata:
       defaultToFirstItem: false
       creatable: true
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: User Email
     filterType: filter_select
@@ -251,7 +253,7 @@ metadata:
       defaultToFirstItem: false
       creatable: true
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: User Full Name
     filterType: filter_select

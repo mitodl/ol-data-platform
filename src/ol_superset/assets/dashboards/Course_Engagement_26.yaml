@@ -128,10 +128,10 @@ position:
     children: []
     id: MARKDOWN-NBlnARE3A_jrQ34WSXS-8
     meta:
-      code: '### Change Log:
-
-        6/13/2025 changed the content engagement chart from weekly aggregation to
-        daily'
+      code: '### Change Log
+        
+        **2/2/26**: Enabled search functionality on Course Run Readable ID filter
+        **6/13/2025**: changed the content engagement chart from weekly aggregation to daily'
       height: 50
       width: 4
     parents:
@@ -469,7 +469,7 @@ metadata:
       defaultToFirstItem: false
       creatable: true
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: Course Run Readable ID
     filterType: filter_select

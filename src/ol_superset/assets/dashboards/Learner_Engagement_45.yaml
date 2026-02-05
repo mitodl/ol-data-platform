@@ -330,10 +330,9 @@ position:
     children: []
     id: MARKDOWN-XawqPQL8D3MnkTWJ120IH
     meta:
-      code: '### Change Log:
-
-
-        6/2 added Data Detail tab and charts'
+      code: '### Change Log
+        
+        **2/2/26**: Standardized filter names: ''Learner Email'' → ''User Email'', ''Course Title'' → ''Course''; Enabled search on User Email and Course Run Readable ID filters'
       height: 50
       width: 6
     parents:
@@ -1080,9 +1079,9 @@ metadata:
       enableEmptyFilter: false
       defaultToFirstItem: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
-    name: Learner Email
+    name: User Email
     filterType: filter_select
     targets:
     - column:
@@ -1130,7 +1129,7 @@ metadata:
       multiSelect: true
       searchAllOptions: false
       inverseSelection: false
-    name: Course Title
+    name: Course
     filterType: filter_select
     targets:
     - column:
@@ -1170,7 +1169,7 @@ metadata:
       enableEmptyFilter: false
       defaultToFirstItem: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
       inverseSelection: false
     name: Course Run Readable ID
     filterType: filter_select
