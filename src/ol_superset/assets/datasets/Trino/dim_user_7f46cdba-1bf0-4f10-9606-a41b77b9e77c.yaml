@@ -1,6 +1,6 @@
 table_name: dim_user
 main_dttm_col: null
-description: Auto refreshed at 2026-02-02T16:22:04.289556+00:00
+description: Auto refreshed at 2026-02-05T13:51:02.908300+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
@@ -561,4 +561,4 @@ columns:
   extra:
     warning_markdown: null
 version: 1.0.0
-database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929
+database_uuid: 8702691f-d666-4dac-943b-9382c02233e3

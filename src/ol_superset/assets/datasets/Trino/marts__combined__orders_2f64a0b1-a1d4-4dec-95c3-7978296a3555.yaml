@@ -1,6 +1,6 @@
 table_name: marts__combined__orders
 main_dttm_col: null
-description: Auto refreshed at 2026-02-03T07:56:32.353233+00:00
+description: Auto refreshed at 2026-02-05T13:51:29.767789+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
@@ -629,5 +629,17 @@ columns:
   description: null
   python_date_format: null
   extra: {}
+- column_name: redeemed_email
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
 version: 1.0.0
-database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929
+database_uuid: 8702691f-d666-4dac-943b-9382c02233e3

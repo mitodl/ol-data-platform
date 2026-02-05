@@ -9,8 +9,8 @@ allow_dml: false
 allow_file_upload: false
 extra:
   allows_virtual_table_explore: true
-  allow_multi_catalog: true
-  cost_estimate_enabled: false
+  schema_options:
+    expand_rows: true
 impersonate_user: false
-uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929
+uuid: 8702691f-d666-4dac-943b-9382c02233e3
 version: 1.0.0

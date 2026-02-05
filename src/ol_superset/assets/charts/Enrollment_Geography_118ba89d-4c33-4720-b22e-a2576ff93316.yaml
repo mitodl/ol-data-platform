@@ -4,28 +4,13 @@ certified_by: null
 certification_details: null
 viz_type: world_map
 params:
-  adhoc_filters:
-  - clause: WHERE
-    comparator: No filter
-    expressionType: SIMPLE
-    operator: TEMPORAL_RANGE
-    subject: activity_date
-  color_by: metric
-  color_picker:
-    a: 1
-    b: 135
-    g: 122
-    r: 0
-  country_fieldtype: cca2
-  dashboards:
-  - 16
-  datasource: 14__table
+  datasource: 40__table
+  viz_type: world_map
+  slice_id: 31
   entity: user_country_code
-  extra_form_data: {}
-  linear_color_scheme: superset_seq_1
-  max_bubble_size: '25'
+  country_fieldtype: cca2
   metric:
-    aggregate: SUM
+    expressionType: SIMPLE
     column:
       advanced_data_type: null
       changed_on: '2024-07-25T21:48:03.649184'
@@ -44,45 +29,34 @@ params:
       type_generic: 0
       uuid: 79e79859-63da-475b-9eb6-b5a577b8faf4
       verbose_name: null
+    aggregate: SUM
+    sqlExpression: null
     datasourceWarning: false
-    expressionType: SIMPLE
     hasCustomLabel: true
     label: enrollment_count
     optionName: metric_qhdthmpen3_n09pia9r95s
-    sqlExpression: null
+  adhoc_filters:
+  - clause: WHERE
+    subject: activity_date
+    operator: TEMPORAL_RANGE
+    comparator: No filter
+    expressionType: SIMPLE
   row_limit: 10000
-  slice_id: 31
-  viz_type: world_map
+  max_bubble_size: '25'
+  color_picker:
+    a: 1
+    b: 135
+    g: 122
+    r: 0
+  color_by: metric
+  linear_color_scheme: superset_seq_1
   y_axis_format: SMART_NUMBER
-  annotation_layers: []
-query_context: '{"datasource": {"id": 14, "type": "table"}, "force": false, "queries":
-  [{"filters": [{"col": "activity_date", "op": "TEMPORAL_RANGE", "val": "No filter"}],
-  "extras": {"having": "", "where": ""}, "applied_time_extras": {}, "columns": [],
-  "metrics": [{"expressionType": "SIMPLE", "column": {"advanced_data_type": null,
-  "changed_on": "2024-07-25T21:48:03.649184", "column_name": "enrollment_count", "created_on":
-  "2024-07-25T21:48:03.649180", "description": null, "expression": null, "extra":
-  "{}", "filterable": true, "groupby": true, "id": 564, "is_active": true, "is_dttm":
-  false, "python_date_format": null, "type": "BIGINT", "type_generic": 0, "uuid":
-  "79e79859-63da-475b-9eb6-b5a577b8faf4", "verbose_name": null}, "aggregate": "SUM",
-  "sqlExpression": null, "datasourceWarning": false, "hasCustomLabel": true, "label":
-  "enrollment_count", "optionName": "metric_qhdthmpen3_n09pia9r95s"}], "annotation_layers":
-  [], "row_limit": 10000, "series_limit": 0, "order_desc": true, "url_params": {},
-  "custom_params": {}, "custom_form_data": {}}], "form_data": {"datasource": "14__table",
-  "viz_type": "world_map", "slice_id": 31, "entity": "user_country_code", "country_fieldtype":
-  "cca2", "metric": {"expressionType": "SIMPLE", "column": {"advanced_data_type":
-  null, "changed_on": "2024-07-25T21:48:03.649184", "column_name": "enrollment_count",
-  "created_on": "2024-07-25T21:48:03.649180", "description": null, "expression": null,
-  "extra": "{}", "filterable": true, "groupby": true, "id": 564, "is_active": true,
-  "is_dttm": false, "python_date_format": null, "type": "BIGINT", "type_generic":
-  0, "uuid": "79e79859-63da-475b-9eb6-b5a577b8faf4", "verbose_name": null}, "aggregate":
-  "SUM", "sqlExpression": null, "datasourceWarning": false, "hasCustomLabel": true,
-  "label": "enrollment_count", "optionName": "metric_qhdthmpen3_n09pia9r95s"}, "adhoc_filters":
-  [{"clause": "WHERE", "subject": "activity_date", "operator": "TEMPORAL_RANGE", "comparator":
-  "No filter", "expressionType": "SIMPLE"}], "row_limit": 10000, "max_bubble_size":
-  "25", "color_picker": {"a": 1, "b": 135, "g": 122, "r": 0}, "color_by": "metric",
-  "linear_color_scheme": "superset_seq_1", "y_axis_format": "SMART_NUMBER", "extra_form_data":
-  {}, "dashboards": [16], "force": false, "result_format": "json", "result_type":
-  "full"}, "result_format": "json", "result_type": "full"}'
+  extra_form_data: {}
+  dashboards:
+  - 16
+query_context: '{"datasource":{"id":40,"type":"table"},"force":false,"queries":[{"filters":[{"col":"activity_date","op":"TEMPORAL_RANGE","val":"No
+  filter"}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":[],"metrics":[{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2024-07-25T21:48:03.649184","column_name":"enrollment_count","created_on":"2024-07-25T21:48:03.649180","description":null,"expression":null,"extra":"{}","filterable":true,"groupby":true,"id":564,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"uuid":"79e79859-63da-475b-9eb6-b5a577b8faf4","verbose_name":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"enrollment_count","optionName":"metric_qhdthmpen3_n09pia9r95s"}],"annotation_layers":[],"row_limit":10000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{}}],"form_data":{"datasource":"40__table","viz_type":"world_map","slice_id":31,"entity":"user_country_code","country_fieldtype":"cca2","metric":{"expressionType":"SIMPLE","column":{"advanced_data_type":null,"changed_on":"2024-07-25T21:48:03.649184","column_name":"enrollment_count","created_on":"2024-07-25T21:48:03.649180","description":null,"expression":null,"extra":"{}","filterable":true,"groupby":true,"id":564,"is_active":true,"is_dttm":false,"python_date_format":null,"type":"BIGINT","type_generic":0,"uuid":"79e79859-63da-475b-9eb6-b5a577b8faf4","verbose_name":null},"aggregate":"SUM","sqlExpression":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"enrollment_count","optionName":"metric_qhdthmpen3_n09pia9r95s"},"adhoc_filters":[{"clause":"WHERE","subject":"activity_date","operator":"TEMPORAL_RANGE","comparator":"No
+  filter","expressionType":"SIMPLE"}],"row_limit":10000,"max_bubble_size":"25","color_picker":{"a":1,"b":135,"g":122,"r":0},"color_by":"metric","linear_color_scheme":"superset_seq_1","y_axis_format":"SMART_NUMBER","extra_form_data":{},"dashboards":[16],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
 cache_timeout: null
 uuid: 118ba89d-4c33-4720-b22e-a2576ff93316
 version: 1.0.0

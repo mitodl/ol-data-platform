@@ -1,6 +1,6 @@
 table_name: tfact_discussion_events
 main_dttm_col: event_timestamp
-description: null
+description: Auto refreshed at 2026-02-05T13:53:01.701165+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
@@ -232,4 +232,4 @@ columns:
   python_date_format: null
   extra: null
 version: 1.0.0
-database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929
+database_uuid: 8702691f-d666-4dac-943b-9382c02233e3

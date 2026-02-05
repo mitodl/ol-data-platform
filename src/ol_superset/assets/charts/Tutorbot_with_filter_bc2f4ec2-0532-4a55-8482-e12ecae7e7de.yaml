@@ -4,20 +4,12 @@ certified_by: null
 certification_details: null
 viz_type: table
 params:
-  adhoc_filters:
-  - clause: WHERE
-    comparator:
-    - course-v1:MITxT+7.28.1x+2T2025
-    - course-v1:MITxT+7.28.1x+1T2025
-    datasourceWarning: false
-    expressionType: SIMPLE
-    filterOptionName: filter_g6mu0yslf5h_vhz9j0j2j0m
-    isExtra: false
-    isNew: false
-    operator: NOT IN
-    operatorId: NOT_IN
-    sqlExpression: null
-    subject: courserun_readable_id
+  datasource: 121__table
+  viz_type: table
+  slice_id: 116
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
   all_columns:
   - tutorbotoutput_id
   - chatsession_thread_id
@@ -33,50 +25,36 @@ params:
   - user_global_id
   - chatsession_created_on
   - chatsession_updated_on
+  percent_metrics: []
+  adhoc_filters:
+  - expressionType: SIMPLE
+    subject: courserun_readable_id
+    operator: NOT IN
+    operatorId: NOT_IN
+    comparator:
+    - course-v1:MITxT+7.28.1x+2T2025
+    - course-v1:MITxT+7.28.1x+1T2025
+    clause: WHERE
+    sqlExpression: null
+    isExtra: false
+    isNew: false
+    datasourceWarning: false
+    filterOptionName: filter_g6mu0yslf5h_vhz9j0j2j0m
+  order_by_cols: []
+  order_desc: true
+  row_limit: 50000
+  server_page_length: 10
+  table_timestamp_format: smart_date
   allow_render_html: true
-  annotation_layers: []
+  show_cell_bars: true
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
-  dashboards: []
-  datasource: 37__table
   extra_form_data: {}
-  groupby: []
-  order_by_cols: []
-  order_desc: true
-  percent_metrics: []
-  query_mode: raw
-  row_limit: 50000
-  server_page_length: 10
-  show_cell_bars: true
-  slice_id: 116
-  table_timestamp_format: smart_date
-  temporal_columns_lookup: {}
-  viz_type: table
-query_context: '{"datasource": {"id": 37, "type": "table"}, "force": false, "queries":
-  [{"filters": [{"col": "courserun_readable_id", "op": "NOT IN", "val": ["course-v1:MITxT+7.28.1x+2T2025",
-  "course-v1:MITxT+7.28.1x+1T2025"]}], "extras": {"having": "", "where": ""}, "applied_time_extras":
-  {}, "columns": ["tutorbotoutput_id", "chatsession_thread_id", "tutorbot_chat_json",
-  "chatsession_agent", "chatsession_title", "courserun_readable_id", "edx_module_id",
-  "user_id", "user_email", "user_full_name", "user_username", "user_global_id", "chatsession_created_on",
-  "chatsession_updated_on"], "orderby": [], "annotation_layers": [], "row_limit":
-  50000, "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params":
-  {}, "custom_form_data": {}, "post_processing": [], "time_offsets": []}], "form_data":
-  {"datasource": "37__table", "viz_type": "table", "slice_id": 116, "query_mode":
-  "raw", "groupby": [], "temporal_columns_lookup": {}, "all_columns": ["tutorbotoutput_id",
-  "chatsession_thread_id", "tutorbot_chat_json", "chatsession_agent", "chatsession_title",
-  "courserun_readable_id", "edx_module_id", "user_id", "user_email", "user_full_name",
-  "user_username", "user_global_id", "chatsession_created_on", "chatsession_updated_on"],
-  "percent_metrics": [], "adhoc_filters": [{"expressionType": "SIMPLE", "subject":
-  "courserun_readable_id", "operator": "NOT IN", "operatorId": "NOT_IN", "comparator":
-  ["course-v1:MITxT+7.28.1x+2T2025", "course-v1:MITxT+7.28.1x+1T2025"], "clause":
-  "WHERE", "sqlExpression": null, "isExtra": false, "isNew": false, "datasourceWarning":
-  false, "filterOptionName": "filter_g6mu0yslf5h_vhz9j0j2j0m"}], "order_by_cols":
-  [], "order_desc": true, "row_limit": 50000, "server_page_length": 10, "table_timestamp_format":
-  "smart_date", "allow_render_html": true, "show_cell_bars": true, "color_pn": true,
-  "comparison_color_scheme": "Green", "comparison_type": "values", "extra_form_data":
-  {}, "dashboards": [], "force": false, "result_format": "json", "result_type": "full",
-  "include_time": false}, "result_format": "json", "result_type": "full"}'
+  dashboards: []
+query_context: '{"datasource":{"id":121,"type":"table"},"force":false,"queries":[{"filters":[{"col":"courserun_readable_id","op":"NOT
+  IN","val":["course-v1:MITxT+7.28.1x+2T2025","course-v1:MITxT+7.28.1x+1T2025"]}],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["tutorbotoutput_id","chatsession_thread_id","tutorbot_chat_json","chatsession_agent","chatsession_title","courserun_readable_id","edx_module_id","user_id","user_email","user_full_name","user_username","user_global_id","chatsession_created_on","chatsession_updated_on"],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"121__table","viz_type":"table","slice_id":116,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["tutorbotoutput_id","chatsession_thread_id","tutorbot_chat_json","chatsession_agent","chatsession_title","courserun_readable_id","edx_module_id","user_id","user_email","user_full_name","user_username","user_global_id","chatsession_created_on","chatsession_updated_on"],"percent_metrics":[],"adhoc_filters":[{"expressionType":"SIMPLE","subject":"courserun_readable_id","operator":"NOT
+  IN","operatorId":"NOT_IN","comparator":["course-v1:MITxT+7.28.1x+2T2025","course-v1:MITxT+7.28.1x+1T2025"],"clause":"WHERE","sqlExpression":null,"isExtra":false,"isNew":false,"datasourceWarning":false,"filterOptionName":"filter_g6mu0yslf5h_vhz9j0j2j0m"}],"order_by_cols":[],"order_desc":true,"row_limit":50000,"server_page_length":10,"table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","comparison_type":"values","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
 cache_timeout: null
 uuid: bc2f4ec2-0532-4a55-8482-e12ecae7e7de
 version: 1.0.0

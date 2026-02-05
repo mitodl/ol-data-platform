@@ -4,7 +4,13 @@ certified_by: null
 certification_details: null
 viz_type: table
 params:
-  adhoc_filters: []
+  datasource: 148__table
+  viz_type: table
+  slice_id: 128
+  cache_timeout: -1
+  query_mode: raw
+  groupby: []
+  temporal_columns_lookup: {}
   all_columns:
   - ai_agent
   - resource_id
@@ -13,51 +19,29 @@ params:
   - ai_message
   - created_on
   - message_index
-  allow_render_html: false
-  annotation_layers: []
-  cache_timeout: -1
-  color_pn: false
-  column_config:
-    message_index:
-      showCellBars: false
-  comparison_color_scheme: Green
-  comparison_type: values
-  conditional_formatting: []
-  dashboards:
-  - 55
-  datasource: 29__table
-  extra_form_data: {}
-  groupby: []
+  percent_metrics: []
+  adhoc_filters: []
   order_by_cols:
   - '["created_on", false]'
   - '["message_index", true]'
   order_desc: true
-  percent_metrics: []
-  query_mode: raw
   row_limit: 50000
   server_page_length: 10
-  show_cell_bars: false
-  slice_id: 128
   table_timestamp_format: smart_date
-  temporal_columns_lookup: {}
-  viz_type: table
-query_context: '{"datasource": {"id": 29, "type": "table"}, "force": false, "queries":
-  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
-  "columns": ["ai_agent", "resource_id", "thread_id", "human_message", "ai_message",
-  "created_on", "message_index"], "orderby": [["created_on", false], ["message_index",
-  true]], "annotation_layers": [], "row_limit": 50000, "series_limit": 0, "order_desc":
-  true, "url_params": {}, "custom_params": {}, "custom_form_data": {}, "post_processing":
-  [], "time_offsets": []}], "form_data": {"datasource": "29__table", "viz_type": "table",
-  "slice_id": 128, "cache_timeout": -1, "query_mode": "raw", "groupby": [], "temporal_columns_lookup":
-  {}, "all_columns": ["ai_agent", "resource_id", "thread_id", "human_message", "ai_message",
-  "created_on", "message_index"], "percent_metrics": [], "adhoc_filters": [], "order_by_cols":
-  ["[\"created_on\", false]", "[\"message_index\", true]"], "order_desc": true, "row_limit":
-  50000, "server_page_length": 10, "table_timestamp_format": "smart_date", "allow_render_html":
-  false, "column_config": {"message_index": {"showCellBars": false}}, "show_cell_bars":
-  false, "color_pn": false, "comparison_color_scheme": "Green", "conditional_formatting":
-  [], "comparison_type": "values", "extra_form_data": {}, "dashboards": [55], "force":
-  false, "result_format": "json", "result_type": "full", "include_time": false}, "result_format":
-  "json", "result_type": "full"}'
+  allow_render_html: false
+  column_config:
+    message_index:
+      showCellBars: false
+  show_cell_bars: false
+  color_pn: false
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 55
+query_context: '{"datasource":{"id":148,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["ai_agent","resource_id","thread_id","human_message","ai_message","created_on","message_index"],"orderby":[["created_on",false],["message_index",true]],"annotation_layers":[],"row_limit":50000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"148__table","viz_type":"table","slice_id":128,"cache_timeout":-1,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["ai_agent","resource_id","thread_id","human_message","ai_message","created_on","message_index"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":["[\"created_on\",
+  false]","[\"message_index\", true]"],"order_desc":true,"row_limit":50000,"server_page_length":10,"table_timestamp_format":"smart_date","allow_render_html":false,"column_config":{"message_index":{"showCellBars":false}},"show_cell_bars":false,"color_pn":false,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[55],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
 cache_timeout: -1
 uuid: 92488983-505d-4642-a76d-6d5225275577
 version: 1.0.0

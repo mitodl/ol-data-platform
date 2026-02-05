@@ -82,6 +82,7 @@ Sync assets from one instance to another with automatic database UUID mapping.
 - `--assets-dir`, `-d`: Assets directory (default: `assets/`)
 - `--yes`, `-y`: Skip confirmation prompt
 - `--dry-run`, `-n`: Preview what would be synced without syncing
+- `--map-only`, `-m`: Only map database UUIDs, don't push assets to target
 
 **Examples:**
 ```bash
@@ -93,6 +94,27 @@ ol-superset sync superset-production superset-qa --yes
 
 # Preview sync without making changes
 ol-superset sync superset-production superset-qa --dry-run
+
+# Only map database UUIDs without pushing (useful for manual review)
+ol-superset sync superset-production superset-qa --map-only
+```
+
+**Map-Only Mode:**
+
+The `--map-only` flag is useful when you want to:
+1. Update database UUIDs in your local asset files to match the target environment
+2. Review the changes before pushing
+3. Manually push specific assets instead of syncing everything
+
+```bash
+# Map UUIDs to match QA environment
+ol-superset sync superset-production superset-qa --map-only
+
+# Review changes
+git diff
+
+# Manually push specific assets
+sup dataset push assets/datasets/Trino/marts__combined__users_*.yaml --instance superset-qa
 ```
 
 ### `ol-superset promote`

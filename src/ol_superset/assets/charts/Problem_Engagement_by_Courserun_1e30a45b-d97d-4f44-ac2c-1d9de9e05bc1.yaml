@@ -4,65 +4,42 @@ certified_by: null
 certification_details: null
 viz_type: table
 params:
-  adhoc_filters: []
-  all_columns: []
-  allow_render_html: true
-  color_pn: true
-  column_config:
-    Avg_%_problems_attempted:
-      d3NumberFormat: ',.1%'
-  comparison_type: values
-  conditional_formatting: []
-  dashboards: []
-  datasource: 32__table
-  extra_form_data: {}
+  datasource: 66__table
+  viz_type: table
+  slice_id: 90
+  query_mode: aggregate
   groupby:
   - courserun_readable_id
+  time_grain_sqla: P1D
+  temporal_columns_lookup: {}
   metrics:
-  - aggregate: null
+  - expressionType: SQL
+    sqlExpression: AVG(percetage_problems_attempted)
     column: null
+    aggregate: null
     datasourceWarning: false
-    expressionType: SQL
     hasCustomLabel: true
     label: Avg_%_problems_attempted
     optionName: metric_v0x9x3vkxs_lyd8fkz8ah
-    sqlExpression: AVG(percetage_problems_attempted)
-  order_by_cols: []
-  order_desc: true
+  all_columns: []
   percent_metrics: []
-  query_mode: aggregate
+  adhoc_filters: []
+  order_by_cols: []
   row_limit: 1000
   server_page_length: 10
-  show_cell_bars: true
-  slice_id: 90
+  order_desc: true
   table_timestamp_format: smart_date
-  temporal_columns_lookup: {}
-  time_grain_sqla: P1D
-  viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 32, "type": "table"}, "force": false, "queries":
-  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
-  "columns": ["courserun_readable_id"], "metrics": [{"expressionType": "SQL", "sqlExpression":
-  "AVG(percetage_problems_attempted)", "column": null, "aggregate": null, "datasourceWarning":
-  false, "hasCustomLabel": true, "label": "Avg_%_problems_attempted", "optionName":
-  "metric_v0x9x3vkxs_lyd8fkz8ah"}], "orderby": [[{"expressionType": "SQL", "sqlExpression":
-  "AVG(percetage_problems_attempted)", "column": null, "aggregate": null, "datasourceWarning":
-  false, "hasCustomLabel": true, "label": "Avg_%_problems_attempted", "optionName":
-  "metric_v0x9x3vkxs_lyd8fkz8ah"}, false]], "annotation_layers": [], "row_limit":
-  1000, "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params":
-  {}, "custom_form_data": {}, "post_processing": [], "time_offsets": []}], "form_data":
-  {"datasource": "32__table", "viz_type": "table", "slice_id": 90, "query_mode": "aggregate",
-  "groupby": ["courserun_readable_id"], "time_grain_sqla": "P1D", "temporal_columns_lookup":
-  {}, "metrics": [{"expressionType": "SQL", "sqlExpression": "AVG(percetage_problems_attempted)",
-  "column": null, "aggregate": null, "datasourceWarning": false, "hasCustomLabel":
-  true, "label": "Avg_%_problems_attempted", "optionName": "metric_v0x9x3vkxs_lyd8fkz8ah"}],
-  "all_columns": [], "percent_metrics": [], "adhoc_filters": [], "order_by_cols":
-  [], "row_limit": 1000, "server_page_length": 10, "order_desc": true, "table_timestamp_format":
-  "smart_date", "allow_render_html": true, "column_config": {"Avg_%_problems_attempted":
-  {"d3NumberFormat": ",.1%"}}, "show_cell_bars": true, "color_pn": true, "conditional_formatting":
-  [], "comparison_type": "values", "extra_form_data": {}, "dashboards": [], "force":
-  false, "result_format": "json", "result_type": "full"}, "result_format": "json",
-  "result_type": "full"}'
+  allow_render_html: true
+  column_config:
+    Avg_%_problems_attempted:
+      d3NumberFormat: ',.1%'
+  show_cell_bars: true
+  color_pn: true
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards: []
+query_context: '{"datasource":{"id":66,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["courserun_readable_id"],"metrics":[{"expressionType":"SQL","sqlExpression":"AVG(percetage_problems_attempted)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Avg_%_problems_attempted","optionName":"metric_v0x9x3vkxs_lyd8fkz8ah"}],"orderby":[[{"expressionType":"SQL","sqlExpression":"AVG(percetage_problems_attempted)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Avg_%_problems_attempted","optionName":"metric_v0x9x3vkxs_lyd8fkz8ah"},false]],"annotation_layers":[],"row_limit":1000,"series_limit":0,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"66__table","viz_type":"table","slice_id":90,"query_mode":"aggregate","groupby":["courserun_readable_id"],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"metrics":[{"expressionType":"SQL","sqlExpression":"AVG(percetage_problems_attempted)","column":null,"aggregate":null,"datasourceWarning":false,"hasCustomLabel":true,"label":"Avg_%_problems_attempted","optionName":"metric_v0x9x3vkxs_lyd8fkz8ah"}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":1000,"server_page_length":10,"order_desc":true,"table_timestamp_format":"smart_date","allow_render_html":true,"column_config":{"Avg_%_problems_attempted":{"d3NumberFormat":",.1%"}},"show_cell_bars":true,"color_pn":true,"conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
 cache_timeout: null
 uuid: 1e30a45b-d97d-4f44-ac2c-1d9de9e05bc1
 version: 1.0.0
