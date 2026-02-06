@@ -221,6 +221,8 @@ models:
       this is the same as order_total_price_paid
   - name: order_total_price_paid
     description: number, total order amount
+  - name: order_type
+    description: str, type of order for example- B2B, B2C, staff, or Boeing
   - name: product_id
     description: int, foreign key for product table. May be null for bootcamps and
       edX.org.
