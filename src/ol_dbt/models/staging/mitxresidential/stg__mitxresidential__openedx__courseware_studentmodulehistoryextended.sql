@@ -7,13 +7,6 @@
 }}
 
 with source as (
-    select * from
-    {{
-      source('ol_warehouse_raw_data'
-      ,'raw__mitx__openedx__mysql__courseware_studentmodulehistory')
-    }}
-
-    union all
 
     select * from
     {{
@@ -24,6 +17,18 @@ with source as (
     {% if is_incremental() %}
         where created >= (select max(this.studentmodule_created_on) from {{ this }} as this)
     {% endif %}
+
+
+    {% if not is_incremental() %}
+
+        union all
+         --- ONLY run on full-refresh / first build to backfill data from the old raw table
+        select * from
+        {{
+          source('ol_warehouse_raw_data', 'raw__mitx__openedx__mysql__courseware_studentmodulehistory')
+        }}
+    {% endif %}
+
 )
 
 --- this is needed for the initial dbt run to deduplicate the data from raw table
