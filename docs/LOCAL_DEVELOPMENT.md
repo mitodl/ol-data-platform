@@ -264,6 +264,108 @@ This is idempotent - existing registrations are updated, new tables are added.
 
 **Recommendation**: Start with Tier 1 (current implementation). Only move to Tier 2 if you need offline capability or encounter performance issues.
 
+## Cleanup & Maintenance
+
+### Cleaning Up Local DuckDB Storage
+
+**Remove all local data** (preserves S3 Iceberg sources):
+```bash
+# Option 1: Delete the entire DuckDB database (fastest)
+rm ~/.ol-dbt/local.duckdb
+# Re-register sources when needed:
+./bin/setup-local-dbt.sh
+
+# Option 2: Remove specific materialized tables
+sqlite3 ~/.ol-dbt/local.duckdb "DROP TABLE IF EXISTS my_model_name"
+```
+
+**Disk space check**:
+```bash
+du -sh ~/.ol-dbt/local.duckdb
+du -sh ~/.ol-dbt/temp/
+```
+
+### Cleaning Up Trino Development Schemas
+
+If you've been using the legacy `--target dev` or `--target dev_qa` workflow with suffixed schemas, you can clean up old data:
+
+**Option 1: Using dbt run-operation (Recommended)**
+
+The `trino_utils` package (already installed) provides built-in cleanup macros:
+
+```bash
+cd src/ol_dbt
+
+# Drop all schemas matching your suffix (e.g., ol_warehouse_production_tmacey)
+uv run dbt run-operation trino__drop_schemas_by_prefixes \
+  --args "{prefixes: ['ol_warehouse_production_${DBT_SCHEMA_SUFFIX}']}" \
+  --target dev_production
+
+# Drop orphaned models no longer in project (dry run first)
+uv run dbt run-operation trino__drop_old_relations \
+  --args "{dry_run: true}" \
+  --target dev_production
+
+# Execute cleanup
+uv run dbt run-operation trino__drop_old_relations \
+  --target dev_production
+
+# Clean up multiple prefixes at once
+uv run dbt run-operation trino__drop_schemas_by_prefixes \
+  --args "{prefixes: ['ol_warehouse_production_tmacey', 'ol_warehouse_production_staging_tmacey']}" \
+  --target dev_production
+```
+
+**Option 2: Using Python cleanup script**
+
+For more detailed control and cross-target cleanup:
+
+```bash
+# Dry run (see what would be deleted)
+python bin/cleanup-dev-schemas.py --target dev_production
+
+# Execute cleanup (requires confirmation)
+python bin/cleanup-dev-schemas.py --target dev_production --execute
+
+# Clean QA schemas
+python bin/cleanup-dev-schemas.py --target dev_qa --execute
+
+# Skip confirmation (USE WITH CAUTION)
+python bin/cleanup-dev-schemas.py --target dev_production --execute --yes
+
+# Clean specific suffix
+python bin/cleanup-dev-schemas.py --target dev_production --suffix myname --execute
+```
+
+**Safety features**:
+- ✅ Only deletes schemas with suffixes (e.g., `ol_warehouse_production_yourname`)
+- ✅ Blocks deletion of base schemas (`ol_warehouse_production`, `ol_warehouse_qa`)
+- ✅ Dry-run mode by default
+- ✅ Requires explicit confirmation before deletion
+- ✅ Lists all objects before deletion
+
+**When to clean up**:
+- After switching to local DuckDB workflow (one-time cleanup)
+- Before leaving the project (good citizenship)
+- When approaching Trino storage quotas
+- Periodically (e.g., monthly) if actively using suffixed schemas
+
+### Refreshing Iceberg Sources
+
+If the production schema changes (new tables, schema migrations):
+
+```bash
+# Re-register all layers (idempotent, safe to re-run)
+uv run python bin/register-glue-sources.py register --all-layers
+
+# Or just one layer
+uv run python bin/register-glue-sources.py register \
+  --database ol_warehouse_production_staging
+
+# Check what's registered
+uv run python bin/register-glue-sources.py list
+```
+
 ## FAQs
 
 **Q: Can I still use Trino for testing?**

@@ -81,9 +81,37 @@ uv run python bin/register-glue-sources.py --database ol_warehouse_production_st
 # Check database size
 du -sh ~/.ol-dbt/local.duckdb
 
-# Clean up (re-register after)
+# Clean up local DuckDB (re-register after)
 rm -rf ~/.ol-dbt/
 ./bin/setup-local-dbt.sh
+```
+
+## Cleanup Trino Dev Schemas
+
+**Using dbt run-operation (Recommended)**:
+```bash
+cd src/ol_dbt
+
+# Drop schemas with your suffix (dry run first to preview)
+uv run dbt run-operation trino__drop_old_relations \
+  --args "{dry_run: true}" --target dev_production
+
+# Execute cleanup
+uv run dbt run-operation trino__drop_old_relations --target dev_production
+
+# Drop all schemas with prefix
+uv run dbt run-operation trino__drop_schemas_by_prefixes \
+  --args "{prefixes: ['ol_warehouse_production_myname']}" \
+  --target dev_production
+```
+
+**Using Python script** (more detailed output):
+```bash
+# Dry run
+python bin/cleanup-dev-schemas.py --target dev_production
+
+# Execute (requires confirmation)
+python bin/cleanup-dev-schemas.py --target dev_production --execute
 ```
 
 ## Getting Help
