@@ -1,7 +1,7 @@
 {% macro source(source_name, table_name) %}
   {#
     Override the default source() macro for DuckDB targets to route to Iceberg views
-    
+
     For DuckDB: References glue__ prefixed views registered by register-glue-sources.py
     For Trino: Uses the built-in source() macro behavior
   #}
@@ -15,9 +15,9 @@
       'ol_warehouse_marts': 'ol_warehouse_production_mart',
       'ol_warehouse_reporting': 'ol_warehouse_production_reporting'
     } %}
-    
+
     {% set glue_database = source_to_database_map.get(source_name, 'ol_warehouse_production_raw') %}
-    
+
     {# Return the fully qualified view name #}
     glue__{{ glue_database }}__{{ table_name }}
   {% else %}

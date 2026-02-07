@@ -15,7 +15,7 @@ end
   case
     when try_cast({{ column_name }} AS date) is not null
        then strftime(try_cast({{ column_name }} AS date), '%Y-%m-%d')
-    
+
     else strftime(strptime(try_cast({{ column_name }} AS varchar), '%Y-%m-%d'), '%Y-%m-%d')
 end
 {% endmacro %}

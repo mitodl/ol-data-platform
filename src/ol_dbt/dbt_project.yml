@@ -11,7 +11,7 @@ profile: 'open_learning'
 
 # Load AWS credentials for DuckDB Iceberg access
 on-run-start:
-  - "{{ duckdb_init() }}"
+- "{{ duckdb_init() }}"
 
 # These configurations specify where dbt should look for different types of files.
 # The `model-paths` config, for example, states that models in this project can be

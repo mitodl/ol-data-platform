@@ -52,9 +52,9 @@ open_learning:
       threads: 4
       use_credential_provider: aws
       extensions:
-        - httpfs
-        - aws
-        - iceberg
+      - httpfs
+      - aws
+      - iceberg
       settings:
         memory_limit: '8GB'
         temp_directory: '{{ env_var("HOME") }}/.ol-dbt/temp'
@@ -64,9 +64,9 @@ open_learning:
       path: ':memory:'
       threads: 4
       extensions:
-        - httpfs
-        - aws
-        - iceberg
+      - httpfs
+      - aws
+      - iceberg
       settings:
         memory_limit: '8GB'
         temp_directory: '{{ env_var("HOME") }}/.ol-dbt/temp'
