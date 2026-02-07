@@ -45,3 +45,32 @@ open_learning:
     dev:
       type: duckdb
       path: dev_dbs/dev.duckdb
+    dev_local:
+      type: duckdb
+      path: '{{ env_var("HOME") }}/.ol-dbt/local.duckdb'
+      schema: main
+      threads: 4
+      use_credential_provider: aws
+      extensions:
+        - httpfs
+        - aws
+        - iceberg
+      settings:
+        memory_limit: '8GB'
+        temp_directory: '{{ env_var("HOME") }}/.ol-dbt/temp'
+        enable_http_metadata_cache: true
+    dev_local_iceberg:
+      type: duckdb
+      path: ':memory:'
+      threads: 4
+      extensions:
+        - httpfs
+        - aws
+        - iceberg
+      settings:
+        memory_limit: '8GB'
+        temp_directory: '{{ env_var("HOME") }}/.ol-dbt/temp'
+        enable_http_metadata_cache: true
+        s3_region: '{{ env_var("AWS_DEFAULT_REGION", "us-east-1") }}'
+        s3_access_key_id: '{{ env_var("AWS_ACCESS_KEY_ID", "") }}'
+        s3_secret_access_key: '{{ env_var("AWS_SECRET_ACCESS_KEY", "") }}'
