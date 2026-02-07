@@ -497,11 +497,11 @@ wheels = [
 
 [[package]]
 name = "marshmallow"
-version = "4.2.1"
+version = "4.2.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d8/61/9540e1b120e9eff74b24def6060b79347f2b4083dddbd5a435f6e8d74b14/marshmallow-4.2.1.tar.gz", hash = "sha256:4d1d66189c8d279ca73a6b0599d74117e5f8a3830b5cd766b75c2bb08e3464e7", size = 221309, upload-time = "2026-01-23T13:00:24.841Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/03/261af5efb3d3ce0e2db3fd1e11dc5a96b74a4fb76e488da1c845a8f12345/marshmallow-4.2.2.tar.gz", hash = "sha256:ba40340683a2d1c15103647994ff2f6bc2c8c80da01904cbe5d96ee4baa78d9f", size = 221404, upload-time = "2026-02-04T15:47:03.401Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/41/e8cfdebc3a475c397e074ceaa12e86dca1b23e8e10c2ab4d4875f9a01418/marshmallow-4.2.1-py3-none-any.whl", hash = "sha256:d82b1a83cfbb4667d050850fbed4e9d4435576cb95f5ff37894f375dce201768", size = 48451, upload-time = "2026-01-23T13:00:23.009Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/70/bb89f807a6a6704bdc4d6f850d5d32954f6c1965e3248e31455defdf2f30/marshmallow-4.2.2-py3-none-any.whl", hash = "sha256:084a9466111b7ec7183ca3a65aed758739af919fedc5ebdab60fb39d6b4dc121", size = 48454, upload-time = "2026-02-04T15:47:02.013Z" },
 ]
 
 [[package]]
@@ -1055,11 +1055,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/ce/af/20290b55d469e873c
 
 [[package]]
 name = "sqlglot"
-version = "28.9.0"
+version = "28.10.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/36/72/cc50543a479a65f4ec24bef0e71529254686a1334c57cb1daebadfc29672/sqlglot-28.9.0.tar.gz", hash = "sha256:5648eaa2d038b5a0bc345f223f375315cfc6a27b2852d4eeaa1b8aaaabccdd2c", size = 5736988, upload-time = "2026-02-02T16:04:45.794Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/7d/1479ac3543caada917c3781893d3f846c810aec6355eb7b2f58df68f999b/sqlglot-28.10.0.tar.gz", hash = "sha256:f3d4759164ad854176980b3a47eb0c7ef699118dfa80beeb93e010885637b211", size = 5739594, upload-time = "2026-02-04T14:22:18.26Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f6/21/ee7d2798ff1f59cd5ca53063a728022da53552cbc0c63d05e120e9c9b794/sqlglot-28.9.0-py3-none-any.whl", hash = "sha256:044fbe85fd2dc0a9d8ea4adb2beefa7ff26fa2320849b08f5c5f3859d7973260", size = 595704, upload-time = "2026-02-02T16:04:43.531Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/34/c5de8f3c110bd066ebfa31b2d948dd33b691c7ccea39065e37f97f3f30a1/sqlglot-28.10.0-py3-none-any.whl", hash = "sha256:d442473bfd2340776dfc88382de3df456b9c5b66974623e554c6ad6426ba365e", size = 597042, upload-time = "2026-02-04T14:22:16.534Z" },
 ]
 
 [[package]]
@@ -1170,11 +1170,11 @@ wheels = [
 
 [[package]]
 name = "wcwidth"
-version = "0.5.3"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/c2/62/a7c072fbfefb2980a00f99ca994279cb9ecf310cb2e6b2a4d2a28fe192b3/wcwidth-0.5.3.tar.gz", hash = "sha256:53123b7af053c74e9fe2e92ac810301f6139e64379031f7124574212fb3b4091", size = 157587, upload-time = "2026-01-31T03:52:10.92Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/35/a2/8e3becb46433538a38726c948d3399905a4c7cabd0df578ede5dc51f0ec2/wcwidth-0.6.0.tar.gz", hash = "sha256:cdc4e4262d6ef9a1a57e018384cbeb1208d8abbc64176027e2c2455c81313159", size = 159684, upload-time = "2026-02-06T19:19:40.919Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/c1/d73f12f8cdb1891334a2ccf7389eed244d3941e74d80dd220badb937f3fb/wcwidth-0.5.3-py3-none-any.whl", hash = "sha256:d584eff31cd4753e1e5ff6c12e1edfdb324c995713f75d26c29807bb84bf649e", size = 92981, upload-time = "2026-01-31T03:52:09.14Z" },
+    { url = "https://files.pythonhosted.org/packages/68/5a/199c59e0a824a3db2b89c5d2dade7ab5f9624dbf6448dc291b46d5ec94d3/wcwidth-0.6.0-py3-none-any.whl", hash = "sha256:1a3a1e510b553315f8e146c54764f4fb6264ffad731b3d78088cdb1478ffbdad", size = 94189, upload-time = "2026-02-06T19:19:39.646Z" },
 ]
 
 [[package]]
