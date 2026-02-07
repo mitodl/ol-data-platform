@@ -170,8 +170,8 @@ If you encounter a compatibility issue:
 ## Troubleshooting
 
 ### "HTTP 403 - Authentication Failure"
-**Cause**: AWS credentials not loaded  
-**Fix**: 
+**Cause**: AWS credentials not loaded
+**Fix**:
 ```bash
 # Verify AWS credentials
 aws sts get-caller-identity
@@ -181,7 +181,7 @@ aws sts get-caller-identity
 ```
 
 ### "Catalog Error: View/table does not exist"
-**Cause**: Iceberg tables not registered  
+**Cause**: Iceberg tables not registered
 **Fix**:
 ```bash
 # Register missing layer
@@ -189,15 +189,15 @@ uv run python bin/register-glue-sources.py --database ol_warehouse_production_st
 ```
 
 ### "Function does not exist" (e.g., `to_iso8601`)
-**Cause**: Missing DuckDB compatibility macro  
+**Cause**: Missing DuckDB compatibility macro
 **Fix**: Add macro with adapter dispatch (see `macros/cast_timestamp_to_iso8601.sql` for template)
 
 ### Slow performance on first run
-**Cause**: S3 metadata cache warming up  
+**Cause**: S3 metadata cache warming up
 **Expected**: First query ~10-30s, subsequent queries faster due to DuckDB caching
 
 ### "Out of memory" errors
-**Cause**: DuckDB memory limit (default 8GB)  
+**Cause**: DuckDB memory limit (default 8GB)
 **Fix**: Increase in `profiles.yml`:
 ```yaml
 settings:
@@ -266,22 +266,22 @@ This is idempotent - existing registrations are updated, new tables are added.
 
 ## FAQs
 
-**Q: Can I still use Trino for testing?**  
+**Q: Can I still use Trino for testing?**
 A: Yes! Use `--target dev` for the legacy workflow. Both are supported.
 
-**Q: What if I need to test with production-scale data?**  
+**Q: What if I need to test with production-scale data?**
 A: Use CI/CD with `--target production` or create a PR for preview environment.
 
-**Q: Does this work on macOS?**  
+**Q: Does this work on macOS?**
 A: Yes, DuckDB works on macOS, Linux, and Windows.
 
-**Q: How much RAM do I need?**  
+**Q: How much RAM do I need?**
 A: 16 GB recommended, 8 GB minimum. DuckDB is configured for 8 GB memory limit.
 
-**Q: What if a model fails with a DuckDB error?**  
+**Q: What if a model fails with a DuckDB error?**
 A: Check SQL compatibility. Add an adapter dispatch macro if needed. Fallback to `--target dev` if urgent.
 
-**Q: Can I use this in CI/CD?**  
+**Q: Can I use this in CI/CD?**
 A: Yes! You could use dev_local target for PR preview builds to save costs.
 
 ## Resources
