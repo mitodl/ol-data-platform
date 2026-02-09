@@ -49,7 +49,7 @@ repos:
     - src/ol_dbt/package-lock.yml
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: 'v0.14.14'
+  rev: 'v0.15.0'
   hooks:
   - id: ruff-format
   - id: ruff-check
@@ -70,7 +70,7 @@ repos:
     - types-pymysql
     - types-requests
 - repo: https://github.com/sqlfluff/sqlfluff
-  rev: 4.0.0
+  rev: 4.0.4
   hooks:
   - id: sqlfluff-fix
       # Arbitrary arguments to show an example

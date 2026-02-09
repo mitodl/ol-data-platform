@@ -18,6 +18,11 @@
       "matchPackageNames": [
         "dagster{/,}**"
       ]
+    },
+    {
+      "matchDatasources": ["python"],
+      "automerge": false,
+      "description": "Python version constraints require manual review due to dbt Mashumaro compatibility with Python 3.14"
     }
   ]
 }
