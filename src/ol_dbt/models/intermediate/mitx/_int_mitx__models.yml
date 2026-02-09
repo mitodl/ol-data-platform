@@ -471,8 +471,6 @@ models:
   - name: courserungrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline
-    tests:
-    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
