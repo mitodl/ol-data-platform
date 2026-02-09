@@ -2,8 +2,8 @@ dashboard_title: Suspicious Behavior Report
 description: null
 css: ''
 slug: null
-certified_by: null
-certification_details: null
+certified_by: ''
+certification_details: ''
 published: true
 uuid: 1e2883d9-d122-4af6-aa33-43a0f0ac2c3b
 position:
@@ -11,7 +11,7 @@ position:
     children: []
     id: CHART-avtPI5HqRH14QhZG4T9H6
     meta:
-      chartId: 124
+      chartId: 125
       height: 76
       sliceName: Suspicious Behavior Report
       uuid: 3acf6da0-1add-486f-9e70-884a1bb306f9
@@ -27,7 +27,7 @@ position:
     children: []
     id: CHART-explore-150-1
     meta:
-      chartId: 150
+      chartId: 225
       height: 94
       sliceName: Student Level Course Grades
       uuid: 1a78ac33-5081-4fb7-9593-89b1aed6daad
@@ -35,7 +35,9 @@ position:
     parents:
     - ROOT_ID
     - GRID_ID
-    - ROW-XTWquXFixByiYTirYL_Z4
+    - TABS-lUkDlANRnqkwJU2wmp6eg
+    - TAB-ucYCSKy00-BM9ShbwB7Yl
+    - ROW-5YkndqYNyvukrwSbKdi8o
     type: CHART
   DASHBOARD_VERSION_KEY: v2
   GRID_ID:
@@ -55,7 +57,7 @@ position:
     id: MARKDOWN-ca_W7JJ1noAqRR1bKT3-8
     meta:
       code: '### Change Log
-        
+
         **2/2/26**: Enabled search functionality on Course Run Readable ID filter'
       height: 50
       width: 4
@@ -163,8 +165,8 @@ position:
     type: TAB
   TABS-lUkDlANRnqkwJU2wmp6eg:
     children:
-    - TAB-fqinMmgScO5lzSdsEBgV2
     - TAB-ucYCSKy00-BM9ShbwB7Yl
+    - TAB-fqinMmgScO5lzSdsEBgV2
     - TAB-Er1foaK2n78kBYKHUaf80
     id: TABS-lUkDlANRnqkwJU2wmp6eg
     meta: {}
@@ -173,36 +175,38 @@ position:
     - GRID_ID
     type: TABS
 metadata:
-  label_colors: {}
   chart_configuration:
-    '124':
-      id: 124
+    '125':
       crossFilters:
-        scope: global
         chartsInScope:
-        - 150
-    '150':
-      id: 150
+        - 225
+        scope: global
+      id: 125
+    '225':
       crossFilters:
-        scope: global
         chartsInScope:
-        - 124
+        - 125
+        scope: global
+      id: 225
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
   global_chart_configuration:
     scope:
+      excluded: []
       rootPath:
       - ROOT_ID
-      excluded: []
     chartsInScope:
-    - 124
-    - 150
-  color_scheme: ''
-  refresh_frequency: 0
-  expanded_slices: {}
-  timed_refresh_immune_slices: []
-  cross_filters_enabled: true
-  default_filters: '{}'
+    - 125
+    - 225
+  label_colors: {}
+  map_label_colors: {}
   native_filter_configuration:
   - cascadeParentIds: []
+    chartsInScope:
+    - 124
+    - 125
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -222,49 +226,46 @@ metadata:
       rootPath:
       - TAB-fqinMmgScO5lzSdsEBgV2
       - TAB-ucYCSKy00-BM9ShbwB7Yl
+    tabsInScope:
+    - TAB-fqinMmgScO5lzSdsEBgV2
+    - TAB-ucYCSKy00-BM9ShbwB7Yl
     targets:
     - column:
         name: platform
       datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
     type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
     chartsInScope:
     - 124
     - 125
-    tabsInScope:
-    - TAB-fqinMmgScO5lzSdsEBgV2
-    - TAB-ucYCSKy00-BM9ShbwB7Yl
-  - id: NATIVE_FILTER-W94SYs9sUYuVI_BFVxJOs
     controlValues:
-      enableEmptyFilter: false
       defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
       multiSelect: true
       searchAllOptions: false
-      inverseSelection: false
-    name: Openedx User ID
-    filterType: filter_select
-    targets:
-    - column:
-        name: openedx_user_id
-      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
     defaultDataMask:
       extraFormData: {}
       filterState: {}
       ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-W94SYs9sUYuVI_BFVxJOs
+    name: Openedx User ID
     scope:
+      excluded: []
       rootPath:
       - TAB-fqinMmgScO5lzSdsEBgV2
       - TAB-ucYCSKy00-BM9ShbwB7Yl
-      excluded: []
-    type: NATIVE_FILTER
-    description: ''
-    chartsInScope:
-    - 124
-    - 125
     tabsInScope:
     - TAB-fqinMmgScO5lzSdsEBgV2
     - TAB-ucYCSKy00-BM9ShbwB7Yl
+    targets:
+    - column:
+        name: openedx_user_id
+      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+    type: NATIVE_FILTER
   - cascadeParentIds:
     - NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
     - NATIVE_FILTER-W94SYs9sUYuVI_BFVxJOs
@@ -355,44 +356,45 @@ metadata:
         name: unit_name
       datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
     type: NATIVE_FILTER
-  - id: NATIVE_FILTER-j3SktlYu7w7e_iEmwfnCm
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    name: Exam Indicator
-    filterType: filter_select
-    targets:
-    - column:
-        name: exam_indicator
-      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
+  - cascadeParentIds:
     - NATIVE_FILTER-_WSW136OzR1nHkkPDrRrb
     - NATIVE_FILTER-2WpcmAAMhEjGrjhMh2xBi
     - NATIVE_FILTER-T6v7PTm8LwBaP5Zwehdja
     - NATIVE_FILTER-PflPeMlah9eX0yLJyNTIQ
     - NATIVE_FILTER-W94SYs9sUYuVI_BFVxJOs
-    scope:
-      rootPath:
-      - TAB-fqinMmgScO5lzSdsEBgV2
-      - TAB-ucYCSKy00-BM9ShbwB7Yl
-      excluded: []
-    type: NATIVE_FILTER
-    description: ''
     chartsInScope:
     - 124
     - 125
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-j3SktlYu7w7e_iEmwfnCm
+    name: Exam Indicator
+    scope:
+      excluded: []
+      rootPath:
+      - TAB-fqinMmgScO5lzSdsEBgV2
+      - TAB-ucYCSKy00-BM9ShbwB7Yl
     tabsInScope:
     - TAB-fqinMmgScO5lzSdsEBgV2
     - TAB-ucYCSKy00-BM9ShbwB7Yl
+    targets:
+    - column:
+        name: exam_indicator
+      datasetUuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+    type: NATIVE_FILTER
+  refresh_frequency: 0
   shared_label_colors: []
-  map_label_colors: {}
-  color_scheme_domain: []
+  timed_refresh_immune_slices: []
+  default_filters: '{}'
 theme_uuid: null
 version: 1.0.0
