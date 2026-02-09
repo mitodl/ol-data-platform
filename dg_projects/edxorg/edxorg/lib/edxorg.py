@@ -51,7 +51,7 @@ def parse_archive_path(archive_path: str) -> dict[str, str]:
     regexes = "".join(pattern_pieces)
     components = re.fullmatch(
         regexes,
-        archive_path.rsplit("/", maxsplit=1)[-1],
+        archive_path.split("/")[-1],
     )
     if components:
         asset_info = components.groupdict()
