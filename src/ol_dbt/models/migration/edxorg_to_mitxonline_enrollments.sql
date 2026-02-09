@@ -2,6 +2,17 @@ with combined_enrollments as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
+, edxorg_grade as (
+    select
+          {{ format_course_id('courseruncertificate_courserun_readable_id', false) }} as courserun_readable_id
+         , user_id
+         , courseruncertificate_grade
+    from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
+    where
+        courserun_platform = '{{ var("edxorg") }}'
+        and courseruncertificate_grade is not null
+)
+
 , edxorg_runs as (
     select * from {{ ref('int__edxorg__mitx_courseruns') }}
 )
@@ -145,13 +156,19 @@ select
     , mitxonline__course_runs.courserun_id
     , edxorg_enrollment.courserun_readable_id
     , edxorg_enrollment.courserunenrollment_enrollment_mode
-    , edxorg_enrollment.courserungrade_grade
+    , coalesce(
+        edxorg_enrollment.courserungrade_grade,
+        edxorg_grade.courseruncertificate_grade
+     ) as courserungrade_grade
     , edxorg_enrollment.courserungrade_is_passing
     , edxorg_enrollment.courserunenrollment_created_on
     , edxorg_enrollment.courseruncertificate_created_on
     , edx_to_mitxonline_certificate_revision.wagtailcore_revision_id as certificate_page_revision_id
     , edx_signatories.signatory_names
 from edxorg_enrollment
+left join edxorg_grade
+    on edxorg_enrollment.user_id = cast(edxorg_grade.user_id as varchar)
+    and edxorg_enrollment.courserun_readable_id = edxorg_grade.courserun_readable_id
 left join mitxonline_enrollment
     on
         lower(edxorg_enrollment.user_email) = lower(mitxonline_enrollment.user_email)
