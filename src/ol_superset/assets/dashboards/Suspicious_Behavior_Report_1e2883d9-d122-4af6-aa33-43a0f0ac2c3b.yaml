@@ -56,7 +56,8 @@ position:
     meta:
       code: '### Change Log
         
-        **2/2/26**: Enabled search functionality on Course Run Readable ID filter'
+        **2/2/26**: Enabled search functionality on Course Run Readable ID filter
+        **2/9/26**: Changed the order of the tabs moved student tab first and problem tab second'
       height: 50
       width: 4
     parents:
@@ -163,8 +164,8 @@ position:
     type: TAB
   TABS-lUkDlANRnqkwJU2wmp6eg:
     children:
-    - TAB-fqinMmgScO5lzSdsEBgV2
     - TAB-ucYCSKy00-BM9ShbwB7Yl
+    - TAB-fqinMmgScO5lzSdsEBgV2
     - TAB-Er1foaK2n78kBYKHUaf80
     id: TABS-lUkDlANRnqkwJU2wmp6eg
     meta: {}
