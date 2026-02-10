@@ -60,18 +60,25 @@ This guide describes the improved local development workflow that eliminates clo
 ### Setup (One-Time, ~15 minutes)
 
 ```bash
-# Run the setup script
+# Run the setup command
 cd /path/to/ol-data-platform
-./bin/setup-local-dbt.sh
+python bin/dbt-local-dev.py setup --layers all
 ```
 
-The script will:
+The setup command will:
 1. ✅ Check prerequisites (AWS creds, uv, permissions)
 2. ✅ Create `~/.ol-dbt/` directory
 3. ✅ Initialize DuckDB with extensions (httpfs, aws, iceberg)
 4. ✅ Install dbt dependencies
-5. ✅ Register Iceberg tables from AWS Glue (choose layers)
+5. ✅ Register Iceberg tables from AWS Glue
 6. ✅ Run test to verify everything works
+
+Options:
+- `--layers all` - Register all dbt layers (recommended)
+- `--layers raw` - Register only raw layer (faster initial setup)
+- `--layers staging` - Register only staging layer
+- `--recreate` - Recreate DuckDB database if it exists
+- `--skip-tests` - Skip testing after setup
 
 ### Daily Usage
 
@@ -177,7 +184,7 @@ If you encounter a compatibility issue:
 aws sts get-caller-identity
 
 # Re-run setup
-./bin/setup-local-dbt.sh
+python bin/dbt-local-dev.py setup --layers all
 ```
 
 ### "Catalog Error: View/table does not exist"
@@ -185,7 +192,7 @@ aws sts get-caller-identity
 **Fix**:
 ```bash
 # Register missing layer
-uv run python bin/register-glue-sources.py --database ol_warehouse_production_staging
+python bin/dbt-local-dev.py register --database ol_warehouse_production_staging
 ```
 
 ### "Function does not exist" (e.g., `to_iso8601`)
@@ -210,10 +217,10 @@ If Iceberg tables change (new tables added, schemas updated):
 
 ```bash
 # Re-register a specific layer
-uv run python bin/register-glue-sources.py --database ol_warehouse_production_raw
+python bin/dbt-local-dev.py register --database ol_warehouse_production_raw
 
 # Re-register all layers
-uv run python bin/register-glue-sources.py --all-layers
+python bin/dbt-local-dev.py register --all-layers
 ```
 
 This is idempotent - existing registrations are updated, new tables are added.
@@ -273,7 +280,7 @@ This is idempotent - existing registrations are updated, new tables are added.
 # Option 1: Delete the entire DuckDB database (fastest)
 rm ~/.ol-dbt/local.duckdb
 # Re-register sources when needed:
-./bin/setup-local-dbt.sh
+python bin/dbt-local-dev.py setup --layers all
 
 # Option 2: Remove specific materialized tables
 sqlite3 ~/.ol-dbt/local.duckdb "DROP TABLE IF EXISTS my_model_name"
@@ -322,19 +329,19 @@ For more detailed control and cross-target cleanup:
 
 ```bash
 # Dry run (see what would be deleted)
-python bin/cleanup-dev-schemas.py --target dev_production
+python bin/dbt-local-dev.py cleanup --target dev_production
 
 # Execute cleanup (requires confirmation)
-python bin/cleanup-dev-schemas.py --target dev_production --execute
+python bin/dbt-local-dev.py cleanup --target dev_production --execute
 
 # Clean QA schemas
-python bin/cleanup-dev-schemas.py --target dev_qa --execute
+python bin/dbt-local-dev.py cleanup --target dev_qa --execute
 
 # Skip confirmation (USE WITH CAUTION)
-python bin/cleanup-dev-schemas.py --target dev_production --execute --yes
+python bin/dbt-local-dev.py cleanup --target dev_production --execute --yes
 
 # Clean specific suffix
-python bin/cleanup-dev-schemas.py --target dev_production --suffix myname --execute
+python bin/dbt-local-dev.py cleanup --target dev_production --suffix myname --execute
 ```
 
 **Safety features**:
@@ -356,14 +363,14 @@ If the production schema changes (new tables, schema migrations):
 
 ```bash
 # Re-register all layers (idempotent, safe to re-run)
-uv run python bin/register-glue-sources.py register --all-layers
+python bin/dbt-local-dev.py register --all-layers
 
 # Or just one layer
-uv run python bin/register-glue-sources.py register \
+python bin/dbt-local-dev.py register \
   --database ol_warehouse_production_staging
 
 # Check what's registered
-uv run python bin/register-glue-sources.py list
+python bin/dbt-local-dev.py list-sources
 ```
 
 ## FAQs

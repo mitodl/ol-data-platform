@@ -3,8 +3,8 @@
 ## One-Time Setup (15 minutes)
 
 ```bash
-./bin/setup-local-dbt.sh
-# Follow prompts to register Iceberg sources
+python bin/dbt-local-dev.py setup --layers all
+# Automatically checks prerequisites and registers Iceberg sources
 ```
 
 ## Daily Commands
@@ -57,13 +57,13 @@ cat target/compiled/open_learning/models/path/to/my_model.sql
 ### AWS credential errors
 ```bash
 aws sts get-caller-identity  # Verify credentials
-./bin/setup-local-dbt.sh     # Re-run setup
+python bin/dbt-local-dev.py setup --layers all  # Re-run setup
 ```
 
 ### Missing tables
 ```bash
 # Register missing layer
-uv run python bin/register-glue-sources.py --database ol_warehouse_production_staging
+python bin/dbt-local-dev.py register --database ol_warehouse_production_staging
 ```
 
 ### Function not found errors
@@ -83,7 +83,7 @@ du -sh ~/.ol-dbt/local.duckdb
 
 # Clean up local DuckDB (re-register after)
 rm -rf ~/.ol-dbt/
-./bin/setup-local-dbt.sh
+python bin/dbt-local-dev.py setup --layers all
 ```
 
 ## Cleanup Trino Dev Schemas
@@ -105,13 +105,13 @@ uv run dbt run-operation trino__drop_schemas_by_prefixes \
   --target dev_production
 ```
 
-**Using Python script** (more detailed output):
+**Using Python CLI** (more detailed output):
 ```bash
 # Dry run
-python bin/cleanup-dev-schemas.py --target dev_production
+python bin/dbt-local-dev.py cleanup --target dev_production
 
 # Execute (requires confirmation)
-python bin/cleanup-dev-schemas.py --target dev_production --execute
+python bin/dbt-local-dev.py cleanup --target dev_production --execute
 ```
 
 ## Getting Help
