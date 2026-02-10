@@ -153,7 +153,7 @@ def video_short_metadata(
 
     # Save full metadata as JSON (includes all fields from Google Sheets)
     video_ext = Path(video_data["file_name"]).suffix.lstrip(".")
-    path_prefix = os.environ.get("LEARN_SHORTS_PREFIX", "shorts").rstrip("/")
+    path_prefix = os.environ.get("LEARN_SHORTS_PREFIX", "media/shorts").rstrip("/")
     processed_metadata = {
         "video_id": video_id,
         "pub_date": video_data["pub_date_str"],
@@ -261,7 +261,7 @@ def video_short_content(
             msg = f"Failed to download video: {video_id}"
             raise RuntimeError(msg)
 
-        # Full S3 path: shorts/{video_id}/{video_id}.{mp4}
+        # Full S3 path: S3_PREFIX/{video_id}/{video_id}.{mp4}
         video_s3_path = f"{video_id}/{video_id}.{video_ext}"
         context.log.info("Video downloaded: %s -> %s", video_file, video_s3_path)
 

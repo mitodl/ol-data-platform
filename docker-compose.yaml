@@ -329,6 +329,7 @@ services:
 
   postgres:
     image: postgres
+    command: ["postgres", "-c", "max_connections=300"]
     healthcheck:
       test: ["CMD", "pg_isready"]
       interval: 3s
