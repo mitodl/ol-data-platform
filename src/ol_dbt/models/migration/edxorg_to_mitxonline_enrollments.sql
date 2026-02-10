@@ -77,7 +77,7 @@ with combined_enrollments as (
         , array_sort(
             transform(
                 cast(
-                 json_parse(json_query(wagtailcore_revision_content, 'lax $.signatories' omit quotes)) as array(json)
+                 json_parse({{ json_query_string('wagtailcore_revision_content', "'$.signatories'") }}) as array(json)
                 )
                 , x ->  CAST(json_extract_scalar(x, '$.value') as integer)
             )

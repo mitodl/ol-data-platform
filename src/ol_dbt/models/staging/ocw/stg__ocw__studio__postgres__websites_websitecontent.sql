@@ -21,10 +21,10 @@ with source as (
         , updated_by_id as websitecontent_updated_by_user_id
         , metadata as websitecontent_metadata
         -- extract website metadata from sitemetadata for courses
-        , json_query(metadata, 'lax $.course_description' omit quotes) as course_description
-        , nullif(json_query(metadata, 'lax $.course_title' omit quotes), '') as course_title
-        , nullif(json_query(metadata, 'lax $.term' omit quotes), '') as course_term
-        , nullif(json_query(metadata, 'lax $.year' omit quotes), '') as course_year
+        , {{ json_query_string('metadata', "'$.course_description'") }} as course_description
+        , nullif({{ json_query_string('metadata', "'$.course_title'") }}, '') as course_title
+        , nullif({{ json_query_string('metadata', "'$.term'") }}, '') as course_term
+        , nullif({{ json_query_string('metadata', "'$.year'") }}, '') as course_year
         -- convert to comma-separated list to be consistent with extra_course_numbers
         , array_join(
             cast(json_parse(json_query(metadata, 'lax $.level')) as array (varchar)), ', ' --noqa
@@ -42,8 +42,8 @@ with source as (
         , array_join(
             cast(json_parse(json_query(metadata, 'lax $.department_numbers')) as array (varchar)), ', ' --noqa
         ) as course_department_numbers
-        , nullif(json_query(metadata, 'lax $.primary_course_number' omit quotes), '') as course_primary_course_number
-        , json_query(metadata, 'lax $.extra_course_numbers' omit quotes) as course_extra_course_numbers
+        , nullif({{ json_query_string('metadata', "'$.primary_course_number'") }}, '') as course_primary_course_number
+        , {{ json_query_string('metadata', "'$.extra_course_numbers'") }} as course_extra_course_numbers
         , json_query(metadata, 'lax $.instructors.content') as course_instructor_uuids
         , json_query(metadata, 'lax $.topics') as course_topics
         , json_query(metadata, 'lax $.department_numbers') as course_department_numbers_json
@@ -51,16 +51,16 @@ with source as (
         , {{ cast_timestamp_to_iso8601('created_on') }} as websitecontent_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as websitecontent_updated_on
         -- miscellaneous metadata
-        , json_query(metadata, 'lax $.body' omit quotes) as metadata_body
-        , json_query(metadata, 'lax $.description' omit quotes) as metadata_description
-        , cast(nullif(json_query(metadata, 'lax $.draft' omit quotes), '') as boolean) as metadata_draft
-        , json_query(metadata, 'lax $.file' omit quotes) as metadata_file
-        , json_query(metadata, 'lax $.file_size' omit quotes) as metadata_file_size
-        , json_query(metadata, 'lax $.license' omit quotes) as metadata_license
-        , json_query(metadata, 'lax $.ocw_type' omit quotes) as metadata_legacy_type
-        , json_query(metadata, 'lax $.resourcetype' omit quotes) as metadata_resource_type
-        , json_query(metadata, 'lax $.title' omit quotes) as metadata_title
-        , json_query(metadata, 'lax $.uid' omit quotes) as metadata_uid
+        , {{ json_query_string('metadata', "'$.body'") }} as metadata_body
+        , {{ json_query_string('metadata', "'$.description'") }} as metadata_description
+        , cast(nullif({{ json_query_string('metadata', "'$.draft'") }}, '') as boolean) as metadata_draft
+        , {{ json_query_string('metadata', "'$.file'") }} as metadata_file
+        , {{ json_query_string('metadata', "'$.file_size'") }} as metadata_file_size
+        , {{ json_query_string('metadata', "'$.license'") }} as metadata_license
+        , {{ json_query_string('metadata', "'$.ocw_type'") }} as metadata_legacy_type
+        , {{ json_query_string('metadata', "'$.resourcetype'") }} as metadata_resource_type
+        , {{ json_query_string('metadata', "'$.title'") }} as metadata_title
+        , {{ json_query_string('metadata', "'$.uid'") }} as metadata_uid
 
     from source
 

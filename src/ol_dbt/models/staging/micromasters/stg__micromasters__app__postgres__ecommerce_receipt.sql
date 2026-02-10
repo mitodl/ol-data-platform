@@ -8,28 +8,28 @@ with source as (
     select
         id as receipt_id
         , order_id
-        , json_query(data, 'lax $.decision' omit quotes) as receipt_transaction_status
-        , json_query(data, 'lax $.transaction_id' omit quotes) as receipt_transaction_id
-        , json_query(data, 'lax $.req_transaction_uuid' omit quotes) as receipt_transaction_uuid
-        , json_query(data, 'lax $.req_transaction_type' omit quotes) as receipt_transaction_type
-        , json_query(data, 'lax $.req_payment_method' omit quotes) as receipt_payment_method
-        , json_query(data, 'lax $.auth_code' omit quotes) as receipt_authorization_code
-        , json_query(data, 'lax $.req_reference_number' omit quotes) as receipt_reference_number
-        , json_query(data, 'lax $.req_bill_to_address_state' omit quotes) as receipt_bill_to_address_state
-        , json_query(data, 'lax $.req_bill_to_address_country' omit quotes) as receipt_bill_to_address_country
-        , cast(json_query(data, 'lax $.req_amount' omit quotes) as decimal(38, 2)) as receipt_payment_amount
-        , json_query(data, 'lax $.req_currency' omit quotes) as receipt_payment_currency
-        , json_query(data, 'lax $.req_bill_to_email' omit quotes) as receipt_payer_email
-        , json_query(data, 'lax $.req_card_number' omit quotes) as receipt_payment_card_number
-        , json_query(data, 'lax $.req_customer_ip_address' omit quotes) as receipt_payer_ip_address
-        , json_query(data, 'lax $.card_type_name' omit quotes) as receipt_payment_card_type
+        , {{ json_query_string('data', "'$.decision'") }} as receipt_transaction_status
+        , {{ json_query_string('data', "'$.transaction_id'") }} as receipt_transaction_id
+        , {{ json_query_string('data', "'$.req_transaction_uuid'") }} as receipt_transaction_uuid
+        , {{ json_query_string('data', "'$.req_transaction_type'") }} as receipt_transaction_type
+        , {{ json_query_string('data', "'$.req_payment_method'") }} as receipt_payment_method
+        , {{ json_query_string('data', "'$.auth_code'") }} as receipt_authorization_code
+        , {{ json_query_string('data', "'$.req_reference_number'") }} as receipt_reference_number
+        , {{ json_query_string('data', "'$.req_bill_to_address_state'") }} as receipt_bill_to_address_state
+        , {{ json_query_string('data', "'$.req_bill_to_address_country'") }} as receipt_bill_to_address_country
+        , cast({{ json_query_string('data', "'$.req_amount'") }} as decimal(38, 2)) as receipt_payment_amount
+        , {{ json_query_string('data', "'$.req_currency'") }} as receipt_payment_currency
+        , {{ json_query_string('data', "'$.req_bill_to_email'") }} as receipt_payer_email
+        , {{ json_query_string('data', "'$.req_card_number'") }} as receipt_payment_card_number
+        , {{ json_query_string('data', "'$.req_customer_ip_address'") }} as receipt_payer_ip_address
+        , {{ json_query_string('data', "'$.card_type_name'") }} as receipt_payment_card_type
         , concat(
-            json_query(data, 'lax $.req_bill_to_forename' omit quotes)
+            {{ json_query_string('data', "'$.req_bill_to_forename'") }}
             , ' '
-            , json_query(data, 'lax $.req_bill_to_surname' omit quotes)
+            , {{ json_query_string('data', "'$.req_bill_to_surname'") }}
         ) as receipt_payer_name
         , data as receipt_data
-        , json_query(data, 'lax $.signed_date_time' omit quotes) as receipt_payment_timestamp
+        , {{ json_query_string('data', "'$.signed_date_time'") }} as receipt_payment_timestamp
         ,{{ cast_timestamp_to_iso8601('created_at') }} as receipt_created_on
         ,{{ cast_timestamp_to_iso8601('modified_at') }} as receipt_updated_on
     from source

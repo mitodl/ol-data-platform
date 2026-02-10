@@ -1,7 +1,7 @@
 with video_structure as (
     select
         *
-        , json_query(coursestructure_block_metadata, 'lax $.edx_video_id' omit quotes) as video_edx_uuid
+        , {{ json_query_string('coursestructure_block_metadata', "'$.edx_video_id'") }} as video_edx_uuid
         , element_at(split(coursestructure_block_id, '@'), -1) as video_id
     from {{ ref('int__combined__course_structure') }}
     where coursestructure_block_category = 'video'
