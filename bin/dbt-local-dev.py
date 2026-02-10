@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ruff: noqa: T201, FBT001, FBT002, S608, BLE001, C901, PLR0912, PLR0915, E501, RUF059, PT028, PLC0415, PLR2004, S607, RUF001
+# ruff: noqa: T201, FBT001, FBT002, S608, BLE001, C901, PLR0912, PLR0913, PLR0915, E501, RUF059, PT028, PLC0415, PLR2004, S607, RUF001
 """
 CLI tool for local dbt development with DuckDB + Iceberg.
 
@@ -144,6 +144,7 @@ def register_tables_in_duckdb(
     duckdb_path: Path,
     dry_run: bool = False,
     verbose: bool = True,
+    force: bool = False,
 ) -> dict[str, int]:
     """
     Register Glue tables as DuckDB views.
@@ -160,13 +161,15 @@ def register_tables_in_duckdb(
         If True, print SQL but don't execute
     verbose
         If True, print progress for each table
+    force
+        If True, re-register all tables; if False, only register new/changed tables
 
     Returns
     -------
     dict[str, int]
-        Dict with success/error counts
+        Dict with success/error counts (success, error, skipped, updated, new)
     """
-    results = {"success": 0, "error": 0, "skipped": 0}
+    results = {"success": 0, "error": 0, "skipped": 0, "updated": 0, "new": 0}
 
     if not dry_run:
         if verbose:
@@ -187,52 +190,8 @@ def register_tables_in_duckdb(
         conn.execute("CALL load_aws_credentials()")
         if verbose:
             print("  ✓ AWS credentials loaded")
-    else:
-        conn = None
-        if verbose:
-            print("\n🔍 DRY RUN MODE - No actual changes will be made\n")
 
-    if verbose:
-        print(f"\nRegistering {len(tables)} Iceberg tables from {database_name}...")
-        print("=" * 70)
-
-    for idx, table in enumerate(tables):
-        table_name = table["name"]
-        metadata_location = table["metadata_location"]
-
-        # Create view name: glue__{database}__{table}
-        view_name = f"glue__{database_name}__{table_name}"
-
-        # Create view SQL
-        create_view_sql = f"""
-CREATE OR REPLACE VIEW {view_name} AS
-SELECT * FROM iceberg_scan('{metadata_location}')
-"""
-
-        if dry_run:
-            if verbose:
-                print(f"\n-- {table_name}")
-                print(create_view_sql.strip())
-            results["success"] += 1
-        else:
-            try:
-                conn.execute(create_view_sql)
-                if verbose:
-                    print(f"  ✓ {view_name}")
-                results["success"] += 1
-            except Exception as e:
-                if verbose:
-                    print(f"  ✗ {view_name}: {e}")
-                results["error"] += 1
-
-        # Progress indicator for large batches
-        if not verbose and (idx + 1) % 100 == 0:
-            print(f"  Processed {idx + 1}/{len(tables)} tables...")
-
-    if not dry_run:
-        # Create a metadata table to track registered sources
-        if verbose:
-            print("\nUpdating metadata registry...")
+        # Create registry table first
         conn.execute("""
             CREATE TABLE IF NOT EXISTS _glue_source_registry (
                 view_name VARCHAR PRIMARY KEY,
@@ -243,17 +202,126 @@ SELECT * FROM iceberg_scan('{metadata_location}')
             )
         """)
 
-        # Insert/update registry
+        # Get existing registrations if not forcing re-registration
+        existing_registrations = {}
+        if not force:
+            try:
+                result = conn.execute(
+                    """
+                    SELECT view_name, metadata_location
+                    FROM _glue_source_registry
+                    WHERE glue_database = ?
+                """,
+                    (database_name,),
+                ).fetchall()
+                existing_registrations = {row[0]: row[1] for row in result}
+            except Exception:
+                # Table might not exist yet or be empty
+                existing_registrations = {}
+    else:
+        conn = None
+        existing_registrations = {}
+        if verbose:
+            print("\n🔍 DRY RUN MODE - No actual changes will be made\n")
+
+    if verbose:
+        mode = "all (forced)" if force else "new/changed only"
+        print(
+            f"\nRegistering {len(tables)} Iceberg tables from {database_name} ({mode})..."
+        )
+        print("=" * 70)
+
+    for idx, table in enumerate(tables):
+        table_name = table["name"]
+        metadata_location = table["metadata_location"]
+
+        # Create view name: glue__{database}__{table}
+        view_name = f"glue__{database_name}__{table_name}"
+
+        # Check if we should skip this table
+        should_skip = False
+        is_new = False
+        is_updated = False
+
+        if not force and view_name in existing_registrations:
+            existing_metadata = existing_registrations[view_name]
+            if existing_metadata == metadata_location:
+                # Metadata hasn't changed, skip
+                should_skip = True
+                results["skipped"] += 1
+                if verbose:
+                    print(f"  ⊘ {view_name} (unchanged)")
+            else:
+                # Metadata changed, needs update
+                is_updated = True
+                results["updated"] += 1
+        else:
+            # New table
+            is_new = True
+            results["new"] += 1
+
+        if should_skip:
+            continue
+
+        # Create view SQL
+        create_view_sql = f"""
+CREATE OR REPLACE VIEW {view_name} AS
+SELECT * FROM iceberg_scan('{metadata_location}')
+"""
+
+        if dry_run:
+            if verbose:
+                status = "UPDATE" if is_updated else "NEW"
+                print(f"\n-- [{status}] {table_name}")
+                print(create_view_sql.strip())
+            results["success"] += 1
+        else:
+            try:
+                conn.execute(create_view_sql)
+                if verbose:
+                    if is_updated:
+                        print(f"  ↻ {view_name} (updated)")
+                    elif is_new:
+                        print(f"  + {view_name} (new)")
+                    else:
+                        print(f"  ✓ {view_name}")
+                results["success"] += 1
+            except Exception as e:
+                if verbose:
+                    print(f"  ✗ {view_name}: {e}")
+                results["error"] += 1
+
+        # Progress indicator for large batches
+        if not verbose and (idx + 1) % 100 == 0:
+            processed = results["success"] + results["error"] + results["skipped"]
+            print(f"  Processed {processed}/{len(tables)} tables...")
+
+    if not dry_run:
+        # Update registry for all processed tables
+        if verbose:
+            print("\nUpdating metadata registry...")
+
         for table in tables:
             view_name = f"glue__{database_name}__{table['name']}"
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO _glue_source_registry
-                (view_name, glue_database, glue_table, metadata_location, registered_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """,
-                (view_name, database_name, table["name"], table["metadata_location"]),
-            )
+            # Only update if we didn't skip it
+            if not (
+                not force
+                and view_name in existing_registrations
+                and existing_registrations[view_name] == table["metadata_location"]
+            ):
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO _glue_source_registry
+                    (view_name, glue_database, glue_table, metadata_location, registered_at)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                    (
+                        view_name,
+                        database_name,
+                        table["name"],
+                        table["metadata_location"],
+                    ),
+                )
 
         if verbose:
             print("  ✓ Registry updated")
@@ -550,6 +618,12 @@ def register(
     quiet: Annotated[
         bool, cyclopts.Parameter(help="Suppress verbose output (show summary only)")
     ] = False,
+    force: Annotated[
+        bool,
+        cyclopts.Parameter(
+            help="Force re-registration of all tables (default: only register new/changed)"
+        ),
+    ] = False,
 ) -> None:
     """
     Register AWS Glue Iceberg tables as DuckDB views.
@@ -557,6 +631,9 @@ def register(
     This command queries AWS Glue to discover Iceberg tables and creates
     DuckDB views that reference their metadata locations. This enables dbt
     models to query Iceberg tables directly without copying data locally.
+
+    By default, this command is incremental - it only registers new tables
+    or tables whose metadata has changed. Use --force to re-register all tables.
 
     Parameters
     ----------
@@ -570,6 +647,8 @@ def register(
         Show what would be done without making changes
     quiet
         Suppress verbose output (show summary only)
+    force
+        Force re-registration of all tables (skips incremental check)
     """
     # Determine which databases to register
     if all_layers:
@@ -582,7 +661,7 @@ def register(
         databases = [DEFAULT_GLUE_DATABASE]
         print(f"\n🔄 Registering default database: {DEFAULT_GLUE_DATABASE}")
 
-    total_results = {"success": 0, "error": 0, "skipped": 0}
+    total_results = {"success": 0, "error": 0, "skipped": 0, "new": 0, "updated": 0}
     verbose = not quiet
 
     for db_idx, db_name in enumerate(databases):
@@ -603,7 +682,7 @@ def register(
 
         # Register in DuckDB
         results = register_tables_in_duckdb(
-            tables, db_name, duckdb_path, dry_run, verbose=verbose
+            tables, db_name, duckdb_path, dry_run, verbose=verbose, force=force
         )
 
         # Accumulate totals
@@ -611,7 +690,9 @@ def register(
             total_results[key] += results[key]
 
         if not verbose:
-            print(f"  ✓ {results['success']} tables registered")
+            print(f"  + {results['new']} new")
+            print(f"  ↻ {results['updated']} updated")
+            print(f"  ⊘ {results['skipped']} skipped")
             if results["error"] > 0:
                 print(f"  ✗ {results['error']} errors")
 
@@ -620,19 +701,28 @@ def register(
     print(f"{'SIMULATION' if dry_run else 'REGISTRATION'} COMPLETE")
     print("=" * 70)
     print(f"  Databases processed: {len(databases)}")
-    print(f"  ✓ Total success: {total_results['success']}")
-    print(f"  ✗ Total errors: {total_results['error']}")
-    print(f"  ⊘ Total skipped: {total_results['skipped']}")
+    print(f"  + New tables: {total_results['new']}")
+    print(f"  ↻ Updated tables: {total_results['updated']}")
+    print(f"  ⊘ Skipped (unchanged): {total_results['skipped']}")
+    print(f"  ✗ Errors: {total_results['error']}")
     print("=" * 70)
 
-    if not dry_run and total_results["success"] > 0:
-        print(
-            f"\n✨ {total_results['success']} Iceberg tables registered across all layers!"
-        )
+    if not dry_run and (total_results["new"] > 0 or total_results["updated"] > 0):
+        changed = total_results["new"] + total_results["updated"]
+        print(f"\n✨ {changed} Iceberg tables registered/updated across all layers!")
         print(f"   DuckDB location: {duckdb_path}")
+        if total_results["skipped"] > 0:
+            print(
+                f"   ⊘ {total_results['skipped']} tables skipped (unchanged - use --force to re-register)"
+            )
         print("\n   You can now run dbt with: --target dev_local")
         print("   Raw data will be read from Iceberg (zero local storage)")
         print("   Only transformed models will be written locally")
+    elif not dry_run and total_results["skipped"] > 0:
+        print(
+            f"\n✓ All {total_results['skipped']} tables already registered and up-to-date!"
+        )
+        print("   Use --force to re-register all tables")
 
 
 @app.command
@@ -1210,7 +1300,7 @@ def setup(
     else:
         databases = [DEFAULT_GLUE_DATABASE]
 
-    total_results = {"success": 0, "error": 0, "skipped": 0}
+    total_results = {"success": 0, "error": 0, "skipped": 0, "new": 0, "updated": 0}
 
     for db_idx, db_name in enumerate(databases):
         print(f"\n[{db_idx + 1}/{len(databases)}] Processing: {db_name}")
@@ -1226,13 +1316,13 @@ def setup(
             continue
 
         results = register_tables_in_duckdb(
-            tables, db_name, duckdb_path, dry_run=False, verbose=False
+            tables, db_name, duckdb_path, dry_run=False, verbose=False, force=True
         )
 
         for key in total_results:
             total_results[key] += results[key]
 
-        print(f"  ✓ {results['success']} tables registered")
+        print(f"  + {results['new']} new tables registered")
         if results["error"] > 0:
             print(f"  ✗ {results['error']} errors")
 
