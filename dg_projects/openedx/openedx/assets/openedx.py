@@ -260,7 +260,7 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
     context.log.info(
         "Attempting to download course XML from %s to %s", course_xml, course_xml_path
     )
-    course_xml.fs.get_file(str(course_xml), course_xml_path)
+    course_xml.fs.get_file(str(course_xml), str(course_xml_path))
     data_version = hashlib.file_digest(course_xml_path.open("rb"), "sha256").hexdigest()
 
     # Process the course metadata

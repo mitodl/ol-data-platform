@@ -84,7 +84,7 @@ def extract_edxorg_courserun_metadata(
         course_archive,
         course_xml_path,
     )
-    course_archive.fs.get_file(str(course_archive), course_xml_path)
+    course_archive.fs.get_file(str(course_archive), str(course_xml_path))
     data_version = hashlib.file_digest(course_xml_path.open("rb"), "sha256").hexdigest()
 
     # Process the course metadata
