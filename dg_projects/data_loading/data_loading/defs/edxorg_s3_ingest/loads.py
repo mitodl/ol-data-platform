@@ -24,10 +24,10 @@ Usage (standalone):
 
 import logging
 import os
-from collections.abc import Iterator
 from pathlib import Path
 
 import dlt
+from dlt.extract import DltResource
 from dlt.sources import incremental
 from dlt.sources.filesystem import filesystem, read_csv_duckdb
 from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
@@ -74,7 +74,7 @@ def edxorg_s3_source(
             primary_key=None,  # TSV files don't have consistent primary keys
             table_format=table_format,  # Use iceberg for QA/prod, parquet for local
         )
-        def load_table(table=table_name) -> Iterator[dict[str, str]]:
+        def load_table(table=table_name) -> DltResource:
             """
             Load TSV files for a specific table from S3.
 
