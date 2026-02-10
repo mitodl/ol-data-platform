@@ -89,7 +89,7 @@ bucket_url = "s3://ol-data-lake-landing-zone-production/edxorg-raw-data/edxorg/r
 The pipeline automatically selects the appropriate destination based on the `DAGSTER_ENVIRONMENT` variable:
 
 **Local Development** (`DAGSTER_ENVIRONMENT=dev` or unset - default):
-- Writes to `.dlt/data/` as Parquet files
+- Writes to `/tmp/.dlt/data/` as Parquet files
 - No Iceberg overhead for fast iteration
 - Query with DuckDB for local testing
 - No Glue catalog registration
