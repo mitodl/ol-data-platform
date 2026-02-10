@@ -138,7 +138,7 @@ defs = Definitions(
                 os.environ.get("VIDEO_SHORTS_BUCKET")
                 or f"ol-mitlearn-app-storage-{MIT_LEARN_BUCKET_SUFFIXES[DAGSTER_ENV]}"
             ),
-            path_prefix=os.environ.get("LEARN_SHORTS_PREFIX", "shorts/"),
+            path_prefix=os.environ.get("LEARN_SHORTS_PREFIX", "media/shorts/"),
         ),
         "vault": vault,
         "s3": S3Resource(),
