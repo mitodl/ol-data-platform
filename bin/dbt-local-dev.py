@@ -423,6 +423,132 @@ def show_registry(duckdb_path: Path) -> None:
         conn.close()
 
 
+def cleanup_local_tables(
+    duckdb_path: Path, dry_run: bool = False, yes: bool = False
+) -> dict[str, int]:
+    """
+    Drop all locally built dbt tables from DuckDB, keeping Glue views.
+
+    Parameters
+    ----------
+    duckdb_path
+        Path to DuckDB database
+    dry_run
+        If True, show what would be dropped without actually dropping
+    yes
+        If True, skip confirmation prompt
+
+    Returns
+    -------
+    dict[str, int]
+        Statistics about tables dropped
+    """
+    results = {"tables_dropped": 0, "views_kept": 0, "space_freed_mb": 0}
+
+    if not duckdb_path.exists():
+        print(f"❌ Database not found: {duckdb_path}")
+        return results
+
+    # Use read-only mode for dry-run to avoid lock conflicts
+    conn = duckdb.connect(str(duckdb_path), read_only=dry_run)
+
+    try:
+        # Get all tables (not views) in the database, excluding glue__ views
+        tables_query = """
+            SELECT
+                table_schema,
+                table_name,
+                CASE
+                    WHEN table_type = 'BASE TABLE' THEN 'table'
+                    WHEN table_type = 'VIEW' THEN 'view'
+                    ELSE 'other'
+                END as object_type
+            FROM information_schema.tables
+            WHERE table_schema NOT IN ('information_schema', 'pg_catalog')
+            ORDER BY table_schema, table_name
+        """
+
+        all_objects = conn.execute(tables_query).fetchall()
+
+        # Separate tables from views, exclude glue__ views and registry table
+        local_tables = []
+        glue_views = []
+
+        for schema, name, obj_type in all_objects:
+            if name.startswith("glue__") or name == "_glue_source_registry":
+                glue_views.append((schema, name))
+            elif obj_type == "table":
+                local_tables.append((schema, name))
+
+        results["views_kept"] = len(glue_views)
+
+        if not local_tables:
+            print("\n✓ No local tables found. All Glue views are preserved.")
+            print(f"  {len(glue_views)} Glue views registered")
+            return results
+
+        # Show what will be dropped
+        print(
+            f"\n{'📊 Local Tables to Drop' if not dry_run else '📊 Local Tables (DRY RUN)'}:"
+        )
+        print("=" * 70)
+
+        by_schema: dict[str, list[str]] = {}
+        for schema, name in local_tables:
+            if schema not in by_schema:
+                by_schema[schema] = []
+            by_schema[schema].append(name)
+
+        for schema in sorted(by_schema.keys()):
+            print(f"\n{schema} ({len(by_schema[schema])} tables):")
+            for name in sorted(by_schema[schema]):
+                print(f"  • {name}")
+
+        print("\n" + "=" * 70)
+        print(f"Total: {len(local_tables)} tables to drop")
+        print(f"Kept:  {len(glue_views)} Glue views (preserved)")
+        print("=" * 70)
+
+        if dry_run:
+            print("\n🔍 DRY RUN - No changes made")
+            return results
+
+        # Confirm unless --yes flag
+        if not yes:
+            response = input(
+                f"\n⚠️  Drop {len(local_tables)} local tables? (y/N): "
+            ).lower()
+            if response != "y":
+                print("Cancelled.")
+                return results
+
+        # Drop all local tables
+        print("\nDropping local tables...")
+        for schema, name in local_tables:
+            try:
+                conn.execute(f'DROP TABLE IF EXISTS "{schema}"."{name}"')
+                results["tables_dropped"] += 1
+                print(f"  ✓ {schema}.{name}")
+            except Exception as e:
+                print(f"  ✗ {schema}.{name}: {e}")
+
+        # Vacuum to reclaim space
+        print("\nReclaiming disk space...")
+        conn.execute("VACUUM")
+        conn.execute("CHECKPOINT")
+
+        print("\n✅ Cleanup complete!")
+        print(f"  Dropped: {results['tables_dropped']} tables")
+        print(f"  Kept:    {results['views_kept']} Glue views")
+
+    except Exception as e:
+        print(f"❌ Error during cleanup: {e}")
+    finally:
+        conn.close()
+
+    return results
+
+
 # ============================================================================
 # Trino Cleanup Functions
 # ============================================================================
@@ -817,6 +943,47 @@ def list_sources(
         DuckDB database path
     """
     show_registry(duckdb_path)
+
+
+@app.command
+def cleanup_local(
+    duckdb_path: Annotated[
+        Path,
+        cyclopts.Parameter(
+            help=f"DuckDB database path (default: {DEFAULT_DUCKDB_PATH})"
+        ),
+    ] = DEFAULT_DUCKDB_PATH,
+    dry_run: Annotated[
+        bool, cyclopts.Parameter(help="Show what would be dropped without dropping")
+    ] = False,
+    yes: Annotated[bool, cyclopts.Parameter(help="Skip confirmation prompt")] = False,
+) -> None:
+    """
+    Drop all locally built dbt tables to free up disk space.
+
+    This command removes all tables that were built locally during development,
+    while preserving all registered Glue views. This is useful for:
+    - Freeing up disk space after development sessions
+    - Cleaning up before switching to a different feature
+    - Resetting local state to start fresh
+
+    All Glue views (prefixed with glue__) are preserved, so you can immediately
+    start building models again without re-registering Glue sources.
+
+    Parameters
+    ----------
+    duckdb_path
+        DuckDB database path
+    dry_run
+        Show what would be dropped without actually dropping
+    yes
+        Skip confirmation prompt (use with caution)
+    """
+    print("\n🧹 Local DuckDB Cleanup")
+    print("=" * 70)
+    print(f"Database: {duckdb_path}")
+
+    cleanup_local_tables(duckdb_path, dry_run=dry_run, yes=yes)
 
 
 @app.command
