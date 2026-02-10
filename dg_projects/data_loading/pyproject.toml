@@ -11,7 +11,6 @@ dependencies = [
     "dlt[filesystem,parquet,pyiceberg]>=1.21.0",
     "duckdb>=1.2.0",
     "ol-orchestrate-lib",
-    "pyiceberg>=0.8.0",
     "sqlalchemy>=2.0.46",
 ]
 

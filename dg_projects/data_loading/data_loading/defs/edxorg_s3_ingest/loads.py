@@ -30,6 +30,7 @@ from pathlib import Path
 import dlt
 from dlt.sources import incremental
 from dlt.sources.filesystem import filesystem, read_csv_duckdb
+from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
 
 logger = logging.getLogger(__name__)
 
@@ -62,53 +63,8 @@ def edxorg_s3_source(
         dlt resources for each table type found in S3
     """
 
-    # Available table names from edxorg_archive.py
-    all_tables = [
-        "assessment_assessment",
-        "assessment_assessmentfeedback",
-        "assessment_assessmentfeedback_assessments",
-        "assessment_assessmentfeedback_options",
-        "assessment_assessmentfeedbackoption",
-        "assessment_assessmentpart",
-        "assessment_criterion",
-        "assessment_criterionoption",
-        "assessment_peerworkflow",
-        "assessment_peerworkflowitem",
-        "assessment_rubric",
-        "assessment_studenttrainingworkflow",
-        "assessment_studenttrainingworkflowitem",
-        "assessment_trainingexample",
-        "assessment_trainingexample_options_selected",
-        "auth_user",
-        "auth_userprofile",
-        "certificates_generatedcertificate",
-        "course",
-        "course_groups_cohortmembership",
-        "courseware_studentmodule",
-        "credit_crediteligibility",
-        "django_comment_client_role_users",
-        "grades_persistentcoursegrade",
-        "grades_persistentsubsectiongrade",
-        "student_anonymoususerid",
-        "student_courseaccessrole",
-        "student_courseenrollment",
-        "student_languageproficiency",
-        "submissions_score",
-        "submissions_scoresummary",
-        "submissions_studentitem",
-        "submissions_submission",
-        "teams",
-        "teams_membership",
-        "user_api_usercoursetag",
-        "user_id_map",
-        "wiki_article",
-        "wiki_articlerevision",
-        "workflow_assessmentworkflow",
-        "workflow_assessmentworkflowstep",
-    ]
-
     # Filter to requested tables if specified
-    tables_to_load = tables if tables is not None else all_tables
+    tables_to_load = tables if tables is not None else EDXORG_DB_TABLES
 
     for table_name in tables_to_load:
         # Create a resource for each table with standardized naming
@@ -210,12 +166,14 @@ def run_pipeline(tables: list[str] | None = None):
 
     if tables:
         logger.info("Loading specific tables: %s", ", ".join(tables))
+        source = edxorg_s3_source(tables=tables, table_format=table_format)
     else:
         logger.info("Loading all available tables (this may take a while)")
+        source = edxorg_s3_source_instance
 
     load_info = edxorg_s3_pipeline.run(
-        edxorg_s3_source(tables=tables),
-        loader_file_format="parquet",
+        source,
+        loader_file_format=table_format,
     )
     logger.info("Pipeline completed: %s", load_info)
 

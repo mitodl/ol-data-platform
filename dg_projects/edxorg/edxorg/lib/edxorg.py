@@ -45,7 +45,9 @@ def parse_archive_path(archive_path: str) -> dict[str, str]:
 
     """
     pattern_pieces = [COURSE_ID_REGEX]
-    if categorize_archive_element(archive_path) != "forum_mongo":
+    data_category = categorize_archive_element(archive_path)
+    # Only include DATA_ATTRIBUTE_REGEX for .sql files (database tables)
+    if data_category == "db_table":
         pattern_pieces.append(DATA_ATTRIBUTE_REGEX)
     pattern_pieces.extend([SYSTEM_OF_ORIGIN_REGEX, FILE_TYPE_REGEX])
     regexes = "".join(pattern_pieces)

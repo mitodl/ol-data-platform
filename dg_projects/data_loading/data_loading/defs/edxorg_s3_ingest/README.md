@@ -223,7 +223,7 @@ LIMIT 10;
 
 ## Dagster Integration
 
-The pipeline is automatically discovered by Dagster via the `DltLoadCollectionComponent` defined in `defs.yaml`.
+The pipeline is automatically discovered by Dagster via the `DltLoadCollectionComponent` defined in this package's `defs.py` module, which is loaded by `data_loading/definitions.py` using `load_from_defs_folder`.
 
 ### View Assets
 

@@ -83,7 +83,7 @@ export SKIP_AIRBYTE=1
 dg list defs
 ```
 
-**Solution**: Configure credentials in `.dlt/secrets.toml` (see template at `.dlt/secrets.toml.template`)
+**Solution**: Configure dlt credentials in the data loading project, using `dg_projects/data_loading/.dlt/secrets.toml` created from the template at `dg_projects/data_loading/.dlt/secrets.toml.template`
 
 ### Missing Assets in Dagster
 
