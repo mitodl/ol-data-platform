@@ -79,7 +79,12 @@ def extract_edxorg_courserun_metadata(
 ):
     # Download the remote file to the current working directory
     course_xml_path = Path(NamedTemporaryFile(delete=False, suffix=".xml.tar.gz").name)
-    course_archive.fs.get_file(course_archive, course_xml_path)
+    context.log.info(
+        "Attempting to download course XML from %s to %s",
+        course_archive,
+        course_xml_path,
+    )
+    course_archive.fs.get_file(str(course_archive), course_xml_path)
     data_version = hashlib.file_digest(course_xml_path.open("rb"), "sha256").hexdigest()
 
     # Process the course metadata
