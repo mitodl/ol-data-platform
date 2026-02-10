@@ -5,7 +5,7 @@ with combined_enrollments as (
 , edxorg_grade as (
     select
           {{ format_course_id('courseruncertificate_courserun_readable_id', false) }} as courserun_readable_id
-         , user_id
+         , cast(user_id as varchar) as user_id
          , courseruncertificate_grade
     from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
     where
@@ -167,7 +167,7 @@ select
     , edx_signatories.signatory_names
 from edxorg_enrollment
 left join edxorg_grade
-    on edxorg_enrollment.user_id = cast(edxorg_grade.user_id as varchar)
+    on edxorg_enrollment.user_id = edxorg_grade.user_id
     and edxorg_enrollment.courserun_readable_id = edxorg_grade.courserun_readable_id
 left join mitxonline_enrollment
     on

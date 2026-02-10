@@ -301,6 +301,8 @@ models:
   - name: courserungrade_is_passing
     description: boolean, indicating that the user completed the course with a passing
       grade
+    tests:
+    - not_null
   - name: courserun_title
     description: str, The title of the course run
   - name: course_number

@@ -48,7 +48,10 @@ with grades as (
             user_info_combo.courseruncertificate_grade
         ) as courserungrade_user_grade
         , grades.courserungrade_passing_grade
-        , grades.courserungrade_is_passing
+        , coalesce(
+            grades.courserungrade_is_passing
+           , nullif(user_info_combo.courseruncertificate_verify_uuid, '') is not null
+        ) as  courserungrade_is_passing
     from grades
     full outer join user_info_combo on
         grades.user_id = user_info_combo.user_id
