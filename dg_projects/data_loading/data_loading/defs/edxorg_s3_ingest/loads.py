@@ -72,7 +72,7 @@ def edxorg_s3_source(
             name=f"raw__edxorg__s3__tables__{table_name}",
             write_disposition="append",
             primary_key=None,  # TSV files don't have consistent primary keys
-            table_format=table_format,  # Use iceberg for QA/prod, parquet for local
+            table_format=table_format,
         )
         def load_table(table=table_name) -> DltResource:
             """
@@ -173,7 +173,7 @@ def run_pipeline(tables: list[str] | None = None):
 
     load_info = edxorg_s3_pipeline.run(
         source,
-        loader_file_format=table_format,
+        loader_file_format="parquet",
     )
     logger.info("Pipeline completed: %s", load_info)
 
