@@ -7,7 +7,6 @@ from dagster import (
     RunRequest,
     SensorEvaluationContext,
     SensorResult,
-    sensor,
 )
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
@@ -26,11 +25,6 @@ class CourseCursor(BaseModel):
     course_end: datetime | None = None
 
 
-@sensor(
-    name="openedx_courseware_sensor",
-    minimum_interval_seconds=60 * 60,
-    description="Query a running Open edX system for a list of course runs.",
-)
 def course_run_sensor(
     context: SensorEvaluationContext,
     openedx: OpenEdxApiClientFactory,

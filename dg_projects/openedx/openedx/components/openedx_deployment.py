@@ -106,11 +106,32 @@ class OpenEdxDeploymentComponent:
         """
         # Find the course_version_asset (first asset in the list)
         course_version_asset = assets[0]
+        course_xml_asset = assets[2]
+        course_content_webhook_asset = assets[4]
+
+        # Create asset-bound courseware sensor
+        courseware_sensor = SensorDefinition(
+            name=f"{self.deployment_name}_courseware_sensor",
+            description="Query a running Open edX system for a list of course runs.",
+            asset_selection=[
+                course_version_asset,
+                course_xml_asset,
+                course_content_webhook_asset,
+            ],
+            job=None,
+            default_status=DefaultSensorStatus.STOPPED,
+            minimum_interval_seconds=60 * 60,
+            evaluation_fn=course_run_sensor,
+        )
 
         # Create asset-bound course version sensor
         asset_bound_course_version_sensor = SensorDefinition(
             name=f"{self.deployment_name}_course_version_sensor",
-            asset_selection=[course_version_asset],
+            asset_selection=[
+                course_version_asset,
+                course_xml_asset,
+                course_content_webhook_asset,
+            ],
             job=None,
             default_status=DefaultSensorStatus.STOPPED,
             minimum_interval_seconds=60 * 60,
@@ -125,7 +146,7 @@ class OpenEdxDeploymentComponent:
         )
 
         return [
-            course_run_sensor,
+            courseware_sensor,
             asset_bound_course_version_sensor,
             automation_sensor,
         ]
