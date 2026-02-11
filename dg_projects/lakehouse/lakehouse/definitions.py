@@ -46,6 +46,10 @@ airbyte_host_map = {
 
 airbyte_host = os.environ.get("DAGSTER_AIRBYTE_HOST", airbyte_host_map[DAGSTER_ENV])
 
+# Allow skipping Airbyte loading for local development
+# Set SKIP_AIRBYTE=1 to disable Airbyte connection and asset loading
+SKIP_AIRBYTE = os.environ.get("SKIP_AIRBYTE", "").lower() in ("1", "true", "yes")
+
 # Determine dagster URL and dbt target based on environment
 if DAGSTER_ENV == "dev":
     dagster_url = "http://localhost:3000"
@@ -79,17 +83,21 @@ except Exception as e:  # noqa: BLE001 (resilient loading)
     dagster_url = "http://localhost:3000"
     dbt_target = "dev_production"
 
-airbyte_workspace = AirbyteOSSWorkspace(
-    api_server=airbyte_host,
-    username="dagster",
-    password=(
-        vault.client.secrets.kv.v1.read_secret(
-            path="dagster-http-auth-password", mount_point="secret-data"
-        )["data"]["dagster_unhashed_password"]
-        if vault_authenticated
-        else "mock_password"
-    ),
-    request_timeout=60,  # Allow up to a minute for Airbyte requests
+airbyte_workspace = (
+    AirbyteOSSWorkspace(
+        api_server=airbyte_host,
+        username="dagster",
+        password=(
+            vault.client.secrets.kv.v1.read_secret(
+                path="dagster-http-auth-password", mount_point="secret-data"
+            )["data"]["dagster_unhashed_password"]
+            if vault_authenticated
+            else "mock_password"
+        ),
+        request_timeout=60,  # Allow up to a minute for Airbyte requests
+    )
+    if not SKIP_AIRBYTE
+    else None
 )
 
 dbt_config = {
@@ -132,13 +140,21 @@ class OLAirbyteTranslator(DagsterAirbyteTranslator):
 
 
 try:
-    airbyte_assets = build_airbyte_assets_definitions(
-        workspace=airbyte_workspace,
-        dagster_airbyte_translator=OLAirbyteTranslator(),
-        connection_selector_fn=(
-            lambda conn: conn.name.lower().endswith("s3 data lake")
-        ),
-    )
+    if SKIP_AIRBYTE:
+        import warnings
+
+        warnings.warn(
+            "SKIP_AIRBYTE is set. Airbyte assets will not be loaded.", stacklevel=2
+        )
+        airbyte_assets = []
+    else:
+        airbyte_assets = build_airbyte_assets_definitions(
+            workspace=airbyte_workspace,
+            dagster_airbyte_translator=OLAirbyteTranslator(),
+            connection_selector_fn=(
+                lambda conn: conn.name.lower().endswith("s3 data lake")
+            ),
+        )
 except Exception as e:  # noqa: BLE001
     # If Airbyte connection fails, create empty list to allow code to load
     import warnings
@@ -250,6 +266,17 @@ instructor_onboarding_schedule = ScheduleDefinition(
     execution_timezone="UTC",
 )
 
+# Build resources dict, conditionally including airbyte
+resources_dict = {
+    "dbt": dbt_cli,
+    "vault": vault,
+    "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
+    "github_api": GithubApiClientFactory(vault=vault),
+}
+
+if not SKIP_AIRBYTE:
+    resources_dict["airbyte"] = airbyte_workspace
+
 defs = Definitions(
     assets=[
         *with_source_code_references([full_dbt_project]),
@@ -258,13 +285,7 @@ defs = Definitions(
         generate_instructor_onboarding_user_list,
         update_access_forge_repo,
     ],
-    resources={
-        "airbyte": airbyte_workspace,
-        "dbt": dbt_cli,
-        "vault": vault,
-        "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
-        "github_api": GithubApiClientFactory(vault=vault),
-    },
+    resources=resources_dict,
     sensors=[
         AutomationConditionSensorDefinition(
             "dbt_automation_sensor",

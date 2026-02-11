@@ -13,6 +13,7 @@ dependencies = [
     "httpx ~= 0.28.0",
     "ol-orchestrate-lib",
     "pygithub>=2.8.1",
+    "pyiceberg>=0.8.0",
 ]
 
 [project.entry-points]

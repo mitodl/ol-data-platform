@@ -1,0 +1,56 @@
+# dlt Configuration
+# This file contains non-sensitive configuration that can be committed to git.
+# Credentials are managed via AWS IAM (IRSA for K8s, ~/.aws/credentials for local dev).
+
+[runtime]
+log_level = "INFO"
+dlthub_telemetry = true
+
+# EdX.org S3 Source Configuration
+# Path matches dlt's lookup: sources.<module_name>.<source_name>.<param>
+[sources.loads.edxorg_s3_source]
+bucket_url = "s3://ol-data-lake-landing-zone-production/edxorg-raw-data/edxorg/raw_data/"
+
+# Local Development Destination (named destination)
+# Writes Parquet files to local disk for fast iteration
+[destination.local]
+destination_type = "filesystem"
+bucket_url = "file:///tmp/.dlt/data"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+# QA Destination - Filesystem with Iceberg + Glue Catalog (named destination)
+# Writes Iceberg tables to S3 and registers in ol_warehouse_qa_raw Glue database
+[destination.qa]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-qa/edxorg"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+# Production Destination - Filesystem with Iceberg + Glue Catalog (named destination)
+# Writes Iceberg tables to S3 and registers in ol_warehouse_production_raw Glue database
+[destination.production]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-production/edxorg"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+# Iceberg Catalog Configuration for QA
+[iceberg_catalog.qa]
+iceberg_catalog_name = "ol_warehouse_qa_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.qa.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-qa/edxorg"
+
+# Iceberg Catalog Configuration for Production
+[iceberg_catalog.production]
+iceberg_catalog_name = "ol_warehouse_production_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.production.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-production/edxorg"
+
+# Note: Destination is auto-selected based on DAGSTER_ENVIRONMENT:
+# - dev/ci -> local (filesystem, local disk, no Iceberg)
+# - qa -> qa (filesystem + Iceberg, S3 + ol_warehouse_qa_raw Glue catalog)
+# - production -> production (filesystem + Iceberg, S3 + ol_warehouse_production_raw Glue catalog)

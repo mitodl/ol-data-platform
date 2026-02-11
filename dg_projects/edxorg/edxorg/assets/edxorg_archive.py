@@ -12,6 +12,7 @@ from pathlib import Path
 import duckdb
 import jsonlines
 import polars as pl
+import polars_hash as plh
 from dagster import (
     AssetExecutionContext,
     AssetIn,
@@ -249,31 +250,62 @@ def process_edxorg_archive_bundle(
             else:
                 output_key = categorize_archive_element(tinfo.name)
             archive_file = Path(tmpdir.name).joinpath(tinfo.name.split("/")[-1])
-            archive_file.write_bytes(archive.extractfile(tinfo).read())  # type: ignore[union-attr]
-
+            context.log.debug(
+                "Processing archive file %s with output key %s",
+                tinfo.name,
+                output_key,
+            )
             # Avoid processing CSV files that consist of only a header row. These files
             # cause Airbyte to throw errors when attempting to infer the schema.
             # (TMM 2024-03-14)
             if table_name:
                 try:
-                    df = pl.read_csv(
-                        archive_file,
+                    df = pl.scan_csv(
+                        archive.extractfile(tinfo),
                         has_header=True,
-                        n_rows=2,
                         separator="\t",
+                        quote_char=None,
                         infer_schema=False,
                         truncate_ragged_lines=True,
                         raise_if_empty=True,
+                        ignore_errors=True,
+                    ).with_columns(
+                        # Use explicit `extracted_` key prefix to avoid colliding with
+                        # `course_id` fields that exist in certain table exports such as
+                        # `student_courseenrollment`. Also extract key components to
+                        # allow for easy aggregation by those attributes without doing
+                        # parsing in SQL logic. (TMM 2026-02-10)
+                        pl.lit(asset_info["course_id"]).alias("extracted_course_key"),
+                        pl.lit(asset_info["organization"]).alias(
+                            "extracted_course_organization"
+                        ),
+                        pl.lit(asset_info["course_number"]).alias(
+                            "extracted_course_number"
+                        ),
+                        pl.lit(asset_info["course_run"]).alias("extracted_course_run"),
+                        # Create a row hash to allow for deduplicating data
+                        plh.concat_str(pl.all().fill_null(""))
+                        .chash.sha256()
+                        .alias("row_hash"),
                     )
-                except pl.exceptions.PolarsError:
+                    df.sink_csv(
+                        archive_file,
+                        include_header=True,
+                        separator="\t",
+                        lazy=False,
+                        check_extension=False,
+                    )
+                except pl.exceptions.NoDataError:
                     context.log.debug(
                         "Skipping further processing of empty CSV file %s", tinfo.name
                     )
                     archive_file.unlink()
                     continue
-                if df.is_empty():
+                if df.collect().is_empty():
                     archive_file.unlink()
                     continue
+            else:
+                archive_file.write_bytes(archive.extractfile(tinfo).read())  # type: ignore[union-attr]
             data_version = hashlib.file_digest(
                 archive_file.open("rb"), "sha256"
             ).hexdigest()
