@@ -58,6 +58,17 @@ def course_run_sensor(
                 partition_keys=list(new_course_run_ids)
             )
         ],
+        run_requests=[
+            RunRequest(
+                asset_selection=[
+                    AssetKey((openedx.deployment, "openedx", "courseware")),
+                    AssetKey((openedx.deployment, "openedx", "raw_data", "course_xml")),
+                    AssetKey((openedx.deployment, "openedx", "course_content_webhook")),
+                ],
+                partition_key=course_run_id,
+            )
+            for course_run_id in new_course_run_ids
+        ],
     )
 
 
@@ -120,7 +131,13 @@ def course_version_sensor(
             run_requests.append(
                 RunRequest(
                     asset_selection=[
-                        AssetKey((openedx.deployment, "openedx", "courseware"))
+                        AssetKey((openedx.deployment, "openedx", "courseware")),
+                        AssetKey(
+                            (openedx.deployment, "openedx", "raw_data", "course_xml")
+                        ),
+                        AssetKey(
+                            (openedx.deployment, "openedx", "course_content_webhook")
+                        ),
                     ],
                     partition_key=course_run_id,
                     tags={"published_version": response["published_version"]},
