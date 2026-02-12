@@ -7,7 +7,6 @@ from dagster import (
     RunRequest,
     SensorEvaluationContext,
     SensorResult,
-    sensor,
 )
 from ol_orchestrate.lib.dagster_helpers import contains_invalid_partition_strings
 from ol_orchestrate.resources.openedx import OpenEdxApiClientFactory
@@ -26,11 +25,6 @@ class CourseCursor(BaseModel):
     course_end: datetime | None = None
 
 
-@sensor(
-    name="openedx_courseware_sensor",
-    minimum_interval_seconds=60 * 60,
-    description="Query a running Open edX system for a list of course runs.",
-)
 def course_run_sensor(
     context: SensorEvaluationContext,
     openedx: OpenEdxApiClientFactory,
@@ -57,6 +51,17 @@ def course_run_sensor(
             OPENEDX_COURSE_RUN_PARTITIONS[openedx.deployment].build_add_request(
                 partition_keys=list(new_course_run_ids)
             )
+        ],
+        run_requests=[
+            RunRequest(
+                asset_selection=[
+                    AssetKey((openedx.deployment, "openedx", "courseware")),
+                    AssetKey((openedx.deployment, "openedx", "raw_data", "course_xml")),
+                    AssetKey((openedx.deployment, "openedx", "course_content_webhook")),
+                ],
+                partition_key=course_run_id,
+            )
+            for course_run_id in new_course_run_ids
         ],
     )
 
@@ -120,7 +125,13 @@ def course_version_sensor(
             run_requests.append(
                 RunRequest(
                     asset_selection=[
-                        AssetKey((openedx.deployment, "openedx", "courseware"))
+                        AssetKey((openedx.deployment, "openedx", "courseware")),
+                        AssetKey(
+                            (openedx.deployment, "openedx", "raw_data", "course_xml")
+                        ),
+                        AssetKey(
+                            (openedx.deployment, "openedx", "course_content_webhook")
+                        ),
                     ],
                     partition_key=course_run_id,
                     tags={"published_version": response["published_version"]},
