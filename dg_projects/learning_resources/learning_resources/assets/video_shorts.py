@@ -35,13 +35,14 @@ from learning_resources.lib.contants import (
     VIDEO_SHORT_THUMB_SMALL_WIDTH,
 )
 from learning_resources.lib.google_sheets import (
+    compress_video,
     convert_dropbox_link_to_direct,
     fetch_video_shorts_from_google_sheet,
     generate_video_thumbnail,
 )
 
 # Process top 12 most recent videos
-MAX_VIDEOS_TO_PROCESS = 12
+MAX_VIDEOS_TO_PROCESS = 24
 
 # Dynamic partitions for video IDs
 video_short_ids = DynamicPartitionsDefinition(name="video_short_ids")
@@ -196,7 +197,7 @@ def video_short_metadata(
 
 
 @asset(
-    code_version="video_shorts_content_v2",
+    code_version="video_shorts_content_v2.01",
     key=AssetKey(["video_shorts", "video_content"]),
     group_name="video_shorts",
     description="Download video content from Dropbox.",
@@ -261,18 +262,26 @@ def video_short_content(
             msg = f"Failed to download video: {video_id}"
             raise RuntimeError(msg)
 
+        # Compress video to target size (max 25 MB)
+        context.log.info("Compressing video to max 25 MB: %s", video_file)
+        compressed_file = compress_video(
+            input_path=video_file,
+            output_path=Path(temp_dir) / "compressed" / f"{video_id}.{video_ext}",
+            max_size_mb=25.0,
+        )
+
         # Full S3 path: S3_PREFIX/{video_id}/{video_id}.{mp4}
         video_s3_path = f"{video_id}/{video_id}.{video_ext}"
-        context.log.info("Video downloaded: %s -> %s", video_file, video_s3_path)
+        context.log.info("Video ready: %s -> %s", compressed_file, video_s3_path)
 
         yield Output(
-            value=(video_file, video_s3_path),
+            value=(compressed_file, video_s3_path),
             data_version=DataVersion(data_version),
         )
 
 
 @asset(
-    code_version="video_shorts_thumbnail_small_v1",
+    code_version="video_shorts_thumbnail_small_v2.01",
     key=AssetKey(["video_shorts", "video_thumbnail_small"]),
     group_name="video_shorts",
     description="Generate small thumbnail (270x480) from video file.",
@@ -344,7 +353,7 @@ def video_short_thumbnail_small(
 
 
 @asset(
-    code_version="video_shorts_thumbnail_large_v1",
+    code_version="video_shorts_thumbnail_large_v2.01",
     key=AssetKey(["video_shorts", "video_thumbnail_large"]),
     group_name="video_shorts",
     description="Generate large thumbnail (1080x1920) from video file.",
@@ -416,7 +425,7 @@ def video_short_thumbnail_large(
 
 
 @asset(
-    code_version="video_shorts_webhook_v3",
+    code_version="video_shorts_webhook_v3.01",
     key=AssetKey(["video_shorts", "video_webhook"]),
     group_name="video_shorts",
     description="Send webhook to Learn API after video processing.",
