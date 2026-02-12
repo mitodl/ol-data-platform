@@ -53,11 +53,12 @@ class OpenEdxDeploymentComponent:
         self.deployment_name = deployment_name
         self.vault = vault
 
-    def build_assets(self) -> list[AssetsDefinition]:
+    def build_assets(self) -> dict[str, AssetsDefinition]:
         """Build asset definitions for the deployment.
 
         Returns:
-            List of asset definitions with deployment-specific prefixes and partitions.
+            Dictionary of asset definitions with deployment-specific prefixes and
+            partitions.
         """
         # Create the main courseware asset with deployment-specific partitioning
         course_version_asset = late_bind_partition_to_asset(
@@ -87,15 +88,17 @@ class OpenEdxDeploymentComponent:
             OPENEDX_COURSE_RUN_PARTITIONS[self.deployment_name],
         )
 
-        return [
-            course_version_asset,
-            course_structure_asset,
-            course_xml_asset,
-            courserun_detail_asset,
-            course_content_webhook_asset,
-        ]
+        return {
+            "course_version_asset": course_version_asset,
+            "course_structure_asset": course_structure_asset,
+            "course_xml_asset": course_xml_asset,
+            "courserun_detail_asset": courserun_detail_asset,
+            "course_content_webhook_asset": course_content_webhook_asset,
+        }
 
-    def build_sensors(self, assets: list[AssetsDefinition]) -> list[SensorDefinition]:
+    def build_sensors(
+        self, assets: dict[str, AssetsDefinition]
+    ) -> list[SensorDefinition]:
         """Build sensor definitions for the deployment.
 
         Args:
@@ -104,10 +107,10 @@ class OpenEdxDeploymentComponent:
         Returns:
             List of sensor definitions
         """
-        # Find the course_version_asset (first asset in the list)
-        course_version_asset = assets[0]
-        course_xml_asset = assets[2]
-        course_content_webhook_asset = assets[4]
+        # Access individual assets by their keys
+        course_version_asset = assets["course_version_asset"]
+        course_xml_asset = assets["course_xml_asset"]
+        course_content_webhook_asset = assets["course_content_webhook_asset"]
 
         # Create asset-bound courseware sensor
         courseware_sensor = SensorDefinition(
@@ -142,7 +145,7 @@ class OpenEdxDeploymentComponent:
         automation_sensor = AutomationConditionSensorDefinition(
             f"{self.deployment_name}_openedx_automation_sensor",
             minimum_interval_seconds=300 if DAGSTER_ENV == "dev" else 60 * 60,
-            target=assets,
+            target=list(assets.values()),
         )
 
         return [
@@ -190,7 +193,7 @@ class OpenEdxDeploymentComponent:
             all_resources.update(shared_resources)
 
         return Definitions(
-            assets=assets,
+            assets=list(assets.values()),
             sensors=sensors,
             resources=all_resources,
         )
