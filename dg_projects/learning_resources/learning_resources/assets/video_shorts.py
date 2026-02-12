@@ -35,14 +35,16 @@ from learning_resources.lib.contants import (
     VIDEO_SHORT_THUMB_SMALL_WIDTH,
 )
 from learning_resources.lib.google_sheets import (
-    compress_video,
     convert_dropbox_link_to_direct,
     fetch_video_shorts_from_google_sheet,
+)
+from learning_resources.lib.video_processing import (
+    compress_video,
     generate_video_thumbnail,
 )
 
 # Process top 12 most recent videos
-MAX_VIDEOS_TO_PROCESS = 24
+MAX_VIDEOS_TO_PROCESS = 12
 
 # Dynamic partitions for video IDs
 video_short_ids = DynamicPartitionsDefinition(name="video_short_ids")
@@ -197,7 +199,7 @@ def video_short_metadata(
 
 
 @asset(
-    code_version="video_shorts_content_v2.01",
+    code_version="video_shorts_content_v2",
     key=AssetKey(["video_shorts", "video_content"]),
     group_name="video_shorts",
     description="Download video content from Dropbox.",
@@ -281,7 +283,7 @@ def video_short_content(
 
 
 @asset(
-    code_version="video_shorts_thumbnail_small_v2.01",
+    code_version="video_shorts_thumbnail_small_v1",
     key=AssetKey(["video_shorts", "video_thumbnail_small"]),
     group_name="video_shorts",
     description="Generate small thumbnail (270x480) from video file.",
@@ -353,7 +355,7 @@ def video_short_thumbnail_small(
 
 
 @asset(
-    code_version="video_shorts_thumbnail_large_v2.01",
+    code_version="video_shorts_thumbnail_large_v1",
     key=AssetKey(["video_shorts", "video_thumbnail_large"]),
     group_name="video_shorts",
     description="Generate large thumbnail (1080x1920) from video file.",
@@ -425,7 +427,7 @@ def video_short_thumbnail_large(
 
 
 @asset(
-    code_version="video_shorts_webhook_v3.01",
+    code_version="video_shorts_webhook_v3",
     key=AssetKey(["video_shorts", "video_webhook"]),
     group_name="video_shorts",
     description="Send webhook to Learn API after video processing.",
