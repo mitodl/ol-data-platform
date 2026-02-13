@@ -1,12 +1,10 @@
 """Video encoding and thumbnail generation utilities."""
 
-import logging
 import os
 from pathlib import Path
 
 import ffmpeg
-
-log = logging.getLogger(__name__)
+from dagster import OpExecutionContext
 
 
 def generate_video_thumbnail(
@@ -55,9 +53,10 @@ def generate_video_thumbnail(
 
 
 def compress_video(
+    context: OpExecutionContext,
     input_path: Path,
     output_path: Path,
-    max_size_mb: float = 12,
+    max_size_mb: float = 6,
 ) -> Path:
     """
     Compress video to a target maximum file size using two-pass H.264 encoding.
@@ -67,6 +66,7 @@ def compress_video(
     the size limit with minimal quality loss.
 
     Args:
+        context: Dagster execution context for logging
         input_path: Path to the input video file
         output_path: Path where compressed video will be saved
         max_size_mb: Maximum output file size in megabytes (default 12 MB)
@@ -80,14 +80,14 @@ def compress_video(
     file_size_mb = input_path.stat().st_size / (1024 * 1024)
 
     if file_size_mb <= max_size_mb:
-        log.info(
+        context.log.info(
             "Video already under %.1f MB (%.1f MB), skipping compression",
             max_size_mb,
             file_size_mb,
         )
         return input_path
 
-    log.info(
+    context.log.info(
         "Compressing video from %.1f MB to target %.1f MB", file_size_mb, max_size_mb
     )
 
@@ -113,7 +113,7 @@ def compress_video(
         )
         raise RuntimeError(msg)
 
-    log.info(
+    context.log.info(
         "Duration: %.1fs, target video bitrate: %d bps (%.1f Mbps)",
         duration,
         video_bitrate,
@@ -170,7 +170,7 @@ def compress_video(
         raise RuntimeError(msg)
 
     output_size_mb = output_path.stat().st_size / (1024 * 1024)
-    log.info(
+    context.log.info(
         "Compression complete: %.1f MB -> %.1f MB (%.0f%% reduction)",
         file_size_mb,
         output_size_mb,
