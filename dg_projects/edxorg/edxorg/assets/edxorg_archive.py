@@ -283,6 +283,9 @@ def process_edxorg_archive_bundle(
                             "extracted_course_number"
                         ),
                         pl.lit(asset_info["course_run"]).alias("extracted_course_run"),
+                        pl.lit(f"edxorg_{asset_info['source_system']}").alias(
+                            "extracted_source_platform"
+                        ),
                         # Create a row hash to allow for deduplicating data
                         plh.concat_str(pl.all().fill_null(""))
                         .chash.sha256()
