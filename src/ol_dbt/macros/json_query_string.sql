@@ -17,12 +17,12 @@
 
 {%- macro trino__json_query_string(json_col, json_path) -%}
   {# Trino: Use json_query with 'lax' mode and 'omit quotes' to return unquoted strings #}
-  json_query({{ json_col }}, 'lax ' || {{ json_path }} || ' omit quotes')
+  json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}' omit quotes)
 {%- endmacro -%}
 
 {%- macro duckdb__json_query_string(json_col, json_path) -%}
   {# DuckDB: Use json_extract_string which returns unquoted string values #}
-  json_extract_string({{ json_col }}, {{ json_path }})
+  json_extract_string({{ json_col }}, {{ json_path | replace("'", "\"") }})
 {%- endmacro -%}
 
 {%- macro starrocks__json_query_string(json_col, json_path) -%}

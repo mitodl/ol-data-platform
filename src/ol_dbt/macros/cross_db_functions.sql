@@ -32,20 +32,20 @@
 {% macro default__array_join(array_expr, delimiter, null_replacement='') -%}
     {# Trino: native support #}
     {% if null_replacement %}
-        array_join({{ array_expr }}, {{ delimiter }}, {{ null_replacement }})
+        array_join({{ array_expr }}, '{{ delimiter }}', '{{ null_replacement }}')
     {% else %}
-        array_join({{ array_expr }}, {{ delimiter }})
+        array_join({{ array_expr }}, '{{ delimiter }}')
     {% endif %}
 {%- endmacro %}
 
 {% macro duckdb__array_join(array_expr, delimiter, null_replacement='') -%}
     {# DuckDB: use array_to_string or list_aggr #}
-    array_to_string({{ array_expr }}, {{ delimiter }})
+    array_to_string({{ array_expr }}, '{{ delimiter }}')
 {%- endmacro %}
 
 {% macro starrocks__array_join(array_expr, delimiter, null_replacement='') -%}
     {# StarRocks: array_join with different signature #}
-    array_join({{ array_expr }}, {{ delimiter }})
+    array_join({{ array_expr }}, '{{ delimiter }}')
 {%- endmacro %}
 
 
