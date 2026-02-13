@@ -2,20 +2,15 @@
 
 import hashlib
 import json
-import logging
 import re
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-import ffmpeg
 import pygsheets
 from dagster import OpExecutionContext
 from dateutil import parser  # type: ignore[import-untyped]
 from google.oauth2 import service_account
-
-log = logging.getLogger(__name__)
 
 
 def fetch_video_shorts_from_google_sheet(
@@ -79,7 +74,7 @@ def fetch_video_shorts_from_google_sheet(
         context.log.warning("No rows returned from Google Sheets!")
 
     # Parse rows into video metadata
-    return parse_sheet_rows(rows)
+    return parse_sheet_rows(context, rows)
 
 
 def parse_pub_date(date_value: str | float) -> datetime | None:  # noqa: PLR0911
@@ -197,11 +192,11 @@ def convert_dropbox_link_to_direct(dropbox_url: str) -> str:
     elif "dl=" not in direct_url:
         separator = "&" if "?" in direct_url else "?"
         direct_url = f"{direct_url}{separator}dl=1"
-    log.info("Converted Dropbox URL to direct link: %s", direct_url)
     return direct_url
 
 
 def parse_sheet_rows(
+    context: OpExecutionContext,
     rows: list[list[str]],
 ) -> list[dict[str, Any]]:
     """
@@ -222,7 +217,9 @@ def parse_sheet_rows(
         sorted by pub_date descending
     """
     if not rows or len(rows) < 2:  # Need at least header + 1 data row  # noqa: PLR2004
-        log.warning("Sheet has fewer than 2 rows (header + data): %d rows", len(rows))
+        context.log.warning(
+            "Sheet has fewer than 2 rows (header + data): %d rows", len(rows)
+        )
         return []
 
     # Get today's date (without time) for comparison
@@ -230,7 +227,7 @@ def parse_sheet_rows(
 
     # Parse header row
     header = [col.strip().lower() for col in rows[0]]
-    log.info("Sheet headers found: %s", header)
+    context.log.info("Sheet headers found: %s", header)
 
     # Find column indices
     try:
@@ -246,7 +243,7 @@ def parse_sheet_rows(
     skipped_rows = 0
     for row_idx, row in enumerate(rows[1:], start=2):  # Skip header, start at row 2
         if len(row) <= max(pub_date_idx, video_name_idx, dropbox_link_idx):
-            log.debug(
+            context.log.debug(
                 "Row %d: Skipped (incomplete row, only %d cells)", row_idx, len(row)
             )
             skipped_rows += 1
@@ -269,7 +266,7 @@ def parse_sheet_rows(
         # Skip rows without parseable pub_date or dropbox_link
         pub_date = parse_pub_date(pub_date_value)
         if not pub_date or not dropbox_link:
-            log.warning(
+            context.log.warning(
                 "Row %d: Skipped - pub_date_value='%s' (type=%s, parsed=%s), "
                 "dropbox_link='%s' (has_link=%s)",
                 row_idx,
@@ -284,7 +281,7 @@ def parse_sheet_rows(
 
         # Skip rows with future publication dates
         if pub_date.date() > today:
-            log.info(
+            context.log.info(
                 "Row %d: Skipped - pub_date=%s is in the future (today=%s)",
                 row_idx,
                 pub_date.date(),
@@ -298,7 +295,7 @@ def parse_sheet_rows(
         # Format date for display (convert datetime back to string)
         pub_date_str = pub_date.isoformat()
 
-        log.info(
+        context.log.info(
             "Row %d: Accepted - video='%s', file='%s', date='%s' (from %s)",
             row_idx,
             video_name[:30] if video_name else "(no name)",
@@ -321,7 +318,7 @@ def parse_sheet_rows(
     # Sort by pub_date descending (newest first)
     videos.sort(key=lambda v: v["pub_date"], reverse=True)  # type: ignore[arg-type, return-value]
 
-    log.info(
+    context.log.info(
         "Parsed %d videos with pub_date <= %s (%d rows, %d skipped)",
         len(videos),
         today,
@@ -330,48 +327,3 @@ def parse_sheet_rows(
     )
 
     return videos
-
-
-def generate_video_thumbnail(
-    video_path: Path,
-    thumbnail_path: Path,
-    width: int,
-    height: int,
-) -> None:
-    """
-    Generate a thumbnail image from a video file using ffmpeg.
-
-    Extracts the first frame and resizes it to the specified dimensions.
-
-    Args:
-        video_path: Path to the input video file
-        thumbnail_path: Path where thumbnail will be saved
-        width: Thumbnail width in pixels
-        height: Thumbnail height in pixels
-
-    Raises:
-        RuntimeError: If video cannot be read or thumbnail cannot be generated
-    """
-    try:
-        # Extract first frame from video and resize to specified dimensions
-        (
-            ffmpeg.input(str(video_path), ss=0)
-            .filter("scale", width, height)
-            .output(
-                str(thumbnail_path),
-                vframes=1,
-                format="image2",
-                vcodec="mjpeg",
-            )
-            .overwrite_output()
-            .run(capture_stdout=True, capture_stderr=True)
-        )
-    except ffmpeg.Error as e:
-        stderr = e.stderr.decode("utf-8") if e.stderr else "No error details"
-        msg = f"Failed to generate thumbnail from {video_path}: {stderr}"
-        raise RuntimeError(msg) from e
-
-    # Verify thumbnail was created
-    if not thumbnail_path.exists() or thumbnail_path.stat().st_size == 0:
-        msg = f"Thumbnail file was not created or is empty: {thumbnail_path}"
-        raise RuntimeError(msg)

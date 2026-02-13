@@ -37,6 +37,9 @@ from learning_resources.lib.contants import (
 from learning_resources.lib.google_sheets import (
     convert_dropbox_link_to_direct,
     fetch_video_shorts_from_google_sheet,
+)
+from learning_resources.lib.video_processing import (
+    compress_video,
     generate_video_thumbnail,
 )
 
@@ -261,12 +264,22 @@ def video_short_content(
             msg = f"Failed to download video: {video_id}"
             raise RuntimeError(msg)
 
+        # Compress video to target size
+        target_size = float(os.environ.get("VIDEO_SHORTS_MAX_SIZE_MB", "6"))
+        context.log.info("Compressing video to max %d MB: %s", target_size, video_file)
+        compressed_file = compress_video(
+            context,
+            input_path=video_file,
+            output_path=Path(temp_dir) / "compressed" / f"{video_id}.{video_ext}",
+            max_size_mb=target_size,
+        )
+
         # Full S3 path: S3_PREFIX/{video_id}/{video_id}.{mp4}
         video_s3_path = f"{video_id}/{video_id}.{video_ext}"
-        context.log.info("Video downloaded: %s -> %s", video_file, video_s3_path)
+        context.log.info("Video ready: %s -> %s", compressed_file, video_s3_path)
 
         yield Output(
-            value=(video_file, video_s3_path),
+            value=(compressed_file, video_s3_path),
             data_version=DataVersion(data_version),
         )
 
