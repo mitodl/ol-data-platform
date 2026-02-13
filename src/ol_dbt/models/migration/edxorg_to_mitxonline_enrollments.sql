@@ -147,6 +147,9 @@ with combined_enrollments as (
     --- Exclude PEx runs as these are transient and don't need to be migrated. Anyone who earned a certificate
       -- in them also earned a certificate in the corresponding non-PEx version of the course
     and combined_enrollments.courserun_readable_id not like '%PEx%'
+    -- Exclude retired users
+    and combined_enrollments.user_email not like 'retired__user%'
+    and combined_enrollments.user_username not like 'retired__user%'
 )
 
 select
@@ -186,3 +189,4 @@ left join edx_signatories
 where
     edxorg_enrollment.courseruncertificate_created_on is not null
     and mitxonline_enrollment.user_email is null
+    and mitx__users.user_mitxonline_email is null
