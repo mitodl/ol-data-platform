@@ -45,7 +45,7 @@ with combined_course_activities_daily as (
         '{{ var("mitxonline") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__mitxonline__user_courseactivity_video') }}
     where useractivity_event_type = 'play_video'
 
@@ -55,7 +55,7 @@ with combined_course_activities_daily as (
         '{{ var("edxorg") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__edxorg__mitx_user_courseactivity_video') }}
     where useractivity_event_type = 'play_video'
 
@@ -65,7 +65,7 @@ with combined_course_activities_daily as (
         '{{ var("mitxpro") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__mitxpro__user_courseactivity_video') }}
     where useractivity_event_type = 'play_video'
 
@@ -75,7 +75,7 @@ with combined_course_activities_daily as (
         '{{ var("residential") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__mitxresidential__user_courseactivity_video') }}
     where useractivity_event_type = 'play_video'
 )
@@ -86,7 +86,7 @@ with combined_course_activities_daily as (
         '{{ var("mitxonline") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__mitxonline__user_courseactivity_problemsubmitted') }}
 
     union all
@@ -95,7 +95,7 @@ with combined_course_activities_daily as (
         '{{ var("edxorg") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__edxorg__mitx_user_courseactivity_problemsubmitted') }}
 
     union all
@@ -104,7 +104,7 @@ with combined_course_activities_daily as (
         '{{ var("mitxpro") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__mitxpro__user_courseactivity_problemsubmitted') }}
 
     union all
@@ -113,7 +113,7 @@ with combined_course_activities_daily as (
         '{{ var("residential") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__mitxresidential__user_courseactivity_problemsubmitted') }}
 )
 
@@ -123,7 +123,7 @@ with combined_course_activities_daily as (
         '{{ var("mitxonline") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__mitxonline__user_courseactivity_discussion') }}
     -- edx.forum.comment.created, edx.forum.response.created, edx.forum.thread.created
     where useractivity_event_type like 'edx.forum.%.created'
@@ -134,7 +134,7 @@ with combined_course_activities_daily as (
         '{{ var("edxorg") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__edxorg__mitx_user_courseactivity_discussion') }}
     -- edx.forum.comment.created, edx.forum.response.created, edx.forum.thread.created
     where useractivity_event_type like 'edx.forum.%.created'
@@ -145,7 +145,7 @@ with combined_course_activities_daily as (
         '{{ var("mitxpro") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__mitxpro__user_courseactivity_discussion') }}
     -- edx.forum.comment.created, edx.forum.response.created, edx.forum.thread.created
     where useractivity_event_type like 'edx.forum.%.created'
@@ -156,7 +156,7 @@ with combined_course_activities_daily as (
         '{{ var("residential") }}' as platform
         , user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
     from {{ ref('int__mitxresidential__user_courseactivity_discussion') }}
     -- edx.forum.comment.created, edx.forum.response.created, edx.forum.thread.created
     where useractivity_event_type like 'edx.forum.%.created'

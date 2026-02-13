@@ -26,6 +26,6 @@ select
     , {{ json_query_string('useractivity_event_object', "'$.old_speed'") }} as useractivity_video_old_speed
 from course_activities
 where
-    regexp_like(useractivity_event_type, '(^[\w]+)_video') = true
-    or regexp_like(useractivity_event_type, '(^[\w]+)_transcript') = true
+    {{ regexp_like('useractivity_event_type', "'(^[\\w]+)_video'") }} = true
+    or {{ regexp_like('useractivity_event_type', "'(^[\\w]+)_transcript'") }} = true
     or useractivity_event_type like 'edx.video.%'

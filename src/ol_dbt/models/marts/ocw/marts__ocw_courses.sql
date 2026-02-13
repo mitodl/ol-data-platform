@@ -5,7 +5,7 @@ with courses as (
 , instructors as (
     select
         course_uuid
-        , array_join(array_agg(course_instructor_title), ', ') as course_instructors
+        , {{ array_join('array_agg(course_instructor_title)', ", ") }} as course_instructors
     from {{ ref('int__ocw__course_instructors') }}
     group by course_uuid
 )

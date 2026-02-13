@@ -26,21 +26,18 @@ with source as (
         , nullif({{ json_query_string('metadata', "'$.term'") }}, '') as course_term
         , nullif({{ json_query_string('metadata', "'$.year'") }}, '') as course_year
         -- convert to comma-separated list to be consistent with extra_course_numbers
-        , array_join(
-            cast(json_parse(json_query(metadata, 'lax $.level')) as array (varchar)), ', ' --noqa
+        , {{ array_join('cast(json_parse(json_query(metadata', "lax $.level") }}) as array (varchar)), ', ' --noqa
         ) as course_level
-        , array_join(
-            cast(
+        , {{ array_join('cast(
                 json_parse(
                     case
-                        when json_query(metadata, 'lax $.learning_resource_types') = '[]' then null
+                        when json_query(metadata', "lax $.learning_resource_types") }} = '[]' then null
                         else nullif(json_query(metadata, 'lax $.learning_resource_types'), '')
                     end
                 ) as array(varchar) --noqa
             ), ', '
         ) as learning_resource_types
-        , array_join(
-            cast(json_parse(json_query(metadata, 'lax $.department_numbers')) as array (varchar)), ', ' --noqa
+        , {{ array_join('cast(json_parse(json_query(metadata', "lax $.department_numbers") }}) as array (varchar)), ', ' --noqa
         ) as course_department_numbers
         , nullif({{ json_query_string('metadata', "'$.primary_course_number'") }}, '') as course_primary_course_number
         , {{ json_query_string('metadata', "'$.extra_course_numbers'") }} as course_extra_course_numbers

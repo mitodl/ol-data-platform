@@ -4,7 +4,7 @@ with video_content as (
         , block_id
         , block_title
         , courserun_readable_id
-        , element_at(split(block_id, '@'), -1) as video_id
+        , {{ element_at_array('split(block_id, \'@\')', -1) }} as video_id
         , nullif({{ json_query_string('block_metadata', "'$.display_name'") }}, 'null') as video_name
         , nullif({{ json_query_string('block_metadata', "'$.start'") }}, 'null') as start_date
         , nullif({{ json_query_string('block_metadata', "'$.due'") }}, 'null') as due_date

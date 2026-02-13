@@ -27,6 +27,6 @@ from course_activities
 --- https://edx.readthedocs.io/projects/devdata/en/latest/internal_data_formats/tracking_logs/student_event_types.html
 -- #video-interaction-events
 where
-    regexp_like(useractivity_event_type, '(^[\w]+)_video') = true
-    or regexp_like(useractivity_event_type, '(^[\w]+)_transcript') = true
+    {{ regexp_like('useractivity_event_type', "'(^[\\w]+)_video'") }} = true
+    or {{ regexp_like('useractivity_event_type', "'(^[\\w]+)_transcript'") }} = true
     or useractivity_event_type like 'edx.video.%'

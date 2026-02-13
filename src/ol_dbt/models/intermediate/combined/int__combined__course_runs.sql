@@ -87,11 +87,11 @@ with mitx_courses as (
         , case
             when
                 mitxonline_runs.courserun_end_on is null
-                and from_iso8601_timestamp(mitxonline_runs.courserun_start_on) <= current_date
+                and {{ from_iso8601_timestamp('mitxonline_runs.courserun_start_on') }} <= current_date
                 then true
             when
-                from_iso8601_timestamp(mitxonline_runs.courserun_start_on) <= current_date
-                and from_iso8601_timestamp(mitxonline_runs.courserun_end_on) > current_date
+                {{ from_iso8601_timestamp('mitxonline_runs.courserun_start_on') }} <= current_date
+                and {{ from_iso8601_timestamp('mitxonline_runs.courserun_end_on') }} > current_date
                 then true
             else false
         end as courserun_is_current
@@ -116,11 +116,11 @@ with mitx_courses as (
         , case
             when
                 edxorg_runs.courserun_end_date is null
-                and from_iso8601_timestamp(edxorg_runs.courserun_start_date) <= current_date
+                and {{ from_iso8601_timestamp('edxorg_runs.courserun_start_date') }} <= current_date
                 then true
             when
-                from_iso8601_timestamp(edxorg_runs.courserun_start_date) <= current_date
-                and from_iso8601_timestamp(edxorg_runs.courserun_end_date) > current_date
+                {{ from_iso8601_timestamp('edxorg_runs.courserun_start_date') }} <= current_date
+                and {{ from_iso8601_timestamp('edxorg_runs.courserun_end_date') }} > current_date
                 then true
             else false
         end as courserun_is_current
@@ -151,11 +151,11 @@ with mitx_courses as (
         , case
             when
                 mitxpro_runs.courserun_end_on is null
-                and from_iso8601_timestamp(mitxpro_runs.courserun_start_on) <= current_date
+                and {{ from_iso8601_timestamp('mitxpro_runs.courserun_start_on') }} <= current_date
                 then true
             when
-                from_iso8601_timestamp(mitxpro_runs.courserun_start_on) <= current_date
-                and from_iso8601_timestamp(mitxpro_runs.courserun_end_on) > current_date
+                {{ from_iso8601_timestamp('mitxpro_runs.courserun_start_on') }} <= current_date
+                and {{ from_iso8601_timestamp('mitxpro_runs.courserun_end_on') }} > current_date
                 then true
             else false
         end as courserun_is_current
@@ -179,11 +179,11 @@ with mitx_courses as (
         , case
             when
                 emeritus_runs.courserun_end_on is null
-                and from_iso8601_timestamp(mitxpro_runs.courserun_start_on) <= current_date
+                and {{ from_iso8601_timestamp('mitxpro_runs.courserun_start_on') }} <= current_date
                 then true
             when
-                from_iso8601_timestamp(emeritus_runs.courserun_start_on) <= current_date
-                and from_iso8601_timestamp(emeritus_runs.courserun_end_on) > current_date
+                {{ from_iso8601_timestamp('emeritus_runs.courserun_start_on') }} <= current_date
+                and {{ from_iso8601_timestamp('emeritus_runs.courserun_end_on') }} > current_date
                 then true
             else false
         end as courserun_is_current
@@ -209,11 +209,11 @@ with mitx_courses as (
         , case
             when
                 global_alumni_runs.courserun_end_on is null
-                and from_iso8601_timestamp(global_alumni_runs.courserun_start_on) <= current_date
+                and {{ from_iso8601_timestamp('global_alumni_runs.courserun_start_on') }} <= current_date
                 then true
             when
-                from_iso8601_timestamp(global_alumni_runs.courserun_start_on) <= current_date
-                and from_iso8601_timestamp(global_alumni_runs.courserun_end_on) > current_date
+                {{ from_iso8601_timestamp('global_alumni_runs.courserun_start_on') }} <= current_date
+                and {{ from_iso8601_timestamp('global_alumni_runs.courserun_end_on') }} > current_date
                 then true
             else false
         end as courserun_is_current
@@ -242,11 +242,11 @@ with mitx_courses as (
         , case
             when
                 bootcamps_runs.courserun_end_on is null
-                and from_iso8601_timestamp(bootcamps_runs.courserun_start_on) <= current_date
+                and {{ from_iso8601_timestamp('bootcamps_runs.courserun_start_on') }} <= current_date
                 then true
             when
-                from_iso8601_timestamp(bootcamps_runs.courserun_start_on) <= current_date
-                and from_iso8601_timestamp(bootcamps_runs.courserun_end_on) > current_date
+                {{ from_iso8601_timestamp('bootcamps_runs.courserun_start_on') }} <= current_date
+                and {{ from_iso8601_timestamp('bootcamps_runs.courserun_end_on') }} > current_date
                 then true
             else false
         end as courserun_is_current
@@ -273,11 +273,11 @@ with mitx_courses as (
         , case
             when
                 courserun_end_on is null
-                and from_iso8601_timestamp(courserun_start_on) <= current_date
+                and {{ from_iso8601_timestamp('courserun_start_on') }} <= current_date
                 then true
             when
-                from_iso8601_timestamp(courserun_start_on) <= current_date
-                and from_iso8601_timestamp(courserun_end_on) > current_date
+                {{ from_iso8601_timestamp('courserun_start_on') }} <= current_date
+                and {{ from_iso8601_timestamp('courserun_end_on') }} > current_date
                 then true
             else false
         end as courserun_is_current
