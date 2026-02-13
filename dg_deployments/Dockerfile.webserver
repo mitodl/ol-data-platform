@@ -1,0 +1,32 @@
+# Dagster Webserver with ol-orchestrate-lib for pooled Postgres storage
+#
+# This Dockerfile builds a custom Dagster webserver image that includes
+# the ol-orchestrate-lib package, enabling the use of pooled Postgres
+# storage classes to prevent connection exhaustion.
+#
+# Build from repository root:
+#   docker build -f dg_deployments/Dockerfile.webserver -t ol-data-platform-webserver:latest .
+#
+# Usage with Helm chart:
+#   Set dagsterWebserver.image.repository and dagsterWebserver.image.tag in values.yaml
+
+FROM docker.io/dagster/dagster-k8s:1.12.14
+
+# Install uv for faster Python dependency management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Set working directory
+WORKDIR /opt/dagster/app
+
+# Copy ol-orchestrate-lib package
+COPY packages/ol-orchestrate-lib /opt/dagster/packages/ol-orchestrate-lib
+
+# Install ol-orchestrate-lib and its dependencies
+# This makes the pooled Postgres storage classes available
+RUN uv pip install --system /opt/dagster/packages/ol-orchestrate-lib
+
+# Verify installation
+RUN python -c "from ol_orchestrate.lib.postgres import PooledPostgresRunStorage, PooledPostgresEventLogStorage, PooledPostgresScheduleStorage; print('✓ Pooled Postgres storage classes installed')"
+
+# The base image already sets up the webserver entrypoint
+# No need to override CMD or ENTRYPOINT
