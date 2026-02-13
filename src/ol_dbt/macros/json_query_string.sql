@@ -1,4 +1,4 @@
-{% macro json_query_string(json_col, json_path) %}
+{%- macro json_query_string(json_col, json_path) -%}
   {#
     Cross-database macro for extracting string values from JSON with the "omit quotes" behavior.
 
@@ -12,26 +12,26 @@
       {{ json_query_string('metadata_col', "'$.edx_video_id'") }}
       {{ json_query_string('event_object', "'$.problem_id'") }}
   #}
-  {{ return(adapter.dispatch('json_query_string', 'open_learning')(json_col, json_path)) }}
-{% endmacro %}
+  {{- return(adapter.dispatch('json_query_string', 'open_learning')(json_col, json_path)) -}}
+{%- endmacro -%}
 
-{% macro trino__json_query_string(json_col, json_path) %}
+{%- macro trino__json_query_string(json_col, json_path) -%}
   {# Trino: Use json_query with 'lax' mode and 'omit quotes' to return unquoted strings #}
   json_query({{ json_col }}, 'lax ' || {{ json_path }} || ' omit quotes')
-{% endmacro %}
+{%- endmacro -%}
 
-{% macro duckdb__json_query_string(json_col, json_path) %}
+{%- macro duckdb__json_query_string(json_col, json_path) -%}
   {# DuckDB: Use json_extract_string which returns unquoted string values #}
   json_extract_string({{ json_col }}, {{ json_path }})
-{% endmacro %}
+{%- endmacro -%}
 
-{% macro starrocks__json_query_string(json_col, json_path) %}
+{%- macro starrocks__json_query_string(json_col, json_path) -%}
   {# StarRocks: Use get_json_string for direct string extraction #}
   {# Alternative: CAST(json_query(col, path) AS VARCHAR) #}
   get_json_string({{ json_col }}, {{ json_path }})
-{% endmacro %}
+{%- endmacro -%}
 
-{% macro default__json_query_string(json_col, json_path) %}
+{%- macro default__json_query_string(json_col, json_path) -%}
   {# Default to Trino behavior #}
-  {{ return(trino__json_query_string(json_col, json_path)) }}
-{% endmacro %}
+  {{- return(trino__json_query_string(json_col, json_path)) -}}
+{%- endmacro -%}
