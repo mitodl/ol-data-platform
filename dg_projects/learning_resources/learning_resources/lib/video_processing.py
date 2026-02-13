@@ -57,7 +57,7 @@ def generate_video_thumbnail(
 def compress_video(
     input_path: Path,
     output_path: Path,
-    max_size_mb: float = 25.0,
+    max_size_mb: float = 12,
 ) -> Path:
     """
     Compress video to a target maximum file size using two-pass H.264 encoding.
@@ -69,7 +69,7 @@ def compress_video(
     Args:
         input_path: Path to the input video file
         output_path: Path where compressed video will be saved
-        max_size_mb: Maximum output file size in megabytes (default 25 MB)
+        max_size_mb: Maximum output file size in megabytes (default 12 MB)
 
     Returns:
         Path to the output file

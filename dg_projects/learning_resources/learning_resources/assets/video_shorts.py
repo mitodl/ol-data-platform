@@ -264,12 +264,13 @@ def video_short_content(
             msg = f"Failed to download video: {video_id}"
             raise RuntimeError(msg)
 
-        # Compress video to target size (max 25 MB)
-        context.log.info("Compressing video to max 25 MB: %s", video_file)
+        # Compress video to target size
+        target_size = float(os.environ.get("VIDEO_SHORTS_MAX_SIZE_MB", "12"))
+        context.log.info("Compressing video to max %d MB: %s", target_size, video_file)
         compressed_file = compress_video(
             input_path=video_file,
             output_path=Path(temp_dir) / "compressed" / f"{video_id}.{video_ext}",
-            max_size_mb=25.0,
+            max_size_mb=target_size,
         )
 
         # Full S3 path: S3_PREFIX/{video_id}/{video_id}.{mp4}
