@@ -1,6 +1,6 @@
 table_name: organization_administration_report
 main_dttm_col: certificate_created_date
-description: Auto refreshed at 2026-02-05T13:52:46.882546+00:00
+description: Auto refreshed at 2026-02-13T07:59:16.856640+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

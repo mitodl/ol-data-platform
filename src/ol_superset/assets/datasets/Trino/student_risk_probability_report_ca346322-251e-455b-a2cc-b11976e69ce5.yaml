@@ -1,6 +1,6 @@
 table_name: student_risk_probability_report
 main_dttm_col: created_timestamp
-description: null
+description: Auto refreshed at 2026-02-10T15:23:01.983182+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

@@ -1,6 +1,6 @@
 table_name: combined_enrollments_with_gender_and_date
 main_dttm_col: null
-description: Auto refreshed at 2026-02-05T13:51:04.613730+00:00
+description: Auto refreshed at 2026-02-13T07:56:16.145084+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

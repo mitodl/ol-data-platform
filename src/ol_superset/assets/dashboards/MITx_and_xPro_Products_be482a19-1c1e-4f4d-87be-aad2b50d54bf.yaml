@@ -11,7 +11,7 @@ position:
     children: []
     id: CHART-explore-71-1
     meta:
-      chartId: 4
+      chartId: 71
       height: 24
       sliceName: Latest Product Created Date
       uuid: cdba7fac-5019-4d70-9f0c-817fb7f194d8
@@ -27,7 +27,7 @@ position:
     children: []
     id: CHART-explore-82-1
     meta:
-      chartId: 52
+      chartId: 82
       height: 77
       sliceName: Products
       uuid: 36ade680-7ae9-4d35-89b0-a46235139418
@@ -159,18 +159,18 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '4':
+    '71':
       crossFilters:
         chartsInScope:
         - 82
         scope: global
-      id: 4
-    '52':
+      id: 71
+    '82':
       crossFilters:
         chartsInScope:
         - 71
         scope: global
-      id: 52
+      id: 82
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
