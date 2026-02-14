@@ -654,6 +654,66 @@ def get_schemas_to_clean(
     return sorted(schemas_to_clean)
 
 
+def get_all_eligible_schemas(
+    conn: trino.dbapi.Connection, catalog: str, base_schema: str
+) -> dict[str, list[str]]:
+    """
+    Get all schemas eligible for cleanup, grouped by inferred suffix.
+
+    This enumerates all schemas that match the pattern base_schema_suffix[_layer]
+    and are not in the protected list.
+
+    Parameters
+    ----------
+    conn
+        Trino connection
+    catalog
+        Catalog name
+    base_schema
+        Base schema name (e.g., 'ol_warehouse_production')
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Dictionary mapping suffixes to lists of matching schemas
+    """
+    cursor = conn.cursor()
+    cursor.execute(f"SHOW SCHEMAS FROM {catalog}")
+    all_schemas = [row[0] for row in cursor.fetchall()]
+
+    # Group schemas by suffix
+    suffix_groups: dict[str, list[str]] = {}
+
+    for schema in all_schemas:
+        # Skip protected schemas
+        if schema in PROTECTED_SCHEMAS:
+            continue
+
+        # Schema must start with base_schema + underscore
+        prefix = f"{base_schema}_"
+        if not schema.startswith(prefix):
+            continue
+
+        # Extract the suffix (first component after base_schema_)
+        remainder = schema[len(prefix) :]
+        if not remainder:
+            continue
+
+        # Suffix is everything up to next underscore (if any)
+        parts = remainder.split("_", 1)
+        suffix = parts[0]
+
+        if suffix not in suffix_groups:
+            suffix_groups[suffix] = []
+        suffix_groups[suffix].append(schema)
+
+    # Sort schemas within each group
+    for suffix_key, schemas in suffix_groups.items():
+        suffix_groups[suffix_key] = sorted(schemas)
+
+    return suffix_groups
+
+
 def get_tables_and_views(
     conn: trino.dbapi.Connection, catalog: str, schema: str
 ) -> dict[str, list[str]]:
@@ -1111,6 +1171,10 @@ def cleanup(
             help="Schema suffix (default: from DBT_SCHEMA_SUFFIX env var)"
         ),
     ] = None,
+    list_only: Annotated[
+        bool,
+        cyclopts.Parameter(help="Only list eligible schemas without scanning objects"),
+    ] = False,
     execute: Annotated[
         bool, cyclopts.Parameter(help="Actually delete objects (default is dry-run)")
     ] = False,
@@ -1151,11 +1215,74 @@ def cleanup(
         Target environment (dev_production or dev_qa)
     suffix
         Schema suffix (overrides DBT_SCHEMA_SUFFIX)
+    list_only
+        Only list eligible schemas without scanning for objects (fast enumeration)
     execute
         Actually delete objects (default is dry-run)
     yes
         Skip confirmation prompt (USE WITH CAUTION)
+
+    Examples
+    --------
+    # List all schemas eligible for cleanup (no suffix needed)
+    python bin/dbt-local-dev.py cleanup --list-only
+
+    # Show what would be deleted (dry-run)
+    python bin/dbt-local-dev.py cleanup --suffix tmacey
+
+    # Actually delete objects
+    python bin/dbt-local-dev.py cleanup --suffix tmacey --execute
     """
+    # Handle list-only mode (enumerate all eligible schemas)
+    if list_only:
+        config = TARGET_CONFIGS[target]
+
+        print("=" * 70)
+        print(f"Schema Enumeration - {config['description']}")
+        print("=" * 70)
+        print(f"Target: {target}")
+        print(f"Cluster: {config['host']}")
+        print(f"Catalog: {config['catalog']}")
+        print(f"Base Schema: {config['base_schema']}")
+        print("=" * 70)
+
+        # Connect
+        print("\n📡 Connecting to Trino...")
+        conn = get_trino_connection(
+            config["host"], config["catalog"], config["base_schema"]
+        )
+        print("✓ Connected")
+
+        # Get all eligible schemas grouped by suffix
+        print("\n🔍 Enumerating all schemas with suffixes...")
+        suffix_groups = get_all_eligible_schemas(
+            conn, config["catalog"], config["base_schema"]
+        )
+
+        if not suffix_groups:
+            print("✓ No schemas found with suffixes")
+            return
+
+        print(f"\n📋 Found {len(suffix_groups)} suffix(es) with eligible schemas:")
+        print("=" * 70)
+
+        total_schemas = 0
+        for user_suffix in sorted(suffix_groups.keys()):
+            schemas = suffix_groups[user_suffix]
+            total_schemas += len(schemas)
+            print(f"\nSuffix: {user_suffix} ({len(schemas)} schema(s))")
+            for schema in schemas:
+                print(f"  - {schema}")
+
+        print("\n" + "=" * 70)
+        print(f"Total eligible schemas: {total_schemas}")
+        print("=" * 70)
+        print("\nTo clean a specific suffix, run:")
+        print(
+            f"  python bin/dbt-local-dev.py cleanup --suffix <suffix> --target {target}"
+        )
+        return
+
     # Get suffix
     suffix_val = suffix or os.getenv("DBT_SCHEMA_SUFFIX", "")
     if not suffix_val:
