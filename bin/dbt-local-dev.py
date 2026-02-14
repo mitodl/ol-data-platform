@@ -33,7 +33,7 @@ import boto3
 import cyclopts
 import duckdb
 import trino
-from trino.auth import BasicAuthentication
+from trino.auth import OAuth2Authentication
 
 # ============================================================================
 # Constants and Configuration
@@ -574,21 +574,13 @@ def get_trino_connection(
     trino.dbapi.Connection
         Trino connection
     """
-    username = os.getenv("DBT_TRINO_USERNAME")
-    password = os.getenv("DBT_TRINO_PASSWORD")
-
-    if not username or not password:
-        print("ERROR: DBT_TRINO_USERNAME and DBT_TRINO_PASSWORD must be set")
-        sys.exit(1)
-
     return trino.dbapi.connect(
         host=host,
         port=443,
-        user=username,
         catalog=catalog,
         schema=schema,
         http_scheme="https",
-        auth=BasicAuthentication(username, password),
+        auth=OAuth2Authentication(),
     )
 
 
@@ -1143,9 +1135,10 @@ def cleanup(
     - Blocks deletion of production/qa base schemas
 
     Environment Variables Required:
-        DBT_TRINO_USERNAME - Trino username
-        DBT_TRINO_PASSWORD - Trino password
         DBT_SCHEMA_SUFFIX - Your schema suffix (default, can override with --suffix)
+
+    Authentication:
+        Uses OAuth2 authentication (will open browser for login)
 
     Parameters
     ----------
