@@ -584,7 +584,7 @@ def get_trino_connection(
     )
 
 
-def validate_schema_safety(schema_name: str, suffix: str) -> bool:
+def validate_schema_safety(schema_name: str, suffix: str, base_schema: str) -> bool:
     """
     Validate that schema is safe to clean (has suffix, not in protected list).
 
@@ -594,6 +594,8 @@ def validate_schema_safety(schema_name: str, suffix: str) -> bool:
         Schema name to validate
     suffix
         Expected suffix
+    base_schema
+        Base schema pattern (e.g., 'ol_warehouse_production')
 
     Returns
     -------
@@ -606,7 +608,10 @@ def validate_schema_safety(schema_name: str, suffix: str) -> bool:
     if not suffix or suffix == "":
         return False
 
-    return schema_name.endswith(f"_{suffix}")
+    # Schema must match pattern: base_schema_suffix or base_schema_suffix_layer
+    # e.g., ol_warehouse_production_tmacey or ol_warehouse_production_tmacey_staging
+    suffixed_base = f"{base_schema}_{suffix}"
+    return schema_name == suffixed_base or schema_name.startswith(f"{suffixed_base}_")
 
 
 def get_schemas_to_clean(
@@ -641,7 +646,7 @@ def get_schemas_to_clean(
 
     for schema in all_schemas:
         if schema == suffixed_schema or schema.startswith(f"{suffixed_schema}_"):
-            if validate_schema_safety(schema, suffix):
+            if validate_schema_safety(schema, suffix, base_schema):
                 schemas_to_clean.append(schema)
             else:
                 print(f"⚠️  Skipping protected schema: {schema}")
