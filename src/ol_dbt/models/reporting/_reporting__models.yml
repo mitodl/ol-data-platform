@@ -769,7 +769,7 @@ models:
       column_list: ["user_email", "platform", "courserun_readable_id", "course_title",
         "section_title", "section_block_index"]
 
-- name: combined_video_engagements_w_video_counts_report
+- name: combined_video_engagements_counts_report
   description: Combined video engagement report across all platforms with video counts
     per chapter. Shows user video watching activity including total videos available
     in each chapter and how many the user has watched.
