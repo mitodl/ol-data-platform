@@ -49,7 +49,7 @@ repos:
     - src/ol_dbt/package-lock.yml
 - repo: https://github.com/astral-sh/ruff-pre-commit
   # Ruff version.
-  rev: 'v0.15.0'
+  rev: 'v0.15.1'
   hooks:
   - id: ruff-format
   - id: ruff-check
