@@ -157,6 +157,12 @@ class PooledPostgresRunStorage(PostgresRunStorage):
                 default_value=3600,
                 description="Recycle connections after N seconds",
             ),
+            "pool_timeout": Field(
+                IntSource,
+                is_required=False,
+                default_value=30,
+                description="Seconds to wait for connection from pool",
+            ),
         }
 
     @classmethod
@@ -175,6 +181,7 @@ class PooledPostgresRunStorage(PostgresRunStorage):
             pool_size=int(config_value.get("pool_size", 10)),
             max_overflow=int(config_value.get("max_overflow", 20)),
             pool_recycle=int(config_value.get("pool_recycle", 3600)),
+            pool_timeout=int(config_value.get("pool_timeout", 30)),
         )
 
     @property

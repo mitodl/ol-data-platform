@@ -60,6 +60,7 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
         pool_size: int = 10,
         max_overflow: int = 20,
         pool_recycle: int = 3600,
+        pool_timeout: int = 30,
     ) -> None:
         """Initialize PooledPostgresEventLogStorage.
 
@@ -70,6 +71,7 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
             pool_size: Number of permanent connections in the pool
             max_overflow: Number of additional connections above pool_size
             pool_recycle: Recycle connections after this many seconds
+            pool_timeout: Seconds to wait for connection from pool before timeout
         """
         self._inst_data = check.opt_inst_param(
             inst_data, "inst_data", ConfigurableClassData
@@ -81,6 +83,7 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
         self._pool_size = pool_size
         self._max_overflow = max_overflow
         self._pool_recycle = pool_recycle
+        self._pool_timeout = pool_timeout
 
         # Use QueuePool instead of NullPool for efficient connection reuse
         self._engine = create_engine(
@@ -90,6 +93,7 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
             pool_size=self._pool_size,
             max_overflow=self._max_overflow,
             pool_recycle=self._pool_recycle,
+            pool_timeout=self._pool_timeout,
             pool_pre_ping=True,
         )
         self._event_watcher: SqlPollingEventWatcher | None = None
@@ -162,6 +166,12 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
                 default_value=3600,
                 description="Recycle connections after N seconds",
             ),
+            "pool_timeout": Field(
+                IntSource,
+                is_required=False,
+                default_value=3600,
+                description="Recycle connections after N seconds",
+            ),
         }
 
     @classmethod
@@ -180,6 +190,7 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
             pool_size=int(config_value.get("pool_size", 10)),
             max_overflow=int(config_value.get("max_overflow", 20)),
             pool_recycle=int(config_value.get("pool_recycle", 3600)),
+            pool_timeout=int(config_value.get("pool_timeout", 30)),
         )
 
     @property
