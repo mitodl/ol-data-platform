@@ -768,3 +768,54 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "platform", "courserun_readable_id", "course_title",
         "section_title", "section_block_index"]
+
+- name: problem_engagement_detail_report
+  description: Problem engagement detail report showing user performance at the problem
+    level across course runs. Includes attempt counts, grade information, and course
+    content hierarchy.
+  columns:
+  - name: platform
+    description: string, name of the platform
+    tests:
+    - not_null
+  - name: user_email
+    description: string, email address of the user. Coalesced from mitxonline and
+      edxorg user records.
+  - name: full_name
+    description: string, full name of the user. Coalesced from mitxonline and edxorg
+      user records.
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: course_title
+    description: string, title of the course run
+  - name: section_title
+    description: string, title of the chapter (section) block within the course
+  - name: section_block_index
+    description: int, sequence number giving the order in which this section appears
+      within the course
+  - name: subsection_title
+    description: string, title of the sequential (subsection) block within the course
+  - name: subsection_block_index
+    description: int, sequence number giving the order in which this subsection appears
+      within the section
+  - name: problem_title
+    description: string, title of the problem block
+  - name: num_of_attempts
+    description: int, total number of attempts the user made on this problem
+  - name: num_of_correct_attempts
+    description: int, total number of correct attempts the user made on this problem
+  - name: max_possible_grade
+    description: decimal, maximum possible grade for this problem
+  - name: learner_lowest_grade
+    description: decimal, lowest grade the learner achieved on this problem
+  - name: learner_highest_grade
+    description: decimal, highest grade the learner achieved on this problem
+  - name: correct_true_cnt
+    description: int, 1 if the user has at least one correct attempt, 0 otherwise
+  - name: attempted_true_cnt
+    description: int, 1 if the user has at least one correct attempt, 0 otherwise
+  - name: number_of_problems
+    description: int, total number of problems in the chapter
