@@ -118,6 +118,7 @@ class PooledPostgresRunStorage(PostgresRunStorage):
             "pool_size": self._pool_size,
             "pool_recycle": pool_recycle,
             "max_overflow": max_overflow,
+            "pool_timeout": self._pool_timeout,
             "pool_pre_ping": True,
         }
 

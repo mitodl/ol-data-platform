@@ -96,7 +96,7 @@ Restart Dagster services. No schema migrations needed.
 **Standard**: `pool_size: 10, max_overflow: 20` per storage class
 - Total: (10+20) × 3 = 90 connections max
 
-**High-throughput**: 
+**High-throughput**:
 - run_storage: 15/30
 - event_log_storage: 20/40 (busiest)
 - schedule_storage: 10/20
@@ -115,11 +115,11 @@ Ensure `postgres max_connections` > total connections × number of Dagster insta
 
 ## Benefits
 
-✅ Eliminates connection exhaustion  
-✅ 10-50ms faster operations (no connection overhead)  
-✅ Automatic connection health checks  
-✅ No schema changes or data migration  
-✅ Fully configurable per storage class  
+✅ Eliminates connection exhaustion
+✅ 10-50ms faster operations (no connection overhead)
+✅ Automatic connection health checks
+✅ No schema changes or data migration
+✅ Fully configurable per storage class
 ✅ Production-ready (SQLAlchemy QueuePool)
 
 ## Current Installation

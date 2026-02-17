@@ -97,10 +97,10 @@ ORDER BY duration DESC;
 SHOW max_connections;
 
 -- Current usage vs limit
-SELECT 
+SELECT
   (SELECT count(*) FROM pg_stat_activity) as current,
   (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') as max,
-  (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') - 
+  (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') -
   (SELECT count(*) FROM pg_stat_activity) as available;
 ```
 
@@ -146,7 +146,7 @@ def my_asset(context):
     # Access the storage instance
     storage = context.instance.run_storage
     pool = storage._engine.pool
-    
+
     logger.info(f"Pool size: {pool.size()}")
     logger.info(f"Checked out: {pool.checkedout()}")
     logger.info(f"Overflow: {pool.overflow()}")
@@ -274,16 +274,16 @@ Set up alerts for:
 
 ## Common Mistakes
 
-❌ **Setting pool_size too high** → Overwhelms Postgres  
+❌ **Setting pool_size too high** → Overwhelms Postgres
 ✅ **Start conservative, increase based on monitoring**
 
-❌ **Ignoring "idle in transaction"** → Connection leaks  
+❌ **Ignoring "idle in transaction"** → Connection leaks
 ✅ **Monitor and kill stuck transactions**
 
-❌ **Not recycling connections** → Stale connection errors  
+❌ **Not recycling connections** → Stale connection errors
 ✅ **Set pool_recycle to 30-60 minutes**
 
-❌ **Same pool size for all storage types** → Event log needs more  
+❌ **Same pool size for all storage types** → Event log needs more
 ✅ **Size event_log_storage pool higher**
 
 ## Quick Checklist
