@@ -222,6 +222,10 @@ def process_edxorg_archive_bundle(
     )[0]
 
     tmpdir = tempfile.TemporaryDirectory()
+    # Collect partition keys to batch add after processing all files
+    # This reduces DB operations from N calls to 1 call, preventing
+    # connection pool exhaustion
+    partition_keys_to_add = []
     while tinfo := archive.next():
         if not tinfo.isdir():
             context.log.debug("Processing archive path %s", tinfo.name)
@@ -231,16 +235,13 @@ def process_edxorg_archive_bundle(
             normalized_source_system = (
                 "edge" if "edge" in asset_info["source_system"] else "prod"
             )
-            dagster_instance.add_dynamic_partitions(
-                course_and_source_partitions.name,
-                partition_keys=[
-                    MultiPartitionKey(
-                        {
-                            "course_id": asset_info["course_id"],
-                            "source_system": normalized_source_system,
-                        }
-                    )
-                ],
+            partition_keys_to_add.append(
+                MultiPartitionKey(
+                    {
+                        "course_id": asset_info["course_id"],
+                        "source_system": normalized_source_system,
+                    }
+                )
             )
             normalized_extension = (
                 "tsv" if asset_info["extension"] == "sql" else asset_info["extension"]
@@ -357,6 +358,15 @@ def process_edxorg_archive_bundle(
                 },
             )
             yield materialization
+    # Add all dynamic partitions in a single batch operation to minimize DB connections
+    if partition_keys_to_add:
+        context.log.info(
+            "Adding %d dynamic partitions in batch", len(partition_keys_to_add)
+        )
+        dagster_instance.add_dynamic_partitions(
+            course_and_source_partitions.name,
+            partition_keys=partition_keys_to_add,
+        )
     # Clean up the downloaded archive file so that it doesn't consume the local disk
     edxorg_raw_data_archive.unlink()
 
