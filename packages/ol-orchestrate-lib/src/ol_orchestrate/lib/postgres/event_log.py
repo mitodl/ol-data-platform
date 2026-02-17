@@ -86,6 +86,8 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
         self._pool_timeout = pool_timeout
 
         # Use QueuePool instead of NullPool for efficient connection reuse
+        # pool_reset_on_return='rollback' ensures connections are clean when
+        # returned to pool, preventing "idle in transaction" state
         self._engine = create_engine(
             self.postgres_url,
             isolation_level="AUTOCOMMIT",
@@ -95,6 +97,7 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
             pool_recycle=self._pool_recycle,
             pool_timeout=self._pool_timeout,
             pool_pre_ping=True,
+            pool_reset_on_return="rollback",
         )
         self._event_watcher: SqlPollingEventWatcher | None = None
 
@@ -129,6 +132,7 @@ class PooledPostgresEventLogStorage(PostgresEventLogStorage):
             "max_overflow": max_overflow,
             "pool_timeout": self._pool_timeout,
             "pool_pre_ping": True,
+            "pool_reset_on_return": "rollback",
         }
 
         existing_options = self._engine.url.query.get("options")

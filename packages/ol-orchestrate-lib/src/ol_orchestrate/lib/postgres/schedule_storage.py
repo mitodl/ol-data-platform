@@ -78,6 +78,8 @@ class PooledPostgresScheduleStorage(PostgresScheduleStorage):
         self._pool_timeout = pool_timeout
 
         # Use QueuePool instead of NullPool for efficient connection reuse
+        # pool_reset_on_return='rollback' ensures connections are clean when
+        # returned to pool, preventing "idle in transaction" state
         self._engine = create_engine(
             self.postgres_url,
             isolation_level="AUTOCOMMIT",
@@ -87,6 +89,7 @@ class PooledPostgresScheduleStorage(PostgresScheduleStorage):
             pool_recycle=self._pool_recycle,
             pool_timeout=self._pool_timeout,
             pool_pre_ping=True,
+            pool_reset_on_return="rollback",
         )
 
         if self.should_autocreate_tables:
@@ -122,6 +125,7 @@ class PooledPostgresScheduleStorage(PostgresScheduleStorage):
             "max_overflow": max_overflow,
             "pool_timeout": self._pool_timeout,
             "pool_pre_ping": True,
+            "pool_reset_on_return": "rollback",
         }
 
         existing_options = self._engine.url.query.get("options")
