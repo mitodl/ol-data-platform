@@ -734,12 +734,13 @@ models:
     tests:
     - not_null
   - name: coursestructure_xml_block_id
-    description: str, unique identifier for the block from XML url_name attribute or filename
+    description: str, unique identifier for the block from XML url_name attribute
+      or filename
     tests:
     - not_null
   - name: coursestructure_xml_block_type
-    description: str, category/type of the XML block such as chapter, sequential, vertical,
-      video, problem, html, discussion, lti, etc.
+    description: str, category/type of the XML block such as chapter, sequential,
+      vertical, video, problem, html, discussion, lti, etc.
     tests:
     - not_null
   - name: coursestructure_xml_block_display_name
@@ -761,13 +762,14 @@ models:
   - name: problem_markdown
     description: str, for problem blocks, markdown content if present
   - name: coursestructure_xml_retrieved_at
-    description: timestamp, ISO8601 timestamp when the block data was extracted from the archive
+    description: timestamp, ISO8601 timestamp when the block data was extracted from
+      the archive
     tests:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "coursestructure_xml_block_id", 
-        "coursestructure_xml_block_type", "coursestructure_xml_retrieved_at"]
+      column_list: ["courserun_readable_id", "coursestructure_xml_block_id", "coursestructure_xml_block_type",
+        "coursestructure_xml_retrieved_at"]
 
 - name: stg__edxorg__s3__user
   description: edx.org user data
