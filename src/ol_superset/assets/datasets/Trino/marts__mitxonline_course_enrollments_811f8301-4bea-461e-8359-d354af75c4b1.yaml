@@ -1,6 +1,6 @@
 table_name: marts__mitxonline_course_enrollments
 main_dttm_col: null
-description: Auto refreshed at 2026-02-05T13:52:22.593306+00:00
+description: Auto refreshed at 2026-02-13T07:58:48.456145+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

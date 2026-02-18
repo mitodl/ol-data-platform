@@ -1,6 +1,6 @@
 table_name: video_engagement_report
 main_dttm_col: null
-description: Auto refreshed at 2026-02-05T13:53:07.605390+00:00
+description: Auto refreshed at 2026-02-13T07:59:29.282227+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

@@ -1,16 +1,13 @@
 table_name: marts__mitxonline_course_engagements_daily
 main_dttm_col: courseactivity_date
-description: Auto refreshed at 2026-02-05T13:52:20.978413+00:00
+description: Converted to dbt physical dataset on 2026-02-05. Physical table managed
+  by dbt.
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_mart
-sql: "SELECT a.*\n,'MITx Online' as Platform\n,case when \ncast(substring(courserun_start_on,\
-  \ 1, 10) as date) <= current_date\nand \n(courserun_end_on is null or \ncast(substring(courserun_end_on,\
-  \ 1, 10) as date) >= current_date)\nthen true\nelse false end as courserun_is_current\n\
-  ,b.course_readable_id\nFROM ol_warehouse_production_mart.marts__mitxonline_course_engagements_daily\
-  \ a\nleft join  ol_warehouse_production_intermediate.int__mitx__courses b\non a.course_number=b.course_number\n"
+sql: null
 params: null
 template_params: null
 filter_select_enabled: true

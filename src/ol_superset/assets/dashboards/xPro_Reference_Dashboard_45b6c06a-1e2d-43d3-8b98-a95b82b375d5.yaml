@@ -159,9 +159,9 @@ metadata:
       - ROOT_ID
   label_colors: {}
   map_label_colors: {}
+  native_filter_configuration: []
   refresh_frequency: 0
   shared_label_colors: []
   timed_refresh_immune_slices: []
-  native_filter_configuration: []
 theme_uuid: null
 version: 1.0.0

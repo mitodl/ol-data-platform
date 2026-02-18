@@ -1,6 +1,6 @@
 table_name: engagement_problem_completion_summary
 main_dttm_col: null
-description: Auto refreshed at 2026-02-05T13:51:20.072586+00:00
+description: Auto refreshed at 2026-02-13T07:57:56.521603+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

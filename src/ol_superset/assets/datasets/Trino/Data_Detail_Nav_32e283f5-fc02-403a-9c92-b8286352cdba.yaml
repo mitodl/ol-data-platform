@@ -1,16 +1,12 @@
-table_name: Data_Detail_Nav
+table_name: navigation_events_detail
 main_dttm_col: event_timestamp
-description: null
+description: Reporting view for navigation events with denormalized course information
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
-schema: ol_warehouse_production_dimensional
-sql: "select \na.platform\n, h.course_title\n,a.courserun_readable_id\n,a.event_type\n\
-  ,a.starting_position\n,a.ending_position\n,a.event_timestamp\nfrom  ol_warehouse_production_dimensional.tfact_course_navigation_events\
-  \ a\n    inner join ol_warehouse_production_intermediate.int__combined__course_runs\
-  \ as h\n     on a.courserun_readable_id = h.courserun_readable_id\nwhere a.platform\
-  \ in ('edxorg', 'mitxonline')\n\n\n"
+schema: ol_warehouse_production_reporting
+sql: null
 params: null
 template_params: null
 filter_select_enabled: true

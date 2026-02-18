@@ -1,6 +1,6 @@
 table_name: tfact_discussion_events
 main_dttm_col: event_timestamp
-description: Auto refreshed at 2026-02-05T13:53:01.701165+00:00
+description: Auto refreshed at 2026-02-13T07:59:23.553915+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

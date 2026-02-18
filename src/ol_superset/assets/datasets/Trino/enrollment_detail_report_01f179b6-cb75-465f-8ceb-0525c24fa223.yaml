@@ -1,6 +1,6 @@
 table_name: enrollment_detail_report
 main_dttm_col: null
-description: Auto refreshed at 2026-02-05T13:51:23.850823+00:00
+description: Auto refreshed at 2026-02-13T07:57:56.533967+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

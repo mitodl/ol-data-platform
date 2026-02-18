@@ -1,6 +1,6 @@
 table_name: marts__mitxonline_problem_summary
 main_dttm_col: null
-description: Auto refreshed at 2026-02-05T13:52:36.380268+00:00
+description: Auto refreshed at 2026-02-13T07:59:00.354457+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

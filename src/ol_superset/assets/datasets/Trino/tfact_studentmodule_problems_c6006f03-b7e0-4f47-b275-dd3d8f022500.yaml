@@ -1,6 +1,6 @@
 table_name: tfact_studentmodule_problems
 main_dttm_col: event_timestamp
-description: Auto refreshed at 2026-02-05T13:53:06.284825+00:00
+description: Auto refreshed at 2026-02-13T07:59:25.384550+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

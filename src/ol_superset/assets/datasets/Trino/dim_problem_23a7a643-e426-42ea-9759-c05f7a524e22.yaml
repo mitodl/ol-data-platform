@@ -1,6 +1,6 @@
 table_name: dim_problem
 main_dttm_col: null
-description: Auto refreshed at 2026-02-04T17:43:54.381823+00:00
+description: Auto refreshed at 2026-02-13T04:46:57.443178+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
