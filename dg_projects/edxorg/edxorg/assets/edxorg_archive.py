@@ -319,20 +319,21 @@ def process_edxorg_archive_bundle(
                 asset_info,
                 mapping_key,
             )
+            object_key = f"{'/'.join(mapping_key)}/{data_version}.{normalized_extension}".replace(  # noqa: E501
+                "//", "/"
+            ).strip("/")
+            object_path = (
+                "s3://" + f"{config.s3_bucket}/{config.s3_prefix}/{object_key}"
+            )
             shared_metadata = {
-                "path": MetadataValue.path(
-                    f"s3://{config.s3_bucket}/{config.s3_prefix}/{'/'.join(mapping_key)}/{data_version}.{normalized_extension}"
-                ),
-                "object_key": f"{'/'.join(mapping_key)}/{data_version}.{normalized_extension}",  # noqa: E501
+                "path": MetadataValue.path(object_path),
+                "object_key": object_key,
                 "source": "edxorg",
                 "source_system": normalized_source_system,
                 "course_id": asset_info["course_id"],
             }
             yield DynamicOutput(
-                (
-                    archive_file,
-                    f"s3://{config.s3_bucket}/{config.s3_prefix}/{'/'.join(mapping_key)}/{data_version}.{normalized_extension}",
-                ),
+                (archive_file, object_path),
                 output_name=output_key,
                 mapping_key=sanitize_mapping_key("/".join(mapping_key)),
                 metadata=shared_metadata,
