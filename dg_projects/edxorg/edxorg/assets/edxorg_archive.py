@@ -147,6 +147,7 @@ class EdxorgArchiveProcessConfig(Config):
 @op(
     name="process_edxorg_archive_bundle",
     required_resource_keys={"gcp_gcs"},
+    pool="edxorg_archive",
     out={
         "course_structure": DynamicOut(is_required=False),
         "course_xml": DynamicOut(is_required=False),
