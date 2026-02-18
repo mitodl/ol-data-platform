@@ -682,8 +682,8 @@ sources:
         from S3
 
   - name: raw__edxorg__s3__course_xml_blocks
-    description: Comprehensive block-level data extracted from edX.org course XML archives,
-      including all course components from the XML structure
+    description: Comprehensive block-level data extracted from edX.org course XML
+      archives, including all course components from the XML structure
     columns:
     - name: course_id
       description: str, course ID formatted as course-v1:{org}+{course}+{run}
