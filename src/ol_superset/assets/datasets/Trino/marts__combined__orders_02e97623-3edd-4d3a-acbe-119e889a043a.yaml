@@ -1,35 +1,12 @@
-table_name: combined_enrollments_with_gender_and_date
+table_name: marts__combined__orders
 main_dttm_col: null
-description: Auto refreshed at 2026-02-05T13:51:04.613730+00:00
+description: null
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
 schema: ol_warehouse_production_mart
-sql: "\nselect enrollment_detail.platform\n    , enrollment_detail.courserunenrollment_id\n\
-  \    , enrollment_detail.combined_orders_hash_id\n    , enrollment_detail.course_readable_id\n\
-  \    , enrollment_detail.course_title\n    , enrollment_detail.courserun_id\n  \
-  \  , enrollment_detail.courserun_is_current\n    , enrollment_detail.courserun_readable_id\n\
-  \    , enrollment_detail.courserun_start_on\n    , enrollment_detail.courserun_end_on\n\
-  \    , enrollment_detail.courserun_title\n    , enrollment_detail.courserun_upgrade_deadline\n\
-  \    , enrollment_detail.courseruncertificate_created_on\n    , enrollment_detail.courseruncertificate_is_earned\n\
-  \    , enrollment_detail.courseruncertificate_url\n    , enrollment_detail.courseruncertificate_uuid\n\
-  \    , enrollment_detail.courserunenrollment_created_on\n    , enrollment_detail.courserunenrollment_enrollment_mode\n\
-  \    , enrollment_detail.courserunenrollment_enrollment_status\n    , enrollment_detail.courserunenrollment_is_active\n\
-  \    , enrollment_detail.courserunenrollment_is_edx_enrolled\n    , enrollment_detail.courserunenrollment_upgraded_on\n\
-  \    , enrollment_detail.courserungrade_grade\n    , enrollment_detail.courserungrade_is_passing\n\
-  \    , enrollment_detail.line_id\n    , enrollment_detail.order_id\n    , enrollment_detail.order_reference_number\n\
-  \    , enrollment_detail.user_company\n    , enrollment_detail.user_country_code\n\
-  \    , enrollment_detail.user_email\n    , enrollment_detail.user_full_name\n  \
-  \  , enrollment_detail.user_highest_education\n    , enrollment_detail.user_hashed_id\n\
-  \    , enrollment_detail.user_id\n    , enrollment_detail.user_username\n    ---,\
-  \ coalesce(enrollment_detail.user_gender, combined__users.user_gender) as user_gender\n\
-  \      , nullif(enrollment_detail.user_gender, '') as user_gender\n    , substring(courserunenrollment_created_on,\
-  \ 1, 10) as courserunenrollment_created_on_date\n    , combined_users.user_job_title\n\
-  \    , combined_users.user_industry\nfrom \nol_warehouse_production_mart.marts__combined_course_enrollment_detail\
-  \ as enrollment_detail\nleft join ol_warehouse_production_mart.marts__combined__users\
-  \ as combined_users\non enrollment_detail.user_hashed_id=combined_users.user_hashed_id\n\
-  \n\n"
+sql: ''
 params: null
 template_params: null
 filter_select_enabled: true
@@ -38,7 +15,7 @@ extra: null
 normalize_columns: false
 always_filter_main_dttm: false
 folders: null
-uuid: f3e517dd-4012-441e-8dfe-edaef1318000
+uuid: 02e97623-3edd-4d3a-acbe-119e889a043a
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
@@ -51,7 +28,224 @@ metrics:
     warning_markdown: ''
   warning_text: null
 columns:
-- column_name: courserunenrollment_created_on_date
+- column_name: order_created_date
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: null
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: 'substring(order_created_on, 6, 2) || ''/'' || substring(order_created_on,
+    9, 2) || ''/'' || substring(order_created_on, 1, 4) '
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: year_of_order_created_date
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: null
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: substring(order_created_on, 1, 4)
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: month_of_order_created_date
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: null
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: substring(order_created_on, 6, 2)
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: order_total_price_paid_plus_tax
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: order_total_price_paid
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: receipt_payment_amount
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: order_tax_rate
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: order_tax_amount
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: unit_price
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 2)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: b2border_contract_number
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: b2bcoupon_id
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: receipt_bill_to_address_state
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: receipt_bill_to_address_country
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: receipt_payment_transaction_uuid
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: receipt_payment_transaction_type
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: order_tax_rate_name
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: receipt_payment_card_number
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: receipt_payment_card_type
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: receipt_payer_ip_address
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -75,6 +269,42 @@ columns:
   description: null
   python_date_format: null
   extra: {}
+- column_name: order_tax_country_code
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: couponpaymentversion_payment_transaction
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: product_readable_id
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
 - column_name: courserun_readable_id
   verbose_name: null
   is_dttm: false
@@ -87,7 +317,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: course_readable_id
+- column_name: receipt_authorization_code
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -99,7 +329,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courseruncertificate_created_on
+- column_name: receipt_transaction_id
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -111,7 +341,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courserun_upgrade_deadline
+- column_name: receipt_payer_email
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -123,7 +353,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courserunenrollment_created_on
+- column_name: receipt_payment_timestamp
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -135,7 +365,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courserunenrollment_upgraded_on
+- column_name: receipt_payer_name
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -147,7 +377,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: user_highest_education
+- column_name: receipt_payment_currency
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -159,7 +389,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courserunenrollment_enrollment_status
+- column_name: order_created_on
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -171,7 +401,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courserun_start_on
+- column_name: receipt_payment_method
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -195,18 +425,6 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: user_full_name
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
 - column_name: order_reference_number
   verbose_name: null
   is_dttm: false
@@ -219,7 +437,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: user_job_title
+- column_name: req_reference_number
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -231,7 +449,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: user_country_code
+- column_name: coupon_redeemed_on
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -243,7 +461,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courserunenrollment_enrollment_mode
+- column_name: coupon_name
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -255,7 +473,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courserun_end_on
+- column_name: redeemed_email
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -267,43 +485,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courseruncertificate_uuid
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: courseruncertificate_url
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: user_company
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: user_username
+- column_name: order_state
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -327,7 +509,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courserun_title
+- column_name: coupon_code
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -339,7 +521,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: course_title
+- column_name: product_type
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -351,7 +533,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: user_gender
+- column_name: coupon_type
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -363,19 +545,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: user_industry
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: user_id
+- column_name: order_type
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -399,11 +569,11 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courserunenrollment_is_edx_enrolled
+- column_name: discount
   verbose_name: null
   is_dttm: false
   is_active: true
-  type: BOOLEAN
+  type: VARCHAR
   advanced_data_type: null
   groupby: true
   filterable: true
@@ -411,67 +581,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: courseruncertificate_is_earned
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BOOLEAN
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: courserungrade_is_passing
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BOOLEAN
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: courserunenrollment_is_active
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BOOLEAN
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: courserun_is_current
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BOOLEAN
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: courserungrade_grade
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: DOUBLE
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: courserunenrollment_id
+- column_name: product_id
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -484,6 +594,18 @@ columns:
   python_date_format: null
   extra: {}
 - column_name: courserun_id
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: coupon_id
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -508,6 +630,18 @@ columns:
   python_date_format: null
   extra: {}
 - column_name: line_id
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: {}
+- column_name: user_id
   verbose_name: null
   is_dttm: false
   is_active: true

@@ -11,7 +11,7 @@ position:
     children: []
     id: CHART-BUBfsrCkoz2S6YtVe6lWt
     meta:
-      chartId: 141
+      chartId: 142
       height: 50
       sliceName: Chatbot Usage By Course Section and Subsection
       uuid: 9ad6f248-c9cd-42bd-9285-5dbe6d30d5c3
@@ -27,7 +27,7 @@ position:
     children: []
     id: CHART-BVHyUuvWGkh0cLNXcP7A1
     meta:
-      chartId: 140
+      chartId: 162
       height: 50
       sliceName: Chatbot Usage By Type
       uuid: 751da4ab-6e41-44de-a2b8-e54dc7b2c6b0
@@ -43,7 +43,7 @@ position:
     children: []
     id: CHART-explore-142-1
     meta:
-      chartId: 142
+      chartId: 146
       height: 50
       sliceName: Videos Rewatched
       uuid: 397698ec-916f-46e4-bd4c-cae296806b10
@@ -59,7 +59,7 @@ position:
     children: []
     id: CHART-explore-143-1
     meta:
-      chartId: 143
+      chartId: 120
       height: 50
       sliceName: Percentage of Video Played
       uuid: 9bb14cc1-d787-4f47-b6d3-86adb3d4ec47
@@ -75,7 +75,7 @@ position:
     children: []
     id: CHART-explore-144-1
     meta:
-      chartId: 144
+      chartId: 170
       height: 50
       sliceName: '# of Watches By Video'
       uuid: cb328531-f862-467c-b073-4a2cec5dfbe2
@@ -91,7 +91,7 @@ position:
     children: []
     id: CHART-explore-145-1
     meta:
-      chartId: 145
+      chartId: 185
       height: 50
       sliceName: Latest Activity Date
       uuid: f9e19a79-18f9-4a54-ad7a-85c5f0b5b801
@@ -133,8 +133,9 @@ position:
     id: MARKDOWN-ZZBx82IJA_TfZinxj8-ac
     meta:
       code: '### Change Log
-        
-        **2/2/26**: Enabled search functionality on Course Run Readable ID and User Email filters'
+
+        **2/2/26**: Enabled search functionality on Course Run Readable ID and User
+        Email filters'
       height: 50
       width: 6
     parents:
@@ -253,71 +254,71 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '140':
-      id: 140
+    '162':
       crossFilters:
-        scope: global
         chartsInScope:
         - 141
         - 142
         - 143
         - 144
         - 145
-    '141':
-      id: 141
-      crossFilters:
         scope: global
-        chartsInScope:
-        - 140
-        - 142
-        - 143
-        - 144
-        - 145
+      id: 162
     '142':
+      crossFilters:
+        chartsInScope:
+        - 140
+        - 142
+        - 143
+        - 144
+        - 145
+        scope: global
       id: 142
+    '146':
       crossFilters:
-        scope: global
         chartsInScope:
         - 140
         - 141
         - 143
         - 144
         - 145
-    '143':
-      id: 143
-      crossFilters:
         scope: global
+      id: 146
+    '120':
+      crossFilters:
         chartsInScope:
         - 140
         - 141
         - 142
         - 144
         - 145
-    '144':
-      id: 144
-      crossFilters:
         scope: global
+      id: 120
+    '170':
+      crossFilters:
         chartsInScope:
         - 140
         - 141
         - 142
         - 143
         - 145
-    '145':
-      id: 145
-      crossFilters:
         scope: global
+      id: 170
+    '185':
+      crossFilters:
         chartsInScope:
         - 140
         - 141
         - 142
         - 143
         - 144
+        scope: global
+      id: 185
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
   global_chart_configuration:
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
     chartsInScope:
     - 140
     - 141
@@ -325,152 +326,151 @@ metadata:
     - 143
     - 144
     - 145
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
   map_label_colors:
     SUM(chatbot_used_count): '#1FA8C9'
     SUM(video_watched_count): '#1FA8C9'
-  color_scheme: ''
-  refresh_frequency: 0
-  color_scheme_domain: []
-  expanded_slices: {}
-  label_colors: {}
-  shared_label_colors: []
-  timed_refresh_immune_slices: []
-  cross_filters_enabled: true
-  default_filters: '{}'
   native_filter_configuration:
-  - id: NATIVE_FILTER-hWWV-Sv3ZF93m5ZI9ZryO
+  - cascadeParentIds: []
+    chartsInScope:
+    - 140
+    - 141
+    - 142
+    - 143
+    - 144
     controlValues:
-      enableEmptyFilter: false
       defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
       multiSelect: true
       searchAllOptions: true
-      inverseSelection: false
-    name: Course Run Readable ID
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
     filterType: filter_select
+    id: NATIVE_FILTER-hWWV-Sv3ZF93m5ZI9ZryO
+    name: Course Run Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-8p1CGidw8lv4ZPPkTXA9q
     targets:
     - column:
         name: courserun_readable_id
       datasetUuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds: []
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
     type: NATIVE_FILTER
-    description: ''
+  - cascadeParentIds:
+    - NATIVE_FILTER-hWWV-Sv3ZF93m5ZI9ZryO
     chartsInScope:
     - 140
     - 141
     - 142
     - 143
     - 144
-    tabsInScope:
-    - TAB-8p1CGidw8lv4ZPPkTXA9q
-  - id: NATIVE_FILTER-8oumTP2yOnwCPqE8K6RBP
     controlValues:
-      enableEmptyFilter: false
       defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
       multiSelect: true
       searchAllOptions: false
-      inverseSelection: false
-    name: Section Title
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
     filterType: filter_select
+    id: NATIVE_FILTER-8oumTP2yOnwCPqE8K6RBP
+    name: Section Title
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-8p1CGidw8lv4ZPPkTXA9q
     targets:
     - column:
         name: section_title
       datasetUuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-hWWV-Sv3ZF93m5ZI9ZryO
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
     type: NATIVE_FILTER
-    description: ''
+  - cascadeParentIds:
+    - NATIVE_FILTER-hWWV-Sv3ZF93m5ZI9ZryO
+    - NATIVE_FILTER-8oumTP2yOnwCPqE8K6RBP
     chartsInScope:
     - 140
     - 141
     - 142
     - 143
     - 144
-    tabsInScope:
-    - TAB-8p1CGidw8lv4ZPPkTXA9q
-  - id: NATIVE_FILTER-0NRCdSA35E-Y1AdqZuRsq
     controlValues:
-      enableEmptyFilter: false
       defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
       multiSelect: true
       searchAllOptions: false
-      inverseSelection: false
-    name: Subsection Title
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
     filterType: filter_select
+    id: NATIVE_FILTER-0NRCdSA35E-Y1AdqZuRsq
+    name: Subsection Title
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-8p1CGidw8lv4ZPPkTXA9q
     targets:
     - column:
         name: subsection_title
       datasetUuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-hWWV-Sv3ZF93m5ZI9ZryO
-    - NATIVE_FILTER-8oumTP2yOnwCPqE8K6RBP
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
     type: NATIVE_FILTER
-    description: ''
+  - cascadeParentIds:
+    - NATIVE_FILTER-8oumTP2yOnwCPqE8K6RBP
+    - NATIVE_FILTER-0NRCdSA35E-Y1AdqZuRsq
+    - NATIVE_FILTER-hWWV-Sv3ZF93m5ZI9ZryO
     chartsInScope:
     - 140
     - 141
     - 142
     - 143
     - 144
-    tabsInScope:
-    - TAB-8p1CGidw8lv4ZPPkTXA9q
-  - id: NATIVE_FILTER-agnQHRl2qGODt2NHyda-5
     controlValues:
-      enableEmptyFilter: false
       defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
       multiSelect: true
       searchAllOptions: true
-      inverseSelection: false
-    name: User Email
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
     filterType: filter_select
+    id: NATIVE_FILTER-agnQHRl2qGODt2NHyda-5
+    name: User Email
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-8p1CGidw8lv4ZPPkTXA9q
     targets:
     - column:
         name: user_email
       datasetUuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-8oumTP2yOnwCPqE8K6RBP
-    - NATIVE_FILTER-0NRCdSA35E-Y1AdqZuRsq
-    - NATIVE_FILTER-hWWV-Sv3ZF93m5ZI9ZryO
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
     type: NATIVE_FILTER
-    description: ''
-    chartsInScope:
-    - 140
-    - 141
-    - 142
-    - 143
-    - 144
-    tabsInScope:
-    - TAB-8p1CGidw8lv4ZPPkTXA9q
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
 theme_uuid: null
 version: 1.0.0
