@@ -11,6 +11,6 @@ select
     , openedx_user_id
     , useractivity_path
     , useractivity_timestamp
-    , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as useractivity_problem_id
+    , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as useractivity_problem_id
 from course_activities
 where useractivity_event_type = 'showanswer'

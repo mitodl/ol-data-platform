@@ -33,7 +33,7 @@ with courses as (
 , course_topics as (
     select
         course_id
-        , array_join(array_agg(coursetopic_name), ', ') as course_topics
+        , {{ array_join('array_agg(coursetopic_name)', ", ") }} as course_topics
     from {{ ref('int__mitxpro__courses_to_topics') }}
     group by course_id
 )
@@ -41,7 +41,7 @@ with courses as (
 , course_instructors as (
     select
         course_id
-        , array_join(array_agg(cms_facultymemberspage_facultymember_name), ', ') as course_instructors
+        , {{ array_join('array_agg(cms_facultymemberspage_facultymember_name)', ", ") }} as course_instructors
     from {{ ref('int__mitxpro__coursesfaculty') }}
     group by course_id
 )

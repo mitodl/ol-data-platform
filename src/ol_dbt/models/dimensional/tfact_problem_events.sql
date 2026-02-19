@@ -12,13 +12,13 @@ with mitxonline_problem_events as (
         , courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
-        , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
-        , json_query(useractivity_event_object, 'lax $.attempts' omit quotes) as attempt
-        , json_query(useractivity_event_object, 'lax $.success' omit quotes) as success
-        , json_query(useractivity_event_object, 'lax $.grade' omit quotes) as grade
-        , json_query(useractivity_event_object, 'lax $.max_grade' omit quotes) as max_grade
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
+        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
+        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
+        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
+        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
+        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
@@ -34,13 +34,13 @@ with mitxonline_problem_events as (
         , courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
-        , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
-        , json_query(useractivity_event_object, 'lax $.attempts' omit quotes) as attempt
-        , json_query(useractivity_event_object, 'lax $.success' omit quotes) as success
-        , json_query(useractivity_event_object, 'lax $.grade' omit quotes) as grade
-        , json_query(useractivity_event_object, 'lax $.max_grade' omit quotes) as max_grade
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
+        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
+        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
+        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
+        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
+        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
@@ -56,13 +56,13 @@ with mitxonline_problem_events as (
         , courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
-        , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
-        , json_query(useractivity_event_object, 'lax $.attempts' omit quotes) as attempt
-        , json_query(useractivity_event_object, 'lax $.success' omit quotes) as success
-        , json_query(useractivity_event_object, 'lax $.grade' omit quotes) as grade
-        , json_query(useractivity_event_object, 'lax $.max_grade' omit quotes) as max_grade
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
+        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
+        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
+        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
+        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
+        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
@@ -78,13 +78,13 @@ with mitxonline_problem_events as (
         , {{ format_course_id('courserun_readable_id') }} as courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
-        , json_query(useractivity_event_object, 'lax $.answers' omit quotes) as answers
-        , json_query(useractivity_event_object, 'lax $.attempts' omit quotes) as attempt
-        , json_query(useractivity_event_object, 'lax $.success' omit quotes) as success
-        , json_query(useractivity_event_object, 'lax $.grade' omit quotes) as grade
-        , json_query(useractivity_event_object, 'lax $.max_grade' omit quotes) as max_grade
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
+        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
+        , {{ json_query_string('useractivity_event_object', "'$.answers'") }} as answers
+        , {{ json_query_string('useractivity_event_object', "'$.attempts'") }} as attempt
+        , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
+        , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
+        , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where

@@ -1,10 +1,10 @@
 with users as (
     select
         *
-        , element_at(split(user_full_name, ' '), 1) as user_first_name
+        , {{ element_at_array('split(user_full_name, \' \')', 1) }} as user_first_name
         , if(
             cardinality(split(user_full_name, ' ')) > 1
-           , element_at(split(user_full_name, ' '), -1)
+           , {{ element_at_array('split(user_full_name, \' \')', -1) }}
            , null
         ) as user_last_name
     from {{ ref('stg__mitxonline__app__postgres__users_user') }}

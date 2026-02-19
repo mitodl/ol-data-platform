@@ -12,11 +12,11 @@ select
     , useractivity_event_type
     , useractivity_path
     , useractivity_timestamp
-    , json_query(useractivity_event_object, 'lax $.event_transaction_id' omit quotes) as useractivity_event_id
-    , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as useractivity_problem_name
-    , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as useractivity_problem_id
-    , json_query(useractivity_event_object, 'lax $.weight' omit quotes) as useractivity_problem_weight
-    , json_query(useractivity_event_object, 'lax $.weighted_earned' omit quotes) as useractivity_problem_earned_score
-    , json_query(useractivity_event_object, 'lax $.weighted_possible' omit quotes) as useractivity_problem_max_score
+    , {{ json_query_string('useractivity_event_object', "'$.event_transaction_id'") }} as useractivity_event_id
+    , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as useractivity_problem_name
+    , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as useractivity_problem_id
+    , {{ json_query_string('useractivity_event_object', "'$.weight'") }} as useractivity_problem_weight
+    , {{ json_query_string('useractivity_event_object', "'$.weighted_earned'") }} as useractivity_problem_earned_score
+    , {{ json_query_string('useractivity_event_object', "'$.weighted_possible'") }} as useractivity_problem_max_score
 from course_activities
 where useractivity_event_type = 'edx.grades.problem.submitted'
