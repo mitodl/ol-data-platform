@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
-    unique_key='product_pk'
+    unique_key='product_pk',
+    incremental_strategy='delete+insert'
 ) }}
 
 with mitxonline_products as (
@@ -12,7 +13,7 @@ with mitxonline_products as (
         , product_price
         , product_is_active
         , product_created_on
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
         , 'mitxonline' as platform_code
     from {{ ref('int__mitxonline__ecommerce_product') }}
 )
@@ -26,7 +27,7 @@ with mitxonline_products as (
         , product_list_price as product_price
         , product_is_active
         , product_created_on
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
         , 'mitxpro' as platform_code
     from {{ ref('int__mitxpro__ecommerce_product') }}
 )
@@ -56,7 +57,7 @@ with mitxonline_products as (
         combined_products.*
         , dim_course_run.courserun_pk as courserun_fk
         , dim_program.program_pk as program_fk
-        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
         , {{ iso8601_to_date_key('product_created_on') }} as created_date_key
     from combined_products
     left join dim_course_run

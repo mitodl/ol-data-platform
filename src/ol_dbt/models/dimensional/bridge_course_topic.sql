@@ -8,7 +8,7 @@ with mitxonline_course_topics as (
     select
         course_id
         , coursetopic_name as topic_name
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_to_topics') }}
 )
 
@@ -16,7 +16,7 @@ with mitxonline_course_topics as (
     select
         course_id
         , coursetopic_name as topic_name
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
     from {{ ref('int__mitxpro__courses_to_topics') }}
 )
 

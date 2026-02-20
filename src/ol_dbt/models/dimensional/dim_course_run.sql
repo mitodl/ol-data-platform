@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
     unique_key='courserun_pk',
+    incremental_strategy='delete+insert',
     on_schema_change='append_new_columns'
 ) }}
 
@@ -15,7 +16,7 @@ with mitxonline_courseruns as (
         , courserun_enrollment_start_on as enrollment_start
         , courserun_enrollment_end_on as enrollment_end
         , courserun_is_live
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_runs') }}
 )
 
@@ -30,7 +31,7 @@ with mitxonline_courseruns as (
         , courserun_enrollment_start_on as enrollment_start
         , courserun_enrollment_end_on as enrollment_end
         , courserun_is_live
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
     from {{ ref('int__mitxpro__course_runs') }}
 )
 
@@ -45,7 +46,7 @@ with mitxonline_courseruns as (
         , courserun_enrollment_start_date as enrollment_start
         , courserun_enrollment_end_date as enrollment_end
         , courserun_is_published as courserun_is_live
-        , '{{ var("edxorg") }}' as platform
+        , 'edxorg' as platform
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
 
@@ -90,7 +91,7 @@ with mitxonline_courseruns as (
 , courseruns_with_all_fks as (
     select
         courseruns_with_fk.*
-        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
         -- Create date keys for date dimension joins (parse to timestamp then format as YYYYMMDD)
         , {{ iso8601_to_date_key('courserun_start_on') }} as start_date_key
         , {{ iso8601_to_date_key('courserun_end_on') }} as end_date_key
@@ -102,6 +103,7 @@ with mitxonline_courseruns as (
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
+            'platform',
             'courserun_readable_id',
             'cast(current_timestamp as varchar)'
         ]) }} as courserun_pk
@@ -131,6 +133,7 @@ with mitxonline_courseruns as (
         from {{ this }} as existing
         where
             existing.courserun_readable_id = courseruns_with_all_fks.courserun_readable_id
+            and existing.platform = courseruns_with_all_fks.platform
             and existing.is_current = true
             and existing.courserun_title = courseruns_with_all_fks.courserun_title
     )
@@ -163,6 +166,7 @@ with mitxonline_courseruns as (
     from {{ this }} as existing
     inner join final as new_records
         on existing.courserun_readable_id = new_records.courserun_readable_id
+        and existing.platform = new_records.platform
     where existing.is_current = true
 )
 

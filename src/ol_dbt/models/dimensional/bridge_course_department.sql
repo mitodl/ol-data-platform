@@ -8,7 +8,7 @@ with mitxonline_course_departments as (
     select
         course_id
         , coursedepartment_name as department_name
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_to_departments') }}
 )
 

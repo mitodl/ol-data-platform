@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
     unique_key='order_key',
+    incremental_strategy='delete+insert',
     on_schema_change='append_new_columns'
 ) }}
 
@@ -14,12 +15,12 @@ with mitxonline_orders as (
         , order_reference_number
         , order_created_on
         , order_created_on as order_updated_on  -- mitxonline doesn't have updated_on, use created_on
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
         , product_id
         , case
+            when discount_amount_text like 'Fixed Price: 0%' then 'free'
             when right(discount_amount_text, 1) = '%' then 'percentage'
             when left(discount_amount_text, 1) = '$' then 'fixed_amount'
-            when discount_amount_text like 'Fixed Price: 0%' then 'free'
             else null
           end as discount_type_code
     from {{ ref('int__mitxonline__ecommerce_order') }}
@@ -34,7 +35,7 @@ with mitxonline_orders as (
         , cast(null as varchar) as order_reference_number  -- mitxpro doesn't have reference_number
         , order_created_on
         , order_updated_on
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
         , cast(null as bigint) as product_id
         , case
             when couponpaymentversion_discount_type = 'percent-off' then 'percentage'
@@ -66,7 +67,7 @@ with mitxonline_orders as (
     select
         combined_orders.*
         , cast(null as varchar) as user_fk  -- dim_user: user_pk is varchar (surrogate key)
-        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
         , dim_discount_type.discount_type_pk as discount_type_fk
         , dim_product.product_pk as product_fk
         , {{ iso8601_to_date_key('order_created_on') }} as order_date_key
