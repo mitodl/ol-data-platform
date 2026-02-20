@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
     unique_key='certificate_key',
+    incremental_strategy='delete+insert',
     on_schema_change='append_new_columns'
 ) }}
 
@@ -13,7 +14,7 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid as certificate_uuid
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
     from {{ ref('int__mitxonline__courserun_certificates') }}
 )
 
@@ -25,7 +26,7 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid as certificate_uuid
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
     from {{ ref('int__mitxpro__courserun_certificates') }}
 )
 
@@ -57,7 +58,7 @@ with mitxonline_certificates as (
         combined_certificates.*
         , cast(null as varchar) as user_fk  -- dim_user not in Phase 1-2
         , dim_course_run.courserun_pk as courserun_fk
-        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
         , dim_certificate_type.certificate_type_pk as certificate_type_fk
         , {{ iso8601_to_date_key('certificate_created_on') }} as certificate_date_key
     from combined_certificates
@@ -66,8 +67,8 @@ with mitxonline_certificates as (
         and combined_certificates.platform = dim_course_run.platform
     left join dim_certificate_type
         on dim_certificate_type.certificate_type_code = case combined_certificates.platform
-            when '{{ var("mitxonline") }}' then 'verified'
-            when '{{ var("mitxpro") }}' then 'professional'
+            when 'mitxonline' then 'verified'
+            when 'mitxpro' then 'professional'
             else null
         end
 )

@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
     unique_key='enrollment_key',
+    incremental_strategy='delete+insert',
     on_schema_change='append_new_columns'
 ) }}
 
@@ -15,7 +16,7 @@ with mitxonline_enrollments as (
         , courserunenrollment_is_active as enrollment_is_active
         , courserunenrollment_enrollment_mode as enrollment_mode
         , courserunenrollment_enrollment_status as enrollment_status
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
         , 'mitxonline' as platform_code
     from {{ ref('int__mitxonline__courserunenrollments') }}
 )
@@ -30,14 +31,16 @@ with mitxonline_enrollments as (
         , courserunenrollment_is_active
         , courserunenrollment_enrollment_mode
         , null as enrollment_status
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
         , 'mitxpro' as platform_code
     from {{ ref('int__mitxpro__courserunenrollments') }}
 )
 
 , edxorg_enrollments as (
     select
-        row_number() over (order by user_id, courserunenrollment_created_on) as courserunenrollment_id  -- synthetic ID since edxorg doesn't have enrollment_id
+        -- Stable surrogate key: edxorg has no enrollment_id; use natural key (user + course run)
+        {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }}
+            as courserunenrollment_id
         , user_id
         , null as courserun_id
         , null as program_id
@@ -45,7 +48,7 @@ with mitxonline_enrollments as (
         , courserunenrollment_is_active
         , courserunenrollment_enrollment_mode
         , null as enrollment_status
-        , '{{ var("edxorg") }}' as platform
+        , 'edxorg' as platform
         , 'edxorg' as platform_code
     from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
 )
@@ -60,7 +63,7 @@ with mitxonline_enrollments as (
         , programenrollment_is_active as enrollment_is_active
         , null as enrollment_mode
         , null as enrollment_status
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
         , 'mitxonline' as platform_code
     from {{ ref('int__mitxonline__programenrollments') }}
 )
@@ -97,7 +100,7 @@ with mitxonline_enrollments as (
         , cast(null as varchar) as user_fk  -- dim_user: user_pk is varchar (surrogate key)
         , dim_course_run.courserun_pk as courserun_fk
         , dim_program.program_pk as program_fk
-        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
         , {{ iso8601_to_date_key('enrollment_created_on') }} as enrollment_date_key
     from combined_enrollments
     left join dim_course_run

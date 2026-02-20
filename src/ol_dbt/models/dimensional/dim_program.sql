@@ -99,7 +99,7 @@ with
     with_platform_fk as (
         select
             combined.*,
-            cast(null as integer) as platform_fk,  -- dim_platform not in Phase 1-2
+            cast(null as varchar) as platform_fk,  -- dim_platform not in Phase 1-2
             {{ safe_parse_iso8601_date("first_published_date") }} as published_date,
             {{ iso8601_to_date_key('first_published_date') }} as published_date_key
         from combined
