@@ -34,7 +34,7 @@ with course_block_source as (
         , block_title as coursestructure_block_title
         , course_content_hash as coursestructure_content_hash
         , block_content_hash as coursestructure_block_content_hash
-        , json_query(block_details, 'lax $.metadata') as coursestructure_block_metadata
+        , {{ json_extract_value('block_details', "'$.metadata'") }} as coursestructure_block_metadata
         , {{ cast_timestamp_to_iso8601('course_start') }} as courserun_start_on
         , {{ cast_timestamp_to_iso8601('retrieved_at') }} as coursestructure_retrieved_at
     from course_block

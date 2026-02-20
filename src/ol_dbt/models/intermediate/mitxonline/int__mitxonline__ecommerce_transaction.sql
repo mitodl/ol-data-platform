@@ -17,9 +17,8 @@ select
     , {{ json_query_string('transaction_data', "'$.req_payment_method'") }} as transaction_payment_method
     , {{ json_query_string('transaction_data', "'$.req_reference_number'") }} as transaction_reference_number
     , {{ json_query_string('transaction_data', "'$.req_bill_to_address_state'") }} as transaction_bill_to_address_state
-    , json_query(
-        transaction_data, 'lax $.req_bill_to_address_country' omit quotes
-    ) as transaction_bill_to_address_country
+    , {{ json_query_string('transaction_data', "'$.req_bill_to_address_country'") }}
+        as transaction_bill_to_address_country
     , {{ json_query_string('transaction_data', "'$.req_transaction_type'") }} as transaction_req_type
     , {{ json_query_string('transaction_data', "'$.req_currency'") }} as transaction_payment_currency
     , {{ json_query_string('transaction_data', "'$.req_bill_to_email'") }} as transaction_payer_email
