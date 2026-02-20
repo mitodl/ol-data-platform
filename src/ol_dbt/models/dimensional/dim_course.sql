@@ -93,6 +93,7 @@ with mitxonline_courses as (
     select
         existing.course_pk
         , existing.course_readable_id
+        , existing.source_id
         , existing.course_number
         , existing.course_title
         , existing.course_description

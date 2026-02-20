@@ -95,7 +95,7 @@ with mitxonline_discussion_events as (
 )
 
 , dim_course_run as (
-    select courserun_pk, courserun_readable_id
+    select courserun_pk, courserun_readable_id, platform
     from {{ ref('dim_course_run') }}
     where is_current = true
 )
@@ -201,13 +201,13 @@ with mitxonline_discussion_events as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['platform']) }} as platform_fk
-    , platform
+    {{ dbt_utils.generate_surrogate_key(['combined.platform']) }} as platform_fk
+    , combined.platform
     , user_fk
     , openedx_user_id
     , user_username
     , dim_course_run.courserun_pk as courserun_fk
-    , courserun_readable_id
+    , combined.courserun_readable_id
     , event_type
     , event_json
     , post_id
@@ -220,4 +220,11 @@ select
     , user_forums_roles
     , event_timestamp
 from combined
-left join dim_course_run on combined.courserun_readable_id = dim_course_run.courserun_readable_id
+left join dim_course_run
+    on combined.courserun_readable_id = dim_course_run.courserun_readable_id
+    and dim_course_run.platform = case combined.platform
+        when 'mitxonline' then '{{ var("mitxonline") }}'
+        when 'mitxpro' then '{{ var("mitxpro") }}'
+        when 'edxorg' then '{{ var("edxorg") }}'
+        when 'residential' then '{{ var("residential") }}'
+    end
