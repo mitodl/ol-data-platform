@@ -777,9 +777,8 @@ models:
   - name: user_email
     description: string, user email address. May be null for some xPRO Emeritus learners.
   - name: chapter_title
-    description: string, title of the chapter/section within the course
-    tests:
-    - not_null
+    description: string, title of the chapter/section within the course. May be null
+      for Residential MITx data.
   - name: courserun_readable_id
     description: string, unique identifier for the course run formatted as course-v1:{org}+{course
       code}+{run_tag}
