@@ -10,18 +10,23 @@ with mitxonline_engagements as (
 )
 
 , mitx_courses as (
-    select * from {{ ref('int__mitx__courses') }}
+    select
+        mitxonline_course_id
+        , course_readable_id
+    from {{ ref('int__mitx__courses') }}
 )
 
 select
     mitxonline_engagements.*
     , '{{ var("mitxonline") }}' as platform
     , case
-        when cast(substring(mitxonline_engagements.courserun_start_on, 1, 10) as date) <= current_date
-            and (
-                mitxonline_engagements.courserun_end_on is null
-                or cast(substring(mitxonline_engagements.courserun_end_on, 1, 10) as date) >= current_date
-            )
+        when
+            mitxonline_engagements.courserun_end_on is null
+            and from_iso8601_timestamp(mitxonline_engagements.courserun_start_on) <= current_date
+            then true
+        when
+            from_iso8601_timestamp(mitxonline_engagements.courserun_start_on) <= current_date
+            and from_iso8601_timestamp(mitxonline_engagements.courserun_end_on) > current_date
             then true
         else false
     end as courserun_is_current
