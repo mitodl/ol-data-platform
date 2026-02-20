@@ -803,6 +803,17 @@ models:
       within the section
   - name: problem_title
     description: string, title of the problem block
+  - name: problem_block_index
+    description: int, sequence number giving the order in which this problem appears
+      within the subsection
+  - name: openedx_user_id
+    description: int, the user's numeric ID in the OpenedX platform
+    tests:
+    - not_null
+  - name: problem_block_fk
+    description: string, foreign key to the problem block in dim_course_content
+    tests:
+    - not_null
   - name: num_of_attempts
     description: int, total number of attempts the user made on this problem
   - name: num_of_correct_attempts
@@ -816,6 +827,6 @@ models:
   - name: correct_true_cnt
     description: int, 1 if the user has at least one correct attempt, 0 otherwise
   - name: attempted_true_cnt
-    description: int, 1 if the user has at least one correct attempt, 0 otherwise
+    description: int, 1 if the user has at least one attempt, 0 otherwise
   - name: number_of_problems
     description: int, total number of problems in the chapter
