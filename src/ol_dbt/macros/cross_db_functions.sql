@@ -107,12 +107,12 @@
     {# DuckDB: strftime with %-style format. Convert common Java patterns. #}
     {% set strftime_format = java_format
         | replace('yyyy', '%Y')
+        | replace('MMMM', '%B')
+        | replace('MMM', '%b')
         | replace('MM', '%m')
         | replace('dd', '%d')
         | replace('EEEE', '%A')
         | replace('EEE', '%a')
-        | replace('MMMM', '%B')
-        | replace('MMM', '%b')
         | replace('HH', '%H')
         | replace('mm', '%M')
         | replace('ss', '%S')

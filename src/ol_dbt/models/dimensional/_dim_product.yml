@@ -6,6 +6,13 @@ models:
   description: >
     Product catalog dimension (SCD Type 2) representing purchasable offerings.
     Products can be for course runs or programs. Tracks price changes over time.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - source_product_id
+      - platform
+      - is_current
+      where: "is_current = true"
   columns:
   - name: product_pk
     description: Surrogate key primary key

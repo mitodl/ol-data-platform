@@ -76,7 +76,7 @@ with mitxonline_payments as (
     from payments_with_fks
 
     {% if is_incremental() %}
-    where transaction_created_on > (select max(transaction_created_on) from {{ this }})
+    where transaction_created_on >= (select max(transaction_created_on) from {{ this }})
     {% endif %}
 )
 
