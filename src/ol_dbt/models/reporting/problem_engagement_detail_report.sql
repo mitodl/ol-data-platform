@@ -8,7 +8,8 @@ with problem_engagement as (
 
 , problem_grades as (
     select
-        problem_block_fk
+        platform
+        , problem_block_fk
         , courserun_readable_id
         , openedx_user_id
         , max(cast(max_grade as decimal(30, 10))) as max_possible_grade
@@ -16,17 +17,21 @@ with problem_engagement as (
         , max(cast(grade as decimal(30, 10))) as learner_highest_grade
     from {{ ref('tfact_problem_events') }}
     group by
-        problem_block_fk
+        platform
+        , problem_block_fk
         , courserun_readable_id
         , openedx_user_id
 )
 
 , problems_per_chapter as (
     select
-        chapter_block_fk
-        , count(distinct problem_block_fk) as number_of_problems
-    from {{ ref('afact_problem_engagement') }}
-    group by chapter_block_fk
+        chapter_block_id as chapter_block_fk
+        , count(distinct block_id) as number_of_problems
+    from {{ ref('dim_course_content') }}
+    where
+        is_latest = true
+        and block_category = 'problem'
+    group by chapter_block_id
 )
 
 , course_runs as (
@@ -65,6 +70,9 @@ select
     , subsection_blocks.block_title as subsection_title
     , subsection_blocks.block_index as subsection_block_index
     , problem_blocks.block_title as problem_title
+    , problem_blocks.block_index as problem_block_index
+    , problem_engagement.openedx_user_id
+    , problem_engagement.problem_block_fk
     , max(problem_engagement.num_of_attempts) as num_of_attempts
     , max(problem_engagement.num_of_correct_attempts) as num_of_correct_attempts
     , max(problem_grades.max_possible_grade) as max_possible_grade
@@ -72,7 +80,7 @@ select
     , max(problem_grades.learner_highest_grade) as learner_highest_grade
     , max(case when problem_engagement.num_of_correct_attempts > 0 then 1 else 0 end)
         as correct_true_cnt
-    , max(case when problem_engagement.num_of_correct_attempts > 0 then 1 else 0 end)
+    , max(case when problem_engagement.num_of_attempts > 0 then 1 else 0 end)
         as attempted_true_cnt
     , max(problems_per_chapter.number_of_problems) as number_of_problems
 from problem_engagement
@@ -89,7 +97,8 @@ inner join section_blocks
 inner join problem_blocks
     on problem_engagement.problem_block_fk = problem_blocks.block_id
 inner join problem_grades
-    on problem_engagement.problem_block_fk = problem_grades.problem_block_fk
+    on problem_engagement.platform = problem_grades.platform
+    and problem_engagement.problem_block_fk = problem_grades.problem_block_fk
     and problem_engagement.courserun_readable_id = problem_grades.courserun_readable_id
     and problem_engagement.openedx_user_id = problem_grades.openedx_user_id
 left join course_runs
@@ -107,3 +116,6 @@ group by
     , subsection_blocks.block_title
     , subsection_blocks.block_index
     , problem_blocks.block_title
+    , problem_blocks.block_index
+    , problem_engagement.openedx_user_id
+    , problem_engagement.problem_block_fk
