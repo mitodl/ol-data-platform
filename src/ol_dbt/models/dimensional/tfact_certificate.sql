@@ -47,17 +47,29 @@ with mitxonline_certificates as (
 
 -- dim_platform not in Phase 1-2
 
+, dim_certificate_type as (
+    select certificate_type_pk, certificate_type_code
+    from {{ ref('dim_certificate_type') }}
+)
+
 , certificates_with_fks as (
     select
         combined_certificates.*
         , cast(null as varchar) as user_fk  -- dim_user not in Phase 1-2
         , dim_course_run.courserun_pk as courserun_fk
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , dim_certificate_type.certificate_type_pk as certificate_type_fk
         , {{ iso8601_to_date_key('certificate_created_on') }} as certificate_date_key
     from combined_certificates
     left join dim_course_run
         on combined_certificates.courserun_id = dim_course_run.source_id
         and combined_certificates.platform = dim_course_run.platform
+    left join dim_certificate_type
+        on dim_certificate_type.certificate_type_code = case combined_certificates.platform
+            when '{{ var("mitxonline") }}' then 'verified'
+            when '{{ var("mitxpro") }}' then 'professional'
+            else null
+        end
 )
 
 , final as (
@@ -71,6 +83,7 @@ with mitxonline_certificates as (
         , user_fk
         , courserun_fk
         , platform_fk
+        , certificate_type_fk
         , platform
         , certificate_uuid
         , certificate_is_revoked

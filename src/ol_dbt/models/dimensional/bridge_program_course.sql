@@ -9,6 +9,7 @@ with mitxonline_program_requirements as (
         , course_id
         , true as is_required
         , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform_code
     from {{ ref('int__mitxonline__program_requirements') }}
 )
 
@@ -18,6 +19,7 @@ with mitxonline_program_requirements as (
         , course_id
         , true as is_required
         , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform_code
     from {{ ref('int__mitxpro__coursesinprogram') }}
 )
 
@@ -48,8 +50,7 @@ with mitxonline_program_requirements as (
     from combined_requirements
     inner join dim_program
         on combined_requirements.program_id = dim_program.source_id
-        -- Join on platform_readable_id to match the canonical platform value used in dim_course
-        and combined_requirements.platform = dim_program.platform_readable_id
+        and combined_requirements.platform_code = dim_program.platform_code
     inner join dim_course
         on combined_requirements.course_id = dim_course.source_id
         and dim_program.platform_readable_id = dim_course.primary_platform

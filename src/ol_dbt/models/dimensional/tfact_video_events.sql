@@ -29,7 +29,7 @@ with mitxonline_video_events as (
         , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
         , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
         , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -51,7 +51,7 @@ with mitxonline_video_events as (
         , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
         , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
         , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -73,7 +73,7 @@ with mitxonline_video_events as (
         , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
         , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
         , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -95,7 +95,7 @@ with mitxonline_video_events as (
         , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
         , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
         , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null

@@ -48,7 +48,7 @@ with mitxonline_payments as (
 , payments_with_fks as (
     select
         combined_payments.*
-        , cast(null as integer) as user_fk  -- dim_user not in Phase 1-2
+        , cast(null as varchar) as user_fk  -- dim_user: user_pk is varchar (surrogate key)
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
         , dim_payment_method.payment_method_pk as payment_method_fk
         , {{ iso8601_to_date_key('transaction_created_on') }} as payment_date_key
