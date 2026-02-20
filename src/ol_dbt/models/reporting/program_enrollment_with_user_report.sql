@@ -37,7 +37,27 @@ with enrollment_detail as (
 )
 
 select
-    enrollment_detail.*
+    enrollment_detail.platform_name
+    , enrollment_detail.program_id
+    , enrollment_detail.program_title
+    , enrollment_detail.program_name
+    , enrollment_detail.program_track
+    , enrollment_detail.program_type
+    , enrollment_detail.program_is_live
+    , enrollment_detail.program_readable_id
+    , enrollment_detail.user_hashed_id
+    , enrollment_detail.user_id
+    , enrollment_detail.user_email
+    , enrollment_detail.user_username
+    , enrollment_detail.user_full_name
+    , enrollment_detail.user_has_completed_program
+    , enrollment_detail.programenrollment_is_active
+    , enrollment_detail.programenrollment_created_on
+    , enrollment_detail.programenrollment_enrollment_status
+    , enrollment_detail.programcertificate_created_on
+    , enrollment_detail.programcertificate_is_revoked
+    , enrollment_detail.programcertificate_uuid
+    , enrollment_detail.programcertificate_url
     , coalesce(
         combined_users.user_highest_education, combined_users2.user_highest_education
     ) as user_highest_education
@@ -49,7 +69,7 @@ select
     , coalesce(
         combined_users.user_address_country, combined_users2.user_address_country
     ) as user_address_country
-    , courses_detail.courses_taken_in_program
+    , coalesce(courses_detail.courses_taken_in_program, 0) as courses_taken_in_program
     , combined_users.user_street_address
     , combined_users.user_address_city
     , combined_users.user_address_state_or_territory
