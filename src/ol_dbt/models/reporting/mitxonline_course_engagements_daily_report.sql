@@ -2,6 +2,13 @@ with mitxonline_engagements as (
     select * from {{ ref('marts__mitxonline_course_engagements_daily') }}
 )
 
+, mitxonline_course_runs as (
+    select
+        courserun_readable_id
+        , course_id
+    from {{ ref('int__mitxonline__course_runs') }}
+)
+
 , mitx_courses as (
     select * from {{ ref('int__mitx__courses') }}
 )
@@ -20,5 +27,7 @@ select
     end as courserun_is_current
     , mitx_courses.course_readable_id
 from mitxonline_engagements
+inner join mitxonline_course_runs
+    on mitxonline_engagements.courserun_readable_id = mitxonline_course_runs.courserun_readable_id
 left join mitx_courses
-    on mitxonline_engagements.course_number = mitx_courses.course_number
+    on mitxonline_course_runs.course_id = mitx_courses.mitxonline_course_id
