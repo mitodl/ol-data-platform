@@ -8,6 +8,12 @@ models:
     have
     multiple runs over time. This dimension captures the specific instance of a course
     with start/end dates, enrollment windows, etc.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - courserun_readable_id
+      - is_current
+      where: "is_current = true"
   columns:
   - name: courserun_pk
     description: Surrogate key primary key

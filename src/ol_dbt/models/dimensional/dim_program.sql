@@ -23,6 +23,7 @@ with
             false as is_external,
             cast(null as varchar) as partner_platform_name,
             'MITx Online' as platform_readable_id,
+            'mitxonline' as platform_code,
             program_page_first_published_on as first_published_date,  -- Keep as VARCHAR
             -- Temporal attributes directly in dimension
             cast(null as varchar) as enrollment_start_date,  -- Not time-bound in MITx Online
@@ -51,6 +52,7 @@ with
             program_is_external,
             platform_name as partner_platform_name,
             case when program_is_external then 'xPRO ' || platform_name else 'xPro' end as platform_readable_id,
+            'mitxpro' as platform_code,
             cms_programpage_first_published_on as first_published_date,  -- Keep as VARCHAR
             cast(null as varchar) as enrollment_start_date,
             cast(null as varchar) as enrollment_end_date
@@ -59,7 +61,7 @@ with
     micromasters_programs as (
         select
             program_id as source_id,
-            cast(program_id as varchar) as program_readable_id,  -- micromasters doesn't have readable_id
+            {{ generate_micromasters_program_readable_id('program_id', 'program_title') }} as program_readable_id,
             program_title as program_name,
             program_title,
             'MicroMasters' as program_type,
@@ -78,6 +80,7 @@ with
             false as is_external,
             cast(null as varchar) as partner_platform_name,
             'MITx Online' as platform_readable_id,
+            'micromasters' as platform_code,
             cast(null as varchar) as first_published_date,
             cast(null as varchar) as enrollment_start_date,
             cast(null as varchar) as enrollment_end_date
@@ -102,5 +105,5 @@ with
         from combined
     )
 
-select {{ dbt_utils.generate_surrogate_key(["source_id", "platform_readable_id"]) }} as program_pk, *
+select {{ dbt_utils.generate_surrogate_key(["source_id", "platform_code"]) }} as program_pk, *
 from with_platform_fk

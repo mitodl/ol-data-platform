@@ -72,11 +72,36 @@ with mitxonline_topics as (
     group by topic_name
 )
 
+, deduped_with_pk as (
+    select
+        {{ dbt_utils.generate_surrogate_key(['topic_name']) }} as topic_pk
+        , topic_name
+        , source_topic_id
+        , source_parent_topic_id
+        , primary_platform
+    from deduped_topics
+)
+
+-- Resolve parent_topic_fk via self-join on source topic IDs
+, with_parent_fk as (
+    select
+        child.topic_pk
+        , child.topic_name
+        , child.source_topic_id
+        , child.source_parent_topic_id
+        , parent.topic_pk as parent_topic_fk
+        , child.primary_platform
+    from deduped_with_pk as child
+    left join deduped_with_pk as parent
+        on child.source_parent_topic_id = parent.source_topic_id
+        and child.source_parent_topic_id is not null
+)
+
 select
-    {{ dbt_utils.generate_surrogate_key(['topic_name']) }} as topic_pk
+    topic_pk
     , topic_name
     , source_topic_id
     , source_parent_topic_id
-    , cast(null as varchar) as parent_topic_fk  -- Populated after initial load via self-join
+    , parent_topic_fk
     , primary_platform
-from deduped_topics
+from with_parent_fk

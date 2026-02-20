@@ -101,4 +101,38 @@ with mitxonline_products as (
     {% endif %}
 )
 
+{% if is_incremental() %}
+-- Expire prior current rows when price changes
+, records_to_expire as (
+    select
+        existing.product_pk
+        , existing.source_product_id
+        , existing.product_type
+        , existing.courserun_fk
+        , existing.program_fk
+        , existing.platform_fk
+        , existing.platform
+        , existing.product_price
+        , existing.product_currency
+        , existing.product_is_active
+        , existing.created_date_key
+        , existing.effective_date
+        , current_timestamp as end_date
+        , false as is_current
+    from {{ this }} as existing
+    inner join final as new_records
+        on existing.source_product_id = new_records.source_product_id
+        and existing.platform = new_records.platform
+    where existing.is_current = true
+)
+
+, combined as (
+    select * from final
+    union all
+    select * from records_to_expire
+)
+
+select * from combined
+{% else %}
 select * from final
+{% endif %}
