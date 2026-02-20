@@ -21,8 +21,8 @@
 {%- endmacro -%}
 
 {%- macro duckdb__json_query_string(json_col, json_path) -%}
-  {# DuckDB: Use json_extract_string which returns unquoted string values #}
-  json_extract_string({{ json_col }}, {{ json_path | replace("'", "\"") }})
+  {# DuckDB: Use json_extract_string which returns unquoted string values. Path must use single quotes. #}
+  json_extract_string({{ json_col }}, {{ json_path }})
 {%- endmacro -%}
 
 {%- macro starrocks__json_query_string(json_col, json_path) -%}
