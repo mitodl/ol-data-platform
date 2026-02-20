@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
     unique_key='payment_key',
+    incremental_strategy='delete+insert',
     on_schema_change='append_new_columns'
 ) }}
 
@@ -15,7 +16,7 @@ with mitxonline_payments as (
         , transaction_status
         , transaction_payment_method as payment_method
         , transaction_created_on
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
     from {{ ref('int__mitxonline__ecommerce_transaction') }}
 )
 
@@ -29,7 +30,7 @@ with mitxonline_payments as (
         , receipt_transaction_status as transaction_status
         , receipt_payment_method as payment_method
         , receipt_created_on as transaction_created_on
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
     from {{ ref('int__mitxpro__ecommerce_receipt') }}
 )
 
@@ -49,7 +50,7 @@ with mitxonline_payments as (
     select
         combined_payments.*
         , cast(null as varchar) as user_fk  -- dim_user: user_pk is varchar (surrogate key)
-        , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
+        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
         , dim_payment_method.payment_method_pk as payment_method_fk
         , {{ iso8601_to_date_key('transaction_created_on') }} as payment_date_key
     from combined_payments

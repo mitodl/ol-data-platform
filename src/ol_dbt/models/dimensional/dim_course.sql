@@ -1,6 +1,7 @@
 {{ config(
     materialized='incremental',
     unique_key='course_pk',
+    incremental_strategy='delete+insert',
     on_schema_change='append_new_columns'
 ) }}
 
@@ -13,7 +14,7 @@ with mitxonline_courses as (
         , course_number
         , course_description
         , course_is_live
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
     from {{ ref('int__mitxonline__courses') }}
 )
 
@@ -25,7 +26,7 @@ with mitxonline_courses as (
         , cast(null as varchar) as course_number  -- mitxpro doesn't have course_number
         , cast(null as varchar) as course_description  -- mitxpro doesn't have course_description
         , course_is_live
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
     from {{ ref('int__mitxpro__courses') }}
 )
 

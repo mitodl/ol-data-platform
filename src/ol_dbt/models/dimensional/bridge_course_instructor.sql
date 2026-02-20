@@ -8,7 +8,7 @@ with mitxonline_course_instructors as (
     select
         course_id
         , instructor_name
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_instructors') }}
 )
 
@@ -16,7 +16,7 @@ with mitxonline_course_instructors as (
     select
         course_id
         , cms_facultymemberspage_facultymember_name as instructor_name
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
     from {{ ref('int__mitxpro__coursesfaculty') }}
 )
 

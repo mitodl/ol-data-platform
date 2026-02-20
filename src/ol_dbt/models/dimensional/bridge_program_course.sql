@@ -53,7 +53,7 @@ with mitxonline_program_requirements as (
         and combined_requirements.platform_code = dim_program.platform_code
     inner join dim_course
         on combined_requirements.course_id = dim_course.source_id
-        and dim_program.platform_readable_id = dim_course.primary_platform
+        and combined_requirements.platform_code = dim_course.primary_platform
 )
 
 select
