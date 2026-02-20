@@ -19,15 +19,7 @@ select
     , combined_video_engagements.courserun_readable_id
     , video_counts_by_chapter.total_video_count
     , combined_video_engagements.platform
-    , case
-        when cast(substring(combined_video_engagements.courserun_start_on, 1, 10) as date) <= current_date
-            and (
-                combined_video_engagements.courserun_end_on is null
-                or cast(substring(combined_video_engagements.courserun_end_on, 1, 10) as date) >= current_date
-            )
-            then true
-        else false
-    end as courserun_is_current
+    , combined_video_engagements.courserun_is_current
     , combined_video_engagements.course_readable_id
     , count(distinct combined_video_engagements.video_title) as user_watched_video_count
     , max(combined_video_engagements.video_index) as max_video_index
@@ -42,13 +34,5 @@ group by
     , combined_video_engagements.courserun_readable_id
     , video_counts_by_chapter.total_video_count
     , combined_video_engagements.platform
-    , case
-        when cast(substring(combined_video_engagements.courserun_start_on, 1, 10) as date) <= current_date
-            and (
-                combined_video_engagements.courserun_end_on is null
-                or cast(substring(combined_video_engagements.courserun_end_on, 1, 10) as date) >= current_date
-            )
-            then true
-        else false
-    end
+    , combined_video_engagements.courserun_is_current
     , combined_video_engagements.course_readable_id
