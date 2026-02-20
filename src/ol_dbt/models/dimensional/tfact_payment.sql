@@ -48,11 +48,10 @@ with mitxonline_payments as (
 , payments_with_fks as (
     select
         combined_payments.*
+        , cast(null as integer) as user_fk  -- dim_user not in Phase 1-2
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
         , dim_payment_method.payment_method_pk as payment_method_fk
-        , case when transaction_created_on is not null
-            then cast(date_format(date_parse(substr(transaction_created_on, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
-            else null end as payment_date_key
+        , {{ iso8601_to_date_key('transaction_created_on') }} as payment_date_key
     from combined_payments
     left join dim_payment_method on combined_payments.payment_method = dim_payment_method.payment_method_code
 )

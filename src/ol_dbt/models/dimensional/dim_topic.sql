@@ -22,14 +22,13 @@ with mitxonline_topics as (
 )
 
 -- OCW has 3-level hierarchy: topic > subtopic > speciality
--- Use production intermediate table since OCW not in tmacey schema
 , ocw_topics as (
     select distinct
         cast(null as bigint) as topic_id
         , course_topic as topic_name
         , cast(null as bigint) as parent_topic_id
         , 'ocw' as platform
-    from ol_data_lake_production.ol_warehouse_production_intermediate.int__ocw__course_topics
+    from {{ ref('int__ocw__course_topics') }}
     where course_topic is not null
 
     union all
@@ -39,7 +38,7 @@ with mitxonline_topics as (
         , course_subtopic as topic_name
         , cast(null as bigint) as parent_topic_id  -- Would need to link to parent topic
         , 'ocw' as platform
-    from ol_data_lake_production.ol_warehouse_production_intermediate.int__ocw__course_topics
+    from {{ ref('int__ocw__course_topics') }}
     where course_subtopic is not null
 
     union all
@@ -49,7 +48,7 @@ with mitxonline_topics as (
         , course_speciality as topic_name
         , cast(null as bigint) as parent_topic_id  -- Would need to link to parent subtopic
         , 'ocw' as platform
-    from ol_data_lake_production.ol_warehouse_production_intermediate.int__ocw__course_topics
+    from {{ ref('int__ocw__course_topics') }}
     where course_speciality is not null
 )
 

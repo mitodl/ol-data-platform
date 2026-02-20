@@ -3,13 +3,12 @@
 ) }}
 
 -- Consolidate departments from platforms that have this metadata
--- Use production intermediate tables for OCW since not in tmacey schema
 with ocw_departments as (
     select distinct
         course_department_number as department_number
         , course_department_name as department_name
         , 'ocw' as platform
-    from ol_data_lake_production.ol_warehouse_production_intermediate.int__ocw__course_departments
+    from {{ ref('int__ocw__course_departments') }}
     where course_department_name is not null
 )
 
@@ -18,7 +17,7 @@ with ocw_departments as (
         cast(null as varchar) as department_number
         , coursedepartment_name as department_name
         , '{{ var("mitxonline") }}' as platform
-    from ol_data_lake_production.ol_warehouse_production_intermediate.int__mitxonline__course_to_departments
+    from {{ ref('int__mitxonline__course_to_departments') }}
     where coursedepartment_name is not null
 )
 

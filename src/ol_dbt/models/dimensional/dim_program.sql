@@ -98,9 +98,7 @@ with
             combined.*,
             cast(null as integer) as platform_fk,  -- dim_platform not in Phase 1-2
             {{ safe_parse_iso8601_date("first_published_date") }} as published_date,
-            cast(
-                date_format({{ safe_parse_iso8601_date("first_published_date") }}, '%Y%m%d') as integer
-            ) as published_date_key
+            {{ iso8601_to_date_key('first_published_date') }} as published_date_key
         from combined
     )
 

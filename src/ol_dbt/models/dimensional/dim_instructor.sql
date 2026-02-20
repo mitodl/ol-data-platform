@@ -30,7 +30,7 @@ with mitxonline_instructors as (
         , cast(null as varchar) as instructor_bio_short
         , cast(null as varchar) as instructor_bio_long
         , 'ocw' as platform
-    from ol_data_lake_production.ol_warehouse_production_intermediate.int__ocw__course_instructors
+    from {{ ref('int__ocw__course_instructors') }}
 )
 
 , combined_instructors as (
