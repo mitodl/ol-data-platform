@@ -5,6 +5,39 @@
     different implementations across database engines.
 #}
 
+{#
+    json_extract_value: Cross-db extraction of a JSON value (returns JSON type, not plain string).
+    This replaces the Trino-specific: json_query(col, 'lax $.path')
+
+    For extracting plain strings use json_query_string instead.
+
+    Parameters:
+      json_col: The column or expression containing JSON
+      json_path: The JSON path (e.g., "'$.metadata'", "'$.value.name'")
+
+    Usage:
+      {{ json_extract_value('block_details', "'$.metadata'") }}
+#}
+{% macro json_extract_value(json_col, json_path) -%}
+    {{ adapter.dispatch('json_extract_value', 'open_learning')(json_col, json_path) }}
+{%- endmacro %}
+
+{% macro default__json_extract_value(json_col, json_path) -%}
+    {# Trino: json_query with lax mode returns a JSON value #}
+    json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')
+{%- endmacro %}
+
+{% macro duckdb__json_extract_value(json_col, json_path) -%}
+    {# DuckDB: json_extract returns a JSON value (equivalent to Trino json_query without omit quotes) #}
+    json_extract({{ json_col }}, {{ json_path }})
+{%- endmacro %}
+
+{% macro starrocks__json_extract_value(json_col, json_path) -%}
+    {# StarRocks: json_extract returns a JSON value #}
+    json_extract({{ json_col }}, {{ json_path }})
+{%- endmacro %}
+
+
 {% macro from_iso8601_timestamp(timestamp_str) -%}
     {{ adapter.dispatch('from_iso8601_timestamp', 'open_learning')(timestamp_str) }}
 {%- endmacro %}
