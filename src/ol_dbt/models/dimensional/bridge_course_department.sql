@@ -4,13 +4,12 @@
 
 -- Map courses to departments (many-to-many)
 -- Note: OCW courses not yet in dim_course (Phase 1-2), so OCW omitted here
--- Using production schema for mitxonline intermediate table
 with mitxonline_course_departments as (
     select
         course_id
         , coursedepartment_name as department_name
         , '{{ var("mitxonline") }}' as platform
-    from ol_data_lake_production.ol_warehouse_production_intermediate.int__mitxonline__course_to_departments
+    from {{ ref('int__mitxonline__course_to_departments') }}
 )
 
 , combined_course_departments as (

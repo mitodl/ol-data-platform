@@ -73,10 +73,6 @@ with mitxonline_enrollments as (
 
 -- Join to dimensions for FKs
 -- dim_user not in Phase 1-2
---, dim_user as (
---    select user_pk, mitxonline_openedx_user_id, mitxpro_openedx_user_id, edxorg_openedx_user_id
---    from {{ ref('dim_user') }}
---)
 
 , dim_course_run as (
     select courserun_pk, source_id, platform_fk, platform
@@ -85,15 +81,11 @@ with mitxonline_enrollments as (
 )
 
 , dim_program as (
-    select program_pk, source_id, platform_fk, platform
+    select program_pk, source_id, platform_fk, platform_readable_id as platform
     from {{ ref('dim_program') }}
 )
 
 -- dim_platform not in Phase 1-2
---, dim_platform as (
---    select platform_pk, platform_readable_id
---    from {{ ref('dim_platform') }}
---)
 
 , enrollments_with_fks as (
     select
@@ -102,13 +94,7 @@ with mitxonline_enrollments as (
         , dim_course_run.courserun_pk as courserun_fk
         , dim_program.program_pk as program_fk
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
-        , case when enrollment_created_on is not null
-            then cast(date_format(
-                case when length(enrollment_created_on) = 10
-                    then date_parse(enrollment_created_on, '%Y-%m-%d')
-                    else date_parse(substr(enrollment_created_on, 1, 19), '%Y-%m-%dT%H:%i:%s')
-                end, '%Y%m%d') as integer)
-            else null end as enrollment_date_key
+        , {{ iso8601_to_date_key('enrollment_created_on') }} as enrollment_date_key
     from combined_enrollments
     left join dim_course_run
         on combined_enrollments.courserun_id = dim_course_run.source_id

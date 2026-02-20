@@ -79,7 +79,7 @@ with mitxonline_courseruns as (
                     then substring(
                         combined_courseruns.courserun_readable_id,
                         1,
-                        regexp_position(combined_courseruns.courserun_readable_id, '\+type@', 1) - 1
+                        strpos(combined_courseruns.courserun_readable_id, '+type@') - 1
                     )
                 else combined_courseruns.courserun_readable_id
             end = dim_course.course_readable_id
@@ -90,34 +90,10 @@ with mitxonline_courseruns as (
         courseruns_with_fk.*
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
         -- Create date keys for date dimension joins (parse to timestamp then format as YYYYMMDD)
-        , case when courserun_start_on is not null
-            then cast(date_format(
-                case when length(courserun_start_on) = 10
-                    then date_parse(courserun_start_on, '%Y-%m-%d')
-                    else date_parse(substr(courserun_start_on, 1, 19), '%Y-%m-%dT%H:%i:%s')
-                end, '%Y%m%d') as integer)
-            else null end as start_date_key
-        , case when courserun_end_on is not null
-            then cast(date_format(
-                case when length(courserun_end_on) = 10
-                    then date_parse(courserun_end_on, '%Y-%m-%d')
-                    else date_parse(substr(courserun_end_on, 1, 19), '%Y-%m-%dT%H:%i:%s')
-                end, '%Y%m%d') as integer)
-            else null end as end_date_key
-        , case when enrollment_start is not null
-            then cast(date_format(
-                case when length(enrollment_start) = 10
-                    then date_parse(enrollment_start, '%Y-%m-%d')
-                    else date_parse(substr(enrollment_start, 1, 19), '%Y-%m-%dT%H:%i:%s')
-                end, '%Y%m%d') as integer)
-            else null end as enrollment_start_date_key
-        , case when enrollment_end is not null
-            then cast(date_format(
-                case when length(enrollment_end) = 10
-                    then date_parse(enrollment_end, '%Y-%m-%d')
-                    else date_parse(substr(enrollment_end, 1, 19), '%Y-%m-%dT%H:%i:%s')
-                end, '%Y%m%d') as integer)
-            else null end as enrollment_end_date_key
+        , {{ iso8601_to_date_key('courserun_start_on') }} as start_date_key
+        , {{ iso8601_to_date_key('courserun_end_on') }} as end_date_key
+        , {{ iso8601_to_date_key('enrollment_start') }} as enrollment_start_date_key
+        , {{ iso8601_to_date_key('enrollment_end') }} as enrollment_end_date_key
     from courseruns_with_fk
 )
 

@@ -43,12 +43,8 @@ with mitxonline_orders as (
         combined_orders.*
         , cast(null as integer) as user_fk  -- dim_user not in Phase 1-2
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
-        , case when order_created_on is not null
-            then cast(date_format(date_parse(substr(order_created_on, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
-            else null end as order_date_key
-        , case when order_updated_on is not null
-            then cast(date_format(date_parse(substr(order_updated_on, 1, 19), '%Y-%m-%dT%H:%i:%s'), '%Y%m%d') as integer)
-            else null end as order_updated_date_key
+        , {{ iso8601_to_date_key('order_created_on') }} as order_date_key
+        , {{ iso8601_to_date_key('order_updated_on') }} as order_updated_date_key
     from combined_orders
 )
 
