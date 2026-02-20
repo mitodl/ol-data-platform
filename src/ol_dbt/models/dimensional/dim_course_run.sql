@@ -135,4 +135,42 @@ with mitxonline_courseruns as (
     {% endif %}
 )
 
+{% if is_incremental() %}
+-- Expire prior current rows that have changed
+, records_to_expire as (
+    select
+        existing.courserun_pk
+        , existing.courserun_readable_id
+        , existing.source_id
+        , existing.course_fk
+        , existing.platform_fk
+        , existing.platform
+        , existing.courserun_title
+        , existing.start_date_key
+        , existing.end_date_key
+        , existing.enrollment_start_date_key
+        , existing.enrollment_end_date_key
+        , existing.courserun_start_on
+        , existing.courserun_end_on
+        , existing.enrollment_start
+        , existing.enrollment_end
+        , existing.courserun_is_live
+        , existing.effective_date
+        , current_timestamp as end_date
+        , false as is_current
+    from {{ this }} as existing
+    inner join final as new_records
+        on existing.courserun_readable_id = new_records.courserun_readable_id
+    where existing.is_current = true
+)
+
+, combined as (
+    select * from final
+    union all
+    select * from records_to_expire
+)
+
+select * from combined
+{% else %}
 select * from final
+{% endif %}

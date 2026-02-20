@@ -67,7 +67,7 @@ with mitxonline_orders as (
     from orders_with_fks
 
     {% if is_incremental() %}
-    where order_updated_on > (select max(order_updated_on) from {{ this }})
+    where order_updated_on >= (select max(order_updated_on) from {{ this }})
     {% endif %}
 )
 

@@ -8,6 +8,7 @@ with mitxonline_program_requirements as (
         program_id
         , course_id
         , true as is_required
+        , '{{ var("mitxonline") }}' as platform
     from {{ ref('int__mitxonline__program_requirements') }}
 )
 
@@ -16,6 +17,7 @@ with mitxonline_program_requirements as (
         program_id
         , course_id
         , true as is_required
+        , '{{ var("mitxpro") }}' as platform
     from {{ ref('int__mitxpro__coursesinprogram') }}
 )
 
@@ -27,7 +29,7 @@ with mitxonline_program_requirements as (
 
 -- Join to dimensions to get FKs
 , dim_program as (
-    select program_pk, program_readable_id, source_id, platform_readable_id
+    select program_pk, program_readable_id, source_id, platform_readable_id, platform_code
     from {{ ref('dim_program') }}
 )
 
@@ -46,6 +48,8 @@ with mitxonline_program_requirements as (
     from combined_requirements
     inner join dim_program
         on combined_requirements.program_id = dim_program.source_id
+        -- Join on platform_readable_id to match the canonical platform value used in dim_course
+        and combined_requirements.platform = dim_program.platform_readable_id
     inner join dim_course
         on combined_requirements.course_id = dim_course.source_id
         and dim_program.platform_readable_id = dim_course.primary_platform

@@ -90,7 +90,7 @@ with mitxonline_enrollments as (
 , enrollments_with_fks as (
     select
         combined_enrollments.*
-        , cast(null as varchar) as user_fk  -- dim_user not in Phase 1-2
+        , cast(null as integer) as user_fk  -- dim_user not in Phase 1-2
         , dim_course_run.courserun_pk as courserun_fk
         , dim_program.program_pk as program_fk
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
@@ -124,7 +124,7 @@ with mitxonline_enrollments as (
     from enrollments_with_fks
 
     {% if is_incremental() %}
-    where enrollment_created_on > (select max(enrollment_created_on) from {{ this }})
+    where enrollment_created_on >= (select max(enrollment_created_on) from {{ this }})
     {% endif %}
 )
 
