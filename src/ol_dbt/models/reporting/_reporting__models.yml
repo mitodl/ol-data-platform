@@ -774,17 +774,62 @@ models:
     completion details. Extends marts__combined_program_enrollment_detail with user
     profile information, capstone completion indicator, and program completion duration.
   columns:
-  - name: user_email
-    description: string, email address of the enrolled user. May be null for some
-      platforms.
-  - name: program_name
-    description: string, name of the program the user is enrolled in
-    tests:
-    - not_null
   - name: platform_name
     description: string, name of the platform (e.g. edX.org, MITx Online, xPRO)
     tests:
     - not_null
+  - name: program_id
+    description: int, id representing a single program on a particular platform
+  - name: program_title
+    description: str, title of the program, including the specific track if applicable.
+      e.g., Statistics and Data Science (General Track)
+  - name: program_name
+    description: string, name of the program the user is enrolled in
+    tests:
+    - not_null
+  - name: program_track
+    description: str, name of the specific track for MicroMasters programs
+  - name: program_type
+    description: str, the type of the program. Possible values are 'MicroMasters',
+      'XSeries' and 'Professional Certificate'
+    tests:
+    - not_null
+  - name: program_is_live
+    description: boolean, indicating whether the program is available to users on
+      the platform website
+  - name: program_readable_id
+    description: str, readable ID from xpro or mitxonline formatted as program-v1:{org}+{program
+      code} e.g. program-v1:xPRO+MLx
+  - name: user_hashed_id
+    description: str, foreign key to combined_users to identify the user
+  - name: user_id
+    description: int, user ID on the corresponding platform
+  - name: user_email
+    description: string, email address of the enrolled user. May be null for some
+      platforms.
+  - name: user_username
+    description: string, username on the corresponding platform
+  - name: user_full_name
+    description: string, user full name on the corresponding platform
+  - name: user_has_completed_program
+    description: boolean, whether the learner has completed program to earn the certificate
+    tests:
+    - not_null
+  - name: programenrollment_is_active
+    description: boolean, indicating whether the user is still enrolled in the program
+  - name: programenrollment_created_on
+    description: timestamp, specifying when an enrollment was initially created
+  - name: programenrollment_enrollment_status
+    description: str, enrollment status for users whose enrollment changed
+  - name: programcertificate_created_on
+    description: timestamp, specifying when a certificate was initially created
+  - name: programcertificate_is_revoked
+    description: boolean, indicating whether the certificate is revoked and invalid
+  - name: programcertificate_uuid
+    description: str, unique identifier for the program certificate
+  - name: programcertificate_url
+    description: str, URL to the program certificate for users who earned the certificate
+      on either mitxonline.mit.edu or xpro.mit.edu. Null for edX.org or revoked certificates.
   - name: user_highest_education
     description: string, highest level of education attained by the user. Coalesced
       from edX.org and hashed ID user matches.
@@ -806,20 +851,31 @@ models:
   - name: user_address_country
     description: string, country of the user. Coalesced from edX.org and hashed ID
       user matches.
-  - name: user_street_address
-    description: string, street address of the user from edX.org match
-  - name: user_address_city
-    description: string, city of the user from edX.org match
-  - name: user_address_state_or_territory
-    description: string, state or territory of the user from edX.org match
-  - name: user_address_postal_code
-    description: string, postal code of the user from edX.org match
   - name: courses_taken_in_program
     description: int, count of distinct verified courses the user has taken within
       the program
+  - name: user_street_address
+    description: string, street address of the user. Coalesced from edX.org and hashed
+      ID user matches.
+  - name: user_address_city
+    description: string, city of the user. Coalesced from edX.org and hashed ID user
+      matches.
+  - name: user_address_state_or_territory
+    description: string, state or territory of the user. Coalesced from edX.org and
+      hashed ID user matches.
+  - name: user_address_postal_code
+    description: string, postal code of the user. Coalesced from edX.org and hashed
+      ID user matches.
   - name: capstone_ind
     description: str, indicator of whether the user has completed a capstone course.
       'Y' if capstone completed, 'N' otherwise.
   - name: program_complete_days
-    description: int, number of days between the first course run start date and the
+    description: int, number of days from the first course run start date to the
       program certificate creation date
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
+      row_condition: "program_id !=2 and platform_name !='edX.org'"
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_username", "user_email"]
+      row_condition: "program_id =2 and platform_name ='edX.org'"
