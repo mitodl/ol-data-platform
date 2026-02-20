@@ -25,6 +25,21 @@
 {%- endmacro %}
 
 
+{% macro from_iso8601_timestamp_nanos(timestamp_str) -%}
+    {{ adapter.dispatch('from_iso8601_timestamp_nanos', 'open_learning')(timestamp_str) }}
+{%- endmacro %}
+
+{% macro default__from_iso8601_timestamp_nanos(timestamp_str) -%}
+    {# Trino: native nanosecond-precision timestamp parser #}
+    from_iso8601_timestamp_nanos({{ timestamp_str }})
+{%- endmacro %}
+
+{% macro duckdb__from_iso8601_timestamp_nanos(timestamp_str) -%}
+    {# DuckDB: max precision is microseconds; cast ISO 8601 string as timestamptz #}
+    try_cast({{ timestamp_str }} as timestamptz)
+{%- endmacro %}
+
+
 {% macro array_join(array_expr, delimiter, null_replacement='') -%}
     {{ adapter.dispatch('array_join', 'open_learning')(array_expr, delimiter, null_replacement) }}
 {%- endmacro %}

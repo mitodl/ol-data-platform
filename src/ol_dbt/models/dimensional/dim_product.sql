@@ -13,6 +13,7 @@ with mitxonline_products as (
         , product_is_active
         , product_created_on
         , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform_code
     from {{ ref('int__mitxonline__ecommerce_product') }}
 )
 
@@ -26,6 +27,7 @@ with mitxonline_products as (
         , product_is_active
         , product_created_on
         , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform_code
     from {{ ref('int__mitxpro__ecommerce_product') }}
 )
 
@@ -43,7 +45,7 @@ with mitxonline_products as (
 )
 
 , dim_program as (
-    select program_pk, source_id, platform_fk, platform_readable_id as platform
+    select program_pk, source_id, platform_fk, platform_code
     from {{ ref('dim_program') }}
 )
 
@@ -62,7 +64,7 @@ with mitxonline_products as (
         and combined_products.platform = dim_course_run.platform
     left join dim_program
         on combined_products.program_id = dim_program.source_id
-        and combined_products.platform = dim_program.platform
+        and combined_products.platform_code = dim_program.platform_code
 )
 
 , final as (

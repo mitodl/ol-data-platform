@@ -16,6 +16,7 @@ with mitxonline_enrollments as (
         , courserunenrollment_enrollment_mode as enrollment_mode
         , courserunenrollment_enrollment_status as enrollment_status
         , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform_code
     from {{ ref('int__mitxonline__courserunenrollments') }}
 )
 
@@ -30,6 +31,7 @@ with mitxonline_enrollments as (
         , courserunenrollment_enrollment_mode
         , null as enrollment_status
         , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform_code
     from {{ ref('int__mitxpro__courserunenrollments') }}
 )
 
@@ -44,6 +46,7 @@ with mitxonline_enrollments as (
         , courserunenrollment_enrollment_mode
         , null as enrollment_status
         , '{{ var("edxorg") }}' as platform
+        , 'edxorg' as platform_code
     from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
 )
 
@@ -58,6 +61,7 @@ with mitxonline_enrollments as (
         , null as enrollment_mode
         , null as enrollment_status
         , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform_code
     from {{ ref('int__mitxonline__programenrollments') }}
 )
 
@@ -81,7 +85,7 @@ with mitxonline_enrollments as (
 )
 
 , dim_program as (
-    select program_pk, source_id, platform_fk, platform_readable_id as platform
+    select program_pk, source_id, platform_code
     from {{ ref('dim_program') }}
 )
 
@@ -90,7 +94,7 @@ with mitxonline_enrollments as (
 , enrollments_with_fks as (
     select
         combined_enrollments.*
-        , cast(null as integer) as user_fk  -- dim_user not in Phase 1-2
+        , cast(null as varchar) as user_fk  -- dim_user: user_pk is varchar (surrogate key)
         , dim_course_run.courserun_pk as courserun_fk
         , dim_program.program_pk as program_fk
         , cast(null as integer) as platform_fk  -- dim_platform not in Phase 1-2
@@ -101,7 +105,7 @@ with mitxonline_enrollments as (
         and combined_enrollments.platform = dim_course_run.platform
     left join dim_program
         on combined_enrollments.program_id = dim_program.source_id
-        and combined_enrollments.platform = dim_program.platform
+        and combined_enrollments.platform_code = dim_program.platform_code
 )
 
 , final as (
