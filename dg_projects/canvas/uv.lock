@@ -1451,7 +1451,7 @@ requires-dist = [
     { name = "polars", specifier = ">=1.35.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
     { name = "pyarrow", specifier = "~=23.0.0" },
-    { name = "pyathena", specifier = "~=3.27.1" },
+    { name = "pyathena", specifier = "~=3.29.2" },
     { name = "pydantic", specifier = "~=2.12.3" },
     { name = "pygsheets", specifier = "~=2.0.6" },
     { name = "pyiceberg", extras = ["polars"], specifier = ">=0.10.0" },
@@ -1697,7 +1697,7 @@ wheels = [
 
 [[package]]
 name = "pyathena"
-version = "3.27.2"
+version = "3.29.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
@@ -1706,9 +1706,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/88/4f/e29c4fca317ec887f0abcc19043cf712cebd8b53f5edb1d3b1a58abf6604/pyathena-3.27.2.tar.gz", hash = "sha256:0994bb3600aeace81435ad75171a92911c5c042e2d57ee7420541a59954f663e", size = 114574, upload-time = "2026-02-15T08:21:21.081Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/11/67/1458c13ff55f3d7f17036296eb3099638616173d806231c016c7cdf11818/pyathena-3.29.2.tar.gz", hash = "sha256:881c93356425eacb4c43c5467118b006e63fb8f72d7734f5b6a21afb4ff43a2e", size = 126327, upload-time = "2026-02-21T17:18:13.431Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/00/76/d410f2a2cabdbc5c33f2c513d04ba8a095f19033161274f2620143fddd91/pyathena-3.27.2-py3-none-any.whl", hash = "sha256:e795dd6d157bc29b5ab47caeee0babc29b9dfd786ea787f9210eac9f185053c6", size = 153582, upload-time = "2026-02-15T08:21:19.219Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/4e/0319099f5c3e67370b640487a74b555770f60b6ba9abb513e44fc47e6025/pyathena-3.29.2-py3-none-any.whl", hash = "sha256:cafdcb0b09f0d7743d5b0e5999866bc96f7e978fbd074762d09b25e3be61cd46", size = 181759, upload-time = "2026-02-21T17:18:11.844Z" },
 ]
 
 [[package]]
@@ -2248,7 +2248,7 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.24.0"
+version = "0.24.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -2256,9 +2256,9 @@ dependencies = [
     { name = "rich" },
     { name = "shellingham" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5a/b6/3e681d3b6bb22647509bdbfdd18055d5adc0dce5c5585359fa46ff805fdc/typer-0.24.0.tar.gz", hash = "sha256:f9373dc4eff901350694f519f783c29b6d7a110fc0dcc11b1d7e353b85ca6504", size = 118380, upload-time = "2026-02-16T22:08:48.496Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/24/cb09efec5cc954f7f9b930bf8279447d24618bb6758d4f6adf2574c41780/typer-0.24.1.tar.gz", hash = "sha256:e39b4732d65fbdcde189ae76cf7cd48aeae72919dea1fdfc16593be016256b45", size = 118613, upload-time = "2026-02-21T16:54:40.609Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/d0/4da85c2a45054bb661993c93524138ace4956cb075a7ae0c9d1deadc331b/typer-0.24.0-py3-none-any.whl", hash = "sha256:5fc435a9c8356f6160ed6e85a6301fdd6e3d8b2851da502050d1f92c5e9eddc8", size = 56441, upload-time = "2026-02-16T22:08:47.535Z" },
+    { url = "https://files.pythonhosted.org/packages/4a/91/48db081e7a63bb37284f9fbcefda7c44c277b18b0e13fbc36ea2335b71e6/typer-0.24.1-py3-none-any.whl", hash = "sha256:112c1f0ce578bfb4cab9ffdabc68f031416ebcc216536611ba21f04e9aa84c9e", size = 56085, upload-time = "2026-02-21T16:54:41.616Z" },
 ]
 
 [[package]]
