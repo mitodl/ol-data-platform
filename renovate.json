@@ -15,7 +15,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["(^|/)Dockerfile\\.dagster-k8s$"],
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile\\.dagster-k8s$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+)\\nARG [A-Z_]+=(?<currentValue>[^\\s]+)"
       ]
@@ -30,7 +32,9 @@
       ]
     },
     {
-      "matchDatasources": ["python-version"],
+      "matchDatasources": [
+        "python-version"
+      ],
       "automerge": false
     }
   ]
