@@ -37,6 +37,7 @@ select
     , page_engagement.platform
     , page_engagement.courserun_readable_id
     , page_engagement.num_of_views
+    , unit_blocks.block_id as unit_block_id
     , unit_blocks.block_title as unit_title
     , subsection_blocks.block_title as subsection_title
     , subsection_blocks.block_index as subsection_block_index

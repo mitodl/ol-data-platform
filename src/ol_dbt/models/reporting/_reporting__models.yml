@@ -795,6 +795,8 @@ models:
     - not_null
   - name: unit_title
     description: string, title of the vertical (unit) block within the course
+  - name: unit_block_id
+    description: string, unique identifier of the vertical (unit) block within the course
   - name: subsection_title
     description: string, title of the sequential (subsection) block within the course
   - name: subsection_block_index
@@ -809,4 +811,4 @@ models:
     description: string, title of the course run
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id", "unit_title"]
+      column_list: ["user_email", "courserun_readable_id", "unit_block_id"]
