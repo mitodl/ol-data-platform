@@ -270,17 +270,7 @@ with mitx_courses as (
             when cardinality(split(courserun_readable_id, '+')) >= 2
                 then split(courserun_readable_id, '+')[2]
         end as course_number
-        , case
-            when
-                courserun_end_on is null
-                and {{ from_iso8601_timestamp('courserun_start_on') }} <= current_date
-                then true
-            when
-                {{ from_iso8601_timestamp('courserun_start_on') }} <= current_date
-                and {{ from_iso8601_timestamp('courserun_end_on') }} > current_date
-                then true
-            else false
-        end as courserun_is_current
+        ,  {{ is_courserun_current('courserun_start_on', 'courserun_end_on') }} as courserun_is_current
     from residential_runs
 )
 
