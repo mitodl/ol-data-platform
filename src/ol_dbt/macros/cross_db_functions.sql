@@ -88,46 +88,31 @@
     {{ array_expr }}[{{ index }}]
 {%- endmacro %}
 
-{% macro is_courserun_current(courserun_start_on, courserun_end_on) -%}
-    {{ adapter.dispatch('is_courserun_current', 'open_learning')(courserun_start_on, courserun_end_on) }}
+{% macro is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
+    {{ adapter.dispatch('is_courserun_current', 'open_learning')(start_on_timestamp_str, end_on_timestamp_str) }}
 {%- endmacro %}
 
-{% macro default__is_courserun_current(courserun_start_on, courserun_end_on) -%}
+{% macro default__is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
    {# Trino: native support #}
     case
         when
-            cast(from_iso8601_timestamp({{ courserun_start_on }}) as date) <= current_date
+            cast(from_iso8601_timestamp({{ start_on_timestamp_str }}) as date) <= current_date
             and (
-                {{ courserun_end_on }} is null
-                or cast(from_iso8601_timestamp({{ courserun_end_on }}) as date) >= current_date
+                {{ end_on_timestamp_str }} is null
+                or cast(from_iso8601_timestamp({{ end_on_timestamp_str }}) as date) >= current_date
             )
         then true
         else false
     end
 {%- endmacro %}
 
-{% macro duckdb__is_courserun_current(courserun_start_on, courserun_end_on) -%}
-    {# DuckDB: Casting to date for compatibility #}
+{% macro duckdb__is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
     case
         when
-            cast(strptime({{ courserun_start_on }}, '%Y-%m-%dT%H:%M:%S') as date) <= current_date
+            cast({{ start_on_timestamp_str }} as date) <= current_date
             and (
-                {{ courserun_end_on }} is null
-                or cast(strptime({{ courserun_end_on }}, '%Y-%m-%dT%H:%M:%S') as date) >= current_date
-            )
-        then true
-        else false
-    end
-{%- endmacro %}
-
-{% macro starrocks__is_courserun_current(courserun_start_on, courserun_end_on) -%}
-    {# StarRocks: Casting to date for comparisons #}
-    case
-        when
-            cast({{ courserun_start_on }} as date) <= current_date
-            and (
-                {{ courserun_end_on }} is null
-                or cast({{ courserun_end_on }} as date) >= current_date
+                {{ end_on_timestamp_str }} is null
+                or cast({{ end_on_timestamp_str }} as date) >= current_date
             )
         then true
         else false
