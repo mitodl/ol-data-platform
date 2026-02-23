@@ -316,7 +316,7 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
     }
 
 
-def process_course_xml_blocks(archive_path: Path) -> list[dict[str, Any]]:  # noqa: C901
+def process_course_xml_blocks(archive_path: Path) -> list[dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
     """
     Extract comprehensive block information from course XML archives.
 
@@ -374,12 +374,18 @@ def process_course_xml_blocks(archive_path: Path) -> list[dict[str, Any]]:  # no
                     continue
 
                 block_type = path_parts[1]
-                # Skip non-block files like policies, about, etc.
+                # Skip non-block files like policies, about, assets, etc.
                 if (
                     block_type not in block_types
                     and block_type != "course"
-                    and block_type in ["policies", "about", "static", "drafts"]
+                    and block_type
+                    in ["policies", "about", "static", "drafts", "assets"]
                 ):
+                    continue
+
+                # Skip the root course.xml file (block_type would be "course.xml"
+                # from the filename stem)
+                if block_type == "course.xml":
                     continue
 
                 xml_data = tf.extractfile(member)
@@ -433,7 +439,7 @@ def process_course_xml_blocks(archive_path: Path) -> list[dict[str, Any]]:  # no
 
                     blocks.append(block_data)
 
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: BLE001, S112
                     # Skip malformed XML files
                     continue
 
