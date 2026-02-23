@@ -470,6 +470,19 @@ wheels = [
 ]
 
 [[package]]
+name = "dagster-airbyte"
+version = "0.28.15"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dagster" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/da/1e/9754b3064b25e8b4fbbbf20d92da1e73d3e3592484d97ec5d2b25799ffda/dagster_airbyte-0.28.15.tar.gz", hash = "sha256:5e139db886af7be0bd3e6768029798c098f075510a74372b2877f19c612fbe94", size = 108492, upload-time = "2026-02-20T18:57:50.891Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/cb/be925544df2adf08087b25d9b5a001dab54cb3ea3856374d683b1bf510fe/dagster_airbyte-0.28.15-py3-none-any.whl", hash = "sha256:e0d8eef8c37a13db8ceeaf9edda0902eb4901afb93085cca2ad5281786d6183a", size = 117032, upload-time = "2026-02-20T18:57:49.392Z" },
+]
+
+[[package]]
 name = "dagster-aws"
 version = "0.28.15"
 source = { registry = "https://pypi.org/simple" }
@@ -700,7 +713,7 @@ wheels = [
 
 [[package]]
 name = "dlt"
-version = "1.22.0"
+version = "1.22.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -729,9 +742,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "tzdata" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/35/4822ed7afe2dcff8b97241fe3b2db6e9f85513c31c608efb80da0a161fe6/dlt-1.22.0.tar.gz", hash = "sha256:ce17c7df0a7d5efe50679568c0439f263d4ed2ad643e28fa60590122abbee76e", size = 929379, upload-time = "2026-02-17T13:21:47.407Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/52/b3/c5efd908f50ca2fcaeea1556d402cfb4a7b80597b0a9ad33eb17f7995334/dlt-1.22.1.tar.gz", hash = "sha256:3c4fc049ddc9c06047155ad1066549194bbe732a5d43adc45eade9cf6d52ee27", size = 933727, upload-time = "2026-02-23T20:43:32.367Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/9a/cf0b8b572e2f2c3c7c4ad7b8ed307b0045e36013f37be71abddf381d060a/dlt-1.22.0-py3-none-any.whl", hash = "sha256:2474726471d09e9eccff0f20a1821a2a48b60fb6cbff85f289ba7d3467232140", size = 1174024, upload-time = "2026-02-17T13:21:44.603Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/b7/bb54064b8efee3254ec8c3f2bf0231abe659b710caefddcead7b56e91e18/dlt-1.22.1-py3-none-any.whl", hash = "sha256:1de448421eabdc2e4b2941a88f52a49be10b4973c1bb9057bfd8d64449b027dc", size = 1183790, upload-time = "2026-02-23T20:43:29.385Z" },
 ]
 
 [package.optional-dependencies]
@@ -1777,6 +1790,7 @@ source = { editable = "../../packages/ol-orchestrate-lib" }
 dependencies = [
     { name = "boto3" },
     { name = "dagster" },
+    { name = "dagster-airbyte" },
     { name = "dagster-aws" },
     { name = "fsspec" },
     { name = "gcsfs" },
@@ -1796,8 +1810,9 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "boto3", specifier = "~=1.42.0" },
+    { name = "boto3", specifier = ">=1.41.0" },
     { name = "dagster", specifier = "~=1.11" },
+    { name = "dagster-airbyte", specifier = ">=0.28.6" },
     { name = "dagster-aws", specifier = "~=0.28.0" },
     { name = "fsspec", specifier = ">=2026.0.0,<2027.0.0" },
     { name = "gcsfs", specifier = ">=2026.0.0,<2027.0.0" },
@@ -1808,7 +1823,7 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = "~=2.9.10" },
     { name = "pyarrow", specifier = "~=23.0.0" },
     { name = "pyathena", specifier = "~=3.29.2" },
-    { name = "pydantic", specifier = "~=2.12.3" },
+    { name = "pydantic", specifier = ">=2.11.0" },
     { name = "pygsheets", specifier = "~=2.0.6" },
     { name = "pyiceberg", extras = ["polars"], specifier = ">=0.10.0" },
     { name = "s3fs", specifier = ">=2026.0.0,<2027.0.0" },
@@ -2826,11 +2841,11 @@ wheels = [
 
 [[package]]
 name = "sqlglot"
-version = "28.10.1"
+version = "29.0.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1c/66/b2b300f325227044aa6f511ea7c9f3109a1dc74b13a0897931c1754b504e/sqlglot-28.10.1.tar.gz", hash = "sha256:66e0dae43b4bce23314b80e9aef41b8c88fea0e17ada62de095b45262084a8c5", size = 5739510, upload-time = "2026-02-09T23:36:23.671Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/a7/7ce0a012cb49d93f2fff480834990cd3a03a5e623355aa24c14d7fdafb0c/sqlglot-29.0.0.tar.gz", hash = "sha256:5f6297ccfe186e270a2d2586213132e733c4c3bd6bda592254d52190aa8af7d1", size = 5749218, upload-time = "2026-02-23T18:41:17.274Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/55/ff/5a768b34202e1ee485737bfa167bd84592585aa40383f883a8e346d767cc/sqlglot-28.10.1-py3-none-any.whl", hash = "sha256:214aef51fd4ce16407022f81cfc80c173409dab6d0f6ae18c52b43f43b31d4dd", size = 597053, upload-time = "2026-02-09T23:36:21.385Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/0c/ab081b49638cdaf96a575fab273339b5378809056734541332e62d226a1e/sqlglot-29.0.0-py3-none-any.whl", hash = "sha256:e545f2afd7ff5f886c407c75fb16f8ecd432eb2dceffbf342d2badebffc849b3", size = 611290, upload-time = "2026-02-23T18:41:15.277Z" },
 ]
 
 [[package]]
