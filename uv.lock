@@ -359,11 +359,11 @@ wheels = [
 
 [[package]]
 name = "chardet"
-version = "5.2.0"
+version = "6.0.0.post1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/f3/0d/f7b6ab21ec75897ed80c17d79b15951a719226b9fababf1e40ea74d69079/chardet-5.2.0.tar.gz", hash = "sha256:1b3b6ff479a8c414bc3fa2c0852995695c4a026dcd6d0633b2dd092ca39c1cf7", size = 2069618, upload-time = "2023-08-01T19:23:02.662Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/42/fb9436c103a881a377e34b9f58d77b5f503461c702ff654ebe86151bcfe9/chardet-6.0.0.post1.tar.gz", hash = "sha256:6b78048c3c97c7b2ed1fbad7a18f76f5a6547f7d34dbab536cc13887c9a92fa4", size = 12521798, upload-time = "2026-02-22T15:09:17.925Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/38/6f/f5fbc992a329ee4e0f288c1fe0e2ad9485ed064cac731ed2fe47dcc38cbf/chardet-5.2.0-py3-none-any.whl", hash = "sha256:e1cf59446890a00105fe7b7912492ea04b6e6f06d4b742b2c788469e34c82970", size = 199385, upload-time = "2023-08-01T19:23:00.661Z" },
+    { url = "https://files.pythonhosted.org/packages/66/42/5de54f632c2de53cd3415b3703383d5fff43a94cbc0567ef362515261a21/chardet-6.0.0.post1-py3-none-any.whl", hash = "sha256:c894a36800549adf7bb5f2af47033281b75fdfcd2aa0f0243be0ad22a52e2dcb", size = 627245, upload-time = "2026-02-22T15:09:15.876Z" },
 ]
 
 [[package]]
@@ -2655,7 +2655,7 @@ wheels = [
 
 [[package]]
 name = "pyathena"
-version = "3.29.2"
+version = "3.29.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
@@ -2664,9 +2664,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/11/67/1458c13ff55f3d7f17036296eb3099638616173d806231c016c7cdf11818/pyathena-3.29.2.tar.gz", hash = "sha256:881c93356425eacb4c43c5467118b006e63fb8f72d7734f5b6a21afb4ff43a2e", size = 126327, upload-time = "2026-02-21T17:18:13.431Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c4/0e/35785558096857f73efca711da0838912d5833ed970882a90521fd4b783f/pyathena-3.29.3.tar.gz", hash = "sha256:4a7006ad03b45f0557e59f6a8aa0b1d8b74664f1fe4ce6a9352e8bb7ac31d805", size = 129925, upload-time = "2026-02-22T08:08:51.924Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ea/4e/0319099f5c3e67370b640487a74b555770f60b6ba9abb513e44fc47e6025/pyathena-3.29.2-py3-none-any.whl", hash = "sha256:cafdcb0b09f0d7743d5b0e5999866bc96f7e978fbd074762d09b25e3be61cd46", size = 181759, upload-time = "2026-02-21T17:18:11.844Z" },
+    { url = "https://files.pythonhosted.org/packages/51/51/01f35edd3c9e1550b25acf1fd89f6ab99325f1c9d169c4c611871a03b61b/pyathena-3.29.3-py3-none-any.whl", hash = "sha256:60a40cc9e3f819b0dbda778ebfce698fae6cfc2a70cc45cf274c6a2d29ac4c20", size = 186929, upload-time = "2026-02-22T08:08:50.074Z" },
 ]
 
 [[package]]
@@ -3728,15 +3728,15 @@ wheels = [
 
 [[package]]
 name = "universal-pathlib"
-version = "0.3.9"
+version = "0.3.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fsspec" },
     { name = "pathlib-abc" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dc/c6/6cc1b21d7a96b67923b43de91b1f42d9aa1e663b11d7dc32be54aa02441e/universal_pathlib-0.3.9.tar.gz", hash = "sha256:3a2225bc8cb0ca685a032ff885b945fdb0613b46e8c97d32df6afb6327c6c817", size = 260902, upload-time = "2026-01-31T22:35:35.183Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/6e/d997a70ee8f4c61f9a7e2f4f8af721cf072a3326848fc881b05187e52558/universal_pathlib-0.3.10.tar.gz", hash = "sha256:4487cbc90730a48cfb64f811d99e14b6faed6d738420cd5f93f59f48e6930bfb", size = 261110, upload-time = "2026-02-22T14:40:58.87Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/23/1e5afa2ea865b2bf0d031a7a1eb4d11e5b3e1a70cffa7001112eb34c7805/universal_pathlib-0.3.9-py3-none-any.whl", hash = "sha256:e4c3bdfd7650f55fb47da0a8a48eae9da6ae7216ea628fe5e1cadcc82d591a0e", size = 83476, upload-time = "2026-01-31T22:35:33.377Z" },
+    { url = "https://files.pythonhosted.org/packages/dd/1a/5d9a402b39ec892d856bbdd9db502ff73ce28cdf4aff72eb1ce1d6843506/universal_pathlib-0.3.10-py3-none-any.whl", hash = "sha256:dfaf2fb35683d2eb1287a3ed7b215e4d6016aa6eaf339c607023d22f90821c66", size = 83528, upload-time = "2026-02-22T14:40:57.316Z" },
 ]
 
 [[package]]
