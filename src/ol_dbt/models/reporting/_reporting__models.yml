@@ -870,8 +870,8 @@ models:
     description: str, indicator of whether the user has completed a capstone course.
       'Y' if capstone completed, 'N' otherwise.
   - name: program_complete_days
-    description: int, number of days from the first course run start date to the
-      program certificate creation date
+    description: int, number of days from the first course run start date to the program
+      certificate creation date
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
