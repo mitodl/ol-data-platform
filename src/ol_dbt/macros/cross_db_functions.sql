@@ -87,3 +87,49 @@
     {# StarRocks: array subscript with 1-based indexing #}
     {{ array_expr }}[{{ index }}]
 {%- endmacro %}
+
+{% macro is_courserun_current(courserun_start_on, courserun_end_on) -%}
+    {{ adapter.dispatch('is_courserun_current', 'open_learning')(courserun_start_on, courserun_end_on) }}
+{%- endmacro %}
+
+{% macro default__is_courserun_current(courserun_start_on, courserun_end_on) -%}
+   {# Trino: native support #}
+    case
+        when
+            cast(from_iso8601_timestamp({{ courserun_start_on }}) as date) <= current_date
+            and (
+                {{ courserun_end_on }} is null
+                or cast(from_iso8601_timestamp({{ courserun_end_on }}) as date) >= current_date
+            )
+        then true
+        else false
+    end
+{%- endmacro %}
+
+{% macro duckdb__is_courserun_current(courserun_start_on, courserun_end_on) -%}
+    {# DuckDB: Casting to date for compatibility #}
+    case
+        when
+            cast(strptime({{ courserun_start_on }}, '%Y-%m-%dT%H:%M:%S') as date) <= current_date
+            and (
+                {{ courserun_end_on }} is null
+                or cast(strptime({{ courserun_end_on }}, '%Y-%m-%dT%H:%M:%S') as date) >= current_date
+            )
+        then true
+        else false
+    end
+{%- endmacro %}
+
+{% macro starrocks__is_courserun_current(courserun_start_on, courserun_end_on) -%}
+    {# StarRocks: Casting to date for comparisons #}
+    case
+        when
+            cast({{ courserun_start_on }} as date) <= current_date
+            and (
+                {{ courserun_end_on }} is null
+                or cast({{ courserun_end_on }} as date) >= current_date
+            )
+        then true
+        else false
+    end
+{%- endmacro %}
