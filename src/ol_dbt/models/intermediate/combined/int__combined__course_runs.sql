@@ -84,17 +84,6 @@ with mitx_courses as (
         , mitxonline_runs.courserun_upgrade_deadline
         , mitxonline_runs.courserun_is_live
         , mitxonline_runs.course_number
-        , case
-            when
-                mitxonline_runs.courserun_end_on is null
-                and {{ from_iso8601_timestamp('mitxonline_runs.courserun_start_on') }} <= current_date
-                then true
-            when
-                {{ from_iso8601_timestamp('mitxonline_runs.courserun_start_on') }} <= current_date
-                and {{ from_iso8601_timestamp('mitxonline_runs.courserun_end_on') }} > current_date
-                then true
-            else false
-        end as courserun_is_current
     from mitxonline_runs
     left join mitx_courses on mitxonline_runs.course_id = mitx_courses.mitxonline_course_id
     where mitxonline_runs.courserun_platform = '{{ var("mitxonline") }}'
@@ -113,17 +102,6 @@ with mitx_courses as (
         , micromasters_runs.courserun_upgrade_deadline
         , null as courserun_is_live
         , edxorg_runs.course_number
-        , case
-            when
-                edxorg_runs.courserun_end_date is null
-                and {{ from_iso8601_timestamp('edxorg_runs.courserun_start_date') }} <= current_date
-                then true
-            when
-                {{ from_iso8601_timestamp('edxorg_runs.courserun_start_date') }} <= current_date
-                and {{ from_iso8601_timestamp('edxorg_runs.courserun_end_date') }} > current_date
-                then true
-            else false
-        end as courserun_is_current
     from edxorg_runs
     left join mitx_courses on edxorg_runs.course_number = mitx_courses.course_number
     left join micromasters_runs on edxorg_runs.courserun_readable_id = micromasters_runs.courserun_edxorg_readable_id
@@ -148,17 +126,6 @@ with mitx_courses as (
             when cardinality(split(mitxpro_runs.courserun_readable_id, '+')) >= 2
                 then split(mitxpro_runs.courserun_readable_id, '+')[2]
         end as course_number
-        , case
-            when
-                mitxpro_runs.courserun_end_on is null
-                and {{ from_iso8601_timestamp('mitxpro_runs.courserun_start_on') }} <= current_date
-                then true
-            when
-                {{ from_iso8601_timestamp('mitxpro_runs.courserun_start_on') }} <= current_date
-                and {{ from_iso8601_timestamp('mitxpro_runs.courserun_end_on') }} > current_date
-                then true
-            else false
-        end as courserun_is_current
     from mitxpro_runs
     left join mitxpro_courses on mitxpro_runs.course_id = mitxpro_courses.course_id
 
@@ -176,17 +143,6 @@ with mitx_courses as (
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
         , emeritus_runs.course_number
-        , case
-            when
-                emeritus_runs.courserun_end_on is null
-                and {{ from_iso8601_timestamp('mitxpro_runs.courserun_start_on') }} <= current_date
-                then true
-            when
-                {{ from_iso8601_timestamp('emeritus_runs.courserun_start_on') }} <= current_date
-                and {{ from_iso8601_timestamp('emeritus_runs.courserun_end_on') }} > current_date
-                then true
-            else false
-        end as courserun_is_current
     from emeritus_runs
     left join mitxpro_runs
         on emeritus_runs.courserun_external_readable_id = mitxpro_runs.courserun_external_readable_id
@@ -206,17 +162,6 @@ with mitx_courses as (
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
         , global_alumni_runs.course_number
-        , case
-            when
-                global_alumni_runs.courserun_end_on is null
-                and {{ from_iso8601_timestamp('global_alumni_runs.courserun_start_on') }} <= current_date
-                then true
-            when
-                {{ from_iso8601_timestamp('global_alumni_runs.courserun_start_on') }} <= current_date
-                and {{ from_iso8601_timestamp('global_alumni_runs.courserun_end_on') }} > current_date
-                then true
-            else false
-        end as courserun_is_current
     from global_alumni_runs
     left join mitxpro_runs
         on global_alumni_runs.courserun_external_readable_id = mitxpro_runs.courserun_external_readable_id
@@ -239,17 +184,6 @@ with mitx_courses as (
             when cardinality(split(bootcamps_runs.courserun_readable_id, '+')) >= 2
                 then split(bootcamps_runs.courserun_readable_id, '+')[2]
         end as course_number
-        , case
-            when
-                bootcamps_runs.courserun_end_on is null
-                and {{ from_iso8601_timestamp('bootcamps_runs.courserun_start_on') }} <= current_date
-                then true
-            when
-                {{ from_iso8601_timestamp('bootcamps_runs.courserun_start_on') }} <= current_date
-                and {{ from_iso8601_timestamp('bootcamps_runs.courserun_end_on') }} > current_date
-                then true
-            else false
-        end as courserun_is_current
     from bootcamps_runs
     left join bootcamps_courses on bootcamps_runs.course_id = bootcamps_courses.course_id
 
@@ -270,18 +204,20 @@ with mitx_courses as (
             when cardinality(split(courserun_readable_id, '+')) >= 2
                 then split(courserun_readable_id, '+')[2]
         end as course_number
-        , case
-            when
-                courserun_end_on is null
-                and {{ from_iso8601_timestamp('courserun_start_on') }} <= current_date
-                then true
-            when
-                {{ from_iso8601_timestamp('courserun_start_on') }} <= current_date
-                and {{ from_iso8601_timestamp('courserun_end_on') }} > current_date
-                then true
-            else false
-        end as courserun_is_current
     from residential_runs
 )
 
-select * from combined_runs
+select
+    platform
+    , course_title
+    , course_readable_id
+    , courserun_title
+    , courserun_readable_id
+    , courserun_url
+    , courserun_start_on
+    , courserun_end_on
+    , courserun_upgrade_deadline
+    , courserun_is_live
+    , course_number
+    , {{ is_courserun_current('courserun_start_on', 'courserun_end_on') }} as courserun_is_current
+from combined_runs

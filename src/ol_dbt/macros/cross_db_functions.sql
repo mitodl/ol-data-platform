@@ -87,3 +87,34 @@
     {# StarRocks: array subscript with 1-based indexing #}
     {{ array_expr }}[{{ index }}]
 {%- endmacro %}
+
+{% macro is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
+    {{ adapter.dispatch('is_courserun_current', 'open_learning')(start_on_timestamp_str, end_on_timestamp_str) }}
+{%- endmacro %}
+
+{% macro default__is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
+   {# Trino: native support #}
+    case
+        when
+            cast(from_iso8601_timestamp({{ start_on_timestamp_str }}) as date) <= current_date
+            and (
+                {{ end_on_timestamp_str }} is null
+                or cast(from_iso8601_timestamp({{ end_on_timestamp_str }}) as date) >= current_date
+            )
+        then true
+        else false
+    end
+{%- endmacro %}
+
+{% macro duckdb__is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
+    case
+        when
+            cast({{ start_on_timestamp_str }} as date) <= current_date
+            and (
+                {{ end_on_timestamp_str }} is null
+                or cast({{ end_on_timestamp_str }} as date) >= current_date
+            )
+        then true
+        else false
+    end
+{%- endmacro %}
