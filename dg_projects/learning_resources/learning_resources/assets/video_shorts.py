@@ -265,7 +265,7 @@ def video_short_content(
             raise RuntimeError(msg)
 
         # Compress video to target size
-        target_size = float(os.environ.get("VIDEO_SHORTS_MAX_SIZE_MB", "12"))
+        target_size = float(os.environ.get("VIDEO_SHORTS_MAX_SIZE_MB") or "12")
         context.log.info(
             "Compressing video to max %.1f MB: %s", target_size, video_file
         )
