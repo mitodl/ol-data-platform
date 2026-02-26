@@ -367,7 +367,11 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
             msg = "Unable to retrieve the archive root of the course XML."
             raise ValueError(msg)
 
-        tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
+        try:
+            tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
+        except KeyError as err:
+            msg = f"course.xml not found in archive root '{archive_root.name}'."
+            raise ValueError(msg) from err
         course_xml_file = Path(
             NamedTemporaryFile(delete=False, suffix="_course.xml").name
         )
