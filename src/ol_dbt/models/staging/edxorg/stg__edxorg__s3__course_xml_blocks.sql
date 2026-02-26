@@ -5,13 +5,14 @@ with
     cleaned as (
         select
             course_id as courserun_readable_id,
+            source_system as coursestructure_xml_source_system,
             block_id as coursestructure_xml_block_id,
             block_type as coursestructure_xml_block_type,
             block_display_name as coursestructure_xml_block_display_name,
             xml_attributes as coursestructure_xml_block_attributes,
             xml_path as coursestructure_xml_block_path,
             edx_video_id as video_edx_id,
-            cast(duration as decimal(38, 4)) as video_duration,
+            cast(nullif(trim(duration), '') as decimal(38, 4)) as video_duration,
             max_attempts as problem_max_attempts,
             weight as problem_weight,
             markdown as problem_markdown,
