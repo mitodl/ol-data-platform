@@ -82,6 +82,15 @@ def dummy_edxorg_course_xml(): ...
             io_manager_key="s3file_io_manager",
             key=AssetKey(("edxorg", "processed_data", "course_xml_blocks")),
         ),
+        "course_static_assets": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Non-XML files extracted from the course archive (e.g. SRT subtitles, "
+                "HTML content, PDFs), bundled as a tar archive for downstream use."
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("edxorg", "processed_data", "course_static_assets")),
+        ),
     },
 )
 def extract_edxorg_courserun_metadata(
@@ -171,8 +180,10 @@ def extract_edxorg_courserun_metadata(
         },
     )
 
-    # Process comprehensive XML block data
-    xml_blocks = process_course_xml_blocks(course_xml_path)
+    # Process comprehensive XML block data and collect non-XML assets
+    xml_blocks, static_assets_path = process_course_xml_blocks(
+        course_xml_path, partition_dict["source_system"]
+    )
     course_xml_blocks_file = Path(
         NamedTemporaryFile(delete=False, suffix="_xml_blocks.jsonl").name
     )
@@ -186,6 +197,17 @@ def extract_edxorg_courserun_metadata(
             "course_id": partition_dict["course_id"],
             "object_key": course_xml_blocks_object_key,
             "block_count": len(xml_blocks),
+        },
+    )
+
+    course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.tar.gz"  # noqa: E501
+    yield Output(
+        (static_assets_path, course_static_assets_object_key),
+        output_name="course_static_assets",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": partition_dict["course_id"],
+            "object_key": course_static_assets_object_key,
         },
     )
 

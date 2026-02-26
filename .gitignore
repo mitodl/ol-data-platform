@@ -12,7 +12,6 @@ bin/pants
 .aider*
 .env
 **/*.egg-info/
-<<<<<<< HEAD
 progress.log
 # dlt specific
 **/.dlt/secrets.toml
