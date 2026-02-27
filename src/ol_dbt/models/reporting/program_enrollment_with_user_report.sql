@@ -17,7 +17,6 @@ with enrollment_detail as (
 , courses_detail as (
     select
         courses_in_program.program_name
-        , course_enrollment_detail.user_email
         , course_enrollment_detail.user_hashed_id
         , count(distinct courses_in_program.course_readable_id) as courses_taken_in_program
         , sum(
@@ -34,7 +33,6 @@ with enrollment_detail as (
     where course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
     group by
         courses_in_program.program_name
-        , course_enrollment_detail.user_email
         , course_enrollment_detail.user_hashed_id
 )
 
