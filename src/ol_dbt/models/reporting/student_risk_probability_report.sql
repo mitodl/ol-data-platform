@@ -3,7 +3,7 @@ with cheating_detection as (
 )
 
 , student_risk_probability as (
-   select * from {{ source('ol_warehouse_reporting_source','student_risk_probability') }}
+   select * from {{ source('reporting','student_risk_probability') }}
 )
 
 , student_grades as (
