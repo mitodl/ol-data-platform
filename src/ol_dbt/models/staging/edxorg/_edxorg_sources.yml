@@ -688,6 +688,8 @@ sources:
     columns:
     - name: course_id
       description: str, course ID formatted as course-v1:{org}+{course}+{run}
+    - name: source_system
+      description: str, ETL source system identifier (e.g. "prod", "edge")
     - name: block_id
       description: str, unique identifier for the block extracted from XML url_name
         attribute or filename
