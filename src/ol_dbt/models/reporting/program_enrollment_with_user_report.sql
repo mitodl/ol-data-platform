@@ -18,7 +18,12 @@ with enrollment_detail as (
     select
         courses_in_program.program_name
         , course_enrollment_detail.user_hashed_id
-        , count(distinct courses_in_program.course_readable_id) as courses_taken_in_program
+        , count(
+            distinct case
+                when course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
+                then courses_in_program.course_readable_id
+            end
+        ) as courses_taken_in_program
         , sum(
             case
                 when upper(courses_in_program.course_title) like '%CAPSTONE%' then 1
@@ -30,7 +35,6 @@ with enrollment_detail as (
     from courses_in_program
     inner join course_enrollment_detail
         on courses_in_program.course_readable_id = course_enrollment_detail.course_readable_id
-    where course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
     group by
         courses_in_program.program_name
         , course_enrollment_detail.user_hashed_id
