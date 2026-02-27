@@ -31,17 +31,7 @@ select
     , mitxonline_engagements.num_video_played
     , mitxonline_engagements.num_discussion_participated
     , '{{ var("mitxonline") }}' as platform
-    , case
-        when
-            mitxonline_engagements.courserun_end_on is null
-            and from_iso8601_timestamp(mitxonline_engagements.courserun_start_on) <= current_date
-            then true
-        when
-            from_iso8601_timestamp(mitxonline_engagements.courserun_start_on) <= current_date
-            and from_iso8601_timestamp(mitxonline_engagements.courserun_end_on) > current_date
-            then true
-        else false
-    end as courserun_is_current
+    , {{ is_courserun_current('mitxonline_engagements.courserun_start_on', 'mitxonline_engagements.courserun_end_on') }} as courserun_is_current
     , mitx_courses.course_readable_id
 from mitxonline_engagements
 inner join mitxonline_course_runs
