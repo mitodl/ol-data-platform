@@ -27,34 +27,34 @@ with course_activities_daily as (
     select
         user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
         , count(*) as num_problem_submitted
     from problem_submitted
     group by
         user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp))
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }})
 )
 
 , played_video_users_daily as (
     select
         user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
         , count(*) as num_video_played
     from video
     where useractivity_event_type = 'play_video'
     group by
         user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp))
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }})
 )
 
 , participated_discussion_users_daily as (
     select
         user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
         , count(*) as num_discussion_participated
     from discussion
     -- edx.forum.comment.created, edx.forum.response.created, edx.forum.thread.created
@@ -62,7 +62,7 @@ with course_activities_daily as (
     group by
         user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp))
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }})
 )
 
 select

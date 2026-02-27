@@ -21,14 +21,14 @@ with mitxonline_video_events as (
         , courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as video_id
+        , {{ json_query_string('useractivity_event_object', "'$.id'") }} as video_id
         , case
-            when lower(json_query(useractivity_event_object, 'lax $.duration' omit quotes)) = 'null' then null
-            else cast(json_query(useractivity_event_object, 'lax $.duration' omit quotes) as decimal(38, 4))
+            when lower({{ json_query_string('useractivity_event_object', "'$.duration'") }}) = 'null' then null
+            else cast({{ json_query_string('useractivity_event_object', "'$.duration'") }} as decimal(38, 4))
         end as video_duration
-        , json_query(useractivity_event_object, 'lax $.currentTime' omit quotes) as video_position
-        , json_query(useractivity_event_object, 'lax $.old_time' omit quotes) as starting_position
-        , json_query(useractivity_event_object, 'lax $.new_time' omit quotes) as ending_position
+        , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
+        , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
+        , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
@@ -43,14 +43,14 @@ with mitxonline_video_events as (
         , courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as video_id
+        , {{ json_query_string('useractivity_event_object', "'$.id'") }} as video_id
         , case
-            when lower(json_query(useractivity_event_object, 'lax $.duration' omit quotes)) = 'null' then null
-            else cast(json_query(useractivity_event_object, 'lax $.duration' omit quotes) as decimal(38, 4))
+            when lower({{ json_query_string('useractivity_event_object', "'$.duration'") }}) = 'null' then null
+            else cast({{ json_query_string('useractivity_event_object', "'$.duration'") }} as decimal(38, 4))
         end as video_duration
-        , json_query(useractivity_event_object, 'lax $.currentTime' omit quotes) as video_position
-        , json_query(useractivity_event_object, 'lax $.old_time' omit quotes) as starting_position
-        , json_query(useractivity_event_object, 'lax $.new_time' omit quotes) as ending_position
+        , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
+        , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
+        , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
@@ -65,14 +65,14 @@ with mitxonline_video_events as (
         , courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as video_id
+        , {{ json_query_string('useractivity_event_object', "'$.id'") }} as video_id
         , case
-            when lower(json_query(useractivity_event_object, 'lax $.duration' omit quotes)) = 'null' then null
-            else cast(json_query(useractivity_event_object, 'lax $.duration' omit quotes) as decimal(38, 4))
+            when lower({{ json_query_string('useractivity_event_object', "'$.duration'") }}) = 'null' then null
+            else cast({{ json_query_string('useractivity_event_object', "'$.duration'") }} as decimal(38, 4))
         end as video_duration
-        , json_query(useractivity_event_object, 'lax $.currentTime' omit quotes) as video_position
-        , json_query(useractivity_event_object, 'lax $.old_time' omit quotes) as starting_position
-        , json_query(useractivity_event_object, 'lax $.new_time' omit quotes) as ending_position
+        , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
+        , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
+        , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
@@ -87,14 +87,14 @@ with mitxonline_video_events as (
         , {{ format_course_id('courserun_readable_id') }} as courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as video_id
+        , {{ json_query_string('useractivity_event_object', "'$.id'") }} as video_id
         , case
-            when lower(json_query(useractivity_event_object, 'lax $.duration' omit quotes)) = 'null' then null
-            else cast(json_query(useractivity_event_object, 'lax $.duration' omit quotes) as decimal(38, 4))
+            when lower({{ json_query_string('useractivity_event_object', "'$.duration'") }}) = 'null' then null
+            else cast({{ json_query_string('useractivity_event_object', "'$.duration'") }} as decimal(38, 4))
         end as video_duration
-        , json_query(useractivity_event_object, 'lax $.currentTime' omit quotes) as video_position
-        , json_query(useractivity_event_object, 'lax $.old_time' omit quotes) as starting_position
-        , json_query(useractivity_event_object, 'lax $.new_time' omit quotes) as ending_position
+        , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
+        , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
+        , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where

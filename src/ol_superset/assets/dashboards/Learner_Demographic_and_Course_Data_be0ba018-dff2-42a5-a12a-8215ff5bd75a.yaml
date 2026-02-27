@@ -11,7 +11,7 @@ position:
     children: []
     id: CHART-pMiEJRHITe
     meta:
-      chartId: 69
+      chartId: 192
       height: 81
       sliceName: Learner Demographic Including Income and Course Data
       uuid: 11b1455f-25f1-45aa-8358-b8449013bb24
@@ -120,11 +120,11 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '69':
+    '192':
       crossFilters:
         chartsInScope: []
         scope: global
-      id: 69
+      id: 192
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true

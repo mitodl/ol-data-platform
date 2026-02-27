@@ -199,7 +199,7 @@ def video_short_metadata(
 
 
 @asset(
-    code_version="video_shorts_content_v2",
+    code_version="video_shorts_content_v2_1",
     key=AssetKey(["video_shorts", "video_content"]),
     group_name="video_shorts",
     description="Download video content from Dropbox.",
@@ -265,8 +265,10 @@ def video_short_content(
             raise RuntimeError(msg)
 
         # Compress video to target size
-        target_size = float(os.environ.get("VIDEO_SHORTS_MAX_SIZE_MB", "6"))
-        context.log.info("Compressing video to max %d MB: %s", target_size, video_file)
+        target_size = float(os.environ.get("VIDEO_SHORTS_MAX_SIZE_MB") or "12")
+        context.log.info(
+            "Compressing video to max %.1f MB: %s", target_size, video_file
+        )
         compressed_file = compress_video(
             context,
             input_path=video_file,

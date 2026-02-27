@@ -147,6 +147,7 @@ class EdxorgArchiveProcessConfig(Config):
 @op(
     name="process_edxorg_archive_bundle",
     required_resource_keys={"gcp_gcs"},
+    pool="edxorg_archive",
     out={
         "course_structure": DynamicOut(is_required=False),
         "course_xml": DynamicOut(is_required=False),
@@ -222,6 +223,10 @@ def process_edxorg_archive_bundle(
     )[0]
 
     tmpdir = tempfile.TemporaryDirectory()
+    # Collect partition keys to batch add after processing all files
+    # This reduces DB operations from N calls to 1 call, preventing
+    # connection pool exhaustion
+    partition_keys_to_add = []
     while tinfo := archive.next():
         if not tinfo.isdir():
             context.log.debug("Processing archive path %s", tinfo.name)
@@ -231,16 +236,13 @@ def process_edxorg_archive_bundle(
             normalized_source_system = (
                 "edge" if "edge" in asset_info["source_system"] else "prod"
             )
-            dagster_instance.add_dynamic_partitions(
-                course_and_source_partitions.name,
-                partition_keys=[
-                    MultiPartitionKey(
-                        {
-                            "course_id": asset_info["course_id"],
-                            "source_system": normalized_source_system,
-                        }
-                    )
-                ],
+            partition_keys_to_add.append(
+                MultiPartitionKey(
+                    {
+                        "course_id": asset_info["course_id"],
+                        "source_system": normalized_source_system,
+                    }
+                )
             )
             normalized_extension = (
                 "tsv" if asset_info["extension"] == "sql" else asset_info["extension"]
@@ -318,20 +320,21 @@ def process_edxorg_archive_bundle(
                 asset_info,
                 mapping_key,
             )
+            object_key = f"{'/'.join(mapping_key)}/{data_version}.{normalized_extension}".replace(  # noqa: E501
+                "//", "/"
+            ).strip("/")
+            object_path = (
+                "s3://" + f"{config.s3_bucket}/{config.s3_prefix}/{object_key}"
+            )
             shared_metadata = {
-                "path": MetadataValue.path(
-                    f"s3://{config.s3_bucket}/{config.s3_prefix}/{'/'.join(mapping_key)}/{data_version}.{normalized_extension}"
-                ),
-                "object_key": f"{'/'.join(mapping_key)}/{data_version}.{normalized_extension}",  # noqa: E501
+                "path": MetadataValue.path(object_path),
+                "object_key": object_key,
                 "source": "edxorg",
                 "source_system": normalized_source_system,
                 "course_id": asset_info["course_id"],
             }
             yield DynamicOutput(
-                (
-                    archive_file,
-                    f"s3://{config.s3_bucket}/{config.s3_prefix}/{'/'.join(mapping_key)}/{data_version}.{normalized_extension}",
-                ),
+                (archive_file, object_path),
                 output_name=output_key,
                 mapping_key=sanitize_mapping_key("/".join(mapping_key)),
                 metadata=shared_metadata,
@@ -357,6 +360,15 @@ def process_edxorg_archive_bundle(
                 },
             )
             yield materialization
+    # Add all dynamic partitions in a single batch operation to minimize DB connections
+    if partition_keys_to_add:
+        context.log.info(
+            "Adding %d dynamic partitions in batch", len(partition_keys_to_add)
+        )
+        dagster_instance.add_dynamic_partitions(
+            course_and_source_partitions.name,
+            partition_keys=partition_keys_to_add,
+        )
     # Clean up the downloaded archive file so that it doesn't consume the local disk
     edxorg_raw_data_archive.unlink()
 

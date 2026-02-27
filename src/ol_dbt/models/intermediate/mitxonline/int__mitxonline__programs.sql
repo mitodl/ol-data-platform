@@ -26,7 +26,7 @@ with programs as (
 , program_topics as (
     select
         program_requirements.program_id
-        , array_join(array_distinct(array_agg(course_topics.coursetopic_name)), ', ') as program_topics
+        , {{ array_join('array_distinct(array_agg(course_topics.coursetopic_name))', ", ") }} as program_topics
     from course_topics
     inner join program_requirements on course_topics.course_id = program_requirements.course_id
     group by program_requirements.program_id
@@ -35,7 +35,7 @@ with programs as (
 , program_instructors as (
     select
         program_id
-        , array_join(array_agg(instructor_name), ', ') as program_instructors
+        , {{ array_join('array_agg(instructor_name)', ", ") }} as program_instructors
     from {{ ref('int__mitxonline__program_instructors') }}
     group by program_id
 )

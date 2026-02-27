@@ -19,10 +19,9 @@ with runs_from_bigquery as (
 , instructors as (
     select
         courseruns.courserun_readable_id
-        , array_join(
-            array_agg(
+        , {{ array_join('array_agg(
                 concat(
-                    json_extract_scalar(t.instructor, '$.first_name')
+                    json_extract_scalar(t.instructor', "$.first_name") }}
                     , ' '
                     , json_extract_scalar(t.instructor, '$.last_name')
                 )
@@ -39,7 +38,7 @@ with runs_from_bigquery as (
         courseruns.*
         , courses.course_organizations
         , instructors.instructor_names
-        , array_join(courses.course_topics, ', ') as course_topics
+        , {{ array_join('courses.course_topics', ", ") }} as course_topics
     from courseruns
     inner join courses
         on courseruns.course_readable_id = courses.course_readable_id

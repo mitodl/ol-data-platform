@@ -6,10 +6,10 @@ with websitecontents as (
     select
         websitecontent_text_id as course_instructor_uuid
         , websitecontent_title as course_instructor_title
-        , json_query(websitecontent_metadata, 'lax $.first_name' omit quotes) as course_instructor_first_name
-        , json_query(websitecontent_metadata, 'lax $.last_name' omit quotes) as course_instructor_last_name
-        , json_query(websitecontent_metadata, 'lax $.middle_initial' omit quotes) as course_instructor_middle_initial
-        , json_query(websitecontent_metadata, 'lax $.salutation' omit quotes) as course_instructor_salutation
+        , {{ json_query_string('websitecontent_metadata', "'$.first_name'") }} as course_instructor_first_name
+        , {{ json_query_string('websitecontent_metadata', "'$.last_name'") }} as course_instructor_last_name
+        , {{ json_query_string('websitecontent_metadata', "'$.middle_initial'") }} as course_instructor_middle_initial
+        , {{ json_query_string('websitecontent_metadata', "'$.salutation'") }} as course_instructor_salutation
     from websitecontents
     where websitecontent_type = 'instructor'
 )
