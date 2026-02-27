@@ -18,6 +18,7 @@ with enrollment_detail as (
     select
         courses_in_program.program_name
         , course_enrollment_detail.user_email
+        , course_enrollment_detail.user_hashed_id
         , count(distinct courses_in_program.course_readable_id) as courses_taken_in_program
         , sum(
             case
@@ -34,6 +35,7 @@ with enrollment_detail as (
     group by
         courses_in_program.program_name
         , course_enrollment_detail.user_email
+        , course_enrollment_detail.user_hashed_id
 )
 
 select
@@ -97,4 +99,4 @@ left join combined_users as combined_users2
     on enrollment_detail.user_hashed_id = combined_users2.user_hashed_id
 left join courses_detail
     on enrollment_detail.program_name = courses_detail.program_name
-    and enrollment_detail.user_email = courses_detail.user_email
+    and enrollment_detail.user_hashed_id = courses_detail.user_hashed_id
