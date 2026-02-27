@@ -209,7 +209,7 @@ models:
   - name: user_job_title
     description: str, job title on user's profile from MITx Online or MicroMasters
   tests:
-  - expect_no_value_overlap_across_rows:
+  - check_cross_column_duplicates:
       column_a: user_mitxonline_email
       column_b: user_edxorg_email
 

@@ -1,4 +1,4 @@
-{% macro test_expect_no_value_overlap_across_rows(model, column_a, column_b) %}
+{% macro test_check_cross_column_duplicates(model, column_a, column_b) %}
     {% set model_name = model if model is string else model.identifier %}
 
     -- This test checks whether a value from `column_a` occurs in `column_b`
@@ -11,27 +11,27 @@
     -- | alice@mail.com          | NULL             |
     -- | NULL                    | alice@mail.com   | <-- Violation: "alice@mail.com" exists in both columns across rows
     --
-    -- If `test_columns_no_value_overlap` is applied to `user_mitxonline_email` and `user_edxorg_email`,
-    -- this row will be flagged
     --
     -- Output:
     -- - The query will return the rows that violate the no-overlap condition.
 
-    select
-        value
+    select value
     from (
-        select {{ column_a }} AS value
+        select {{ column_a }} as value
         from {{ ref(model_name) }}
-        where {{ column_a }} IS NOT NULL
+        where {{ column_a }} is not null
+          and {{ column_b }} is null
 
-        union distinct
+        union all
 
-        select {{ column_b }} AS value
+        select {{ column_b }} as value
         from {{ ref(model_name) }}
-        where {{ column_b }} IS NOT NULL
-    ) t
+        where {{ column_b }} is not null
+          and {{ column_a }} is null
+    ) combined
     group by value
     having count(*) > 1
+
 
 
 
