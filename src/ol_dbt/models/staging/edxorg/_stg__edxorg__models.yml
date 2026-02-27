@@ -671,6 +671,10 @@ models:
     description: str, course ID formatted as course-v1:{org}+{course}+{run}
     tests:
     - not_null
+  - name: coursestructure_xml_source_system
+    description: str, ETL source system identifier (prod or edge)
+    tests:
+    - not_null
   - name: coursestructure_xml_block_id
     description: str, unique identifier for the block from XML url_name attribute
       or filename
