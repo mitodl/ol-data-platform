@@ -6,13 +6,13 @@ with course_activities as (
     select
         user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp)) as courseactivity_date
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }}) as courseactivity_date
         , count(*) as courseactivity_num_events
     from course_activities
     group by
         user_username
         , courserun_readable_id
-        , date(from_iso8601_timestamp(useractivity_timestamp))
+        , date({{ from_iso8601_timestamp('useractivity_timestamp') }})
 )
 
 select * from daily_activities_stats

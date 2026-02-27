@@ -11,6 +11,7 @@ classifiers = [
 ]
 dependencies = [
     "PyPika ~=0.51.0",
+    "boto3>=1.42.42",
     "cyclopts~=4.5.0",
     "dbt-duckdb>=1.10.0",
     "dbt-trino>=1.10.0",

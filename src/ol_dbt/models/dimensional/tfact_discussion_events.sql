@@ -7,14 +7,14 @@ with mitxonline_discussion_events as (
         , courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as post_id
-        , json_query(useractivity_event_object, 'lax $.title' omit quotes) as post_title
-        , json_query(useractivity_event_object, 'lax $.body' omit quotes) as post_content
-        , json_query(useractivity_event_object, 'lax $.commentable_id' omit quotes) as commentable_id
-        , json_query(useractivity_event_object, 'lax $.category_id' omit quotes) as discussion_component_id
-        , json_query(useractivity_event_object, 'lax $.category_name' omit quotes) as discussion_component_name
-        , json_query(useractivity_event_object, 'lax $.url' omit quotes) as page_url
-        , json_query(useractivity_event_object, 'lax $.user_forums_roles' omit quotes) as user_forums_roles
+        , {{ json_query_string('useractivity_event_object', "'$.id'") }} as post_id
+        , {{ json_query_string('useractivity_event_object', "'$.title'") }} as post_title
+        , {{ json_query_string('useractivity_event_object', "'$.body'") }} as post_content
+        , {{ json_query_string('useractivity_event_object', "'$.commentable_id'") }} as commentable_id
+        , {{ json_query_string('useractivity_event_object', "'$.category_id'") }} as discussion_component_id
+        , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
+        , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
+        , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
@@ -30,14 +30,14 @@ with mitxonline_discussion_events as (
         , courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as post_id
-        , json_query(useractivity_event_object, 'lax $.title' omit quotes) as post_title
-        , json_query(useractivity_event_object, 'lax $.body' omit quotes) as post_content
-        , json_query(useractivity_event_object, 'lax $.commentable_id' omit quotes) as commentable_id
-        , json_query(useractivity_event_object, 'lax $.category_id' omit quotes) as discussion_component_id
-        , json_query(useractivity_event_object, 'lax $.category_name' omit quotes) as discussion_component_name
-        , json_query(useractivity_event_object, 'lax $.url' omit quotes) as page_url
-        , json_query(useractivity_event_object, 'lax $.user_forums_roles' omit quotes) as user_forums_roles
+        , {{ json_query_string('useractivity_event_object', "'$.id'") }} as post_id
+        , {{ json_query_string('useractivity_event_object', "'$.title'") }} as post_title
+        , {{ json_query_string('useractivity_event_object', "'$.body'") }} as post_content
+        , {{ json_query_string('useractivity_event_object', "'$.commentable_id'") }} as commentable_id
+        , {{ json_query_string('useractivity_event_object', "'$.category_id'") }} as discussion_component_id
+        , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
+        , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
+        , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
@@ -53,14 +53,14 @@ with mitxonline_discussion_events as (
         , courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as post_id
-        , json_query(useractivity_event_object, 'lax $.title' omit quotes) as post_title
-        , json_query(useractivity_event_object, 'lax $.body' omit quotes) as post_content
-        , json_query(useractivity_event_object, 'lax $.commentable_id' omit quotes) as commentable_id
-        , json_query(useractivity_event_object, 'lax $.category_id' omit quotes) as discussion_component_id
-        , json_query(useractivity_event_object, 'lax $.category_name' omit quotes) as discussion_component_name
-        , json_query(useractivity_event_object, 'lax $.url' omit quotes) as page_url
-        , json_query(useractivity_event_object, 'lax $.user_forums_roles' omit quotes) as user_forums_roles
+        , {{ json_query_string('useractivity_event_object', "'$.id'") }} as post_id
+        , {{ json_query_string('useractivity_event_object', "'$.title'") }} as post_title
+        , {{ json_query_string('useractivity_event_object', "'$.body'") }} as post_content
+        , {{ json_query_string('useractivity_event_object', "'$.commentable_id'") }} as commentable_id
+        , {{ json_query_string('useractivity_event_object', "'$.category_id'") }} as discussion_component_id
+        , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
+        , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
+        , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
@@ -75,14 +75,14 @@ with mitxonline_discussion_events as (
         , {{ format_course_id('courserun_readable_id') }} as courserun_readable_id
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
-        , json_query(useractivity_event_object, 'lax $.id' omit quotes) as post_id
-        , json_query(useractivity_event_object, 'lax $.title' omit quotes) as post_title
-        , json_query(useractivity_event_object, 'lax $.body' omit quotes) as post_content
-        , json_query(useractivity_event_object, 'lax $.commentable_id' omit quotes) as commentable_id
-        , json_query(useractivity_event_object, 'lax $.category_id' omit quotes) as discussion_component_id
-        , json_query(useractivity_event_object, 'lax $.category_name' omit quotes) as discussion_component_name
-        , json_query(useractivity_event_object, 'lax $.url' omit quotes) as page_url
-        , json_query(useractivity_event_object, 'lax $.user_forums_roles' omit quotes) as user_forums_roles
+        , {{ json_query_string('useractivity_event_object', "'$.id'") }} as post_id
+        , {{ json_query_string('useractivity_event_object', "'$.title'") }} as post_title
+        , {{ json_query_string('useractivity_event_object', "'$.body'") }} as post_content
+        , {{ json_query_string('useractivity_event_object', "'$.commentable_id'") }} as commentable_id
+        , {{ json_query_string('useractivity_event_object', "'$.category_id'") }} as discussion_component_id
+        , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
+        , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
+        , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where

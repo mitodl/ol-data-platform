@@ -37,18 +37,18 @@ select
     -- noqa: disable=RF02
     -- external resources
     , cast(
-        nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.is_broken' omit quotes), '') as boolean
+        nullif({{ json_query_string('websitecontents.websitecontent_metadata', "'$.is_broken'") }}, '') as boolean
     ) as external_resource_is_broken
     , cast(
         nullif(
-            json_query(websitecontents.websitecontent_metadata, 'lax $.has_external_license_warning' omit quotes), ''
+            {{ json_query_string('websitecontents.websitecontent_metadata', "'$.has_external_license_warning'") }}, ''
         ) as boolean
     ) as external_resource_license_warning
     , nullif(nullif(
-        json_query(websitecontents.websitecontent_metadata, 'lax $.url_status_code' omit quotes), ''
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.url_status_code'") }}, ''
     ), 'null') as external_resource_url_status_code
     , nullif(nullif(
-        json_query(websitecontents.websitecontent_metadata, 'lax $.backup_url_status_code' omit quotes), ''
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.backup_url_status_code'") }}, ''
     ), 'null') as external_resource_backup_url_status_code
     , coalesce(sitemetadata.sitemetadata_primary_course_number, websites.primary_course_number) as course_number
     , coalesce(sitemetadata.sitemetadata_course_term, websites.metadata_course_term) as course_term
@@ -66,34 +66,34 @@ select
         websitecontents.websitecontent_metadata, 'lax $.backup_url' omit quotes
     ), ''), 'null') as external_resource_backup_url
     , nullif(
-        nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.external_url' omit quotes), ''), 'null'
+        nullif({{ json_query_string('websitecontents.websitecontent_metadata', "'$.external_url'") }}, ''), 'null'
     ) as external_resource_url
     -- image_metadata for image resources; could be in metadata or image_metadata
     , coalesce(
         nullif(
-            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.image_alt' omit quotes), '')
+            nullif({{ json_query_string('websitecontents.websitecontent_metadata', "'$.metadata.image_alt'") }}, '')
             , 'null'
         )
         , nullif(nullif(
-            json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata."image-alt"' omit quotes), ''
+            {{ json_query_string('websitecontents.websitecontent_metadata', "'$.image_metadata.\"image-alt\"'") }}, ''
         ), 'null')
     ) as image_alt_text
     , coalesce(
         nullif(
-            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.caption' omit quotes), '')
+            nullif({{ json_query_string('websitecontents.websitecontent_metadata', "'$.metadata.caption'") }}, '')
             , 'null'
         )
         , nullif(
-            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata.caption' omit quotes), '')
+            nullif({{ json_query_string('websitecontents.websitecontent_metadata', "'$.image_metadata.caption'") }}, '')
             , 'null'
         )
     ) as image_caption
     , coalesce(
         nullif(
-            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.metadata.credit' omit quotes), ''), 'null'
+            nullif({{ json_query_string('websitecontents.websitecontent_metadata', "'$.metadata.credit'") }}, ''), 'null'
         )
         , nullif(
-            nullif(json_query(websitecontents.websitecontent_metadata, 'lax $.image_metadata.credit' omit quotes), '')
+            nullif({{ json_query_string('websitecontents.websitecontent_metadata', "'$.image_metadata.credit'") }}, '')
             , 'null'
         )
     ) as image_credit

@@ -14,7 +14,7 @@ with source as (
         , about as program_about
         , what_you_learn as program_what_you_learn
         , video_url as program_video_url
-        , json_query(price, 'lax $.value.text' omit quotes) as program_price
+        , {{ json_query_string('price', "'$.value.text'") }} as program_price
     from source
 )
 

@@ -9,7 +9,7 @@ with mitx_courses as (
 , mitxonline_course_department as (
     select
         course_id
-        , array_join(array_agg(coursedepartment_name), ', ') as department_name
+        , {{ array_join('array_agg(coursedepartment_name)', ", ") }} as department_name
     from {{ ref('int__mitxonline__course_to_departments') }}
     group by course_id
 )
@@ -17,8 +17,8 @@ with mitx_courses as (
 , edx_courseruns as (
     select
         *
-        , element_at(split(courserun_readable_id, '/'), 3) as run_tag
-        , element_at(split(course_number, '.'), 1) as extracted_department_number
+        , {{ element_at_array('split(courserun_readable_id, \'/\')', 3) }} as run_tag
+        , {{ element_at_array('split(course_number, \'.\')', 1) }} as extracted_department_number
         , {{ format_course_id('courserun_readable_id', false) }} as courseware_id
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
@@ -61,12 +61,10 @@ select distinct
     , edx_courseruns.courserun_title
     , edx_courseruns.courseware_id
     , edx_courseruns.run_tag
-    , from_iso8601_timestamp(edx_courseruns.courserun_enrollment_start_date) as enrollment_start
-    , from_iso8601_timestamp(
-       coalesce(edx_courseruns.courserun_enrollment_end_date, edx_courseruns.courserun_end_date)
-    ) as enrollment_end
-    , from_iso8601_timestamp(edx_courseruns.courserun_start_date) as start_date
-    , from_iso8601_timestamp(edx_courseruns.courserun_end_date) as end_date
+    , {{ from_iso8601_timestamp('edx_courseruns.courserun_enrollment_start_date') }} as enrollment_start
+    , {{ from_iso8601_timestamp('coalesce(edx_courseruns.courserun_enrollment_end_date, edx_courseruns.courserun_end_date)') }} as enrollment_end
+    , {{ from_iso8601_timestamp('edx_courseruns.courserun_start_date') }} as start_date
+    , {{ from_iso8601_timestamp('edx_courseruns.courserun_end_date') }} as end_date
     , coalesce(
         mitxonline_course_department.department_name
         , edx_courseruns.coursedepartment_name
@@ -91,5 +89,5 @@ left join mitxonline_courseruns
 left join edx_signatories
     on edx_courseruns.courseware_id = edx_signatories.courserun_readable_id
 where
-    from_iso8601_timestamp(edx_courseruns.courserun_end_date) < current_date  -- unenrollable runs
+    {{ from_iso8601_timestamp('edx_courseruns.courserun_end_date') }} < current_date  -- unenrollable runs
     and mitxonline_courseruns.course_number is null  -- not already in mitxonline course runs

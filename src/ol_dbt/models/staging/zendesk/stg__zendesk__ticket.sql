@@ -38,16 +38,16 @@ with source as (
         , nullif(follower_ids, array[]) as ticket_follower_user_ids
         , nullif(collaborator_ids, array[]) as ticket_collaborator_user_ids
         , nullif(sharing_agreement_ids, array[]) as sharing_agreement_ids
-        , nullif(json_query(satisfaction_rating, 'lax $.score' omit quotes), 'null')
+        , nullif({{ json_query_string('satisfaction_rating', "'$.score'") }}, 'null')
             as ticket_satisfaction_rating_score
-        , nullif(json_query(satisfaction_rating, 'lax $.comment' omit quotes), 'null')
+        , nullif({{ json_query_string('satisfaction_rating', "'$.comment'") }}, 'null')
             as ticket_satisfaction_rating_comment
-        , nullif(json_query(satisfaction_rating, 'lax $.reason' omit quotes), 'null')
+        , nullif({{ json_query_string('satisfaction_rating', "'$.reason'") }}, 'null')
             as ticket_satisfaction_rating_reason
-        , nullif(json_query(via, 'lax $.channel' omit quotes), 'null') as ticket_source_channel
-        , nullif(json_query(via, 'lax $.source.from.address' omit quotes), 'null') as ticket_source_email
-        , nullif(json_query(via, 'lax $.source.from.ticket_id' omit quotes), 'null') as ticket_source_ticket_id
-        , nullif(json_query(via, 'lax $.source.rel' omit quotes), 'null') as ticket_source_rel
+        , nullif({{ json_query_string('via', "'$.channel'") }}, 'null') as ticket_source_channel
+        , nullif({{ json_query_string('via', "'$.source.from.address'") }}, 'null') as ticket_source_email
+        , nullif({{ json_query_string('via', "'$.source.from.ticket_id'") }}, 'null') as ticket_source_ticket_id
+        , nullif({{ json_query_string('via', "'$.source.rel'") }}, 'null') as ticket_source_rel
         , {{ cast_timestamp_to_iso8601('created_at') }} as ticket_created_at
         , {{ cast_timestamp_to_iso8601('updated_at') }} as ticket_updated_at
     from most_recent_source

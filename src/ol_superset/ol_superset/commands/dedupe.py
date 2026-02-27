@@ -35,20 +35,44 @@ def extract_uuid_from_yaml(yaml_file: Path) -> str | None:
 
 
 def extract_base_name_without_id(filename: str) -> str:
-    """Remove database ID suffix from filename.
+    """Remove database ID or UUID suffix from filename.
+
+    Handles multiple consecutive UUIDs/IDs by removing all trailing suffixes.
 
     Args:
-        filename: Original filename (e.g., 'marts__combined__users_35.yaml')
+        filename: Original filename (e.g., 'marts__combined__users_35.yaml'
+            or 'marts__combined__users_<uuid>.yaml')
 
     Returns:
-        Base name without ID (e.g., 'marts__combined__users')
+        Base name without ID or UUID (e.g., 'marts__combined__users')
     """
-    # Match pattern: <name>_<digits>.yaml
-    match = re.match(r"^(.+)_(\d+)\.yaml$", filename)
-    if match:
-        return match.group(1)
-    # If no ID suffix, return as-is (without .yaml extension)
-    return filename.replace(".yaml", "")
+    # First, remove .yaml extension
+    base = filename.replace(".yaml", "")
+
+    # Repeatedly remove trailing database IDs and UUIDs until none remain
+    # This handles cases where the bug caused multiple UUIDs to be appended
+    while True:
+        # Try to match and remove database ID: <name>_<digits>
+        match = re.match(r"^(.+)_(\d+)$", base)
+        if match:
+            base = match.group(1)
+            continue
+
+        # Try to match and remove UUID: <name>_<uuid>
+        # UUID format: 8-4-4-4-12 hex characters with dashes
+        match = re.match(
+            r"^(.+)_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
+            base,
+            re.IGNORECASE,
+        )
+        if match:
+            base = match.group(1)
+            continue
+
+        # No more IDs or UUIDs to remove
+        break
+
+    return base
 
 
 def deduplicate_assets(directory: Path, dry_run: bool = False) -> tuple[int, int]:

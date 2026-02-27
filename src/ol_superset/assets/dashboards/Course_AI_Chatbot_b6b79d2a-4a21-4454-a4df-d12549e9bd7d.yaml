@@ -11,7 +11,7 @@ position:
     children: []
     id: CHART-explore-128-1
     meta:
-      chartId: 128
+      chartId: 195
       height: 105
       sliceName: Course AI Chatbot
       uuid: 92488983-505d-4642-a76d-6d5225275577
@@ -26,7 +26,7 @@ position:
     children: []
     id: CHART-sTqJ0pHCNGMuy7rHtXgQC
     meta:
-      chartId: 130
+      chartId: 123
       height: 62
       sliceName: Course AI Chatbot Table Metadata
       sliceNameOverride: Data Last Updated
@@ -129,91 +129,90 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '128':
-      id: 128
+    '195':
       crossFilters:
-        scope: global
         chartsInScope:
         - 130
-    '130':
-      id: 130
-      crossFilters:
         scope: global
+      id: 195
+    '123':
+      crossFilters:
         chartsInScope:
         - 128
+        scope: global
+      id: 123
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: false
+  expanded_slices: {}
   global_chart_configuration:
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
     chartsInScope:
     - 128
     - 130
-  color_scheme: ''
-  refresh_frequency: 0
-  color_scheme_domain: []
-  expanded_slices: {}
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
   label_colors: {}
-  shared_label_colors: []
   map_label_colors: {}
-  timed_refresh_immune_slices: []
-  cross_filters_enabled: false
-  default_filters: '{}'
   native_filter_configuration:
-  - id: NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
+  - cascadeParentIds: []
+    chartsInScope:
+    - 128
+    - 130
     controlValues:
-      enableEmptyFilter: false
       defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
       multiSelect: false
       searchAllOptions: false
-      inverseSelection: false
-    name: Agent
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
     filterType: filter_select
+    id: NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
+    name: Agent
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-f9kZjFZJcGqYTdBxpCR2o
+    - TAB-yHMV5QOM_44gkFJMD_pSv
     targets:
     - column:
         name: ai_agent
       datasetUuid: b1f7c663-9faf-4c95-bdeb-d786a3f4cd3c
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
     defaultDataMask:
       extraFormData: {}
       filterState: {}
       ownState: {}
-    cascadeParentIds: []
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-RmITn4Q-qvifQxrX7JSF8
+    name: 'Resource Identifier '
     scope:
+      excluded: []
       rootPath:
       - ROOT_ID
-      excluded: []
-    type: NATIVE_FILTER
-    description: ''
-    chartsInScope:
-    - 128
-    - 130
-    tabsInScope:
-    - TAB-f9kZjFZJcGqYTdBxpCR2o
-    - TAB-yHMV5QOM_44gkFJMD_pSv
-  - id: NATIVE_FILTER-RmITn4Q-qvifQxrX7JSF8
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    name: 'Resource Identifier '
-    filterType: filter_select
     targets:
     - column:
         name: resource_id
       datasetUuid: b1f7c663-9faf-4c95-bdeb-d786a3f4cd3c
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
     type: NATIVE_FILTER
-    description: ''
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
 theme_uuid: null
 version: 1.0.0
