@@ -56,7 +56,7 @@ def compress_video(
     context: OpExecutionContext,
     input_path: Path,
     output_path: Path,
-    max_size_mb: float = 6,
+    max_size_mb: float = 12,
 ) -> Path:
     """
     Compress video to a target maximum file size using two-pass H.264 encoding.
@@ -135,6 +135,9 @@ def compress_video(
                     "b:v": video_bitrate,
                     "pass": 1,
                     "passlogfile": passlogfile,
+                    "preset": "slow",
+                    "profile:v": "high",
+                    "level": "4.1",
                     "an": None,
                 },
             )
@@ -152,6 +155,13 @@ def compress_video(
                     "b:v": video_bitrate,
                     "pass": 2,
                     "passlogfile": passlogfile,
+                    "preset": "slow",
+                    "profile:v": "high",
+                    "level": "4.1",
+                    "bufsize": video_bitrate * 2,
+                    "maxrate": int(video_bitrate * 1.5),
+                    "pix_fmt": "yuv420p",
+                    "movflags": "+faststart",
                     "c:a": "aac",
                     "b:a": audio_bitrate,
                 },
