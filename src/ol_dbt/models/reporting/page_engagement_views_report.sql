@@ -22,12 +22,14 @@ with page_engagement as (
 , subsection_blocks as (
     select * from {{ ref('dim_course_content') }}
     where is_latest = true
+    where is_latest = true
     and block_category = 'sequential'
 )
 
 , section_blocks as (
     select * from {{ ref('dim_course_content') }}
     where is_latest = true
+    and block_category = 'chapter'
     and block_category = 'chapter'
 )
 
