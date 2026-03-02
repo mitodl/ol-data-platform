@@ -91,7 +91,7 @@ def s3_uploads_bucket(
         "qa": {"bucket": "ol-data-lake-landing-zone-qa", "prefix": ""},
         "production": {
             "bucket": "ol-data-lake-landing-zone-production",
-            "prefix": "",
+            "prefix": "edxorg-raw-data",
         },
     }
     return bucket_map[dagster_env]

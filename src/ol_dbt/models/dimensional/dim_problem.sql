@@ -4,11 +4,11 @@ with problems as (
         , block_id
         , block_title
         , courserun_readable_id
-        , nullif(json_query(block_metadata, 'lax $.markdown' omit quotes), 'null') as markdown
-        , nullif(json_query(block_metadata, 'lax $.max_attempts' omit quotes), 'null') as max_attempts
-        , nullif(json_query(block_metadata, 'lax $.start' omit quotes), 'null') as start_date
-        , nullif(json_query(block_metadata, 'lax $.due' omit quotes), 'null') as due_date
-        , nullif(json_query(block_metadata, 'lax $.weight' omit quotes), 'null') as weight
+        , nullif({{ json_query_string('block_metadata', "'$.markdown'") }}, 'null') as markdown
+        , nullif({{ json_query_string('block_metadata', "'$.max_attempts'") }}, 'null') as max_attempts
+        , nullif({{ json_query_string('block_metadata', "'$.start'") }}, 'null') as start_date
+        , nullif({{ json_query_string('block_metadata', "'$.due'") }}, 'null') as due_date
+        , nullif({{ json_query_string('block_metadata', "'$.weight'") }}, 'null') as weight
         , row_number() over (
             partition by block_id
             order by is_latest desc, retrieved_at desc
@@ -20,53 +20,53 @@ with problems as (
 , problem_events as (
     select distinct
         courserun_readable_id
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
+        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , json_extract(useractivity_event_object, '$.submission') as submission
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
         and useractivity_event_type = 'problem_check'
-        and json_query(useractivity_event_object, 'lax $.submission' omit quotes) is not null
+        and {{ json_query_string('useractivity_event_object', "'$.submission'") }} is not null
 
     union all
 
     select distinct
         courserun_readable_id
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
+        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , json_extract(useractivity_event_object, '$.submission') as submission
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
         and useractivity_event_type = 'problem_check'
-        and json_query(useractivity_event_object, 'lax $.submission' omit quotes) is not null
+        and {{ json_query_string('useractivity_event_object', "'$.submission'") }} is not null
 
     union all
 
     select distinct
         courserun_readable_id
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
+        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , json_extract(useractivity_event_object, '$.submission') as submission
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
         and useractivity_event_type = 'problem_check'
-        and json_query(useractivity_event_object, 'lax $.submission' omit quotes) is not null
+        and {{ json_query_string('useractivity_event_object', "'$.submission'") }} is not null
 
     union all
 
     select distinct
         courserun_readable_id
-        , json_query(useractivity_event_object, 'lax $.problem_id' omit quotes) as problem_block_id
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as problem_name
+        , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , json_extract(useractivity_event_object, '$.submission') as submission
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
         and useractivity_event_type = 'problem_check'
-        and json_query(useractivity_event_object, 'lax $.submission' omit quotes) is not null
+        and {{ json_query_string('useractivity_event_object', "'$.submission'") }} is not null
 )
 
 , problem_type_metadata as (

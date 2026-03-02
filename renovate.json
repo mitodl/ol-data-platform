@@ -12,17 +12,30 @@
   "lockFileMaintenance": {
     "enabled": true
   },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)Dockerfile\\.dagster-k8s$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+)\\nARG [A-Z_]+=(?<currentValue>[^\\s]+)"
+      ]
+    }
+  ],
   "packageRules": [
     {
       "groupName": "dagster-plugins",
       "matchPackageNames": [
-        "dagster{/,}**"
+        "dagster{/,}**",
+        "dagster-io/dagster"
       ]
     },
     {
-      "matchDatasources": ["python-version"],
+      "matchDatasources": [
+        "python-version"
+      ],
       "automerge": false
     }
-  ]
   ]
 }

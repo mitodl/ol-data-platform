@@ -37,7 +37,7 @@ with enrollments as (
         )
             as unique_verified_users
     from enrollments
-    inner join timeseries on from_iso8601_timestamp(enrollments.courserunenrollment_created_on) < timeseries.end_date
+    inner join timeseries on {{ from_iso8601_timestamp('enrollments.courserunenrollment_created_on') }} < timeseries.end_date
     group by enrollments.micromasters_program_id, enrollments.mitxonline_program_id, timeseries.end_date
 )
 
@@ -63,7 +63,7 @@ with enrollments as (
         )
             as unique_verified_users
     from enrollments
-    inner join timeseries on from_iso8601_timestamp(enrollments.courserunenrollment_created_on) < timeseries.end_date
+    inner join timeseries on {{ from_iso8601_timestamp('enrollments.courserunenrollment_created_on') }} < timeseries.end_date
     group by timeseries.end_date
 )
 
@@ -103,7 +103,7 @@ with enrollments as (
     from course_certificates
     inner join
         timeseries
-        on from_iso8601_timestamp(course_certificates.courseruncertificate_created_on) < timeseries.end_date
+        on {{ from_iso8601_timestamp('course_certificates.courseruncertificate_created_on') }} < timeseries.end_date
     group by course_certificates.micromasters_program_id, course_certificates.mitxonline_program_id, timeseries.end_date
 )
 
@@ -125,7 +125,7 @@ with enrollments as (
     from course_certificates
     inner join
         timeseries
-        on from_iso8601_timestamp(course_certificates.courseruncertificate_created_on) < timeseries.end_date
+        on {{ from_iso8601_timestamp('course_certificates.courseruncertificate_created_on') }} < timeseries.end_date
     group by timeseries.end_date
 )
 
@@ -156,7 +156,7 @@ with enrollments as (
     from program_certificates
     inner join
         timeseries
-        on from_iso8601_timestamp(program_certificates.program_completion_timestamp) < timeseries.end_date
+        on {{ from_iso8601_timestamp('program_certificates.program_completion_timestamp') }} < timeseries.end_date
     group by
         program_certificates.micromasters_program_id, program_certificates.mitxonline_program_id, timeseries.end_date
 )
@@ -170,7 +170,7 @@ with enrollments as (
     from program_certificates
     inner join
         timeseries
-        on from_iso8601_timestamp(program_certificates.program_completion_timestamp) < timeseries.end_date
+        on {{ from_iso8601_timestamp('program_certificates.program_completion_timestamp') }} < timeseries.end_date
     group by timeseries.end_date
 )
 

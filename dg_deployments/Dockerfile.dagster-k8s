@@ -15,7 +15,8 @@ FROM python:3.13-slim
 # Install uv for faster Python dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-ARG DAGSTER_VERSION=1.12.14
+# renovate: datasource=github-releases depName=dagster-io/dagster
+ARG DAGSTER_VERSION=1.12.17
 
 # Set working directory
 WORKDIR /opt/dagster/app

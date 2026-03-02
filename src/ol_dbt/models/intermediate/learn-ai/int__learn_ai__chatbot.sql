@@ -18,7 +18,7 @@ with chatsession as (
     select distinct
         courserun_readable_id
         , retrieved_at
-        , json_query(block_metadata, 'lax $.transcripts.en' omit quotes) as transcript_id
+        , {{ json_query_string('block_metadata', "'$.transcripts.en'") }} as transcript_id
     from {{ ref('dim_course_content') }}
     where block_category = 'video'
 )

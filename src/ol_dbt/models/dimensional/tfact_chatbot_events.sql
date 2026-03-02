@@ -23,21 +23,21 @@ with openedx_events as (
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
         , useractivity_session_id as session_id
-        , json_query(useractivity_context_object, 'lax $.module.usage_key' omit quotes) as block_id
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as block_name
-        , json_query(useractivity_event_object, 'lax $.value' omit quotes) as event_value
+        , {{ json_query_string('useractivity_context_object', "'$.module.usage_key'") }} as block_id
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as block_name
+        , {{ json_query_string('useractivity_event_object', "'$.value'") }} as event_value
         , coalesce(
-              json_query(useractivity_event_object, 'lax $.thread_id' omit quotes),
+              {{ json_query_string('useractivity_event_object', "'$.thread_id'") }},
               regexp_extract(
-                  json_query(useractivity_event_object, 'lax $.value' omit quotes),
+                  {{ json_query_string('useractivity_event_object', "'$.value'") }},
                   '"thread_id": "([^"]+)"',
                   1
               )
          ) AS thread_id
          , coalesce(
-              json_query(useractivity_event_object, 'lax $.checkpoint_pk' omit quotes),
+              {{ json_query_string('useractivity_event_object', "'$.checkpoint_pk'") }},
               regexp_extract(
-                  json_query(useractivity_event_object, 'lax $.value' omit quotes),
+                  {{ json_query_string('useractivity_event_object', "'$.value'") }},
                   '"checkpoint_pk": ([0-9]+)',
                   1
               )
@@ -58,31 +58,31 @@ with openedx_events as (
         , useractivity_event_type as event_type
         , useractivity_event_object as event_json
         , useractivity_session_id as session_id
-        , json_query(useractivity_context_object, 'lax $.module.usage_key' omit quotes) as block_id
-        , json_query(useractivity_context_object, 'lax $.module.display_name' omit quotes) as block_name
-        , json_query(useractivity_event_object, 'lax $.xblock_state' omit quotes) as chatbot_type
-        , json_query(useractivity_event_object, 'lax $.problem_set' omit quotes) as problem_set
-        , nullif(json_query(useractivity_event_object, 'lax $.canvas_course_id' omit quotes),'') as canvas_course_id
+        , {{ json_query_string('useractivity_context_object', "'$.module.usage_key'") }} as block_id
+        , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as block_name
+        , {{ json_query_string('useractivity_event_object', "'$.xblock_state'") }} as chatbot_type
+        , {{ json_query_string('useractivity_event_object', "'$.problem_set'") }} as problem_set
+        , nullif({{ json_query_string('useractivity_event_object', "'$.canvas_course_id'") }},'') as canvas_course_id
         , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
         , case when useractivity_event_type like '%response'
              then regexp_replace(
-                 json_query(useractivity_event_object, 'lax $.value' omit quotes)
+                 {{ json_query_string('useractivity_event_object', "'$.value'") }}
                  , '^b[''"]|[''"]$', ''
                )
-          else json_query(useractivity_event_object, 'lax $.value' omit quotes)
+          else {{ json_query_string('useractivity_event_object', "'$.value'") }}
         end as event_value
         , coalesce(
-              json_query(useractivity_event_object, 'lax $.thread_id' omit quotes),
+              {{ json_query_string('useractivity_event_object', "'$.thread_id'") }},
               regexp_extract(
-                  json_query(useractivity_event_object, 'lax $.value' omit quotes),
+                  {{ json_query_string('useractivity_event_object', "'$.value'") }},
                   '"thread_id": "([^"]+)"',
                   1
               )
          ) AS thread_id
          , coalesce(
-              json_query(useractivity_event_object, 'lax $.checkpoint_pk' omit quotes),
+              {{ json_query_string('useractivity_event_object', "'$.checkpoint_pk'") }},
               regexp_extract(
-                  json_query(useractivity_event_object, 'lax $.value' omit quotes),
+                  {{ json_query_string('useractivity_event_object', "'$.value'") }},
                   '"checkpoint_pk": ([0-9]+)',
                   1
               )

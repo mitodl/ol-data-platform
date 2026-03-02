@@ -41,7 +41,7 @@ with programs as (
 , program_topics as (
     select
         course_program.program_id
-        , array_join(array_agg(course_topics.coursetopic_name), ', ') as program_topics
+        , {{ array_join('array_agg(course_topics.coursetopic_name)', ", ") }} as program_topics
     from course_topics
     inner join course_program on course_topics.course_id = course_program.course_id
     group by course_program.program_id
@@ -50,7 +50,7 @@ with programs as (
 , program_instructors as (
     select
         program_id
-        , array_join(array_agg(cms_facultymemberspage_facultymember_name), ', ') as program_instructors
+        , {{ array_join('array_agg(cms_facultymemberspage_facultymember_name)', ", ") }} as program_instructors
     from {{ ref('int__mitxpro__programsfaculty') }}
     group by program_id
 )

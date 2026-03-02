@@ -13,8 +13,8 @@ with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__tracking_logs') }}
     where
         username != ''
-        and json_query(context, 'lax $.user_id' omit quotes) is not null
-        and json_query(event, 'lax $.exception' omit quotes) is null
+        and {{ json_query_string('context', "'$.user_id'") }} is not null
+        and {{ json_query_string('event', "'$.exception'") }} is null
 
     {% if is_incremental() %}
         and "time" > (select max(this.useractivity_timestamp) from {{ this }} as this) --noqa
@@ -42,9 +42,9 @@ with source as (
         , event_type as useractivity_event_type
         , {{ extract_course_id_from_tracking_log() }} as courserun_readable_id
         --- extract common fields from context object
-        , cast(json_query(context, 'lax $.user_id' omit quotes) as integer) as openedx_user_id
-        , json_query(context, 'lax $.org_id' omit quotes) as org_id
-        , json_query(context, 'lax $.path' omit quotes) as useractivity_path
+        , cast({{ json_query_string('context', "'$.user_id'") }} as integer) as openedx_user_id
+        , {{ json_query_string('context', "'$.org_id'") }} as org_id
+        , {{ json_query_string('context', "'$.path'") }} as useractivity_path
         --- due to log collector changes, values of time field come with different formats
         , to_iso8601(from_iso8601_timestamp_nanos(
             regexp_replace(time, '(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2}\.\d+)(.*?)', '$1T$2$3') -- noqa

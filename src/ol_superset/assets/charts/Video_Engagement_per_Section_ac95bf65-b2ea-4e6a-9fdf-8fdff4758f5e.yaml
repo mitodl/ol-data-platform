@@ -10,7 +10,7 @@ params:
   contributionMode: null
   dashboards:
   - 24
-  datasource: 43__table
+  datasource: 129__table
   extra_form_data: {}
   form_data_bak:
     adhoc_filters: []
@@ -199,7 +199,8 @@ params:
   - null
   y_axis_format: SMART_NUMBER
   zoomable: false
-query_context: '{"datasource": {"id": 43, "type": "table"}, "force": false, "queries":
+  annotation_layers: []
+query_context: '{"datasource": {"id": 129, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": [{"columnType": "BASE_AXIS", "sqlExpression": "section_title", "label":
   "section_title", "expressionType": "SQL"}], "metrics": [{"aggregate": null, "column":
@@ -227,8 +228,8 @@ query_context: '{"datasource": {"id": 43, "type": "table"}, "force": false, "que
   "optionName": "metric_l5fmf7i5xb_rbdvkyjo29h", "sqlExpression": null}, true]], "time_offsets":
   [], "post_processing": [{"operation": "pivot", "options": {"index": ["section_title"],
   "columns": [], "aggregates": {"Viewed At Least One Video": {"operator": "mean"},
-  "Viewed All Videos": {"operator": "mean"}}, "drop_missing_columns":
-  true}}, {"operation": "flatten"}]}], "form_data": {"datasource": "43__table",
+  "Viewed All Videos": {"operator": "mean"__JINJA2_CLOSE__, "drop_missing_columns":
+  true__JINJA2_CLOSE__, {"operation": "flatten"}]}], "form_data": {"datasource": "129__table",
   "viz_type": "echarts_timeseries_bar", "slice_id": 44, "metrics": [{"aggregate":
   null, "column": null, "datasourceWarning": false, "expressionType": "SQL", "hasCustomLabel":
   true, "label": "Viewed At Least One Video", "optionName": "metric_ilmj7tjqf9l_3gzz1vtb7cf",
@@ -254,4 +255,4 @@ query_context: '{"datasource": {"id": 43, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: ac95bf65-b2ea-4e6a-9fdf-8fdff4758f5e
 version: 1.0.0
-dataset_uuid: bf17ec0d-2a0a-4f97-ab5b-ae2df862d4b5
+dataset_uuid: 0514985b-ff21-490b-a34e-25ae356da7e9

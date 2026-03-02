@@ -23,7 +23,7 @@ with source as (
         , pacing_type as courserun_pace
         , if(staff = '[]', null, staff) as courserun_instructors
         , if(seats = '[]', null, seats) as courserun_enrollment_modes
-        , json_query(image, 'lax $.url' omit quotes) as courserun_image_url
+        , {{ json_query_string('image', "'$.url'") }} as courserun_image_url
         , if(status = 'published' and is_enrollable, true, false) as courserun_is_published
         , case
             when pacing_type = 'self_paced' then true

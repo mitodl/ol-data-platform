@@ -14,10 +14,10 @@ with source as (
         , checkpoint_id
         , parent_checkpoint_id
         , metadata as checkpoint_metadata
-        , cast(json_query(metadata, 'lax $.step' omit quotes) as integer) as checkpoint_step
-        , json_query(metadata, 'lax $.writes.__start__.messages.kwargs.content' omit quotes) as human_message
-        , json_query(metadata, 'lax $.writes.agent.messages.kwargs.content' omit quotes) as agent_message
-        , json_query(metadata, 'lax $.source' omit quotes) as checkpoint_source
+        , cast({{ json_query_string('metadata', "'$.step'") }} as integer) as checkpoint_step
+        , {{ json_query_string('metadata', "'$.writes.__start__.messages.kwargs.content'") }} as human_message
+        , {{ json_query_string('metadata', "'$.writes.agent.messages.kwargs.content'") }} as agent_message
+        , {{ json_query_string('metadata', "'$.source'") }} as checkpoint_source
         , {{ cast_timestamp_to_iso8601('created_on') }} as checkpoint_created_on
     from most_recent_source
 )

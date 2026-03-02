@@ -1,9 +1,9 @@
 with discussion_component_topics as (
     select
         *
-        , json_query(block_metadata, 'lax $.discussion_category' omit quotes) as discussion_component_category
-        , json_query(block_metadata, 'lax $.discussion_target' omit quotes) as discussion_component_name
-        , json_query(block_metadata, 'lax $.discussion_id' omit quotes) as discussion_component_id
+        , {{ json_query_string('block_metadata', "'$.discussion_category'") }} as discussion_component_category
+        , {{ json_query_string('block_metadata', "'$.discussion_target'") }} as discussion_component_name
+        , {{ json_query_string('block_metadata', "'$.discussion_id'") }} as discussion_component_id
     from {{ ref('dim_course_content') }}
     where
         block_category = 'discussion'

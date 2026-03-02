@@ -830,3 +830,104 @@ models:
     description: int, 1 if the user has at least one attempt, 0 otherwise
   - name: number_of_problems
     description: int, total number of problems in the chapter
+
+- name: mitxonline_course_engagements_daily_report
+  description: MITx Online daily course engagement report with platform, course status,
+    and course identification fields. Shows user engagement metrics including course
+    events, problem submissions, video plays, and discussion participation aggregated
+    by date, user, and course run.
+  columns:
+  - name: courseactivity_date
+    description: date, the date when the course activity occurred
+    tests:
+    - not_null
+  - name: user_username
+    description: string, username on MITx Online platform
+  - name: user_full_name
+    description: string, full name of the user
+  - name: user_email
+    description: string, email address of the user
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: courserun_title
+    description: string, title of the course run
+  - name: course_number
+    description: string, course number identifier
+  - name: courserun_start_on
+    description: timestamp, date and time when the course run starts
+  - name: courserun_end_on
+    description: timestamp, date and time when the course run ends. May be null.
+  - name: num_events
+    description: int, total number of course activity events for the user on this
+      date
+  - name: num_problem_submitted
+    description: int, count of problem submissions by the user on this date
+  - name: num_video_played
+    description: int, count of video play events by the user on this date
+  - name: num_discussion_participated
+    description: int, count of discussion participation events (posts, comments, responses
+      created) by the user on this date
+  - name: platform
+    description: string, name of the platform, set to 'MITx Online'
+    tests:
+    - not_null
+  - name: courserun_is_current
+    description: boolean, indicates if the course run is currently active. True if
+      current date is between courserun_start_on and courserun_end_on (or courserun_end_on
+      is null).
+    tests:
+    - not_null
+  - name: course_readable_id
+    description: string, Open edX course ID formatted as course-v1:{org}+{course code}
+      for MITx Online courses
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courseactivity_date", "user_username", "courserun_readable_id"]
+
+- name: combined_video_engagements_counts_report
+  description: Combined video engagement report across all platforms with video counts
+    per chapter. Shows user video watching activity including total videos available
+    in each chapter and how many the user has watched.
+  columns:
+  - name: user_email
+    description: string, user email address. May be null for some xPRO Emeritus learners.
+  - name: chapter_title
+    description: string, title of the chapter/section within the course. May be null
+      for Residential MITx data.
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: total_video_count
+    description: int, total number of distinct videos in this chapter for this course
+      run
+    tests:
+    - not_null
+  - name: platform
+    description: string, name of the platform (MITx Online, edX.org, xPRO, etc.)
+    tests:
+    - not_null
+  - name: courserun_is_current
+    description: boolean, indicates if the course run is currently active. True if
+      current date is between courserun_start_on and courserun_end_on (or courserun_end_on
+      is null).
+    tests:
+    - not_null
+  - name: course_readable_id
+    description: string, course ID without the run tag, formatted as course-v1:{org}+{course
+      code}
+  - name: user_watched_video_count
+    description: int, number of distinct videos the user has watched (play_video events)
+      in this chapter
+    tests:
+    - not_null
+  - name: max_video_index
+    description: int, maximum video sequence index number within the chapter that
+      the user has watched
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "chapter_title", "courserun_readable_id", "platform"]
