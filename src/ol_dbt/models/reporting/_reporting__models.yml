@@ -824,3 +824,48 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courseactivity_date", "user_username", "courserun_readable_id"]
+
+- name: combined_video_engagements_counts_report
+  description: Combined video engagement report across all platforms with video counts
+    per chapter. Shows user video watching activity including total videos available
+    in each chapter and how many the user has watched.
+  columns:
+  - name: user_email
+    description: string, user email address. May be null for some xPRO Emeritus learners.
+  - name: chapter_title
+    description: string, title of the chapter/section within the course. May be null
+      for Residential MITx data.
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: total_video_count
+    description: int, total number of distinct videos in this chapter for this course
+      run
+    tests:
+    - not_null
+  - name: platform
+    description: string, name of the platform (MITx Online, edX.org, xPRO, etc.)
+    tests:
+    - not_null
+  - name: courserun_is_current
+    description: boolean, indicates if the course run is currently active. True if
+      current date is between courserun_start_on and courserun_end_on (or courserun_end_on
+      is null).
+    tests:
+    - not_null
+  - name: course_readable_id
+    description: string, course ID without the run tag, formatted as course-v1:{org}+{course
+      code}
+  - name: user_watched_video_count
+    description: int, number of distinct videos the user has watched (play_video events)
+      in this chapter
+    tests:
+    - not_null
+  - name: max_video_index
+    description: int, maximum video sequence index number within the chapter that
+      the user has watched
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["user_email", "chapter_title", "courserun_readable_id", "platform"]

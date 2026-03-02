@@ -2,7 +2,7 @@
 version: 2
 
 sources:
-- name: ol_warehouse_reporting_source
+- name: reporting
   loader: airbyte
   database: '{{ target.database }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_reporting'
