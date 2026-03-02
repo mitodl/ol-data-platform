@@ -40,6 +40,7 @@ with chatbot as (
     select
         tutorbotoutput_id
         , chatsession_agent
+        , courserun_readable_id
         , edx_module_id
         , chatsession_thread_id
         , human_message
@@ -63,6 +64,7 @@ with chatbot as (
 
 select
     chatsession_agent as ai_agent
+    , courserun_readable_id
     , chatsession_object_id as resource_id
     , chatsession_thread_id as thread_id
     , human_message
@@ -75,6 +77,7 @@ union all
 
 select
     tutorbot_deduplicated.chatsession_agent as ai_agent
+    , tutorbot_deduplicated.courserun_readable_id
     , tutorbot_deduplicated.edx_module_id as resource_id
     , tutorbot_deduplicated.chatsession_thread_id as thread_id
     , tutorbot_deduplicated.human_message

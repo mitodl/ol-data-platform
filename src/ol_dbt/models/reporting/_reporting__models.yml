@@ -359,6 +359,9 @@ models:
       values - TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot
     tests:
     - not_null
+  - name: courserun_readable_id
+    description: str, the course readable ID for the chat session. Populated for TutorBot,
+      SyllabusBot, CanvasSyllabusBot and VideoGPTBot, but may be blank for ResourceRecommendationBot
   - name: thread_id
     description: str, unique identifier for the chat thread.
     tests:
