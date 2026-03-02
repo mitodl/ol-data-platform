@@ -16,7 +16,8 @@ with enrollment_detail as (
 
 , courses_detail as (
     select
-        courses_in_program.program_name
+        courses_in_program.platform
+        , courses_in_program.program_id
         , course_enrollment_detail.user_hashed_id
         , count(
             distinct case
@@ -36,7 +37,8 @@ with enrollment_detail as (
     inner join course_enrollment_detail
         on courses_in_program.course_readable_id = course_enrollment_detail.course_readable_id
     group by
-        courses_in_program.program_name
+        courses_in_program.platform
+        , courses_in_program.program_id
         , course_enrollment_detail.user_hashed_id
 )
 
@@ -95,10 +97,11 @@ select
     ) as program_complete_days
 from enrollment_detail
 left join combined_users
-    on enrollment_detail.platform_name = 'edX.org'
+    on enrollment_detail.platform_name = '{{ var("edxorg") }}'
     and enrollment_detail.user_id = combined_users.user_edxorg_id
 left join combined_users as combined_users2
     on enrollment_detail.user_hashed_id = combined_users2.user_hashed_id
 left join courses_detail
-    on enrollment_detail.program_name = courses_detail.program_name
+    on enrollment_detail.platform_name = courses_detail.platform
+    and enrollment_detail.program_id is not distinct from courses_detail.program_id
     and enrollment_detail.user_hashed_id = courses_detail.user_hashed_id
