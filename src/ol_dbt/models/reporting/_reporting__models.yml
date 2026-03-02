@@ -789,6 +789,11 @@ models:
       code}+{run_tag}
     tests:
     - not_null
+  - name: block_fk
+    description: string, foreign key to dim_course_content for the vertical (unit)
+      block
+    tests:
+    - not_null
   - name: num_of_views
     description: int, number of times the user viewed this page unit
     tests:
@@ -809,10 +814,7 @@ models:
     description: string, title of the course run
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id", "unit_title"]
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id", "unit_title"]
+      column_list: ["user_email", "courserun_readable_id", "block_fk"]
 - name: combined_video_engagements_counts_report
   description: Combined video engagement report across all platforms with video counts
     per chapter. Shows user video watching activity including total videos available

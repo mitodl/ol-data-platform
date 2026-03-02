@@ -22,14 +22,12 @@ with page_engagement as (
 , subsection_blocks as (
     select * from {{ ref('dim_course_content') }}
     where is_latest = true
-    where is_latest = true
     and block_category = 'sequential'
 )
 
 , section_blocks as (
     select * from {{ ref('dim_course_content') }}
     where is_latest = true
-    and block_category = 'chapter'
     and block_category = 'chapter'
 )
 
@@ -38,6 +36,7 @@ select
     , dim_user.full_name
     , page_engagement.platform
     , page_engagement.courserun_readable_id
+    , page_engagement.block_fk
     , page_engagement.num_of_views
     , unit_blocks.block_title as unit_title
     , subsection_blocks.block_title as subsection_title
