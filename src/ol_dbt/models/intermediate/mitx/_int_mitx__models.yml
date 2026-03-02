@@ -209,6 +209,7 @@ models:
   - name: user_job_title
     description: str, job title on user's profile from MITx Online or MicroMasters
 
+
 - name: int__mitx__courserun_enrollments
   description: MITx courserun enrollments combined from MITx Online and edX.org
   columns:

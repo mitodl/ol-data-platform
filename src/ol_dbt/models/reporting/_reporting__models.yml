@@ -815,6 +815,125 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id", "block_fk"]
+
+- name: problem_engagement_detail_report
+  description: Problem engagement detail report showing user performance at the problem
+    level across course runs. Includes attempt counts, grade information, and course
+    content hierarchy.
+  columns:
+  - name: platform
+    description: string, name of the platform
+    tests:
+    - not_null
+  - name: user_email
+    description: string, email address of the user. Coalesced from mitxonline and
+      edxorg user records.
+  - name: full_name
+    description: string, full name of the user. Coalesced from mitxonline and edxorg
+      user records.
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: course_title
+    description: string, title of the course run
+  - name: section_title
+    description: string, title of the chapter (section) block within the course
+  - name: section_block_index
+    description: int, sequence number giving the order in which this section appears
+      within the course
+  - name: subsection_title
+    description: string, title of the sequential (subsection) block within the course
+  - name: subsection_block_index
+    description: int, sequence number giving the order in which this subsection appears
+      within the section
+  - name: problem_title
+    description: string, title of the problem block
+  - name: problem_block_index
+    description: int, sequence number giving the order in which this problem appears
+      within the subsection
+  - name: openedx_user_id
+    description: int, the user's numeric ID in the OpenedX platform
+    tests:
+    - not_null
+  - name: problem_block_fk
+    description: string, foreign key to the problem block in dim_course_content
+    tests:
+    - not_null
+  - name: num_of_attempts
+    description: int, total number of attempts the user made on this problem
+  - name: num_of_correct_attempts
+    description: int, total number of correct attempts the user made on this problem
+  - name: max_possible_grade
+    description: decimal, maximum possible grade for this problem
+  - name: learner_lowest_grade
+    description: decimal, lowest grade the learner achieved on this problem
+  - name: learner_highest_grade
+    description: decimal, highest grade the learner achieved on this problem
+  - name: correct_true_cnt
+    description: int, 1 if the user has at least one correct attempt, 0 otherwise
+  - name: attempted_true_cnt
+    description: int, 1 if the user has at least one attempt, 0 otherwise
+  - name: number_of_problems
+    description: int, total number of problems in the chapter
+
+- name: mitxonline_course_engagements_daily_report
+  description: MITx Online daily course engagement report with platform, course status,
+    and course identification fields. Shows user engagement metrics including course
+    events, problem submissions, video plays, and discussion participation aggregated
+    by date, user, and course run.
+  columns:
+  - name: courseactivity_date
+    description: date, the date when the course activity occurred
+    tests:
+    - not_null
+  - name: user_username
+    description: string, username on MITx Online platform
+  - name: user_full_name
+    description: string, full name of the user
+  - name: user_email
+    description: string, email address of the user
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: courserun_title
+    description: string, title of the course run
+  - name: course_number
+    description: string, course number identifier
+  - name: courserun_start_on
+    description: timestamp, date and time when the course run starts
+  - name: courserun_end_on
+    description: timestamp, date and time when the course run ends. May be null.
+  - name: num_events
+    description: int, total number of course activity events for the user on this
+      date
+  - name: num_problem_submitted
+    description: int, count of problem submissions by the user on this date
+  - name: num_video_played
+    description: int, count of video play events by the user on this date
+  - name: num_discussion_participated
+    description: int, count of discussion participation events (posts, comments, responses
+      created) by the user on this date
+  - name: platform
+    description: string, name of the platform, set to 'MITx Online'
+    tests:
+    - not_null
+  - name: courserun_is_current
+    description: boolean, indicates if the course run is currently active. True if
+      current date is between courserun_start_on and courserun_end_on (or courserun_end_on
+      is null).
+    tests:
+    - not_null
+  - name: course_readable_id
+    description: string, Open edX course ID formatted as course-v1:{org}+{course code}
+      for MITx Online courses
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["courseactivity_date", "user_username", "courserun_readable_id"]
+
 - name: combined_video_engagements_counts_report
   description: Combined video engagement report across all platforms with video counts
     per chapter. Shows user video watching activity including total videos available
