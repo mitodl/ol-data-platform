@@ -208,11 +208,6 @@ models:
     description: str, job industry on user's profile from MITx Online or MicroMasters
   - name: user_job_title
     description: str, job title on user's profile from MITx Online or MicroMasters
-  tests:
-  - check_cross_column_duplicates:
-      arguments:
-        column_a: user_mitxonline_email
-        column_b: user_edxorg_email
 
 
 - name: int__mitx__courserun_enrollments

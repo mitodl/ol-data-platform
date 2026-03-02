@@ -143,45 +143,6 @@ with users as (
         on mitxonline_users_view.user_edxorg_username = edxorg_users_view.user_edxorg_username
 )
 
-, deduped_mitxonline_edxorg_users as (
-
-   select
-        coalesce(user_mitxonline_email, user_edxorg_email) as user_email
-        , max(user_mitxonline_email) as user_mitxonline_email
-        , max(user_edxorg_email) as user_edxorg_email
-        , max(user_mitxonline_id) as user_mitxonline_id
-        , max(user_edxorg_id) as user_edxorg_id
-        , max(user_global_id) as user_global_id
-        , max(user_mitxonline_username) as user_mitxonline_username
-        , max(user_edxorg_username) as user_edxorg_username
-        , max(user_joined_on_mitxonline) as user_joined_on_mitxonline
-        , max(user_joined_on_edxorg) as user_joined_on_edxorg
-        , max(user_last_login_on_mitxonline) as user_last_login_on_mitxonline
-        , max(user_last_login_on_edxorg) as user_last_login_on_edxorg
-        , max(user_is_active_on_mitxonline) as user_is_active_on_mitxonline
-        , max(user_is_active_on_edxorg) as user_is_active_on_edxorg
-        , max(user_address_postal_code) as user_address_postal_code
-        , max(user_street_address) as user_street_address
-        , max(user_address_city) as user_address_city
-        , max(is_mitxonline_user) as is_mitxonline_user
-        , max(is_edxorg_user) as is_edxorg_user
-        , max(user_full_name) as user_full_name
-        , max(user_first_name) as user_first_name
-        , max(user_last_name) as user_last_name
-        , max(user_address_country) as user_address_country
-        , max(user_address_state) as user_address_state
-        , max(user_highest_education) as user_highest_education
-        , max(user_gender) as user_gender
-        , max(user_birth_year) as user_birth_year
-        , max(user_company) as user_company
-        , max(user_job_title) as user_job_title
-        , max(user_industry) as user_industry
-        , max(user_micromasters_id) as user_micromasters_id
-        , max(user_micromasters_email) as user_micromasters_email
-    from mitxonline_edxorg_users
-    group by coalesce(user_mitxonline_email, user_edxorg_email)
-)
-
 select
     is_mitxonline_user
     , is_edxorg_user
@@ -220,7 +181,7 @@ select
         when is_edxorg_user = true
             then {{ generate_hash_id("cast(user_edxorg_id as varchar) || 'edX.org'") }}
     end as user_hashed_id
-from deduped_mitxonline_edxorg_users
+from mitxonline_edxorg_users
 
 union distinct
 --- append micromasters users who don't exist in mitxonline_edxorg_users
