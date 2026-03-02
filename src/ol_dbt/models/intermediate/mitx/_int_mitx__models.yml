@@ -210,8 +210,9 @@ models:
     description: str, job title on user's profile from MITx Online or MicroMasters
   tests:
   - check_cross_column_duplicates:
-      column_a: user_mitxonline_email
-      column_b: user_edxorg_email
+      arguments:
+        column_a: user_mitxonline_email
+        column_b: user_edxorg_email
 
 
 - name: int__mitx__courserun_enrollments
