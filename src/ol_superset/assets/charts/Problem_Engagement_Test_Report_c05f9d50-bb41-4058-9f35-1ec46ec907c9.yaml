@@ -76,7 +76,7 @@ query_context: '{"datasource": {"id": 87, "type": "table"}, "force": false, "que
   [], "order_by_cols": [], "row_limit": 1000, "server_page_length": 10, "order_desc":
   true, "table_timestamp_format": "smart_date", "allow_render_html": true, "column_config":
   {"%_Problems_Attempted": {"d3NumberFormat": ",.1%"}, "%_Problems_Correct": {"d3NumberFormat":
-  ",.1%"__JINJA2_CLOSE__, "show_cell_bars": true, "color_pn": true, "comparison_color_scheme":
+  ",.1%"}}, "show_cell_bars": true, "color_pn": true, "comparison_color_scheme":
   "Green", "conditional_formatting": [], "comparison_type": "values", "extra_form_data":
   {}, "dashboards": [], "force": false, "result_format": "json", "result_type": "full"},
   "result_format": "json", "result_type": "full"}'

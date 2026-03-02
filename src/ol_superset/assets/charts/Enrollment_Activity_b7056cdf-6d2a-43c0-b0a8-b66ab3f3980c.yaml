@@ -95,7 +95,7 @@ query_context: '{"datasource": {"id": 106, "type": "table"}, "force": false, "qu
   [{"operation": "pivot", "options": {"index": ["courserunenrollment_created_on_date"],
   "columns": [], "aggregates": {"verified_count": {"operator": "mean"}, "audit_count":
   {"operator": "mean"}, "enrollment_count": {"operator": "mean"}, "certs_earned_count":
-  {"operator": "mean"__JINJA2_CLOSE__, "drop_missing_columns": false__JINJA2_CLOSE__,
+  {"operator": "mean"}}, "drop_missing_columns": false}},
   {"operation": "flatten"}]}], "form_data": {"datasource": "106__table", "viz_type":
   "echarts_timeseries_line", "slice_id": 28, "x_axis": "courserunenrollment_created_on_date",
   "x_axis_sort_series": "name", "x_axis_sort_series_ascending": true, "metrics": [{"aggregate":
