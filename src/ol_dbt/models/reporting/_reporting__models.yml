@@ -356,9 +356,13 @@ models:
   columns:
   - name: ai_agent
     description: str, indicates the type of chatbot agent used in the session. Possible
-      values - TutorBot, ResourceRecommendationBot, VideoGPTBot, SyllabusBot
+      values - TutorBot, CanvasSyllabusBot, ResourceRecommendationBot, VideoGPTBot,
+      SyllabusBot
     tests:
     - not_null
+  - name: courserun_readable_id
+    description: str, the course readable ID for the chat session. May be blank for
+      ResourceRecommendationBot
   - name: thread_id
     description: str, unique identifier for the chat thread.
     tests:
