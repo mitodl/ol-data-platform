@@ -51,7 +51,7 @@ inner join subsection_blocks
     on page_engagement.sequential_block_fk = subsection_blocks.block_id
 inner join section_blocks
     on page_engagement.chapter_block_fk = section_blocks.block_id
-inner join dim_user
+left join dim_user
     on page_engagement.user_fk= dim_user.user_pk
 left join course_runs
     on page_engagement.courserun_readable_id = course_runs.courserun_readable_id
