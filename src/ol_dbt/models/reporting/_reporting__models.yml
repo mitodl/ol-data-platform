@@ -775,9 +775,7 @@ models:
     content hierarchy and user information.
   columns:
   - name: user_email
-    description: string, email address of the user
-    tests:
-    - not_null
+    description: string, email address of the user. May be null when user_fk is null.
   - name: full_name
     description: string, full name of the user
   - name: platform
