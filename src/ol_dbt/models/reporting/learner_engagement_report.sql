@@ -168,13 +168,13 @@ with video_pre_query as (
       on
             video_block.parent_block_id = unit.block_id
             and unit.is_latest = true
-            and unit.block_category= 'vertical'
+            and unit.block_category = 'vertical'
     group by
         a.platform
         , a.courserun_readable_id
         , cc_section.block_title
         , cc_subsection.block_title
-        , unit.block_title as unit_title
+        , unit.block_title
         , h2.course_title
         , coalesce(b.email, ob.email)
         , coalesce(b.full_name, ob.full_name)
