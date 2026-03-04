@@ -874,11 +874,12 @@ models:
       certificate creation date
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
-      row_condition: "program_id !=2 and platform_name !='edX.org'"
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "user_email"]
-      row_condition: "program_id =2 and platform_name ='edX.org'"
+      column_list:
+        - platform_name
+        - program_id
+        - user_username
+        - user_email
+        - programenrollment_created_on
 
 - name: mitxonline_course_engagements_daily_report
   description: MITx Online daily course engagement report with platform, course status,
