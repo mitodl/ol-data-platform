@@ -797,19 +797,24 @@ models:
     tests:
     - not_null
   - name: unit_title
-    description: string, title of the vertical (unit) block within the course
+    description: string, title of the vertical (unit) block within the course. May
+      be null if block_fk does not match dim_course_content.
   - name: subsection_title
-    description: string, title of the sequential (subsection) block within the course
+    description: string, title of the sequential (subsection) block within the course.
+      May be null if sequential_block_fk does not match or is null.
   - name: subsection_block_index
     description: int, sequence number giving the order in which this subsection appears
-      within the section
+      within the section. May be null if sequential_block_fk does not match or is
+      null.
   - name: section_title
-    description: string, title of the chapter (section) block within the course
+    description: string, title of the chapter (section) block within the course. May
+      be null if chapter_block_fk does not match or is null.
   - name: section_block_index
     description: int, sequence number giving the order in which this section appears
-      within the course
+      within the course. May be null if chapter_block_fk does not match or is null.
   - name: course_title
-    description: string, title of the course run
+    description: string, title of the course run. May be null if courserun_readable_id
+      does not match.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "courserun_readable_id", "block_fk"]

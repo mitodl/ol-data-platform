@@ -45,11 +45,11 @@ select
     , section_blocks.block_index as section_block_index
     , course_runs.course_title
 from page_engagement
-inner join unit_blocks
+left join unit_blocks
     on page_engagement.block_fk = unit_blocks.block_id
-inner join subsection_blocks
+left join subsection_blocks
     on page_engagement.sequential_block_fk = subsection_blocks.block_id
-inner join section_blocks
+left join section_blocks
     on page_engagement.chapter_block_fk = section_blocks.block_id
 left join dim_user
     on page_engagement.user_fk= dim_user.user_pk
