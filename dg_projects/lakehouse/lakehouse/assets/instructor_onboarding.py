@@ -61,6 +61,7 @@ def generate_instructor_onboarding_user_list(
     user_data = (
         int__combined__user_course_roles.select(["user_email", "platform"])
         .filter(pl.col("user_email").is_not_null())
+        .filter(pl.col("user_email").str.ends_with("@mit.edu"))
         .filter(pl.col("platform").is_in(["xPro", "MITx Online"]))
         .select(["user_email"])
         .unique()

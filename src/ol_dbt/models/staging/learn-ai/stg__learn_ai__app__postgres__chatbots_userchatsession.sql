@@ -11,7 +11,10 @@ with source as (
         , user_id
         , thread_id as chatsession_thread_id
         , object_id as chatsession_object_id
-        , if(object_id like '%+canvas%', split_part(object_id, '+canvas', 1), null) as canvas_course_id
+        , case
+             when object_id like '%+canvas%' then split_part(object_id, '+canvas', 1)
+             when agent = 'CanvasSyllabusBot' then object_id
+        end as canvas_course_id
         , dj_session_key as chatsession_django_session_key
         , {{ cast_timestamp_to_iso8601('created_on') }} as chatsession_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as chatsession_updated_on

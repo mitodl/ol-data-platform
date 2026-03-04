@@ -63,7 +63,7 @@ models:
     - not_null
   - name: chatsession_agent
     description: str, indicates the type of chatbot agent used in the session. Possible
-      values - ResourceRecommendationBot, VideoGPTBot, SyllabusBot
+      values - ResourceRecommendationBot, VideoGPTBot, SyllabusBot, CanvasSyllabusBot
   - name: chatsession_title
     description: str, the initial question of the chat session.
   - name: chatsession_object_id

@@ -63,8 +63,8 @@ query_context: '{"datasource": {"id": 115, "type": "table"}, "force": false, "qu
   [], "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params": {},
   "custom_form_data": {}, "time_offsets": [], "post_processing": [{"operation": "pivot",
   "options": {"index": ["courseruncertificate_created_on"], "columns": [], "aggregates":
-  {"Certificate_count": {"operator": "mean"__JINJA2_CLOSE__, "drop_missing_columns":
-  false__JINJA2_CLOSE__, {"operation": "flatten"}]}], "form_data": {"datasource":
+  {"Certificate_count": {"operator": "mean"}}, "drop_missing_columns":
+  false}}, {"operation": "flatten"}]}], "form_data": {"datasource":
   "115__table", "viz_type": "echarts_timeseries_line", "slice_id": 12, "x_axis": {"expressionType":
   "SQL", "label": "courseruncertificate_created_on", "sqlExpression": "cast(substring(courseruncertificate_created_on,
   1, 10) as date)"}, "time_grain_sqla": "P1D", "metrics": [{"aggregate": null, "column":

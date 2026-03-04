@@ -89,8 +89,8 @@ query_context: '{"datasource": {"id": 128, "type": "table"}, "force": false, "qu
   [], "row_limit": 10000, "series_columns": [], "series_limit": 0, "order_desc": true,
   "url_params": {}, "custom_params": {}, "custom_form_data": {}, "time_offsets": [],
   "post_processing": [{"operation": "pivot", "options": {"index": ["courserun_readable_id"],
-  "columns": [], "aggregates": {"count(*)": {"operator": "mean"__JINJA2_CLOSE__, "drop_missing_columns":
-  false__JINJA2_CLOSE__, {"operation": "flatten"}]}], "form_data": {"datasource":
+  "columns": [], "aggregates": {"count(*)": {"operator": "mean"}}, "drop_missing_columns":
+  false}}, {"operation": "flatten"}]}], "form_data": {"datasource":
   "128__table", "viz_type": "echarts_timeseries_bar", "x_axis": "courserun_readable_id",
   "time_grain_sqla": "P1D", "x_axis_sort_asc": true, "x_axis_sort_series": "name",
   "x_axis_sort_series_ascending": true, "metrics": [{"expressionType": "SQL", "sqlExpression":

@@ -170,7 +170,7 @@ query_context: '{"datasource": {"id": 123, "type": "table"}, "force": false, "qu
   [], "post_processing": [{"operation": "pivot", "options": {"index": ["courseactivity_date"],
   "columns": [], "aggregates": {"Watched_a_video": {"operator": "mean"}, "Tried_a_problem":
   {"operator": "mean"}, "Participated_in_discussion": {"operator": "mean"}, "Learner_Engaged_count":
-  {"operator": "mean"__JINJA2_CLOSE__, "drop_missing_columns": false__JINJA2_CLOSE__,
+  {"operator": "mean"}}, "drop_missing_columns": false}},
   {"operation": "flatten"}]}], "form_data": {"datasource": "123__table", "viz_type":
   "echarts_timeseries_line", "slice_id": 59, "x_axis": "courseactivity_date", "time_grain_sqla":
   "P1W", "x_axis_sort_asc": true, "x_axis_sort_series": "name", "x_axis_sort_series_ascending":
