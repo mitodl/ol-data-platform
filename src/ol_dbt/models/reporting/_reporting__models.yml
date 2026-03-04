@@ -882,6 +882,14 @@ models:
     description: int, number of days from the first course run start date to the program
       certificate creation date
   tests:
+  # NOTE: These conditional uniqueness tests match the upstream marts__combined_program_enrollment_detail
+  # model's grain definition. This reporting model is a passthrough/enrichment layer that inherits
+  # the upstream grain without introducing new aggregations or transformations that would alter it.
+  # The conditional logic accounts for platform-specific enrollment behavior:
+  # - edX.org (program_id=2) allows re-enrollment, so grain excludes programenrollment_created_on
+  # - Other platforms use programenrollment_created_on as part of the unique identifier
+  # TODO: Investigate whether the upstream mart's conditional grain is the correct design or if
+  # it should be simplified/fixed upstream (see issue #TBD)
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
       row_condition: "program_id !=2 and platform_name !='edX.org'"
