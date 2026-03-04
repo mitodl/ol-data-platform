@@ -821,7 +821,7 @@ models:
       does not match.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "block_fk"]
+      column_list: ["platform", "openedx_user_id", "courserun_readable_id", "block_fk"]
 
 - name: problem_engagement_detail_report
   description: Problem engagement detail report showing user performance at the problem
