@@ -50,11 +50,11 @@ with video_pre_query as (
         on
             a.chapter_block_fk = d.block_id
             and d.is_latest = true
-   inner join ol_warehouse_production_dimensional.dim_course_content as content_block
+   left join ol_warehouse_production_dimensional.dim_course_content as content_block
         on
             a.content_block_fk = content_block.content_block_pk
             and content_block.is_latest = true
-    inner join ol_warehouse_production_dimensional.dim_course_content as unit
+    left join ol_warehouse_production_dimensional.dim_course_content as unit
         on
             content_block.parent_block_id = unit.block_id
             and unit.is_latest = true

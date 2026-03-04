@@ -64,8 +64,8 @@ models:
     description: str, user email associated with their account on the corresponding
       platform
   - name: full_name
-    description: str, user first and last name associated with their account on the
-      corresponding platform
+    description: str, user first and last name associated with their account on the corresponding
+      platform
   - name: course_title
     description: str, title of the course.
   - name: courserun_readable_id
