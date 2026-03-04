@@ -18,7 +18,7 @@ with enrollment_detail as (
     select
         courses_in_program.platform
         , courses_in_program.program_id
-        , course_enrollment_detail.user_hashed_id
+        , course_enrollment_detail.user_email
         , count(
             distinct case
                 when course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
@@ -39,7 +39,7 @@ with enrollment_detail as (
     group by
         courses_in_program.platform
         , courses_in_program.program_id
-        , course_enrollment_detail.user_hashed_id
+        , course_enrollment_detail.user_email
 )
 
 select
@@ -104,4 +104,4 @@ left join combined_users as combined_users2
 left join courses_detail
     on enrollment_detail.platform_name = courses_detail.platform
     and enrollment_detail.program_id is not distinct from courses_detail.program_id
-    and enrollment_detail.user_hashed_id = courses_detail.user_hashed_id
+    and enrollment_detail.user_email = courses_detail.user_email
