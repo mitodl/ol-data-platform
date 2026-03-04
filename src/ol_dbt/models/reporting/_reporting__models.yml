@@ -12,6 +12,11 @@ models:
       of Policy
     tests:
     - not_null
+  - name: program_type
+    description: str, type of the program, e.g. MicroMasters, Series, Professional
+      Certificate, etc.
+    tests:
+    - not_null
   - name: total_enrollments
     description: int, count of course enrollments in the program, aggregated by user_email
       and courserun_readable_id

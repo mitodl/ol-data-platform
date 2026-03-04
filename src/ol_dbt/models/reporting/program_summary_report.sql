@@ -45,17 +45,23 @@ with program_enrollments as (
     group by program_courses.program_name
 )
 
-, aggregated_program_certificates as (
+, aggregated_program_enrollements as (
     select
         program_name
-        , count(distinct user_email) as program_certificates
+        , program_type
+        , count(
+              distinct case
+                  when user_has_completed_program = true
+                     then user_email
+              end
+        ) as program_certificates
     from program_enrollments
-    where user_has_completed_program = true
-    group by program_name
+    group by program_name, program_type
 )
 
 select
     aggregated_course_enrollments.program_name
+    , aggregated_program_enrollements.program_type
     , aggregated_course_enrollments.total_enrollments
     , aggregated_course_enrollments.unique_users
     , aggregated_course_enrollments.unique_countries
@@ -63,7 +69,7 @@ select
     , aggregated_course_enrollments.unique_verified_users
     , aggregated_course_enrollments.course_certificates
     , aggregated_course_enrollments.unique_course_certificate_earners
-    , aggregated_program_certificates.program_certificates
+    , aggregated_program_enrollements.program_certificates
 from aggregated_course_enrollments
-left join aggregated_program_certificates
-    on aggregated_course_enrollments.program_name = aggregated_program_certificates.program_name
+inner join aggregated_program_enrollements
+    on aggregated_course_enrollments.program_name = aggregated_program_enrollements.program_name
