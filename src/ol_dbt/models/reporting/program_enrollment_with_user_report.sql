@@ -27,7 +27,9 @@ with enrollment_detail as (
         ) as courses_taken_in_program
         , sum(
             case
-                when upper(courses_in_program.course_title) like '%CAPSTONE%' then 1
+                when upper(courses_in_program.course_title) like '%CAPSTONE%'
+                and course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
+                then 1
                 else 0
             end
         ) as capstone_sum
@@ -36,6 +38,7 @@ with enrollment_detail as (
     from courses_in_program
     inner join course_enrollment_detail
         on courses_in_program.course_readable_id = course_enrollment_detail.course_readable_id
+        and courses_in_program.platform = course_enrollment_detail.platform
     group by
         courses_in_program.platform
         , courses_in_program.program_id
