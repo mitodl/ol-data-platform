@@ -150,6 +150,7 @@ with video_pre_query as (
         on
             c.content_block_fk = v.content_block_pk
             and a.courserun_readable_id = v.courserun_readable_id
+            and v.is_latest = true
     left join ol_warehouse_production_dimensional.dim_course_content as cc_subsection
         on
             v.parent_block_id = cc_subsection.block_id
@@ -160,13 +161,9 @@ with video_pre_query as (
             cc_subsection.parent_block_id = cc_section.block_id
             and a.courserun_readable_id = cc_section.courserun_readable_id
             and cc_section.is_latest = true
-    inner join ol_warehouse_production_dimensional.dim_course_content as video_block
-        on
-            a.video_block_fk = video_block.block_id
-            and video_block.is_latest = true
-    inner join ol_warehouse_production_dimensional.dim_course_content as unit
+    left join ol_warehouse_production_dimensional.dim_course_content as unit
       on
-            video_block.parent_block_id = unit.block_id
+            v.parent_block_id = unit.block_id
             and unit.is_latest = true
             and unit.block_category = 'vertical'
     group by
@@ -246,11 +243,11 @@ with video_pre_query as (
             and a.openedx_user_id = ou.edxorg_openedx_user_id
     left join ol_warehouse_production_intermediate.int__combined__course_runs as h2
         on a.courserun_readable_id = h2.courserun_readable_id
-    inner join ol_warehouse_production_dimensional.dim_course_content as d
+    left join ol_warehouse_production_dimensional.dim_course_content as d
         on
             a.sequential_block_fk = d.block_id
             and d.is_latest = true
-    inner join ol_warehouse_production_dimensional.dim_course_content as sec
+    left join ol_warehouse_production_dimensional.dim_course_content as sec
         on
             a.chapter_block_fk = sec.block_id
             and sec.is_latest = true
@@ -258,12 +255,12 @@ with video_pre_query as (
         on
             a.problem_block_fk = problem_block.block_id
             and problem_block.is_latest = true
-    inner join ol_warehouse_production_dimensional.dim_course_content as unit
+    left join ol_warehouse_production_dimensional.dim_course_content as unit
       on
             problem_block.parent_block_id = unit.block_id
             and unit.is_latest = true
             and unit.block_category= 'vertical'
-    inner join problems_events as g
+    left join problems_events as g
         on
             a.problem_block_fk = g.problem_block_fk
             and a.courserun_readable_id = g.courserun_readable_id
