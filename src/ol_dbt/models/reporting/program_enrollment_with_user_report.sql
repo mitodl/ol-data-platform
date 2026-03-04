@@ -33,8 +33,12 @@ with enrollment_detail as (
                 else 0
             end
         ) as capstone_sum
-        , min(cast(substring(course_enrollment_detail.courserun_start_on, 1, 10) as date))
-            as first_courserun_start_on_date
+        , min(
+            case
+                when course_enrollment_detail.courserunenrollment_enrollment_mode = 'verified'
+                then cast(substring(course_enrollment_detail.courserun_start_on, 1, 10) as date)
+            end
+        ) as first_courserun_start_on_date
     from courses_in_program
     inner join course_enrollment_detail
         on courses_in_program.course_readable_id = course_enrollment_detail.course_readable_id
