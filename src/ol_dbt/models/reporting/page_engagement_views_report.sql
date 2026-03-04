@@ -38,6 +38,7 @@ select
     , page_engagement.platform
     , page_engagement.courserun_readable_id
     , page_engagement.block_fk
+    , page_engagement.openedx_user_id
     , max(page_engagement.num_of_views) as num_of_views
     , max(unit_blocks.block_title) as unit_title
     , max(subsection_blocks.block_title) as subsection_title
@@ -62,3 +63,4 @@ group by
     , page_engagement.platform
     , page_engagement.courserun_readable_id
     , page_engagement.block_fk
+    , page_engagement.openedx_user_id
