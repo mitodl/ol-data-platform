@@ -11,6 +11,7 @@ with page_engagement as (
         course_title
         , courserun_readable_id
     from {{ ref('int__combined__course_runs') }}
+    group by course_title, courserun_readable_id
 )
 
 , unit_blocks as (
