@@ -64,8 +64,8 @@ models:
     description: str, user email associated with their account on the corresponding
       platform
   - name: full_name
-    description: str, user first and last name associated with their account on the
-      corresponding platform
+    description: str, user first and last name associated with their account on the corresponding
+      platform
   - name: course_title
     description: str, title of the course.
   - name: courserun_readable_id
@@ -87,8 +87,6 @@ models:
     description: int, count of problems attempted
   - name: number_of_problems
     description: int, total number of problems regardless of whether they were attempted
-  - name: percetage_problems_attempted
-    description: str, count of problems attempted/ total number of problems
   - name: num_of_problems_correct
     description: int, count of distinct problems the user got correct
   - name: avg_percent_grade
@@ -103,6 +101,14 @@ models:
     description: int, count of discussion posts created
   - name: posts_replied
     description: int, count of discussion posts replied to
+  - name: video_name
+    description: str, name of the video within the course
+  - name: page_viewed_title
+    description: str, title of the block viewed within the course
+  - name: problem_name
+    description: str, name of the problem within the course
+  - name: discussion_topic_name
+    description: str, name of the discussion topic within the course
 
 - name: enrollment_detail_report
   description: Enrollment detail report for MITxOnline, xPro and edX.org courses.

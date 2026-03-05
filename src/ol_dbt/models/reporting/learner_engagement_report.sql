@@ -31,11 +31,14 @@ with video_pre_query as (
         , c.block_title as subsection_title
         , unit.block_title as unit_title
         , h2.course_title
+        , discussion_topic_pk.topic_name
         , coalesce(u.email, ou.email) as email
         , coalesce(u.full_name, ou.full_name) as full_name
         , sum(a.post_created) as posts_created
         , sum(a.post_replied) as posts_replied
     from ol_warehouse_production_dimensional.afact_discussion_engagement as a
+    left join ol_warehouse_production_dimensional.dim_discussion_topic as topic
+        on a.discussion_topic_fk = topic.discussion_topic_pk
     left join ol_warehouse_production_dimensional.dim_user as u
         on a.platform = 'mitxonline' and a.openedx_user_id = u.mitxonline_openedx_user_id
     left join ol_warehouse_production_dimensional.dim_user as ou
@@ -66,6 +69,7 @@ with video_pre_query as (
         , c.block_title
         , unit.block_title
         , h2.course_title
+        , discussion_topic_pk.topic_name
         , coalesce(u.email, ou.email)
         , coalesce(u.full_name, ou.full_name)
 )
@@ -76,7 +80,7 @@ with video_pre_query as (
         , a.courserun_readable_id
         , d.block_title as section_title
         , c.block_title as subsection_title
-        , b.block_title as unit_title
+        , b.block_title as viewed_title
         , h2.course_title
         , coalesce(u.email, ou.email) as email
         , coalesce(u.full_name, ou.full_name) as full_name
@@ -122,6 +126,7 @@ with video_pre_query as (
         , cc_section.block_title as section_title
         , cc_subsection.block_title as subsection_title
         , unit.block_title as unit_title
+        , c.video_name
         , h2.course_title
         , coalesce(b.email, ob.email) as email
         , coalesce(b.full_name, ob.full_name) as full_name
@@ -172,6 +177,7 @@ with video_pre_query as (
         , cc_section.block_title
         , cc_subsection.block_title
         , unit.block_title
+        , c.video_name
         , h2.course_title
         , coalesce(b.email, ob.email)
         , coalesce(b.full_name, ob.full_name)
@@ -214,6 +220,7 @@ with video_pre_query as (
         , sec.block_title as section_title
         , d.block_title as subsection_title
         , unit.block_title as unit_title
+        , problem.problem_name
         , h2.course_title
         , coalesce(u.email, ou.email) as email
         , coalesce(u.full_name, ou.full_name) as full_name
@@ -231,6 +238,8 @@ with video_pre_query as (
         / cast(max(c.problem_numb) as decimal(30, 10)
         ) as percetage_problems_attempted
     from ol_warehouse_production_dimensional.afact_problem_engagement as a
+    inner join ol_warehouse_production_dimensional.dim_problem as problem
+        on a.problem_block_fk = problem.problem_block_pk
     inner join pre_problems_table as c
         on a.sequential_block_fk = c.sequential_block_id
     left join ol_warehouse_production_dimensional.dim_user as u
@@ -271,6 +280,7 @@ with video_pre_query as (
         , sec.block_title
         , d.block_title
         , unit.block_title
+        , problem.problem_name
         , h2.course_title
         , coalesce(u.email, ou.email)
         , coalesce(u.full_name, ou.full_name)
@@ -281,6 +291,9 @@ with video_pre_query as (
         page_views_table.num_of_page_views
         , video_views_table.estimated_time_played
         , video_views_table.video_duration
+        , video_views_table.unit_title
+        , page_views_table.viewed_title as page_viewed_title
+        , video_views_table.video_name
         , coalesce(video_views_table.platform, page_views_table.platform) as platform
         , coalesce(video_views_table.email, page_views_table.email) as email
         , coalesce(video_views_table.full_name, page_views_table.full_name) as full_name
@@ -289,7 +302,6 @@ with video_pre_query as (
             as courserun_readable_id
         , coalesce(video_views_table.section_title, page_views_table.section_title) as section_title
         , coalesce(video_views_table.subsection_title, page_views_table.subsection_title) as subsection_title
-        , coalesce(video_views_table.unit_title, page_views_table.unit_title) as unit_title
     from page_views_table
     full outer join video_views_table
         on
@@ -297,7 +309,8 @@ with video_pre_query as (
             and page_views_table.courserun_readable_id = video_views_table.courserun_readable_id
             and page_views_table.section_title = video_views_table.section_title
             and page_views_table.subsection_title = video_views_table.subsection_title
-            and page_views_table.unit_title = video_views_table.unit_title
+            and page_views_table.viewed_title = video_views_table.unit_title
+            and age_views_table.viewed_title = video_views_table.video_name
 )
 
 , page_video_problems as (
@@ -313,6 +326,9 @@ with video_pre_query as (
         , problems_table.max_possible_grade
         , problems_table.max_learner_grade
         , problems_table.min_learner_grade
+        , page_and_video.video_name
+        , page_and_video.page_viewed_title
+        , problems_table.problem_name
         , coalesce(page_and_video.platform, problems_table.platform) as platform
         , coalesce(page_and_video.email, problems_table.email) as email
         , coalesce(page_and_video.full_name, problems_table.full_name) as full_name
@@ -329,6 +345,7 @@ with video_pre_query as (
             and page_and_video.section_title = problems_table.section_title
             and page_and_video.subsection_title = problems_table.subsection_title
             and page_and_video.unit_title = problems_table.unit_title
+            and problems_table.problem_name = page_and_video.video_name
 )
 
 select
@@ -345,6 +362,10 @@ select
     , page_video_problems.min_learner_grade
     , discuss_table.posts_created
     , discuss_table.posts_replied
+    , page_video_problems.video_name
+    , page_video_problems.page_viewed_title
+    , page_video_problems.problem_name
+    , discuss_table.topic_name as discussion_topic_name
     , coalesce(page_video_problems.platform, discuss_table.platform) as platform
     , coalesce(page_video_problems.email, discuss_table.email) as user_email
     , coalesce(page_video_problems.full_name, discuss_table.full_name) as full_name
@@ -361,3 +382,4 @@ full outer join discuss_table
         and page_video_problems.section_title = discuss_table.section_title
         and page_video_problems.subsection_title = discuss_table.subsection_title
         and page_video_problems.unit_title = discuss_table.unit_title
+        and discuss_table.topic_name = page_video_problems.problem_name
