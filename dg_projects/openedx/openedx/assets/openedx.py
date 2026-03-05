@@ -324,7 +324,8 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
     course_xml_blocks_file = Path(
         NamedTemporaryFile(delete=False, suffix="_xml_blocks.jsonl").name
     )
-    jsonlines.open(course_xml_blocks_file, "w").write_all(xml_blocks)
+    with jsonlines.open(course_xml_blocks_file, "w") as writer:
+        writer.write_all(xml_blocks)
     course_xml_blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_xml_blocks').path)}/{source_system}/{context.partition_key}/{data_version}.json"  # noqa: E501
     yield Output(
         (course_xml_blocks_file, course_xml_blocks_object_key),
