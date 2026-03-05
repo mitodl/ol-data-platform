@@ -310,7 +310,7 @@ with video_pre_query as (
             and page_views_table.section_title = video_views_table.section_title
             and page_views_table.subsection_title = video_views_table.subsection_title
             and page_views_table.viewed_title = video_views_table.unit_title
-            and age_views_table.viewed_title = video_views_table.video_name
+            and page_views_table.viewed_title = video_views_table.video_name
 )
 
 , page_video_problems as (
