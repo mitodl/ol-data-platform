@@ -449,6 +449,62 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_id", "courserun_readable_id", "program_uuid"]
 
+- name: stg__edxorg__program_entitlement
+  description: staging model for edX.org program entitlement records
+  columns:
+  - name: program_title
+    data_type: varchar
+    description: title of the program that the learner purchased
+    tests:
+    - not_null
+  - name: program_type
+    data_type: varchar
+    description: type of the program. e.g., MicroMasters, XSeries
+    tests:
+    - not_null
+  - name: organization_key
+    data_type: varchar
+    description: the organization that offers the program. e.g., MITx
+    tests:
+    - not_null
+  - name: user_id
+    data_type: integer
+    description: user ID on edX.org
+  - name: user_username
+    data_type: varchar
+    description: username of the learner on edX.org
+  - name: user_email
+    data_type: varchar
+    description: email address of the learner who purchased the program bundle
+    tests:
+    - not_null
+  - name: purchase_date
+    data_type: date
+    description: the date that the learner purchased the program bundle
+    tests:
+    - not_null
+  - name: expiration_date
+    data_type: date
+    description: the date that the entitlement expires
+    tests:
+    - not_null
+  - name: number_of_entitlements
+    data_type: integer
+    description: number of courses that the learner has access to using the program
+      bundle entitlement
+    tests:
+    - not_null
+  - name: number_of_redeemed_entitlements
+    data_type: integer
+    description: number of courses in the program that the learner has redeemed access
+      to using the program bundle entitlement
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["user_email", "program_title"]
+
 - name: stg__edxorg__s3__tracking_logs__user_activity
   description: edX.org event data that are emitted by server, the browser, or the
     mobile device to capture information about user's interactions with a course.
