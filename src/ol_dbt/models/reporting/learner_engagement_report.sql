@@ -31,7 +31,7 @@ with video_pre_query as (
         , c.block_title as subsection_title
         , unit.block_title as unit_title
         , h2.course_title
-        , discussion_topic_pk.topic_name
+        , topic.topic_name
         , coalesce(u.email, ou.email) as email
         , coalesce(u.full_name, ou.full_name) as full_name
         , sum(a.post_created) as posts_created
@@ -69,7 +69,7 @@ with video_pre_query as (
         , c.block_title
         , unit.block_title
         , h2.course_title
-        , discussion_topic_pk.topic_name
+        , topic.topic_name
         , coalesce(u.email, ou.email)
         , coalesce(u.full_name, ou.full_name)
 )
