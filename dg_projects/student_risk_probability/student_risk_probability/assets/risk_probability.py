@@ -18,7 +18,7 @@ from student_risk_probability.lib.helper import (
 
 @asset(
     code_version="student_risk_probability_v1",
-    group_name="student_risk_probability",
+    group_name="reporting",
     deps=[AssetKey(["reporting", "cheating_detection_report"])],
     automation_condition=upstream_or_code_changes(),
     io_manager_key="io_manager",
