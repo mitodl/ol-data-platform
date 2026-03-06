@@ -90,7 +90,7 @@ params:
   show_legend: true
   legendType: scroll
   legendOrientation: top
-  x_axis_time_format: smart_date
+  x_axis_time_format: '%Y-%m'
   xAxisLabelInterval: auto
   y_axis_format: SMART_NUMBER
   y_axis_bounds:
