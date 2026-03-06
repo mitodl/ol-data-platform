@@ -470,6 +470,8 @@ models:
   - name: user_id
     data_type: integer
     description: user ID on edX.org
+    tests:
+    - not_null
   - name: user_username
     data_type: varchar
     description: username of the learner on edX.org

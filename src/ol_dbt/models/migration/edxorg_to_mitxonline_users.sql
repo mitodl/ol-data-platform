@@ -44,7 +44,7 @@ where
     and mitx_user1.user_mitxonline_username is null
     and mitx_user2.user_mitxonline_email is null
 
-union all
+union distinct
 
 select
     program_entitlements.user_email
