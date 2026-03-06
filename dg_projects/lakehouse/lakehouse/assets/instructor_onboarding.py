@@ -63,18 +63,16 @@ def generate_instructor_onboarding_user_list(
         .filter(pl.col("user_email").is_not_null())
         .filter(pl.col("user_email").str.ends_with("@mit.edu"))
         .filter(pl.col("platform").is_in(["xPro", "MITx Online"]))
-        .select(["user_email"])
+        .with_columns(email=pl.col("user_email").str.to_lowercase())
+        .select(["email"])
         .unique()
-        .sort("user_email")
+        .sort("email")
     )
 
     # Add role and sent_invite columns with fixed values
     user_data = user_data.with_columns(
         [pl.lit("ol-data-analyst").alias("role"), pl.lit(1).alias("sent_invite")]
     )
-
-    # Rename column to match expected format
-    user_data = user_data.rename({"user_email": "email"})
 
     # Reorder columns: email, role, sent_invite
     user_data = user_data.select(["email", "role", "sent_invite"])
