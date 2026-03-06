@@ -778,6 +778,60 @@ models:
       column_list: ["user_email", "platform", "courserun_readable_id", "course_title",
         "section_title", "section_block_index"]
 
+- name: page_engagement_views_report
+  description: Page engagement report showing user activity at the unit, subsection,
+    and section level across course runs. Joins page engagement facts with course
+    content hierarchy and user information.
+  columns:
+  - name: user_email
+    description: string, email address of the user. May be null when user_fk is null.
+  - name: full_name
+    description: string, full name of the user
+  - name: platform
+    description: string, name of the platform
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: block_fk
+    description: string, foreign key to dim_course_content for the vertical (unit)
+      block
+    tests:
+    - not_null
+  - name: openedx_user_id
+    description: int, the user's numeric ID in the OpenedX platform
+    tests:
+    - not_null
+  - name: num_of_views
+    description: int, number of times the user viewed this page unit
+    tests:
+    - not_null
+  - name: unit_title
+    description: string, title of the vertical (unit) block within the course. May
+      be null if block_fk does not match dim_course_content.
+  - name: subsection_title
+    description: string, title of the sequential (subsection) block within the course.
+      May be null if sequential_block_fk does not match or is null.
+  - name: subsection_block_index
+    description: int, sequence number giving the order in which this subsection appears
+      within the section. May be null if sequential_block_fk does not match or is
+      null.
+  - name: section_title
+    description: string, title of the chapter (section) block within the course. May
+      be null if chapter_block_fk does not match or is null.
+  - name: section_block_index
+    description: int, sequence number giving the order in which this section appears
+      within the course. May be null if chapter_block_fk does not match or is null.
+  - name: course_title
+    description: string, title of the course run. May be null if courserun_readable_id
+      does not match.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "openedx_user_id", "courserun_readable_id", "block_fk"]
+
 - name: program_enrollment_with_user_report
   description: Program enrollment report enriched with user demographic data and course
     completion details. Extends marts__combined_program_enrollment_detail with user
