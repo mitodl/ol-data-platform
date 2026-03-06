@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import tarfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -314,3 +315,157 @@ def parse_course_xml(metadata_file: str) -> dict[str, Any]:
         "self_paced": self_paced,
         "title": title,
     }
+
+
+def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
+    archive_path: Path,
+    source_system: str,
+) -> tuple[list[dict[str, Any]], Path]:
+    """
+    Extract comprehensive block information from course XML archives, and collect
+    all non-XML files into a tar archive for downstream processing.
+
+    Processes all XML files in the course archive to extract block-level data
+    including chapters, sequentials, verticals, and content components like
+    videos, problems, and HTML blocks. All non-XML files (e.g. SRT subtitles,
+    HTML content, PDFs) are bundled into a single tar archive.
+
+    :param archive_path: The path to the tar archive for the course bundle
+    :param source_system: The ETL source system (e.g. "prod", "edge")
+
+    :return: A tuple of (list of block dicts, Path to non-XML assets tar)
+    :rtype: tuple[list[dict[str, Any]], Path]
+    """
+    log = logging.getLogger(__name__)
+
+    blocks = []
+    retrieved_at = datetime.now(tz=UTC).isoformat()
+
+    # Known XML block types — only these are processed as course blocks
+    block_types = {
+        "chapter",
+        "sequential",
+        "vertical",
+        "video",
+        "problem",
+        "html",
+        "discussion",
+        "lti",
+        "lti_consumer",
+        "word_cloud",
+        "poll_question",
+    }
+
+    non_xml_assets_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_static_assets.tar.gz").name
+    )
+
+    with tarfile.open(archive_path, "r") as tf:
+        # Get course info from the course xml file in the root directory
+        archive_root = tf.next()
+        if archive_root is None:
+            msg = "Unable to retrieve the archive root of the course XML."
+            raise ValueError(msg)
+
+        try:
+            tar_info_course = tf.getmember(f"{archive_root.name}/course.xml")
+        except KeyError as err:
+            msg = f"course.xml not found in archive root '{archive_root.name}'."
+            raise ValueError(msg) from err
+        course_xml_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_course.xml").name
+        )
+        course_xml_file.write_bytes(tf.extractfile(tar_info_course).read())  # type: ignore[union-attr]
+        course_id, _course_number, _run_tag, _org = parse_course_id(
+            str(course_xml_file)
+        )
+        course_xml_file.unlink()
+
+        with tarfile.open(non_xml_assets_file, "w:gz") as assets_tf:
+            for member in tf.getmembers():
+                if member.isdir():
+                    continue
+
+                path_parts = member.path.split("/")
+                if len(path_parts) < 2:  # noqa: PLR2004
+                    continue
+
+                if not member.path.endswith(".xml"):
+                    # Collect all non-XML files into the assets archive
+                    file_data = tf.extractfile(member)
+                    if file_data:
+                        assets_tf.addfile(member, file_data)
+                    continue
+
+                # XML file — only process known block types (allowlist approach)
+                block_type = path_parts[1]
+
+                # Skip the root course.xml file
+                if block_type == "course.xml":
+                    continue
+
+                if block_type not in block_types and block_type != "course":
+                    log.debug(
+                        "Skipping unknown block type '%s' in %s",
+                        block_type,
+                        member.path,
+                    )
+                    continue
+
+                xml_data = tf.extractfile(member)
+                if not xml_data:
+                    continue
+
+                try:
+                    tree = ElementTree()
+                    tree.parse(xml_data)
+                    root = tree.getroot()
+
+                    if root is None:
+                        continue
+
+                    # Extract block_id from filename or url_name attribute
+                    block_id = root.attrib.get("url_name")
+                    if not block_id:
+                        # Use filename without extension as fallback
+                        block_id = Path(member.path).stem
+
+                    # Build complete block data
+                    block_data = {
+                        "course_id": course_id,
+                        "source_system": source_system,
+                        "block_id": block_id,
+                        "block_type": block_type,
+                        "block_display_name": root.attrib.get("display_name", ""),
+                        "xml_attributes": dict(root.attrib),
+                        "xml_path": member.path,
+                        "retrieved_at": retrieved_at,
+                    }
+
+                    # Add type-specific metadata
+                    if block_type == "video":
+                        edx_video_id = root.attrib.get("edx_video_id")
+                        if edx_video_id:
+                            block_data["edx_video_id"] = edx_video_id
+                        video_asset = root.find("video_asset")
+                        if video_asset is not None:
+                            duration = video_asset.attrib.get("duration", "0.0")
+                            block_data["duration"] = duration
+                    elif block_type == "problem":
+                        max_attempts = root.attrib.get("max_attempts")
+                        if max_attempts:
+                            block_data["max_attempts"] = max_attempts
+                        weight = root.attrib.get("weight")
+                        if weight:
+                            block_data["weight"] = weight
+                        markdown = root.attrib.get("markdown")
+                        if markdown:
+                            block_data["markdown"] = markdown
+
+                    blocks.append(block_data)
+
+                except Exception:  # noqa: BLE001
+                    log.warning("Skipping malformed XML file: %s", member.path)
+                    continue
+
+    return blocks, non_xml_assets_file

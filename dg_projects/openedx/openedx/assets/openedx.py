@@ -26,6 +26,7 @@ from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
+    process_course_xml_blocks,
     process_video_xml,
     un_nest_course_structure,
 )
@@ -252,6 +253,24 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
             io_manager_key="s3file_io_manager",
             key=AssetKey(("openedx", "processed_data", "course_video")),
         ),
+        "course_xml_blocks": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Comprehensive block-level data extracted from course XML archives, "
+                "including chapters, sequentials, verticals, and content components"
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_xml_blocks")),
+        ),
+        "course_static_assets": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Non-XML files extracted from the course archive (e.g. SRT subtitles, "
+                "HTML content, PDFs), bundled as a tar archive for downstream use."
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("openedx", "processed_data", "course_static_assets")),
+        ),
     },
 )
 def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath):
@@ -296,6 +315,40 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
             "object_key": course_video_object_key,
         },
     )
+
+    # Process comprehensive XML block data and collect non-XML assets
+    source_system = context.resources.openedx.deployment
+    xml_blocks, static_assets_path = process_course_xml_blocks(
+        course_xml_path, source_system
+    )
+    course_xml_blocks_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_xml_blocks.jsonl").name
+    )
+    with jsonlines.open(course_xml_blocks_file, "w") as writer:
+        writer.write_all(xml_blocks)
+    course_xml_blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_xml_blocks').path)}/{source_system}/{context.partition_key}/{data_version}.json"  # noqa: E501
+    yield Output(
+        (course_xml_blocks_file, course_xml_blocks_object_key),
+        output_name="course_xml_blocks",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": context.partition_key,
+            "object_key": course_xml_blocks_object_key,
+            "block_count": len(xml_blocks),
+        },
+    )
+
+    course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{source_system}/{context.partition_key}/{data_version}.tar.gz"  # noqa: E501
+    yield Output(
+        (static_assets_path, course_static_assets_object_key),
+        output_name="course_static_assets",
+        data_version=DataVersion(data_version),
+        metadata={
+            "course_id": context.partition_key,
+            "object_key": course_static_assets_object_key,
+        },
+    )
+
     course_xml_path.unlink()
 
 
