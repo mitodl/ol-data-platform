@@ -73,7 +73,7 @@ params:
     expressionType: SQL
     label: activity_date
     sqlExpression: date_format(activity_date, '%c-%Y')
-  x_axis_time_format: smart_date
+  x_axis_time_format: '%Y-%m'
   x_axis_title_margin: 15
   y_axis_bounds:
   - null
