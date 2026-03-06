@@ -548,6 +548,7 @@ sources:
       description: str, the start date of the course run in the format 'YYYY-MM-DD
         HH:mm:ss Z' in UTC
 
+
   - name: raw__edxorg__s3__tracking_logs
     description: edX.org event data that are emitted by server, the browser, or the
       mobile device to capture information about user's interactions with a course
@@ -1126,3 +1127,51 @@ sources:
     - name: discussion_settings
       description: object, discussion (forum) configurations. Member fields example
         - enable_graded_units, posting_restrictions, provider, etc.
+
+  - name: raw__edxorg__program_entitlement
+    description: this table includes all the program entitlements on edX.org, which
+      indicates the learners who have purchased a program bundle and their entitlement
+      details.
+    columns:
+    - name: email
+      data_type: varchar
+      description: email address of the learner who purchased the program bundle
+    - name: entitlements
+      data_type: varchar
+      description: number of courses in the program that the learner has access to
+        using the program bundle entitlement.
+    - name: expiration date
+      data_type: varchar
+      description: the date that the entitlement expires
+    - name: first name
+      data_type: varchar
+      description: first name of the learner who purchased the program bundle
+    - name: last name
+      data_type: varchar
+      description: last name of the learner who purchased the program bundle
+    - name: partner key
+      data_type: varchar
+      description: the organization that offers the program. e.g., MITx
+    - name: program title
+      data_type: varchar
+      description: title of the program that the learner purchased
+    - name: program type
+      data_type: varchar
+      description: type of the program. e.g., MicroMasters, XSeries
+    - name: purchase date
+      data_type: varchar
+      description: the date that the learner purchased the program bundle
+    - name: redeemed entitlements
+      data_type: varchar
+      description: number of courses in the program that the learner has redeemed
+        access to using the program bundle entitlement
+    - name: unredeemed entitlements
+      data_type: varchar
+      description: number of courses in the program that the learner has not redeemed
+        access to using the program bundle entitlement
+    - name: user id
+      data_type: varchar
+      description: user ID on edX.org
+    - name: username
+      data_type: varchar
+      description: username of the learner on edX.org
