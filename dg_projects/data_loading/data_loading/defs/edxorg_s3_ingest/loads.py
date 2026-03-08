@@ -40,19 +40,6 @@ DLT_PROJECT_DIR = Path(__file__).parent.parent.parent.parent
 if DLT_PROJECT_DIR.exists():
     os.environ.setdefault("DLT_PROJECT_DIR", str(DLT_PROJECT_DIR))
 
-# Per-table DuckDB dtype overrides to enforce consistent column type inference.
-# Some TSV files may have a column inferred as one type (e.g. TIMESTAMP WITH TIME ZONE)
-# while others infer it as a different type (e.g. VARCHAR), causing pyarrow schema
-# mismatches when concatenating tables from multiple files.
-TABLE_DTYPE_OVERRIDES: dict[str, dict[str, str]] = {
-    "grades_persistentsubsectiongrade": {
-        # first_attempted is sometimes inferred as TIMESTAMP WITH TIME ZONE and
-        # sometimes as VARCHAR depending on whether the source file contains
-        # parseable timestamp values or empty/null entries.
-        "first_attempted": "VARCHAR",
-    },
-}
-
 
 @dlt.source
 def edxorg_s3_source(
@@ -117,12 +104,15 @@ def edxorg_s3_source(
             # Only processes files modified since the last successful run
             files.apply_hints(incremental=incremental("modification_date"))
 
-            dtype_override = TABLE_DTYPE_OVERRIDES.get(table, {})
             return files | read_csv_duckdb(
                 use_pyarrow=True,
                 delimiter="\t",  # TSV files use tabs
                 ignore_errors=True,
-                **({"dtype": dtype_override} if dtype_override else {}),
+                # Force all columns to VARCHAR to prevent pyarrow schema mismatches
+                # when DuckDB infers different types for the same column across files
+                # (e.g. TIMESTAMP vs VARCHAR depending on whether values are present).
+                # Downstream dbt models handle type casting.
+                all_varchar=True,
             )
 
         yield load_table
