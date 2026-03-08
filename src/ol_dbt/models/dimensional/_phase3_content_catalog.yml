@@ -1,0 +1,132 @@
+---
+version: 2
+
+models:
+- name: dim_instructor
+  description: Instructor dimension containing faculty and course instructors from
+    all platforms
+  columns:
+  - name: instructor_pk
+    description: Primary key - surrogate key generated from instructor_name
+    tests:
+    - unique
+    - not_null
+  - name: instructor_name
+    description: Full name of the instructor
+    tests:
+    - not_null
+  - name: instructor_title
+    description: Academic or professional title (e.g., "Professor", "Lecturer")
+  - name: instructor_bio_short
+    description: Short biographical description
+  - name: instructor_bio_long
+    description: Full biographical description in HTML format
+  - name: primary_platform
+    description: Platform where this instructor was first recorded
+
+- name: dim_topic
+  description: Topic taxonomy dimension with hierarchical structure
+  columns:
+  - name: topic_pk
+    description: Primary key - surrogate key generated from topic_name
+    tests:
+    - unique
+    - not_null
+  - name: topic_name
+    description: Topic or subject area name
+    tests:
+    - not_null
+  - name: source_topic_id
+    description: Original topic ID from source system
+  - name: source_parent_topic_id
+    description: Parent topic ID from source system (for hierarchy)
+  - name: parent_topic_fk
+    description: Self-referencing FK to parent topic (for hierarchical navigation)
+  - name: primary_platform
+    description: Platform where this topic was first recorded
+
+- name: dim_department
+  description: MIT department dimension
+  columns:
+  - name: department_pk
+    description: Primary key - surrogate key generated from department_name
+    tests:
+    - unique
+    - not_null
+  - name: department_name
+    description: Full department name
+    tests:
+    - not_null
+  - name: department_number
+    description: MIT department number (e.g., "6" for EECS, "18" for Math)
+  - name: primary_platform
+    description: Platform where this department was first recorded
+
+- name: bridge_course_instructor
+  description: Many-to-many relationship between courses and instructors
+  columns:
+  - name: course_fk
+    description: Foreign key to dim_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: instructor_fk
+    description: Foreign key to dim_instructor
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_instructor')
+        field: instructor_pk
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - course_fk
+      - instructor_fk
+
+- name: bridge_course_topic
+  description: Many-to-many relationship between courses and topics
+  columns:
+  - name: course_fk
+    description: Foreign key to dim_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: topic_fk
+    description: Foreign key to dim_topic
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_topic')
+        field: topic_pk
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - course_fk
+      - topic_fk
+
+- name: bridge_course_department
+  description: Many-to-many relationship between courses and departments
+  columns:
+  - name: course_fk
+    description: Foreign key to dim_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: department_fk
+    description: Foreign key to dim_department
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_department')
+        field: department_pk
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - course_fk
+      - department_fk

@@ -19,7 +19,7 @@ with mitxonline_problem_events as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -41,7 +41,7 @@ with mitxonline_problem_events as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -63,7 +63,7 @@ with mitxonline_problem_events as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -85,7 +85,7 @@ with mitxonline_problem_events as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
