@@ -18,6 +18,7 @@ params:
     subject: section_title
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   column_config:
     Estimated_Time_Played(seconds):
@@ -31,7 +32,7 @@ params:
   conditional_formatting: []
   dashboards:
   - 45
-  datasource: 90__table
+  datasource: 92__table
   extra_form_data: {}
   groupby:
   - section_title
@@ -73,8 +74,7 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 90, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 92, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "section_title", "op": "IS NOT NULL"}], "extras": {"having":
   "", "where": ""}, "applied_time_extras": {}, "columns": ["section_title", "subsection_title"],
   "metrics": [{"expressionType": "SQL", "sqlExpression": "SUM(case when estimated_time_played
@@ -96,7 +96,7 @@ query_context: '{"datasource": {"id": 90, "type": "table"}, "force": false, "que
   false, "hasCustomLabel": true, "label": "Percentage_Watched", "optionName": "metric_dumltzcco9n_29nb76o699x"},
   false]], "annotation_layers": [], "row_limit": 1000, "series_limit": 0, "order_desc":
   true, "url_params": {}, "custom_params": {}, "custom_form_data": {}, "post_processing":
-  [], "time_offsets": []}], "form_data": {"datasource": "90__table", "viz_type": "table",
+  [], "time_offsets": []}], "form_data": {"datasource": "92__table", "viz_type": "table",
   "slice_id": 98, "query_mode": "aggregate", "groupby": ["section_title", "subsection_title"],
   "temporal_columns_lookup": {}, "metrics": [{"expressionType": "SQL", "sqlExpression":
   "SUM(case when estimated_time_played > video_duration then cast(video_duration as

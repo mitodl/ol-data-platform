@@ -11,7 +11,7 @@ position:
     children: []
     id: CHART-GIoELOquos60t9gabSJgV
     meta:
-      chartId: 128
+      chartId: 120
       height: 64
       sliceName: Coupon/Discount Summary
       uuid: 2e066386-dc90-48e3-859b-2b665b3cb257
@@ -27,7 +27,7 @@ position:
     children: []
     id: CHART-hiM8gxP0MAGBAp83LUSII
     meta:
-      chartId: 224
+      chartId: 113
       height: 81
       sliceName: Coupon Dashboard (Last Updated)
       uuid: a468ef05-11af-4a02-b61c-f928f36f17fb
@@ -134,18 +134,18 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '224':
-      crossFilters:
-        chartsInScope:
-        - 120
-        scope: global
-      id: 224
-    '128':
+    '120':
       crossFilters:
         chartsInScope:
         - 113
         scope: global
-      id: 128
+      id: 120
+    '113':
+      crossFilters:
+        chartsInScope:
+        - 120
+        scope: global
+      id: 113
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
@@ -180,7 +180,7 @@ metadata:
     name: Platform
     scope:
       excluded:
-      - 224
+      - 113
       rootPath:
       - ROOT_ID
     tabsInScope:

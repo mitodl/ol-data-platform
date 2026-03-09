@@ -28,13 +28,14 @@ params:
   - user_company
   allow_rearrange_columns: true
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
   conditional_formatting: []
   dashboards:
   - 16
-  datasource: 106__table
+  datasource: 54__table
   extra_form_data: {}
   groupby:
   - user_username
@@ -50,8 +51,7 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 106, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 54, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["platform", "user_email", "user_username", "user_full_name", "user_highest_education",
   "user_gender", "course_readable_id", "courserun_readable_id", "course_title", "courserunenrollment_created_on_date",
@@ -60,8 +60,8 @@ query_context: '{"datasource": {"id": 106, "type": "table"}, "force": false, "qu
   "courserun_upgrade_deadline", "user_job_title", "user_industry", "user_company"],
   "orderby": [], "annotation_layers": [], "row_limit": 50000, "series_limit": 0, "order_desc":
   true, "url_params": {}, "custom_params": {}, "custom_form_data": {}, "post_processing":
-  [], "time_offsets": []}], "form_data": {"datasource": "106__table", "viz_type":
-  "table", "slice_id": 34, "query_mode": "raw", "groupby": ["user_username"], "temporal_columns_lookup":
+  [], "time_offsets": []}], "form_data": {"datasource": "54__table", "viz_type": "table",
+  "slice_id": 34, "query_mode": "raw", "groupby": ["user_username"], "temporal_columns_lookup":
   {}, "all_columns": ["platform", "user_email", "user_username", "user_full_name",
   "user_highest_education", "user_gender", "course_readable_id", "courserun_readable_id",
   "course_title", "courserunenrollment_created_on_date", "courserunenrollment_upgraded_on",

@@ -11,7 +11,7 @@ position:
     children: []
     id: CHART-BUBfsrCkoz2S6YtVe6lWt
     meta:
-      chartId: 142
+      chartId: 141
       height: 50
       sliceName: Chatbot Usage By Course Section and Subsection
       uuid: 9ad6f248-c9cd-42bd-9285-5dbe6d30d5c3
@@ -27,7 +27,7 @@ position:
     children: []
     id: CHART-BVHyUuvWGkh0cLNXcP7A1
     meta:
-      chartId: 162
+      chartId: 140
       height: 50
       sliceName: Chatbot Usage By Type
       uuid: 751da4ab-6e41-44de-a2b8-e54dc7b2c6b0
@@ -43,7 +43,7 @@ position:
     children: []
     id: CHART-explore-142-1
     meta:
-      chartId: 146
+      chartId: 142
       height: 50
       sliceName: Videos Rewatched
       uuid: 397698ec-916f-46e4-bd4c-cae296806b10
@@ -59,7 +59,7 @@ position:
     children: []
     id: CHART-explore-143-1
     meta:
-      chartId: 120
+      chartId: 143
       height: 50
       sliceName: Percentage of Video Played
       uuid: 9bb14cc1-d787-4f47-b6d3-86adb3d4ec47
@@ -75,7 +75,7 @@ position:
     children: []
     id: CHART-explore-144-1
     meta:
-      chartId: 170
+      chartId: 144
       height: 50
       sliceName: '# of Watches By Video'
       uuid: cb328531-f862-467c-b073-4a2cec5dfbe2
@@ -91,7 +91,7 @@ position:
     children: []
     id: CHART-explore-145-1
     meta:
-      chartId: 185
+      chartId: 145
       height: 50
       sliceName: Latest Activity Date
       uuid: f9e19a79-18f9-4a54-ad7a-85c5f0b5b801
@@ -254,47 +254,47 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '162':
+    '143':
       crossFilters:
         chartsInScope:
+        - 140
         - 141
+        - 142
+        - 144
+        - 145
+        scope: global
+      id: 143
+    '141':
+      crossFilters:
+        chartsInScope:
+        - 140
         - 142
         - 143
         - 144
         - 145
         scope: global
-      id: 162
+      id: 141
     '142':
       crossFilters:
         chartsInScope:
         - 140
-        - 142
+        - 141
         - 143
         - 144
         - 145
         scope: global
       id: 142
-    '146':
+    '140':
       crossFilters:
         chartsInScope:
-        - 140
         - 141
+        - 142
         - 143
         - 144
         - 145
         scope: global
-      id: 146
-    '120':
-      crossFilters:
-        chartsInScope:
-        - 140
-        - 141
-        - 142
-        - 144
-        - 145
-        scope: global
-      id: 120
-    '170':
+      id: 140
+    '144':
       crossFilters:
         chartsInScope:
         - 140
@@ -303,8 +303,8 @@ metadata:
         - 143
         - 145
         scope: global
-      id: 170
-    '185':
+      id: 144
+    '145':
       crossFilters:
         chartsInScope:
         - 140
@@ -313,7 +313,7 @@ metadata:
         - 143
         - 144
         scope: global
-      id: 185
+      id: 145
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true

@@ -32,7 +32,7 @@ params:
   comparison_type: values
   dashboards:
   - 59
-  datasource: 124__table
+  datasource: 154__table
   extra_form_data: {}
   forecastInterval: 0.8
   forecastPeriods: 10
@@ -91,7 +91,7 @@ params:
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: 30
   y_axis_title_position: Left
-query_context: '{"datasource": {"id": 124, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 154, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "activity_date", "op": "TEMPORAL_RANGE", "val": "No filter"},
   {"col": "rewatch_indicator", "op": "IN", "val": [true]}], "extras": {"time_grain_sqla":
   "P1D", "having": "", "where": ""}, "applied_time_extras": {}, "columns": [{"timeGrain":
@@ -115,7 +115,7 @@ query_context: '{"datasource": {"id": 124, "type": "table"}, "force": false, "qu
   {}, "time_offsets": [], "post_processing": [{"operation": "pivot", "options": {"index":
   ["activity_date"], "columns": [], "aggregates": {"SUM(video_watched_count)": {"operator":
   "mean"}}, "drop_missing_columns": false}}, {"operation": "flatten"}]}], "form_data":
-  {"datasource": "124__table", "viz_type": "echarts_timeseries_bar", "slice_id": 142,
+  {"datasource": "154__table", "viz_type": "echarts_timeseries_bar", "slice_id": 142,
   "x_axis": {"label": "activity_date", "sqlExpression": "date_format(activity_date,
   ''%c-%Y'')", "expressionType": "SQL"}, "time_grain_sqla": "P1D", "metrics": [{"aggregate":
   "SUM", "column": {"advanced_data_type": null, "certification_details": null, "certified_by":

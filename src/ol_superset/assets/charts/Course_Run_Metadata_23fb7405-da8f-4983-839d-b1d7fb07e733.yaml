@@ -7,12 +7,13 @@ params:
   adhoc_filters: []
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
   dashboards:
   - 26
-  datasource: 106__table
+  datasource: 54__table
   extra_form_data: {}
   groupby:
   - course_title
@@ -35,15 +36,14 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 106, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 54, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["course_title", "course_readable_id", "courserun_title", "courserun_readable_id",
   "platform", "courserun_start_on", "courserun_end_on", "courserun_upgrade_deadline",
   "courserun_is_current"], "metrics": [], "orderby": [], "annotation_layers": [],
   "row_limit": 1000, "series_limit": 0, "group_others_when_limit_reached": false,
   "order_desc": true, "url_params": {}, "custom_params": {}, "custom_form_data": {},
-  "post_processing": [], "time_offsets": []}], "form_data": {"datasource": "106__table",
+  "post_processing": [], "time_offsets": []}], "form_data": {"datasource": "54__table",
   "viz_type": "table", "slice_id": 55, "query_mode": "aggregate", "groupby": ["course_title",
   "course_readable_id", "courserun_title", "courserun_readable_id", "platform", "courserun_start_on",
   "courserun_end_on", "courserun_upgrade_deadline", "courserun_is_current"], "temporal_columns_lookup":

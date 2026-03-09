@@ -34,11 +34,12 @@ params:
   - chatsession_created_on
   - chatsession_updated_on
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
   dashboards: []
-  datasource: 96__table
+  datasource: 121__table
   extra_form_data: {}
   groupby: []
   order_by_cols: []
@@ -52,8 +53,7 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 96, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 121, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "courserun_readable_id", "op": "NOT IN", "val": ["course-v1:MITxT+7.28.1x+2T2025",
   "course-v1:MITxT+7.28.1x+1T2025"]}], "extras": {"having": "", "where": ""}, "applied_time_extras":
   {}, "columns": ["tutorbotoutput_id", "chatsession_thread_id", "tutorbot_chat_json",
@@ -62,7 +62,7 @@ query_context: '{"datasource": {"id": 96, "type": "table"}, "force": false, "que
   "chatsession_updated_on"], "orderby": [], "annotation_layers": [], "row_limit":
   50000, "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params":
   {}, "custom_form_data": {}, "post_processing": [], "time_offsets": []}], "form_data":
-  {"datasource": "96__table", "viz_type": "table", "slice_id": 116, "query_mode":
+  {"datasource": "121__table", "viz_type": "table", "slice_id": 116, "query_mode":
   "raw", "groupby": [], "temporal_columns_lookup": {}, "all_columns": ["tutorbotoutput_id",
   "chatsession_thread_id", "tutorbot_chat_json", "chatsession_agent", "chatsession_title",
   "courserun_readable_id", "edx_module_id", "user_id", "user_email", "user_full_name",

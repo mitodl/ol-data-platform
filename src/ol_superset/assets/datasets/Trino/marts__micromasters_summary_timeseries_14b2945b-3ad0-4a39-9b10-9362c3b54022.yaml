@@ -1,6 +1,6 @@
 table_name: marts__micromasters_summary_timeseries
 main_dttm_col: null
-description: Auto refreshed at 2026-02-05T13:52:16.804113+00:00
+description: Auto refreshed at 2026-03-07T19:50:55.312910+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

@@ -24,6 +24,7 @@ params:
   - program_is_live
   - program_title
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   column_config:
     user_id:
@@ -31,7 +32,7 @@ params:
   conditional_formatting: []
   dashboards:
   - 34
-  datasource: 89__table
+  datasource: 52__table
   extra_form_data: {}
   groupby: []
   order_by_cols: []
@@ -43,8 +44,7 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 89, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 52, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["platform_name", "program_type", "program_name", "program_track", "program_readable_id",
   "user_id", "user_full_name", "user_email", "programenrollment_enrollment_status",
@@ -53,7 +53,7 @@ query_context: '{"datasource": {"id": 89, "type": "table"}, "force": false, "que
   "program_is_live", "program_title"], "orderby": [], "annotation_layers": [], "row_limit":
   50000, "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params":
   {}, "custom_form_data": {}, "post_processing": [], "time_offsets": []}], "form_data":
-  {"datasource": "89__table", "viz_type": "table", "slice_id": 69, "query_mode": "raw",
+  {"datasource": "52__table", "viz_type": "table", "slice_id": 69, "query_mode": "raw",
   "groupby": [], "temporal_columns_lookup": {}, "all_columns": ["platform_name", "program_type",
   "program_name", "program_track", "program_readable_id", "user_id", "user_full_name",
   "user_email", "programenrollment_enrollment_status", "programenrollment_is_active",
@@ -61,7 +61,7 @@ query_context: '{"datasource": {"id": 89, "type": "table"}, "force": false, "que
   "programcertificate_url", "programcertificate_is_revoked", "program_is_live", "program_title"],
   "percent_metrics": [], "adhoc_filters": [], "order_by_cols": [], "row_limit": 50000,
   "table_timestamp_format": "smart_date", "allow_render_html": true, "column_config":
-  {"user_id": {"showCellBars": false}}, "show_cell_bars": true, "color_pn":
+  {"user_id": {"showCellBars": false__JINJA2_CLOSE__, "show_cell_bars": true, "color_pn":
   true, "conditional_formatting": [], "extra_form_data": {}, "dashboards": [34], "force":
   false, "result_format": "json", "result_type": "full", "include_time": false}, "result_format":
   "json", "result_type": "full"}'

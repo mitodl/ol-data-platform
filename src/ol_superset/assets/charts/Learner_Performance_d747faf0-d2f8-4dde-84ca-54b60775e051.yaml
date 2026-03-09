@@ -21,11 +21,12 @@ params:
     sqlExpression: null
     subject: courserunenrollment_enrollment_status
   all_columns: []
+  annotation_layers: []
   color_pn: true
   comparison_type: values
   dashboards:
   - 16
-  datasource: 106__table
+  datasource: 54__table
   extra_form_data: {}
   groupby:
   - course_title
@@ -84,8 +85,7 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 106, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 54, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "courserunenrollment_enrollment_status", "op": "IN", "val":
   [null, "deferred", "refunded", "transferred"]}], "extras": {"time_grain_sqla": "P1D",
   "having": "", "where": ""}, "applied_time_extras": {}, "columns": ["course_title",
@@ -107,7 +107,7 @@ query_context: '{"datasource": {"id": 106, "type": "table"}, "force": false, "qu
   "optionName": "metric_cb6ifhe3g1_pjq21962l3", "sqlExpression": "SUM(case when courserungrade_is_passing
   = true then 1 else 0 end)"}, false]], "annotation_layers": [], "row_limit": 1000,
   "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params": {}, "custom_form_data":
-  {}, "post_processing": []}], "form_data": {"datasource": "106__table", "viz_type":
+  {}, "post_processing": []}], "form_data": {"datasource": "54__table", "viz_type":
   "table", "slice_id": 48, "query_mode": "aggregate", "groupby": ["course_title",
   "courserun_readable_id"], "time_grain_sqla": "P1D", "temporal_columns_lookup": {},
   "metrics": [{"aggregate": null, "column": null, "datasourceWarning": false, "expressionType":

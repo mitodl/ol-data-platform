@@ -41,11 +41,12 @@ params:
   - video_thumbnail_file
   - video_transcript_file
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
   dashboards: []
-  datasource: 109__table
+  datasource: 60__table
   extra_form_data: {}
   groupby: []
   order_by_cols: []
@@ -59,8 +60,7 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 109, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 60, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["course_name", "course_live_url", "course_uuid", "content_type", "learning_resource_types",
   "metadata", "resource_draft", "resource_filename", "resource_title", "resource_type",
@@ -72,7 +72,7 @@ query_context: '{"datasource": {"id": 109, "type": "table"}, "force": false, "qu
   "video_youtube_tags", "video_archive_url", "video_captions_file", "video_thumbnail_file",
   "video_transcript_file"], "orderby": [], "annotation_layers": [], "row_limit": 200000,
   "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params": {}, "custom_form_data":
-  {}, "post_processing": [], "time_offsets": []}], "form_data": {"datasource": "109__table",
+  {}, "post_processing": [], "time_offsets": []}], "form_data": {"datasource": "60__table",
   "viz_type": "table", "query_mode": "raw", "groupby": [], "time_grain_sqla": "P1D",
   "temporal_columns_lookup": {}, "all_columns": ["course_name", "course_live_url",
   "course_uuid", "content_type", "learning_resource_types", "metadata", "resource_draft",

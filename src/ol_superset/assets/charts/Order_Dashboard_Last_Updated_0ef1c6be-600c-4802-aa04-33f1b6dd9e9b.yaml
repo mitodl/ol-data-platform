@@ -32,11 +32,12 @@ params:
     label: last_updated_on (in UTC)
     sqlExpression: changed_on
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   dashboards:
   - 21
-  datasource: 5__table
+  datasource: 113__table
   extra_form_data: {}
   groupby: []
   order_by_cols: []
@@ -50,16 +51,15 @@ params:
     changed_on: true
     created_on: true
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 5, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 113, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "created_on", "op": "TEMPORAL_RANGE", "val": "No filter"},
   {"col": "table_name", "op": "IN", "val": ["marts__combined__orders"]}], "extras":
   {"having": "", "where": ""}, "applied_time_extras": {}, "columns": [{"expressionType":
   "SQL", "label": "last_updated_on (in UTC)", "sqlExpression": "changed_on"}], "orderby":
   [], "annotation_layers": [], "row_limit": 1000, "series_limit": 0, "order_desc":
   true, "url_params": {}, "custom_params": {}, "custom_form_data": {}, "post_processing":
-  [], "time_offsets": []}], "form_data": {"datasource": "5__table", "viz_type": "table",
-  "slice_id": 114, "query_mode": "raw", "groupby": [], "temporal_columns_lookup":
+  [], "time_offsets": []}], "form_data": {"datasource": "113__table", "viz_type":
+  "table", "slice_id": 114, "query_mode": "raw", "groupby": [], "temporal_columns_lookup":
   {"created_on": true, "changed_on": true}, "all_columns": [{"expressionType": "SQL",
   "label": "last_updated_on (in UTC)", "sqlExpression": "changed_on"}], "percent_metrics":
   [], "adhoc_filters": [{"clause": "WHERE", "comparator": "No filter", "datasourceWarning":

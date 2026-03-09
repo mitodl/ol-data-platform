@@ -121,7 +121,7 @@ position:
     id: MARKDOWN-1o1uJTcBdCkHg338Pa4rK
     meta:
       code: '### Change Log
-        
+
         **2/2/26**: Enabled search functionality on Course Run Readable ID filter'
       height: 50
       width: 4
@@ -229,79 +229,68 @@ position:
 metadata:
   chart_configuration:
     '133':
+      crossFilters:
+        chartsInScope:
+        - 134
+        - 136
+        - 137
+        - 138
+        - 139
+        scope: global
       id: 133
-      crossFilters:
-        scope: global
-        chartsInScope:
-        - 134
-        - 136
-        - 137
-        - 138
-        - 139
     '134':
+      crossFilters:
+        chartsInScope:
+        - 133
+        - 136
+        - 137
+        - 138
+        - 139
+        scope: global
       id: 134
-      crossFilters:
-        scope: global
-        chartsInScope:
-        - 133
-        - 136
-        - 137
-        - 138
-        - 139
     '136':
+      crossFilters:
+        chartsInScope:
+        - 133
+        - 134
+        - 137
+        - 138
+        - 139
+        scope: global
       id: 136
-      crossFilters:
-        scope: global
-        chartsInScope:
-        - 133
-        - 134
-        - 137
-        - 138
-        - 139
     '137':
+      crossFilters:
+        chartsInScope:
+        - 133
+        - 134
+        - 136
+        - 138
+        - 139
+        scope: global
       id: 137
-      crossFilters:
-        scope: global
-        chartsInScope:
-        - 133
-        - 134
-        - 136
-        - 138
-        - 139
     '138':
-      id: 138
       crossFilters:
-        scope: global
         chartsInScope:
         - 133
         - 134
         - 136
         - 137
         - 139
-    '139':
-      id: 139
-      crossFilters:
         scope: global
+      id: 138
+    '139':
+      crossFilters:
         chartsInScope:
         - 133
         - 134
         - 136
         - 137
         - 138
-  global_chart_configuration:
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
-    chartsInScope:
-    - 133
-    - 134
-    - 136
-    - 137
-    - 138
-    - 139
+        scope: global
+      id: 139
   color_scheme: ''
-  refresh_frequency: 0
+  color_scheme_domain: []
+  cross_filters_enabled: true
   expanded_slices:
     '133': true
     '134': true
@@ -309,36 +298,63 @@ metadata:
     '137': true
     '138': true
     '139': true
+  global_chart_configuration:
+    chartsInScope:
+    - 133
+    - 134
+    - 136
+    - 137
+    - 138
+    - 139
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
   label_colors: {}
-  timed_refresh_immune_slices: []
-  cross_filters_enabled: true
-  default_filters: '{}'
+  map_label_colors:
+    COUNT_DISTINCT(user_email): '#1FA8C9'
+    SUM(certificate_count): '#1FA8C9'
+    SUM(chatbot_used_count): '#1FA8C9'
+    SUM(enrolled_count): '#1FA8C9'
+    SUM(problems_count): '#1FA8C9'
+    SUM(videos_watched): '#1FA8C9'
   native_filter_configuration:
-  - id: NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
+  - cascadeParentIds:
+    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    chartsInScope:
+    - 133
+    - 134
+    - 136
+    - 137
+    - 138
+    - 139
     controlValues:
-      enableEmptyFilter: false
       defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
       multiSelect: true
       searchAllOptions: false
-      inverseSelection: false
-    name: Organization Key
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
     filterType: filter_select
+    id: NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
+    name: Organization Key
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
     targets:
     - column:
         name: organization_key
       datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
     type: NATIVE_FILTER
-    description: ''
+  - cascadeParentIds:
+    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
+    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
     chartsInScope:
     - 133
     - 134
@@ -346,33 +362,33 @@ metadata:
     - 137
     - 138
     - 139
-    tabsInScope: []
-  - id: NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
     controlValues:
-      enableEmptyFilter: false
       defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
       multiSelect: true
       searchAllOptions: false
-      inverseSelection: false
-    name: Organization Name
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
     filterType: filter_select
+    id: NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    name: Organization Name
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
     targets:
     - column:
         name: organization_name
       datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
-    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
     type: NATIVE_FILTER
-    description: ''
+  - cascadeParentIds:
+    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
+    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
     chartsInScope:
     - 133
     - 134
@@ -380,49 +396,32 @@ metadata:
     - 137
     - 138
     - 139
-    tabsInScope: []
-  - id: NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
     controlValues:
-      enableEmptyFilter: false
       defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
       multiSelect: true
       searchAllOptions: true
-      inverseSelection: false
-    name: Course Run Readable ID
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
     filterType: filter_select
+    id: NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
+    name: Course Run Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
     targets:
     - column:
         name: courserun_readable_id
       datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
-    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    scope:
-      rootPath:
-      - ROOT_ID
-      excluded: []
     type: NATIVE_FILTER
-    description: ''
-    chartsInScope:
-    - 133
-    - 134
-    - 136
-    - 137
-    - 138
-    - 139
-    tabsInScope: []
-  color_scheme_domain: []
+  refresh_frequency: 0
   shared_label_colors: []
-  map_label_colors:
-    SUM(certificate_count): '#1FA8C9'
-    SUM(problems_count): '#1FA8C9'
-    COUNT_DISTINCT(user_email): '#1FA8C9'
-    SUM(enrolled_count): '#1FA8C9'
-    SUM(videos_watched): '#1FA8C9'
-    SUM(chatbot_used_count): '#1FA8C9'
+  timed_refresh_immune_slices: []
 theme_uuid: null
 version: 1.0.0

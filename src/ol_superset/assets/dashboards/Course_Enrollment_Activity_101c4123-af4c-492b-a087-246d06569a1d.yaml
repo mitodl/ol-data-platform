@@ -11,7 +11,7 @@ position:
     children: []
     id: CHART-1YCvDd7c7w
     meta:
-      chartId: 177
+      chartId: 31
       height: 50
       sliceName: Enrollment Geography
       uuid: 118ba89d-4c33-4720-b22e-a2576ff93316
@@ -26,7 +26,7 @@ position:
     children: []
     id: CHART-7_4tzNyAvI
     meta:
-      chartId: 144
+      chartId: 33
       height: 55
       sliceName: Enrollment Activity Over Time
       uuid: 07019136-a885-4261-8960-cfca368642d7
@@ -41,7 +41,7 @@ position:
     children: []
     id: CHART-CAXu2Bxatz
     meta:
-      chartId: 197
+      chartId: 48
       height: 50
       sliceName: Learner Performance
       uuid: d747faf0-d2f8-4dde-84ca-54b60775e051
@@ -56,7 +56,7 @@ position:
     children: []
     id: CHART-FVQKiNc8fC
     meta:
-      chartId: 205
+      chartId: 29
       height: 50
       sliceName: Enrollment Demographics by Education
       uuid: aa6bdf8d-b5be-4142-a3fc-df4f0032189e
@@ -71,7 +71,7 @@ position:
     children: []
     id: CHART-LhKRNTk1Yy
     meta:
-      chartId: 135
+      chartId: 34
       height: 58
       sliceName: Individual Enrollment Detail
       uuid: f8aa5d0c-f838-4236-9057-4f118d340a53
@@ -86,7 +86,7 @@ position:
     children: []
     id: CHART-QU2zng2NWM
     meta:
-      chartId: 207
+      chartId: 30
       height: 55
       sliceName: Enrollment Demographics by Gender
       uuid: e9c00f99-deb8-4a1f-99d4-d4e592b7c8db
@@ -101,7 +101,7 @@ position:
     children: []
     id: CHART-a-f7r9-KXp
     meta:
-      chartId: 150
+      chartId: 40
       height: 24
       sliceName: Record Count
       uuid: 1e441a91-5d1a-4f4f-9bf8-90fcc9d12988
@@ -116,7 +116,7 @@ position:
     children: []
     id: CHART-fpVX6Tu1bJ
     meta:
-      chartId: 166
+      chartId: 35
       height: 29
       sliceName: Course Run Metadata
       uuid: 01f0a8ee-45f0-40ef-a96e-250a40aebf10
@@ -131,7 +131,7 @@ position:
     children: []
     id: CHART-g4FRspfqRg
     meta:
-      chartId: 141
+      chartId: 47
       height: 69
       sliceName: Counts by course run
       uuid: 5670e704-3dc6-4b28-a12c-20d4faabcd46
@@ -146,7 +146,7 @@ position:
     children: []
     id: CHART-vIx6wWhMxD
     meta:
-      chartId: 217
+      chartId: 37
       height: 19
       sliceName: Latest Dashboard Activity Recorded Date
       uuid: 582d2109-e097-4acc-a39e-f19932afa98d
@@ -394,21 +394,7 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '141':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 48
-        scope: global
-      id: 141
-    '135':
+    '34':
       crossFilters:
         chartsInScope:
         - 29
@@ -421,8 +407,8 @@ metadata:
         - 47
         - 48
         scope: global
-      id: 135
-    '217':
+      id: 34
+    '47':
       crossFilters:
         chartsInScope:
         - 29
@@ -431,40 +417,12 @@ metadata:
         - 33
         - 34
         - 35
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 217
-    '177':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 33
-        - 34
-        - 35
         - 37
         - 40
-        - 47
         - 48
         scope: global
-      id: 177
-    '207':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 207
-    '166':
+      id: 47
+    '35':
       crossFilters:
         chartsInScope:
         - 29
@@ -477,8 +435,22 @@ metadata:
         - 47
         - 48
         scope: global
-      id: 166
-    '197':
+      id: 35
+    '31':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 31
+    '48':
       crossFilters:
         chartsInScope:
         - 29
@@ -491,8 +463,8 @@ metadata:
         - 40
         - 47
         scope: global
-      id: 197
-    '205':
+      id: 48
+    '29':
       crossFilters:
         chartsInScope:
         - 30
@@ -505,7 +477,35 @@ metadata:
         - 47
         - 48
         scope: global
-      id: 205
+      id: 29
+    '30':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 31
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 30
+    '37':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 35
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 37
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true

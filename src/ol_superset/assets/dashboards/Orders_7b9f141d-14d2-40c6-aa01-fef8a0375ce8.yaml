@@ -11,7 +11,7 @@ position:
     children: []
     id: CHART-IjDCkMYB40
     meta:
-      chartId: 3
+      chartId: 39
       height: 42
       sliceName: Latest Fulfilled Order Date
       uuid: 686fd4b2-e9f4-401b-bd85-b03f8b8824fd
@@ -26,7 +26,7 @@ position:
     children: []
     id: CHART-OvmWSuQBEyKWpRvCpuQwh
     meta:
-      chartId: 65
+      chartId: 114
       height: 50
       sliceName: Order Dashboard (Last Updated)
       uuid: 0ef1c6be-600c-4802-aa04-33f1b6dd9e9b
@@ -41,7 +41,7 @@ position:
     children: []
     id: CHART-explore-135-1
     meta:
-      chartId: 11
+      chartId: 135
       height: 68
       sliceName: Order detail
       uuid: fb906f1f-c07f-472f-9387-ad02f73cae55
@@ -172,32 +172,32 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '65':
-      crossFilters:
-        chartsInScope:
-        - 39
-        - 135
-        scope: global
-      id: 65
-    '11':
+    '135':
       crossFilters:
         chartsInScope:
         - 39
         - 114
         scope: global
-      id: 11
-    '3':
+      id: 135
+    '39':
       crossFilters:
         chartsInScope:
         - 114
         - 135
         scope: global
-      id: 3
+      id: 39
+    '114':
+      crossFilters:
+        chartsInScope:
+        - 39
+        - 135
+        scope: global
+      id: 114
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
   expanded_slices:
-    '3': true
+    '39': true
   global_chart_configuration:
     chartsInScope:
     - 39
@@ -337,7 +337,7 @@ metadata:
     name: User Email
     scope:
       excluded:
-      - 65
+      - 114
       rootPath:
       - ROOT_ID
     tabsInScope:
@@ -370,7 +370,7 @@ metadata:
     name: Year Of Order Created Date
     scope:
       excluded:
-      - 65
+      - 114
       rootPath:
       - ROOT_ID
     tabsInScope:
@@ -403,7 +403,7 @@ metadata:
     name: Month of Order Created Date
     scope:
       excluded:
-      - 65
+      - 114
       rootPath:
       - ROOT_ID
     tabsInScope:

@@ -36,7 +36,7 @@ params:
   comparison_type: values
   dashboards:
   - 58
-  datasource: 149__table
+  datasource: 152__table
   extra_form_data: {}
   forecastInterval: 0.8
   forecastPeriods: 10
@@ -97,7 +97,7 @@ params:
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: 30
   y_axis_title_position: Left
-query_context: '{"datasource": {"id": 149, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 152, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "activity_date", "op": "TEMPORAL_RANGE", "val": "No filter"},
   {"col": "active_count", "op": "IN", "val": [1]}], "extras": {"time_grain_sqla":
   "P1M", "having": "", "where": ""}, "applied_time_extras": {}, "columns": [{"timeGrain":
@@ -123,7 +123,7 @@ query_context: '{"datasource": {"id": 149, "type": "table"}, "force": false, "qu
   {}, "time_offsets": [], "post_processing": [{"operation": "pivot", "options": {"index":
   ["activity_date"], "columns": [], "aggregates": {"COUNT_DISTINCT(user_email)": {"operator":
   "mean"}}, "drop_missing_columns": false}}, {"operation": "flatten"}]}], "form_data":
-  {"datasource": "149__table", "viz_type": "echarts_timeseries_bar", "slice_id": 137,
+  {"datasource": "152__table", "viz_type": "echarts_timeseries_bar", "slice_id": 137,
   "x_axis": {"expressionType": "SQL", "label": "activity_date", "sqlExpression": "date_format(activity_date,
   ''%c-%Y'')"}, "time_grain_sqla": "P1M", "metrics": [{"aggregate": "COUNT_DISTINCT",
   "column": {"advanced_data_type": null, "certification_details": null, "certified_by":

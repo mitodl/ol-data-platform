@@ -1,6 +1,6 @@
 table_name: marts__micromasters_course_certificates
 main_dttm_col: null
-description: Auto refreshed at 2026-02-05T13:52:07.703638+00:00
+description: Auto refreshed at 2026-03-07T19:50:44.807814+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

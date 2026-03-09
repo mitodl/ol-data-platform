@@ -7,6 +7,7 @@ params:
   adhoc_filters: []
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   column_config:
     Avg_%_Grade:
@@ -25,7 +26,7 @@ params:
   conditional_formatting: []
   dashboards:
   - 45
-  datasource: 90__table
+  datasource: 92__table
   extra_form_data: {}
   groupby:
   - section_title
@@ -177,8 +178,7 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 90, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 92, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["section_title", "subsection_title"], "metrics": [{"expressionType":
   "SIMPLE", "column": {"advanced_data_type": null, "changed_on": "2025-05-29T21:49:25.066410",
@@ -233,7 +233,7 @@ query_context: '{"datasource": {"id": 90, "type": "table"}, "force": false, "que
   "Num_of_Page_Views", "optionName": "metric_4gduc5lvvb8_wgfud0g0wa9"}, false]], "annotation_layers":
   [], "row_limit": 1000, "series_limit": 0, "order_desc": false, "url_params": {},
   "custom_params": {}, "custom_form_data": {}, "post_processing": [], "time_offsets":
-  []}], "form_data": {"datasource": "90__table", "viz_type": "table", "slice_id":
+  []}], "form_data": {"datasource": "92__table", "viz_type": "table", "slice_id":
   100, "query_mode": "aggregate", "groupby": ["section_title", "subsection_title"],
   "temporal_columns_lookup": {}, "metrics": [{"expressionType": "SIMPLE", "column":
   {"advanced_data_type": null, "changed_on": "2025-05-29T21:49:25.066410", "column_name":
