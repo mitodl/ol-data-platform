@@ -381,17 +381,11 @@ def list_all_datasets_from_api(
 
     try:
         while True:
-            filters = (
-                [{"col": "kind", "opr": "eq", "value": "physical"}]
-                if physical_only
-                else []
-            )
             params = {
                 "q": json.dumps(
                     {
                         "page": page,
                         "page_size": page_size,
-                        "filters": filters,
                     }
                 )
             }
@@ -405,13 +399,16 @@ def list_all_datasets_from_api(
                 break
 
             for item in results:
+                kind = item.get("kind")
+                if physical_only and kind != "physical":
+                    continue
                 datasets.append(
                     {
                         "id": item.get("id"),
                         "uuid": item.get("uuid"),
                         "table_name": item.get("table_name"),
                         "schema": item.get("schema"),
-                        "kind": item.get("kind"),
+                        "kind": kind,
                     }
                 )
 
