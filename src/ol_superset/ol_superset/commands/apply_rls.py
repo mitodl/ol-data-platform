@@ -212,9 +212,7 @@ def apply_rls(
             failed.append(str(policy["name"]))
         except Exception as exc:
             name_str = str(policy["name"])
-            console.print(
-                f"  [red]❌ Unexpected error on '{name_str}': {exc}[/red]"
-            )
+            console.print(f"  [red]❌ Unexpected error on '{name_str}': {exc}[/red]")
             failed.append(str(policy["name"]))
 
     console.print()

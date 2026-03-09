@@ -852,8 +852,8 @@ def apply_rls_filter(
     partially-configured filters are never silently accepted.
     """
     name = str(policy["name"])
-    roles: list[str] = list(policy["roles"])  # type: ignore[arg-type]
-    tables: list[str] = list(policy["tables"])  # type: ignore[arg-type]
+    roles: list[str] = list(policy["roles"])  # type: ignore[call-overload]
+    tables: list[str] = list(policy["tables"])  # type: ignore[call-overload]
 
     missing_roles = [r for r in roles if r not in role_map]
     if missing_roles:
