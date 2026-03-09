@@ -318,9 +318,12 @@ def update_asset_external_management_flag(
         endpoint = f"{base_url}/api/v1/dashboard/{asset_id}"
     elif asset_type == "chart":
         endpoint = f"{base_url}/api/v1/chart/{asset_id}"
+    elif asset_type == "dataset":
+        endpoint = f"{base_url}/api/v1/dataset/{asset_id}"
     else:
         print(
-            f"  ❌ Unknown asset type '{asset_type}'. Must be 'dashboard' or 'chart'",
+            f"  ❌ Unknown asset type '{asset_type}'. "
+            "Must be 'dashboard', 'chart', or 'dataset'",
             file=sys.stderr,
         )
         return False
@@ -352,6 +355,210 @@ def update_asset_external_management_flag(
             file=sys.stderr,
         )
         return False
+
+
+def list_all_datasets_from_api(
+    session: requests.Session,
+    base_url: str,
+    *,
+    physical_only: bool = True,
+) -> list[dict[str, str | int | None]]:
+    """
+    List all datasets from Superset API.
+
+    Args:
+        session: Authenticated requests session
+        base_url: Base URL of Superset instance
+        physical_only: If True, return only physical (table) datasets, not virtual (SQL)
+
+    Returns:
+        List of dicts with 'id', 'uuid', 'table_name', 'schema', 'kind' keys
+    """
+    endpoint = f"{base_url}/api/v1/dataset/"
+    datasets = []
+    page = 0
+    page_size = 100
+
+    try:
+        while True:
+            filters = (
+                [{"col": "kind", "opr": "eq", "value": "physical"}]
+                if physical_only
+                else []
+            )
+            params = {
+                "q": json.dumps(
+                    {
+                        "page": page,
+                        "page_size": page_size,
+                        "filters": filters,
+                    }
+                )
+            }
+
+            response = session.get(endpoint, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+
+            results = data.get("result", [])
+            if not results:
+                break
+
+            for item in results:
+                datasets.append(
+                    {
+                        "id": item.get("id"),
+                        "uuid": item.get("uuid"),
+                        "table_name": item.get("table_name"),
+                        "schema": item.get("schema"),
+                        "kind": item.get("kind"),
+                    }
+                )
+
+            page += 1
+
+            if len(results) < page_size:
+                break
+
+        return datasets
+
+    except Exception as e:
+        print(f"  ❌ Error listing datasets: {e}", file=sys.stderr)
+        return []
+
+
+def get_dataset_id_by_uuid(
+    session: requests.Session, base_url: str, uuid: str
+) -> int | None:
+    """
+    Get Superset dataset ID (pk) from UUID.
+
+    Args:
+        session: Authenticated requests session
+        base_url: Base URL of Superset instance
+        uuid: UUID of the dataset
+
+    Returns:
+        Integer dataset ID or None if not found
+    """
+    try:
+        endpoint = f"{base_url}/api/v1/dataset/"
+        params = {
+            "q": json.dumps({"filters": [{"col": "uuid", "opr": "eq", "value": uuid}]})
+        }
+
+        response = session.get(endpoint, params=params, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+        results = data.get("result", [])
+
+        if results:
+            return results[0].get("id")
+
+        return None
+
+    except Exception as e:
+        print(
+            f"  ⚠️  Error looking up dataset UUID {uuid}: {e}",
+            file=sys.stderr,
+        )
+        return None
+
+
+def refresh_dataset(session: requests.Session, base_url: str, dataset_id: int) -> bool:
+    """
+    Refresh a Superset physical dataset to pick up new/changed columns.
+
+    Calls PUT /api/v1/dataset/{pk}/refresh which syncs the dataset schema
+    with the underlying database table.
+
+    Args:
+        session: Authenticated requests session
+        base_url: Base URL of Superset instance
+        dataset_id: Integer primary key of the dataset
+
+    Returns:
+        True if successful, False otherwise
+    """
+    csrf_token = get_csrf_token(session, base_url)
+    if not csrf_token:
+        return False
+
+    session.headers.update(
+        {
+            "X-CSRFToken": csrf_token,
+            "Referer": base_url,
+        }
+    )
+
+    endpoint = f"{base_url}/api/v1/dataset/{dataset_id}/refresh"
+
+    try:
+        response = session.put(endpoint, timeout=30)
+        response.raise_for_status()
+        return True
+
+    except requests.exceptions.HTTPError as e:
+        print(
+            f"  ⚠️  HTTP error refreshing dataset {dataset_id}: {e}",
+            file=sys.stderr,
+        )
+        if e.response is not None:
+            try:
+                error_data = e.response.json()
+                print(f"      Details: {error_data}", file=sys.stderr)
+            except Exception:  # noqa: S110
+                pass
+        return False
+    except Exception as e:
+        print(
+            f"  ❌ Error refreshing dataset {dataset_id}: {e}",
+            file=sys.stderr,
+        )
+        return False
+
+
+def get_dataset_uuids_from_directory(
+    assets_dir: Path, *, physical_only: bool = True
+) -> list[tuple[str, str | None]]:
+    """
+    Extract dataset UUIDs (and table names) from local dataset YAML files.
+
+    Args:
+        assets_dir: Path to assets directory
+        physical_only: If True, skip virtual datasets (those with non-null sql field)
+
+    Returns:
+        List of (uuid, table_name) tuples
+    """
+    results: list[tuple[str, str | None]] = []
+
+    dataset_dir = assets_dir / "datasets"
+    if not dataset_dir.exists():
+        return results
+
+    yaml_files = list(dataset_dir.rglob("*.yaml")) + list(dataset_dir.rglob("*.yml"))
+
+    for yaml_file in yaml_files:
+        try:
+            with yaml_file.open() as f:
+                data = yaml.safe_load(f)
+
+            if physical_only and data.get("sql"):
+                continue
+
+            uuid = data.get("uuid")
+            if uuid:
+                results.append((uuid, data.get("table_name")))
+
+        except Exception as e:
+            print(
+                f"  ⚠️  Error reading {yaml_file}: {e}",
+                file=sys.stderr,
+            )
+
+    return results
 
 
 def get_asset_uuids_from_directory(assets_dir: Path, asset_type: str) -> list[str]:
@@ -484,6 +691,39 @@ def update_pushed_assets_external_flag(
         print(f"    ✅ Updated {success_count} {asset_type}(s)")
         if failed_count > 0:
             print(f"    ⚠️  Failed to update {failed_count} {asset_type}(s)")
+
+    # Process datasets
+    print("  Processing datasets...")
+    dataset_entries = get_dataset_uuids_from_directory(assets_dir, physical_only=False)
+
+    if not dataset_entries:
+        print("    No datasets found")
+    else:
+        print(f"    Found {len(dataset_entries)} dataset(s)")
+
+        success_count = 0
+        failed_count = 0
+
+        for uuid, _table_name in dataset_entries:
+            asset_id = get_dataset_id_by_uuid(session, base_url, uuid)
+
+            if asset_id is None:
+                print(f"    ⚠️  Could not find dataset with UUID {uuid}")
+                failed_count += 1
+                continue
+
+            success = update_asset_external_management_flag(
+                session, base_url, "dataset", asset_id, is_managed_externally=False
+            )
+
+            if success:
+                success_count += 1
+            else:
+                failed_count += 1
+
+        print(f"    ✅ Updated {success_count} dataset(s)")
+        if failed_count > 0:
+            print(f"    ⚠️  Failed to update {failed_count} dataset(s)")
 
     print()
     print("=" * 50)

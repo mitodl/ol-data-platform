@@ -8,6 +8,7 @@ from ol_superset.commands.dedupe import dedupe_app
 from ol_superset.commands.export import export
 from ol_superset.commands.lock import lock_app
 from ol_superset.commands.promote import promote
+from ol_superset.commands.refresh import refresh
 from ol_superset.commands.sync import sync
 from ol_superset.commands.validate import validate
 
@@ -44,6 +45,7 @@ app.command(sync, name="sync")
 app.command(promote, name="promote")
 app.command(dedupe_app, name="dedupe")
 app.command(lock_app, name="lock")
+app.command(refresh, name="refresh")
 
 
 def main() -> None:
