@@ -67,6 +67,7 @@ with problem_structure as (
     from problem_attempt_aggregated
     left join problem_structure
         on problem_attempt_aggregated.problem_block_fk = problem_structure.problem_block_fk
+         and problem_attempt_aggregated.courserun_readable_id = problem_structure.courserun_readable_id
 )
 
 select

@@ -235,6 +235,11 @@ models:
     description: boolean, indicating if the course content is the latest version
     tests:
     - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["courserun_readable_id", "block_id"]
+        row_condition: "is_latest = true"
 
 - name: dim_user
   description: Eventually a dimensional model for users from different platforms.

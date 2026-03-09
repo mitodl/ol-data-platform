@@ -43,6 +43,7 @@ with vertical_structure as (
     from page_navigation_events
     left join vertical_structure
         on page_navigation_events.block_fk = vertical_structure.block_id
+        and page_navigation_events.courserun_readable_id = vertical_structure.courserun_readable_id
 )
 
 select

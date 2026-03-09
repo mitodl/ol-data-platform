@@ -61,18 +61,22 @@ with problem_events as (
     left join course_content as cc
         on
             problem_events.problem_block_fk = cc.block_id
+            and problem_events.courserun_readable_id = cc.courserun_readable_id
             and cc.is_latest = true
     left join course_content as unit
         on
             cc.parent_block_id = unit.block_id
+            and cc.courserun_readable_id = unit.courserun_readable_id
             and unit.is_latest = true
     left join course_content as chapter
         on
             cc.chapter_block_id = chapter.block_id
+            and cc.courserun_readable_id = chapter.courserun_readable_id
             and chapter.is_latest = true
     left join course_content as sequential
         on
             cc.sequential_block_id = sequential.block_id
+            and cc.courserun_readable_id = sequential.courserun_readable_id
             and sequential.is_latest = true
     where overall_grade.verified_cnt > 0
 )

@@ -69,18 +69,22 @@ inner join course_content as c
     on
         d_video.content_block_fk = c.content_block_pk
         and c.is_latest = true
+        and d_video.courserun_readable_id = c.courserun_readable_id
 left join course_content as d
     on
         c.parent_block_id = d.block_id
         and d.is_latest = true
+        and c.courserun_readable_id = d.courserun_readable_id
 left join course_content as f
     on
         d.parent_block_id = f.block_id
         and f.is_latest = true
+        and d.courserun_readable_id = f.courserun_readable_id
 left join course_content as g
     on
         f.parent_block_id = g.block_id
         and g.is_latest = true
+        and f.courserun_readable_id = g.courserun_readable_id
 left join start_and_end_times
     on
         tfact_video_events.video_block_fk = start_and_end_times.video_block_fk
