@@ -247,7 +247,12 @@ def process_edxorg_archive_bundle(
             normalized_extension = (
                 "tsv" if asset_info["extension"] == "sql" else asset_info["extension"]
             )
-            if table_name := asset_info.get("table_name"):
+            # table_name is only meaningful for db_table (sql) files.  Extract it
+            # unconditionally so it is always bound before the CSV-processing branch
+            # below, which uses it to decide whether to treat the file as tabular data.
+            is_db_table = asset_info.get("data_category") == "db_table"
+            table_name = asset_info.get("table_name") if is_db_table else None
+            if is_db_table and table_name:
                 output_key = f"db_table__{table_name}"
             else:
                 output_key = categorize_archive_element(tinfo.name)

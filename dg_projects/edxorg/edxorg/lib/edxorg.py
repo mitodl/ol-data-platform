@@ -4,6 +4,10 @@ from collections.abc import Sequence
 COURSE_ID_REGEX = r"^(?P<course_id>(?P<organization>[a-zA-Z0-9._]+)-(?P<course_number>[a-zA-Z0-9._-]+?)-(?P<course_run>[a-zA-Z0-9._]+)(?>-ccx-)?(?P<ccx_id>\d+)?)"  # noqa: E501
 FILE_TYPE_REGEX = r"\.(?P<extension>mongo|json|xml\.tar\.gz|sql)$"
 DATA_ATTRIBUTE_REGEX = r"(-(?P<table_name>[a-zA-Z_]+)-)?"
+# Consumes the optional -course suffix in XML archive filenames
+# (e.g. ...-course.xml.tar.gz) without capturing it, so it is not absorbed
+# into course_id by the COURSE_ID_REGEX.
+XML_COURSE_SUFFIX_REGEX = r"(-course)?"
 SYSTEM_OF_ORIGIN_REGEX = r"-?(?P<source_system>((prod)?-?(edge)?))(-analytics)?"
 
 # source_system, archive_date, course_id, data_category, data_content
@@ -46,9 +50,18 @@ def parse_archive_path(archive_path: str) -> dict[str, str]:
     """
     pattern_pieces = [COURSE_ID_REGEX]
     data_category = categorize_archive_element(archive_path)
-    # Only include DATA_ATTRIBUTE_REGEX for .sql files (database tables)
-    if data_category == "db_table":
+    if data_category in {"db_table", "course_structure"}:
+        # DATA_ATTRIBUTE_REGEX consumes the -{name}- token that sits between the course
+        # ID and the source-system marker.  For .sql files this is the database table
+        # name; for .json files it is the file-type label (course / course_structure).
+        # Without it the regex engine backtracks and absorbs that token into course_id,
+        # producing wrong partition keys such as MITx-15.415x-3T2018-course|edge.
         pattern_pieces.append(DATA_ATTRIBUTE_REGEX)
+    elif data_category == "course_xml":
+        # XML archives may carry an optional -course suffix before the extension
+        # (e.g. MITx-15.415x-3T2018-course.xml.tar.gz).  The non-capturing group
+        # prevents it from being absorbed into course_id.
+        pattern_pieces.append(XML_COURSE_SUFFIX_REGEX)
     pattern_pieces.extend([SYSTEM_OF_ORIGIN_REGEX, FILE_TYPE_REGEX])
     regexes = "".join(pattern_pieces)
     components = re.fullmatch(
