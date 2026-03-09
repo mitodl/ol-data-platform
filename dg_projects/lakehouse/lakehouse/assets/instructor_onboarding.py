@@ -71,7 +71,7 @@ def generate_instructor_onboarding_user_list(
 
     # Add role and sent_invite columns with fixed values
     user_data = user_data.with_columns(
-        [pl.lit("ol-data-analyst").alias("role"), pl.lit(1).alias("sent_invite")]
+        [pl.lit("ol-instructor").alias("role"), pl.lit(1).alias("sent_invite")]
     )
 
     # Reorder columns: email, role, sent_invite
