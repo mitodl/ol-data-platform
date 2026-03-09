@@ -52,7 +52,7 @@ with discussion_component_topics as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['discussion_block_pk', 'commentable_id']) }} as discussion_topic_pk
+    {{ dbt_utils.generate_surrogate_key(['courserun_readable_id','discussion_block_pk', 'commentable_id']) }} as discussion_topic_pk
     , content_block_fk
     , discussion_block_pk
     , courserun_readable_id
