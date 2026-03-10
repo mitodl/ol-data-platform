@@ -24,7 +24,7 @@ WORKDIR /opt/dagster/app
 # Copy ol-orchestrate-lib package
 COPY packages/ol-orchestrate-lib /opt/dagster/packages/ol-orchestrate-lib
 
-COPY dg_deployments/reconcile_edxorg_partitions.py /opt/dagster/
+COPY dg_deployments/reconcile_edxorg_partitions.py /opt/dagster/app/
 
 # Install ol-orchestrate-lib and its dependencies
 # This makes the pooled Postgres storage classes available
