@@ -4,6 +4,7 @@ import sys
 
 import cyclopts
 
+from ol_superset.commands.apply_rls import apply_rls
 from ol_superset.commands.dedupe import dedupe_app
 from ol_superset.commands.export import export
 from ol_superset.commands.lock import lock_app
@@ -33,6 +34,9 @@ app = cyclopts.App(
          $ ol-superset export --from superset-production
          $ ol-superset sync superset-production superset-qa
 
+      4. Apply governance RLS policies:
+         $ ol-superset apply-rls superset-production
+
     Use --help on any command for detailed usage.
     """,
     version="0.1.0",
@@ -46,6 +50,7 @@ app.command(promote, name="promote")
 app.command(dedupe_app, name="dedupe")
 app.command(lock_app, name="lock")
 app.command(refresh, name="refresh")
+app.command(apply_rls, name="apply-rls")
 
 
 def main() -> None:

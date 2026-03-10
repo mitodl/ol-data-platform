@@ -727,3 +727,192 @@ def update_pushed_assets_external_flag(
     print(f"✅ Asset management flags updated for {instance_name}")
     print("=" * 50)
     print()
+
+
+# ---------------------------------------------------------------------------
+# Row-Level Security helpers
+# ---------------------------------------------------------------------------
+
+
+def list_roles(session: requests.Session, base_url: str) -> dict[str, int]:
+    """Return {role_name: role_id} for all roles in the Superset instance."""
+    result: dict[str, int] = {}
+    page = 0
+    page_size = 100
+    while True:
+        response = session.get(
+            f"{base_url}/api/v1/security/roles/",
+            params={"q": json.dumps({"page": page, "page_size": page_size})},
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        for item in data.get("result", []):
+            result[item["name"]] = item["id"]
+        if len(data.get("result", [])) < page_size:
+            break
+        page += 1
+    return result
+
+
+def list_datasets_name_to_id(
+    session: requests.Session, base_url: str
+) -> dict[str, int]:
+    """Return dataset name→id mapping with bare-name collision detection.
+
+    Each dataset is indexed under:
+    - bare ``table_name``  (e.g. ``"instructor_module_report"``)
+    - qualified ``schema.table_name``
+
+    If two datasets share the same bare ``table_name`` across different schemas
+    the bare key is removed and a warning is printed.  Policies must then use
+    the fully-qualified ``schema.table_name`` form.
+    """
+    result: dict[str, int] = {}
+    bare_collision: set[str] = set()
+    page = 0
+    page_size = 100
+    while True:
+        response = session.get(
+            f"{base_url}/api/v1/dataset/",
+            params={
+                "q": json.dumps(
+                    {
+                        "page": page,
+                        "page_size": page_size,
+                        "columns": ["id", "table_name", "schema"],
+                    }
+                )
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        for item in data.get("result", []):
+            schema = item.get("schema") or ""
+            table = item.get("table_name", "")
+            dataset_id = int(item["id"])
+            if table in bare_collision:
+                pass  # already marked ambiguous
+            elif table in result:
+                bare_collision.add(table)
+                del result[table]
+                print(
+                    f"  ⚠️  Multiple datasets share table_name '{table}'; "
+                    "use schema-qualified name in RLS policies.",
+                )
+            else:
+                result[table] = dataset_id
+            if schema:
+                result[f"{schema}.{table}"] = dataset_id
+        if len(data.get("result", [])) < page_size:
+            break
+        page += 1
+    return result
+
+
+def list_rls_filters(session: requests.Session, base_url: str) -> dict[str, int]:
+    """Return {filter_name: filter_id} for all existing RLS filters."""
+    result: dict[str, int] = {}
+    page = 0
+    page_size = 100
+    while True:
+        response = session.get(
+            f"{base_url}/api/v1/rowlevelsecurity/",
+            params={"q": json.dumps({"page": page, "page_size": page_size})},
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        for item in data.get("result", []):
+            result[item["name"]] = item["id"]
+        if len(data.get("result", [])) < page_size:
+            break
+        page += 1
+    return result
+
+
+def apply_rls_filter(
+    session: requests.Session,
+    base_url: str,
+    policy: dict[str, object],
+    role_map: dict[str, int],
+    dataset_map: dict[str, int],
+    existing: dict[str, int],
+    *,
+    dry_run: bool = False,
+) -> bool:
+    """Create or update a single RLS filter from a policy definition.
+
+    Returns ``True`` on success (or in dry-run mode), ``False`` on any error.
+    Raises ``ValueError`` if required roles or datasets are missing so that
+    partially-configured filters are never silently accepted.
+    """
+    name = str(policy["name"])
+    roles: list[str] = list(policy["roles"])  # type: ignore[call-overload]
+    tables: list[str] = list(policy["tables"])  # type: ignore[call-overload]
+
+    missing_roles = [r for r in roles if r not in role_map]
+    if missing_roles:
+        msg = (
+            f"Required roles not found in Superset for filter '{name}': "
+            f"{', '.join(missing_roles)}"
+        )
+        raise ValueError(msg)
+
+    missing_tables = [t for t in tables if t not in dataset_map]
+    if missing_tables:
+        msg = (
+            f"Required datasets not found in Superset for filter '{name}': "
+            f"{', '.join(missing_tables)}"
+        )
+        raise ValueError(msg)
+
+    payload = {
+        "name": name,
+        "description": str(policy.get("description", "")),
+        "filter_type": str(policy["filter_type"]),
+        "clause": str(policy["clause"]),
+        "group_key": str(policy.get("group_key", "")),
+        "roles": [role_map[r] for r in roles],
+        "tables": [dataset_map[t] for t in tables],
+    }
+
+    if dry_run:
+        action = "update" if name in existing else "create"
+        print(f"  [dry-run] Would {action} RLS filter '{name}'")
+        return True
+
+    csrf_token = get_csrf_token(session, base_url)
+    if not csrf_token:
+        print(f"  ❌ Could not get CSRF token for filter '{name}'")
+        return False
+    session.headers.update({"X-CSRFToken": csrf_token, "Referer": base_url})
+
+    try:
+        if name in existing:
+            filter_id = existing[name]
+            resp = session.put(
+                f"{base_url}/api/v1/rowlevelsecurity/{filter_id}",
+                json=payload,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            print(f"  ✅ Updated RLS filter '{name}' (id={filter_id})")
+        else:
+            resp = session.post(
+                f"{base_url}/api/v1/rowlevelsecurity/",
+                json=payload,
+                timeout=30,
+            )
+            resp.raise_for_status()
+            new_id = resp.json().get("id", "?")
+            print(f"  ✅ Created RLS filter '{name}' (id={new_id})")
+        return True
+    except requests.exceptions.HTTPError as exc:
+        body = exc.response.text if exc.response is not None else "no response"
+        print(f"  ❌ HTTP error applying filter '{name}': {exc} — {body}")
+        return False
+    except Exception as exc:
+        print(f"  ❌ Error applying filter '{name}': {exc}")
+        return False
