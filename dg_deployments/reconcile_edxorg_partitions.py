@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Reconcile edxorg archive asset partitions and S3 objects with invalid course IDs.
 
 Partitions created between commit 2c2b9c3a (2026-02-11) and the subsequent fix
