@@ -1,3 +1,4 @@
+# ruff: noqa: INP001
 """Reconcile edxorg archive asset partitions and S3 objects with invalid course IDs.
 
 Partitions created between commit 2c2b9c3a (2026-02-11) and the subsequent fix
@@ -68,7 +69,7 @@ import sys
 from urllib.parse import urlparse
 
 import boto3
-from dagster import AssetKey, AssetMaterialization, DagsterInstance
+from dagster import AssetKey, AssetMaterialization, DagsterInstance, MultiPartitionKey
 from dagster._core.events import DagsterEventType
 from dagster._core.storage.event_log.base import EventRecordsFilter
 
@@ -101,9 +102,11 @@ def _canonical_course_id(course_id: str) -> str | None:
 
 
 def _parse_partition_key(raw_key: str) -> tuple[str, str]:
-    """Split a ``course_id|source_system`` string into its two components.
+    """Split a ``course_id|source_system`` key string into its two components.
 
-    MultiPartitionKey serialises as ``<course_id>|<source_system>``.
+    Keys stored in the dynamic partition are serialised from
+    ``MultiPartitionKey({"course_id": ..., "source_system": ...})``, which
+    Dagster stores as ``{course_id}|{source_system}`` (no ``dim=`` prefix).
     """
     idx = raw_key.rfind("|")
     if idx == -1:
@@ -112,8 +115,18 @@ def _parse_partition_key(raw_key: str) -> tuple[str, str]:
     return raw_key[:idx], raw_key[idx + 1 :]
 
 
-def _build_partition_key(course_id: str, source_system: str) -> str:
-    return f"{course_id}|{source_system}"
+def _make_multi_partition_key(course_id: str, source_system: str) -> MultiPartitionKey:
+    return MultiPartitionKey({"course_id": course_id, "source_system": source_system})
+
+
+def _tag_safe(value: str) -> str:
+    """Replace characters that are invalid in Dagster tag values.
+
+    Dagster tags allow only ``[a-zA-Z0-9_\\-.]`` and a maximum of 63 chars.
+    Partition keys contain ``|`` as a dimension separator; replace it with
+    ``__`` so the value survives tag validation while remaining readable.
+    """
+    return value.replace("|", "__")[:63]
 
 
 def _correct_object_key(object_key: str) -> str | None:
@@ -193,7 +206,9 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
     )
 
     bad_keys: list[str] = []
-    canonical_keys: dict[str, str] = {}  # bad_key -> canonical_key
+    canonical_keys: dict[
+        str, MultiPartitionKey
+    ] = {}  # bad_key_str -> canonical MultiPartitionKey
 
     for key in all_keys:
         try:
@@ -204,7 +219,7 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
         canonical = _canonical_course_id(course_id)
         if canonical is not None:
             bad_keys.append(key)
-            canonical_keys[key] = _build_partition_key(canonical, source_system)
+            canonical_keys[key] = _make_multi_partition_key(canonical, source_system)
 
     if not bad_keys:
         log.info("No invalid partition keys found - nothing to do.")
@@ -221,7 +236,9 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
     existing_key_set: set[str] = set(all_keys)
 
     # 1. Add canonical partition keys that do not exist yet.
-    keys_to_add = [ck for ck in canonical_keys.values() if ck not in existing_key_set]
+    keys_to_add = [
+        mk for bad_k, mk in canonical_keys.items() if str(mk) not in existing_key_set
+    ]
     if keys_to_add:
         log.info("Adding %d new canonical partition key(s).", len(keys_to_add))
         if not dry_run:
@@ -352,8 +369,8 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
                     partition=canon_key,
                     tags={
                         **original.tags,
-                        # Audit trail: record which bad partition this migrated from.
-                        "dagster/reconciled_from_partition": bad_key,
+                        # Audit trail: tag value must be tag-safe (no '|').
+                        "dagster/reconciled_from_partition": _tag_safe(bad_key),
                     },
                 )
                 log.info(
