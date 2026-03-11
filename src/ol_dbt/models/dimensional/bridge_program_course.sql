@@ -8,7 +8,7 @@ with mitxonline_program_requirements as (
         program_id
         , course_id
         , true as is_required
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
         , 'mitxonline' as platform_code
     from {{ ref('int__mitxonline__program_requirements') }}
 )
@@ -18,7 +18,7 @@ with mitxonline_program_requirements as (
         program_id
         , course_id
         , true as is_required
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
         , 'mitxpro' as platform_code
     from {{ ref('int__mitxpro__coursesinprogram') }}
 )

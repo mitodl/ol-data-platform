@@ -11,6 +11,7 @@ with mitxonline_enrollments as (
         courserunenrollment_id as enrollment_id
         , user_id
         , courserun_id
+        , cast(null as varchar) as courserun_readable_id  -- join key for edxorg only
         , null as program_id
         , courserunenrollment_created_on as enrollment_created_on
         , courserunenrollment_is_active as enrollment_is_active
@@ -23,13 +24,14 @@ with mitxonline_enrollments as (
 
 , mitxpro_enrollments as (
     select
-        courserunenrollment_id
+        courserunenrollment_id as enrollment_id
         , user_id
         , courserun_id
+        , cast(null as varchar) as courserun_readable_id  -- join key for edxorg only
         , null as program_id
-        , courserunenrollment_created_on
-        , courserunenrollment_is_active
-        , courserunenrollment_enrollment_mode
+        , courserunenrollment_created_on as enrollment_created_on
+        , courserunenrollment_is_active as enrollment_is_active
+        , courserunenrollment_enrollment_mode as enrollment_mode
         , null as enrollment_status
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
@@ -40,13 +42,14 @@ with mitxonline_enrollments as (
     select
         -- Stable surrogate key: edxorg has no enrollment_id; use natural key (user + course run)
         {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }}
-            as courserunenrollment_id
+            as enrollment_id
         , user_id
-        , null as courserun_id
+        , null as courserun_id  -- edxorg has no integer source_id; join on readable_id instead
+        , courserun_readable_id
         , null as program_id
-        , courserunenrollment_created_on
-        , courserunenrollment_is_active
-        , courserunenrollment_enrollment_mode
+        , courserunenrollment_created_on as enrollment_created_on
+        , courserunenrollment_is_active as enrollment_is_active
+        , courserunenrollment_enrollment_mode as enrollment_mode
         , null as enrollment_status
         , 'edxorg' as platform
         , 'edxorg' as platform_code
@@ -58,6 +61,7 @@ with mitxonline_enrollments as (
         programenrollment_id as enrollment_id
         , user_id
         , null as courserun_id
+        , cast(null as varchar) as courserun_readable_id  -- join key for edxorg only
         , program_id
         , programenrollment_created_on as enrollment_created_on
         , programenrollment_is_active as enrollment_is_active
@@ -82,7 +86,7 @@ with mitxonline_enrollments as (
 -- dim_user not in Phase 1-2
 
 , dim_course_run as (
-    select courserun_pk, source_id, platform_fk, platform
+    select courserun_pk, source_id, courserun_readable_id, platform_fk, platform
     from {{ ref('dim_course_run') }}
     where is_current = true
 )
@@ -104,8 +108,13 @@ with mitxonline_enrollments as (
         , {{ iso8601_to_date_key('enrollment_created_on') }} as enrollment_date_key
     from combined_enrollments
     left join dim_course_run
-        on combined_enrollments.courserun_id = dim_course_run.source_id
-        and combined_enrollments.platform = dim_course_run.platform
+        on combined_enrollments.platform = dim_course_run.platform
+        and (
+            -- mitxonline/mitxpro: join on integer source_id
+            (combined_enrollments.platform != 'edxorg' and combined_enrollments.courserun_id = dim_course_run.source_id)
+            -- edxorg: has no integer source_id; join on readable_id instead
+            or (combined_enrollments.platform = 'edxorg' and combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id)
+        )
     left join dim_program
         on combined_enrollments.program_id = dim_program.source_id
         and combined_enrollments.platform_code = dim_program.platform_code
