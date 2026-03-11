@@ -13,11 +13,6 @@ with products as (
     from {{ ref('stg__mitxonline__app__postgres__courses_courserun') }}
 )
 
-, programruns as (
-    select *
-    from {{ ref('stg__mitxonline__app__postgres__courses_programrun') }}
-)
-
 , programs as (
     select * from {{ ref('stg__mitxonline__app__postgres__courses_program') }}
 )
@@ -33,11 +28,11 @@ with products as (
             when 'courses_courserun' then products.product_object_id
         end as courserun_id
         , case contenttypes.contenttype_full_name
-            when 'courses_programrun' then products.product_object_id
-        end as programrun_id
+            when 'courses_program' then products.product_object_id
+        end as program_id
         , case contenttypes.contenttype_full_name
             when 'courses_courserun' then 'course run'
-            when 'courses_programrun' then 'program run'
+            when 'courses_program' then 'program'
         end as product_type
     from products
     inner join contenttypes on products.contenttype_id = contenttypes.contenttype_id
@@ -46,10 +41,9 @@ with products as (
 select
     product_subquery.*
     , courseruns.course_id
-    , programruns.program_id
+    , programs.program_id
     , courseruns.courserun_readable_id
     , programs.program_readable_id
 from product_subquery
 left join courseruns on product_subquery.courserun_id = courseruns.courserun_id
-left join programruns on product_subquery.programrun_id = programruns.programrun_id
-left join programs on programruns.program_id = programs.program_id
+left join programs on product_subquery.program_id = programs.program_id
