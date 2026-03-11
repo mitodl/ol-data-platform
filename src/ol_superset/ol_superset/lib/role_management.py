@@ -74,9 +74,7 @@ def get_local_datasets(assets_dir: Path) -> list[dict]:
     return datasets
 
 
-def get_superset_datasets(
-    session: requests.Session, base_url: str
-) -> list[dict]:
+def get_superset_datasets(session: requests.Session, base_url: str) -> list[dict]:
     """
     Fetch all datasets from the Superset API.
 
@@ -385,9 +383,7 @@ def add_role_permissions(
                 pass
         return False
     except Exception as e:
-        print(
-            f"  ❌ Error adding permissions to role {role_id}: {e}", file=sys.stderr
-        )
+        print(f"  ❌ Error adding permissions to role {role_id}: {e}", file=sys.stderr)
         return False
 
 
