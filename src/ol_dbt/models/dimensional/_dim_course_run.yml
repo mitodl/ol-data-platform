@@ -17,7 +17,10 @@ models:
       where: "is_current = true"
   columns:
   - name: courserun_pk
-    description: Surrogate key primary key
+    description: >
+      Surrogate primary key. Generated as dbt_utils.generate_surrogate_key(['platform',
+      'courserun_readable_id']). Value is stable across runs — do not filter on this
+      alone for SCD2; also filter on is_current.
     tests:
     - unique
     - not_null
@@ -62,11 +65,15 @@ models:
   - name: courserun_is_live
     description: Boolean indicating if course run is live
   - name: effective_date
-    description: SCD Type 2 effective timestamp
+    description: >
+      Timestamp (UTC) when this SCD Type 2 version became effective. Always set for
+      the current record. Filter with is_current to get the active version.
     tests:
     - not_null
   - name: end_date
-    description: SCD Type 2 end timestamp (null if current)
+    description: >
+      Timestamp (UTC) when this SCD Type 2 version was superseded. Null for the current
+      active record.
   - name: is_current
     description: Boolean indicating current version
     tests:

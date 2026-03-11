@@ -168,6 +168,9 @@ with openedx_events as (
 
 select
     users.user_pk as user_fk
+    -- All chatbot events are sourced exclusively from stg__mitxonline__openedx__tracking_logs__user_activity,
+    -- so the platform is always 'mitxonline'. Canvas learning assistant events are delivered
+    -- through the MITx Online OpenEdX tracking log pipeline, not a separate canvas pipeline.
     , {{ dbt_utils.generate_surrogate_key(["'mitxonline'"]) }} as platform_fk
     , combined.chatbot_source
     , combined.user_username

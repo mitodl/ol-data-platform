@@ -14,7 +14,9 @@ models:
     - unique
     - not_null
   - name: date
-    description: Actual calendar date
+    description: >
+      Actual calendar date in ISO 8601 format (YYYY-MM-DD). Join this to date columns
+      in fact tables after converting the date to a date_key integer (YYYYMMDD).
     tests:
     - not_null
   - name: year

@@ -104,8 +104,7 @@ with mitxonline_courseruns as (
     select
         {{ dbt_utils.generate_surrogate_key([
             'platform',
-            'courserun_readable_id',
-            'cast(current_timestamp as varchar)'
+            'courserun_readable_id'
         ]) }} as courserun_pk
         , courserun_readable_id
         , source_id
