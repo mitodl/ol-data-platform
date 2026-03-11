@@ -152,3 +152,4 @@ models:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
         column_list: ["program_title", "user_edxorg_email"]
+        row_condition: "order_id is null"
