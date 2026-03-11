@@ -1,4 +1,4 @@
-"""Tests for ol_orchestrate.lib.openedx module, specifically process_course_xml_blocks function."""
+"""Tests for ol_orchestrate.lib.openedx module."""
 
 import tarfile
 from pathlib import Path
@@ -262,7 +262,7 @@ def test_process_course_xml_blocks_missing_course_xml():
         tar.add(course_root, arcname="course_root")
 
     # Should raise ValueError
-    with pytest.raises(ValueError, match="course.xml not found"):
+    with pytest.raises(ValueError, match=r"course\.xml not found"):
         process_course_xml_blocks(archive_path, "test")
 
     temp_dir.cleanup()
@@ -274,7 +274,7 @@ def test_process_course_xml_blocks_empty_archive():
     archive_path = Path(temp_dir.name) / "empty_course.tar.gz"
 
     # Create empty tar
-    with tarfile.open(archive_path, "w:gz") as tar:
+    with tarfile.open(archive_path, "w:gz"):
         pass
 
     # Should raise ValueError about archive root
