@@ -146,8 +146,8 @@ with mitxonline_discussion_events as (
     from xpro_discussion_events
     left join users
         on
-            xpro_discussion_events.openedx_user_id = users.mitxonline_openedx_user_id
-            and xpro_discussion_events.user_username = users.user_mitxonline_username
+            xpro_discussion_events.openedx_user_id = users.mitxpro_openedx_user_id
+            and xpro_discussion_events.user_username = users.user_mitxpro_username
 
     union all
 
@@ -201,7 +201,7 @@ with mitxonline_discussion_events as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['combined.platform']) }} as platform_fk
+    cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2; align with other fact tables
     , combined.platform
     , user_fk
     , openedx_user_id

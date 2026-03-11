@@ -26,12 +26,15 @@ models:
     tests:
     - not_null
   - name: course_fk
-    description: Foreign key to dim_course
+    description: Foreign key to dim_course (null for edxorg runs — edxorg courses
+      not yet in dim_course)
     tests:
-    - not_null
+    - not_null:
+        where: "platform != 'edxorg'"
     - relationships:
         to: ref('dim_course')
         field: course_pk
+        where: "platform != 'edxorg'"
   - name: platform_fk
     description: Foreign key to dim_platform (Phase 3+)
   - name: platform
