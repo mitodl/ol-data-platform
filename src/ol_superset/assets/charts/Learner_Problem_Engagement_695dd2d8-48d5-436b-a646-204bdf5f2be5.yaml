@@ -11,12 +11,12 @@ params:
   - courserun_readable_id
   - section_title
   - subsection_title
-  - problem_title
-  - num_of_attempts
-  - num_of_correct_attempts
+  - problem_name
+  - problems_attempted
+  - num_of_problems_correct
   - max_possible_grade
-  - learner_lowest_grade
-  - learner_highest_grade
+  - max_learner_grade
+  - min_learner_grade
   allow_render_html: true
   color_pn: true
   column_config:
@@ -33,13 +33,11 @@ params:
   conditional_formatting: []
   dashboards:
   - 45
-  datasource: 65__table
+  datasource: 92__table
   extra_form_data: {}
   groupby: []
   include_search: true
-  order_by_cols:
-  - '["section_block_index", true]'
-  - '["subsection_block_index", true]'
+  order_by_cols: []
   order_desc: true
   percent_metrics: []
   query_mode: raw
@@ -51,24 +49,23 @@ params:
   temporal_columns_lookup: {}
   viz_type: table
   annotation_layers: []
-query_context: '{"datasource": {"id": 65, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 92, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["user_email", "full_name", "courserun_readable_id", "section_title",
-  "subsection_title", "problem_title", "num_of_attempts", "num_of_correct_attempts",
-  "max_possible_grade", "learner_lowest_grade", "learner_highest_grade"], "orderby":
-  [["section_block_index", true], ["subsection_block_index", true]], "annotation_layers":
+  "subsection_title", "problem_name", "problems_attempted", "num_of_problems_correct",
+  "max_possible_grade", "max_learner_grade", "min_learner_grade"], "orderby":
+  [], "annotation_layers":
   [], "row_limit": 10000, "series_limit": 0, "order_desc": true, "url_params": {},
   "custom_params": {}, "custom_form_data": {}, "post_processing": [], "time_offsets":
-  []}], "form_data": {"datasource": "65__table", "viz_type": "table", "slice_id":
+  []}], "form_data": {"datasource": "92__table", "viz_type": "table", "slice_id":
   84, "query_mode": "raw", "groupby": [], "temporal_columns_lookup": {}, "all_columns":
   ["user_email", "full_name", "courserun_readable_id", "section_title", "subsection_title",
-  "problem_title", "num_of_attempts", "num_of_correct_attempts", "max_possible_grade",
-  "learner_lowest_grade", "learner_highest_grade"], "percent_metrics": [], "adhoc_filters":
-  [], "order_by_cols": ["[\"section_block_index\", true]", "[\"subsection_block_index\",
-  true]"], "order_desc": true, "row_limit": 10000, "server_page_length": 10, "table_timestamp_format":
+  "problem_name", "problems_attempted", "num_of_problems_correct", "max_possible_grade",
+  "max_learner_grade", "min_learner_grade"], "percent_metrics": [], "adhoc_filters":
+  [], "order_by_cols": [], "order_desc": true, "row_limit": 10000, "server_page_length": 10, "table_timestamp_format":
   "smart_date", "include_search": true, "allow_render_html": true, "column_config":
-  {"learner_highest_grade": {"showCellBars": false}, "learner_lowest_grade": {"showCellBars":
-  false}, "max_possible_grade": {"showCellBars": false}, "num_of_correct_attempts":
+  {"min_learner_grade": {"showCellBars": false}, "max_learner_grade": {"showCellBars":
+  false}, "max_possible_grade": {"showCellBars": false}, "num_of_problems_correct":
   {"showCellBars": false}}, "show_cell_bars": true, "color_pn": true, "comparison_color_scheme":
   "Green", "conditional_formatting": [], "comparison_type": "values", "extra_form_data":
   {}, "dashboards": [45], "force": false, "result_format": "json", "result_type":
@@ -76,4 +73,4 @@ query_context: '{"datasource": {"id": 65, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 695dd2d8-48d5-436b-a646-204bdf5f2be5
 version: 1.0.0
-dataset_uuid: b9e94ba2-f399-4210-b042-b8aaa4039f58
+dataset_uuid: 4752cd11-a13e-4a8e-be31-4d9227b07ca2
