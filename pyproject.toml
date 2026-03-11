@@ -36,6 +36,7 @@ dev = [
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
     "sqlfluff[rs]>=4.0.0",
+    "types-boto3>=1.42.65",
 ]
 
 # The ol_orchestrate package has been moved to packages/ol-orchestrate-lib/
