@@ -23,7 +23,7 @@ from ol_superset.lib.superset_api import (
     create_authenticated_session,
     get_instance_config,
 )
-from ol_superset.lib.utils import confirm_action, get_assets_dir
+from ol_superset.lib.utils import get_assets_dir
 
 roles_app = cyclopts.App(
     name="roles",
@@ -101,18 +101,14 @@ def roles_list(
         for schema in allowed_schemas:
             matching.extend(schema_to_datasets.get(schema, []))
 
-        uncovered_schemas = [
-            s for s in allowed_schemas if s not in schema_to_datasets
-        ]
+        uncovered_schemas = [s for s in allowed_schemas if s not in schema_to_datasets]
 
         print(f"Role: {name}")
         print(f"  Allowed schemas: {allowed_schemas or '(none defined)'}")
         print(f"  Accessible datasets: {len(matching)}")
 
         if uncovered_schemas:
-            print(
-                f"  ⚠️  Schemas with no local datasets: {uncovered_schemas}"
-            )
+            print(f"  ⚠️  Schemas with no local datasets: {uncovered_schemas}")
 
         if matching:
             for ds in sorted(matching, key=lambda d: d.get("table_name") or ""):
@@ -173,9 +169,7 @@ def roles_check(
 
     # Filter to the target database directory (default: Trino)
     if database:
-        local_datasets = [
-            ds for ds in local_datasets if ds.get("database") == database
-        ]
+        local_datasets = [ds for ds in local_datasets if ds.get("database") == database]
 
     # Collect all schemas covered by at least one role
     covered_schemas: set[str] = set()
@@ -209,9 +203,7 @@ def roles_check(
     if uncovered:
         print("❌ FAIL: Dataset schemas not covered by any governance role:")
         for schema in sorted(uncovered):
-            count = sum(
-                1 for ds in local_datasets if ds.get("schema") == schema
-            )
+            count = sum(1 for ds in local_datasets if ds.get("schema") == schema)
             print(f"  • {schema} ({count} dataset(s))")
         print()
         print(
@@ -220,7 +212,9 @@ def roles_check(
         )
         sys.exit(1)
 
-    print(f"✅ All {len(dataset_schemas)} dataset schema(s) are covered by governance roles.")
+    print(
+        f"✅ All {len(dataset_schemas)} dataset schema(s) are covered by governance roles."
+    )
     print()
 
 
@@ -407,9 +401,7 @@ def roles_sync(
         # Map current perm IDs back to dataset IDs
         perm_id_to_ds_id = {v: k for k, v in dataset_id_to_perm_id.items()}
         current_ds_ids: set[int] = {
-            perm_id_to_ds_id[pid]
-            for pid in current_perm_ids
-            if pid in perm_id_to_ds_id
+            perm_id_to_ds_id[pid] for pid in current_perm_ids if pid in perm_id_to_ds_id
         }
 
         to_add_ds_ids = desired_ds_ids - current_ds_ids
@@ -509,9 +501,7 @@ def _resolve_governance_json(
     if explicit_path:
         p = Path(explicit_path)
         if not p.exists():
-            print(
-                f"Error: governance JSON not found: {p}", file=sys.stderr
-            )
+            print(f"Error: governance JSON not found: {p}", file=sys.stderr)
             return None
         return p
 

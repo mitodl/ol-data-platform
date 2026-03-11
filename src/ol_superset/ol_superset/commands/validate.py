@@ -110,18 +110,14 @@ def validate(
     print("Checking governance role schema coverage...")
     gov_json = find_governance_roles_json(assets_dir)
     if gov_json is None:
-        print(
-            "  ⚠️  ol_governance_roles.json not found; skipping schema coverage check"
-        )
+        print("  ⚠️  ol_governance_roles.json not found; skipping schema coverage check")
     else:
         governance_roles = load_governance_roles(gov_json)
         local_datasets = get_local_datasets(assets_dir)
 
         # Only check warehouse (Trino) datasets - other DBs (e.g. Superset
         # Metadata DB) are not subject to warehouse schema governance.
-        trino_datasets = [
-            ds for ds in local_datasets if ds.get("database") == "Trino"
-        ]
+        trino_datasets = [ds for ds in local_datasets if ds.get("database") == "Trino"]
 
         covered_schemas: set[str] = set()
         for role in governance_roles:
