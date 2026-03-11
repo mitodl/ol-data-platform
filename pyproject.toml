@@ -31,6 +31,7 @@ dev = [
     "dagster-dg-cli>=1.12.10",
     "dagster-webserver>=1.12.10",
     "mypy",
+    "ol-orchestrate-lib",
     "pre-commit>=4.0.0,<5",
     "pytest>=9.0.1,<10",
     "pytest-cov>=6.0.0,<7",
@@ -38,6 +39,9 @@ dev = [
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
     "sqlfluff[rs]>=4.0.0",
 ]
+
+[tool.uv.sources]
+ol-orchestrate-lib = { workspace = true }
 
 # The ol_orchestrate package has been moved to packages/ol-orchestrate-lib/
 # and is managed as a workspace member package
