@@ -1,3 +1,4 @@
+---
 name: Python Tests
 
 permissions:
@@ -6,16 +7,16 @@ permissions:
 on:
   push:
     branches:
-      - main
+    - main
     paths:
-      - "packages/**/*.py"
-      - ".github/workflows/pytest.yaml"
-      - "pyproject.toml"
+    - "packages/**/*.py"
+    - ".github/workflows/pytest.yaml"
+    - "pyproject.toml"
   pull_request:
     paths:
-      - "packages/**/*.py"
-      - ".github/workflows/pytest.yaml"
-      - "pyproject.toml"
+    - "packages/**/*.py"
+    - ".github/workflows/pytest.yaml"
+    - "pyproject.toml"
   workflow_dispatch:
 
 jobs:
@@ -24,44 +25,44 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.13"]
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          version: "0.9.3"
-          enable-cache: true
-      
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-      
-      - name: Install dependencies
-        run: uv sync --all-extras
-      
-      - name: Run pytest
-        run: |
-          uv run pytest packages/ \
-            --verbose \
-            --cov=packages \
-            --cov-report=term-missing \
-            --cov-report=xml \
-            --junit-xml=pytest-results.xml
-      
-      - name: Upload coverage reports
-        if: always()
-        uses: codecov/codecov-action@v5
-        with:
-          file: ./coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-      
-      - name: Publish test results
-        if: always()
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        with:
-          files: pytest-results.xml
-          check_name: Python Test Results
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: "0.9.3"
+        enable-cache: true
+
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: uv sync --all-extras
+
+    - name: Run pytest
+      run: |
+        uv run pytest packages/ \
+          --verbose \
+          --cov=packages \
+          --cov-report=term-missing \
+          --cov-report=xml \
+          --junit-xml=pytest-results.xml
+
+    - name: Upload coverage reports
+      if: always()
+      uses: codecov/codecov-action@v5
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Publish test results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        files: pytest-results.xml
+        check_name: Python Test Results
