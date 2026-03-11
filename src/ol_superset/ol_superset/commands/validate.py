@@ -6,6 +6,11 @@ from typing import Annotated
 import yaml
 from cyclopts import Parameter
 
+from ol_superset.lib.role_management import (
+    find_governance_roles_json,
+    get_local_datasets,
+    load_governance_roles,
+)
 from ol_superset.lib.utils import count_assets, get_assets_dir
 
 
@@ -100,6 +105,51 @@ def validate(
     if warnings == 0:
         print("  ✅ No security issues detected")
 
+    # Check governance role schema coverage
+    print()
+    print("Checking governance role schema coverage...")
+    gov_json = find_governance_roles_json(assets_dir)
+    if gov_json is None:
+        print(
+            "  ⚠️  ol_governance_roles.json not found; skipping schema coverage check"
+        )
+    else:
+        governance_roles = load_governance_roles(gov_json)
+        local_datasets = get_local_datasets(assets_dir)
+
+        # Only check warehouse (Trino) datasets - other DBs (e.g. Superset
+        # Metadata DB) are not subject to warehouse schema governance.
+        trino_datasets = [
+            ds for ds in local_datasets if ds.get("database") == "Trino"
+        ]
+
+        covered_schemas: set[str] = set()
+        for role in governance_roles:
+            covered_schemas.update(role.get("allowed_schemas", []))
+
+        dataset_schemas: set[str] = {
+            ds["schema"] for ds in trino_datasets if ds.get("schema")
+        }
+        uncovered = dataset_schemas - covered_schemas
+
+        if uncovered:
+            warnings += len(uncovered)
+            for schema in sorted(uncovered):
+                count = sum(1 for ds in trino_datasets if ds.get("schema") == schema)
+                print(
+                    f"  ⚠️  Schema not covered by any governance role: "
+                    f"{schema} ({count} dataset(s))"
+                )
+            print(
+                "      Add the missing schema(s) to ol_governance_roles.json "
+                "and run 'ol-superset roles sync'."
+            )
+        else:
+            print(
+                f"  ✅ All {len(dataset_schemas)} dataset schema(s) covered "
+                "by governance roles"
+            )
+
     print()
     print("=" * 50)
     print("Validation Complete!")
@@ -111,5 +161,8 @@ def validate(
         f"{counts['charts']} charts, {counts['datasets']} datasets"
     )
     print("  ✅ All YAML files are valid")
-    print("  ✅ Ready for version control")
+    if warnings == 0:
+        print("  ✅ Ready for version control")
+    else:
+        print(f"  ⚠️  {warnings} warning(s) found — review above before deploying")
     print()
