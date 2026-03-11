@@ -234,6 +234,7 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
 
 @multi_asset(
     group_name="openedx",
+    required_resource_keys={"openedx"},
     ins={"course_xml": AssetIn(key=AssetKey(("openedx", "raw_data", "course_xml")))},
     outs={
         "course_metadata": AssetOut(
