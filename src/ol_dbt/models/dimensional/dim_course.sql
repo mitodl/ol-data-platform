@@ -44,8 +44,8 @@ with mitxonline_courses as (
             partition by course_readable_id
             order by
                 case platform
-                    when '{{ var("mitxonline") }}' then 1
-                    when '{{ var("mitxpro") }}' then 2
+                    when 'mitxonline' then 1
+                    when 'mitxpro' then 2
                 end
         ) as row_num
     from combined_courses
