@@ -9,7 +9,7 @@ with mitxonline_instructors as (
         , instructor_title
         , instructor_bio_short
         , instructor_bio_long
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_instructors') }}
 )
 
@@ -19,7 +19,7 @@ with mitxonline_instructors as (
         , cast(null as varchar) as instructor_title
         , cast(null as varchar) as instructor_bio_short
         , cms_facultymemberspage_facultymember_description as instructor_bio_long
-        , '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform
     from {{ ref('int__mitxpro__coursesfaculty') }}
 )
 
