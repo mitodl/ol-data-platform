@@ -75,7 +75,7 @@ select
     , coalesce(mitx_user.user_mitxonline_id, mitx_user2.user_mitxonline_id) as user_mitxonline_id
 from program_entitlements
 left join mitxonline_programs
-      on mitxonline_programs.program_title like program_entitlements.program_title || '%'
+      on mitxonline_programs.program_title = program_entitlements.program_title
 left join program_product_versions
       on mitxonline_programs.program_id = program_product_versions.product_object_id
 left join mitxonline_fulfilled_orders
