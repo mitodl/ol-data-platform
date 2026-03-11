@@ -105,3 +105,51 @@ models:
     description: int, user birth year
   - name: user_country
     description: string, user country
+
+- name: edxorg_to_mitxonline_program_entitlements
+  description: Program entitlements to program orders to be migrated to MITx Online
+  columns:
+  - name: program_id
+    data_type: integer
+    description: program ID on the mitxonline platform.
+  - name: program_title
+    data_type: varchar
+    description: program title for the program entitlement
+  - name: user_mitxonline_id
+    data_type: integer
+    description: user ID on the mitxonline platform.
+  - name: user_edxorg_email
+    data_type: varchar
+    description: user email that user registered on edX.org platform.
+  - name: purchase_date
+    data_type: date
+    description: the date that the learner purchased the program bundle on edX.org
+  - name: expiration_date
+    data_type: date
+    description: the date that the entitlement expires
+  - name: order_id
+    data_type: integer
+    description: the order id for the program order on mitxonline. Used to track if
+      the program entitlement has been migrated to an order on mitxonline.
+  - name: number_of_entitlements
+    data_type: integer
+    description: number of courses that the learner has access to using the program
+      bundle entitlement
+  - name: number_of_redeemed_entitlements
+    data_type: integer
+    description: number of courses in the program that the learner has redeemed access
+      to using the program bundle entitlement
+  - name: product_object_id
+    data_type: integer
+    description: the product object id for the program on mitxonline.
+  - name: product_version_id
+    data_type: integer
+    description: the product version id for the program on mitxonline
+  - name: contenttype_id
+    data_type: integer
+    description: the content type id for the program on mitxonline
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["program_title", "user_edxorg_email"]
+        row_condition: "order_id is null"
