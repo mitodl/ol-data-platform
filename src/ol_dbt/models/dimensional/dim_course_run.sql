@@ -93,8 +93,8 @@ with mitxonline_courseruns as (
         courseruns_with_fk.*
         , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
         -- Create date keys for date dimension joins (parse to timestamp then format as YYYYMMDD)
-        , {{ iso8601_to_date_key('courserun_start_on') }} as start_date_key
-        , {{ iso8601_to_date_key('courserun_end_on') }} as end_date_key
+        , {{ iso8601_to_date_key('courserun_start_on') }} as courserun_start_date_key
+        , {{ iso8601_to_date_key('courserun_end_on') }} as courserun_end_date_key
         , {{ iso8601_to_date_key('enrollment_start') }} as enrollment_start_date_key
         , {{ iso8601_to_date_key('enrollment_end') }} as enrollment_end_date_key
     from courseruns_with_fk
@@ -112,8 +112,8 @@ with mitxonline_courseruns as (
         , platform_fk
         , platform
         , courserun_title
-        , start_date_key
-        , end_date_key
+        , courserun_start_date_key
+        , courserun_end_date_key
         , enrollment_start_date_key
         , enrollment_end_date_key
         , courserun_start_on
@@ -150,8 +150,8 @@ with mitxonline_courseruns as (
         , existing.platform_fk
         , existing.platform
         , existing.courserun_title
-        , existing.start_date_key
-        , existing.end_date_key
+        , existing.courserun_start_date_key
+        , existing.courserun_end_date_key
         , existing.enrollment_start_date_key
         , existing.enrollment_end_date_key
         , existing.courserun_start_on

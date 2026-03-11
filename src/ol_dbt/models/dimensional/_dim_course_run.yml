@@ -46,14 +46,14 @@ models:
     - not_null
   - name: courserun_title
     description: Title of this specific course run
-  - name: start_date_key
-    description: Foreign key to dim_date for course run start
+  - name: courserun_start_date_key
+    description: Foreign key to dim_date for course run start date
     tests:
     - relationships:
         to: ref('dim_date')
         field: date_key
-  - name: end_date_key
-    description: Foreign key to dim_date for course run end
+  - name: courserun_end_date_key
+    description: Foreign key to dim_date for course run end date
     tests:
     - relationships:
         to: ref('dim_date')
