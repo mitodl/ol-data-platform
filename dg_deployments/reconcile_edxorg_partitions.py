@@ -326,6 +326,11 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
                             "    S3 destination already exists, skipping copy: %s",
                             correct_path,
                         )
+                        if not dry_run:
+                            s3_client.delete_object(
+                                Bucket=bucket,
+                                Key=bad_s3_key,
+                            )
                     else:
                         log.info(
                             "    S3 copy: s3://%s/%s -> s3://%s/%s",
@@ -339,6 +344,10 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
                                 Bucket=bucket,
                                 CopySource={"Bucket": bucket, "Key": bad_s3_key},
                                 Key=good_s3_key,
+                            )
+                            s3_client.delete_object(
+                                Bucket=bucket,
+                                Key=bad_s3_key,
                             )
 
                     # Update metadata for the re-emitted event.
