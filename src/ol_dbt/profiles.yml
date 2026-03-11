@@ -60,7 +60,7 @@ open_learning:
       settings:
         memory_limit: '{{ env_var("DBT_DUCKDB_MEMORY_LIMIT", "28GB") }}'
         enable_http_metadata_cache: true
-        preserve_insertion_order: 'false'
+        preserve_insertion_order: false
     dev_local_iceberg:
       type: duckdb
       path: ':memory:'
