@@ -140,7 +140,7 @@ models:
     description: number of courses in the program that the learner has redeemed access
       to using the program bundle entitlement
   - name: product_object_id
-    data_type: varchar
+    data_type: integer
     description: the product object id for the program on mitxonline.
   - name: product_version_id
     data_type: integer
