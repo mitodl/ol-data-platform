@@ -16,7 +16,7 @@ with ocw_departments as (
     select distinct
         cast(null as varchar) as department_number
         , coursedepartment_name as department_name
-        , '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_to_departments') }}
     where coursedepartment_name is not null
 )
