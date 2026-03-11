@@ -69,6 +69,7 @@ import sys
 from urllib.parse import urlparse
 
 import boto3
+import botocore
 from dagster import AssetKey, AssetMaterialization, DagsterInstance, MultiPartitionKey
 from dagster._core.events import DagsterEventType
 from dagster._core.storage.event_log.base import EventRecordsFilter
@@ -326,11 +327,6 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
                             "    S3 destination already exists, skipping copy: %s",
                             correct_path,
                         )
-                        if not dry_run:
-                            s3_client.delete_object(
-                                Bucket=bucket,
-                                Key=bad_s3_key,
-                            )
                     else:
                         log.info(
                             "    S3 copy: s3://%s/%s -> s3://%s/%s",
@@ -340,15 +336,14 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
                             good_s3_key,
                         )
                         if not dry_run:
-                            s3_client.copy_object(
-                                Bucket=bucket,
-                                CopySource={"Bucket": bucket, "Key": bad_s3_key},
-                                Key=good_s3_key,
-                            )
-                            s3_client.delete_object(
-                                Bucket=bucket,
-                                Key=bad_s3_key,
-                            )
+                            try:
+                                s3_client.copy_object(
+                                    Bucket=bucket,
+                                    CopySource={"Bucket": bucket, "Key": bad_s3_key},
+                                    Key=good_s3_key,
+                                )
+                            except botocore.errorfactory.NoSuchKey:
+                                log.info("The bad key no longer exists")
 
                     # Update metadata for the re-emitted event.
                     from dagster import MetadataValue  # noqa: PLC0415
@@ -396,6 +391,10 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
         log.info("  Deleting %r", bad_key)
         if not dry_run:
             instance.delete_dynamic_partition(PARTITIONS_DEF_NAME, bad_key)
+            s3_client.delete_object(
+                Bucket=bucket,
+                Key=bad_key,
+            )
 
     suffix = " (dry-run - no changes persisted)" if dry_run else ""
     log.info("Reconciliation complete%s.", suffix)
