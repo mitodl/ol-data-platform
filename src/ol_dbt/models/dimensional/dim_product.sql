@@ -72,8 +72,7 @@ with mitxonline_products as (
     select
         {{ dbt_utils.generate_surrogate_key([
             'cast(product_id as varchar)',
-            'platform',
-            'cast(current_timestamp as varchar)'
+            'platform'
         ]) }} as product_pk
         , product_id as source_product_id
         , product_type

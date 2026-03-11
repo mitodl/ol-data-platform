@@ -79,32 +79,28 @@ with mitxonline_course_structure as (
         *
         , last_value(
             case when coursestructure_block_category = 'sequential' then coursestructure_block_id end
-            ignore nulls
-        ) over (
+        ) ignore nulls over (
             partition by courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as sequential_block_id
         , last_value(
             case when coursestructure_block_category = 'sequential' then coursestructure_block_title end
-            ignore nulls
-        ) over (
+        ) ignore nulls over (
             partition by courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as sequential_title
         , last_value(
             case when coursestructure_block_category = 'chapter' then coursestructure_block_id end
-            ignore nulls
-        ) over (
+        ) ignore nulls over (
             partition by courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as chapter_block_id
         , last_value(
             case when coursestructure_block_category = 'chapter' then coursestructure_block_title end
-            ignore nulls
-        ) over (
+        ) ignore nulls over (
             partition by courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row

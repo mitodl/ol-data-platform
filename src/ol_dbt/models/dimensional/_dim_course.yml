@@ -11,7 +11,11 @@ models:
     owner: data_team
   columns:
   - name: course_pk
-    description: Surrogate key primary key
+    description: >
+      Surrogate primary key. Generated as dbt_utils.generate_surrogate_key(['platform',
+      'course_readable_id']). Value is stable across runs — do not filter on this
+      alone
+      for SCD2; also filter on is_current.
     tests:
     - unique
     - not_null
@@ -36,11 +40,17 @@ models:
     - accepted_values:
         values: ['mitxonline', 'mitxpro', 'edxorg', 'ocw', 'residential']
   - name: effective_date
-    description: Timestamp when this version became effective (SCD Type 2)
+    description: >
+      Timestamp (UTC) when this SCD Type 2 version became effective. Populated as
+      current_timestamp at the time the row is first inserted. Always set; filter
+      with
+      is_current for the latest version.
     tests:
     - not_null
   - name: end_date
-    description: Timestamp when this version was superseded (null if current)
+    description: >
+      Timestamp (UTC) when this SCD Type 2 version was superseded by a newer version.
+      Null for the current active record.
   - name: is_current
     description: Boolean indicating current version
     tests:

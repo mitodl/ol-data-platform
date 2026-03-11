@@ -56,6 +56,11 @@ with mitxonline_enrollments as (
     from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
 )
 
+-- NOTE: This CTE captures MITx Online program enrollments only. MicroMasters program
+-- enrollments on edX.org (tracked in int__edxorg__mitx_program_enrollments) are not
+-- included here because edxorg MicroMasters programs use a separate program ID namespace
+-- that does not match the program IDs in dim_program. Linking those enrollments requires
+-- a separate mapping effort and is tracked as future work.
 , program_enrollments as (
     select
         programenrollment_id as enrollment_id
@@ -124,7 +129,8 @@ with mitxonline_enrollments as (
     select
         {{ dbt_utils.generate_surrogate_key([
             'cast(enrollment_id as varchar)',
-            'platform'
+            'platform',
+            "case when program_id is not null then 'program' else 'course' end"
         ]) }} as enrollment_key
         , enrollment_id
         , enrollment_date_key
@@ -141,6 +147,7 @@ with mitxonline_enrollments as (
 
     {% if is_incremental() %}
     where enrollment_created_on >= (select max(enrollment_created_on) from {{ this }})
+       or enrollment_created_on is null
     {% endif %}
 )
 

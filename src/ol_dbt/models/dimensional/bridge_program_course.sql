@@ -46,6 +46,10 @@ with mitxonline_program_requirements as (
         dim_program.program_pk as program_fk
         , dim_course.course_pk as course_fk
         , combined_requirements.is_required
+        -- course_order is set to 1 as a placeholder. The source systems (MITx Online,
+        -- xPro, MicroMasters) do not expose a canonical ordering of courses within a
+        -- program, so a meaningful sort order cannot be derived without additional
+        -- business logic or manual curation.
         , 1 as course_order
     from combined_requirements
     inner join dim_program

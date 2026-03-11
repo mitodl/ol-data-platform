@@ -14,7 +14,10 @@ models:
     - unique
     - not_null
   - name: source_id
-    description: Program ID from source system
+    description: >
+      Program ID from the source system (integer). This is used as a join key when
+      linking platform-specific fact tables (e.g., tfact_enrollment) to this dimension.
+      Not the same as program_readable_id which is the business-facing identifier.
     tests:
     - not_null
   - name: program_readable_id

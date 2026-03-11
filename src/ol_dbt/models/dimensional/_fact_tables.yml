@@ -178,7 +178,7 @@ models:
     description: Source system certificate ID
     tests:
     - not_null
-  - name: certificate_date_key
+  - name: certificate_issued_date_key
     description: Foreign key to dim_date for certificate issuance date
     tests:
     - not_null

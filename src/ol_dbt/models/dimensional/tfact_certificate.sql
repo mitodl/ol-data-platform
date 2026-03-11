@@ -60,7 +60,7 @@ with mitxonline_certificates as (
         , dim_course_run.courserun_pk as courserun_fk
         , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
         , dim_certificate_type.certificate_type_pk as certificate_type_fk
-        , {{ iso8601_to_date_key('certificate_created_on') }} as certificate_date_key
+        , {{ iso8601_to_date_key('certificate_created_on') }} as certificate_issued_date_key
     from combined_certificates
     left join dim_course_run
         on combined_certificates.courserun_id = dim_course_run.source_id
@@ -80,7 +80,7 @@ with mitxonline_certificates as (
             'platform'
         ]) }} as certificate_key
         , certificate_id
-        , certificate_date_key
+        , certificate_issued_date_key
         , user_fk
         , courserun_fk
         , platform_fk
