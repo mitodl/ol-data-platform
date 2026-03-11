@@ -100,7 +100,15 @@ with mitxonline_orders as (
     from orders_with_fks
 
     {% if is_incremental() %}
-    where order_updated_on >= (select max(order_updated_on) from {{ this }})
+    -- Per-platform max prevents xPro updates from advancing the global watermark
+    -- past MITx Online order creation times, which would cause silent data loss.
+    where (
+        order_updated_on >= (
+            select max(order_updated_on) from {{ this }}
+            where platform = orders_with_fks.platform
+        )
+        or order_updated_on is null
+    )
     {% endif %}
 )
 
