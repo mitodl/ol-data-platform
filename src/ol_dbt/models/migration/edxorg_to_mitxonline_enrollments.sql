@@ -2,6 +2,15 @@ with combined_enrollments as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
+, program_entitlements as (
+    select *
+    from {{ ref('stg__edxorg__program_entitlement') }}
+)
+
+, program_courses as (
+    select * from {{ ref('int__edxorg__mitx_program_courses') }}
+)
+
 , edxorg_grade as (
     select
           {{ format_course_id('courseruncertificate_courserun_readable_id', false) }} as courserun_readable_id
@@ -126,7 +135,7 @@ with combined_enrollments as (
     select * from {{ ref('int__mitxonline__courserunenrollments') }}
 )
 
-, edxorg_enrollment as (
+, course_enrollments as (
     select
         combined_enrollments.courserunenrollment_created_on
         , combined_enrollments.courserunenrollment_enrollment_mode
@@ -137,6 +146,7 @@ with combined_enrollments as (
         , combined_enrollments.courseruncertificate_created_on
         , combined_enrollments.courserungrade_grade
         , combined_enrollments.courserungrade_is_passing
+        , false as is_program_entitlement_enrollment
     from combined_enrollments
     left join edxorg_runs
        on combined_enrollments.courserun_readable_id = edxorg_runs.courserun_readable_id
@@ -150,6 +160,39 @@ with combined_enrollments as (
     -- Exclude retired users
     and combined_enrollments.user_email not like 'retired__user%'
     and combined_enrollments.user_username not like 'retired__user%'
+)
+
+, entitlement_enrollments as (
+    select distinct
+        combined_enrollments.courserunenrollment_created_on
+        , combined_enrollments.courserunenrollment_enrollment_mode
+        , combined_enrollments.user_id
+        , {{ format_course_id('combined_enrollments.courserun_readable_id', false) }} as courserun_readable_id
+        , combined_enrollments.course_readable_id
+        , combined_enrollments.user_email
+        , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courserungrade_grade
+        , combined_enrollments.courserungrade_is_passing
+        , true as is_program_entitlement_enrollment
+    from combined_enrollments
+    join edxorg_runs
+          on combined_enrollments.courserun_readable_id = edxorg_runs.courserun_readable_id
+    join program_courses
+          on edxorg_runs.course_readable_id = program_courses.course_readable_id
+    join program_entitlements
+       on lower(combined_enrollments.user_email) = program_entitlements.user_email
+        and cast(combined_enrollments.user_id as varchar) = cast(program_entitlements.user_id as varchar)
+        and program_courses.program_title = program_entitlements.program_title
+    where combined_enrollments.platform = '{{ var("edxorg") }}'
+      and combined_enrollments.courserun_readable_id not like '%PEx%'
+      and combined_enrollments.user_email not like 'retired__user%'
+      and combined_enrollments.user_username not like 'retired__user%'
+)
+
+, edxorg_enrollment as (
+    select * from course_enrollments
+    union distinct
+    select * from entitlement_enrollments
 )
 
 select
@@ -187,6 +230,9 @@ left join edx_to_mitxonline_certificate_revision
 left join edx_signatories
     on edxorg_enrollment.courserun_readable_id = edx_signatories.courserun_readable_id
 where
-    edxorg_enrollment.courseruncertificate_created_on is not null
+    (
+      edxorg_enrollment.courseruncertificate_created_on is not null
+      or edxorg_enrollment.is_program_entitlement_enrollment
+    )
     and mitxonline_enrollment.user_email is null
     and mitx__users.user_mitxonline_email is null
