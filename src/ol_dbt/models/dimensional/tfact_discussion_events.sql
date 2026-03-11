@@ -222,9 +222,4 @@ select
 from combined
 left join dim_course_run
     on combined.courserun_readable_id = dim_course_run.courserun_readable_id
-    and dim_course_run.platform = case combined.platform
-        when 'mitxonline' then '{{ var("mitxonline") }}'
-        when 'mitxpro' then '{{ var("mitxpro") }}'
-        when 'edxorg' then '{{ var("edxorg") }}'
-        when 'residential' then '{{ var("residential") }}'
-    end
+    and dim_course_run.platform = combined.platform
