@@ -135,6 +135,11 @@ with mitxonline_courseruns as (
             and existing.platform = courseruns_with_all_fks.platform
             and existing.is_current = true
             and existing.courserun_title = courseruns_with_all_fks.courserun_title
+            and coalesce(existing.courserun_start_on, '') = coalesce(courseruns_with_all_fks.courserun_start_on, '')
+            and coalesce(existing.courserun_end_on, '') = coalesce(courseruns_with_all_fks.courserun_end_on, '')
+            and coalesce(existing.enrollment_start, '') = coalesce(courseruns_with_all_fks.enrollment_start, '')
+            and coalesce(existing.enrollment_end, '') = coalesce(courseruns_with_all_fks.enrollment_end, '')
+            and existing.courserun_is_live = courseruns_with_all_fks.courserun_is_live
     )
     {% endif %}
 )
