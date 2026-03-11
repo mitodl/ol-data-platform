@@ -542,8 +542,8 @@ models:
     - not_null
   - name: courserun_id
     description: int, primary key representing a single MITx Online course run
-  - name: programrun_id
-    description: int, primary key representing a single MITx Online program run
+  - name: program_id
+    description: int, primary key representing a single MITx Online program
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
   - name: program_readable_id

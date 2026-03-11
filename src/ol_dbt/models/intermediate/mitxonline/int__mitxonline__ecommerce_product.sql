@@ -41,7 +41,6 @@ with products as (
 select
     product_subquery.*
     , courseruns.course_id
-    , programs.program_id
     , courseruns.courserun_readable_id
     , programs.program_readable_id
 from product_subquery

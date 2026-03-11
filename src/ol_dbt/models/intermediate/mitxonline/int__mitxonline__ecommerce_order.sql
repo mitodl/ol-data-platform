@@ -77,7 +77,7 @@ select
     , intermediate_products_view.product_type
     , intermediate_products_view.product_id
     , intermediate_products_view.courserun_id
-    , intermediate_products_view.programrun_id
+    , intermediate_products_view.program_id
     , intermediate_products_view.courserun_readable_id
     , intermediate_products_view.program_readable_id
     , discounts.discount_source
