@@ -379,6 +379,64 @@ git diff assets/
 ol-superset sync superset-production superset-qa
 ```
 
+## Governance: Dataset Access (roles sync) and RLS
+
+### Grant Dataset Access to Governance Roles
+
+The `ol_data_analyst`, `ol_instructor`, `ol_business_analyst`, and `ol_researcher` roles do not have
+`all_datasource_access`. They rely on per-dataset `datasource access on [table]` permissions, which
+are derived from each role's `allowed_schemas` in
+`ol-infrastructure/src/ol_infrastructure/applications/superset/ol_governance_roles.json`.
+
+Run this after any of the following events:
+- A new Trino dataset is added to the YAML assets
+- A dataset is moved to a different schema
+- A new governance role is added or `allowed_schemas` is updated
+
+```bash
+# Preview which permissions would be added/revoked (no changes applied)
+ol-superset roles sync superset-production --dry-run
+
+# Apply to QA first for verification
+ol-superset roles sync superset-qa --yes
+
+# Apply to production (prompts for confirmation)
+ol-superset roles sync superset-production
+
+# Audit current per-role dataset access from local YAMLs (no API call)
+ol-superset roles list
+```
+
+### Apply Row-Level Security Policies
+
+RLS policies are defined in `policies/ol_rls_policies.json`. Apply them after updating the policies
+or after a new Superset deployment:
+
+```bash
+# Preview RLS changes
+ol-superset apply-rls superset-production --dry-run
+
+# Apply to QA
+ol-superset apply-rls superset-qa --yes
+
+# Apply to production
+ol-superset apply-rls superset-production
+```
+
+### Deploy Updated Governance Role Definitions
+
+When `ol-infrastructure/src/ol_infrastructure/applications/superset/ol_governance_roles.json`
+changes (e.g., new permissions, `allowed_schemas` additions), the Pulumi stack must be redeployed
+so that `flask fab import-roles` picks up the new definitions:
+
+```bash
+cd ol-infrastructure
+pulumi up --stack applications.superset.Production
+```
+
+After the Pulumi deploy completes, run `roles sync` to re-grant dataset-level permissions, since
+`flask fab import-roles` only manages FAB-level permissions and does not touch datasource access.
+
 ## Future Enhancements
 
 Potential improvements for this workflow:
