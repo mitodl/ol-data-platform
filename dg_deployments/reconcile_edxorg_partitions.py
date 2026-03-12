@@ -55,22 +55,34 @@ Usage::
     uv run python scripts/reconcile_edxorg_partitions.py \\
         [--dry-run] \\
         [--aws-profile PROFILE] \\
-        [--s3-bucket BUCKET]
+        [--s3-bucket BUCKET] \\
+        [--max-workers N]
 
 ``--dry-run`` prints what would change without writing anything.
 ``--s3-bucket`` overrides the bucket resolved from the materialisation ``path``
 metadata; useful when running against a non-production copy of the event log.
+``--max-workers`` sets the thread-pool size for concurrent S3 and partition-
+deletion operations (default: 16).
 """
 
 import argparse
 import logging
 import re
 import sys
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 import boto3
 import botocore
-from dagster import AssetKey, AssetMaterialization, DagsterInstance, MultiPartitionKey
+from dagster import (
+    AssetKey,
+    AssetMaterialization,
+    DagsterInstance,
+    MetadataValue,
+    MultiPartitionKey,
+)
 from dagster._core.events import DagsterEventType
 from dagster._core.storage.event_log.base import EventRecordsFilter
 
@@ -94,6 +106,25 @@ AFFECTED_ASSET_KEYS: list[AssetKey] = [
     AssetKey(("edxorg", "raw_data", "course_structure")),
     AssetKey(("edxorg", "raw_data", "course_xml")),
 ]
+
+# Default thread-pool size for concurrent S3 and partition-deletion operations.
+DEFAULT_MAX_WORKERS = 16
+
+
+@dataclass
+class _WorkItem:
+    """All information needed to process a single bad-partition materialisation."""
+
+    bad_key: str
+    canon_key: MultiPartitionKey
+    asset_key: AssetKey
+    new_materialization: AssetMaterialization
+    # S3 copy details; None when no copy is required for this record.
+    bucket: str | None = None
+    bad_s3_key: str | None = None
+    good_s3_key: str | None = None
+    # Populated during the S3 execution phase.
+    s3_copy_failed: bool = field(default=False, init=False)
 
 
 def _canonical_course_id(course_id: str) -> str | None:
@@ -174,11 +205,181 @@ def _parse_s3_url(url: str) -> tuple[str, str]:
     return parsed.netloc, parsed.path.lstrip("/")
 
 
+def _meta_value(meta: dict[str, object | str], field_name: str) -> str | None:
+    """Extract a raw string value from a metadata dict regardless of wrapper type."""
+    val: object | str = meta.get(field_name)
+    if val is None:
+        return None
+    retval: str = str(val.value) if hasattr(val, "value") else str(val)
+    return retval
+
+
+def _plan_work_items(
+    instance: DagsterInstance,
+    bad_keys: list[str],
+    canonical_keys: dict[str, MultiPartitionKey],
+    s3_bucket_override: str | None,
+) -> list[_WorkItem]:
+    """Fetch all event records in two bulk queries and build the work plan.
+
+    Rather than issuing ``len(bad_keys) x len(AFFECTED_ASSET_KEYS)`` individual
+    event-log queries, this function issues one query per asset key and passes
+    *all* bad partition keys at once via ``EventRecordsFilter.asset_partitions``.
+    """
+    items: list[_WorkItem] = []
+
+    for asset_key in AFFECTED_ASSET_KEYS:
+        records = instance.get_event_records(
+            EventRecordsFilter(
+                asset_key=asset_key,
+                event_type=DagsterEventType.ASSET_MATERIALIZATION,
+                asset_partitions=bad_keys,
+            )
+        )
+
+        # Group by partition so we can log a concise summary per bad key.
+        records_by_partition: dict[str, int] = defaultdict(int)
+        for record in records:
+            original = record.asset_materialization
+            if original is None:
+                continue
+            bad_key = original.partition
+            if bad_key not in canonical_keys:
+                continue
+            records_by_partition[bad_key] += 1
+
+            canon_key = canonical_keys[bad_key]
+            original_meta = dict(original.metadata)
+            updated_meta = dict(original_meta)
+
+            raw_object_key = _meta_value(original_meta, "object_key")
+            raw_path = _meta_value(original_meta, "path")
+
+            correct_object_key = (
+                _correct_object_key(raw_object_key) if raw_object_key else None
+            )
+
+            bucket: str | None = None
+            bad_s3_key: str | None = None
+            good_s3_key: str | None = None
+
+            if correct_object_key and raw_path:
+                bucket, _ = _parse_s3_url(str(raw_path))
+                if s3_bucket_override:
+                    bucket = s3_bucket_override
+
+                prefix = str(raw_path).split(raw_object_key)[0].rstrip("/")
+                prefix_no_scheme = prefix.removeprefix("s3://").split("/", 1)
+                s3_prefix = prefix_no_scheme[1] if len(prefix_no_scheme) > 1 else ""
+
+                bad_s3_key = (
+                    f"{s3_prefix}/{raw_object_key}".lstrip("/")
+                    if s3_prefix
+                    else raw_object_key
+                )
+                good_s3_key = (
+                    f"{s3_prefix}/{correct_object_key}".lstrip("/")
+                    if s3_prefix
+                    else correct_object_key
+                )
+                correct_path = f"s3://{bucket}/{good_s3_key}"
+                updated_meta["object_key"] = correct_object_key
+                updated_meta["path"] = MetadataValue.path(correct_path)
+
+            raw_course_id = _meta_value(original_meta, "course_id")
+            if raw_course_id:
+                canon_course_id = _canonical_course_id(str(raw_course_id))
+                if canon_course_id:
+                    updated_meta["course_id"] = MetadataValue.text(canon_course_id)
+
+            new_mat = AssetMaterialization(
+                asset_key=original.asset_key,
+                description=original.description,
+                metadata=updated_meta,
+                partition=canon_key,
+                tags={
+                    **original.tags,
+                    # Audit trail: tag value must be tag-safe (no '|').
+                    "dagster/reconciled_from_partition": _tag_safe(bad_key),
+                },
+            )
+            items.append(
+                _WorkItem(
+                    bad_key=bad_key,
+                    canon_key=canon_key,
+                    asset_key=asset_key,
+                    new_materialization=new_mat,
+                    bucket=bucket,
+                    bad_s3_key=bad_s3_key,
+                    good_s3_key=good_s3_key,
+                )
+            )
+
+        for bk, count in records_by_partition.items():
+            log.info(
+                "Planned %d materialization(s) for %s  partition %r -> %r",
+                count,
+                asset_key,
+                bk,
+                canonical_keys[bk],
+            )
+
+    return items
+
+
+def _execute_s3_copy(item: _WorkItem, s3_client, dry_run: bool) -> None:  # noqa: FBT001
+    """Check whether the destination S3 object exists and copy if needed.
+
+    This function is designed to be called concurrently from a thread pool;
+    it mutates ``item.s3_copy_failed`` on failure.
+    """
+    assert item.bucket  # noqa: S101
+    assert item.bad_s3_key  # noqa: S101
+    assert item.good_s3_key  # noqa: S101
+    bucket = item.bucket
+    bad_s3_key = item.bad_s3_key
+    good_s3_key = item.good_s3_key
+    correct_path = f"s3://{bucket}/{good_s3_key}"
+
+    if _s3_object_exists(s3_client, bucket, good_s3_key):
+        log.info("S3 destination already exists, skipping copy: %s", correct_path)
+        return
+
+    log.info(
+        "S3 copy: s3://%s/%s -> s3://%s/%s",
+        bucket,
+        bad_s3_key,
+        bucket,
+        good_s3_key,
+    )
+    if dry_run:
+        return
+
+    try:
+        s3_client.copy_object(
+            Bucket=bucket,
+            CopySource={"Bucket": bucket, "Key": bad_s3_key},
+            Key=good_s3_key,
+        )
+    except botocore.errorfactory.NoSuchKey:
+        log.info("Source key no longer exists: s3://%s/%s", bucket, bad_s3_key)
+    except Exception:
+        log.exception(
+            "S3 copy failed: s3://%s/%s -> s3://%s/%s",
+            bucket,
+            bad_s3_key,
+            bucket,
+            good_s3_key,
+        )
+        item.s3_copy_failed = True
+
+
 def reconcile(  # noqa: C901, PLR0912, PLR0915
     *,
     dry_run: bool = False,
     aws_profile: str | None = None,
     s3_bucket_override: str | None = None,
+    max_workers: int = DEFAULT_MAX_WORKERS,
 ) -> None:
     """Identify invalid partitions, fix S3 objects, and re-emit events.
 
@@ -193,6 +394,8 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
     s3_bucket_override:
         Force all S3 operations to use this bucket instead of the one
         embedded in each materialisation's ``path`` metadata.
+    max_workers:
+        Thread-pool size for concurrent S3 operations and partition deletions.
 
     """
     session = boto3.Session(profile_name=aws_profile)
@@ -207,9 +410,8 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
     )
 
     bad_keys: list[str] = []
-    canonical_keys: dict[
-        str, MultiPartitionKey
-    ] = {}  # bad_key_str -> canonical MultiPartitionKey
+    # bad_key_str -> canonical MultiPartitionKey
+    canonical_keys: dict[str, MultiPartitionKey] = {}
 
     for key in all_keys:
         try:
@@ -236,7 +438,7 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
 
     existing_key_set: set[str] = set(all_keys)
 
-    # 1. Add canonical partition keys that do not exist yet.
+    # 1. Add canonical partition keys that do not exist yet (single bulk call).
     keys_to_add = [
         mk for bad_k, mk in canonical_keys.items() if str(mk) not in existing_key_set
     ]
@@ -247,154 +449,72 @@ def reconcile(  # noqa: C901, PLR0912, PLR0915
                 PARTITIONS_DEF_NAME, partition_keys=keys_to_add
             )
 
-    # 2. For each bad partition, re-emit materialisations with corrected
-    #    partition keys and (where applicable) corrected S3 paths.
-    for bad_key in bad_keys:
-        canon_key = canonical_keys[bad_key]
-        for asset_key in AFFECTED_ASSET_KEYS:
-            records = instance.get_event_records(
-                EventRecordsFilter(
-                    asset_key=asset_key,
-                    event_type=DagsterEventType.ASSET_MATERIALIZATION,
-                    asset_partitions=[bad_key],
-                )
+    # 2. Plan all work: two bulk event-log queries (one per asset key) instead
+    #    of len(bad_keys) x len(AFFECTED_ASSET_KEYS) individual queries.
+    log.info(
+        "Fetching event records for %d bad partition(s) across %d asset key(s)...",
+        len(bad_keys),
+        len(AFFECTED_ASSET_KEYS),
+    )
+    work_items = _plan_work_items(
+        instance, bad_keys, canonical_keys, s3_bucket_override
+    )
+    log.info("Planned %d total materialization(s) to reconcile.", len(work_items))
+
+    # 3. Execute S3 copy operations concurrently.
+    s3_items = [item for item in work_items if item.bucket]
+    if s3_items:
+        log.info(
+            "Executing %d S3 copy operation(s) with up to %d concurrent workers%s.",
+            len(s3_items),
+            max_workers,
+            " (dry-run)" if dry_run else "",
+        )
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            future_to_item = {
+                pool.submit(_execute_s3_copy, item, s3_client, dry_run): item
+                for item in s3_items
+            }
+            for future in as_completed(future_to_item):
+                future.result()  # propagate unexpected exceptions
+
+    # 4. Re-emit materialisation events sequentially (DB writes are not
+    #    safe to parallelize against the Dagster event log).
+    emit_count = 0
+    for item in work_items:
+        if item.s3_copy_failed:
+            log.warning(
+                "Skipping re-emit for %s / %r due to S3 copy failure.",
+                item.asset_key,
+                item.bad_key,
             )
-            if not records:
-                continue
+            continue
+        log.info(
+            "Re-emitting materialisation for %s under %r",
+            item.asset_key,
+            item.canon_key,
+        )
+        if not dry_run:
+            instance.report_runless_asset_event(item.new_materialization)
+        emit_count += 1
+    log.info("Re-emitted %d materialisation event(s).", emit_count)
 
-            log.info(
-                "Processing %d materialization(s) for %s  partition %r -> %r",
-                len(records),
-                asset_key,
-                bad_key,
-                canon_key,
-            )
+    # 5. Delete the invalid dynamic partition keys concurrently.
+    log.info(
+        "Deleting %d invalid partition key(s) with up to %d concurrent workers.",
+        len(bad_keys),
+        max_workers,
+    )
 
-            for record in records:
-                original = record.asset_materialization
-                if original is None:
-                    continue
-
-                original_meta = dict(original.metadata)
-                updated_meta = dict(original_meta)
-
-                # ----------------------------------------------------------
-                # Determine whether the S3 object lives at the wrong path.
-                # The object_key embeds the course_id as a directory segment;
-                # if that segment carries the invalid suffix the file must be
-                # copied before we can re-emit the corrected event.
-                # ----------------------------------------------------------
-                raw_object_key = (
-                    original_meta["object_key"].value
-                    if hasattr(original_meta.get("object_key"), "value")
-                    else original_meta.get("object_key")
-                )
-                raw_path = (
-                    original_meta["path"].value
-                    if hasattr(original_meta.get("path"), "value")
-                    else original_meta.get("path")
-                )
-
-                correct_object_key = (
-                    _correct_object_key(raw_object_key) if raw_object_key else None
-                )
-
-                if correct_object_key and raw_path:
-                    # Derive bucket from the materialisation path; allow
-                    # override for cross-environment use.
-                    bucket, _bad_s3_key = _parse_s3_url(str(raw_path))
-                    if s3_bucket_override:
-                        bucket = s3_bucket_override
-
-                    prefix = str(raw_path).split(raw_object_key)[0].rstrip("/")
-                    prefix_no_scheme = prefix.removeprefix("s3://").split("/", 1)
-                    s3_prefix = prefix_no_scheme[1] if len(prefix_no_scheme) > 1 else ""
-
-                    bad_s3_key = (
-                        f"{s3_prefix}/{raw_object_key}".lstrip("/")
-                        if s3_prefix
-                        else raw_object_key
-                    )
-                    good_s3_key = (
-                        f"{s3_prefix}/{correct_object_key}".lstrip("/")
-                        if s3_prefix
-                        else correct_object_key
-                    )
-                    correct_path = f"s3://{bucket}/{good_s3_key}"
-
-                    if _s3_object_exists(s3_client, bucket, good_s3_key):
-                        log.info(
-                            "    S3 destination already exists, skipping copy: %s",
-                            correct_path,
-                        )
-                    else:
-                        log.info(
-                            "    S3 copy: s3://%s/%s -> s3://%s/%s",
-                            bucket,
-                            bad_s3_key,
-                            bucket,
-                            good_s3_key,
-                        )
-                        if not dry_run:
-                            try:
-                                s3_client.copy_object(
-                                    Bucket=bucket,
-                                    CopySource={"Bucket": bucket, "Key": bad_s3_key},
-                                    Key=good_s3_key,
-                                )
-                            except botocore.errorfactory.NoSuchKey:
-                                log.info("The bad key no longer exists")
-
-                    # Update metadata for the re-emitted event.
-                    from dagster import MetadataValue  # noqa: PLC0415
-
-                    updated_meta["object_key"] = correct_object_key
-                    updated_meta["path"] = MetadataValue.path(correct_path)
-                else:
-                    log.debug("    No S3 path correction needed for %s", raw_object_key)
-
-                # Correct the course_id metadata field if present.
-                raw_course_id = (
-                    original_meta["course_id"].value
-                    if hasattr(original_meta.get("course_id"), "value")
-                    else original_meta.get("course_id")
-                )
-                if raw_course_id:
-                    canon_course_id = _canonical_course_id(str(raw_course_id))
-                    if canon_course_id:
-                        from dagster import MetadataValue  # noqa: PLC0415
-
-                        updated_meta["course_id"] = MetadataValue.text(canon_course_id)
-
-                new_mat = AssetMaterialization(
-                    asset_key=original.asset_key,
-                    description=original.description,
-                    metadata=updated_meta,
-                    partition=canon_key,
-                    tags={
-                        **original.tags,
-                        # Audit trail: tag value must be tag-safe (no '|').
-                        "dagster/reconciled_from_partition": _tag_safe(bad_key),
-                    },
-                )
-                log.info(
-                    "    Re-emitting materialisation for %s under %r",
-                    asset_key,
-                    canon_key,
-                )
-                if not dry_run:
-                    instance.report_runless_asset_event(new_mat)
-
-    # 3. Delete the invalid dynamic partition keys.
-    log.info("Deleting %d invalid partition key(s).", len(bad_keys))
-    for bad_key in bad_keys:
+    def _delete_partition(bad_key: str) -> None:
         log.info("  Deleting %r", bad_key)
         if not dry_run:
             instance.delete_dynamic_partition(PARTITIONS_DEF_NAME, bad_key)
-            s3_client.delete_object(
-                Bucket=bucket,
-                Key=bad_key,
-            )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [pool.submit(_delete_partition, bk) for bk in bad_keys]
+        for future in as_completed(futures):
+            future.result()
 
     suffix = " (dry-run - no changes persisted)" if dry_run else ""
     log.info("Reconciliation complete%s.", suffix)
@@ -428,11 +548,23 @@ def main() -> None:
             "running against a non-production event log)."
         ),
     )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=DEFAULT_MAX_WORKERS,
+        metavar="N",
+        dest="max_workers",
+        help=(
+            f"Thread-pool size for concurrent S3 and partition-deletion "
+            f"operations (default: {DEFAULT_MAX_WORKERS})."
+        ),
+    )
     args = parser.parse_args()
     reconcile(
         dry_run=args.dry_run,
         aws_profile=args.aws_profile,
         s3_bucket_override=args.s3_bucket,
+        max_workers=args.max_workers,
     )
 
 
