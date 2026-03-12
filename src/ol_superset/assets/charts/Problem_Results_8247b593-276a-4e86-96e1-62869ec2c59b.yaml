@@ -110,7 +110,7 @@ query_context: '{"datasource": {"id": 14, "type": "table"}, "force": false, "que
   [], "row_limit": 1000, "server_page_length": 10, "order_desc": true, "table_timestamp_format":
   "smart_date", "show_cell_bars": true, "color_pn": true, "column_config": {"SUM(case
   when problem_success= ''correct'' then 1 else 0 end)/count(*)": {"d3NumberFormat":
-  ".2%"__JINJA2_CLOSE__, "conditional_formatting": [], "extra_form_data": {}, "dashboards":
+  ".2%"}}, "conditional_formatting": [], "extra_form_data": {}, "dashboards":
   [24], "force": false, "result_format": "json", "result_type": "full"}, "result_format":
   "json", "result_type": "full"}'
 cache_timeout: null

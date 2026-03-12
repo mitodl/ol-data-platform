@@ -119,7 +119,7 @@ query_context: '{"datasource": {"id": 47, "type": "table"}, "force": false, "que
   true, "table_timestamp_format": "smart_date", "allow_render_html": true, "column_config":
   {"%_of_Learners_Participated_In_Discussion": {"d3SmallNumberFormat": ",.1%"}, "%_of_Learners_That_Played_A_Video":
   {"d3NumberFormat": ",.1%"}, "%_of_Learners_That_Submitted_Problem": {"d3SmallNumberFormat":
-  ",.1%"__JINJA2_CLOSE__, "show_cell_bars": true, "color_pn": true, "comparison_color_scheme":
+  ",.1%"}}, "show_cell_bars": true, "color_pn": true, "comparison_color_scheme":
   "Green", "conditional_formatting": [], "comparison_type": "values", "extra_form_data":
   {}, "dashboards": [], "force": false, "result_format": "json", "result_type": "full"},
   "result_format": "json", "result_type": "full"}'
