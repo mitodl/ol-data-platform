@@ -15,7 +15,7 @@ params:
   comparison_type: values
   dashboards:
   - 26
-  datasource: 133__table
+  datasource: 47__table
   extra_form_data: {}
   forecastInterval: 0.8
   forecastPeriods: 10
@@ -85,7 +85,7 @@ params:
   y_axis_format: SMART_NUMBER
   y_axis_title_margin: 15
   y_axis_title_position: Left
-query_context: '{"datasource": {"id": 133, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 47, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "courseactivity_date", "op": "TEMPORAL_RANGE", "val": "No
   filter"}], "extras": {"having": "", "where": ""}, "applied_time_extras": {}, "columns":
   [{"columnType": "BASE_AXIS", "sqlExpression": "courserun_readable_id", "label":
@@ -112,7 +112,7 @@ query_context: '{"datasource": {"id": 133, "type": "table"}, "force": false, "qu
   "options": {"index": ["courserun_readable_id"], "columns": [], "aggregates": {"Watched_a_video":
   {"operator": "mean"}, "Tried_a_problem": {"operator": "mean"}, "Participated_In_Discussion":
   {"operator": "mean"}, "Learner_count": {"operator": "mean"}}, "drop_missing_columns":
-  false}}, {"operation": "flatten"}]}], "form_data": {"datasource": "133__table",
+  false}}, {"operation": "flatten"}]}], "form_data": {"datasource": "47__table",
   "viz_type": "echarts_timeseries_bar", "slice_id": 73, "x_axis": "courserun_readable_id",
   "x_axis_sort_asc": true, "x_axis_sort_series": "name", "x_axis_sort_series_ascending":
   true, "metrics": [{"aggregate": null, "column": null, "datasourceWarning": false,
