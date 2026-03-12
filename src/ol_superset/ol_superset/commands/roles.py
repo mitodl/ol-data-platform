@@ -23,7 +23,7 @@ from ol_superset.lib.superset_api import (
     create_authenticated_session,
     get_instance_config,
 )
-from ol_superset.lib.utils import get_assets_dir
+from ol_superset.lib.utils import confirm_action, get_assets_dir
 
 roles_app = cyclopts.App(
     name="roles",
@@ -82,7 +82,7 @@ def roles_list(
     print()
 
     # Group local datasets by schema for quick lookup
-    schema_to_datasets: dict[str, list[dict]] = {}
+    schema_to_datasets: dict[str, list[dict[str, object]]] = {}
     for ds in local_datasets:
         schema = ds.get("schema") or ""
         schema_to_datasets.setdefault(schema, []).append(ds)
@@ -97,7 +97,7 @@ def roles_list(
         name = role.get("name", "(unknown)")
         allowed_schemas = role.get("allowed_schemas", [])
 
-        matching: list[dict] = []
+        matching: list[dict[str, object]] = []
         for schema in allowed_schemas:
             matching.extend(schema_to_datasets.get(schema, []))
 
@@ -111,7 +111,7 @@ def roles_list(
             print(f"  ⚠️  Schemas with no local datasets: {uncovered_schemas}")
 
         if matching:
-            for ds in sorted(matching, key=lambda d: d.get("table_name") or ""):
+            for ds in sorted(matching, key=lambda d: str(d.get("table_name") or "")):
                 print(f"    • {ds['table_name']} [{ds['schema']}]")
         print()
 
@@ -213,7 +213,8 @@ def roles_check(
         sys.exit(1)
 
     print(
-        f"✅ All {len(dataset_schemas)} dataset schema(s) are covered by governance roles."
+        f"✅ All {len(dataset_schemas)} dataset schema(s) are covered"
+        " by governance roles."
     )
     print()
 
@@ -304,6 +305,19 @@ def roles_sync(
 
     if is_production:
         print("⚠️  WARNING: Target is PRODUCTION environment")
+        print()
+
+    if not dry_run and not skip_confirmation:
+        prompt = (
+            "⚠️  Sync governance role permissions to PRODUCTION?"
+            if is_production
+            else "Sync governance role permissions?"
+        )
+        require = "SYNC TO PRODUCTION" if is_production else None
+        confirmed = confirm_action(prompt, require_exact=require)
+        if not confirmed:
+            print("Cancelled.")
+            sys.exit(0)
         print()
 
     if dry_run:
