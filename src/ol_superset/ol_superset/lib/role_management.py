@@ -3,12 +3,13 @@
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 import requests
 import yaml
 
 
-def load_governance_roles(governance_json_path: Path) -> list[dict]:
+def load_governance_roles(governance_json_path: Path) -> list[dict[str, object]]:
     """
     Load role definitions from the ol_governance_roles.json file.
 
@@ -32,7 +33,7 @@ def load_governance_roles(governance_json_path: Path) -> list[dict]:
         return json.load(f)
 
 
-def get_local_datasets(assets_dir: Path) -> list[dict]:
+def get_local_datasets(assets_dir: Path) -> list[dict[str, object]]:
     """
     Read dataset metadata from local YAML files in assets/datasets/.
 
@@ -49,7 +50,7 @@ def get_local_datasets(assets_dir: Path) -> list[dict]:
     if not datasets_dir.exists():
         return []
 
-    datasets: list[dict] = []
+    datasets: list[dict[str, object]] = []
     for yaml_file in sorted(datasets_dir.rglob("*.yaml")):
         try:
             with yaml_file.open() as f:
@@ -74,7 +75,9 @@ def get_local_datasets(assets_dir: Path) -> list[dict]:
     return datasets
 
 
-def get_superset_datasets(session: requests.Session, base_url: str) -> list[dict]:
+def get_superset_datasets(
+    session: requests.Session, base_url: str
+) -> list[dict[str, object]]:
     """
     Fetch all datasets from the Superset API.
 
@@ -87,7 +90,7 @@ def get_superset_datasets(session: requests.Session, base_url: str) -> list[dict
     Returns:
         List of dataset dicts from API
     """
-    datasets: list[dict] = []
+    datasets: list[dict[str, object]] = []
     page = 0
     page_size = 100
 
@@ -135,7 +138,7 @@ def get_superset_datasets(session: requests.Session, base_url: str) -> list[dict
     return datasets
 
 
-def get_all_roles(session: requests.Session, base_url: str) -> list[dict]:
+def get_all_roles(session: requests.Session, base_url: str) -> list[dict[str, object]]:
     """
     Fetch all roles from Superset, returning list of {id, name}.
 
@@ -146,7 +149,7 @@ def get_all_roles(session: requests.Session, base_url: str) -> list[dict]:
     Returns:
         List of role dicts with 'id' and 'name'
     """
-    roles: list[dict] = []
+    roles: list[dict[str, object]] = []
     page = 0
     page_size = 100
 
@@ -182,7 +185,7 @@ def get_all_roles(session: requests.Session, base_url: str) -> list[dict]:
 
 def get_role_dataset_permissions(
     session: requests.Session, base_url: str, role_id: int
-) -> list[dict]:
+) -> list[dict[str, object]]:
     """
     Get current dataset-access permissions for a role.
 
@@ -226,7 +229,7 @@ def get_role_dataset_permissions(
 
 def get_all_datasource_permissions(
     session: requests.Session, base_url: str
-) -> list[dict]:
+) -> list[dict[str, object]]:
     """
     Get all available datasource-level permissions from Superset.
 
@@ -241,7 +244,7 @@ def get_all_datasource_permissions(
     Returns:
         List of permission dicts with 'id', 'permission_name', 'view_menu_name'
     """
-    permissions: list[dict] = []
+    permissions: list[dict[str, object]] = []
     page = 0
     page_size = 100
 
@@ -305,8 +308,8 @@ def get_all_datasource_permissions(
 
 
 def compute_schema_to_datasets(
-    api_datasets: list[dict],
-) -> dict[str, list[dict]]:
+    api_datasets: list[dict[str, object]],
+) -> dict[str, list[dict[str, object]]]:
     """
     Group API datasets by schema name.
 
@@ -316,16 +319,16 @@ def compute_schema_to_datasets(
     Returns:
         Dict mapping schema name -> list of dataset dicts
     """
-    schema_map: dict[str, list[dict]] = {}
+    schema_map: dict[str, list[dict[str, object]]] = {}
     for ds in api_datasets:
-        schema = ds.get("schema") or ""
+        schema = str(ds.get("schema") or "")
         schema_map.setdefault(schema, []).append(ds)
     return schema_map
 
 
 def compute_desired_dataset_ids(
     allowed_schemas: list[str],
-    api_datasets: list[dict],
+    api_datasets: list[dict[str, object]],
 ) -> set[int]:
     """
     Compute the set of Superset dataset IDs that a role should have access to.
@@ -339,7 +342,7 @@ def compute_desired_dataset_ids(
     """
     allowed_set = set(allowed_schemas)
     return {
-        ds["id"]
+        cast(int, ds["id"])
         for ds in api_datasets
         if ds.get("schema") in allowed_set and ds.get("id") is not None
     }
