@@ -16,7 +16,7 @@ sql: "select a.platform\n, u.email\n, course_title\n, a.courserun_readable_id\n,
   \ null end)) as decimal(30,10))\n/cast(max(problem_numb) as decimal(30,10)) as percentage_problems_correct\n\
   , cast(count(distinct (case when cast(a.num_of_attempts as int)> 0 then a.problem_block_fk\
   \ else null end)) as decimal(30,10))\n/cast(max(problem_numb) as decimal(30,10))\
-  \ as percentage_problems_attempted\nfrom ol_warehouse_production_dimensional.afact_problem_engagement\
+  \ as percetage_problems_attempted\nfrom ol_warehouse_production_dimensional.afact_problem_engagement\
   \ a\nleft join (select c.chapter_block_id, count(p.problem_block_pk) as problem_numb\n\
   from ol_warehouse_production_dimensional.dim_problem p\ninner join ol_warehouse_production_dimensional.dim_course_content\
   \ c\non p.content_block_fk=c.content_block_pk\nand c.is_latest= true\ngroup by 1)\
@@ -48,7 +48,7 @@ metrics:
     warning_markdown: ''
   warning_text: null
 columns:
-- column_name: percentage_problems_attempted
+- column_name: percetage_problems_attempted
   verbose_name: null
   is_dttm: false
   is_active: true

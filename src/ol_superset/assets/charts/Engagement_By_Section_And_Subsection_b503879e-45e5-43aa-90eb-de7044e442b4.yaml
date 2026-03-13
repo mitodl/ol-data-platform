@@ -71,7 +71,7 @@ params:
     column:
       advanced_data_type: null
       changed_on: '2025-05-29T21:49:25.066486'
-      column_name: percentage_problems_attempted
+      column_name: percetage_problems_attempted
       created_on: '2025-05-29T21:49:25.066485'
       description: null
       expression: null
@@ -194,7 +194,7 @@ query_context: '{"datasource": {"id": 92, "type": "table"}, "force": false, "que
   null, "aggregate": null, "datasourceWarning": false, "hasCustomLabel": true, "label":
   "Percent_Watched", "optionName": "metric_nl6zruwpjig_92nwuue6vdb"}, {"expressionType":
   "SIMPLE", "column": {"advanced_data_type": null, "changed_on": "2025-05-29T21:49:25.066486",
-  "column_name": "percentage_problems_attempted", "created_on": "2025-05-29T21:49:25.066485",
+  "column_name": "percetage_problems_attempted", "created_on": "2025-05-29T21:49:25.066485",
   "description": null, "expression": null, "extra": null, "filterable": true, "groupby":
   true, "id": 1255, "is_active": true, "is_dttm": false, "python_date_format": null,
   "type": "DECIMAL(38, 10)", "type_generic": 0, "uuid": "38d8f2e9-c84d-4017-aff8-8b31c3b74c01",
@@ -249,7 +249,7 @@ query_context: '{"datasource": {"id": 92, "type": "table"}, "force": false, "que
   null, "aggregate": null, "datasourceWarning": false, "hasCustomLabel": true, "label":
   "Percent_Watched", "optionName": "metric_nl6zruwpjig_92nwuue6vdb"}, {"expressionType":
   "SIMPLE", "column": {"advanced_data_type": null, "changed_on": "2025-05-29T21:49:25.066486",
-  "column_name": "percentage_problems_attempted", "created_on": "2025-05-29T21:49:25.066485",
+  "column_name": "percetage_problems_attempted", "created_on": "2025-05-29T21:49:25.066485",
   "description": null, "expression": null, "extra": null, "filterable": true, "groupby":
   true, "id": 1255, "is_active": true, "is_dttm": false, "python_date_format": null,
   "type": "DECIMAL(38, 10)", "type_generic": 0, "uuid": "38d8f2e9-c84d-4017-aff8-8b31c3b74c01",
