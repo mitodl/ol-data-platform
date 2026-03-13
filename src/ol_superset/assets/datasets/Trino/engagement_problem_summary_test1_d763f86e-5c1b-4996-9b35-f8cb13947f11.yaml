@@ -13,7 +13,7 @@ sql: "select a.platform\n, u.email\n, course_title\n, a.courserun_readable_id\n,
   \ int)> 0 then a.problem_block_fk else null end)) problems_attempted\n, max(problem_numb)\
   \ number_of_problems\n, sum(a.num_of_attempts) number_of_total_attempts\n, cast(count(distinct\
   \ (case when cast(a.num_of_correct_attempts as int)> 0 then a.problem_block_fk else\
-  \ null end)) as decimal(30,10))\n/cast(max(problem_numb) as decimal(30,10)) as percentage_problems_correct\n\
+  \ null end)) as decimal(30,10))\n/cast(max(problem_numb) as decimal(30,10)) as percetage_problems_correct\n\
   , cast(count(distinct (case when cast(a.num_of_attempts as int)> 0 then a.problem_block_fk\
   \ else null end)) as decimal(30,10))\n/cast(max(problem_numb) as decimal(30,10))\
   \ as percetage_problems_attempted\nfrom ol_warehouse_production_dimensional.afact_problem_engagement\
@@ -60,7 +60,7 @@ columns:
   description: null
   python_date_format: null
   extra: {}
-- column_name: percentage_problems_correct
+- column_name: percetage_problems_correct
   verbose_name: null
   is_dttm: false
   is_active: true

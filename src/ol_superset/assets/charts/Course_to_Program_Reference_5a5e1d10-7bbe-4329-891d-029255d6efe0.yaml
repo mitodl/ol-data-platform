@@ -6,6 +6,7 @@ viz_type: table
 params:
   adhoc_filters: []
   all_columns: []
+  annotation_layers: []
   color_pn: true
   comparison_type: values
   dashboards: []
@@ -29,7 +30,6 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 51, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"time_grain_sqla": "P1D", "having": "", "where": ""},
   "applied_time_extras": {}, "columns": ["platform", "course_title", "course_readable_id",

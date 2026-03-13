@@ -12,6 +12,7 @@ params:
     subject: courseactivity_date
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   column_config:
     '%_of_Learners_Participated_In_Discussion':
@@ -74,7 +75,6 @@ params:
   temporal_columns_lookup:
     courseactivity_date: true
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 47, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "courseactivity_date", "op": "TEMPORAL_RANGE", "val": "No
   filter"}], "extras": {"having": "", "where": ""}, "applied_time_extras": {}, "columns":

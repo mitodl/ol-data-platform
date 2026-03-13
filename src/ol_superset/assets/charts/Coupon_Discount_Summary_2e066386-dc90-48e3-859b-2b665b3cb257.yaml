@@ -7,6 +7,7 @@ params:
   adhoc_filters: []
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
@@ -55,7 +56,6 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 140, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"time_grain_sqla": "P1D", "having": "", "where": ""},
   "applied_time_extras": {}, "columns": ["couponpaymentversion_id", "discount_code",

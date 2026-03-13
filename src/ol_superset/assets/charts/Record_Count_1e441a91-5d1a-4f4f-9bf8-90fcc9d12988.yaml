@@ -5,6 +5,7 @@ certification_details: null
 viz_type: big_number_total
 params:
   adhoc_filters: []
+  annotation_layers: []
   dashboards: []
   datasource: 38__table
   extra_form_data: {}
@@ -23,7 +24,6 @@ params:
   time_format: smart_date
   viz_type: big_number_total
   y_axis_format: SMART_NUMBER
-  annotation_layers: []
 query_context: '{"datasource": {"id": 38, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": [], "metrics": [{"expressionType": "SQL", "sqlExpression": "COUNT(*)",

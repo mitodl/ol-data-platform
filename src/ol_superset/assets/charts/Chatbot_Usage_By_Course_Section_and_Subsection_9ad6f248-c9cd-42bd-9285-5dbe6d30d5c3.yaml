@@ -12,6 +12,7 @@ params:
     subject: activity_date
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
@@ -55,7 +56,6 @@ params:
   temporal_columns_lookup:
     activity_date: true
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 154, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "activity_date", "op": "TEMPORAL_RANGE", "val": "No filter"}],
   "extras": {"having": "", "where": ""}, "applied_time_extras": {}, "columns": ["section_title",

@@ -174,13 +174,6 @@ metadata:
         - 146
         scope: global
       id: 123
-    '146':
-      crossFilters:
-        chartsInScope:
-        - 123
-        - 131
-        scope: global
-      id: 146
     '131':
       crossFilters:
         chartsInScope:
@@ -188,6 +181,13 @@ metadata:
         - 146
         scope: global
       id: 131
+    '146':
+      crossFilters:
+        chartsInScope:
+        - 123
+        - 131
+        scope: global
+      id: 146
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true

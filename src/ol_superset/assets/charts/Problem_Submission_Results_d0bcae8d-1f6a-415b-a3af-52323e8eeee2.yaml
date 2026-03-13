@@ -6,6 +6,7 @@ viz_type: table
 params:
   adhoc_filters: []
   all_columns: []
+  annotation_layers: []
   color_pn: true
   comparison_type: values
   conditional_formatting: []
@@ -61,7 +62,6 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 49, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["course_readable_id", "problem_name"], "metrics": [{"aggregate": null,

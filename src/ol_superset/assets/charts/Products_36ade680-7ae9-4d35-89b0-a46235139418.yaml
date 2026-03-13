@@ -47,6 +47,7 @@ params:
   - product_is_private
   - is_live
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   column_config:
     start_on:
@@ -70,7 +71,6 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 44, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["product_platform", "product_type", "product_readable_id", "product_name",

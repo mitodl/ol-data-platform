@@ -32,6 +32,7 @@ params:
     label: last_updated_on in UTC
     sqlExpression: changed_on
   allow_render_html: true
+  annotation_layers: []
   cache_timeout: -1
   color_pn: true
   comparison_color_scheme: Green
@@ -51,7 +52,6 @@ params:
     changed_on: true
     created_on: true
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 113, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "created_on", "op": "TEMPORAL_RANGE", "val": "No filter"},
   {"col": "table_name", "op": "IN", "val": ["dim_user"]}], "extras": {"having": "",

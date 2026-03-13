@@ -254,16 +254,16 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '143':
+    '140':
       crossFilters:
         chartsInScope:
-        - 140
         - 141
         - 142
+        - 143
         - 144
         - 145
         scope: global
-      id: 143
+      id: 140
     '141':
       crossFilters:
         chartsInScope:
@@ -284,16 +284,16 @@ metadata:
         - 145
         scope: global
       id: 142
-    '140':
+    '143':
       crossFilters:
         chartsInScope:
+        - 140
         - 141
         - 142
-        - 143
         - 144
         - 145
         scope: global
-      id: 140
+      id: 143
     '144':
       crossFilters:
         chartsInScope:

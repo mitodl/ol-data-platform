@@ -1,0 +1,34 @@
+dashboard_title: '[ untitled dashboard ]'
+description: null
+css: null
+slug: null
+certified_by: null
+certification_details: null
+published: false
+uuid: c7ef251f-7c0a-4150-bb29-51ec41446550
+position:
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children: []
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: '[ untitled dashboard ]'
+    type: HEADER
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+metadata:
+  color_scheme_domain: []
+  label_colors: {}
+  map_label_colors: {}
+  shared_label_colors: []
+  native_filter_configuration: []
+theme_uuid: null
+version: 1.0.0

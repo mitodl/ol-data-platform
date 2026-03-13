@@ -42,6 +42,7 @@ params:
   - receipt_transaction_id
   allow_rearrange_columns: true
   allow_render_html: true
+  annotation_layers: []
   color_pn: false
   column_config:
     discount:
@@ -99,7 +100,6 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 41, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["platform", "user_email", "user_id", "order_id", "product_type", "product_readable_id",

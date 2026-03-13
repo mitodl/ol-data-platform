@@ -16,6 +16,7 @@ params:
   - unique_course_certificate_earners
   - program_certificates
   allow_render_html: false
+  annotation_layers: []
   color_pn: false
   comparison_color_scheme: Green
   comparison_type: values
@@ -36,7 +37,6 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 55, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["program_name", "total_enrollments", "unique_users", "unique_countries",

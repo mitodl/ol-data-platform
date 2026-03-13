@@ -1,11 +1,11 @@
-table_name: marts__micromasters_program_certificates
-main_dttm_col: null
-description: Auto refreshed at 2026-03-13T15:45:36.597492+00:00
+table_name: mitxonline_course_engagements_daily_report
+main_dttm_col: courseactivity_date
+description: Auto refreshed at 2026-03-13T15:46:24.121889+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
-schema: ol_warehouse_production_mart
+schema: ol_warehouse_production_reporting
 sql: null
 params: null
 template_params: null
@@ -15,7 +15,7 @@ extra: null
 normalize_columns: false
 always_filter_main_dttm: false
 folders: null
-uuid: e531ebf4-6189-4c02-9729-6c6ef18b81ef
+uuid: 91b8255f-044e-4162-9b42-f99143202ed4
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
@@ -27,7 +27,7 @@ metrics:
   extra: null
   warning_text: null
 columns:
-- column_name: user_address_state_or_territory
+- column_name: courserun_readable_id
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -39,7 +39,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: program_certificate_hashed_id
+- column_name: course_readable_id
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -51,103 +51,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_address_postal_code
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: program_readable_id
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: program_completion_timestamp
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_last_name
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_address_city
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_street_address
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_edxorg_username
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_mitxonline_username
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_first_name
+- column_name: courserun_start_on
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -171,6 +75,30 @@ columns:
   description: null
   python_date_format: null
   extra: null
+- column_name: courserun_end_on
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: user_username
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_email
   verbose_name: null
   is_dttm: false
@@ -183,7 +111,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: program_title
+- column_name: course_number
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -195,7 +123,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_country
+- column_name: courserun_title
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -207,7 +135,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_gender
+- column_name: platform
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -219,7 +147,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: program_is_dedp
+- column_name: courserun_is_current
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -231,7 +159,19 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_year_of_birth
+- column_name: courseactivity_date
+  verbose_name: null
+  is_dttm: true
+  is_active: true
+  type: DATE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: num_discussion_participated
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -243,7 +183,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: micromasters_program_id
+- column_name: num_video_played
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -255,7 +195,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: mitxonline_program_id
+- column_name: num_problem_submitted
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -267,7 +207,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_edxorg_id
+- column_name: num_events
   verbose_name: null
   is_dttm: false
   is_active: true

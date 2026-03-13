@@ -7,6 +7,7 @@ params:
   adhoc_filters: []
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
@@ -51,7 +52,6 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 82, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["courserun_readable_id"], "metrics": [{"aggregate": "SUM", "column":

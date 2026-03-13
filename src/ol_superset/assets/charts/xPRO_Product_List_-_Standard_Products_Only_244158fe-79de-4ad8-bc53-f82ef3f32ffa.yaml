@@ -17,6 +17,7 @@ params:
   - enrollment_start
   - enrollment_end
   - link
+  annotation_layers: []
   color_pn: true
   comparison_type: values
   dashboards: []
@@ -36,7 +37,6 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 42, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"time_grain_sqla": "P1D", "having": "", "where": ""},
   "applied_time_extras": {}, "columns": ["productid", "product_name", "product_readable_id",

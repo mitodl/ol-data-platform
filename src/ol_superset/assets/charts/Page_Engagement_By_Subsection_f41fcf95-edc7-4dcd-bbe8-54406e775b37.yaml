@@ -53,6 +53,7 @@ params:
   temporal_columns_lookup: {}
   timeseries_limit_metric: null
   viz_type: table
+  datasource: 92__table
 query_context: null
 cache_timeout: null
 uuid: f41fcf95-edc7-4dcd-bbe8-54406e775b37

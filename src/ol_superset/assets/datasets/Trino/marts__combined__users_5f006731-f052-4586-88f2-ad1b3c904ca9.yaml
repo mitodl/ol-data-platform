@@ -1,6 +1,6 @@
 table_name: marts__combined__users
 main_dttm_col: null
-description: Auto refreshed at 2026-03-07T19:50:27.399426+00:00
+description: Auto refreshed at 2026-03-13T15:45:04.498635+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

@@ -27,6 +27,7 @@ params:
     sqlExpression: CASE WHEN max_possible_grade = '0' then 0 else cast(max_learner_grade
       as decimal(20,10))/cast(max_possible_grade as DECIMAL(20,10)) end
   allow_render_html: true
+  annotation_layers: []
   color_pn: false
   column_config:
     '%_learner_grade_out_of_max':
@@ -53,7 +54,6 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 145, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["platform", "openedx_user_id", "courserun_readable_id", "problem_block_fk",

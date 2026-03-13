@@ -1,6 +1,6 @@
 table_name: marts__combined_program_enrollment_detail
 main_dttm_col: null
-description: Auto refreshed at 2026-03-07T19:50:46.209734+00:00
+description: Auto refreshed at 2026-03-13T15:45:24.020205+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

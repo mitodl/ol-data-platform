@@ -1,6 +1,6 @@
 table_name: marts__combined__products
 main_dttm_col: null
-description: Auto refreshed at 2026-03-07T19:50:19.007652+00:00
+description: Auto refreshed at 2026-03-13T15:45:02.717049+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

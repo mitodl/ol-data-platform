@@ -6,6 +6,7 @@ viz_type: table
 params:
   adhoc_filters: []
   all_columns: []
+  annotation_layers: []
   color_pn: true
   column_config:
     SUM(case when problem_success= 'correct' then 1 else 0 end)/count(*):
@@ -66,7 +67,6 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 49, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"time_grain_sqla": "P1D", "having": "", "where": ""},
   "applied_time_extras": {}, "columns": ["courserun_readable_id", "problem_name"],
