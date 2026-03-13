@@ -1,208 +1,10 @@
+certification_details: ''
+certified_by: ''
+css: ''
 dashboard_title: Enrollment Detail by Learner
 description: null
-css: ''
-slug: null
-certified_by: ''
-certification_details: ''
-published: true
-uuid: da9e03d3-e1bb-45b8-981f-208deca90e7a
-position:
-  CHART-KkyyS2N5s777Egpf_DTJa:
-    children: []
-    id: CHART-KkyyS2N5s777Egpf_DTJa
-    meta:
-      chartId: 147
-      height: 50
-      sliceName: Enrollment Detail Dashboard (Last Updated)
-      uuid: 1ed19d7a-4f9b-4c13-a6f9-ba348f1c4d3d
-      width: 6
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    - TAB-tFB9eF2Ur
-    - ROW-Qv1MQqwT3w
-    type: CHART
-  CHART-explore-108-1:
-    children: []
-    id: CHART-explore-108-1
-    meta:
-      chartId: 218
-      height: 92
-      sliceName: Enrollment Detail
-      uuid: 1cf394ec-8561-4b0d-9d9b-f394a6029b33
-      width: 12
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    - TAB-t1-4mh38qE
-    - ROW-dYqhPM1G6v4wJjCXLBkoi
-    type: CHART
-  CHART-rQKV1it9gO:
-    children: []
-    id: CHART-rQKV1it9gO
-    meta:
-      chartId: 211
-      height: 76
-      sliceName: Learner Deferred Report
-      uuid: 5ce15be9-994b-4377-8c99-21d35267a2dd
-      width: 12
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    - TAB-pWPKo4rBS
-    - ROW-3dEH5sPi2h
-    type: CHART
-  DASHBOARD_VERSION_KEY: v2
-  GRID_ID:
-    children: []
-    id: GRID_ID
-    parents:
-    - ROOT_ID
-    type: GRID
-  HEADER_ID:
-    id: HEADER_ID
-    meta:
-      text: Enrollment Detail by Learner
-    type: HEADER
-  MARKDOWN-49jpOJGrDnO_Ql5sw7tKg:
-    children: []
-    id: MARKDOWN-49jpOJGrDnO_Ql5sw7tKg
-    meta:
-      code: "### Change Log\n**2/2/26**: Standardized filter names: 'Learner Email'\
-        \ \u2192 'User Email', 'Learner name' \u2192 'User Full Name'"
-      height: 50
-      width: 12
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    - TAB-tFB9eF2Ur
-    - ROW-2L92uIzpQUQWkMN0gDT6J
-    type: MARKDOWN
-  MARKDOWN-UwcBhYwtzJ:
-    children: []
-    id: MARKDOWN-UwcBhYwtzJ
-    meta:
-      code: "\n<a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined_course_enrollment_detail#description'\
-        \ target='_blank'>Enrollment column definition</a>\n\n\n<a href=\"https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined__orders\"\
-        \ target=\"_blank\">Order column definition</a>\n\n<br>\n\nThis dashboard\
-        \ contains data from:\n  - marts__combined_course_enrollment_detail\n  - marts__combined__orders\n\
-        \  - marts__combined_coursesinprogram"
-      height: 50
-      width: 6
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    - TAB-tFB9eF2Ur
-    - ROW-Qv1MQqwT3w
-    type: MARKDOWN
-  ROOT_ID:
-    children:
-    - TABS-poyCgBsAnk
-    id: ROOT_ID
-    type: ROOT
-  ROW-2L92uIzpQUQWkMN0gDT6J:
-    children:
-    - MARKDOWN-49jpOJGrDnO_Ql5sw7tKg
-    id: ROW-2L92uIzpQUQWkMN0gDT6J
-    meta:
-      background: BACKGROUND_TRANSPARENT
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    - TAB-tFB9eF2Ur
-    type: ROW
-  ROW-3dEH5sPi2h:
-    children:
-    - CHART-rQKV1it9gO
-    id: ROW-3dEH5sPi2h
-    meta:
-      background: BACKGROUND_TRANSPARENT
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    - TAB-pWPKo4rBS
-    type: ROW
-  ROW-Qv1MQqwT3w:
-    children:
-    - MARKDOWN-UwcBhYwtzJ
-    - CHART-KkyyS2N5s777Egpf_DTJa
-    id: ROW-Qv1MQqwT3w
-    meta:
-      background: BACKGROUND_TRANSPARENT
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    - TAB-tFB9eF2Ur
-    type: ROW
-  ROW-dYqhPM1G6v4wJjCXLBkoi:
-    children:
-    - CHART-explore-108-1
-    id: ROW-dYqhPM1G6v4wJjCXLBkoi
-    meta:
-      '0': ROOT_ID
-      '1': TABS-poyCgBsAnk
-      background: BACKGROUND_TRANSPARENT
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    - TAB-t1-4mh38qE
-    type: ROW
-  TAB-pWPKo4rBS:
-    children:
-    - ROW-3dEH5sPi2h
-    id: TAB-pWPKo4rBS
-    meta:
-      defaultText: Tab title
-      placeholder: Tab title
-      text: Learners Deferred
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    type: TAB
-  TAB-t1-4mh38qE:
-    children:
-    - ROW-dYqhPM1G6v4wJjCXLBkoi
-    id: TAB-t1-4mh38qE
-    meta:
-      defaultText: Tab title
-      placeholder: Tab title
-      text: Enrollment
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    type: TAB
-  TAB-tFB9eF2Ur:
-    children:
-    - ROW-Qv1MQqwT3w
-    - ROW-2L92uIzpQUQWkMN0gDT6J
-    id: TAB-tFB9eF2Ur
-    meta:
-      defaultText: Tab title
-      placeholder: Tab title
-      text: Help
-    parents:
-    - ROOT_ID
-    - TABS-poyCgBsAnk
-    type: TAB
-  TABS-poyCgBsAnk:
-    children:
-    - TAB-t1-4mh38qE
-    - TAB-pWPKo4rBS
-    - TAB-tFB9eF2Ur
-    id: TABS-poyCgBsAnk
-    meta: {}
-    parents:
-    - ROOT_ID
-    type: TABS
 metadata:
   chart_configuration:
-    '218':
-      crossFilters:
-        chartsInScope:
-        - 64
-        - 111
-        scope: global
-      id: 218
     '147':
       crossFilters:
         chartsInScope:
@@ -217,6 +19,13 @@ metadata:
         - 111
         scope: global
       id: 211
+    '218':
+      crossFilters:
+        chartsInScope:
+        - 64
+        - 111
+        scope: global
+      id: 218
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
@@ -477,5 +286,198 @@ metadata:
   refresh_frequency: 86400
   shared_label_colors: []
   timed_refresh_immune_slices: []
+position:
+  CHART-KkyyS2N5s777Egpf_DTJa:
+    children: []
+    id: CHART-KkyyS2N5s777Egpf_DTJa
+    meta:
+      chartId: 147
+      height: 50
+      sliceName: Enrollment Detail Dashboard (Last Updated)
+      uuid: 1ed19d7a-4f9b-4c13-a6f9-ba348f1c4d3d
+      width: 6
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    - ROW-Qv1MQqwT3w
+    type: CHART
+  CHART-explore-108-1:
+    children: []
+    id: CHART-explore-108-1
+    meta:
+      chartId: 218
+      height: 92
+      sliceName: Enrollment Detail
+      uuid: 1cf394ec-8561-4b0d-9d9b-f394a6029b33
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-t1-4mh38qE
+    - ROW-dYqhPM1G6v4wJjCXLBkoi
+    type: CHART
+  CHART-rQKV1it9gO:
+    children: []
+    id: CHART-rQKV1it9gO
+    meta:
+      chartId: 211
+      height: 76
+      sliceName: Learner Deferred Report
+      uuid: 5ce15be9-994b-4377-8c99-21d35267a2dd
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-pWPKo4rBS
+    - ROW-3dEH5sPi2h
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children: []
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Enrollment Detail by Learner
+    type: HEADER
+  MARKDOWN-49jpOJGrDnO_Ql5sw7tKg:
+    children: []
+    id: MARKDOWN-49jpOJGrDnO_Ql5sw7tKg
+    meta:
+      code: '### Change Log
+
+        **2/2/26**: Standardized filter names: ''Learner Email'' → ''User Email'',
+        ''Learner name'' → ''User Full Name'''
+      height: 50
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    - ROW-2L92uIzpQUQWkMN0gDT6J
+    type: MARKDOWN
+  MARKDOWN-UwcBhYwtzJ:
+    children: []
+    id: MARKDOWN-UwcBhYwtzJ
+    meta:
+      code: "\n<a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined_course_enrollment_detail#description'\
+        \ target='_blank'>Enrollment column definition</a>\n\n\n<a href=\"https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.marts__combined__orders\"\
+        \ target=\"_blank\">Order column definition</a>\n\n<br>\n\nThis dashboard\
+        \ contains data from:\n  - marts__combined_course_enrollment_detail\n  - marts__combined__orders\n\
+        \  - marts__combined_coursesinprogram"
+      height: 50
+      width: 6
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    - ROW-Qv1MQqwT3w
+    type: MARKDOWN
+  ROOT_ID:
+    children:
+    - TABS-poyCgBsAnk
+    id: ROOT_ID
+    type: ROOT
+  ROW-2L92uIzpQUQWkMN0gDT6J:
+    children:
+    - MARKDOWN-49jpOJGrDnO_Ql5sw7tKg
+    id: ROW-2L92uIzpQUQWkMN0gDT6J
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    type: ROW
+  ROW-3dEH5sPi2h:
+    children:
+    - CHART-rQKV1it9gO
+    id: ROW-3dEH5sPi2h
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-pWPKo4rBS
+    type: ROW
+  ROW-Qv1MQqwT3w:
+    children:
+    - MARKDOWN-UwcBhYwtzJ
+    - CHART-KkyyS2N5s777Egpf_DTJa
+    id: ROW-Qv1MQqwT3w
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-tFB9eF2Ur
+    type: ROW
+  ROW-dYqhPM1G6v4wJjCXLBkoi:
+    children:
+    - CHART-explore-108-1
+    id: ROW-dYqhPM1G6v4wJjCXLBkoi
+    meta:
+      '0': ROOT_ID
+      '1': TABS-poyCgBsAnk
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    - TAB-t1-4mh38qE
+    type: ROW
+  TAB-pWPKo4rBS:
+    children:
+    - ROW-3dEH5sPi2h
+    id: TAB-pWPKo4rBS
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Learners Deferred
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    type: TAB
+  TAB-t1-4mh38qE:
+    children:
+    - ROW-dYqhPM1G6v4wJjCXLBkoi
+    id: TAB-t1-4mh38qE
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Enrollment
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    type: TAB
+  TAB-tFB9eF2Ur:
+    children:
+    - ROW-Qv1MQqwT3w
+    - ROW-2L92uIzpQUQWkMN0gDT6J
+    id: TAB-tFB9eF2Ur
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - TABS-poyCgBsAnk
+    type: TAB
+  TABS-poyCgBsAnk:
+    children:
+    - TAB-t1-4mh38qE
+    - TAB-pWPKo4rBS
+    - TAB-tFB9eF2Ur
+    id: TABS-poyCgBsAnk
+    meta: {}
+    parents:
+    - ROOT_ID
+    type: TABS
+published: true
+slug: null
 theme_uuid: null
+uuid: da9e03d3-e1bb-45b8-981f-208deca90e7a
 version: 1.0.0

@@ -5,6 +5,7 @@ from typing import Annotated
 from cyclopts import Parameter
 
 from ol_superset.commands.dedupe import dedupe
+from ol_superset.commands.normalize import normalize
 from ol_superset.lib.utils import count_assets, get_assets_dir, run_sup_command
 
 
@@ -26,6 +27,13 @@ def export(
             help="Skip automatic deduplication after export",
         ),
     ] = False,
+    skip_normalize: Annotated[
+        bool,
+        Parameter(
+            name=["--skip-normalize"],
+            help="Skip automatic YAML normalization after export",
+        ),
+    ] = False,
 ) -> None:
     """
     Export all Superset assets from specified instance.
@@ -33,11 +41,11 @@ def export(
     Exports datasets, charts, dashboards, and database configurations
     using automatic pagination to fetch all assets.
 
-    By default, automatically deduplicates and renames assets to UUID-based
-    naming to prevent duplicates from different environments.
+    By default, automatically deduplicates, renames assets to UUID-based
+    naming, and normalizes YAML for clean diffs.
 
     Examples:
-        Export from production (default, with auto-dedupe):
+        Export from production (default, with auto-dedupe and normalize):
             ol-superset export
 
         Export from QA:
@@ -45,6 +53,9 @@ def export(
 
         Export without deduplication:
             ol-superset export --skip-dedupe
+
+        Export without YAML normalization:
+            ol-superset export --skip-normalize
 
         Export to custom directory:
             ol-superset export -f superset-qa -o /tmp/qa-backup
@@ -138,5 +149,32 @@ def export(
         print("ℹ️  Skipped deduplication (--skip-dedupe flag used)")
         print("   Note: You may have duplicate files if this instance imported")
         print("   from another environment. Run 'ol-superset dedupe' to clean up.")
+
+    # Auto-normalize unless skipped
+    if not skip_normalize:
+        print()
+        print("=" * 50)
+        print("Step 5: Normalizing YAML assets...")
+        print("=" * 50)
+        print()
+        print(
+            "Stripping query_context, numeric datasource IDs, sorting keys, "
+            "and annotating UUID fields..."
+        )
+        print()
+
+        try:
+            normalize(assets_dir=assets_dir, dry_run=False)
+            print()
+            print("✅ Normalization complete!")
+        except Exception as e:
+            print()
+            print(f"⚠️  Normalization failed: {e}")
+            print("Assets were exported but not normalized.")
+            print("You can manually run: ol-superset normalize")
+    else:
+        print()
+        print("ℹ️  Skipped normalization (--skip-normalize flag used)")
+        print("   Run 'ol-superset normalize' to apply later.")
 
     print()
