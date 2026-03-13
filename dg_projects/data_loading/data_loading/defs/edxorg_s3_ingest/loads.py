@@ -70,8 +70,8 @@ def edxorg_s3_source(
         # Create a resource for each table with standardized naming
         @dlt.resource(
             name=f"raw__edxorg__s3__tables__{table_name}",
-            write_disposition="append",
-            primary_key=None,  # TSV files don't have consistent primary keys
+            write_disposition="merge",
+            primary_key="row_hash",  # All edxorg TSV exports include a row_hash column
             table_format=table_format,
         )
         def load_table(table=table_name) -> DltResource:
