@@ -27,7 +27,7 @@ metrics:
   extra: {}
   warning_text: null
 columns:
-- column_name: percetage_problems_attempted
+- column_name: percentage_problems_attempted
   verbose_name: null
   is_dttm: false
   is_active: true
