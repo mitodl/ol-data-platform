@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
+import sqlglot
+import sqlglot.expressions as exp
 import yaml
 
 
@@ -23,6 +25,13 @@ class DatasetAsset:
     # query time and not present as raw columns in the underlying table.
     calculated_columns: set[str] = field(default_factory=set)
     sql: str | None = None  # non-None means virtual dataset
+    # Output column names parsed from the virtual dataset SQL (lowercase).
+    # None means the SQL contains a wildcard (SELECT * / table.*) or could
+    # not be parsed — column-level chart validation is skipped in that case.
+    virtual_columns: set[str] | None = None
+    # True when virtual_columns is None specifically because the SQL uses a
+    # SELECT * or table.* wildcard (as opposed to a parse failure).
+    sql_has_wildcard: bool = False
     path: Path = field(default_factory=Path)
 
 
@@ -55,6 +64,65 @@ class AssetIndex:
     datasets: dict[str, DatasetAsset] = field(default_factory=dict)
     charts: dict[str, ChartAsset] = field(default_factory=dict)
     dashboards: dict[str, DashboardAsset] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Virtual dataset SQL column extraction
+# ---------------------------------------------------------------------------
+
+
+class VirtualColumnsResult(NamedTuple):
+    """Result of parsing a virtual dataset SQL query."""
+
+    columns: set[str] | None
+    """Lowercase output column names, or None when the set is indeterminate."""
+    has_wildcard: bool
+    """True when None is due to a SELECT * or table.* wildcard."""
+
+
+def extract_virtual_dataset_columns(sql: str) -> VirtualColumnsResult:
+    """
+    Parse a virtual dataset SQL query and return its output column names.
+
+    Uses sqlglot (Trino dialect) to parse the outermost SELECT and extract
+    the names of all output columns.  Column names are returned in **lowercase**
+    to allow case-insensitive comparison.
+
+    ``columns`` is ``None`` when the complete set cannot be determined:
+
+    - The query contains a wildcard (``SELECT *`` or ``table.*``).
+      ``has_wildcard`` will be ``True`` in this case.
+    - The SQL cannot be parsed (e.g. proprietary syntax).
+      ``has_wildcard`` will be ``False`` in this case.
+
+    Unnamed expressions (e.g. un-aliased aggregates) are silently ignored —
+    they cannot be referenced by name in chart params anyway.
+
+    Args:
+        sql: Raw SQL string from the Superset dataset YAML ``sql`` field.
+
+    Returns:
+        :class:`VirtualColumnsResult` with ``columns`` and ``has_wildcard``.
+    """
+    try:
+        tree = sqlglot.parse_one(sql, dialect="trino")
+    except Exception:  # noqa: BLE001
+        return VirtualColumnsResult(columns=None, has_wildcard=False)
+
+    cols: set[str] = set()
+    for sel in tree.selects:
+        if isinstance(sel, exp.Star):
+            return VirtualColumnsResult(columns=None, has_wildcard=True)
+        if isinstance(sel, exp.Column) and sel.name == "*":
+            # table.* pattern
+            return VirtualColumnsResult(columns=None, has_wildcard=True)
+        if isinstance(sel, exp.Alias):
+            cols.add(sel.alias.lower())
+        elif isinstance(sel, exp.Column):
+            cols.add(sel.name.lower())
+        # else: unnamed expression — skip
+
+    return VirtualColumnsResult(columns=cols, has_wildcard=False)
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +225,13 @@ def _load_datasets(datasets_dir: Path) -> dict[str, DatasetAsset]:
             raw_sql if isinstance(raw_sql, str) and raw_sql.strip() else None
         )
 
+        virtual_columns: set[str] | None = None
+        sql_has_wildcard = False
+        if sql:
+            vcr = extract_virtual_dataset_columns(sql)
+            virtual_columns = vcr.columns
+            sql_has_wildcard = vcr.has_wildcard
+
         database = yaml_file.parent.name  # e.g. "Trino"
 
         result[uuid] = DatasetAsset(
@@ -168,6 +243,8 @@ def _load_datasets(datasets_dir: Path) -> dict[str, DatasetAsset]:
             columns=columns,
             calculated_columns=calculated_columns,
             sql=sql,
+            virtual_columns=virtual_columns,
+            sql_has_wildcard=sql_has_wildcard,
             path=yaml_file,
         )
 

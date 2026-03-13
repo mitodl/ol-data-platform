@@ -10,6 +10,7 @@ import yaml
 from ol_superset.lib.asset_index import (
     build_asset_index,
     extract_chart_column_refs,
+    extract_virtual_dataset_columns,
 )
 
 # ---------------------------------------------------------------------------
@@ -49,7 +50,7 @@ def assets_dir(tmp_path: Path) -> Path:
         },
     )
 
-    # Dataset: virtual (custom SQL)
+    # Dataset: virtual (custom SQL) — fully parseable, no wildcard
     _write_yaml(
         base / "datasets" / "Trino" / "virtual_def456.yaml",
         {
@@ -57,10 +58,28 @@ def assets_dir(tmp_path: Path) -> Path:
             "table_name": "virtual_report",
             "schema": "ol_warehouse_production_mart",
             "catalog": "ol_data_lake_production",
-            "sql": "SELECT * FROM ol_warehouse_production_mart.marts__orders",
+            "sql": (
+                "SELECT a.order_id, a.user_email, "
+                "sum(a.total_amount) AS total_amount "
+                "FROM ol_warehouse_production_mart.marts__orders a "
+                "GROUP BY a.order_id, a.user_email"
+            ),
             "columns": [
                 {"column_name": "order_id"},
             ],
+        },
+    )
+
+    # Dataset: virtual with SELECT * wildcard
+    _write_yaml(
+        base / "datasets" / "Trino" / "wildcard_pqr999.yaml",
+        {
+            "uuid": "pqr999",
+            "table_name": "wildcard_report",
+            "schema": "ol_warehouse_production_mart",
+            "catalog": "ol_data_lake_production",
+            "sql": "SELECT a.* FROM ol_warehouse_production_mart.marts__orders a",
+            "columns": [],
         },
     )
 
@@ -148,7 +167,7 @@ def assets_dir(tmp_path: Path) -> Path:
 def test_build_asset_index_counts(assets_dir: Path) -> None:
     index = build_asset_index(assets_dir)
 
-    assert len(index.datasets) == 2
+    assert len(index.datasets) == 3  # simple + virtual + wildcard
     assert len(index.charts) == 2
     assert len(index.dashboards) == 1
 
@@ -178,7 +197,17 @@ def test_build_asset_index_virtual_dataset(assets_dir: Path) -> None:
 
     ds = index.datasets["def456"]
     assert ds.sql is not None
-    assert "marts__orders" in ds.sql
+    assert ds.virtual_columns == {"order_id", "user_email", "total_amount"}
+    assert ds.sql_has_wildcard is False
+
+
+def test_build_asset_index_wildcard_dataset(assets_dir: Path) -> None:
+    index = build_asset_index(assets_dir)
+
+    ds = index.datasets["pqr999"]
+    assert ds.sql is not None
+    assert ds.virtual_columns is None
+    assert ds.sql_has_wildcard is True
 
 
 def test_build_asset_index_chart_dataset_ref(assets_dir: Path) -> None:
@@ -283,3 +312,74 @@ def test_extract_column_refs_ignores_empty_strings() -> None:
     }
     refs = extract_chart_column_refs(params)
     assert refs == {"user_email"}
+
+
+# ---------------------------------------------------------------------------
+# Tests: extract_virtual_dataset_columns
+# ---------------------------------------------------------------------------
+
+
+def test_extract_virtual_columns_simple_select() -> None:
+    sql = (
+        "SELECT a.platform, h.course_title, a.courserun_readable_id "
+        "FROM schema_a.table_one a JOIN schema_b.table_two h ON a.id = h.id"
+    )
+    result = extract_virtual_dataset_columns(sql)
+    assert result.has_wildcard is False
+    assert result.columns == {"platform", "course_title", "courserun_readable_id"}
+
+
+def test_extract_virtual_columns_aliases() -> None:
+    sql = (
+        "SELECT a.platform, sum(a.cnt) AS enrollment_count, "
+        "substring(a.dt, 1, 4) AS year "
+        "FROM schema.tbl a GROUP BY a.platform"
+    )
+    result = extract_virtual_dataset_columns(sql)
+    assert result.has_wildcard is False
+    assert result.columns == {"platform", "enrollment_count", "year"}
+
+
+def test_extract_virtual_columns_case_insensitive() -> None:
+    sql = "SELECT a.UserEmail, a.CourseName FROM schema.tbl a"
+    result = extract_virtual_dataset_columns(sql)
+    assert result.has_wildcard is False
+    assert result.columns == {"useremail", "coursename"}
+
+
+def test_extract_virtual_columns_cte() -> None:
+    sql = (
+        "WITH base AS (SELECT * FROM schema.tbl) "
+        "SELECT b.col1, b.col2 FROM base b"
+    )
+    result = extract_virtual_dataset_columns(sql)
+    # Outer SELECT has no wildcard — columns are deterministic
+    assert result.has_wildcard is False
+    assert result.columns == {"col1", "col2"}
+
+
+def test_extract_virtual_columns_bare_star_returns_none() -> None:
+    result = extract_virtual_dataset_columns("SELECT * FROM schema.tbl")
+    assert result.columns is None
+    assert result.has_wildcard is True
+
+
+def test_extract_virtual_columns_table_dot_star_returns_none() -> None:
+    result = extract_virtual_dataset_columns(
+        "SELECT a.*, b.extra FROM schema.tbl a JOIN schema.tbl2 b ON a.id = b.id"
+    )
+    assert result.columns is None
+    assert result.has_wildcard is True
+
+
+def test_extract_virtual_columns_parse_error_returns_none() -> None:
+    result = extract_virtual_dataset_columns("THIS IS NOT SQL %%%")
+    assert result.columns is None
+    assert result.has_wildcard is False
+
+
+def test_extract_virtual_columns_empty_sql() -> None:
+    # Empty string cannot be parsed — returns None with no wildcard flag
+    result = extract_virtual_dataset_columns("")
+    assert result.columns is None
+    assert result.has_wildcard is False

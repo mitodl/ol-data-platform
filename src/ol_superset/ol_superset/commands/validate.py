@@ -393,8 +393,19 @@ def _validate_dbt_chain(
                     warnings += 1
                     col_warnings += 1
 
-        # 4b. Virtual dataset: validate referenced table names exist in dbt
+        # 4b. Virtual dataset: validate referenced table names exist in dbt,
+        # and warn about SELECT * / table.* wildcards that prevent static
+        # column analysis.
         if dataset.sql:
+            if dataset.sql_has_wildcard:
+                print(
+                    f"    ⚠️  Virtual dataset '{dataset.table_name}': SQL uses "
+                    f"SELECT * or table.* — output columns cannot be statically "
+                    f"determined; replace with explicit column list"
+                )
+                warnings += 1
+                col_warnings += 1
+
             table_refs = extract_sql_table_refs(dataset.sql)
             for ref_table in sorted(table_refs):
                 if dbt_registry.get_model(ref_table) is None:
@@ -406,11 +417,29 @@ def _validate_dbt_chain(
                     col_warnings += 1
 
         # 4c. Chart column refs vs dataset columns.
-        # Skip virtual datasets — their columns are derived from SQL and the YAML
-        # column list may not enumerate every column the SQL produces.
-        # Calculated columns are also valid targets for chart column refs.
+        # For simple datasets: compare refs against the full column set
+        # (plain + calculated).
+        # For virtual datasets: compare refs against the sqlglot-parsed output
+        # column set (case-insensitive). Skip when virtual_columns is None
+        # (wildcard or unparseable SQL).
         if dataset.sql:
+            if dataset.virtual_columns is None:
+                continue
+            virtual_cols_lower = dataset.virtual_columns  # already lowercase
+            for chart in index.charts.values():
+                if chart.dataset_uuid != dataset.uuid:
+                    continue
+                for col_ref in sorted(chart.column_refs):
+                    if col_ref.lower() not in virtual_cols_lower:
+                        print(
+                            f"    ⚠️  Chart '{chart.name}': column '{col_ref}' "
+                            f"not found in virtual dataset "
+                            f"'{dataset.table_name}' SQL output"
+                        )
+                        warnings += 1
+                        col_warnings += 1
             continue
+
         all_dataset_cols = dataset.columns | dataset.calculated_columns
         if not all_dataset_cols:
             continue

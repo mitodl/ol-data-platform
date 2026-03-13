@@ -8,6 +8,7 @@ dependencies = [
     "pyyaml>=6.0",
     "requests>=2.31.0",
     "rich>=13.0.0",
+    "sqlglot>=20.0",
     "superset-sup",
 ]
 
