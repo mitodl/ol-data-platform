@@ -15,7 +15,7 @@ with mitxonline_discussion_events as (
         , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
         , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
         , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -38,7 +38,7 @@ with mitxonline_discussion_events as (
         , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
         , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
         , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -61,7 +61,7 @@ with mitxonline_discussion_events as (
         , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
         , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
         , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -83,7 +83,7 @@ with mitxonline_discussion_events as (
         , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
         , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
         , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -92,6 +92,12 @@ with mitxonline_discussion_events as (
 
 , users as (
     select * from {{ ref('dim_user') }}
+)
+
+, dim_course_run as (
+    select courserun_pk, courserun_readable_id, platform
+    from {{ ref('dim_course_run') }}
+    where is_current = true
 )
 
 , combined as (
@@ -140,8 +146,8 @@ with mitxonline_discussion_events as (
     from xpro_discussion_events
     left join users
         on
-            xpro_discussion_events.openedx_user_id = users.mitxonline_openedx_user_id
-            and xpro_discussion_events.user_username = users.user_mitxonline_username
+            xpro_discussion_events.openedx_user_id = users.mitxpro_openedx_user_id
+            and xpro_discussion_events.user_username = users.user_mitxpro_username
 
     union all
 
@@ -195,12 +201,13 @@ with mitxonline_discussion_events as (
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['platform']) }} as platform_fk
-    , platform
+    cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2; align with other fact tables
+    , combined.platform
     , user_fk
     , openedx_user_id
     , user_username
-    , courserun_readable_id
+    , dim_course_run.courserun_pk as courserun_fk
+    , combined.courserun_readable_id
     , event_type
     , event_json
     , post_id
@@ -213,3 +220,6 @@ select
     , user_forums_roles
     , event_timestamp
 from combined
+left join dim_course_run
+    on combined.courserun_readable_id = dim_course_run.courserun_readable_id
+    and dim_course_run.platform = combined.platform

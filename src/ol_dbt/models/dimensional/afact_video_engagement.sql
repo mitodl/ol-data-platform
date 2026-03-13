@@ -63,7 +63,7 @@ from tfact_video_events
 inner join d_video
     on
         tfact_video_events.video_block_fk
-        = substring(d_video.video_block_pk, regexp_position(d_video.video_block_pk, 'block@') + 6)
+        = substring(d_video.video_block_pk, strpos(d_video.video_block_pk, 'block@') + 6)
         and tfact_video_events.courserun_readable_id = d_video.courserun_readable_id
 inner join course_content as c
     on

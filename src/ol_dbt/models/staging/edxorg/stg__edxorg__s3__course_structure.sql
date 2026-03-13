@@ -31,7 +31,7 @@ with course_block_source as (
         , block_content_hash as coursestructure_block_content_hash
         , replace(replace(replace(replace(course_id, '[', ''), ']', ''), '"', ''), '-', '/')
             as courserun_readable_id
-        , json_query(block_details, 'lax $.metadata') as coursestructure_block_metadata
+        , {{ json_extract_value('block_details', "'$.metadata'") }} as coursestructure_block_metadata
         , {{ cast_timestamp_to_iso8601('retrieved_at') }} as coursestructure_retrieved_at
     from course_block
 )

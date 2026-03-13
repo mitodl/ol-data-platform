@@ -1,0 +1,70 @@
+---
+version: 2
+
+models:
+- name: dim_organization
+  description: >
+    B2B organizations dimension. Includes MITx Online enterprise organizations
+    (accessed via the B2B contract/organization page system) and xPro corporate
+    clients (companies that purchase bulk access). Grain: one row per unique
+    organization per platform.
+  columns:
+  - name: organization_pk
+    description: Surrogate primary key (platform + source_id).
+    tests:
+    - unique
+    - not_null
+  - name: organization_id
+    description: Source system integer ID cast to varchar.
+    tests:
+    - not_null
+  - name: organization_name
+    description: Human-readable organization name.
+    tests:
+    - not_null
+  - name: organization_key
+    description: Short slug / code used to identify the organization. MITx Online
+      only; null for xPro.
+  - name: organization_logo
+    description: URL or path to the organization logo image. MITx Online only.
+  - name: organization_description
+    description: Long-form description of the organization. MITx Online only.
+  - name: sso_organization_id
+    description: SSO organization identifier used for SAML/federated login. MITx Online
+      only.
+  - name: platform
+    description: Platform code ('mitxonline' or 'mitxpro').
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['mitxonline', 'mitxpro']
+
+- name: bridge_organization_courserun
+  description: >
+    Many-to-many bridge between B2B organizations and course runs.
+    Currently covers MITx Online organizations linked via B2B contracts.
+    Grain: one row per (organization, course_run, contract).
+  columns:
+  - name: organization_fk
+    description: Foreign key to dim_organization.organization_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_organization')
+        field: organization_pk
+  - name: courserun_fk
+    description: Foreign key to dim_course_run.courserun_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+  - name: b2b_contract_name
+    description: Human-readable name of the B2B contract linking this organization
+      to the course run.
+  - name: b2b_contract_is_active
+    description: Whether the B2B contract is currently active.
+  - name: b2b_contract_start_date
+    description: Start date of the B2B contract.
+  - name: b2b_contract_end_date
+    description: End date of the B2B contract (null if open-ended).

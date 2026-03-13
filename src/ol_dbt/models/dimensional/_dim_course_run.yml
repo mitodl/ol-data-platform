@@ -1,0 +1,80 @@
+---
+version: 2
+
+models:
+- name: dim_course_run
+  description: >
+    Specific course offering/run dimension (SCD Type 2). One course (dim_course) may
+    have
+    multiple runs over time. This dimension captures the specific instance of a course
+    with start/end dates, enrollment windows, etc.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - platform
+      - courserun_readable_id
+      - is_current
+      where: "is_current = true"
+  columns:
+  - name: courserun_pk
+    description: >
+      Surrogate primary key. Generated as dbt_utils.generate_surrogate_key(['platform',
+      'courserun_readable_id']). Value is stable across runs — do not filter on this
+      alone for SCD2; also filter on is_current.
+    tests:
+    - unique
+    - not_null
+  - name: courserun_readable_id
+    description: Business key - unique identifier for course run
+    tests:
+    - not_null
+  - name: course_fk
+    description: Foreign key to dim_course (null for edxorg runs — edxorg courses
+      not yet in dim_course)
+    tests:
+    - not_null:
+        where: "platform != 'edxorg'"
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+        where: "platform != 'edxorg'"
+  - name: platform_fk
+    description: Foreign key to dim_platform (Phase 3+)
+  - name: platform
+    description: Platform identifier string
+    tests:
+    - not_null
+  - name: courserun_title
+    description: Title of this specific course run
+  - name: courserun_start_date_key
+    description: Foreign key to dim_date for course run start date
+    tests:
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: courserun_end_date_key
+    description: Foreign key to dim_date for course run end date
+    tests:
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+  - name: enrollment_start_date_key
+    description: Foreign key to dim_date for enrollment period start
+  - name: enrollment_end_date_key
+    description: Foreign key to dim_date for enrollment period end
+  - name: courserun_is_live
+    description: Boolean indicating if course run is live
+  - name: effective_date
+    description: >
+      Timestamp (UTC) when this SCD Type 2 version became effective. Always set for
+      the current record. Filter with is_current to get the active version.
+    tests:
+    - not_null
+  - name: end_date
+    description: >
+      Timestamp (UTC) when this SCD Type 2 version was superseded. Null for the current
+      active record.
+  - name: is_current
+    description: Boolean indicating current version
+    tests:
+    - not_null

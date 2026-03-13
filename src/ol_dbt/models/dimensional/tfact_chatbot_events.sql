@@ -42,7 +42,7 @@ with openedx_events as (
                   1
               )
          ) AS checkpoint_pk
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -63,7 +63,7 @@ with openedx_events as (
         , {{ json_query_string('useractivity_event_object', "'$.xblock_state'") }} as chatbot_type
         , {{ json_query_string('useractivity_event_object', "'$.problem_set'") }} as problem_set
         , nullif({{ json_query_string('useractivity_event_object', "'$.canvas_course_id'") }},'') as canvas_course_id
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
         , case when useractivity_event_type like '%response'
              then regexp_replace(
                  {{ json_query_string('useractivity_event_object', "'$.value'") }}
@@ -168,6 +168,10 @@ with openedx_events as (
 
 select
     users.user_pk as user_fk
+    -- All chatbot events are sourced exclusively from stg__mitxonline__openedx__tracking_logs__user_activity,
+    -- so the platform is always 'mitxonline'. Canvas learning assistant events are delivered
+    -- through the MITx Online OpenEdX tracking log pipeline, not a separate canvas pipeline.
+    , {{ dbt_utils.generate_surrogate_key(["'mitxonline'"]) }} as platform_fk
     , combined.chatbot_source
     , combined.user_username
     , combined.openedx_user_id
