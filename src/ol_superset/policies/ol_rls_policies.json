@@ -34,8 +34,8 @@
       "roles": ["ol_instructor"]
     },
     {
-      "name": "admin_engineer_course_scope_bypass",
-      "description": "Base filter that exempts Admin and ol_data_engineer from all course-scope and term-expiry RLS on per-learner datasets. Engineers and platform admins need unrestricted access for pipeline development, data validation, and support.",
+      "name": "admin_engineer_analyst_course_scope_bypass",
+      "description": "Base filter that exempts Admin, ol_data_engineer, and ol_data_analyst from all course-scope and term-expiry RLS on per-learner datasets. Engineers and platform admins need unrestricted access for pipeline development, data validation, and support. Data analysts (including education technologists supporting course teams across multiple courses) need unrestricted cross-course and cross-platform visibility for institutional analysis.",
       "filter_type": "Base",
       "group_key": "course_scope",
       "clause": "1 = 1",
@@ -53,7 +53,7 @@
         "enrollment_detail_report",
         "marts__combined_course_engagements"
       ],
-      "roles": ["Admin", "ol_data_engineer"]
+      "roles": ["Admin", "ol_data_engineer", "ol_data_analyst"]
     }
   ]
 }
