@@ -7,6 +7,8 @@ import cyclopts
 from ol_superset.commands.apply_rls import apply_rls
 from ol_superset.commands.dedupe import dedupe_app
 from ol_superset.commands.export import export
+from ol_superset.commands.impact import impact
+from ol_superset.commands.lineage import lineage
 from ol_superset.commands.lock import lock_app
 from ol_superset.commands.promote import promote
 from ol_superset.commands.refresh import refresh
@@ -46,6 +48,8 @@ app = cyclopts.App(
 # Register commands
 app.command(export, name="export")
 app.command(validate, name="validate")
+app.command(lineage, name="lineage")
+app.command(impact, name="impact")
 app.command(sync, name="sync")
 app.command(promote, name="promote")
 app.command(dedupe_app, name="dedupe")
