@@ -302,6 +302,12 @@ def process_edxorg_archive_bundle(
                         archive_file,
                         include_header=True,
                         separator="\t",
+                        # Use no quoting to match how the source TSVs are read
+                        # (quote_char=None in scan_csv). This prevents DuckDB from
+                        # seeing quoted vs. unquoted values for the same column across
+                        # files, which was a contributing factor to type inference
+                        # mismatches when loading into iceberg tables.
+                        quote_style="never",
                         lazy=False,
                         check_extension=False,
                     )

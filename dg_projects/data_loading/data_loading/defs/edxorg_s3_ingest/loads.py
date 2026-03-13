@@ -70,8 +70,13 @@ def edxorg_s3_source(
         # Create a resource for each table with standardized naming
         @dlt.resource(
             name=f"raw__edxorg__s3__tables__{table_name}",
-            write_disposition="append",
-            primary_key=None,  # TSV files don't have consistent primary keys
+            write_disposition="merge",
+            # All edxorg TSV exports include a row_hash column. Use a composite key
+            # with extracted_course_key because row_hash is computed from only the
+            # original CSV columns (excluding the extracted_* fields added during
+            # archive processing), so identical rows from different courses would
+            # otherwise collide on row_hash alone.
+            primary_key=["row_hash", "extracted_course_key"],
             table_format=table_format,
         )
         def load_table(table=table_name) -> DltResource:
@@ -108,6 +113,11 @@ def edxorg_s3_source(
                 use_pyarrow=True,
                 delimiter="\t",  # TSV files use tabs
                 ignore_errors=True,
+                # Force all columns to VARCHAR to prevent pyarrow schema mismatches.
+                # This occurs when DuckDB infers different types for the same column
+                # across files (e.g., TIMESTAMP vs. VARCHAR for columns that are
+                # empty in some files). Downstream dbt models handle type casting.
+                all_varchar=True,
             )
 
         yield load_table
