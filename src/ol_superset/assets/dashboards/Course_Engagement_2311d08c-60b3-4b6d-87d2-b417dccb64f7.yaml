@@ -410,7 +410,7 @@ metadata:
       datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
     - column:
         name: platform
-      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+      datasetUuid: f0b79172-5047-402f-b872-42433fc97548
     type: NATIVE_FILTER
   - cascadeParentIds: []
     chartsInScope:
@@ -453,7 +453,7 @@ metadata:
       datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
     - column:
         name: courserun_is_current
-      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+      datasetUuid: f0b79172-5047-402f-b872-42433fc97548
     type: NATIVE_FILTER
   - cascadeParentIds:
     - NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
@@ -485,7 +485,7 @@ metadata:
       datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
     - column:
         name: course_readable_id
-      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+      datasetUuid: f0b79172-5047-402f-b872-42433fc97548
     type: NATIVE_FILTER
   - cascadeParentIds:
     - NATIVE_FILTER-kFdRjkZtp
@@ -531,7 +531,7 @@ metadata:
       datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
     - column:
         name: courserun_readable_id
-      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+      datasetUuid: f0b79172-5047-402f-b872-42433fc97548
     type: NATIVE_FILTER
   refresh_frequency: 0
   shared_label_colors:
