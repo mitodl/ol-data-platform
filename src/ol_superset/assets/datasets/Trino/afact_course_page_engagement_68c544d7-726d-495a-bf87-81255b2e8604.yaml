@@ -1,11 +1,11 @@
-table_name: afact_course_page_engagement
-main_dttm_col: last_view_timestamp
+table_name: page_engagement_views_report
+main_dttm_col: null
 description: Auto refreshed at 2026-02-05T13:50:59.338969+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
-schema: ol_warehouse_production_dimensional
+schema: ol_warehouse_production_reporting
 sql: null
 params: null
 template_params: null
@@ -27,19 +27,7 @@ metrics:
   extra: null
   warning_text: null
 columns:
-- column_name: last_view_timestamp
-  verbose_name: null
-  is_dttm: true
-  is_active: true
-  type: TIMESTAMP(6) WITH TIME ZONE
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: courserun_readable_id
+- column_name: user_email
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -51,67 +39,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: chapter_block_fk
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: sequential_block_fk
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_username
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: platform_fk
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: block_fk
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_fk
+- column_name: full_name
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -135,6 +63,18 @@ columns:
   description: null
   python_date_format: null
   extra: null
+- column_name: courserun_readable_id
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: num_of_views
   verbose_name: null
   is_dttm: false
@@ -147,11 +87,71 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: openedx_user_id
+- column_name: unit_title
   verbose_name: null
   is_dttm: false
   is_active: true
-  type: INTEGER
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: subsection_title
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: subsection_block_index
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: section_title
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: section_block_index
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: course_title
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
   advanced_data_type: null
   groupby: true
   filterable: true
