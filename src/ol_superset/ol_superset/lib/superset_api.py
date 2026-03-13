@@ -1,18 +1,13 @@
 """Superset API client for direct API interactions."""
 
-import hashlib
 import json
-import secrets
 import sys
-import webbrowser
-from base64 import urlsafe_b64encode
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from threading import Thread
-from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
 import yaml
+from preset_cli.auth.oauth_interactive import InteractiveOAuthAuth
+from yarl import URL
 
 
 def get_instance_config(instance_name: str) -> dict[str, str]:
@@ -52,7 +47,12 @@ def get_instance_config(instance_name: str) -> dict[str, str]:
 
 def get_oauth_token_with_pkce(instance_name: str) -> str | None:
     """
-    Get OAuth access token using PKCE flow for Superset instance.
+    Get OAuth access token for a Superset instance, using cached tokens when available.
+
+    Tokens are cached in ~/.sup/tokens/<hostname>.json and reused across
+    invocations. The interactive browser flow (PKCE) is only triggered when no
+    valid cached token exists and the refresh token has also expired, matching
+    the behavior of the sup CLI.
 
     Args:
         instance_name: Name of the instance (e.g., 'superset-qa')
@@ -64,114 +64,32 @@ def get_oauth_token_with_pkce(instance_name: str) -> str | None:
     if not config:
         return None
 
-    # PKCE parameters
-    code_verifier = (
-        urlsafe_b64encode(secrets.token_bytes(32)).decode("utf-8").rstrip("=")
-    )
-    code_challenge = (
-        urlsafe_b64encode(hashlib.sha256(code_verifier.encode("utf-8")).digest())
-        .decode("utf-8")
-        .rstrip("=")
-    )
-
-    # OAuth parameters - use port 8080 to match sup CLI configuration
-    redirect_uri = "http://localhost:8080/callback"
-    state = secrets.token_urlsafe(16)
-
-    auth_url = config["oauth_authorization_url"]
-    token_url = config["oauth_token_url"]
-    client_id = config["oauth_client_id"]
+    base_url = config.get("url")
+    oauth_authorization_url = config.get("oauth_authorization_url")
+    oauth_token_url = config.get("oauth_token_url")
+    client_id = config.get("oauth_client_id", "superset-cli")
     scope = config.get("oauth_scope", "openid profile email")
 
-    # Build authorization URL
-    auth_params = {
-        "client_id": client_id,
-        "response_type": "code",
-        "redirect_uri": redirect_uri,
-        "scope": scope,
-        "state": state,
-        "code_challenge": code_challenge,
-        "code_challenge_method": "S256",
-    }
-
-    authorization_url = f"{auth_url}?{urlencode(auth_params)}"
-
-    # Store authorization code from callback
-    auth_code: dict[str, str | None] = {"code": None, "error": None}
-
-    class CallbackHandler(BaseHTTPRequestHandler):
-        def do_GET(self):  # noqa: N802
-            # Parse query parameters
-            query = urlparse(self.path).query
-            params = parse_qs(query)
-
-            if "code" in params:
-                auth_code["code"] = params["code"][0]
-                self.send_response(200)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write(
-                    b"<html><body><h1>Authorization successful!</h1>"
-                    b"<p>You can close this window and return to the "
-                    b"terminal.</p></body></html>"
-                )
-            else:
-                error = params.get("error", ["Unknown error"])[0]
-                auth_code["error"] = error
-                self.send_response(400)
-                self.send_header("Content-type", "text/html")
-                self.end_headers()
-                self.wfile.write(
-                    b"<html><body><h1>Authorization failed!</h1>"
-                    b"<p>Error: " + error.encode() + b"</p></body></html>"
-                )
-
-        def log_message(self, format, *args):  # noqa: ARG002, A002
-            # Suppress log messages
-            pass
-
-    # Start local server to receive callback - use port 8080 to match redirect_uri
-    server = HTTPServer(("localhost", 8080), CallbackHandler)
-
-    def run_server():
-        server.handle_request()
-
-    server_thread = Thread(target=run_server, daemon=True)
-    server_thread.start()
-
-    # Open browser for authorization
-    print(f"\n  Opening browser for authorization to {instance_name}...")
-    print(f"  If browser doesn't open, visit: {authorization_url}\n")
-    webbrowser.open(authorization_url)
-
-    # Wait for callback
-    server_thread.join(timeout=120)  # 2 minute timeout
-
-    if not auth_code["code"]:
+    if not base_url or not oauth_authorization_url or not oauth_token_url:
         print(
-            f"  ❌ Authorization failed: {auth_code.get('error', 'Timeout')}",
+            f"Error: Missing OAuth configuration for instance '{instance_name}'. "
+            "Ensure url, oauth_authorization_url, and oauth_token_url are set "
+            "in ~/.sup/config.yml.",
             file=sys.stderr,
         )
         return None
 
-    # Exchange authorization code for access token
-    token_data = {
-        "grant_type": "authorization_code",
-        "client_id": client_id,
-        "code": auth_code["code"],
-        "redirect_uri": redirect_uri,
-        "code_verifier": code_verifier,
-    }
-
     try:
-        response = requests.post(token_url, data=token_data, timeout=30)
-        response.raise_for_status()
-
-        token_response = response.json()
-        return token_response.get("access_token")
-
+        auth = InteractiveOAuthAuth(
+            base_url=URL(base_url),
+            authorization_url=URL(oauth_authorization_url),
+            token_url=URL(oauth_token_url),
+            client_id=client_id,
+            scope=scope,
+        )
+        return auth.get_token()
     except Exception as e:
-        print(f"  ❌ Error exchanging code for token: {e}", file=sys.stderr)
+        print(f"  ❌ Error obtaining OAuth token: {e}", file=sys.stderr)
         return None
 
 
