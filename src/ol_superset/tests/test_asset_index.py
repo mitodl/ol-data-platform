@@ -261,7 +261,8 @@ def test_extract_column_refs_entity() -> None:
     assert "user_country_code" in refs
 
 
-def test_extract_column_refs_adhoc_simple_only() -> None:
+def test_extract_column_refs_adhoc_sql_filter_parsed() -> None:
+    """SQL adhoc_filters are now parsed — columns inside SQL are extracted."""
     params = {
         "adhoc_filters": [
             {
@@ -278,23 +279,27 @@ def test_extract_column_refs_adhoc_simple_only() -> None:
     }
     refs = extract_chart_column_refs(params)
     assert "platform" in refs
-    # SQL expression filter should not add any column
-    assert "total" not in refs
+    # SQL expression filter column is now also extracted
+    assert "total" in refs
 
 
-def test_extract_column_refs_skips_sql_expression_dicts_in_all_columns() -> None:
+def test_extract_column_refs_sql_dicts_in_all_columns_parsed() -> None:
+    """SQL-expression dicts in all_columns: sqlExpression is parsed for columns."""
     params = {
         "all_columns": [
-            "order_id",  # plain string - included
+            "order_id",  # plain string - always included
             {
                 "expressionType": "SQL",
                 "label": "computed_col",
                 "sqlExpression": "UPPER(user_email)",
-            },  # dict - excluded
+            },
         ]
     }
     refs = extract_chart_column_refs(params)
-    assert refs == {"order_id"}
+    assert "order_id" in refs
+    # user_email is parsed from the SQL expression
+    assert "user_email" in refs
+    # The label name itself is not a column reference
     assert "computed_col" not in refs
 
 
@@ -315,11 +320,11 @@ def test_extract_column_refs_simple_adhoc_in_all_columns() -> None:
     assert "user_email" in refs
 
 
-def test_extract_column_refs_groupby_sql_dict_skipped() -> None:
-    """SQL-expression dicts in groupby should not contribute column refs."""
+def test_extract_column_refs_groupby_sql_dict_parsed() -> None:
+    """SQL-expression dicts in groupby: sqlExpression is parsed for columns."""
     params = {
         "groupby": [
-            "platform",  # plain string — included
+            "platform",  # plain string — always included
             {
                 "expressionType": "SQL",
                 "label": "is_current",
@@ -329,8 +334,10 @@ def test_extract_column_refs_groupby_sql_dict_skipped() -> None:
     }
     refs = extract_chart_column_refs(params)
     assert "platform" in refs
+    # active is parsed from the SQL CASE expression
+    assert "active" in refs
+    # The label is not a column reference
     assert "is_current" not in refs
-    assert "active" not in refs
 
 
 def test_extract_column_refs_groupby_simple_dict() -> None:
@@ -384,8 +391,8 @@ def test_extract_column_refs_metric_singular_simple() -> None:
     assert "revenue" in refs
 
 
-def test_extract_column_refs_metrics_sql_skipped() -> None:
-    """SQL-expression metric dicts should not contribute column refs."""
+def test_extract_column_refs_metrics_sql_parsed() -> None:
+    """SQL-expression metric dicts: sqlExpression is parsed for columns."""
     params = {
         "metrics": [
             {
@@ -396,7 +403,9 @@ def test_extract_column_refs_metrics_sql_skipped() -> None:
         ]
     }
     refs = extract_chart_column_refs(params)
-    assert not refs
+    # revenue is parsed from the SQL; COUNT(*) Star node contributes nothing
+    assert "revenue" in refs
+    assert "avg_revenue" not in refs
 
 
 def test_extract_column_refs_metrics_saved_metric_string_skipped() -> None:
@@ -467,6 +476,72 @@ def test_extract_column_refs_empty_params() -> None:
     assert extract_chart_column_refs({}) == set()
 
 
+def test_extract_column_refs_sql_complex_case_expression() -> None:
+    """Multi-column CASE expressions are fully parsed."""
+    params = {
+        "metrics": [
+            {
+                "expressionType": "SQL",
+                "sqlExpression": (
+                    "COUNT(DISTINCT CASE WHEN num_video_played > 0 "
+                    "THEN user_username ELSE null END)"
+                ),
+                "label": "active_users",
+            }
+        ]
+    }
+    refs = extract_chart_column_refs(params)
+    assert "num_video_played" in refs
+    assert "user_username" in refs
+    assert "active_users" not in refs
+
+
+def test_extract_column_refs_sql_arithmetic_expression() -> None:
+    """Arithmetic SQL expressions with multiple column operands are parsed."""
+    params = {
+        "groupby": [
+            {
+                "expressionType": "SQL",
+                "label": "capacity",
+                "sqlExpression": "num_discount_codes * discount_max_redemptions",
+            }
+        ]
+    }
+    refs = extract_chart_column_refs(params)
+    assert "num_discount_codes" in refs
+    assert "discount_max_redemptions" in refs
+
+
+def test_extract_column_refs_sql_function_only_no_columns() -> None:
+    """SQL expressions with no column references (pure functions) yield nothing."""
+    params = {
+        "metrics": [
+            {"expressionType": "SQL", "sqlExpression": "COUNT(*)", "label": "cnt"}
+        ],
+        "adhoc_filters": [
+            {"expressionType": "SQL", "sqlExpression": "CURRENT_DATE > '2024-01-01'"}
+        ],
+    }
+    refs = extract_chart_column_refs(params)
+    assert not refs
+
+
+def test_extract_column_refs_sql_parse_failure_is_silent() -> None:
+    """Unparseable SQL expressions do not raise — they yield no columns."""
+    params = {
+        "metrics": [
+            {
+                "expressionType": "SQL",
+                "sqlExpression": "{{jinja_template_not_valid_sql}}",
+                "label": "broken",
+            }
+        ]
+    }
+    # Must not raise
+    refs = extract_chart_column_refs(params)
+    assert isinstance(refs, set)
+
+
 def test_extract_column_refs_deduplicates() -> None:
     params = {
         "groupby": ["user_email"],
@@ -486,7 +561,7 @@ def test_extract_column_refs_ignores_empty_strings() -> None:
 
 
 def test_extract_column_refs_comprehensive() -> None:
-    """Integration test: all extraction paths working together."""
+    """Integration test: all extraction paths including SQL expression parsing."""
     params = {
         "x_axis": "activity_date",
         "entity": "user_country_code",
@@ -500,6 +575,7 @@ def test_extract_column_refs_comprehensive() -> None:
             {
                 "expressionType": "SQL",
                 "label": "derived",
+                # platform is already in refs; this still gets parsed
                 "sqlExpression": "UPPER(platform)",
             },
         ],
@@ -517,6 +593,7 @@ def test_extract_column_refs_comprehensive() -> None:
                 "aggregate": "COUNT_DISTINCT",
                 "column": {"column_name": "user_id"},
             },
+            # COUNT(*) — Star node contributes nothing; label "cnt" is not a col
             {"expressionType": "SQL", "sqlExpression": "COUNT(*)", "label": "cnt"},
         ],
         "timeseries_limit_metric": {
@@ -526,6 +603,7 @@ def test_extract_column_refs_comprehensive() -> None:
         },
         "adhoc_filters": [
             {"expressionType": "SIMPLE", "subject": "is_active"},
+            # SQL filter: revenue is now extracted
             {"expressionType": "SQL", "sqlExpression": "revenue > 0"},
         ],
         "order_by_cols": ['["enrollment_count", false]'],
@@ -534,19 +612,19 @@ def test_extract_column_refs_comprehensive() -> None:
     assert refs == {
         "activity_date",
         "user_country_code",
-        "platform",
+        "platform",       # plain groupby str AND from UPPER(platform) SQL
         "course_run_id",
         "user_email",
         "enrollment_mode",
         "user_id",
         "last_activity_date",
         "is_active",
+        "revenue",        # extracted from SQL adhoc_filter
         "enrollment_count",
     }
-    # SQL expressions do not contribute column names
+    # Label names are not column references
     assert "derived" not in refs
     assert "cnt" not in refs
-
 
 
 # ---------------------------------------------------------------------------

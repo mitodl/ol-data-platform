@@ -145,44 +145,88 @@ _METRIC_KEYS = (
 """Chart param keys: single metric dict, or list of metric dicts/strings."""
 
 
-def _is_sql_expression(item: Any) -> bool:
-    """Return True if item is an adhoc column dict with expressionType=SQL."""
-    return isinstance(item, dict) and item.get("expressionType") in ("SQL", "CUSTOM")
-
-
-def _col_name_from_adhoc(item: Any) -> str | None:
+def _cols_from_sql_expression(sql: str) -> set[str]:
     """
-    Return the raw column name from an adhoc column dict, or None.
+    Extract column name references from a SQL expression fragment.
 
-    Adhoc column dicts can appear in ``groupby``, ``all_columns``, etc.
-    Only ``SIMPLE`` expression types reference a raw dataset column by name;
-    ``SQL``/``CUSTOM`` types compute a new value and are skipped.
+    Uses sqlglot (Trino dialect) to parse the expression and locate all
+    ``Column`` nodes.  Column names are returned in their original case
+    (callers normalise as needed).
 
-    For ``SIMPLE`` items, the column is at ``column.column_name``.
+    Returns an empty set when the SQL is blank or cannot be parsed — we
+    never raise on bad input, we just extract fewer refs.
+
+    Examples::
+
+        _cols_from_sql_expression("AVG(percent_problems_attempted)")
+        # -> {"percent_problems_attempted"}
+
+        _cols_from_sql_expression(
+            "COUNT(DISTINCT CASE WHEN active THEN user_id END)"
+        )
+        # -> {"active", "user_id"}
+
+        _cols_from_sql_expression("COUNT(*)")  # Star is not a Column
+        # -> set()
+    """
+    if not sql or not sql.strip():
+        return set()
+    try:
+        tree = sqlglot.parse_one(sql, dialect="trino")
+    except Exception:  # noqa: BLE001
+        return set()
+    if tree is None:
+        return set()
+    return {
+        col.name
+        for col in tree.find_all(exp.Column)
+        if col.name and col.name != "*"
+    }
+
+
+def _cols_from_adhoc(item: Any) -> set[str]:
+    """
+    Return dataset column names referenced by an adhoc column/filter dict.
+
+    Adhoc column dicts appear in ``groupby``, ``all_columns``, and metric
+    positions.  Two expression types are handled:
+
+    * ``SIMPLE`` — the column is identified directly via ``column.column_name``.
+    * ``SQL`` / ``CUSTOM`` — the ``sqlExpression`` SQL fragment is parsed with
+      sqlglot and all ``Column`` nodes are returned.
+
+    Returns an empty set for any unrecognised shape.
     """
     if not isinstance(item, dict):
-        return None
-    if item.get("expressionType") not in ("SIMPLE",):
-        return None
-    col = item.get("column")
-    if isinstance(col, dict):
-        name = col.get("column_name")
-        return str(name) if name else None
-    return None
+        return set()
+    expr_type = item.get("expressionType")
+    if expr_type == "SIMPLE":
+        col = item.get("column")
+        if isinstance(col, dict):
+            name = col.get("column_name")
+            if name:
+                return {str(name)}
+        return set()
+    if expr_type in ("SQL", "CUSTOM"):
+        sql_expr = item.get("sqlExpression")
+        if isinstance(sql_expr, str):
+            return _cols_from_sql_expression(sql_expr)
+    return set()
 
 
-def _col_name_from_metric(item: Any) -> str | None:
+def _cols_from_metric(item: Any) -> set[str]:
     """
-    Return the raw column name referenced by a metric dict, or None.
+    Return dataset column names referenced by a metric value.
 
-    Metric dicts with ``expressionType: SIMPLE`` aggregate a specific dataset
-    column (``column.column_name``).  SQL-expression metrics and saved-metric
-    name strings (e.g. ``"count"``) do not reference a raw column by name.
+    Metric values can be:
+
+    * A plain string — a *saved metric* name (e.g. ``"count"``).  These are
+      server-side named metrics, not raw column references; returns empty set.
+    * A metric dict — delegates to :func:`_cols_from_adhoc`.
     """
     if isinstance(item, str):
-        # Saved metric name — not a raw column reference.
-        return None
-    return _col_name_from_adhoc(item)
+        return set()  # saved metric name — not a raw column
+    return _cols_from_adhoc(item)
 
 
 def _cols_from_order_by_cols(order_by_cols: list[Any]) -> set[str]:
@@ -212,30 +256,34 @@ def _cols_from_order_by_cols(order_by_cols: list[Any]) -> set[str]:
 
 def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
     """
-    Extract plain column name references from chart params.
+    Extract dataset column name references from all chart params locations.
 
-    Covers all chart param locations where a raw dataset column is referenced
-    by name and whose absence would cause a query error:
+    Covers every param key where a missing dataset column would cause a query
+    error in Superset:
 
-    - ``x_axis`` — str: time axis or categorical axis column
+    - ``x_axis`` — str: time or categorical axis column
     - ``entity`` — str: column used in map/scatter charts (e.g. country code)
-    - ``groupby`` — list of str | adhoc-column-dict (SIMPLE type only)
-    - ``all_columns`` — list of str | adhoc-column-dict (SIMPLE type only)
+    - ``groupby`` — list of str or adhoc-column-dict
+    - ``all_columns`` — list of str or adhoc-column-dict
     - ``metrics`` / ``metric`` / ``timeseries_limit_metric`` /
-      ``secondary_metric`` / ``percent_metrics`` — SIMPLE-type metric dicts
-      expose their aggregated column via ``column.column_name``
-    - ``adhoc_filters`` — ``subject`` field when ``expressionType`` is SIMPLE
+      ``secondary_metric`` / ``percent_metrics`` — metric dicts
+    - ``adhoc_filters`` — ``subject`` (SIMPLE) or ``sqlExpression`` (SQL/CUSTOM)
     - ``order_by_cols`` — JSON-encoded ``["column_name", bool]`` strings
 
-    SQL-expression items (dicts with ``expressionType: SQL`` or ``CUSTOM``)
-    are always skipped because they compute values rather than referencing a
-    dataset column by name.
+    For ``SIMPLE`` expression types the column is taken directly from the
+    structured ``column.column_name`` field.  For ``SQL``/``CUSTOM`` expression
+    types the ``sqlExpression`` fragment is parsed with sqlglot (Trino dialect)
+    and all ``Column`` AST nodes are returned — this correctly handles cases
+    like ``AVG(percent_problems_attempted)`` or complex CASE expressions.
+
+    Saved metric name strings (e.g. ``"count"``) and items that cannot be
+    parsed are silently ignored.
 
     Args:
         params: Parsed chart params dict.
 
     Returns:
-        Set of plain column name strings (case-preserved as stored in params).
+        Set of column name strings as they appear in the params.
     """
     refs: set[str] = set()
 
@@ -256,18 +304,14 @@ def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
             if isinstance(item, str) and item:
                 refs.add(item)
             else:
-                name = _col_name_from_adhoc(item)
-                if name:
-                    refs.add(name)
+                refs.update(_cols_from_adhoc(item))
 
     # all_columns is a mixed list of str | adhoc-column-dict
     for item in params.get("all_columns") or []:
         if isinstance(item, str) and item:
             refs.add(item)
         else:
-            name = _col_name_from_adhoc(item)
-            if name:
-                refs.add(name)
+            refs.update(_cols_from_adhoc(item))
 
     # ── Metric keys ──────────────────────────────────────────────────────────
     for key in _METRIC_KEYS:
@@ -276,22 +320,25 @@ def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
             continue
         if isinstance(value, list):
             for item in value:
-                name = _col_name_from_metric(item)
-                if name:
-                    refs.add(name)
+                refs.update(_cols_from_metric(item))
         else:
-            name = _col_name_from_metric(value)
-            if name:
-                refs.add(name)
+            refs.update(_cols_from_metric(value))
 
-    # ── adhoc_filters: only SIMPLE type filters reference a column by name ───
+    # ── adhoc_filters ─────────────────────────────────────────────────────────
+    # SIMPLE: column name is in the structured ``subject`` field.
+    # SQL/CUSTOM: parse sqlExpression to find column references.
     for filt in params.get("adhoc_filters") or []:
         if not isinstance(filt, dict):
             continue
-        if filt.get("expressionType") == "SIMPLE":
+        expr_type = filt.get("expressionType")
+        if expr_type == "SIMPLE":
             subject = filt.get("subject")
             if isinstance(subject, str) and subject:
                 refs.add(subject)
+        elif expr_type in ("SQL", "CUSTOM"):
+            sql_expr = filt.get("sqlExpression")
+            if isinstance(sql_expr, str):
+                refs.update(_cols_from_sql_expression(sql_expr))
 
     # ── order_by_cols: JSON-encoded ["column_name", bool] strings ────────────
     order_by = params.get("order_by_cols")
