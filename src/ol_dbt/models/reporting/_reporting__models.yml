@@ -786,10 +786,10 @@ models:
     description: int, count of the total number of problems
   - name: number_of_total_attempts
     description: int, number of attempts on a problem
-  - name: percent_problems_correct
+  - name: percentage_problems_correct
     description: decimal, percentage of problems the user got correct out of the total
       number of problems
-  - name: percent_problems_attempted
+  - name: percentage_problems_attempted
     description: decimal, percentage of problems the user attempted out of the total
       number of problems
   tests:

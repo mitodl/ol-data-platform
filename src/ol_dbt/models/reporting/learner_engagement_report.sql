@@ -236,7 +236,7 @@ with video_pre_query as (
                 then a.problem_block_fk
         end) as decimal(30, 10))
         / cast(max(c.problem_numb) as decimal(30, 10)
-        ) as percetage_problems_attempted
+        ) as percentage_problems_attempted
     from ol_warehouse_production_dimensional.afact_problem_engagement as a
     inner join ol_warehouse_production_dimensional.dim_problem as problem
         on a.problem_block_fk = problem.problem_block_pk
@@ -320,7 +320,7 @@ with video_pre_query as (
         , page_and_video.video_duration
         , problems_table.problems_attempted
         , problems_table.number_of_problems
-        , problems_table.percetage_problems_attempted
+        , problems_table.percentage_problems_attempted
         , problems_table.num_of_problems_correct
         , problems_table.avg_percent_grade
         , problems_table.max_possible_grade
@@ -354,7 +354,7 @@ select
     , page_video_problems.video_duration
     , page_video_problems.problems_attempted
     , page_video_problems.number_of_problems
-    , page_video_problems.percetage_problems_attempted
+    , page_video_problems.percentage_problems_attempted
     , page_video_problems.num_of_problems_correct
     , page_video_problems.avg_percent_grade
     , page_video_problems.max_possible_grade

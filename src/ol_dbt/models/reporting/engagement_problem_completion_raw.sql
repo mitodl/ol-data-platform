@@ -55,10 +55,10 @@ select
     , sum(f_problem_engagement.num_of_attempts) as number_of_total_attempts
     , cast(count(distinct (case when cast(f_problem_engagement.num_of_correct_attempts as int)> 0
         then f_problem_engagement.problem_block_fk else null end)) as decimal(30,10))
-        /cast(max(problems_in_block.problem_numb) as decimal(30,10)) as percent_problems_correct
+        /cast(max(problems_in_block.problem_numb) as decimal(30,10)) as percentage_problems_correct
     , cast(count(distinct (case when cast(f_problem_engagement.num_of_attempts as int)> 0
         then f_problem_engagement.problem_block_fk else null end)) as decimal(30,10))
-        /cast(max(problems_in_block.problem_numb) as decimal(30,10)) as percent_problems_attempted
+        /cast(max(problems_in_block.problem_numb) as decimal(30,10)) as percentage_problems_attempted
 from f_problem_engagement
 left join problems_in_block
     on f_problem_engagement.chapter_block_fk = problems_in_block.chapter_block_id
