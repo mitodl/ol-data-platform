@@ -295,6 +295,17 @@ def _validate_dbt_chain(
     print("  [3/4] Dataset → dbt model (table name + schema)...")
     dataset_model_errors = 0
     dataset_schema_warnings = 0
+    virtual_count = sum(
+        1
+        for d in index.datasets.values()
+        if d.database == "Trino" and d.table_name and d.sql
+    )
+    if virtual_count:
+        print(
+            f"    ℹ️  {virtual_count} virtual dataset(s) skipped "
+            f"(SQL-defined — table refs validated in [4/4])"
+        )
+
     for dataset in index.datasets.values():
         if not dataset.table_name:
             continue
@@ -334,16 +345,21 @@ def _validate_dbt_chain(
                 print(
                     f"    ⚠️  Dataset '{dataset.table_name}': schema mismatch — "
                     f"Superset has '{dataset.schema}', "
-                    f"expected '{model.expected_schema}' for dbt layer '{model.layer}'"
+                    f"expected '{model.expected_schema}' for dbt layer "
+                    f"'{model.layer}'"
                 )
                 warnings += 1
                 dataset_schema_warnings += 1
 
     if dataset_model_errors == 0 and dataset_schema_warnings == 0:
-        trino_count = sum(
-            1 for d in index.datasets.values() if d.database == "Trino" and d.table_name
+        simple_count = sum(
+            1
+            for d in index.datasets.values()
+            if d.database == "Trino" and d.table_name and not d.sql
         )
-        print(f"    ✅ All {trino_count} Trino dataset(s) map to known dbt models")
+        print(
+            f"    ✅ All {simple_count} simple Trino dataset(s) map to known dbt models"
+        )
 
     # ------------------------------------------------------------------
     # 4. Column-level validation
@@ -360,7 +376,9 @@ def _validate_dbt_chain(
             dbt_registry.get_model(dataset.table_name) if dataset.table_name else None
         )
 
-        # 4a. Dataset columns vs dbt model columns (simple columns only)
+        # 4a. Dataset columns vs dbt model columns (simple datasets only).
+        # Virtual datasets are defined by SQL — their YAML column list is a
+        # cached metadata snapshot and may be incomplete.
         if model and model.columns and not dataset.sql:
             for col_name in sorted(dataset.columns):
                 if col_name not in model.columns:
@@ -384,7 +402,11 @@ def _validate_dbt_chain(
                     warnings += 1
                     col_warnings += 1
 
-        # 4c. Chart column refs vs dataset columns
+        # 4c. Chart column refs vs dataset columns.
+        # Skip virtual datasets — their columns are derived from SQL and the YAML
+        # column list may not enumerate every column the SQL produces.
+        if dataset.sql:
+            continue
         if not dataset.columns:
             continue
         for chart in index.charts.values():
@@ -394,8 +416,7 @@ def _validate_dbt_chain(
                 if col_ref not in dataset.columns:
                     print(
                         f"    ⚠️  Chart '{chart.name}': column '{col_ref}' "
-                        f"not found in dataset '{dataset.table_name}' "
-                        f"column list"
+                        f"not found in dataset '{dataset.table_name}' column list"
                     )
                     warnings += 1
                     col_warnings += 1
