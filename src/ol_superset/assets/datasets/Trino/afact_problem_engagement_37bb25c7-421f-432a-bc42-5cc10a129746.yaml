@@ -1,11 +1,11 @@
-table_name: afact_problem_engagement
-main_dttm_col: last_attempt_timestamp
-description: Auto refreshed at 2026-03-07T19:49:43.606824+00:00
+table_name: engagement_problem_completion_raw
+main_dttm_col: null
+description: Auto refreshed at 2026-03-06T20:32:30.586193+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
-schema: ol_warehouse_production_dimensional
+schema: ol_warehouse_production_reporting
 sql: null
 params: null
 template_params: null
@@ -27,11 +27,35 @@ metrics:
   extra: null
   warning_text: null
 columns:
-- column_name: last_attempt_timestamp
+- column_name: platform
   verbose_name: null
-  is_dttm: true
+  is_dttm: false
   is_active: true
-  type: TIMESTAMP(6) WITH TIME ZONE
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: user_email
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: course_title
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
   advanced_data_type: null
   groupby: true
   filterable: true
@@ -51,7 +75,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: chapter_block_fk
+- column_name: section_title
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -63,79 +87,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: sequential_block_fk
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: problem_block_fk
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_username
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: platform_fk
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_fk
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: platform
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: num_of_correct_attempts
+- column_name: section_block_index
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -147,7 +99,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: openedx_user_id
+- column_name: problems_correct
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -159,11 +111,59 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: num_of_attempts
+- column_name: problems_attempted
   verbose_name: null
   is_dttm: false
   is_active: true
-  type: INTEGER
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: number_of_problems
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: number_of_total_attempts
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: percentage_problems_correct
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 10)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: percentage_problems_attempted
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DECIMAL(38, 10)
   advanced_data_type: null
   groupby: true
   filterable: true

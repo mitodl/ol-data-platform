@@ -26,7 +26,7 @@ params:
     hasCustomLabel: true
     label: Avg_%_problems_attempted
     optionName: metric_v0x9x3vkxs_lyd8fkz8ah
-    sqlExpression: AVG(percetage_problems_attempted)
+    sqlExpression: AVG(percentage_problems_attempted)
   order_by_cols: []
   order_desc: true
   percent_metrics: []
@@ -43,17 +43,17 @@ params:
 query_context: '{"datasource": {"id": 87, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["courserun_readable_id"], "metrics": [{"expressionType": "SQL", "sqlExpression":
-  "AVG(percetage_problems_attempted)", "column": null, "aggregate": null, "datasourceWarning":
+  "AVG(percentage_problems_attempted)", "column": null, "aggregate": null, "datasourceWarning":
   false, "hasCustomLabel": true, "label": "Avg_%_problems_attempted", "optionName":
   "metric_v0x9x3vkxs_lyd8fkz8ah"}], "orderby": [[{"expressionType": "SQL", "sqlExpression":
-  "AVG(percetage_problems_attempted)", "column": null, "aggregate": null, "datasourceWarning":
+  "AVG(percentage_problems_attempted)", "column": null, "aggregate": null, "datasourceWarning":
   false, "hasCustomLabel": true, "label": "Avg_%_problems_attempted", "optionName":
   "metric_v0x9x3vkxs_lyd8fkz8ah"}, false]], "annotation_layers": [], "row_limit":
   1000, "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params":
   {}, "custom_form_data": {}, "post_processing": [], "time_offsets": []}], "form_data":
   {"datasource": "87__table", "viz_type": "table", "slice_id": 90, "query_mode": "aggregate",
   "groupby": ["courserun_readable_id"], "time_grain_sqla": "P1D", "temporal_columns_lookup":
-  {}, "metrics": [{"expressionType": "SQL", "sqlExpression": "AVG(percetage_problems_attempted)",
+  {}, "metrics": [{"expressionType": "SQL", "sqlExpression": "AVG(percentage_problems_attempted)",
   "column": null, "aggregate": null, "datasourceWarning": false, "hasCustomLabel":
   true, "label": "Avg_%_problems_attempted", "optionName": "metric_v0x9x3vkxs_lyd8fkz8ah"}],
   "all_columns": [], "percent_metrics": [], "adhoc_filters": [], "order_by_cols":
