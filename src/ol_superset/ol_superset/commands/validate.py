@@ -376,7 +376,10 @@ def _validate_dbt_chain(
             dbt_registry.get_model(dataset.table_name) if dataset.table_name else None
         )
 
-        # 4a. Dataset columns vs dbt model columns (simple datasets only).
+        # 4a. Dataset columns vs dbt model columns (plain columns only).
+        # Calculated columns (those with a Superset ``expression``) are derived
+        # at query time by Superset and don't correspond to warehouse columns, so
+        # they are excluded from this check.
         # Virtual datasets are defined by SQL — their YAML column list is a
         # cached metadata snapshot and may be incomplete.
         if model and model.columns and not dataset.sql:
@@ -405,15 +408,17 @@ def _validate_dbt_chain(
         # 4c. Chart column refs vs dataset columns.
         # Skip virtual datasets — their columns are derived from SQL and the YAML
         # column list may not enumerate every column the SQL produces.
+        # Calculated columns are also valid targets for chart column refs.
         if dataset.sql:
             continue
-        if not dataset.columns:
+        all_dataset_cols = dataset.columns | dataset.calculated_columns
+        if not all_dataset_cols:
             continue
         for chart in index.charts.values():
             if chart.dataset_uuid != dataset.uuid:
                 continue
             for col_ref in sorted(chart.column_refs):
-                if col_ref not in dataset.columns:
+                if col_ref not in all_dataset_cols:
                     print(
                         f"    ⚠️  Chart '{chart.name}': column '{col_ref}' "
                         f"not found in dataset '{dataset.table_name}' column list"

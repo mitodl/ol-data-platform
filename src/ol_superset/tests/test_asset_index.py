@@ -40,6 +40,11 @@ def assets_dir(tmp_path: Path) -> Path:
                 {"column_name": "order_id"},
                 {"column_name": "user_email"},
                 {"column_name": "total_amount"},
+                # Calculated column — has an expression
+                {
+                    "column_name": "order_year",
+                    "expression": "substring(order_created_on, 1, 4)",
+                },
             ],
         },
     )
@@ -153,8 +158,19 @@ def test_build_asset_index_dataset_columns(assets_dir: Path) -> None:
 
     ds = index.datasets["abc123"]
     assert ds.table_name == "marts__orders"
+    # Plain columns only — calculated columns are in calculated_columns
     assert ds.columns == {"order_id", "user_email", "total_amount"}
+    assert ds.calculated_columns == {"order_year"}
     assert ds.sql is None
+
+
+def test_build_asset_index_calculated_columns_not_in_columns(assets_dir: Path) -> None:
+    index = build_asset_index(assets_dir)
+
+    ds = index.datasets["abc123"]
+    # Calculated columns must not appear in the plain columns set
+    assert "order_year" not in ds.columns
+    assert "order_year" in ds.calculated_columns
 
 
 def test_build_asset_index_virtual_dataset(assets_dir: Path) -> None:

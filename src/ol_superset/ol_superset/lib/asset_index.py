@@ -19,6 +19,9 @@ class DatasetAsset:
     catalog: str
     database: str  # subdirectory name, e.g. "Trino"
     columns: set[str] = field(default_factory=set)
+    # Columns with a non-empty ``expression`` field — computed by Superset at
+    # query time and not present as raw columns in the underlying table.
+    calculated_columns: set[str] = field(default_factory=set)
     sql: str | None = None  # non-None means virtual dataset
     path: Path = field(default_factory=Path)
 
@@ -140,9 +143,14 @@ def _load_datasets(datasets_dir: Path) -> dict[str, DatasetAsset]:
             continue
 
         columns: set[str] = set()
+        calculated_columns: set[str] = set()
         for col in data.get("columns", []):
             if isinstance(col, dict) and col.get("column_name"):
-                columns.add(col["column_name"])
+                name = col["column_name"]
+                if col.get("expression"):
+                    calculated_columns.add(name)
+                else:
+                    columns.add(name)
 
         raw_sql = data.get("sql")
         sql: str | None = (
@@ -158,6 +166,7 @@ def _load_datasets(datasets_dir: Path) -> dict[str, DatasetAsset]:
             catalog=data.get("catalog", ""),
             database=database,
             columns=columns,
+            calculated_columns=calculated_columns,
             sql=sql,
             path=yaml_file,
         )
