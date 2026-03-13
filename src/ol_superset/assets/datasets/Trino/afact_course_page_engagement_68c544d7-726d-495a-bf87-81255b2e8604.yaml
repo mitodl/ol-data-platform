@@ -1,11 +1,11 @@
-table_name: page_engagement_views_report
+table_name: afact_course_page_engagement
 main_dttm_col: null
 description: Auto refreshed at 2026-02-05T13:50:59.338969+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
-schema: ol_warehouse_production_reporting
+schema: ol_warehouse_production_dimensional
 sql: null
 params: null
 template_params: null
