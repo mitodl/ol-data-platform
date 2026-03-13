@@ -255,6 +255,12 @@ def test_extract_column_refs_x_axis() -> None:
     assert "event_date" in refs
 
 
+def test_extract_column_refs_entity() -> None:
+    params = {"entity": "user_country_code"}
+    refs = extract_chart_column_refs(params)
+    assert "user_country_code" in refs
+
+
 def test_extract_column_refs_adhoc_simple_only() -> None:
     params = {
         "adhoc_filters": [
@@ -276,7 +282,7 @@ def test_extract_column_refs_adhoc_simple_only() -> None:
     assert "total" not in refs
 
 
-def test_extract_column_refs_skips_sql_expression_dicts() -> None:
+def test_extract_column_refs_skips_sql_expression_dicts_in_all_columns() -> None:
     params = {
         "all_columns": [
             "order_id",  # plain string - included
@@ -290,6 +296,171 @@ def test_extract_column_refs_skips_sql_expression_dicts() -> None:
     refs = extract_chart_column_refs(params)
     assert refs == {"order_id"}
     assert "computed_col" not in refs
+
+
+def test_extract_column_refs_simple_adhoc_in_all_columns() -> None:
+    """SIMPLE adhoc-column dicts in all_columns reference the underlying column."""
+    params = {
+        "all_columns": [
+            "order_id",
+            {
+                "expressionType": "SIMPLE",
+                "column": {"column_name": "user_email"},
+                "label": "user_email",
+            },
+        ]
+    }
+    refs = extract_chart_column_refs(params)
+    assert "order_id" in refs
+    assert "user_email" in refs
+
+
+def test_extract_column_refs_groupby_sql_dict_skipped() -> None:
+    """SQL-expression dicts in groupby should not contribute column refs."""
+    params = {
+        "groupby": [
+            "platform",  # plain string — included
+            {
+                "expressionType": "SQL",
+                "label": "is_current",
+                "sqlExpression": "CASE WHEN active = 1 THEN true ELSE false END",
+            },
+        ]
+    }
+    refs = extract_chart_column_refs(params)
+    assert "platform" in refs
+    assert "is_current" not in refs
+    assert "active" not in refs
+
+
+def test_extract_column_refs_groupby_simple_dict() -> None:
+    """SIMPLE adhoc-column dicts in groupby expose column.column_name."""
+    params = {
+        "groupby": [
+            {
+                "expressionType": "SIMPLE",
+                "column": {"column_name": "enrollment_status"},
+                "label": "enrollment_status",
+            }
+        ]
+    }
+    refs = extract_chart_column_refs(params)
+    assert "enrollment_status" in refs
+
+
+def test_extract_column_refs_metrics_simple() -> None:
+    """SIMPLE metric dicts expose the aggregated column."""
+    params = {
+        "metrics": [
+            {
+                "expressionType": "SIMPLE",
+                "aggregate": "SUM",
+                "column": {"column_name": "enrollment_count"},
+                "label": "SUM(enrollment_count)",
+            },
+            {
+                "expressionType": "SIMPLE",
+                "aggregate": "COUNT_DISTINCT",
+                "column": {"column_name": "user_id"},
+                "label": "COUNT_DISTINCT(user_id)",
+            },
+        ]
+    }
+    refs = extract_chart_column_refs(params)
+    assert "enrollment_count" in refs
+    assert "user_id" in refs
+
+
+def test_extract_column_refs_metric_singular_simple() -> None:
+    """Single ``metric`` dict (not list) exposes its column."""
+    params = {
+        "metric": {
+            "expressionType": "SIMPLE",
+            "aggregate": "SUM",
+            "column": {"column_name": "revenue"},
+        }
+    }
+    refs = extract_chart_column_refs(params)
+    assert "revenue" in refs
+
+
+def test_extract_column_refs_metrics_sql_skipped() -> None:
+    """SQL-expression metric dicts should not contribute column refs."""
+    params = {
+        "metrics": [
+            {
+                "expressionType": "SQL",
+                "sqlExpression": "SUM(revenue) / COUNT(*)",
+                "label": "avg_revenue",
+            }
+        ]
+    }
+    refs = extract_chart_column_refs(params)
+    assert not refs
+
+
+def test_extract_column_refs_metrics_saved_metric_string_skipped() -> None:
+    """Saved metric names (plain strings) are not raw column refs."""
+    params = {"metrics": ["count", "sum__revenue"]}
+    refs = extract_chart_column_refs(params)
+    assert not refs
+
+
+def test_extract_column_refs_timeseries_limit_metric() -> None:
+    params = {
+        "timeseries_limit_metric": {
+            "expressionType": "SIMPLE",
+            "aggregate": "MAX",
+            "column": {"column_name": "activity_date"},
+        }
+    }
+    refs = extract_chart_column_refs(params)
+    assert "activity_date" in refs
+
+
+def test_extract_column_refs_secondary_metric() -> None:
+    params = {
+        "secondary_metric": {
+            "expressionType": "SIMPLE",
+            "aggregate": "COUNT",
+            "column": {"column_name": "session_count"},
+        }
+    }
+    refs = extract_chart_column_refs(params)
+    assert "session_count" in refs
+
+
+def test_extract_column_refs_percent_metrics() -> None:
+    params = {
+        "percent_metrics": [
+            {
+                "expressionType": "SIMPLE",
+                "aggregate": "SUM",
+                "column": {"column_name": "completion_count"},
+            }
+        ]
+    }
+    refs = extract_chart_column_refs(params)
+    assert "completion_count" in refs
+
+
+def test_extract_column_refs_order_by_cols() -> None:
+    params = {
+        "order_by_cols": [
+            '["created_on", false]',
+            '["message_index", true]',
+        ]
+    }
+    refs = extract_chart_column_refs(params)
+    assert "created_on" in refs
+    assert "message_index" in refs
+
+
+def test_extract_column_refs_order_by_cols_invalid_json_ignored() -> None:
+    params = {"order_by_cols": ["not-json", '["valid_col", true]']}
+    refs = extract_chart_column_refs(params)
+    assert "valid_col" in refs
+    assert len(refs) == 1
 
 
 def test_extract_column_refs_empty_params() -> None:
@@ -312,6 +483,70 @@ def test_extract_column_refs_ignores_empty_strings() -> None:
     }
     refs = extract_chart_column_refs(params)
     assert refs == {"user_email"}
+
+
+def test_extract_column_refs_comprehensive() -> None:
+    """Integration test: all extraction paths working together."""
+    params = {
+        "x_axis": "activity_date",
+        "entity": "user_country_code",
+        "groupby": [
+            "platform",
+            {
+                "expressionType": "SIMPLE",
+                "column": {"column_name": "course_run_id"},
+                "label": "course_run_id",
+            },
+            {
+                "expressionType": "SQL",
+                "label": "derived",
+                "sqlExpression": "UPPER(platform)",
+            },
+        ],
+        "all_columns": [
+            "user_email",
+            {
+                "expressionType": "SIMPLE",
+                "column": {"column_name": "enrollment_mode"},
+                "label": "enrollment_mode",
+            },
+        ],
+        "metrics": [
+            {
+                "expressionType": "SIMPLE",
+                "aggregate": "COUNT_DISTINCT",
+                "column": {"column_name": "user_id"},
+            },
+            {"expressionType": "SQL", "sqlExpression": "COUNT(*)", "label": "cnt"},
+        ],
+        "timeseries_limit_metric": {
+            "expressionType": "SIMPLE",
+            "aggregate": "MAX",
+            "column": {"column_name": "last_activity_date"},
+        },
+        "adhoc_filters": [
+            {"expressionType": "SIMPLE", "subject": "is_active"},
+            {"expressionType": "SQL", "sqlExpression": "revenue > 0"},
+        ],
+        "order_by_cols": ['["enrollment_count", false]'],
+    }
+    refs = extract_chart_column_refs(params)
+    assert refs == {
+        "activity_date",
+        "user_country_code",
+        "platform",
+        "course_run_id",
+        "user_email",
+        "enrollment_mode",
+        "user_id",
+        "last_activity_date",
+        "is_active",
+        "enrollment_count",
+    }
+    # SQL expressions do not contribute column names
+    assert "derived" not in refs
+    assert "cnt" not in refs
+
 
 
 # ---------------------------------------------------------------------------

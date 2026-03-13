@@ -129,8 +129,20 @@ def extract_virtual_dataset_columns(sql: str) -> VirtualColumnsResult:
 # Column-reference extraction from chart params
 # ---------------------------------------------------------------------------
 
-_SIMPLE_COLUMN_KEYS = ("groupby", "x_axis")
-"""Chart param keys whose values are plain column name strings."""
+_SIMPLE_COLUMN_KEYS = ("x_axis",)
+"""Chart param keys whose values are a single plain column name string."""
+
+_SIMPLE_LIST_KEYS = ("groupby",)
+"""Chart param keys whose values are lists of str | adhoc-column-dict."""
+
+_METRIC_KEYS = (
+    "metric",
+    "metrics",
+    "timeseries_limit_metric",
+    "secondary_metric",
+    "percent_metrics",
+)
+"""Chart param keys: single metric dict, or list of metric dicts/strings."""
 
 
 def _is_sql_expression(item: Any) -> bool:
@@ -138,51 +150,153 @@ def _is_sql_expression(item: Any) -> bool:
     return isinstance(item, dict) and item.get("expressionType") in ("SQL", "CUSTOM")
 
 
+def _col_name_from_adhoc(item: Any) -> str | None:
+    """
+    Return the raw column name from an adhoc column dict, or None.
+
+    Adhoc column dicts can appear in ``groupby``, ``all_columns``, etc.
+    Only ``SIMPLE`` expression types reference a raw dataset column by name;
+    ``SQL``/``CUSTOM`` types compute a new value and are skipped.
+
+    For ``SIMPLE`` items, the column is at ``column.column_name``.
+    """
+    if not isinstance(item, dict):
+        return None
+    if item.get("expressionType") not in ("SIMPLE",):
+        return None
+    col = item.get("column")
+    if isinstance(col, dict):
+        name = col.get("column_name")
+        return str(name) if name else None
+    return None
+
+
+def _col_name_from_metric(item: Any) -> str | None:
+    """
+    Return the raw column name referenced by a metric dict, or None.
+
+    Metric dicts with ``expressionType: SIMPLE`` aggregate a specific dataset
+    column (``column.column_name``).  SQL-expression metrics and saved-metric
+    name strings (e.g. ``"count"``) do not reference a raw column by name.
+    """
+    if isinstance(item, str):
+        # Saved metric name — not a raw column reference.
+        return None
+    return _col_name_from_adhoc(item)
+
+
+def _cols_from_order_by_cols(order_by_cols: list[Any]) -> set[str]:
+    """
+    Parse ``order_by_cols`` entries to extract column names.
+
+    Each entry is a JSON-encoded string like ``'["column_name", false]'``
+    where the first element is the column name and the second is a bool
+    indicating descending sort.
+    """
+    import json
+
+    refs: set[str] = set()
+    for entry in order_by_cols:
+        if not isinstance(entry, str):
+            continue
+        try:
+            parsed = json.loads(entry)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(parsed, list) and parsed and isinstance(parsed[0], str):
+            name = parsed[0].strip()
+            if name:
+                refs.add(name)
+    return refs
+
+
 def extract_chart_column_refs(params: dict[str, Any]) -> set[str]:
     """
     Extract plain column name references from chart params.
 
-    SQL-expression columns (dicts with ``expressionType: SQL``) are skipped
-    because they compute new values and don't reference raw dataset columns
-    by name.
+    Covers all chart param locations where a raw dataset column is referenced
+    by name and whose absence would cause a query error:
 
-    Columns extracted from:
-    - ``groupby`` — list of str
-    - ``x_axis`` — str
-    - ``all_columns`` — mixed list; only plain str items are included
-    - ``adhoc_filters`` — subject field, only when expressionType is SIMPLE
+    - ``x_axis`` — str: time axis or categorical axis column
+    - ``entity`` — str: column used in map/scatter charts (e.g. country code)
+    - ``groupby`` — list of str | adhoc-column-dict (SIMPLE type only)
+    - ``all_columns`` — list of str | adhoc-column-dict (SIMPLE type only)
+    - ``metrics`` / ``metric`` / ``timeseries_limit_metric`` /
+      ``secondary_metric`` / ``percent_metrics`` — SIMPLE-type metric dicts
+      expose their aggregated column via ``column.column_name``
+    - ``adhoc_filters`` — ``subject`` field when ``expressionType`` is SIMPLE
+    - ``order_by_cols`` — JSON-encoded ``["column_name", bool]`` strings
+
+    SQL-expression items (dicts with ``expressionType: SQL`` or ``CUSTOM``)
+    are always skipped because they compute values rather than referencing a
+    dataset column by name.
 
     Args:
         params: Parsed chart params dict.
 
     Returns:
-        Set of plain column name strings.
+        Set of plain column name strings (case-preserved as stored in params).
     """
     refs: set[str] = set()
 
+    # ── Single plain-string column keys ──────────────────────────────────────
     for key in _SIMPLE_COLUMN_KEYS:
         value = params.get(key)
         if isinstance(value, str) and value:
             refs.add(value)
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, str) and item:
-                    refs.add(item)
 
-    # all_columns is a mixed list of str | dict
-    for item in params.get("all_columns", []):
+    # entity is a plain string column used in map/scatter charts
+    entity = params.get("entity")
+    if isinstance(entity, str) and entity:
+        refs.add(entity)
+
+    # ── List keys: str | adhoc-column-dict ───────────────────────────────────
+    for key in _SIMPLE_LIST_KEYS:
+        for item in params.get(key) or []:
+            if isinstance(item, str) and item:
+                refs.add(item)
+            else:
+                name = _col_name_from_adhoc(item)
+                if name:
+                    refs.add(name)
+
+    # all_columns is a mixed list of str | adhoc-column-dict
+    for item in params.get("all_columns") or []:
         if isinstance(item, str) and item:
             refs.add(item)
-        # dicts are SQL expressions — skip
+        else:
+            name = _col_name_from_adhoc(item)
+            if name:
+                refs.add(name)
 
-    # adhoc_filters: only SIMPLE type filters reference a column by name
-    for filt in params.get("adhoc_filters", []):
+    # ── Metric keys ──────────────────────────────────────────────────────────
+    for key in _METRIC_KEYS:
+        value = params.get(key)
+        if value is None:
+            continue
+        if isinstance(value, list):
+            for item in value:
+                name = _col_name_from_metric(item)
+                if name:
+                    refs.add(name)
+        else:
+            name = _col_name_from_metric(value)
+            if name:
+                refs.add(name)
+
+    # ── adhoc_filters: only SIMPLE type filters reference a column by name ───
+    for filt in params.get("adhoc_filters") or []:
         if not isinstance(filt, dict):
             continue
         if filt.get("expressionType") == "SIMPLE":
             subject = filt.get("subject")
             if isinstance(subject, str) and subject:
                 refs.add(subject)
+
+    # ── order_by_cols: JSON-encoded ["column_name", bool] strings ────────────
+    order_by = params.get("order_by_cols")
+    if isinstance(order_by, list):
+        refs.update(_cols_from_order_by_cols(order_by))
 
     return refs
 
