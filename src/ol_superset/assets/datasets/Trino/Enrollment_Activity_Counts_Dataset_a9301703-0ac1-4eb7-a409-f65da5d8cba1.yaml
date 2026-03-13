@@ -1,6 +1,6 @@
 table_name: Enrollment_Activity_Counts_Dataset
 main_dttm_col: activity_date
-description: Auto refreshed at 2026-03-07T19:49:38.000419+00:00
+description: Auto refreshed at 2026-03-13T15:44:06.675301+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

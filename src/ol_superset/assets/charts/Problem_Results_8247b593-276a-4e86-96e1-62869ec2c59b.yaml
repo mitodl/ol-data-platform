@@ -6,6 +6,7 @@ viz_type: table
 params:
   adhoc_filters: []
   all_columns: []
+  annotation_layers: []
   color_pn: true
   column_config:
     SUM(case when problem_success= 'correct' then 1 else 0 end)/count(*):
@@ -14,7 +15,7 @@ params:
   conditional_formatting: []
   dashboards:
   - 24
-  datasource: 14__table
+  datasource: 49__table
   extra_form_data: {}
   groupby:
   - courserun_readable_id
@@ -66,8 +67,7 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
-query_context: '{"datasource": {"id": 14, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 49, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"time_grain_sqla": "P1D", "having": "", "where": ""},
   "applied_time_extras": {}, "columns": ["courserun_readable_id", "problem_name"],
   "metrics": [{"expressionType": "SQL", "sqlExpression": "SUM(case when problem_success=
@@ -89,7 +89,7 @@ query_context: '{"datasource": {"id": 14, "type": "table"}, "force": false, "que
   false, "hasCustomLabel": true, "label": "Problem_Correct_Count", "optionName": "metric_xj16o97mjh_2ccubhpfiei"},
   false]], "annotation_layers": [], "row_limit": 1000, "series_limit": 0, "order_desc":
   true, "url_params": {}, "custom_params": {}, "custom_form_data": {}, "post_processing":
-  []}], "form_data": {"datasource": "14__table", "viz_type": "table", "slice_id":
+  []}], "form_data": {"datasource": "49__table", "viz_type": "table", "slice_id":
   51, "query_mode": "aggregate", "groupby": ["courserun_readable_id", "problem_name"],
   "time_grain_sqla": "P1D", "temporal_columns_lookup": {}, "metrics": [{"expressionType":
   "SQL", "sqlExpression": "SUM(case when problem_success= ''correct'' then 1 else

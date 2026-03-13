@@ -1,12 +1,12 @@
-table_name: marts__mitxonline_course_certificates
+table_name: combined_video_engagements_counts_report
 main_dttm_col: null
-description: Auto refreshed at 2026-03-13T15:45:48.993736+00:00
+description: Auto refreshed at 2026-03-13T15:44:23.986589+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
-schema: ol_warehouse_production_mart
-sql: ''
+schema: ol_warehouse_production_reporting
+sql: null
 params: null
 template_params: null
 filter_select_enabled: true
@@ -15,7 +15,7 @@ extra: null
 normalize_columns: false
 always_filter_main_dttm: false
 folders: null
-uuid: 45f0412f-0d34-4d04-a3ff-e595a3bada19
+uuid: f0b79172-5047-402f-b872-42433fc97548
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
@@ -24,8 +24,7 @@ metrics:
   description: null
   d3format: null
   currency: null
-  extra:
-    warning_markdown: ''
+  extra: null
   warning_text: null
 columns:
 - column_name: courserun_readable_id
@@ -39,8 +38,8 @@ columns:
   expression: ''
   description: null
   python_date_format: null
-  extra: {}
-- column_name: courseruncertificate_created_on
+  extra: null
+- column_name: course_readable_id
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -51,8 +50,8 @@ columns:
   expression: ''
   description: null
   python_date_format: null
-  extra: {}
-- column_name: user_full_name
+  extra: null
+- column_name: chapter_title
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -63,31 +62,7 @@ columns:
   expression: ''
   description: null
   python_date_format: null
-  extra: {}
-- column_name: courseruncertificate_url
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: user_username
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: {}
+  extra: null
 - column_name: user_email
   verbose_name: null
   is_dttm: false
@@ -99,8 +74,8 @@ columns:
   expression: ''
   description: null
   python_date_format: null
-  extra: {}
-- column_name: course_number
+  extra: null
+- column_name: platform
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -111,20 +86,20 @@ columns:
   expression: ''
   description: null
   python_date_format: null
-  extra: {}
-- column_name: courserun_title
+  extra: null
+- column_name: courserun_is_current
   verbose_name: null
   is_dttm: false
   is_active: true
-  type: VARCHAR
+  type: BOOLEAN
   advanced_data_type: null
   groupby: true
   filterable: true
   expression: ''
   description: null
   python_date_format: null
-  extra: {}
-- column_name: openedx_user_id
+  extra: null
+- column_name: user_watched_video_count
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -135,6 +110,30 @@ columns:
   expression: ''
   description: null
   python_date_format: null
-  extra: {}
+  extra: null
+- column_name: total_video_count
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: max_video_index
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
 version: 1.0.0
 database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

@@ -1,6 +1,6 @@
 table_name: afact_video_engagement
 main_dttm_col: latest_activity_timestamp
-description: Auto refreshed at 2026-03-07T19:49:44.807489+00:00
+description: Auto refreshed at 2026-03-13T15:44:11.215380+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

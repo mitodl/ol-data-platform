@@ -25,6 +25,7 @@ params:
   - num_video_played
   - num_discussion_participated
   allow_render_html: false
+  annotation_layers: []
   color_pn: false
   comparison_color_scheme: Green
   conditional_formatting: []
@@ -54,7 +55,6 @@ params:
     courseactivity_date: true
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 47, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "courseactivity_date", "op": "TEMPORAL_RANGE", "val": "No
   filter"}], "extras": {"having": "", "where": ""}, "applied_time_extras": {}, "columns":

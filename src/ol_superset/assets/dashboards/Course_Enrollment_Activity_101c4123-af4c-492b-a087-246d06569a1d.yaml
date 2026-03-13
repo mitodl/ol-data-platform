@@ -394,76 +394,6 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '34':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 34
-    '47':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 48
-        scope: global
-      id: 47
-    '35':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 35
-    '31':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 31
-    '48':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        scope: global
-      id: 48
     '29':
       crossFilters:
         chartsInScope:
@@ -492,6 +422,48 @@ metadata:
         - 48
         scope: global
       id: 30
+    '31':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 31
+    '34':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 34
+    '35':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 35
     '37':
       crossFilters:
         chartsInScope:
@@ -506,6 +478,34 @@ metadata:
         - 48
         scope: global
       id: 37
+    '47':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 48
+        scope: global
+      id: 47
+    '48':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        scope: global
+      id: 48
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true

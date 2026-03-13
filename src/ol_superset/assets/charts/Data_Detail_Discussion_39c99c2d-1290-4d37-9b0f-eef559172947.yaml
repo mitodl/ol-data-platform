@@ -21,6 +21,7 @@ params:
   - page_url
   - event_timestamp
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
@@ -41,7 +42,6 @@ params:
     event_timestamp: true
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 110, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "event_timestamp", "op": "TEMPORAL_RANGE", "val": "No filter"}],
   "extras": {"having": "", "where": ""}, "applied_time_extras": {}, "columns": ["platform",

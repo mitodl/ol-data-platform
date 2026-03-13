@@ -1,11 +1,11 @@
-table_name: marts__micromasters_program_certificates
+table_name: program_enrollment_with_user_report
 main_dttm_col: null
-description: Auto refreshed at 2026-03-13T15:45:36.597492+00:00
+description: Auto refreshed at 2026-03-13T15:46:37.086929+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
 catalog: ol_data_lake_production
-schema: ol_warehouse_production_mart
+schema: ol_warehouse_production_reporting
 sql: null
 params: null
 template_params: null
@@ -15,7 +15,7 @@ extra: null
 normalize_columns: false
 always_filter_main_dttm: false
 folders: null
-uuid: e531ebf4-6189-4c02-9729-6c6ef18b81ef
+uuid: 378cfe46-2614-42e3-82f3-f161aa37e66d
 metrics:
 - metric_name: count
   verbose_name: COUNT(*)
@@ -28,18 +28,6 @@ metrics:
   warning_text: null
 columns:
 - column_name: user_address_state_or_territory
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: program_certificate_hashed_id
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -75,7 +63,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: program_completion_timestamp
+- column_name: programcertificate_created_on
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -87,7 +75,19 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_last_name
+- column_name: programenrollment_created_on
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: programenrollment_enrollment_status
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -111,6 +111,30 @@ columns:
   description: null
   python_date_format: null
   extra: null
+- column_name: user_address_country
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: user_highest_education
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
 - column_name: user_street_address
   verbose_name: null
   is_dttm: false
@@ -123,31 +147,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_edxorg_username
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_mitxonline_username
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: ''
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: user_first_name
+- column_name: user_hashed_id
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -160,6 +160,114 @@ columns:
   python_date_format: null
   extra: null
 - column_name: user_full_name
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: user_job_title
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: programcertificate_uuid
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: programcertificate_url
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: program_track
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: platform_name
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: program_name
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: capstone_ind
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: user_company
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: user_username
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -195,7 +303,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_country
+- column_name: program_type
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -219,7 +327,19 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: program_is_dedp
+- column_name: user_industry
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: user_has_completed_program
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -231,7 +351,43 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_year_of_birth
+- column_name: programcertificate_is_revoked
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: programenrollment_is_active
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: program_is_live
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BOOLEAN
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: courses_taken_in_program
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -243,7 +399,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: micromasters_program_id
+- column_name: program_complete_days
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -255,7 +411,7 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: mitxonline_program_id
+- column_name: user_birth_year
   verbose_name: null
   is_dttm: false
   is_active: true
@@ -267,7 +423,19 @@ columns:
   description: null
   python_date_format: null
   extra: null
-- column_name: user_edxorg_id
+- column_name: program_id
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: ''
+  description: null
+  python_date_format: null
+  extra: null
+- column_name: user_id
   verbose_name: null
   is_dttm: false
   is_active: true

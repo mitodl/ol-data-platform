@@ -29,6 +29,7 @@ params:
     subject: block_category
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   column_config:
     Avg_%_Video_Played:
@@ -67,7 +68,6 @@ params:
     activity_date: true
   time_grain_sqla: P1D
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 154, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "activity_date", "op": "TEMPORAL_RANGE", "val": "No filter"},
   {"col": "block_category", "op": "IN", "val": ["video"]}], "extras": {"time_grain_sqla":

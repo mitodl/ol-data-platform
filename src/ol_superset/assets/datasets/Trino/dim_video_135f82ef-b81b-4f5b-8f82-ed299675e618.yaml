@@ -1,6 +1,6 @@
 table_name: dim_video
 main_dttm_col: null
-description: Auto refreshed at 2026-03-07T19:50:05.510078+00:00
+description: Auto refreshed at 2026-03-13T15:44:37.252788+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null

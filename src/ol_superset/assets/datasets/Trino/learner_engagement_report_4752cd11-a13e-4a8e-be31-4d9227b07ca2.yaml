@@ -1,6 +1,6 @@
 table_name: learner_engagement_report
 main_dttm_col: null
-description: Auto refreshed at 2026-03-06T20:32:30.586193+00:00
+description: Auto refreshed at 2026-03-09T18:33:45.804179+00:00
 default_endpoint: null
 offset: 0
 cache_timeout: null
@@ -215,7 +215,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null
@@ -227,7 +227,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null
@@ -239,7 +239,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null
@@ -251,7 +251,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null
@@ -263,7 +263,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null
@@ -275,7 +275,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null
@@ -287,7 +287,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null
@@ -299,7 +299,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null
@@ -311,7 +311,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null
@@ -323,7 +323,7 @@ columns:
   advanced_data_type: null
   groupby: true
   filterable: true
-  expression: null
+  expression: ''
   description: null
   python_date_format: null
   extra: null

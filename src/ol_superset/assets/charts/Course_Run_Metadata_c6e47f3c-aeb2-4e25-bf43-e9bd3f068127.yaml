@@ -6,6 +6,7 @@ viz_type: table
 params:
   adhoc_filters: []
   all_columns: []
+  annotation_layers: []
   color_pn: true
   comparison_type: values
   dashboards:
@@ -32,7 +33,6 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-  annotation_layers: []
 query_context: '{"datasource": {"id": 38, "type": "table"}, "force": false, "queries":
   [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
   "columns": ["course_title", "course_readable_id", "courserun_title", "courserun_readable_id",

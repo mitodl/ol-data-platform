@@ -159,18 +159,18 @@ position:
     type: TABS
 metadata:
   chart_configuration:
-    '82':
-      crossFilters:
-        chartsInScope:
-        - 71
-        scope: global
-      id: 82
     '71':
       crossFilters:
         chartsInScope:
         - 82
         scope: global
       id: 71
+    '82':
+      crossFilters:
+        chartsInScope:
+        - 71
+        scope: global
+      id: 82
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true

@@ -172,6 +172,13 @@ position:
     type: TABS
 metadata:
   chart_configuration:
+    '114':
+      crossFilters:
+        chartsInScope:
+        - 39
+        - 135
+        scope: global
+      id: 114
     '135':
       crossFilters:
         chartsInScope:
@@ -186,13 +193,6 @@ metadata:
         - 135
         scope: global
       id: 39
-    '114':
-      crossFilters:
-        chartsInScope:
-        - 39
-        - 135
-        scope: global
-      id: 114
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
