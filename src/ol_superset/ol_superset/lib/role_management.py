@@ -191,6 +191,9 @@ def get_role_dataset_permissions(
 
     Filters to only datasource/schema-level permissions (not UI permissions).
 
+    The GET /api/v1/security/roles/{id}/permissions/ endpoint returns flat dicts
+    with keys "id", "permission_name", "view_menu_name".
+
     Args:
         session: Authenticated requests session
         base_url: Base URL of Superset instance
@@ -214,17 +217,51 @@ def get_role_dataset_permissions(
     data = response.json()
     results = data.get("result", [])
 
-    # Keep only datasource-level permissions (format: "datasource access on [...]")
+    # Keep only datasource/schema-level permissions; the response uses flat keys.
     return [
         {
             "id": p.get("id"),
-            "permission_name": p.get("permission", {}).get("name"),
-            "view_menu_name": p.get("view_menu", {}).get("name"),
+            "permission_name": p.get("permission_name"),
+            "view_menu_name": p.get("view_menu_name"),
         }
         for p in results
-        if "datasource" in (p.get("permission", {}).get("name") or "").lower()
-        or "schema" in (p.get("permission", {}).get("name") or "").lower()
+        if "datasource" in (p.get("permission_name") or "").lower()
+        or "schema" in (p.get("permission_name") or "").lower()
     ]
+
+
+def get_role_all_permission_ids(
+    session: requests.Session, base_url: str, role_id: int
+) -> list[int]:
+    """
+    Get all PermissionView IDs currently assigned to a role (all permission types).
+
+    Used to preserve non-datasource permissions (UI permissions, etc.) when
+    computing the full new permission set to POST back.
+
+    Args:
+        session: Authenticated requests session
+        base_url: Base URL of Superset instance
+        role_id: Superset role ID
+
+    Returns:
+        List of all PermissionView IDs assigned to the role
+    """
+    try:
+        response = session.get(
+            f"{base_url}/api/v1/security/roles/{role_id}/permissions/", timeout=30
+        )
+        response.raise_for_status()
+    except Exception as e:
+        print(
+            f"  ❌ Error fetching all permissions for role {role_id}: {e}",
+            file=sys.stderr,
+        )
+        return []
+
+    data = response.json()
+    results = data.get("result", [])
+    return [p["id"] for p in results if p.get("id") is not None]
 
 
 def get_all_datasource_permissions(
@@ -233,9 +270,13 @@ def get_all_datasource_permissions(
     """
     Get all available datasource-level permissions from Superset.
 
-    These are FAB permissions of the form:
-      - permission_name: "datasource access"
-      - view_menu_name: "[table_name](dataset_id)"
+    These are FAB PermissionView records where permission.name == "datasource_access"
+    and view_menu.name has the form "[table_name](dataset_id)".
+
+    Fetches all pages from /api/v1/security/permissions-resources/ without a
+    server-side filter (the FAB rel_o_m filter requires a related-object integer
+    ID, not a name string, making server-side name filtering impractical) and
+    filters client-side for "datasource_access" permissions.
 
     Args:
         session: Authenticated requests session
@@ -249,29 +290,7 @@ def get_all_datasource_permissions(
     page_size = 100
 
     while True:
-        params = {
-            "q": json.dumps(
-                {
-                    "page": page,
-                    "page_size": page_size,
-                    "filters": [
-                        {
-                            "col": "permission",
-                            "opr": "rel_o_m",
-                            "value": {
-                                "filters": [
-                                    {
-                                        "col": "name",
-                                        "opr": "sw",
-                                        "value": "datasource access",
-                                    }
-                                ]
-                            },
-                        }
-                    ],
-                }
-            )
-        }
+        params = {"q": json.dumps({"page": page, "page_size": page_size})}
         try:
             response = session.get(
                 f"{base_url}/api/v1/security/permissions-resources/",
@@ -289,8 +308,9 @@ def get_all_datasource_permissions(
             break
 
         for p in results:
+            # FAB stores this permission as "datasource_access" (underscore)
             perm_name = p.get("permission", {}).get("name", "")
-            if "datasource access" in perm_name:
+            if perm_name == "datasource_access":
                 permissions.append(
                     {
                         "id": p.get("id"),
@@ -348,77 +368,50 @@ def compute_desired_dataset_ids(
     }
 
 
-def add_role_permissions(
+def set_role_datasource_permissions(
     session: requests.Session,
     base_url: str,
     role_id: int,
-    permission_ids: list[int],
+    pvm_ids_to_add: set[int],
+    pvm_ids_to_revoke: set[int],
 ) -> bool:
     """
-    Add permissions to a Superset role via the API.
+    Update datasource permissions for a Superset role.
+
+    The FAB RoleApi POST /roles/{id}/permissions endpoint **replaces** the
+    entire permission list, so we must:
+      1. Fetch all current PermissionView IDs for the role (including
+         non-datasource permissions such as UI permissions).
+      2. Compute the new set: (all_current - to_revoke) | to_add
+      3. POST the full new set in one request.
+
+    The endpoint is at /permissions (no trailing slash); the trailing-slash
+    variant is GET-only.
 
     Args:
         session: Authenticated requests session
         base_url: Base URL of Superset instance
         role_id: Role ID to update
-        permission_ids: List of permission IDs to add
+        pvm_ids_to_add: PermissionView IDs to add to the role
+        pvm_ids_to_revoke: PermissionView IDs to remove from the role
 
     Returns:
         True if successful
     """
+    all_current_ids = get_role_all_permission_ids(session, base_url, role_id)
+    new_ids = (set(all_current_ids) - pvm_ids_to_revoke) | pvm_ids_to_add
+
     try:
         response = session.post(
-            f"{base_url}/api/v1/security/roles/{role_id}/permissions/",
-            json={"permission_view_menu_ids": permission_ids},
+            f"{base_url}/api/v1/security/roles/{role_id}/permissions",
+            json={"permission_view_menu_ids": sorted(new_ids)},
             timeout=30,
         )
         response.raise_for_status()
         return True
     except requests.exceptions.HTTPError as e:
         print(
-            f"  ❌ HTTP error adding permissions to role {role_id}: {e}",
-            file=sys.stderr,
-        )
-        if e.response is not None:
-            try:
-                print(f"      Details: {e.response.json()}", file=sys.stderr)
-            except Exception:  # noqa: S110
-                pass
-        return False
-    except Exception as e:
-        print(f"  ❌ Error adding permissions to role {role_id}: {e}", file=sys.stderr)
-        return False
-
-
-def delete_role_permissions(
-    session: requests.Session,
-    base_url: str,
-    role_id: int,
-    permission_ids: list[int],
-) -> bool:
-    """
-    Remove permissions from a Superset role via the API.
-
-    Args:
-        session: Authenticated requests session
-        base_url: Base URL of Superset instance
-        role_id: Role ID to update
-        permission_ids: List of permission IDs to remove
-
-    Returns:
-        True if successful
-    """
-    try:
-        response = session.delete(
-            f"{base_url}/api/v1/security/roles/{role_id}/permissions/",
-            json={"permission_view_menu_ids": permission_ids},
-            timeout=30,
-        )
-        response.raise_for_status()
-        return True
-    except requests.exceptions.HTTPError as e:
-        print(
-            f"  ❌ HTTP error removing permissions from role {role_id}: {e}",
+            f"  ❌ HTTP error updating permissions for role {role_id}: {e}",
             file=sys.stderr,
         )
         if e.response is not None:
@@ -429,7 +422,8 @@ def delete_role_permissions(
         return False
     except Exception as e:
         print(
-            f"  ❌ Error removing permissions from role {role_id}: {e}", file=sys.stderr
+            f"  ❌ Error updating permissions for role {role_id}: {e}",
+            file=sys.stderr,
         )
         return False
 

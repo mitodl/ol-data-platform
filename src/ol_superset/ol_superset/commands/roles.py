@@ -8,9 +8,7 @@ import cyclopts
 from cyclopts import Parameter
 
 from ol_superset.lib.role_management import (
-    add_role_permissions,
     compute_desired_dataset_ids,
-    delete_role_permissions,
     find_governance_roles_json,
     get_all_datasource_permissions,
     get_all_roles,
@@ -18,6 +16,7 @@ from ol_superset.lib.role_management import (
     get_role_dataset_permissions,
     get_superset_datasets,
     load_governance_roles,
+    set_role_datasource_permissions,
 )
 from ol_superset.lib.superset_api import (
     create_authenticated_session,
@@ -357,14 +356,18 @@ def roles_sync(
     print()
 
     # Build a lookup: dataset_id -> permission_id
-    # Superset datasource permissions have view_menu_name like "[table_name](id)"
+    # Superset datasource permissions have view_menu_name like:
+    #   "[database].[table_name](id:42)"
     dataset_id_to_perm_id: dict[int, int] = {}
     for perm in all_ds_perms:
         vm = perm.get("view_menu_name") or ""
-        # Parse "(id)" from the end of view_menu_name
+        # Extract the trailing "(id:NNN)" suffix
         if vm.endswith(")") and "(" in vm:
             try:
-                ds_id = int(vm.rsplit("(", 1)[-1].rstrip(")"))
+                suffix = vm.rsplit("(", 1)[-1].rstrip(")")  # e.g. "id:42"
+                if suffix.startswith("id:"):
+                    suffix = suffix[3:]
+                ds_id = int(suffix)
                 dataset_id_to_perm_id[ds_id] = perm["id"]
             except ValueError:
                 pass
@@ -453,41 +456,40 @@ def roles_sync(
             print()
             continue
 
-        # Add permissions
-        if to_add_ds_ids:
-            perm_ids_to_add = [
-                dataset_id_to_perm_id[ds_id]
-                for ds_id in to_add_ds_ids
-                if ds_id in dataset_id_to_perm_id
-            ]
-            missing_perms = to_add_ds_ids - set(dataset_id_to_perm_id.keys())
-            if missing_perms:
-                print(
-                    f"    ⚠️  {len(missing_perms)} dataset(s) have no "
-                    "datasource permission registered in Superset yet "
-                    "(import them first)"
-                )
+        # Apply permission changes via a single replace call.
+        # The FAB API replaces all permissions atomically, so we compute the
+        # full new set by fetching all current IDs (including non-datasource
+        # ones) and applying the add/revoke delta.
+        pvm_ids_to_add: set[int] = {
+            dataset_id_to_perm_id[ds_id]
+            for ds_id in to_add_ds_ids
+            if ds_id in dataset_id_to_perm_id
+        }
+        pvm_ids_to_revoke: set[int] = {
+            dataset_id_to_perm_id[ds_id]
+            for ds_id in to_revoke_ds_ids
+            if ds_id in dataset_id_to_perm_id
+        }
 
-            if perm_ids_to_add:
-                ok = add_role_permissions(session, base_url, role_id, perm_ids_to_add)
-                if ok:
-                    print(f"    ✅ Added {len(perm_ids_to_add)} permission(s)")
-                    total_added += len(perm_ids_to_add)
+        missing_perms = to_add_ds_ids - set(dataset_id_to_perm_id.keys())
+        if missing_perms:
+            print(
+                f"    ⚠️  {len(missing_perms)} dataset(s) have no "
+                "datasource permission registered in Superset yet "
+                "(import them first)"
+            )
 
-        # Revoke permissions
-        if to_revoke_ds_ids:
-            perm_ids_to_revoke = [
-                dataset_id_to_perm_id[ds_id]
-                for ds_id in to_revoke_ds_ids
-                if ds_id in dataset_id_to_perm_id
-            ]
-            if perm_ids_to_revoke:
-                ok = delete_role_permissions(
-                    session, base_url, role_id, perm_ids_to_revoke
-                )
-                if ok:
-                    print(f"    ✅ Revoked {len(perm_ids_to_revoke)} permission(s)")
-                    total_revoked += len(perm_ids_to_revoke)
+        if pvm_ids_to_add or pvm_ids_to_revoke:
+            ok = set_role_datasource_permissions(
+                session, base_url, role_id, pvm_ids_to_add, pvm_ids_to_revoke
+            )
+            if ok:
+                if pvm_ids_to_add:
+                    print(f"    ✅ Added {len(pvm_ids_to_add)} permission(s)")
+                    total_added += len(pvm_ids_to_add)
+                if pvm_ids_to_revoke:
+                    print(f"    ✅ Revoked {len(pvm_ids_to_revoke)} permission(s)")
+                    total_revoked += len(pvm_ids_to_revoke)
 
         print()
 
