@@ -21,7 +21,7 @@ params:
   comparison_type: values
   dashboards:
   - 26
-  datasource: 10__table
+  datasource: 47__table
   extra_form_data: {}
   forecastInterval: 0.8
   forecastPeriods: 10
@@ -141,7 +141,7 @@ params:
   y_axis_title_margin: 15
   y_axis_title_position: Left
   zoomable: true
-query_context: '{"datasource": {"id": 10, "type": "table"}, "force": false, "queries":
+query_context: '{"datasource": {"id": 47, "type": "table"}, "force": false, "queries":
   [{"filters": [{"col": "courseactivity_date", "op": "TEMPORAL_RANGE", "val": "No
   filter"}], "extras": {"time_grain_sqla": "P1D", "having": "", "where": ""}, "applied_time_extras":
   {}, "columns": [{"timeGrain": "P1D", "columnType": "BASE_AXIS", "expressionType":
@@ -182,7 +182,7 @@ query_context: '{"datasource": {"id": 10, "type": "table"}, "force": false, "que
   "columns": [], "aggregates": {"Watched_a_video": {"operator": "mean"}, "Tried_a_problem":
   {"operator": "mean"}, "Participated_In_Discussion": {"operator": "mean"}, "Learner_count":
   {"operator": "mean"}}, "drop_missing_columns": true}}, {"operation": "flatten"}]}],
-  "form_data": {"datasource": "10__table", "viz_type": "echarts_timeseries_line",
+  "form_data": {"datasource": "47__table", "viz_type": "echarts_timeseries_line",
   "slice_id": 72, "x_axis": {"expressionType": "SQL", "label": "courseactivity_date",
   "sqlExpression": "courseactivity_date"}, "time_grain_sqla": "P1D", "x_axis_sort_asc":
   true, "x_axis_sort_series": "name", "x_axis_sort_series_ascending": true, "metrics":
@@ -228,4 +228,4 @@ query_context: '{"datasource": {"id": 10, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 984bd054-65c0-4f76-b7ee-7fb0608ccd6e
 version: 1.0.0
-dataset_uuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8
+dataset_uuid: f221af29-5df4-4025-8355-401041f94835

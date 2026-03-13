@@ -180,8 +180,8 @@ query_context: '{"datasource": {"id": 10, "type": "table"}, "force": false, "que
   {}, "time_offsets": [], "post_processing": [{"operation": "pivot", "options": {"index":
   ["courseactivity_date"], "columns": [], "aggregates": {"Watched_a_video": {"operator":
   "mean"}, "Tried_a_problem": {"operator": "mean"}, "Participated_In_Discussion":
-  {"operator": "mean"}, "Learner_count": {"operator": "mean"__JINJA2_CLOSE__, "drop_missing_columns":
-  true__JINJA2_CLOSE__, {"operation": "flatten"}]}], "form_data": {"datasource": "10__table",
+  {"operator": "mean"}, "Learner_count": {"operator": "mean"}}, "drop_missing_columns":
+  true}}, {"operation": "flatten"}]}], "form_data": {"datasource": "10__table",
   "viz_type": "echarts_timeseries_line", "slice_id": 72, "x_axis": {"expressionType":
   "SQL", "label": "courseactivity_date", "sqlExpression": "courseactivity_date"},
   "time_grain_sqla": "P1W", "xAxisForceCategorical": true, "metrics": [{"aggregate":
@@ -227,4 +227,4 @@ query_context: '{"datasource": {"id": 10, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: fb5f7dd7-f56e-44f4-97f6-ed0c3804382f
 version: 1.0.0
-dataset_uuid: e7330108-bdfa-4ff0-8ca3-084d7e8cbda8
+dataset_uuid: f221af29-5df4-4025-8355-401041f94835

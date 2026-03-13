@@ -137,7 +137,7 @@ query_context: '{"datasource": {"id": 41, "type": "table"}, "force": false, "que
   {"d3NumberFormat": ",.2f", "d3SmallNumberFormat": ",.2f", "horizontalAlign": "right",
   "truncateLongCells": false}, "unit_price": {"currencyFormat": {}, "d3NumberFormat":
   ",.2f", "d3SmallNumberFormat": ",.2f", "horizontalAlign": "right", "showCellBars":
-  false__JINJA2_CLOSE__, "show_cell_bars": false, "color_pn": false, "comparison_color_scheme":
+  false}}, "show_cell_bars": false, "color_pn": false, "comparison_color_scheme":
   "Green", "conditional_formatting": [], "extra_form_data": {}, "dashboards": [21],
   "force": false, "result_format": "json", "result_type": "full", "include_time":
   false}, "result_format": "json", "result_type": "full"}'
