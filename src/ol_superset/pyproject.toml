@@ -22,7 +22,9 @@ build-backend = "hatchling.build"
 packages = ["ol_superset"]
 
 [dependency-groups]
-dev = []
+dev = [
+    "pytest>=8.0",
+]
 
 [tool.uv.sources]
 superset-sup = { git = "https://github.com/mitodl/superset-sup", rev = "self_hosted_superset_oidc" }
@@ -34,3 +36,6 @@ line-length = 88
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "S", "B", "UP"]
 ignore = ["S603", "S607"]  # Allow subprocess calls to sup CLI
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is expected in pytest tests

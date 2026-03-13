@@ -54,10 +54,47 @@ ol_superset/
 1. **Make changes** in Superset UI (QA or Production)
 2. **Export** assets with `ol-superset export --from <instance>`
 3. **Deduplicate** if syncing between environments: `ol-superset dedupe`
-4. **Validate** with `ol-superset validate`
+4. **Validate** with `ol-superset validate` (add `--dbt-dir` for full chain checks — see below)
 5. **Review** changes with `git diff assets/`
 6. **Commit** to version control
 7. **Sync** to other environments as needed
+
+## Validation
+
+### Basic validation
+
+Checks YAML syntax, scans for embedded passwords, and verifies governance role schema coverage:
+
+```bash
+ol-superset validate
+```
+
+### Full dependency chain validation
+
+Supply `--dbt-dir` to enable ahead-of-time validation of the complete
+**Dashboard → Chart → Dataset → dbt model** dependency chain:
+
+```bash
+ol-superset validate --dbt-dir ../../src/ol_dbt
+```
+
+This checks:
+
+| Check | Severity | Description |
+|-------|----------|-------------|
+| Dashboard chart UUIDs exist locally | **Error** | All chart UUIDs referenced in dashboard position grid must have a file in `assets/charts/` |
+| Chart dataset UUIDs exist locally | **Error** | Each chart's `dataset_uuid` must have a matching file in `assets/datasets/` |
+| Dataset `table_name` matches a dbt model | **Error** | Non-virtual Trino datasets must reference a model that exists in the dbt project's YAML schema files |
+| Dataset `schema` matches expected dbt layer | **Warning** | Flags schema mismatches (e.g., a reporting model accidentally placed in the mart schema) |
+| Dataset columns documented in dbt model | **Warning** | Columns in the Superset dataset that are not documented in the dbt model's YAML (may still exist in the warehouse) |
+| Chart column refs exist in dataset | **Warning** | Plain column names referenced in chart params (groupby, all_columns, x_axis, SIMPLE filters) must appear in the dataset's column list |
+| Virtual dataset SQL table refs exist in dbt | **Warning** | Table names extracted from virtual dataset SQL (after FROM/JOIN) are checked against the dbt registry |
+
+**Errors** cause a non-zero exit code — fix before promoting to production.
+**Warnings** are surfaced for review but do not block the command.
+
+Raw/external tables (schemas not managed by dbt, such as `ol_warehouse_production_raw`)
+are reported as warnings rather than errors since dbt does not own those tables.
 
 ### Preventing Asset Duplication
 
