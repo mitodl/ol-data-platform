@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+from pathlib import Path
 from typing import Annotated
 
 from cyclopts import Parameter
@@ -180,6 +181,11 @@ def promote(
         if not force and not confirm_action("Continue without database mapping?"):
             print("Promotion cancelled")
             sys.exit(1)
+
+    # Remove sup's progress.log so all assets are pushed fresh, not skipped
+    progress_log = Path("progress.log")
+    if progress_log.exists():
+        progress_log.unlink()
 
     # Set instance to production
     print()
