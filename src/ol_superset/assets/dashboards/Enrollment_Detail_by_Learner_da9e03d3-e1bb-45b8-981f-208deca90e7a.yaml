@@ -302,7 +302,7 @@ metadata:
     targets:
     - column:
         name: user_email
-      datasetUuid: b579034e-2b79-4d3a-ba84-94c9fcfa0cc5
+      datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
     type: NATIVE_FILTER
   - cascadeParentIds: []
     chartsInScope:
@@ -406,7 +406,7 @@ metadata:
     targets:
     - column:
         name: courserun_readable_id
-      datasetUuid: b579034e-2b79-4d3a-ba84-94c9fcfa0cc5
+      datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
     type: NATIVE_FILTER
   - cascadeParentIds:
     - NATIVE_FILTER-zp-lAphrX
@@ -472,7 +472,7 @@ metadata:
     targets:
     - column:
         name: courseruncertificate_is_earned
-      datasetUuid: b579034e-2b79-4d3a-ba84-94c9fcfa0cc5
+      datasetUuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
     type: NATIVE_FILTER
   refresh_frequency: 86400
   shared_label_colors: []
