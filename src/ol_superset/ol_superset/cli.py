@@ -10,6 +10,7 @@ from ol_superset.commands.export import export
 from ol_superset.commands.impact import impact
 from ol_superset.commands.lineage import lineage
 from ol_superset.commands.lock import lock_app
+from ol_superset.commands.normalize import normalize_app
 from ol_superset.commands.promote import promote
 from ol_superset.commands.refresh import refresh
 from ol_superset.commands.roles import roles_app
@@ -53,6 +54,7 @@ app.command(impact, name="impact")
 app.command(sync, name="sync")
 app.command(promote, name="promote")
 app.command(dedupe_app, name="dedupe")
+app.command(normalize_app, name="normalize")
 app.command(lock_app, name="lock")
 app.command(refresh, name="refresh")
 app.command(apply_rls, name="apply-rls")

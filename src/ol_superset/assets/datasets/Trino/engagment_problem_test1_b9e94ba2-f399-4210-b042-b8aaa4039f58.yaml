@@ -1,10 +1,245 @@
-table_name: engagment_problem_test1
-main_dttm_col: null
-description: null
-default_endpoint: null
-offset: 0
+always_filter_main_dttm: false
 cache_timeout: null
 catalog: ol_data_lake_production
+columns:
+- advanced_data_type: null
+  column_name: max_possible_grade
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DECIMAL(30, 10)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: learner_highest_grade
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DECIMAL(30, 10)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: learner_lowest_grade
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DECIMAL(30, 10)
+  verbose_name: null
+- advanced_data_type: null
+  column_name: courserun_readable_id
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: user_email
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: full_name
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: subsection_title
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: problem_title
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: section_title
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: course_title
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: platform
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: num_of_correct_attempts
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: null
+- advanced_data_type: null
+  column_name: subsection_block_index
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: null
+- advanced_data_type: null
+  column_name: number_of_problems
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: null
+- advanced_data_type: null
+  column_name: section_block_index
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: null
+- advanced_data_type: null
+  column_name: attepted_true_cnt
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: INTEGER
+  verbose_name: null
+- advanced_data_type: null
+  column_name: num_of_attempts
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: INTEGER
+  verbose_name: null
+- advanced_data_type: null
+  column_name: correct_true_cnt
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: INTEGER
+  verbose_name: null
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929  # Trino
+default_endpoint: null
+description: null
+extra: null
+fetch_values_predicate: null
+filter_select_enabled: true
+folders: null
+main_dttm_col: null
+metrics:
+- currency: null
+  d3format: null
+  description: null
+  expression: COUNT(*)
+  extra:
+    warning_markdown: ''
+  metric_name: count
+  metric_type: count
+  verbose_name: COUNT(*)
+  warning_text: null
+normalize_columns: false
+offset: 0
+params: null
 schema: ol_warehouse_production_dimensional
 sql: "with g as (\nselect \nproblem_block_fk\n, courserun_readable_id\n, openedx_user_id\n\
   , max(cast(max_grade as decimal(30,10))) max_possible_grade\n, min(cast(grade as\
@@ -34,242 +269,7 @@ sql: "with g as (\nselect \nproblem_block_fk\n, courserun_readable_id\n, openedx
   and b.openedx_user_id=g.openedx_user_id\nleft join ol_warehouse_production_intermediate.int__combined__course_runs\
   \ h\n    on b.courserun_readable_id = h.courserun_readable_id\nleft join i\non b.chapter_block_fk\
   \ = i.chapter_block_fk\ngroup by 1, 2, 3, 4, 5, 6, 7, 8, 9, 10\n\n\n"
-params: null
+table_name: engagment_problem_test1
 template_params: null
-filter_select_enabled: true
-fetch_values_predicate: null
-extra: null
-normalize_columns: false
-always_filter_main_dttm: false
-folders: null
 uuid: b9e94ba2-f399-4210-b042-b8aaa4039f58
-metrics:
-- metric_name: count
-  verbose_name: COUNT(*)
-  metric_type: count
-  expression: COUNT(*)
-  description: null
-  d3format: null
-  currency: null
-  extra:
-    warning_markdown: ''
-  warning_text: null
-columns:
-- column_name: max_possible_grade
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: DECIMAL(30, 10)
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: learner_highest_grade
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: DECIMAL(30, 10)
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: learner_lowest_grade
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: DECIMAL(30, 10)
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: courserun_readable_id
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: user_email
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: full_name
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: subsection_title
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: problem_title
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: section_title
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: course_title
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: platform
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: num_of_correct_attempts
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BIGINT
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: subsection_block_index
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BIGINT
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: number_of_problems
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BIGINT
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: section_block_index
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: BIGINT
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: attepted_true_cnt
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: INTEGER
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: num_of_attempts
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: INTEGER
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
-- column_name: correct_true_cnt
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: INTEGER
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: {}
 version: 1.0.0
-database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

@@ -1,8 +1,8 @@
-slice_name: Course Run Metadata
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000  # combined_enrollments_with_gender_and_date
+description: null
 params:
   adhoc_filters: []
   all_columns: []
@@ -12,7 +12,6 @@ params:
   dashboards:
   - 16
   - 24
-  datasource: 38__table
   extra_form_data: {}
   groupby:
   - course_title
@@ -29,7 +28,6 @@ params:
   query_mode: aggregate
   row_limit: 1000
   show_cell_bars: true
-  slice_id: 35
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
@@ -51,4 +49,4 @@ query_context: '{"datasource": {"id": 38, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: c6e47f3c-aeb2-4e25-bf43-e9bd3f068127
 version: 1.0.0
-dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000
+viz_type: table

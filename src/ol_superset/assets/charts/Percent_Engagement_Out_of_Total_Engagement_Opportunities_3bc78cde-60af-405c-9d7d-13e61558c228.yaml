@@ -1,8 +1,8 @@
-slice_name: Percent Engagement Out of Total Engagement Opportunities
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: edf21d6a-1f41-4812-a1aa-3fcbc8358466  # marts__combined_total_course_engagements
+description: null
 params:
   adhoc_filters: []
   all_columns: []
@@ -20,7 +20,6 @@ params:
   comparison_type: values
   conditional_formatting: []
   dashboards: []
-  datasource: 57__table
   extra_form_data: {}
   groupby:
   - courserun_readable_id
@@ -59,7 +58,6 @@ params:
   row_limit: 1000
   server_page_length: 10
   show_cell_bars: true
-  slice_id: 77
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
@@ -112,4 +110,4 @@ query_context: '{"datasource": {"id": 57, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 3bc78cde-60af-405c-9d7d-13e61558c228
 version: 1.0.0
-dataset_uuid: edf21d6a-1f41-4812-a1aa-3fcbc8358466
+viz_type: table

@@ -1,8 +1,8 @@
-slice_name: Problem Results
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 70adedf0-bc96-4922-a720-d579f2b4065c  # marts__combined_problem_submissions
+description: null
 params:
   adhoc_filters: []
   all_columns: []
@@ -15,7 +15,6 @@ params:
   conditional_formatting: []
   dashboards:
   - 24
-  datasource: 49__table
   extra_form_data: {}
   groupby:
   - courserun_readable_id
@@ -62,7 +61,6 @@ params:
   row_limit: 1000
   server_page_length: 10
   show_cell_bars: true
-  slice_id: 51
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
@@ -116,4 +114,4 @@ query_context: '{"datasource": {"id": 49, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: f07a7065-db29-4749-a4c6-d2c75c9d55f8
 version: 1.0.0
-dataset_uuid: 70adedf0-bc96-4922-a720-d579f2b4065c
+viz_type: table

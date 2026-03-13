@@ -1,8 +1,8 @@
-slice_name: Suspicious Behavior Report
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81  # cheating_detection_report
+description: null
 params:
   adhoc_filters: []
   all_columns:
@@ -39,7 +39,6 @@ params:
   conditional_formatting: []
   dashboards:
   - 52
-  datasource: 145__table
   extra_form_data: {}
   groupby: []
   include_search: true
@@ -50,7 +49,6 @@ params:
   row_limit: '500000'
   server_page_length: 10
   show_cell_bars: false
-  slice_id: 124
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
@@ -84,4 +82,4 @@ query_context: '{"datasource": {"id": 145, "type": "table"}, "force": false, "qu
 cache_timeout: null
 uuid: 3acf6da0-1add-486f-9e70-884a1bb306f9
 version: 1.0.0
-dataset_uuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+viz_type: table

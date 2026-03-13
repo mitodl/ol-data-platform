@@ -1,8 +1,8 @@
-slice_name: Order detail
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555  # marts__combined__orders
+description: null
 params:
   adhoc_filters: []
   all_columns:
@@ -83,7 +83,6 @@ params:
   conditional_formatting: []
   dashboards:
   - 21
-  datasource: 41__table
   extra_form_data: {}
   groupby: []
   include_search: true
@@ -96,7 +95,6 @@ params:
   row_limit: 1000
   server_pagination: false
   show_cell_bars: false
-  slice_id: 38
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
@@ -144,4 +142,4 @@ query_context: '{"datasource": {"id": 41, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: d58f3f14-9d41-4e6e-8245-d194d15aac01
 version: 1.0.0
-dataset_uuid: 2f64a0b1-a1d4-4dec-95c3-7978296a3555
+viz_type: table

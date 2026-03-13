@@ -1,8 +1,8 @@
-slice_name: Student Level- Course Grades
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81  # cheating_detection_report
+description: null
 params:
   adhoc_filters: []
   all_columns: []
@@ -14,7 +14,6 @@ params:
   conditional_formatting: []
   dashboards:
   - 52
-  datasource: 145__table
   extra_form_data: {}
   groupby:
   - platform
@@ -52,7 +51,6 @@ params:
   row_limit: 50000
   server_page_length: 10
   show_cell_bars: false
-  slice_id: 125
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   timeseries_limit_metric:
@@ -132,4 +130,4 @@ query_context: '{"datasource": {"id": 145, "type": "table"}, "force": false, "qu
 cache_timeout: null
 uuid: 1ffe71c4-0732-4e17-a343-67ef3dd28f3d
 version: 1.0.0
-dataset_uuid: 65bdc57c-00f9-42d0-bd37-d4363532fd81
+viz_type: table

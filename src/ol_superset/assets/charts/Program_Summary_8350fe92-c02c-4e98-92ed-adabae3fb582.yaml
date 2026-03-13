@@ -1,8 +1,8 @@
-slice_name: Program Summary
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 0d77ec2b-8489-47f8-b0c3-3abde0b1b8f3  # program_summary_report
+description: null
 params:
   adhoc_filters: []
   all_columns:
@@ -23,7 +23,6 @@ params:
   conditional_formatting: []
   dashboards:
   - 34
-  datasource: 55__table
   extra_form_data: {}
   groupby: []
   order_by_cols: []
@@ -57,4 +56,4 @@ query_context: '{"datasource": {"id": 55, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 8350fe92-c02c-4e98-92ed-adabae3fb582
 version: 1.0.0
-dataset_uuid: 0d77ec2b-8489-47f8-b0c3-3abde0b1b8f3
+viz_type: table

@@ -1,8 +1,8 @@
-slice_name: Page Engagement By Courserun
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: c3182341-5246-40c2-8f04-885369c38093  # page_engagement_views
+description: null
 params:
   adhoc_filters: []
   all_columns: []
@@ -13,7 +13,6 @@ params:
   comparison_type: values
   dashboards:
   - 45
-  datasource: 82__table
   extra_form_data: {}
   groupby:
   - courserun_readable_id
@@ -48,7 +47,6 @@ params:
   query_mode: aggregate
   row_limit: 1000
   show_cell_bars: true
-  slice_id: 97
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
@@ -88,4 +86,4 @@ query_context: '{"datasource": {"id": 82, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 008cffdc-9283-4daf-8507-746491486bd4
 version: 1.0.0
-dataset_uuid: c3182341-5246-40c2-8f04-885369c38093
+viz_type: table

@@ -1,13 +1,12 @@
-slice_name: Record Count
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: big_number_total
+certified_by: null
+dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000  # combined_enrollments_with_gender_and_date
+description: null
 params:
   adhoc_filters: []
   annotation_layers: []
   dashboards: []
-  datasource: 38__table
   extra_form_data: {}
   header_font_size: 0.4
   metric:
@@ -19,7 +18,6 @@ params:
     label: Record Count
     optionName: metric_odjay9cgkon_z1khg8fnb8o
     sqlExpression: COUNT(*)
-  slice_id: 40
   subheader_font_size: 0.15
   time_format: smart_date
   viz_type: big_number_total
@@ -41,4 +39,4 @@ query_context: '{"datasource": {"id": 38, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 1e441a91-5d1a-4f4f-9bf8-90fcc9d12988
 version: 1.0.0
-dataset_uuid: f3e517dd-4012-441e-8dfe-edaef1318000
+viz_type: big_number_total

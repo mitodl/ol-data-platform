@@ -1,8 +1,8 @@
-slice_name: dim_user last updated
-description: null
-certified_by: null
+cache_timeout: -1
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 3b10e411-e497-4e8c-8132-08f673e8d72d  # tables
+description: null
 params:
   adhoc_filters:
   - clause: WHERE
@@ -38,7 +38,6 @@ params:
   comparison_color_scheme: Green
   dashboards:
   - 49
-  datasource: 113__table
   extra_form_data: {}
   groupby: []
   order_by_cols: []
@@ -46,7 +45,6 @@ params:
   query_mode: raw
   row_limit: 1000
   show_cell_bars: true
-  slice_id: 131
   table_timestamp_format: smart_date
   temporal_columns_lookup:
     changed_on: true
@@ -77,4 +75,4 @@ query_context: '{"datasource": {"id": 113, "type": "table"}, "force": false, "qu
 cache_timeout: -1
 uuid: 1e1419f1-f836-43de-964e-6ea9d9521645
 version: 1.0.0
-dataset_uuid: 3b10e411-e497-4e8c-8132-08f673e8d72d
+viz_type: table

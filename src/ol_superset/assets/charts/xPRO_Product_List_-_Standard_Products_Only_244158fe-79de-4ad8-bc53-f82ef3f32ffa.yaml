@@ -1,8 +1,8 @@
-slice_name: xPRO Product List - Standard Products Only
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: dc5b25f5-cf3a-41b4-9b15-4b58532da463  # marts__mitxpro_ecommerce_productlist
+description: null
 params:
   adhoc_filters: []
   all_columns:
@@ -21,7 +21,6 @@ params:
   color_pn: true
   comparison_type: values
   dashboards: []
-  datasource: 42__table
   extra_form_data: {}
   groupby:
   - productid
@@ -32,7 +31,6 @@ params:
   row_limit: 1000
   server_page_length: 10
   show_cell_bars: true
-  slice_id: 41
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
@@ -56,4 +54,4 @@ query_context: '{"datasource": {"id": 42, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 244158fe-79de-4ad8-bc53-f82ef3f32ffa
 version: 1.0.0
-dataset_uuid: dc5b25f5-cf3a-41b4-9b15-4b58532da463
+viz_type: table

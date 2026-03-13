@@ -1,8 +1,8 @@
-slice_name: Content Engagement - Weekly
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: echarts_timeseries_line
+certified_by: null
+dataset_uuid: f221af29-5df4-4025-8355-401041f94835  # marts__combined_course_engagements
+description: null
 params:
   adhoc_filters:
   - clause: WHERE
@@ -92,7 +92,6 @@ params:
   show_empty_columns: false
   show_legend: true
   show_value: false
-  slice_id: 72
   sort_series_type: sum
   time_grain_sqla: P1W
   time_shift_color: true
@@ -227,4 +226,4 @@ query_context: '{"datasource": {"id": 47, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: fb5f7dd7-f56e-44f4-97f6-ed0c3804382f
 version: 1.0.0
-dataset_uuid: f221af29-5df4-4025-8355-401041f94835
+viz_type: echarts_timeseries_line

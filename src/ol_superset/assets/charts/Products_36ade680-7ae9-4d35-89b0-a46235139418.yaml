@@ -1,8 +1,8 @@
-slice_name: Products
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b  # marts__combined__products
+description: null
 params:
   adhoc_filters: []
   all_columns:
@@ -55,7 +55,6 @@ params:
   conditional_formatting: []
   dashboards:
   - 25
-  datasource: 44__table
   extra_form_data: {}
   groupby: []
   include_search: true
@@ -67,7 +66,6 @@ params:
   query_mode: raw
   row_limit: 10000
   show_cell_bars: false
-  slice_id: 49
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
@@ -112,4 +110,4 @@ query_context: '{"datasource": {"id": 44, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 36ade680-7ae9-4d35-89b0-a46235139418
 version: 1.0.0
-dataset_uuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+viz_type: table

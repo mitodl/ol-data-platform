@@ -1,8 +1,8 @@
-slice_name: Data Detail Discussion
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 5bab95fd-d465-44f3-bed8-40c559958fc4  # Data_Detail_Discuss
+description: null
 params:
   adhoc_filters:
   - clause: WHERE
@@ -26,7 +26,6 @@ params:
   comparison_color_scheme: Green
   comparison_type: values
   dashboards: []
-  datasource: 110__table
   extra_form_data: {}
   groupby: []
   metrics: []
@@ -64,4 +63,4 @@ query_context: '{"datasource": {"id": 110, "type": "table"}, "force": false, "qu
 cache_timeout: null
 uuid: 39c99c2d-1290-4d37-9b0f-eef559172947
 version: 1.0.0
-dataset_uuid: 5bab95fd-d465-44f3-bed8-40c559958fc4
+viz_type: table

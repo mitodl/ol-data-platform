@@ -1,8 +1,8 @@
-slice_name: Page Engagement By Subsection
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 4752cd11-a13e-4a8e-be31-4d9227b07ca2  # learner_engagement_report
+description: null
 params:
   adhoc_filters: []
   all_columns: []
@@ -48,7 +48,6 @@ params:
   row_limit: 1000
   server_page_length: 10
   show_cell_bars: true
-  slice_id: 96
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   timeseries_limit_metric: null
@@ -58,4 +57,4 @@ query_context: null
 cache_timeout: null
 uuid: f41fcf95-edc7-4dcd-bbe8-54406e775b37
 version: 1.0.0
-dataset_uuid: 4752cd11-a13e-4a8e-be31-4d9227b07ca2
+viz_type: table

@@ -1,8 +1,8 @@
-slice_name: Course to Program Reference
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: f841a3e6-d864-4499-94dd-6ceafe8ac74f  # marts__combined_coursesinprogram
+description: null
 params:
   adhoc_filters: []
   all_columns: []
@@ -10,7 +10,6 @@ params:
   color_pn: true
   comparison_type: values
   dashboards: []
-  datasource: 51__table
   extra_form_data: {}
   groupby:
   - platform
@@ -47,4 +46,4 @@ query_context: '{"datasource": {"id": 51, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 5a5e1d10-7bbe-4329-891d-029255d6efe0
 version: 1.0.0
-dataset_uuid: f841a3e6-d864-4499-94dd-6ceafe8ac74f
+viz_type: table

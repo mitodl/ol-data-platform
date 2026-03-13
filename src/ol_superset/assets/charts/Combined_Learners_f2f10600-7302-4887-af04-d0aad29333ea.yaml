@@ -1,8 +1,8 @@
-slice_name: Combined Learners
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 01f179b6-cb75-465f-8ceb-0525c24fa223  # enrollment_detail_report
+description: null
 params:
   adhoc_filters: []
   all_columns: []
@@ -13,7 +13,6 @@ params:
   comparison_type: values
   dashboards:
   - 11
-  datasource: 112__table
   extra_form_data: {}
   groupby:
   - user_username
@@ -27,7 +26,6 @@ params:
   server_pagination: false
   show_cell_bars: true
   show_totals: true
-  slice_id: 115
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
@@ -48,4 +46,4 @@ query_context: '{"datasource": {"id": 112, "type": "table"}, "force": false, "qu
 cache_timeout: null
 uuid: f2f10600-7302-4887-af04-d0aad29333ea
 version: 1.0.0
-dataset_uuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
+viz_type: table

@@ -1,8 +1,8 @@
-slice_name: Percent Content Engagement
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: f221af29-5df4-4025-8355-401041f94835  # marts__combined_course_engagements
+description: null
 params:
   adhoc_filters:
   - clause: WHERE
@@ -25,7 +25,6 @@ params:
   comparison_type: values
   conditional_formatting: []
   dashboards: []
-  datasource: 47__table
   extra_form_data: {}
   groupby:
   - courserun_readable_id
@@ -70,7 +69,6 @@ params:
   row_limit: 1000
   server_page_length: 10
   show_cell_bars: true
-  slice_id: 74
   table_timestamp_format: smart_date
   temporal_columns_lookup:
     courseactivity_date: true
@@ -126,4 +124,4 @@ query_context: '{"datasource": {"id": 47, "type": "table"}, "force": false, "que
 cache_timeout: null
 uuid: 822d24da-190a-49ea-9253-8a26637a89c8
 version: 1.0.0
-dataset_uuid: f221af29-5df4-4025-8355-401041f94835
+viz_type: table

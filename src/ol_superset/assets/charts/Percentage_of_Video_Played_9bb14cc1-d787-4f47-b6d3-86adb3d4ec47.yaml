@@ -1,8 +1,8 @@
-slice_name: Percentage of Video Played
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91  # instructor_module_report
+description: null
 params:
   adhoc_filters:
   - clause: WHERE
@@ -39,7 +39,6 @@ params:
   conditional_formatting: []
   dashboards:
   - 59
-  datasource: 154__table
   extra_form_data: {}
   groupby:
   - section_title
@@ -106,4 +105,4 @@ query_context: '{"datasource": {"id": 154, "type": "table"}, "force": false, "qu
 cache_timeout: null
 uuid: 9bb14cc1-d787-4f47-b6d3-86adb3d4ec47
 version: 1.0.0
-dataset_uuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91
+viz_type: table

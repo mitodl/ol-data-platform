@@ -1,8 +1,8 @@
-slice_name: Product Dashboard (Last Updated)
-description: null
-certified_by: null
+cache_timeout: -1
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 3b10e411-e497-4e8c-8132-08f673e8d72d  # tables
+description: null
 params:
   adhoc_filters:
   - clause: WHERE
@@ -37,7 +37,6 @@ params:
   comparison_color_scheme: Green
   dashboards:
   - 25
-  datasource: 113__table
   extra_form_data: {}
   groupby: []
   metrics: []
@@ -77,4 +76,4 @@ query_context: '{"datasource": {"id": 113, "type": "table"}, "force": false, "qu
 cache_timeout: -1
 uuid: 6733b1cd-bb65-44e6-959e-ca21305807e7
 version: 1.0.0
-dataset_uuid: 3b10e411-e497-4e8c-8132-08f673e8d72d
+viz_type: table

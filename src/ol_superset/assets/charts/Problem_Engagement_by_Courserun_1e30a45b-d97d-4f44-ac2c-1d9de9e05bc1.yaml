@@ -1,12 +1,13 @@
-slice_name: Problem Engagement by Courserun
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 37bb25c7-421f-432a-bc42-5cc10a129746  # afact_problem_engagement
+description: null
 params:
   adhoc_filters: []
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   column_config:
     Avg_%_problems_attempted:
@@ -14,7 +15,6 @@ params:
   comparison_type: values
   conditional_formatting: []
   dashboards: []
-  datasource: 87__table
   extra_form_data: {}
   groupby:
   - courserun_readable_id
@@ -34,7 +34,6 @@ params:
   row_limit: 1000
   server_page_length: 10
   show_cell_bars: true
-  slice_id: 90
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
