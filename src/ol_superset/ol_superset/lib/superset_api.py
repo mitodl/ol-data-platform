@@ -476,6 +476,158 @@ def get_dataset_uuids_from_directory(
     return results
 
 
+def update_dataset_physical_connection(
+    session: requests.Session,
+    base_url: str,
+    dataset_id: int,
+    table_name: str,
+    schema: str,
+) -> bool:
+    """
+    Update the physical table connection of a Superset dataset via the API.
+
+    Superset's import API (/api/v1/assets/import/) does not update table_name
+    or schema for existing physical datasets — it only updates metadata (columns,
+    metrics, etc.). This function explicitly PATCHes the dataset's physical
+    connection after an import to ensure the table reference is correct.
+
+    Args:
+        session: Authenticated requests session
+        base_url: Base URL of Superset instance
+        dataset_id: Integer primary key of the dataset
+        table_name: Target table name to set
+        schema: Target schema name to set
+
+    Returns:
+        True if successful, False otherwise
+    """
+    csrf_token = get_csrf_token(session, base_url)
+    if not csrf_token:
+        return False
+
+    session.headers.update({"X-CSRFToken": csrf_token, "Referer": base_url})
+
+    endpoint = f"{base_url}/api/v1/dataset/{dataset_id}"
+    payload = {"table_name": table_name, "schema": schema}
+
+    try:
+        response = session.put(endpoint, json=payload, timeout=30)
+        response.raise_for_status()
+        return True
+
+    except requests.exceptions.HTTPError as e:
+        print(
+            f"  ⚠️  HTTP error updating dataset {dataset_id} physical connection: {e}",
+            file=sys.stderr,
+        )
+        if e.response is not None:
+            try:
+                print(f"      Details: {e.response.json()}", file=sys.stderr)
+            except Exception:  # noqa: S110
+                pass
+        return False
+    except Exception as e:
+        print(
+            f"  ❌ Error updating dataset {dataset_id} physical connection: {e}",
+            file=sys.stderr,
+        )
+        return False
+
+
+def sync_physical_dataset_connections(
+    instance_name: str,
+    assets_dir: Path,
+) -> None:
+    """
+    Ensure physical dataset table_name and schema match the local YAML files.
+
+    Superset's import API does not update the physical table connection of
+    existing datasets. This function reads each physical dataset YAML, looks
+    up the dataset in the target instance by UUID, and explicitly updates
+    table_name and schema via the dataset PUT API if they differ.
+
+    Args:
+        instance_name: Target Superset instance name
+        assets_dir: Path to local assets directory
+    """
+    session = create_authenticated_session(instance_name)
+    if not session:
+        print(
+            f"  ❌ Could not authenticate to {instance_name}",
+            file=sys.stderr,
+        )
+        return
+
+    config = get_instance_config(instance_name)
+    base_url = config.get("url", "").rstrip("/")
+
+    dataset_dir = assets_dir / "datasets"
+    if not dataset_dir.exists():
+        return
+
+    updated = 0
+    skipped = 0
+    failed = 0
+
+    for yaml_file in sorted(dataset_dir.rglob("*.yaml")):
+        try:
+            with yaml_file.open() as f:
+                data = yaml.safe_load(f)
+        except Exception as e:
+            print(f"  ⚠️  Could not read {yaml_file.name}: {e}", file=sys.stderr)
+            continue
+
+        # Skip virtual datasets (SQL-defined)
+        if data.get("sql"):
+            continue
+
+        uuid = data.get("uuid")
+        desired_table = data.get("table_name")
+        desired_schema = data.get("schema")
+
+        if not uuid or not desired_table:
+            continue
+
+        dataset_id = get_dataset_id_by_uuid(session, base_url, uuid)
+        if dataset_id is None:
+            # Dataset doesn't exist yet in target — import will create it correctly
+            skipped += 1
+            continue
+
+        # Check current state in target
+        try:
+            resp = session.get(f"{base_url}/api/v1/dataset/{dataset_id}", timeout=10)
+            resp.raise_for_status()
+            current = resp.json().get("result", {})
+            current_table = current.get("table_name")
+            current_schema = current.get("schema")
+        except Exception as e:
+            print(f"  ⚠️  Could not fetch dataset {dataset_id}: {e}", file=sys.stderr)
+            failed += 1
+            continue
+
+        if current_table == desired_table and current_schema == desired_schema:
+            skipped += 1
+            continue
+
+        print(
+            f"  Updating '{data.get('table_name', uuid)}': "
+            f"{current_schema}.{current_table} → {desired_schema}.{desired_table}"
+        )
+        success = update_dataset_physical_connection(
+            session, base_url, dataset_id, desired_table, desired_schema or ""
+        )
+        if success:
+            updated += 1
+        else:
+            failed += 1
+
+    print(
+        f"  Physical connections: {updated} updated, {skipped} already correct, "
+        f"{failed} failed"
+    )
+
+
 def get_asset_uuids_from_directory(assets_dir: Path, asset_type: str) -> list[str]:
     """
     Extract UUIDs from asset YAML files.

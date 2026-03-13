@@ -7,7 +7,10 @@ from typing import Annotated
 from cyclopts import Parameter
 
 from ol_superset.lib.database_mapping import map_database_uuids
-from ol_superset.lib.superset_api import update_pushed_assets_external_flag
+from ol_superset.lib.superset_api import (
+    sync_physical_dataset_connections,
+    update_pushed_assets_external_flag,
+)
 from ol_superset.lib.utils import (
     confirm_action,
     count_assets,
@@ -183,6 +186,12 @@ def sync(
             check=False,
         )
         print("  ✅ Datasets synced")
+
+        # Superset's import API does not update physical table connections
+        # (table_name, schema) for existing datasets — patch them directly.
+        print()
+        print("Step 2b: Patching physical dataset table connections...")
+        sync_physical_dataset_connections(target, assets_dir)
     else:
         print("  No datasets to sync")
 

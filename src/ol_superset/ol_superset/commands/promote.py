@@ -8,6 +8,7 @@ from typing import Annotated
 from cyclopts import Parameter
 
 from ol_superset.lib.database_mapping import map_database_uuids
+from ol_superset.lib.superset_api import sync_physical_dataset_connections
 from ol_superset.lib.utils import (
     check_git_status,
     confirm_action,
@@ -197,7 +198,31 @@ def promote(
     print()
 
     # Push charts with dependencies
-    print("Step 5a: Pushing charts (includes datasets and databases)...")
+    print("Step 5a: Pushing datasets...")
+    if counts["datasets"] > 0:
+        run_sup_command(
+            [
+                "dataset",
+                "push",
+                str(assets_dir),
+                "--overwrite",
+                "--continue-on-error",
+                "--force",
+            ],
+            check=False,
+        )
+        print("  ✅ Datasets promoted")
+
+        # Superset's import API does not update physical table connections
+        # (table_name, schema) for existing datasets — patch them directly.
+        print()
+        print("Step 5a (patch): Patching physical dataset table connections...")
+        sync_physical_dataset_connections("superset-production", assets_dir)
+    else:
+        print("  No datasets to promote")
+
+    print()
+    print("Step 5b: Pushing charts...")
     if counts["charts"] > 0:
         result = run_sup_command(
             [
@@ -219,7 +244,7 @@ def promote(
 
     # Push dashboards
     print()
-    print("Step 5b: Pushing published dashboards...")
+    print("Step 5c: Pushing published dashboards...")
     if published > 0:
         result = run_sup_command(
             [
