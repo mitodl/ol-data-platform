@@ -9,8 +9,6 @@ params:
   color_scheme: supersetColors
   comparison_type: values
   contributionMode: null
-  dashboards:
-  - 27
   extra_form_data: {}
   form_data_bak:
     adhoc_filters: []

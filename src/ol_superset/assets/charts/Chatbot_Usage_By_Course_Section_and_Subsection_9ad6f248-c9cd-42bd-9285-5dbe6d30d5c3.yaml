@@ -16,7 +16,6 @@ params:
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
-  dashboards: []
   extra_form_data: {}
   groupby:
   - section_title

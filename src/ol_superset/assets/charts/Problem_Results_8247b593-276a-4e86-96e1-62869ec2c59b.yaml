@@ -13,8 +13,6 @@ params:
       d3NumberFormat: .2%
   comparison_type: values
   conditional_formatting: []
-  dashboards:
-  - 24
   extra_form_data: {}
   groupby:
   - courserun_readable_id

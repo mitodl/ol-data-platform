@@ -24,8 +24,6 @@ params:
   annotation_layers: []
   color_pn: true
   comparison_type: values
-  dashboards:
-  - 16
   extra_form_data: {}
   groupby:
   - course_title

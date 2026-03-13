@@ -12,8 +12,6 @@ params:
   comparison_color_scheme: Green
   comparison_type: values
   conditional_formatting: []
-  dashboards:
-  - 11
   extra_form_data: {}
   groupby:
   - user_username

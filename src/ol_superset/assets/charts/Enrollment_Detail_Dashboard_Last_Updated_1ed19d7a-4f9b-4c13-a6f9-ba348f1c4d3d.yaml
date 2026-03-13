@@ -30,8 +30,6 @@ params:
   annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
-  dashboards:
-  - 14
   extra_form_data: {}
   groupby: []
   metrics:

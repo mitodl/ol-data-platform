@@ -53,8 +53,6 @@ params:
     start_on:
       horizontalAlign: left
   conditional_formatting: []
-  dashboards:
-  - 25
   extra_form_data: {}
   groupby: []
   include_search: true

@@ -44,8 +44,6 @@ params:
       horizontalAlign: left
       truncateLongCells: false
   conditional_formatting: []
-  dashboards:
-  - 49
   extra_form_data: {}
   groupby: []
   include_search: true

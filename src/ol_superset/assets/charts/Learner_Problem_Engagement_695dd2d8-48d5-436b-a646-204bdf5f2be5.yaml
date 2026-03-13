@@ -32,8 +32,6 @@ params:
   comparison_color_scheme: Green
   comparison_type: values
   conditional_formatting: []
-  dashboards:
-  - 45
   extra_form_data: {}
   groupby: []
   include_search: true

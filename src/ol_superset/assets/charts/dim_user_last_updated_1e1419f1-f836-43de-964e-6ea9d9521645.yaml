@@ -33,11 +33,8 @@ params:
     sqlExpression: changed_on
   allow_render_html: true
   annotation_layers: []
-  cache_timeout: -1
   color_pn: true
   comparison_color_scheme: Green
-  dashboards:
-  - 49
   extra_form_data: {}
   groupby: []
   order_by_cols: []

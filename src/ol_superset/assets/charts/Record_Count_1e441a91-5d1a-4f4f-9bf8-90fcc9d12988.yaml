@@ -6,7 +6,6 @@ description: null
 params:
   adhoc_filters: []
   annotation_layers: []
-  dashboards: []
   extra_form_data: {}
   header_font_size: 0.4
   metric:

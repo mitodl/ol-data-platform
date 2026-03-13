@@ -7,8 +7,6 @@ params:
   adhoc_filters: []
   annotation_layers: []
   color_scheme: supersetColors
-  dashboards:
-  - 16
   extra_form_data: {}
   groupby: []
   legendOrientation: top

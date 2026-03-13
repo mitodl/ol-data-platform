@@ -23,8 +23,6 @@ params:
   annotation_layers: []
   color_scheme: supersetColors
   comparison_type: values
-  dashboards:
-  - 49
   extra_form_data: {}
   forecastInterval: 0.8
   forecastPeriods: 10

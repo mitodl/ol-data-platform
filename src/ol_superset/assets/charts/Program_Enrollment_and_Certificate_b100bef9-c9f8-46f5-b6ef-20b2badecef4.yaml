@@ -30,8 +30,6 @@ params:
     user_id:
       showCellBars: false
   conditional_formatting: []
-  dashboards:
-  - 34
   extra_form_data: {}
   groupby: []
   order_by_cols: []

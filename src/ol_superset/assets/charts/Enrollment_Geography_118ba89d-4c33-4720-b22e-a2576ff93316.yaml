@@ -18,8 +18,6 @@ params:
     g: 122
     r: 0
   country_fieldtype: cca2
-  dashboards:
-  - 16
   entity: user_country_code
   extra_form_data: {}
   linear_color_scheme: superset_seq_1

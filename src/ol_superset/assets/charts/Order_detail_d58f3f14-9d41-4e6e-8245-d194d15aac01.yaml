@@ -81,8 +81,6 @@ params:
       showCellBars: false
   comparison_color_scheme: Green
   conditional_formatting: []
-  dashboards:
-  - 21
   extra_form_data: {}
   groupby: []
   include_search: true

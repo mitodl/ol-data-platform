@@ -10,8 +10,6 @@ params:
   color_pn: true
   comparison_type: values
   conditional_formatting: []
-  dashboards:
-  - 27
   extra_form_data: {}
   groupby:
   - course_readable_id

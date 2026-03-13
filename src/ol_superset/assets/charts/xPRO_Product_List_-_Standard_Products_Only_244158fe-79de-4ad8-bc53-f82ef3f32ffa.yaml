@@ -20,7 +20,6 @@ params:
   annotation_layers: []
   color_pn: true
   comparison_type: values
-  dashboards: []
   extra_form_data: {}
   groupby:
   - productid

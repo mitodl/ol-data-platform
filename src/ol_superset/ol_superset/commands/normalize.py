@@ -3,13 +3,22 @@
 This module cleans up fields that cause erroneous diffs between exports:
 
   - ``query_context`` on charts: a massive JSON blob that duplicates ``params``
-    and embeds environment-specific numeric datasource IDs. Superset regenerates
-    it on the first query after import, so it has no functional role.
+    and embeds environment-specific numeric datasource IDs. Verified against
+    Superset source: if absent, the import pipeline skips its surgical update
+    and the frontend regenerates it on first load — no functional impact.
 
   - ``params.datasource`` / ``params.slice_id`` on charts: environment-specific
-    numeric IDs (e.g. ``"141__table"``) that differ between QA and production.
-    Superset's ImportChartsCommand resolves the dataset via ``dataset_uuid`` and
-    overwrites these at import time, so they are cosmetic only.
+    numeric IDs. Superset's ``update_chart_config_dataset()`` overwrites
+    ``params.datasource`` from ``dataset_uuid`` at import time; ``Slice.form_data``
+    always sets ``slice_id`` from the current ``Slice.id`` column at runtime.
+
+  - ``params.dashboards`` on charts: list of numeric dashboard IDs that differ
+    between environments. ``import_chart()`` never reads this field — chart↔
+    dashboard relationships are derived from dashboard definitions only.
+
+  - ``params.cache_timeout`` on charts: duplicated from the top-level
+    ``cache_timeout`` field. ``Slice.form_data`` always overwrites
+    ``params.cache_timeout`` from the ``Slice.cache_timeout`` column at runtime.
 
   - Non-deterministic dict key ordering inside ``params``: sorting keys
     alphabetically makes diffs reflect only intentional changes.
@@ -29,11 +38,25 @@ from rich.console import Console
 console = Console()
 
 # Keys stripped from ``params`` dicts on chart YAMLs because they are
-# environment-specific numeric IDs with no import-time meaning.
+# environment-specific, redundant, or have no import-time meaning.
+#
+# Verified against Superset source (superset/commands/chart/importers/v1/):
+#
+# - ``datasource``: overwritten during import by ``update_chart_config_dataset()``
+#   which resolves the dataset via ``dataset_uuid``.
+# - ``slice_id``: overwritten at runtime by ``Slice.form_data`` which always sets
+#   ``slice_id`` from the current ``Slice.id`` database column.
+# - ``dashboards``: list of numeric dashboard IDs; ``import_chart()`` never reads
+#   this field — chart↔dashboard relationships come from dashboard definitions.
+# - ``cache_timeout``: duplicated from the top-level chart field; ``Slice.form_data``
+#   always overwrites ``params.cache_timeout`` from the ``Slice.cache_timeout``
+#   column, so the value in ``params`` is never authoritative.
 _CHART_PARAMS_STRIP_KEYS: frozenset[str] = frozenset(
     {
-        "datasource",  # e.g. "141__table" – numeric ID changes per environment
-        "slice_id",  # numeric chart ID, environment-specific
+        "datasource",  # e.g. "141__table" – overwritten from dataset_uuid at import
+        "slice_id",  # numeric chart ID – overwritten from Slice.id at runtime
+        "dashboards",  # numeric dashboard IDs – environment-specific, unused on import
+        "cache_timeout",  # duplicated from top-level field – overwritten at runtime
     }
 )
 
@@ -265,11 +288,12 @@ normalize_app = cyclopts.App(
 
       Charts
         • Removes ``query_context`` — a large JSON blob that duplicates
-          ``params`` and embeds environment-specific numeric IDs. Superset
-          regenerates it at query time; it has no role in the import pipeline.
-        • Removes ``params.datasource`` and ``params.slice_id`` — numeric IDs
-          that differ between QA and production and are overwritten by Superset
-          during import (resolved via ``dataset_uuid``).
+          ``params`` and embeds environment-specific numeric IDs. Verified
+          against Superset source: the import pipeline skips it when absent
+          and the frontend regenerates it on first load.
+        • Removes from ``params``: ``datasource``, ``slice_id``, ``dashboards``,
+          and ``cache_timeout`` — all overwritten by Superset at import or
+          runtime, and all sources of environment-specific diff noise.
         • Annotates ``dataset_uuid`` with ``# <table_name>`` so reviewers can
           identify the referenced dataset without opening another file.
 

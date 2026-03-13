@@ -11,8 +11,6 @@ params:
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
-  dashboards:
-  - 44
   extra_form_data: {}
   groupby:
   - couponpaymentversion_id

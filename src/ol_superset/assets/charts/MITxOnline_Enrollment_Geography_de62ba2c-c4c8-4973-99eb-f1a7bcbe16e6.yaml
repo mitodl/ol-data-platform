@@ -12,7 +12,6 @@ params:
     r: 0
   color_scheme: supersetColors
   country_fieldtype: cca2
-  dashboards: []
   entity: user_address_country
   extra_form_data: {}
   linear_color_scheme: superset_seq_1

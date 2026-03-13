@@ -29,8 +29,6 @@ params:
   color_pn: false
   comparison_color_scheme: Green
   conditional_formatting: []
-  dashboards:
-  - 41
   extra_form_data: {}
   groupby:
   - platform
