@@ -348,10 +348,7 @@ def test_extract_virtual_columns_case_insensitive() -> None:
 
 
 def test_extract_virtual_columns_cte() -> None:
-    sql = (
-        "WITH base AS (SELECT * FROM schema.tbl) "
-        "SELECT b.col1, b.col2 FROM base b"
-    )
+    sql = "WITH base AS (SELECT * FROM schema.tbl) SELECT b.col1, b.col2 FROM base b"
     result = extract_virtual_dataset_columns(sql)
     # Outer SELECT has no wildcard — columns are deterministic
     assert result.has_wildcard is False
