@@ -1,11 +1,270 @@
+certification_details: ''
+certified_by: ''
+css: ''
 dashboard_title: Course Engagement
 description: null
-css: ''
-slug: null
-certified_by: ''
-certification_details: ''
-published: true
-uuid: 2311d08c-60b3-4b6d-87d2-b417dccb64f7
+metadata:
+  chart_configuration:
+    '13':
+      crossFilters:
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 73
+        - 118
+        - 147
+        scope: global
+      id: 13
+    '26':
+      crossFilters:
+        chartsInScope:
+        - 54
+        - 56
+        - 72
+        - 73
+        - 118
+        - 147
+        scope: global
+      id: 26
+    '28':
+      crossFilters:
+        chartsInScope:
+        - 53
+        - 56
+        - 72
+        - 73
+        - 118
+        - 147
+        scope: global
+      id: 28
+    '48':
+      crossFilters:
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 72
+        - 73
+        - 147
+        scope: global
+      id: 48
+    '49':
+      crossFilters:
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 72
+        - 73
+        - 118
+        scope: global
+      id: 49
+    '6':
+      crossFilters:
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 72
+        - 118
+        - 147
+        scope: global
+      id: 6
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 53
+    - 54
+    - 56
+    - 72
+    - 73
+    - 118
+    - 147
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors:
+    Learner_count: '#1FA8C9'
+    Participated_In_Discussion: '#FF7F44'
+    Tried_a_problem: '#5AC189'
+    Viewed All Videos: '#454E7C'
+    Viewed At Least One Video: '#1FA8C9'
+    Watched_a_video: '#454E7C'
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 72
+    - 73
+    - 57
+    - 56
+    - 53
+    - 55
+    - 118
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - TAB-pdDtuny7Pu
+    tabsInScope:
+    - TAB-pdDtuny7Pu
+    targets:
+    - column:
+        name: platform
+      datasetUuid: f221af29-5df4-4025-8355-401041f94835
+    - column:
+        name: platform
+      datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
+    - column:
+        name: platform
+      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 72
+    - 73
+    - 54
+    - 56
+    - 53
+    - 55
+    - 118
+    - 147
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-tKDJyRftc
+    name: Current Course Run
+    scope:
+      excluded: []
+      rootPath:
+      - TAB-pdDtuny7Pu
+      - TAB-V8iVFkI6_
+    tabsInScope:
+    - TAB-pdDtuny7Pu
+    - TAB-V8iVFkI6_
+    targets:
+    - column:
+        name: courserun_is_current
+      datasetUuid: f221af29-5df4-4025-8355-401041f94835
+    - column:
+        name: courserun_is_current
+      datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
+    - column:
+        name: courserun_is_current
+      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-kFdRjkZtp
+    name: Course
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    targets:
+    - column:
+        name: course_readable_id
+      datasetUuid: f221af29-5df4-4025-8355-401041f94835
+    - column:
+        name: course_readable_id
+      datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
+    - column:
+        name: course_readable_id
+      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-kFdRjkZtp
+    - NATIVE_FILTER-tKDJyRftc
+    - NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
+    chartsInScope:
+    - 72
+    - 73
+    - 54
+    - 56
+    - 53
+    - 55
+    - 118
+    - 147
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-QesG8w9qh
+    name: Course Run Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-pdDtuny7Pu
+    - TAB-V8iVFkI6_
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: f221af29-5df4-4025-8355-401041f94835
+    - column:
+        name: courserun_readable_id
+      datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
+    - column:
+        name: courserun_readable_id
+      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors:
+  - Learner_count
+  - Participated_In_Discussion
+  - Tried_a_problem
+  - Watched_a_video
+  timed_refresh_immune_slices: []
 position:
   CHART-O1--dVq0WF:
     children: []
@@ -278,267 +537,8 @@ position:
     parents:
     - ROOT_ID
     type: TABS
-metadata:
-  chart_configuration:
-    '48':
-      crossFilters:
-        chartsInScope:
-        - 53
-        - 54
-        - 56
-        - 72
-        - 73
-        - 147
-        scope: global
-      id: 48
-    '49':
-      crossFilters:
-        chartsInScope:
-        - 53
-        - 54
-        - 56
-        - 72
-        - 73
-        - 118
-        scope: global
-      id: 49
-    '26':
-      crossFilters:
-        chartsInScope:
-        - 54
-        - 56
-        - 72
-        - 73
-        - 118
-        - 147
-        scope: global
-      id: 26
-    '28':
-      crossFilters:
-        chartsInScope:
-        - 53
-        - 56
-        - 72
-        - 73
-        - 118
-        - 147
-        scope: global
-      id: 28
-    '13':
-      crossFilters:
-        chartsInScope:
-        - 53
-        - 54
-        - 56
-        - 73
-        - 118
-        - 147
-        scope: global
-      id: 13
-    '6':
-      crossFilters:
-        chartsInScope:
-        - 53
-        - 54
-        - 56
-        - 72
-        - 118
-        - 147
-        scope: global
-      id: 6
-  color_scheme: ''
-  color_scheme_domain: []
-  cross_filters_enabled: true
-  expanded_slices: {}
-  global_chart_configuration:
-    chartsInScope:
-    - 53
-    - 54
-    - 56
-    - 72
-    - 73
-    - 118
-    - 147
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-  label_colors: {}
-  map_label_colors:
-    Learner_count: '#1FA8C9'
-    Participated_In_Discussion: '#FF7F44'
-    Tried_a_problem: '#5AC189'
-    Viewed All Videos: '#454E7C'
-    Viewed At Least One Video: '#1FA8C9'
-    Watched_a_video: '#454E7C'
-  native_filter_configuration:
-  - cascadeParentIds: []
-    chartsInScope:
-    - 72
-    - 73
-    - 57
-    - 56
-    - 53
-    - 55
-    - 118
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
-    name: Platform
-    scope:
-      excluded: []
-      rootPath:
-      - TAB-pdDtuny7Pu
-    tabsInScope:
-    - TAB-pdDtuny7Pu
-    targets:
-    - column:
-        name: platform
-      datasetUuid: f221af29-5df4-4025-8355-401041f94835
-    - column:
-        name: platform
-      datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
-    - column:
-        name: platform
-      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
-    type: NATIVE_FILTER
-  - cascadeParentIds: []
-    chartsInScope:
-    - 72
-    - 73
-    - 54
-    - 56
-    - 53
-    - 55
-    - 118
-    - 147
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-tKDJyRftc
-    name: Current Course Run
-    scope:
-      excluded: []
-      rootPath:
-      - TAB-pdDtuny7Pu
-      - TAB-V8iVFkI6_
-    tabsInScope:
-    - TAB-pdDtuny7Pu
-    - TAB-V8iVFkI6_
-    targets:
-    - column:
-        name: courserun_is_current
-      datasetUuid: f221af29-5df4-4025-8355-401041f94835
-    - column:
-        name: courserun_is_current
-      datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
-    - column:
-        name: courserun_is_current
-      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
-    type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
-    controlValues:
-      creatable: true
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-kFdRjkZtp
-    name: Course
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    targets:
-    - column:
-        name: course_readable_id
-      datasetUuid: f221af29-5df4-4025-8355-401041f94835
-    - column:
-        name: course_readable_id
-      datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
-    - column:
-        name: course_readable_id
-      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
-    type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-kFdRjkZtp
-    - NATIVE_FILTER-tKDJyRftc
-    - NATIVE_FILTER-3uiP4O2tjsap4NLmqtSwT
-    chartsInScope:
-    - 72
-    - 73
-    - 54
-    - 56
-    - 53
-    - 55
-    - 118
-    - 147
-    controlValues:
-      creatable: true
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: true
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-QesG8w9qh
-    name: Course Run Readable ID
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope:
-    - TAB-pdDtuny7Pu
-    - TAB-V8iVFkI6_
-    targets:
-    - column:
-        name: courserun_readable_id
-      datasetUuid: f221af29-5df4-4025-8355-401041f94835
-    - column:
-        name: courserun_readable_id
-      datasetUuid: 70adedf0-bc96-4922-a720-d579f2b4065c
-    - column:
-        name: courserun_readable_id
-      datasetUuid: 42f063d3-3c06-4834-b993-777fdbc6dea7
-    type: NATIVE_FILTER
-  refresh_frequency: 0
-  shared_label_colors:
-  - Learner_count
-  - Participated_In_Discussion
-  - Tried_a_problem
-  - Watched_a_video
-  timed_refresh_immune_slices: []
+published: true
+slug: null
 theme_uuid: null
+uuid: 2311d08c-60b3-4b6d-87d2-b417dccb64f7
 version: 1.0.0

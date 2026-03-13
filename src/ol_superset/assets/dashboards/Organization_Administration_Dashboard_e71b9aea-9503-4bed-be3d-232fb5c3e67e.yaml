@@ -1,11 +1,205 @@
+certification_details: ''
+certified_by: ''
+css: ''
 dashboard_title: Organization Administration Dashboard
 description: null
-css: ''
-slug: null
-certified_by: ''
-certification_details: ''
-published: true
-uuid: e71b9aea-9503-4bed-be3d-232fb5c3e67e
+metadata:
+  chart_configuration:
+    '133':
+      crossFilters:
+        chartsInScope:
+        - 134
+        - 136
+        - 137
+        - 138
+        - 139
+        scope: global
+      id: 133
+    '134':
+      crossFilters:
+        chartsInScope:
+        - 133
+        - 136
+        - 137
+        - 138
+        - 139
+        scope: global
+      id: 134
+    '136':
+      crossFilters:
+        chartsInScope:
+        - 133
+        - 134
+        - 137
+        - 138
+        - 139
+        scope: global
+      id: 136
+    '137':
+      crossFilters:
+        chartsInScope:
+        - 133
+        - 134
+        - 136
+        - 138
+        - 139
+        scope: global
+      id: 137
+    '138':
+      crossFilters:
+        chartsInScope:
+        - 133
+        - 134
+        - 136
+        - 137
+        - 139
+        scope: global
+      id: 138
+    '139':
+      crossFilters:
+        chartsInScope:
+        - 133
+        - 134
+        - 136
+        - 137
+        - 138
+        scope: global
+      id: 139
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices:
+    '133': true
+    '134': true
+    '136': true
+    '137': true
+    '138': true
+    '139': true
+  global_chart_configuration:
+    chartsInScope:
+    - 133
+    - 134
+    - 136
+    - 137
+    - 138
+    - 139
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors:
+    COUNT_DISTINCT(user_email): '#1FA8C9'
+    SUM(certificate_count): '#1FA8C9'
+    SUM(chatbot_used_count): '#1FA8C9'
+    SUM(enrolled_count): '#1FA8C9'
+    SUM(problems_count): '#1FA8C9'
+    SUM(videos_watched): '#1FA8C9'
+  native_filter_configuration:
+  - cascadeParentIds:
+    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    chartsInScope:
+    - 133
+    - 134
+    - 136
+    - 137
+    - 138
+    - 139
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
+    name: Organization Key
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: organization_key
+      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
+    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
+    chartsInScope:
+    - 133
+    - 134
+    - 136
+    - 137
+    - 138
+    - 139
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    name: Organization Name
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: organization_name
+      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
+    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    chartsInScope:
+    - 133
+    - 134
+    - 136
+    - 137
+    - 138
+    - 139
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
+    name: Course Run Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
 position:
   CHART-explore-136-1:
     children: []
@@ -226,202 +420,8 @@ position:
     - ROOT_ID
     - GRID_ID
     type: TABS
-metadata:
-  chart_configuration:
-    '133':
-      crossFilters:
-        chartsInScope:
-        - 134
-        - 136
-        - 137
-        - 138
-        - 139
-        scope: global
-      id: 133
-    '134':
-      crossFilters:
-        chartsInScope:
-        - 133
-        - 136
-        - 137
-        - 138
-        - 139
-        scope: global
-      id: 134
-    '136':
-      crossFilters:
-        chartsInScope:
-        - 133
-        - 134
-        - 137
-        - 138
-        - 139
-        scope: global
-      id: 136
-    '137':
-      crossFilters:
-        chartsInScope:
-        - 133
-        - 134
-        - 136
-        - 138
-        - 139
-        scope: global
-      id: 137
-    '138':
-      crossFilters:
-        chartsInScope:
-        - 133
-        - 134
-        - 136
-        - 137
-        - 139
-        scope: global
-      id: 138
-    '139':
-      crossFilters:
-        chartsInScope:
-        - 133
-        - 134
-        - 136
-        - 137
-        - 138
-        scope: global
-      id: 139
-  color_scheme: ''
-  color_scheme_domain: []
-  cross_filters_enabled: true
-  expanded_slices:
-    '133': true
-    '134': true
-    '136': true
-    '137': true
-    '138': true
-    '139': true
-  global_chart_configuration:
-    chartsInScope:
-    - 133
-    - 134
-    - 136
-    - 137
-    - 138
-    - 139
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-  label_colors: {}
-  map_label_colors:
-    COUNT_DISTINCT(user_email): '#1FA8C9'
-    SUM(certificate_count): '#1FA8C9'
-    SUM(chatbot_used_count): '#1FA8C9'
-    SUM(enrolled_count): '#1FA8C9'
-    SUM(problems_count): '#1FA8C9'
-    SUM(videos_watched): '#1FA8C9'
-  native_filter_configuration:
-  - cascadeParentIds:
-    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    chartsInScope:
-    - 133
-    - 134
-    - 136
-    - 137
-    - 138
-    - 139
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
-    name: Organization Key
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope: []
-    targets:
-    - column:
-        name: organization_key
-      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
-    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
-    chartsInScope:
-    - 133
-    - 134
-    - 136
-    - 137
-    - 138
-    - 139
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    name: Organization Name
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope: []
-    targets:
-    - column:
-        name: organization_name
-      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
-    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    chartsInScope:
-    - 133
-    - 134
-    - 136
-    - 137
-    - 138
-    - 139
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: true
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
-    name: Course Run Readable ID
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope: []
-    targets:
-    - column:
-        name: courserun_readable_id
-      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    type: NATIVE_FILTER
-  refresh_frequency: 0
-  shared_label_colors: []
-  timed_refresh_immune_slices: []
+published: true
+slug: null
 theme_uuid: null
+uuid: e71b9aea-9503-4bed-be3d-232fb5c3e67e
 version: 1.0.0

@@ -1,17 +1,39 @@
-slice_name: Order detail
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 02e97623-3edd-4d3a-acbe-119e889a043a  # marts__combined__orders
+description: null
 params:
-  datasource: 158__table
-  viz_type: table
-  slice_id: 153
-  query_mode: aggregate
+  adhoc_filters:
+  - clause: WHERE
+    comparator:
+    - fulfilled
+    - refunded
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_l6zq1dpc1cn_w1kybwbzqu
+    isExtra: false
+    isNew: false
+    operator: IN
+    operatorId: IN
+    sqlExpression: null
+    subject: order_state
+  all_columns: []
+  allow_rearrange_columns: true
+  allow_render_html: true
+  color_pn: true
+  column_config:
+    Latest Fulfilled Order Created On:
+      horizontalAlign: left
+  comparison_color_scheme: Green
+  comparison_type: values
+  conditional_formatting: []
+  dashboards:
+  - 33
+  extra_form_data: {}
   groupby:
   - platform
-  time_grain_sqla: P1D
-  temporal_columns_lookup: {}
+  include_search: true
   metrics:
   - aggregate: MAX
     column:
@@ -37,22 +59,18 @@ params:
     label: Latest Fulfilled Order Created On
     optionName: metric_nx40l3x88w_zo1d39ut2ai
     sqlExpression: null
-  all_columns: []
+  order_by_cols: []
+  order_desc: true
+  percent_metric_calculation: row_limit
   percent_metrics: []
-  adhoc_filters:
-  - clause: WHERE
-    comparator:
-    - fulfilled
-    - refunded
-    datasourceWarning: false
-    expressionType: SIMPLE
-    filterOptionName: filter_l6zq1dpc1cn_w1kybwbzqu
-    isExtra: false
-    isNew: false
-    operator: IN
-    operatorId: IN
-    sqlExpression: null
-    subject: order_state
+  query_mode: aggregate
+  row_limit: 50000
+  server_page_length: 10
+  server_pagination: false
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup: {}
+  time_grain_sqla: P1D
   timeseries_limit_metric:
     aggregate: MAX
     column:
@@ -78,32 +96,8 @@ params:
     label: MAX(order_created_on)
     optionName: metric_6pb81js4ukh_e3lk7v25qh4
     sqlExpression: null
-  order_by_cols: []
-  order_desc: true
-  server_pagination: false
-  server_page_length: 10
-  row_limit: 50000
-  percent_metric_calculation: row_limit
-  table_timestamp_format: smart_date
-  include_search: true
-  allow_rearrange_columns: true
-  allow_render_html: true
-  column_config:
-    Latest Fulfilled Order Created On:
-      horizontalAlign: left
-  show_cell_bars: true
-  color_pn: true
-  comparison_color_scheme: Green
-  conditional_formatting: []
-  comparison_type: values
-  extra_form_data: {}
-  dashboards:
-  - 33
-query_context: '{"datasource":{"id":158,"type":"table"},"force":false,"queries":[{"filters":[{"col":"order_state","op":"IN","val":["fulfilled","refunded"]}],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":["platform"],"metrics":[{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"order_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":588,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"Latest
-  Fulfilled Order Created On","optionName":"metric_nx40l3x88w_zo1d39ut2ai","sqlExpression":null}],"orderby":[[{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"order_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":588,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MAX(order_created_on)","optionName":"metric_6pb81js4ukh_e3lk7v25qh4","sqlExpression":null},false]],"annotation_layers":[],"row_limit":50000,"series_limit":0,"series_limit_metric":{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"order_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":588,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MAX(order_created_on)","optionName":"metric_6pb81js4ukh_e3lk7v25qh4","sqlExpression":null},"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"158__table","viz_type":"table","slice_id":153,"query_mode":"aggregate","groupby":["platform"],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"metrics":[{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"order_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":588,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":true,"label":"Latest
-  Fulfilled Order Created On","optionName":"metric_nx40l3x88w_zo1d39ut2ai","sqlExpression":null}],"all_columns":[],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","comparator":["fulfilled","refunded"],"datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_l6zq1dpc1cn_w1kybwbzqu","isExtra":false,"isNew":false,"operator":"IN","operatorId":"IN","sqlExpression":null,"subject":"order_state"}],"timeseries_limit_metric":{"aggregate":"MAX","column":{"advanced_data_type":null,"certification_details":null,"certified_by":null,"column_name":"order_created_on","description":null,"expression":null,"filterable":true,"groupby":true,"id":588,"is_certified":false,"is_dttm":false,"python_date_format":null,"type":"VARCHAR","type_generic":1,"verbose_name":null,"warning_markdown":null},"datasourceWarning":false,"expressionType":"SIMPLE","hasCustomLabel":false,"label":"MAX(order_created_on)","optionName":"metric_6pb81js4ukh_e3lk7v25qh4","sqlExpression":null},"order_by_cols":[],"order_desc":true,"server_pagination":false,"server_page_length":10,"row_limit":50000,"percent_metric_calculation":"row_limit","table_timestamp_format":"smart_date","include_search":true,"allow_rearrange_columns":true,"allow_render_html":true,"column_config":{"Latest
-  Fulfilled Order Created On":{"horizontalAlign":"left"}},"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[33],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
-cache_timeout: null
+  viz_type: table
+slice_name: Order detail
 uuid: aff18084-6079-49b3-9604-d68c8a315296
 version: 1.0.0
-dataset_uuid: 02e97623-3edd-4d3a-acbe-119e889a043a
+viz_type: table

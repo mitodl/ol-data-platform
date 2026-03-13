@@ -1,0 +1,34 @@
+cache_timeout: null
+certification_details: null
+certified_by: null
+dataset_uuid: f1ec896e-86d4-451a-84cc-841d234e70a6  # int__learn_ai__chatbot
+description: null
+params:
+  adhoc_filters: []
+  all_columns:
+  - chatsession_agent
+  - chatsession_title
+  - courserun_readable_id
+  allow_render_html: true
+  color_pn: true
+  comparison_color_scheme: Green
+  comparison_type: values
+  dashboards: []
+  extra_form_data: {}
+  groupby: []
+  order_by_cols: []
+  order_desc: true
+  percent_metric_calculation: row_limit
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 10000
+  server_page_length: 10
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup: {}
+  time_grain_sqla: P1D
+  viz_type: table
+slice_name: test-superset-new-workflow
+uuid: 89fb36ad-5554-4959-8956-dc073036fb19
+version: 1.0.0
+viz_type: table
