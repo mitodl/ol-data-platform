@@ -7,8 +7,6 @@ params:
   all_columns: []
   color_pn: true
   comparison_type: values
-  dashboards:
-  - 8
   extra_form_data: {}
   groupby:
   - courserun_title

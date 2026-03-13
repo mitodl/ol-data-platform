@@ -30,9 +30,6 @@ params:
   annotation_layers: []
   color_pn: true
   comparison_type: values
-  dashboards:
-  - 16
-  - 7
   extra_form_data: {}
   groupby: []
   metrics:

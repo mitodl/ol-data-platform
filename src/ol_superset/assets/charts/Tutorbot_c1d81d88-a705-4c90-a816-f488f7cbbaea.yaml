@@ -23,7 +23,6 @@ params:
   allow_render_html: true
   color_pn: true
   comparison_color_scheme: Green
-  dashboards: []
   extra_form_data: {}
   groupby: []
   order_by_cols: []

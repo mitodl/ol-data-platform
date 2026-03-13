@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: 2189d254-14fd-4b38-85a8-6af918546dd0  # tfact_course_navigation_events
+dataset_uuid: 32e283f5-fc02-403a-9c92-b8286352cdba  # Data_Detail_Nav
 description: null
 params:
   adhoc_filters:
@@ -23,7 +23,6 @@ params:
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
-  dashboards: []
   extra_form_data: {}
   groupby: []
   metrics: []
@@ -42,4 +41,3 @@ params:
 slice_name: Data Detail Navigation
 uuid: cf8305f6-fe5d-4791-8185-3051b76f4738
 version: 1.0.0
-dataset_uuid: 32e283f5-fc02-403a-9c92-b8286352cdba

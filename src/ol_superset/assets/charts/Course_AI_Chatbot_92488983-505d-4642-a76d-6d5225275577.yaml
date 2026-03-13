@@ -14,7 +14,6 @@ params:
   - created_on
   - message_index
   allow_render_html: false
-  cache_timeout: -1
   color_pn: false
   column_config:
     message_index:
@@ -22,8 +21,6 @@ params:
   comparison_color_scheme: Green
   comparison_type: values
   conditional_formatting: []
-  dashboards:
-  - 55
   extra_form_data: {}
   groupby: []
   order_by_cols:

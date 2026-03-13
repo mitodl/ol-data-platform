@@ -13,8 +13,6 @@ params:
       d3NumberFormat: .2%
   comparison_type: values
   conditional_formatting: []
-  dashboards:
-  - 24
   extra_form_data: {}
   groupby:
   - courserun_readable_id
@@ -65,53 +63,7 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-query_context: '{"datasource": {"id": 49, "type": "table"}, "force": false, "queries":
-  [{"filters": [], "extras": {"time_grain_sqla": "P1D", "having": "", "where": ""},
-  "applied_time_extras": {}, "columns": ["courserun_readable_id", "problem_name"],
-  "metrics": [{"aggregate": null, "column": null, "datasourceWarning": false, "expressionType":
-  "SQL", "hasCustomLabel": true, "label": "Problem_Correct_Count", "optionName": "metric_xj16o97mjh_2ccubhpfiei",
-  "sqlExpression": "SUM(case when problem_success= ''correct'' then 1 else 0 end)"},
-  {"aggregate": null, "column": null, "datasourceWarning": false, "expressionType":
-  "SQL", "hasCustomLabel": true, "label": "Problem_Incorrect_Count", "optionName":
-  "metric_6rnk0f08ehr_ozvuvrmyihp", "sqlExpression": "SUM(case when problem_success=
-  ''incorrect'' then 1 else 0 end)"}, {"aggregate": null, "column": null, "datasourceWarning":
-  false, "expressionType": "SQL", "hasCustomLabel": true, "label": "Correct%", "optionName":
-  "metric_zuvu0a8x2os_w2hgh59mlan", "sqlExpression": "     ROUND(SUM(case\n               when
-  problem_success= ''correct'' then 1\n               else 0\n           end)  * 100.0
-  / count(*), 1)"}, {"aggregate": null, "column": null, "datasourceWarning": false,
-  "expressionType": "SQL", "hasCustomLabel": true, "label": "Incorrect%", "optionName":
-  "metric_u8nnhrkt6h_20hi6ju9pr6", "sqlExpression": "     ROUND(SUM(case\n               when
-  problem_success= ''incorrect'' then 1\n               else 0\n           end)  *
-  100.0 / count(*), 1)"}], "orderby": [[{"aggregate": null, "column": null, "datasourceWarning":
-  false, "expressionType": "SQL", "hasCustomLabel": true, "label": "Problem_Correct_Count",
-  "optionName": "metric_xj16o97mjh_2ccubhpfiei", "sqlExpression": "SUM(case when problem_success=
-  ''correct'' then 1 else 0 end)"}, false]], "annotation_layers": [], "row_limit":
-  1000, "series_limit": 0, "order_desc": true, "url_params": {}, "custom_params":
-  {}, "custom_form_data": {}, "post_processing": []}], "form_data": {"adhoc_filters":
-  [], "all_columns": [], "color_pn": true, "column_config": {"SUM(case when problem_success=
-  ''correct'' then 1 else 0 end)/count(*)": {"d3NumberFormat": ".2%"}}, "conditional_formatting":
-  [], "dashboards": [24], "datasource": "49__table", "extra_form_data": {}, "groupby":
-  ["courserun_readable_id", "problem_name"], "metrics": [{"aggregate": null, "column":
-  null, "datasourceWarning": false, "expressionType": "SQL", "hasCustomLabel": true,
-  "label": "Problem_Correct_Count", "optionName": "metric_xj16o97mjh_2ccubhpfiei",
-  "sqlExpression": "SUM(case when problem_success= ''correct'' then 1 else 0 end)"},
-  {"aggregate": null, "column": null, "datasourceWarning": false, "expressionType":
-  "SQL", "hasCustomLabel": true, "label": "Problem_Incorrect_Count", "optionName":
-  "metric_6rnk0f08ehr_ozvuvrmyihp", "sqlExpression": "SUM(case when problem_success=
-  ''incorrect'' then 1 else 0 end)"}, {"aggregate": null, "column": null, "datasourceWarning":
-  false, "expressionType": "SQL", "hasCustomLabel": true, "label": "Correct%", "optionName":
-  "metric_zuvu0a8x2os_w2hgh59mlan", "sqlExpression": "     ROUND(SUM(case\n               when
-  problem_success= ''correct'' then 1\n               else 0\n           end)  * 100.0
-  / count(*), 1)"}, {"aggregate": null, "column": null, "datasourceWarning": false,
-  "expressionType": "SQL", "hasCustomLabel": true, "label": "Incorrect%", "optionName":
-  "metric_u8nnhrkt6h_20hi6ju9pr6", "sqlExpression": "     ROUND(SUM(case\n               when
-  problem_success= ''incorrect'' then 1\n               else 0\n           end)  *
-  100.0 / count(*), 1)"}], "order_by_cols": [], "order_desc": true, "percent_metrics":
-  [], "query_mode": "aggregate", "row_limit": 1000, "server_page_length": 10, "show_cell_bars":
-  true, "slice_id": 53, "table_timestamp_format": "smart_date", "temporal_columns_lookup":
-  {}, "time_grain_sqla": "P1D", "viz_type": "table", "force": false, "result_format":
-  "json", "result_type": "full"}, "result_format": "json", "result_type": "full"}'
-cache_timeout: null
+slice_name: Problem Results
 uuid: f07a7065-db29-4749-a4c6-d2c75c9d55f8
 version: 1.0.0
 viz_type: table

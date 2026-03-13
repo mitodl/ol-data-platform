@@ -82,8 +82,6 @@ params:
       horizontalAlign: right
       showCellBars: false
   conditional_formatting: []
-  dashboards:
-  - 21
   extra_form_data: {}
   groupby: []
   include_search: true

@@ -1,11 +1,14 @@
+certification_details: null
+certified_by: null
+css: null
 dashboard_title: '[ untitled dashboard ]'
 description: null
-css: null
-slug: null
-certified_by: null
-certification_details: null
-published: false
-uuid: e3c3760d-9ddc-4257-84b0-bb10a604a178
+metadata:
+  color_scheme_domain: []
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration: []
+  shared_label_colors: []
 position:
   DASHBOARD_VERSION_KEY: v2
   GRID_ID:
@@ -24,11 +27,8 @@ position:
     - GRID_ID
     id: ROOT_ID
     type: ROOT
-metadata:
-  color_scheme_domain: []
-  label_colors: {}
-  map_label_colors: {}
-  shared_label_colors: []
-  native_filter_configuration: []
+published: false
+slug: null
 theme_uuid: null
+uuid: e3c3760d-9ddc-4257-84b0-bb10a604a178
 version: 1.0.0
