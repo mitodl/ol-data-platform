@@ -1,11 +1,26 @@
+certification_details: ''
+certified_by: ''
+css: ''
 dashboard_title: xPro Reference Dashboard
 description: null
-css: ''
-slug: null
-certified_by: ''
-certification_details: ''
-published: true
-uuid: 45b6c06a-1e2d-43d3-8b98-a95b82b375d5
+metadata:
+  chart_configuration: {}
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope: []
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration: []
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
 position:
   DASHBOARD_VERSION_KEY: v2
   GRID_ID:
@@ -145,23 +160,8 @@ position:
     parents:
     - ROOT_ID
     type: TABS
-metadata:
-  chart_configuration: {}
-  color_scheme: ''
-  color_scheme_domain: []
-  cross_filters_enabled: true
-  expanded_slices: {}
-  global_chart_configuration:
-    chartsInScope: []
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-  label_colors: {}
-  map_label_colors: {}
-  native_filter_configuration: []
-  refresh_frequency: 0
-  shared_label_colors: []
-  timed_refresh_immune_slices: []
+published: true
+slug: null
 theme_uuid: null
+uuid: 45b6c06a-1e2d-43d3-8b98-a95b82b375d5
 version: 1.0.0

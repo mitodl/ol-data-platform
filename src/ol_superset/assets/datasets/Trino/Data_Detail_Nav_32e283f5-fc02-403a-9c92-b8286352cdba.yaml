@@ -1,119 +1,119 @@
-table_name: Data_Detail_Nav
-main_dttm_col: event_timestamp
-description: null
-default_endpoint: null
-offset: 0
+always_filter_main_dttm: false
 cache_timeout: null
 catalog: ol_data_lake_production
+columns:
+- advanced_data_type: null
+  column_name: event_timestamp
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: true
+  python_date_format: null
+  type: TIMESTAMP(6) WITH TIME ZONE
+  verbose_name: null
+- advanced_data_type: null
+  column_name: courserun_readable_id
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: starting_position
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: course_title
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: ending_position
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: event_type
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: platform
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929  # Trino
+default_endpoint: null
+description: null
+extra: null
+fetch_values_predicate: null
+filter_select_enabled: true
+folders: null
+main_dttm_col: event_timestamp
+metrics:
+- currency: null
+  d3format: null
+  description: null
+  expression: COUNT(*)
+  extra: null
+  metric_name: count
+  metric_type: count
+  verbose_name: COUNT(*)
+  warning_text: null
+normalize_columns: false
+offset: 0
+params: null
 schema: ol_warehouse_production_dimensional
 sql: "select \na.platform\n, h.course_title\n,a.courserun_readable_id\n,a.event_type\n\
   ,a.starting_position\n,a.ending_position\n,a.event_timestamp\nfrom  ol_warehouse_production_dimensional.tfact_course_navigation_events\
   \ a\n    inner join ol_warehouse_production_intermediate.int__combined__course_runs\
   \ as h\n     on a.courserun_readable_id = h.courserun_readable_id\nwhere a.platform\
   \ in ('edxorg', 'mitxonline')\n\n\n"
-params: null
+table_name: Data_Detail_Nav
 template_params: null
-filter_select_enabled: true
-fetch_values_predicate: null
-extra: null
-normalize_columns: false
-always_filter_main_dttm: false
-folders: null
 uuid: 32e283f5-fc02-403a-9c92-b8286352cdba
-metrics:
-- metric_name: count
-  verbose_name: COUNT(*)
-  metric_type: count
-  expression: COUNT(*)
-  description: null
-  d3format: null
-  currency: null
-  extra: null
-  warning_text: null
-columns:
-- column_name: event_timestamp
-  verbose_name: null
-  is_dttm: true
-  is_active: true
-  type: TIMESTAMP(6) WITH TIME ZONE
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: courserun_readable_id
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: starting_position
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: course_title
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: ending_position
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: event_type
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
-- column_name: platform
-  verbose_name: null
-  is_dttm: false
-  is_active: true
-  type: VARCHAR
-  advanced_data_type: null
-  groupby: true
-  filterable: true
-  expression: null
-  description: null
-  python_date_format: null
-  extra: null
 version: 1.0.0
-database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929

@@ -1,0 +1,51 @@
+cache_timeout: null
+certification_details: null
+certified_by: null
+dataset_uuid: 4752cd11-a13e-4a8e-be31-4d9227b07ca2  # learner_engagement_report
+description: null
+params:
+  adhoc_filters: []
+  all_columns:
+  - user_email
+  - full_name
+  - courserun_readable_id
+  - section_title
+  - subsection_title
+  - problem_name
+  - problems_attempted
+  - num_of_problems_correct
+  - max_possible_grade
+  - max_learner_grade
+  - min_learner_grade
+  allow_render_html: true
+  color_pn: true
+  column_config:
+    learner_highest_grade:
+      showCellBars: false
+    learner_lowest_grade:
+      showCellBars: false
+    max_possible_grade:
+      showCellBars: false
+    num_of_correct_attempts:
+      showCellBars: false
+  comparison_color_scheme: Green
+  comparison_type: values
+  conditional_formatting: []
+  extra_form_data: {}
+  groupby: []
+  include_search: true
+  order_by_cols: []
+  order_desc: true
+  percent_metric_calculation: row_limit
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 10000
+  server_page_length: 10
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup: {}
+  viz_type: table
+slice_name: Learner Problem Engagement_test
+uuid: 37f77897-e846-49f9-835b-af81277e5f4b
+version: 1.0.0
+viz_type: table
