@@ -1,6 +1,7 @@
 """Sync command - sync assets between Superset instances."""
 
 import sys
+from pathlib import Path
 from typing import Annotated
 
 from cyclopts import Parameter
@@ -158,6 +159,11 @@ def sync(
     print()
     print("Step 1: Mapping database UUIDs...")
     map_database_uuids(target, assets_dir)
+
+    # Remove sup's progress.log so all assets are pushed fresh, not skipped
+    progress_log = Path("progress.log")
+    if progress_log.exists():
+        progress_log.unlink()
 
     # Step 2: Push datasets
     print()
