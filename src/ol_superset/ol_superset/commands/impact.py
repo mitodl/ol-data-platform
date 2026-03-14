@@ -131,7 +131,7 @@ def _get_changed_files(
 
 @dataclass
 class _ChangedAssets:
-    dbt_models: list[str] = field(default_factory=list)   # model names (stems)
+    dbt_models: list[str] = field(default_factory=list)  # model names (stems)
     dataset_uuids: list[str] = field(default_factory=list)
     chart_uuids: list[str] = field(default_factory=list)
     dashboard_uuids: list[str] = field(default_factory=list)
@@ -292,9 +292,7 @@ def _find_orphans(index: AssetIndex, ri: _ReverseIndex) -> _OrphanAssets:
     for chart_uuid, chart in sorted(index.charts.items(), key=lambda kv: kv[1].name):
         if chart_uuid not in ri.referenced_chart_uuids:
             orphans.charts.append(chart)
-    for ds_uuid, ds in sorted(
-        index.datasets.items(), key=lambda kv: kv[1].table_name
-    ):
+    for ds_uuid, ds in sorted(index.datasets.items(), key=lambda kv: kv[1].table_name):
         if ds_uuid not in ri.referenced_dataset_uuids:
             orphans.datasets.append(ds)
     return orphans
@@ -509,7 +507,10 @@ def _render_json(
     def _ds_dict(uuid: str, ds: DatasetAsset | None) -> dict:
         if ds is None:
             return {
-                "uuid": uuid, "table_name": None, "schema": None, "is_virtual": None
+                "uuid": uuid,
+                "table_name": None,
+                "schema": None,
+                "is_virtual": None,
             }
         return {
             "uuid": uuid,
@@ -538,8 +539,7 @@ def _render_json(
                 for uuid in changed.dataset_uuids
             ],
             "charts": [
-                _ch_dict(uuid, index.charts.get(uuid))
-                for uuid in changed.chart_uuids
+                _ch_dict(uuid, index.charts.get(uuid)) for uuid in changed.chart_uuids
             ],
             "dashboards": [
                 _db_dict(uuid, index.dashboards.get(uuid))
