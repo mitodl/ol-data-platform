@@ -612,14 +612,14 @@ def test_extract_column_refs_comprehensive() -> None:
     assert refs == {
         "activity_date",
         "user_country_code",
-        "platform",       # plain groupby str AND from UPPER(platform) SQL
+        "platform",  # plain groupby str AND from UPPER(platform) SQL
         "course_run_id",
         "user_email",
         "enrollment_mode",
         "user_id",
         "last_activity_date",
         "is_active",
-        "revenue",        # extracted from SQL adhoc_filter
+        "revenue",  # extracted from SQL adhoc_filter
         "enrollment_count",
     }
     # Label names are not column references
@@ -661,10 +661,7 @@ def test_extract_virtual_columns_case_insensitive() -> None:
 
 
 def test_extract_virtual_columns_cte() -> None:
-    sql = (
-        "WITH base AS (SELECT * FROM schema.tbl) "
-        "SELECT b.col1, b.col2 FROM base b"
-    )
+    sql = "WITH base AS (SELECT * FROM schema.tbl) SELECT b.col1, b.col2 FROM base b"
     result = extract_virtual_dataset_columns(sql)
     # Outer SELECT has no wildcard — columns are deterministic
     assert result.has_wildcard is False
