@@ -15,13 +15,15 @@ dependencies = [
     "cyclopts~=4.8.0",
     "dbt-duckdb>=1.10.0",
     "dbt-trino>=1.10.0",
+    "rich>=13.0",
+    "sqlglot>=25.0",
     "trino[external-authentication-token-cache]>=0.336.0",
     "universal-pathlib ~=0.3.1",
 ]
 repository = "https://github.com/mitodl/ol-data-platform"
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["packages/*", "src/ol_dbt_cli"]
 
 [tool.uv]
 package = false  # This is a workspace root, not a package
