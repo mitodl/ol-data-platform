@@ -18,7 +18,7 @@ from ol_superset.lib.asset_index import (
 # ---------------------------------------------------------------------------
 
 
-def _write_yaml(path: Path, data: dict) -> None:
+def _write_yaml(path: Path, data: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.dump(data))
 

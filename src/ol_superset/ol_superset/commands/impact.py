@@ -504,7 +504,7 @@ def _render_json(
     orphans: _OrphanAssets | None,
     raw_files: list[str],
 ) -> None:
-    def _ds_dict(uuid: str, ds: DatasetAsset | None) -> dict:
+    def _ds_dict(uuid: str, ds: DatasetAsset | None) -> dict[str, Any]:
         if ds is None:
             return {
                 "uuid": uuid,
@@ -519,12 +519,12 @@ def _render_json(
             "is_virtual": ds.sql is not None,
         }
 
-    def _ch_dict(uuid: str, ch: ChartAsset | None) -> dict:
+    def _ch_dict(uuid: str, ch: ChartAsset | None) -> dict[str, Any]:
         if ch is None:
             return {"uuid": uuid, "name": None, "dataset_uuid": None}
         return {"uuid": uuid, "name": ch.name, "dataset_uuid": ch.dataset_uuid}
 
-    def _db_dict(uuid: str, db: DashboardAsset | None) -> dict:
+    def _db_dict(uuid: str, db: DashboardAsset | None) -> dict[str, Any]:
         if db is None:
             return {"uuid": uuid, "title": None}
         return {"uuid": uuid, "title": db.title}

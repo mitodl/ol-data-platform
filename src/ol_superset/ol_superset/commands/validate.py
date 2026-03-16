@@ -88,7 +88,7 @@ def validate(
 
     # Validate YAML syntax
     print("Checking YAML syntax...")
-    errors = []
+    yaml_errors = []
     checked = 0
 
     for yaml_file in sorted(assets_dir.rglob("*.yaml")):
@@ -97,14 +97,14 @@ def validate(
                 yaml.safe_load(f)
             checked += 1
         except Exception as e:
-            errors.append((yaml_file, str(e)))
+            yaml_errors.append((yaml_file, str(e)))
 
-    if errors:
+    if yaml_errors:
         print(
-            f"  ❌ Found {len(errors)} invalid YAML file(s) "
-            f"out of {checked + len(errors)} total:"
+            f"  ❌ Found {len(yaml_errors)} invalid YAML file(s) "
+            f"out of {checked + len(yaml_errors)} total:"
         )
-        for file, error in errors:
+        for file, error in yaml_errors:
             print(f"     {file.relative_to(assets_dir)}: {error}")
         sys.exit(1)
 

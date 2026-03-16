@@ -205,7 +205,7 @@ def test_extract_sql_table_refs_skips_column_aliases() -> None:
 
 def test_extract_sql_table_refs_empty_sql() -> None:
     assert extract_sql_table_refs("") == set()
-    assert extract_sql_table_refs(None) == set()  # type: ignore[arg-type]
+    assert extract_sql_table_refs(None) == set()
 
 
 def test_extract_sql_table_refs_multiple_joins() -> None:
