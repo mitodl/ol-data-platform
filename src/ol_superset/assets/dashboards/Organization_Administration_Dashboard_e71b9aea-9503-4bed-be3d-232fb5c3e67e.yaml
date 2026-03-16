@@ -265,6 +265,22 @@ position:
     - TAB-Q-PVJx2Rv0XPqCvUa5V5X
     - ROW-L27sPh0Sjn6tr8_jKInBI
     type: CHART
+  CHART-gJwUdaMdAAf4XgU7JCbMg:
+    children: []
+    id: CHART-gJwUdaMdAAf4XgU7JCbMg
+    meta:
+      chartId: 162
+      height: 50
+      sliceName: Organization Administration Details
+      uuid: 25373a70-93aa-4685-88c7-afdc137cd660
+      width: 12
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-j_3atbXvo8mMG1-t-Arcp
+    - TAB-ZlwBC514aDm27paPV6SXF
+    - ROW--ei1VMcggPS4_D8nVX4OV
+    type: CHART
   CHART-xsEQniyLuqCEDFlkkK1RU:
     children: []
     id: CHART-xsEQniyLuqCEDFlkkK1RU
@@ -316,7 +332,8 @@ position:
     meta:
       code: '### Change Log
 
-        **2/2/26**: Enabled search functionality on Course Run Readable ID filter'
+        **2/2/26**: Enabled search functionality on Course Run Readable ID filter
+        **3/16/26**: added a new table with detailed organization data in table form'
       height: 50
       width: 4
     parents:
@@ -331,6 +348,18 @@ position:
     - GRID_ID
     id: ROOT_ID
     type: ROOT
+  ROW--ei1VMcggPS4_D8nVX4OV:
+    children:
+    - CHART-gJwUdaMdAAf4XgU7JCbMg
+    id: ROW--ei1VMcggPS4_D8nVX4OV
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-j_3atbXvo8mMG1-t-Arcp
+    - TAB-ZlwBC514aDm27paPV6SXF
+    type: ROW
   ROW-Bv-vD2N63PxqHsjQDWi37:
     children:
     - CHART-ydrWe39HGXiLC6CAx2nNb
@@ -410,9 +439,23 @@ position:
     - GRID_ID
     - TABS-j_3atbXvo8mMG1-t-Arcp
     type: TAB
+  TAB-ZlwBC514aDm27paPV6SXF:
+    children:
+    - ROW--ei1VMcggPS4_D8nVX4OV
+    id: TAB-ZlwBC514aDm27paPV6SXF
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Org Details
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-j_3atbXvo8mMG1-t-Arcp
+    type: TAB
   TABS-j_3atbXvo8mMG1-t-Arcp:
     children:
     - TAB-Q-PVJx2Rv0XPqCvUa5V5X
+    - TAB-ZlwBC514aDm27paPV6SXF
     - TAB-DvcdFW2UO9vdxAcRE_hWk
     id: TABS-j_3atbXvo8mMG1-t-Arcp
     meta: {}
