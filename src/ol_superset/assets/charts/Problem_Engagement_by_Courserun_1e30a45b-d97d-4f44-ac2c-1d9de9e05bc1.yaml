@@ -37,5 +37,7 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
+slice_name: Problem Engagement by Courserun
 uuid: 1e30a45b-d97d-4f44-ac2c-1d9de9e05bc1
 version: 1.0.0
+viz_type: table

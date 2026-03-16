@@ -41,3 +41,4 @@ params:
 slice_name: Data Detail Navigation
 uuid: cf8305f6-fe5d-4791-8185-3051b76f4738
 version: 1.0.0
+viz_type: table

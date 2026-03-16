@@ -77,3 +77,4 @@ params:
 slice_name: Page Engagement By Section
 uuid: b4d14d82-feb2-49bf-847f-2cb8b2c11d20
 version: 1.0.0
+viz_type: table

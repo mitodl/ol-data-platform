@@ -37,6 +37,13 @@ from rich.console import Console
 
 console = Console()
 
+# Pattern that matches the trailing UUID in a Superset export filename, e.g.
+# "My_Chart_1e30a45b-d97d-4f44-ac2c-1d9de9e05bc1"
+_UUID_SUFFIX_RE = re.compile(
+    r"_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
 # Keys stripped from ``params`` dicts on chart YAMLs because they are
 # environment-specific, redundant, or have no import-time meaning.
 #
@@ -143,6 +150,19 @@ def _annotate_uuid_fields(
     return content
 
 
+def _slice_name_from_filename(yaml_file: Path) -> str:
+    """Derive a slice_name from the chart YAML filename.
+
+    Superset export filenames follow the pattern ``<Slice_Name>_<uuid>.yaml``.
+    We strip the UUID suffix and replace underscores with spaces to recover the
+    original chart name, e.g. ``Problem_Engagement_by_Courserun_1e30a45b-…yaml``
+    → ``"Problem Engagement by Courserun"``.
+    """
+    stem = yaml_file.stem  # e.g. "Problem_Engagement_by_Courserun_1e30a45b-..."
+    name = _UUID_SUFFIX_RE.sub("", stem)  # strip trailing UUID segment
+    return name.replace("_", " ")
+
+
 def normalize_chart(
     yaml_file: Path,
     dataset_uuid_map: dict[str, str],
@@ -168,7 +188,18 @@ def normalize_chart(
         for key in _CHART_PARAMS_STRIP_KEYS:
             data["params"].pop(key, None)
 
-    # 3. Sort all dict keys alphabetically for deterministic output
+    # 3. Promote required top-level fields from params if absent.
+    #    ImportV1ChartSchema marks both viz_type and slice_name as required=True.
+    #    Superset occasionally exports charts where these fields live only inside
+    #    params; promoting them here prevents import validation failures.
+    raw_params = data.get("params")
+    params: dict[str, object] = raw_params if isinstance(raw_params, dict) else {}
+    if "viz_type" not in data and "viz_type" in params:
+        data["viz_type"] = params["viz_type"]
+    if "slice_name" not in data:
+        data["slice_name"] = _slice_name_from_filename(yaml_file)
+
+    # 4. Sort all dict keys alphabetically for deterministic output
     data = _sorted_dict(data)
 
     new_text = yaml.dump(
@@ -178,7 +209,7 @@ def normalize_chart(
         sort_keys=True,
     )
 
-    # 4. Annotate dataset_uuid with the human-readable dataset name
+    # 5. Annotate dataset_uuid with the human-readable dataset name
     dataset_uuid = data.get("dataset_uuid")
     uuid_comments: dict[str, str] = {}
     if isinstance(dataset_uuid, str) and dataset_uuid in dataset_uuid_map:

@@ -37,3 +37,4 @@ params:
 slice_name: Data Detail Video
 uuid: 8cd66663-f93f-4751-be11-14c5d4c28ed5
 version: 1.0.0
+viz_type: table

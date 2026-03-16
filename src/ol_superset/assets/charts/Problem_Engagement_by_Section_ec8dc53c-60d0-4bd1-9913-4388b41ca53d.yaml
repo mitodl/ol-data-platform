@@ -112,5 +112,7 @@ params:
     optionName: metric_mnwvvmodw4r_ilyz28a3rin
     sqlExpression: null
   viz_type: table
+slice_name: Problem Engagement by Section
 uuid: ec8dc53c-60d0-4bd1-9913-4388b41ca53d
 version: 1.0.0
+viz_type: table
