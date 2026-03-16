@@ -35,7 +35,12 @@ def get_changed_files(
     base_ref: str = "origin/main",
     repo_root: Path | None = None,
 ) -> list[Path]:
-    """Return absolute paths of files changed vs *base_ref* (staged + unstaged + untracked)."""
+    """Return absolute paths of tracked files changed vs *base_ref*.
+
+    Includes files changed relative to *base_ref* (committed), files staged for
+    commit, and unstaged modifications to tracked files.  Untracked (new) files
+    that have not yet been ``git add``-ed are **not** included.
+    """
     root = repo_root or get_repo_root()
     # Files changed relative to base ref (committed + staged)
     committed = _run_git(
@@ -77,11 +82,12 @@ def get_changed_yaml_models(
     dbt_dir: Path,
     base_ref: str = "origin/main",
     repo_root: Path | None = None,
-) -> list[str]:
-    """Return model names whose YAML schema files changed.
+) -> list[Path]:
+    """Return paths of YAML schema files (``_*.yml``) under *dbt_dir*/models/ that changed.
 
-    Returns the *model names* declared inside changed _*.yml files, not just the
-    file names — callers should use :func:`yaml_registry.YamlRegistry` to expand.
+    Returns file :class:`~pathlib.Path` objects, not model names.  Callers that
+    need model names should parse the returned paths through
+    :func:`yaml_registry.build_yaml_registry` or read the ``models:`` key directly.
     """
     root = repo_root or get_repo_root(dbt_dir)
     models_dir = dbt_dir / "models"
@@ -90,7 +96,7 @@ def get_changed_yaml_models(
     for path in changed:
         if path.suffix in {".yml", ".yaml"} and _is_under(path, models_dir):
             yaml_files.append(path)
-    return yaml_files  # type: ignore[return-value]  # callers resolve model names from these
+    return yaml_files
 
 
 def get_file_at_ref(path: Path, ref: str, repo_root: Path | None = None) -> str | None:

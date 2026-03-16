@@ -17,18 +17,18 @@ app = cyclopts.App(
 
     Common workflows:
 
-      1. Check what breaks before opening a PR:
-         $ ol-dbt impact --changed-only
+      1. Check what columns break downstream before opening a PR:
+         $ ol-dbt impact
 
-      2. Validate model SQL/YAML consistency:
-         $ ol-dbt validate --changed-only
+      2. Validate model SQL/YAML consistency for changed models:
+         $ ol-dbt validate --model staging
 
       3. Full validation of all models:
          $ ol-dbt validate
 
       4. JSON output for CI pipelines:
-         $ ol-dbt impact --format json
-         $ ol-dbt validate --format json
+         $ ol-dbt impact --output json
+         $ ol-dbt validate --output json
 
     Use --help on any command for detailed usage.
     """,

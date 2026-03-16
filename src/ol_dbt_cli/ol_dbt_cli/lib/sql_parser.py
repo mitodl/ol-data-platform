@@ -403,18 +403,31 @@ def parse_model_file(path: Path, compiled_dir: Path | None = None) -> ParsedMode
 
     When *compiled_dir* is provided and a compiled counterpart exists, uses the
     fully-rendered (Jinja-free) SQL from ``target/compiled/`` for accurate column
-    extraction.  Falls back to raw SQL parsing with Jinja stripping otherwise.
+    extraction.  Refs and sources are always parsed from the raw SQL via
+    :func:`strip_jinja` so that lineage information is available even when using
+    compiled SQL (compiled SQL uses physical relation names, not ``ref_*`` prefixes).
+
+    Falls back to raw SQL parsing with Jinja stripping otherwise.
     """
+    raw_sql = path.read_text()
+
     if compiled_dir is not None:
         compiled_sql, compiled_path = _find_compiled_sql(path.stem, compiled_dir)
         if compiled_sql is not None:
-            # Compiled SQL is already rendered — parse directly, no Jinja stripping.
+            # Column extraction from compiled SQL (accurate, Jinja-free).
             result = _parse_clean_sql(path.stem, compiled_sql)
             result.compiled_path = compiled_path
+            # Lineage (refs/sources) must come from the raw SQL because compiled
+            # SQL replaces {{ ref('x') }} with physical relation names that have no
+            # reliable 'ref_' prefix convention.
+            jinja_result = strip_jinja(raw_sql)
+            result.refs = jinja_result.ref_names
+            result.source_refs = jinja_result.source_names
+            result.ref_placeholder_map = jinja_result.ref_placeholder_map
+            result.source_placeholder_map = jinja_result.source_placeholder_map
             return result
 
-    sql = path.read_text()
-    return parse_model_sql(path.stem, sql)
+    return parse_model_sql(path.stem, raw_sql)
 
 
 def _find_compiled_sql(model_name: str, compiled_dir: Path) -> tuple[str | None, Path | None]:
@@ -444,13 +457,9 @@ def _parse_clean_sql(name: str, sql: str) -> ParsedModel:
         result.parse_error = "No parseable SQL statements found"
         return result
 
-    # Collect ref/source names from table identifiers in the compiled SQL
-    for tbl in parsed.find_all(exp.Table):
-        n = tbl.name.lower()
-        if n.startswith("ref_"):
-            result.refs.append(n[4:])
-        elif n.startswith("source_"):
-            result.source_refs.append(n[7:])
+    # Note: refs/sources are NOT populated here.  Compiled SQL uses physical
+    # relation names (no `ref_`/`source_` prefix), so lineage information must
+    # come from strip_jinja() on the raw SQL — see parse_model_file().
 
     cte_cols = _build_cte_column_map(parsed)
     select = _outermost_select(parsed)

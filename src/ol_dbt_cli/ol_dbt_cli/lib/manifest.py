@@ -8,6 +8,7 @@ needing to re-parse Jinja-laden SQL.
 from __future__ import annotations
 
 import json
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -70,10 +71,10 @@ class ManifestRegistry:
     def get_all_descendants(self, unique_id: str) -> list[ManifestModel]:
         """BFS walk returning all descendant nodes of *unique_id*."""
         seen: set[str] = set()
-        queue = [unique_id]
+        queue: deque[str] = deque([unique_id])
         result: list[ManifestModel] = []
         while queue:
-            current = queue.pop(0)
+            current = queue.popleft()
             for child in self.get_children(current):
                 if child.unique_id not in seen:
                     seen.add(child.unique_id)

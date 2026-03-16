@@ -160,10 +160,15 @@ def _check_upstream_refs(
     sql_models_by_name: dict[str, ParsedModel],
     report: ValidationReport,
 ) -> None:
-    yaml_model = yaml_registry.get_model(model_name)
-    if yaml_model is None:
-        return
+    """Check that every ref() / source() used by the model can be resolved.
 
+    Reports a WARNING when the upstream model's column list is entirely unknown,
+    which means lineage and impact analysis will be incomplete.  The more invasive
+    "cross-ref column attribution" check has been removed because it cannot
+    correctly attribute a YAML column to a *specific* upstream ref without
+    SQL-AST-level table alias analysis — any such check produces too many false
+    positives when a model joins several refs and adds computed columns.
+    """
     for ref_name in parsed.refs:
         upstream_cols = _resolve_upstream_columns(ref_name, yaml_registry, manifest, sql_models_by_name)
         if upstream_cols is None:
@@ -174,26 +179,6 @@ def _check_upstream_refs(
                 f"Cannot resolve column list for ref('{ref_name}')",
                 "Run `dbt parse` to generate manifest.json for accurate upstream column resolution.",
             )
-            continue
-
-        # Check that columns this model declares from the upstream actually exist
-        # Heuristic: look for columns in THIS model's YAML that share a name with
-        # something that logically comes from *ref_name* (same name present in both)
-        # More precisely: any YAML column of THIS model that is NOT produced by
-        # parsed.output_columns but IS in upstream — a sign of phantom ref.
-        # We also check if any YAML column matches an upstream column name directly.
-        for col_name in yaml_model.column_names:
-            # If the column isn't in our own SQL output, maybe it comes from upstream
-            if col_name not in parsed.output_columns and col_name not in upstream_cols:
-                # Only flag if we're confident about upstream columns (non-empty)
-                if upstream_cols:
-                    report.add(
-                        "upstream_refs",
-                        Severity.WARNING,
-                        model_name,
-                        f"Column '{col_name}' not found in SQL output or in ref('{ref_name}') column list",
-                        f"Upstream model '{ref_name}' columns: {sorted(upstream_cols)[:10]}...",
-                    )
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +257,7 @@ def _resolve_star_with_registry(
         if manifest:
             m_model = manifest.get_model(upstream_model)
             if m_model and m_model.columns:
-                return m_model.columns
+                return m_model.column_names
 
         # YAML-declared columns
         y_model = yaml_registry.get_model(upstream_model)
@@ -424,11 +409,12 @@ def _resolve_model_targets(
             candidate_dirs = [p for p in models_dir.rglob(token) if p.is_dir()]
 
         if candidate_dirs:
+            before = len(resolved)
             for d in candidate_dirs:
                 for sql_file in sorted(d.rglob("*.sql")):
                     if sql_file.stem in sql_file_map:
                         resolved.append(sql_file.stem)
-            if resolved:
+            if len(resolved) > before:
                 continue
 
         unknown.append(token)
