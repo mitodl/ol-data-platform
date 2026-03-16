@@ -9,11 +9,9 @@ params:
     comparator: No filter
     expressionType: SIMPLE
     operator: TEMPORAL_RANGE
-    subject: certificate_created_date
+    subject: activity_date
   all_columns:
-  - platform
-  - organization
-  - course_title
+  - organization_name
   - courserun_readable_id
   - user_email
   - activity_date

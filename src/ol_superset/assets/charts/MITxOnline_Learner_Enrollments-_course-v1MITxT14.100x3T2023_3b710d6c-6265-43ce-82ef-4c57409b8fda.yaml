@@ -15,7 +15,7 @@ params:
     operator: ==
     operatorId: EQUALS
     sqlExpression: null
-    subject: courserun_id
+    subject: courserun_readable_id
   annotation_layers: []
   color_scheme: supersetColors
   comparison_type: values

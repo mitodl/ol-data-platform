@@ -10,7 +10,7 @@ params:
     comparator: No filter
     expressionType: SIMPLE
     operator: TEMPORAL_RANGE
-    subject: certificate_created_date
+    subject: activity_date
   - clause: WHERE
     comparator: No filter
     expressionType: SIMPLE
