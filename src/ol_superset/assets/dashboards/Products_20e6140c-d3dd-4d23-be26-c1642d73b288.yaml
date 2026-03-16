@@ -1,11 +1,201 @@
+certification_details: ''
+certified_by: ''
+css: ''
 dashboard_title: Products
 description: null
-css: ''
-slug: null
-certified_by: ''
-certification_details: ''
-published: true
-uuid: 20e6140c-d3dd-4d23-be26-c1642d73b288
+metadata:
+  chart_configuration:
+    '112':
+      crossFilters:
+        chartsInScope:
+        - 67
+        - 82
+        scope: global
+      id: 112
+    '67':
+      crossFilters:
+        chartsInScope:
+        - 82
+        - 112
+        scope: global
+      id: 67
+    '82':
+      crossFilters:
+        chartsInScope:
+        - 67
+        - 112
+        scope: global
+      id: 82
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 67
+    - 82
+    - 112
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 49
+    - 71
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: false
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: Filter by courses that are open for enrollment
+    filterType: filter_select
+    id: NATIVE_FILTER-VLDelGNIm
+    name: Open for enrollment
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    - TAB-tOcC680Uq
+    targets:
+    - column:
+        name: courserun_is_enrollable
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 49
+    - 71
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-A2tykSpd1
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    - TAB-tOcC680Uq
+    targets:
+    - column:
+        name: platform
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-A2tykSpd1
+    chartsInScope:
+    - 49
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: e.g. Emeritus, xPro
+    filterType: filter_select
+    id: NATIVE_FILTER-Ie7vz8KIT
+    name: Product Platform
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    targets:
+    - column:
+        name: product_platform
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-A2tykSpd1
+    chartsInScope:
+    - 49
+    - 71
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-BIDv6yp-1
+    name: Product Type
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    - TAB-tOcC680Uq
+    targets:
+    - column:
+        name: product_type
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-A2tykSpd1
+    chartsInScope:
+    - 49
+    - 71
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-bI2AkYOwU
+    name: Product Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    - TAB-tOcC680Uq
+    targets:
+    - column:
+        name: product_readable_id
+      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
+    type: NATIVE_FILTER
+  refresh_frequency: 86400
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
 position:
   CHART-GsXfncenrZrCTj6zp7Ym1:
     children: []
@@ -203,198 +393,8 @@ position:
     - ROOT_ID
     - GRID_ID
     type: TABS
-metadata:
-  chart_configuration:
-    '112':
-      crossFilters:
-        chartsInScope:
-        - 67
-        - 82
-        scope: global
-      id: 112
-    '67':
-      crossFilters:
-        chartsInScope:
-        - 82
-        - 112
-        scope: global
-      id: 67
-    '82':
-      crossFilters:
-        chartsInScope:
-        - 67
-        - 112
-        scope: global
-      id: 82
-  color_scheme: ''
-  color_scheme_domain: []
-  cross_filters_enabled: true
-  expanded_slices: {}
-  global_chart_configuration:
-    chartsInScope:
-    - 67
-    - 82
-    - 112
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-  label_colors: {}
-  map_label_colors: {}
-  native_filter_configuration:
-  - cascadeParentIds: []
-    chartsInScope:
-    - 49
-    - 71
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: false
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: Filter by courses that are open for enrollment
-    filterType: filter_select
-    id: NATIVE_FILTER-VLDelGNIm
-    name: Open for enrollment
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope:
-    - TAB-I63TmRRqPi
-    - TAB-tOcC680Uq
-    targets:
-    - column:
-        name: courserun_is_enrollable
-      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
-    type: NATIVE_FILTER
-  - cascadeParentIds: []
-    chartsInScope:
-    - 49
-    - 71
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-A2tykSpd1
-    name: Platform
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope:
-    - TAB-I63TmRRqPi
-    - TAB-tOcC680Uq
-    targets:
-    - column:
-        name: platform
-      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
-    type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-A2tykSpd1
-    chartsInScope:
-    - 49
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: e.g. Emeritus, xPro
-    filterType: filter_select
-    id: NATIVE_FILTER-Ie7vz8KIT
-    name: Product Platform
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope:
-    - TAB-I63TmRRqPi
-    targets:
-    - column:
-        name: product_platform
-      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
-    type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-A2tykSpd1
-    chartsInScope:
-    - 49
-    - 71
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-BIDv6yp-1
-    name: Product Type
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope:
-    - TAB-I63TmRRqPi
-    - TAB-tOcC680Uq
-    targets:
-    - column:
-        name: product_type
-      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
-    type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-A2tykSpd1
-    chartsInScope:
-    - 49
-    - 71
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: true
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-bI2AkYOwU
-    name: Product Readable ID
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope:
-    - TAB-I63TmRRqPi
-    - TAB-tOcC680Uq
-    targets:
-    - column:
-        name: product_readable_id
-      datasetUuid: d53b0a52-4450-4d2a-8ce4-143b9f9e327b
-    type: NATIVE_FILTER
-  refresh_frequency: 86400
-  shared_label_colors: []
-  timed_refresh_immune_slices: []
+published: true
+slug: null
 theme_uuid: null
+uuid: 20e6140c-d3dd-4d23-be26-c1642d73b288
 version: 1.0.0

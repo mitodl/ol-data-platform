@@ -1,11 +1,95 @@
+certification_details: ''
+certified_by: ''
+css: ''
 dashboard_title: Course AI Chatbot
 description: null
-css: ''
-slug: null
-certified_by: ''
-certification_details: ''
-published: true
-uuid: b6b79d2a-4a21-4454-a4df-d12549e9bd7d
+metadata:
+  chart_configuration:
+    '123':
+      crossFilters:
+        chartsInScope:
+        - 128
+        scope: global
+      id: 123
+    '195':
+      crossFilters:
+        chartsInScope:
+        - 130
+        scope: global
+      id: 195
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: false
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 128
+    - 130
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 128
+    - 130
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: false
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
+    name: Agent
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-f9kZjFZJcGqYTdBxpCR2o
+    - TAB-yHMV5QOM_44gkFJMD_pSv
+    targets:
+    - column:
+        name: ai_agent
+      datasetUuid: b1f7c663-9faf-4c95-bdeb-d786a3f4cd3c
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
+    controlValues:
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-RmITn4Q-qvifQxrX7JSF8
+    name: 'Resource Identifier '
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    targets:
+    - column:
+        name: resource_id
+      datasetUuid: b1f7c663-9faf-4c95-bdeb-d786a3f4cd3c
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
 position:
   CHART-explore-128-1:
     children: []
@@ -127,92 +211,8 @@ position:
     parents:
     - ROOT_ID
     type: TABS
-metadata:
-  chart_configuration:
-    '195':
-      crossFilters:
-        chartsInScope:
-        - 130
-        scope: global
-      id: 195
-    '123':
-      crossFilters:
-        chartsInScope:
-        - 128
-        scope: global
-      id: 123
-  color_scheme: ''
-  color_scheme_domain: []
-  cross_filters_enabled: false
-  expanded_slices: {}
-  global_chart_configuration:
-    chartsInScope:
-    - 128
-    - 130
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-  label_colors: {}
-  map_label_colors: {}
-  native_filter_configuration:
-  - cascadeParentIds: []
-    chartsInScope:
-    - 128
-    - 130
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: false
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
-    name: Agent
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope:
-    - TAB-f9kZjFZJcGqYTdBxpCR2o
-    - TAB-yHMV5QOM_44gkFJMD_pSv
-    targets:
-    - column:
-        name: ai_agent
-      datasetUuid: b1f7c663-9faf-4c95-bdeb-d786a3f4cd3c
-    type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-RmITn4Q-qvifQxrX7JSF8
-    name: 'Resource Identifier '
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    targets:
-    - column:
-        name: resource_id
-      datasetUuid: b1f7c663-9faf-4c95-bdeb-d786a3f4cd3c
-    type: NATIVE_FILTER
-  refresh_frequency: 0
-  shared_label_colors: []
-  timed_refresh_immune_slices: []
+published: true
+slug: null
 theme_uuid: null
+uuid: b6b79d2a-4a21-4454-a4df-d12549e9bd7d
 version: 1.0.0

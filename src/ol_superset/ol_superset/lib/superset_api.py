@@ -3,6 +3,7 @@
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import requests
 import yaml
@@ -44,7 +45,7 @@ class SupersetTokenAuth(requests.auth.AuthBase):
             return self._oauth_auth.get_token()
 
     def _handle_401(
-        self, response: requests.Response, **kwargs: object
+        self, response: requests.Response, **kwargs: Any
     ) -> requests.Response:
         if response.status_code != 401:
             return response

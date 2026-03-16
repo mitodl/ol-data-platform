@@ -173,9 +173,9 @@ def validate(
                 "by governance roles"
             )
 
-    # Optionally validate the full dbt dependency chain
+    # Validate asset dependency chain (always runs — no dbt dir required)
     print()
-    total_steps = 4 if dbt_dir_path is not None else 2
+    total_steps = 5 if dbt_dir_path is not None else 3
     errors, warnings, asset_index = _validate_asset_references(
         assets_dir=assets_dir,
         existing_warnings=warnings,
@@ -187,14 +187,12 @@ def validate(
             index=asset_index,
             dbt_dir=Path(dbt_dir_path).resolve(),
             existing_warnings=warnings,
+            total_steps=total_steps,
         )
         errors += dbt_errors
     else:
         print()
-        print(
-            "  ℹ️  Dataset → dbt model and column-level checks skipped "
-            "(use --dbt-dir to enable)."
-        )
+        print("  ℹ️  Dataset → dbt model checks skipped (use --dbt-dir to enable).")
 
     print()
     print("=" * 50)
@@ -223,10 +221,11 @@ def _validate_asset_references(
     assets_dir: Path,
     existing_warnings: int,
     *,
-    total_steps: int = 2,
+    total_steps: int = 3,
 ) -> tuple[int, int, "AssetIndex"]:
     """
-    Validate Dashboard → Chart and Chart → Dataset UUID cross-references.
+    Validate Dashboard → Chart, Chart → Dataset UUID cross-references, and
+    Chart → Dataset column name case consistency.
 
     Always runs regardless of whether a dbt directory is provided.
 
@@ -282,6 +281,89 @@ def _validate_asset_references(
     if chart_uuid_errors == 0:
         print(f"    ✅ All {len(index.charts)} chart(s) have valid dataset references")
 
+    # ------------------------------------------------------------------
+    # 3. Chart → Dataset: column name case consistency
+    #
+    # Superset does exact-string matching when resolving chart column
+    # references against the dataset column list.  Trino normalises all
+    # column names to lowercase, so any mixed-case reference (e.g.
+    # ``DEDP_Course_Cert_Count``) will fail at query time even if the
+    # column exists in lowercase.  This check runs without a dbt registry
+    # because it only needs the chart and dataset YAML files.
+    # ------------------------------------------------------------------
+    print()
+    print(f"  [3/{total_steps}] Chart → Dataset column case consistency...")
+    col_case_issues = 0
+
+    for dataset in index.datasets.values():
+        if dataset.database != "Trino":
+            continue
+
+        if dataset.sql:
+            # Virtual dataset: compare against sqlglot-parsed SQL output
+            # columns (already lowercase). Skip when columns are
+            # indeterminate (wildcard SELECT or unparseable SQL).
+            if dataset.virtual_columns is None:
+                continue
+            virtual_cols = dataset.virtual_columns  # already lowercase
+            for chart in index.charts.values():
+                if chart.dataset_uuid != dataset.uuid:
+                    continue
+                for col_ref in sorted(chart.column_refs):
+                    col_ref_lower = col_ref.lower()
+                    if col_ref in virtual_cols:
+                        pass  # exact match — correct
+                    elif col_ref_lower in virtual_cols:
+                        print(
+                            f"    ❌ Chart '{chart.name}': column '{col_ref}' "
+                            f"matches virtual dataset '{dataset.table_name}' "
+                            f"SQL output as '{col_ref_lower}' — "
+                            f"Trino normalises column names to lowercase; "
+                            f"rename to '{col_ref_lower}'"
+                        )
+                        errors += 1
+                        col_case_issues += 1
+                    else:
+                        print(
+                            f"    ⚠️  Chart '{chart.name}': column '{col_ref}' "
+                            f"not found in virtual dataset "
+                            f"'{dataset.table_name}' SQL output"
+                        )
+                        warnings += 1
+                        col_case_issues += 1
+            continue
+
+        # Simple (dbt-backed) dataset: compare against declared column list.
+        all_cols = dataset.columns | dataset.calculated_columns
+        if not all_cols:
+            continue
+        all_cols_lower: dict[str, str] = {c.lower(): c for c in all_cols}
+        for chart in index.charts.values():
+            if chart.dataset_uuid != dataset.uuid:
+                continue
+            for col_ref in sorted(chart.column_refs):
+                if col_ref not in all_cols:
+                    if col_ref.lower() in all_cols_lower:
+                        canonical = all_cols_lower[col_ref.lower()]
+                        print(
+                            f"    ❌ Chart '{chart.name}': column '{col_ref}' "
+                            f"exists in dataset '{dataset.table_name}' as "
+                            f"'{canonical}' — rename to '{canonical}'"
+                        )
+                        errors += 1
+                        col_case_issues += 1
+                    else:
+                        print(
+                            f"    ⚠️  Chart '{chart.name}': column '{col_ref}' "
+                            f"not found in dataset '{dataset.table_name}' "
+                            f"column list"
+                        )
+                        warnings += 1
+                        col_case_issues += 1
+
+    if col_case_issues == 0:
+        print("    ✅ All chart column references match dataset column names")
+
     return errors, warnings, index
 
 
@@ -289,20 +371,26 @@ def _validate_dbt_chain(
     index: AssetIndex,
     dbt_dir: Path,
     existing_warnings: int,
+    total_steps: int = 5,
 ) -> tuple[int, int]:
     """
-    Validate the Dataset → dbt model and column-level dependency chain (steps 3–4).
+    Validate the Dataset → dbt model and column-level dependency chain (steps 4–5).
 
     Requires a pre-built AssetIndex (from _validate_asset_references) so that
     the index is not reconstructed unnecessarily.
+
+    Chart → Dataset column consistency (step 3) is handled by
+    _validate_asset_references and always runs; this function only validates
+    the dataset → dbt model link and dataset column alignment with dbt docs.
 
     Args:
         index: Pre-built AssetIndex for the assets directory.
         dbt_dir: Path to the dbt project root.
         existing_warnings: Warning count accumulated by the caller so far.
+        total_steps: Total validation step count (used for step labels).
 
     Returns:
-        Tuple of (error_count, warning_count) for steps 3–4 only.
+        Tuple of (error_count, warning_count) for steps 4–5 only.
     """
 
     if not dbt_dir.exists():
@@ -326,10 +414,10 @@ def _validate_dbt_chain(
     warnings = existing_warnings
 
     # ------------------------------------------------------------------
-    # 3. Dataset → dbt model: table_name must match a known dbt model
+    # 4. Dataset → dbt model: table_name must match a known dbt model
     # ------------------------------------------------------------------
     print()
-    print("  [3/4] Dataset → dbt model (table name + schema)...")
+    print(f"  [4/{total_steps}] Dataset → dbt model (table name + schema)...")
     dataset_model_errors = 0
     dataset_schema_warnings = 0
     virtual_count = sum(
@@ -340,7 +428,7 @@ def _validate_dbt_chain(
     if virtual_count:
         print(
             f"    ℹ️  {virtual_count} virtual dataset(s) skipped "
-            f"(SQL-defined — table refs validated in [4/4])"
+            f"(SQL-defined — table refs validated in [5/{total_steps}])"
         )
 
     for dataset in index.datasets.values():
@@ -399,10 +487,14 @@ def _validate_dbt_chain(
         )
 
     # ------------------------------------------------------------------
-    # 4. Column-level validation
+    # 5. Column-level validation (dataset columns vs dbt model docs,
+    #    and virtual dataset SQL table references).
+    #
+    #    Chart → Dataset column case consistency is step 3 and always
+    #    runs; this step only covers the dbt-registry-dependent checks.
     # ------------------------------------------------------------------
     print()
-    print("  [4/4] Column-level consistency...")
+    print(f"  [5/{total_steps}] Column-level consistency (dataset vs dbt model)...")
     col_warnings = 0
 
     for dataset in index.datasets.values():
@@ -413,24 +505,37 @@ def _validate_dbt_chain(
             dbt_registry.get_model(dataset.table_name) if dataset.table_name else None
         )
 
-        # 4a. Dataset columns vs dbt model columns (plain columns only).
+        # 5a. Dataset columns vs dbt model columns (plain columns only).
         # Calculated columns (those with a Superset ``expression``) are derived
         # at query time by Superset and don't correspond to warehouse columns, so
         # they are excluded from this check.
         # Virtual datasets are defined by SQL — their YAML column list is a
         # cached metadata snapshot and may be incomplete.
         if model and model.columns and not dataset.sql:
+            model_cols_lower: dict[str, str] = {c.lower(): c for c in model.columns}
             for col_name in sorted(dataset.columns):
                 if col_name not in model.columns:
-                    print(
-                        f"    ⚠️  Dataset '{dataset.table_name}': column "
-                        f"'{col_name}' not documented in dbt model YAML "
-                        f"(may still exist in the warehouse)"
-                    )
-                    warnings += 1
-                    col_warnings += 1
+                    if col_name.lower() in model_cols_lower:
+                        canonical = model_cols_lower[col_name.lower()]
+                        print(
+                            f"    ❌ Dataset '{dataset.table_name}': column "
+                            f"'{col_name}' has wrong case — dbt model documents "
+                            f"it as '{canonical}' "
+                            f"(Trino normalises column names to lowercase; "
+                            f"update the dataset YAML)"
+                        )
+                        errors += 1
+                        col_warnings += 1
+                    else:
+                        print(
+                            f"    ⚠️  Dataset '{dataset.table_name}': column "
+                            f"'{col_name}' not documented in dbt model YAML "
+                            f"(may still exist in the warehouse)"
+                        )
+                        warnings += 1
+                        col_warnings += 1
 
-        # 4b. Virtual dataset: validate referenced table names exist in dbt,
+        # 5b. Virtual dataset: validate referenced table names exist in dbt,
         # and warn about SELECT * / table.* wildcards that prevent static
         # column analysis.
         if dataset.sql:
@@ -449,45 +554,6 @@ def _validate_dbt_chain(
                     print(
                         f"    ⚠️  Virtual dataset '{dataset.table_name}': SQL "
                         f"references table '{ref_table}' not found in dbt registry"
-                    )
-                    warnings += 1
-                    col_warnings += 1
-
-        # 4c. Chart column refs vs dataset columns.
-        # For simple datasets: compare refs against the full column set
-        # (plain + calculated).
-        # For virtual datasets: compare refs against the sqlglot-parsed output
-        # column set (case-insensitive). Skip when virtual_columns is None
-        # (wildcard or unparseable SQL).
-        if dataset.sql:
-            if dataset.virtual_columns is None:
-                continue
-            virtual_cols_lower = dataset.virtual_columns  # already lowercase
-            for chart in index.charts.values():
-                if chart.dataset_uuid != dataset.uuid:
-                    continue
-                for col_ref in sorted(chart.column_refs):
-                    if col_ref.lower() not in virtual_cols_lower:
-                        print(
-                            f"    ⚠️  Chart '{chart.name}': column '{col_ref}' "
-                            f"not found in virtual dataset "
-                            f"'{dataset.table_name}' SQL output"
-                        )
-                        warnings += 1
-                        col_warnings += 1
-            continue
-
-        all_dataset_cols = dataset.columns | dataset.calculated_columns
-        if not all_dataset_cols:
-            continue
-        for chart in index.charts.values():
-            if chart.dataset_uuid != dataset.uuid:
-                continue
-            for col_ref in sorted(chart.column_refs):
-                if col_ref not in all_dataset_cols:
-                    print(
-                        f"    ⚠️  Chart '{chart.name}': column '{col_ref}' "
-                        f"not found in dataset '{dataset.table_name}' column list"
                     )
                     warnings += 1
                     col_warnings += 1

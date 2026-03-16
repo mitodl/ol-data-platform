@@ -1,8 +1,8 @@
-slice_name: test-superset-new-workflow
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: f1ec896e-86d4-451a-84cc-841d234e70a6  # int__learn_ai__chatbot
+description: null
 params:
   adhoc_filters: []
   all_columns:
@@ -10,10 +10,10 @@ params:
   - chatsession_title
   - courserun_readable_id
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
-  dashboards: []
   extra_form_data: {}
   groupby: []
   order_by_cols: []
@@ -28,10 +28,7 @@ params:
   temporal_columns_lookup: {}
   time_grain_sqla: P1D
   viz_type: table
-  datasource: 141__table
-  annotation_layers: []
-query_context: '{"datasource":{"id":141,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":["chatsession_agent","chatsession_title","courserun_readable_id"],"orderby":[],"annotation_layers":[],"row_limit":10000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"141__table","viz_type":"table","query_mode":"raw","groupby":[],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"all_columns":["chatsession_agent","chatsession_title","courserun_readable_id"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"order_desc":true,"server_page_length":10,"row_limit":10000,"percent_metric_calculation":"row_limit","table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":true,"color_pn":true,"comparison_color_scheme":"Green","comparison_type":"values","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout: null
+slice_name: test-superset-new-workflow
 uuid: 89fb36ad-5554-4959-8956-dc073036fb19
 version: 1.0.0
-dataset_uuid: f1ec896e-86d4-451a-84cc-841d234e70a6
+viz_type: table
