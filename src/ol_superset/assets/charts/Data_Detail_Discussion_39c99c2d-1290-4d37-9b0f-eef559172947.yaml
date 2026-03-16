@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: 5bab95fd-d465-44f3-bed8-40c559958fc4  # Data_Detail_Discuss
+dataset_uuid: ec0fc17c-ebca-44ae-94ae-2072da856d24  # discussion_detail_report
 description: null
 params:
   adhoc_filters:

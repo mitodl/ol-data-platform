@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: c3182341-5246-40c2-8f04-885369c38093  # page_engagement_views
+dataset_uuid: 68c544d7-726d-495a-bf87-81255b2e8604  # afact_course_page_engagement
 description: null
 params:
   adhoc_filters: []
