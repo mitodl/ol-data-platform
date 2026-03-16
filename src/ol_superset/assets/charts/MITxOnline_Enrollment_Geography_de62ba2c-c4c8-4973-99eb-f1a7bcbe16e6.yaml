@@ -1,6 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
+dataset_uuid: 811f8301-4bea-461e-8359-d354af75c4b1  # marts__mitxonline_course_enrollments
 description: null
 params:
   adhoc_filters: []
@@ -12,7 +13,6 @@ params:
     r: 0
   color_scheme: supersetColors
   country_fieldtype: cca2
-  datasource: 2__table
   entity: user_address_country
   extra_form_data: {}
   linear_color_scheme: superset_seq_1

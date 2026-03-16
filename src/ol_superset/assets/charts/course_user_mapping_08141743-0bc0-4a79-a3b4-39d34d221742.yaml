@@ -1,13 +1,13 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
+dataset_uuid: 811f8301-4bea-461e-8359-d354af75c4b1  # marts__mitxonline_course_enrollments
 description: null
 params:
   adhoc_filters: []
   all_columns: []
   color_pn: true
   comparison_type: values
-  datasource: 18__table
   extra_form_data: {}
   groupby:
   - courserun_readable_id
