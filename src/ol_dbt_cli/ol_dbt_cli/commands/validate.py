@@ -484,6 +484,17 @@ def validate(
             ),
         ),
     ] = None,
+    only_checks: Annotated[
+        str | None,
+        Parameter(
+            name=["--only"],
+            help=(
+                "Comma-separated list of checks to run exclusively (all others are skipped): "
+                "yaml_sql_sync, upstream_refs, docs_coverage, yaml_integrity, select_star. "
+                "Mutually exclusive with --skip."
+            ),
+        ),
+    ] = None,
     errors_only: Annotated[
         bool,
         Parameter(
@@ -545,10 +556,26 @@ def validate(
         JSON output for CI integration:
             ol-dbt validate --changed-only --format json
 
+        Run only one check:
+            ol-dbt validate --only yaml_sql_sync
+
+        Run only two checks:
+            ol-dbt validate --only yaml_sql_sync,docs_coverage
+
+        Skip a specific check:
+            ol-dbt validate --skip select_star
+
     """
+    all_checks = {"yaml_sql_sync", "upstream_refs", "docs_coverage", "yaml_integrity", "select_star"}
+    if skip_checks and only_checks:
+        console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
+        raise SystemExit(1)
     skipped: set[str] = set()
     if skip_checks:
         skipped = {s.strip() for s in skip_checks.split(",")}
+    elif only_checks:
+        requested = {s.strip() for s in only_checks.split(",")}
+        skipped = all_checks - requested
 
     # Resolve dbt project directory
     if dbt_dir_path:
