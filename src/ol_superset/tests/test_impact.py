@@ -270,9 +270,7 @@ class TestFindOrphans:
     def test_no_orphans_in_clean_index(self) -> None:
         ds = _mk_dataset("aaaa-0000-0000-0000-aaaaaaaaaaaa", "model_a")
         ch = _mk_chart("bbbb-0000-0000-0000-bbbbbbbbbbbb", "Chart", ds.uuid)
-        db = _mk_dashboard(
-            "cccc-0000-0000-0000-cccccccccccc", "Dash", {ch.uuid}
-        )
+        db = _mk_dashboard("cccc-0000-0000-0000-cccccccccccc", "Dash", {ch.uuid})
         index = AssetIndex(
             datasets={ds.uuid: ds},
             charts={ch.uuid: ch},
