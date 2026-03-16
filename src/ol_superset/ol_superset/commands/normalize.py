@@ -44,13 +44,11 @@ _UUID_SUFFIX_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Keys stripped from ``params`` dicts on chart YAMLs because they are
+# Keys always stripped from ``params`` dicts on chart YAMLs because they are
 # environment-specific, redundant, or have no import-time meaning.
 #
 # Verified against Superset source (superset/commands/chart/importers/v1/):
 #
-# - ``datasource``: overwritten during import by ``update_chart_config_dataset()``
-#   which resolves the dataset via ``dataset_uuid``.
 # - ``slice_id``: overwritten at runtime by ``Slice.form_data`` which always sets
 #   ``slice_id`` from the current ``Slice.id`` database column.
 # - ``dashboards``: list of numeric dashboard IDs; ``import_chart()`` never reads
@@ -58,9 +56,14 @@ _UUID_SUFFIX_RE = re.compile(
 # - ``cache_timeout``: duplicated from the top-level chart field; ``Slice.form_data``
 #   always overwrites ``params.cache_timeout`` from the ``Slice.cache_timeout``
 #   column, so the value in ``params`` is never authoritative.
+#
+# NOTE: ``params.datasource`` (e.g. "141__table") is handled separately in
+# ``normalize_chart``: it is stripped only when ``dataset_uuid`` is already
+# present at the top level.  When a chart has no ``dataset_uuid``,
+# ``params.datasource`` is the sole remaining dataset reference and must be
+# kept so that the asset remains importable.
 _CHART_PARAMS_STRIP_KEYS: frozenset[str] = frozenset(
     {
-        "datasource",  # e.g. "141__table" – overwritten from dataset_uuid at import
         "slice_id",  # numeric chart ID – overwritten from Slice.id at runtime
         "dashboards",  # numeric dashboard IDs – environment-specific, unused on import
         "cache_timeout",  # duplicated from top-level field – overwritten at runtime
@@ -187,6 +190,12 @@ def normalize_chart(
     if isinstance(data.get("params"), dict):
         for key in _CHART_PARAMS_STRIP_KEYS:
             data["params"].pop(key, None)
+        # Strip params.datasource only when dataset_uuid is present at the top
+        # level.  For charts that lack dataset_uuid entirely, params.datasource
+        # (e.g. "18__table") is the sole remaining dataset reference; removing
+        # it would leave the chart with no dataset linkage and break imports.
+        if "dataset_uuid" in data:
+            data["params"].pop("datasource", None)
 
     # 3. Promote required top-level fields from params if absent.
     #    ImportV1ChartSchema marks both viz_type and slice_name as required=True.
@@ -198,6 +207,16 @@ def normalize_chart(
         data["viz_type"] = params["viz_type"]
     if "slice_name" not in data:
         data["slice_name"] = _slice_name_from_filename(yaml_file)
+
+    # Warn about charts that have no dataset_uuid — they are missing a required
+    # field (ImportV1ChartSchema.dataset_uuid is required=True) and will fail
+    # schema validation on import.  These charts need to be re-exported from
+    # Superset so they receive a proper dataset_uuid.
+    if "dataset_uuid" not in data:
+        console.print(
+            f"  [yellow]⚠ {yaml_file.name} has no dataset_uuid — "
+            "re-export from Superset to obtain a proper UUID[/yellow]"
+        )
 
     # 4. Sort all dict keys alphabetically for deterministic output
     data = _sorted_dict(data)

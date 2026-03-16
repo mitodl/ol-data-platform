@@ -7,6 +7,7 @@ params:
   annotation_layers: []
   color_scheme: supersetColors
   comparison_type: values
+  datasource: 2__table
   extra_form_data: {}
   forecastInterval: 0.8
   forecastPeriods: 10

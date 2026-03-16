@@ -7,6 +7,7 @@ params:
   all_columns: []
   color_pn: true
   comparison_type: values
+  datasource: 23__table
   extra_form_data: {}
   groupby:
   - user_id

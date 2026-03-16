@@ -22,6 +22,7 @@ params:
       d3TimeFormat: '%m/%d/%Y'
   comparison_type: values
   conditional_formatting: []
+  datasource: 6__table
   extra_form_data: {}
   groupby:
   - courserun_readable_id
