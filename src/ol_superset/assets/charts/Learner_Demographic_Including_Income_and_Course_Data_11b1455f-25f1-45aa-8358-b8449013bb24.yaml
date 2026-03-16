@@ -29,10 +29,10 @@ params:
   - first_course_start_datetime
   - last_course_start_datetime
   - num_of_course_enrolled
-  - DEDP_Course_Cert_Count
-  - Any_DEDP_Program_Cert_Ind
-  - DEDP_International_Program_Cert_Ind
-  - DEDP_Public_Policy_Program_Cert_Ind
+  - dedp_course_cert_count
+  - any_dedp_program_cert_ind
+  - dedp_international_program_cert_ind
+  - dedp_public_policy_program_cert_ind
   order_by_cols: []
   order_desc: true
   percent_metrics: []
