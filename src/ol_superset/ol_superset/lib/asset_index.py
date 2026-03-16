@@ -178,9 +178,7 @@ def _cols_from_sql_expression(sql: str) -> set[str]:
     if tree is None:
         return set()
     return {
-        col.name
-        for col in tree.find_all(exp.Column)
-        if col.name and col.name != "*"
+        col.name for col in tree.find_all(exp.Column) if col.name and col.name != "*"
     }
 
 
