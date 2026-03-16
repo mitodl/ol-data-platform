@@ -47,10 +47,11 @@ def validate(
     Checks YAML syntax, counts assets, and looks for common issues
     like embedded passwords in database configs.
 
-    When --dbt-dir is supplied, also validates the full dependency chain:
-    Dashboard chart UUID references, Chart dataset UUID references,
-    Dataset table names and schemas against dbt models, and column name
-    consistency across the entire chain.
+    Always validates the asset dependency chain:
+    Dashboard chart UUID references, and Chart dataset UUID references.
+
+    When --dbt-dir is supplied, also validates Dataset table names and schemas
+    against dbt models, and column name consistency across the entire chain.
 
     Examples:
         Validate default assets directory:
@@ -173,17 +174,27 @@ def validate(
             )
 
     # Optionally validate the full dbt dependency chain
-    errors = 0
+    print()
+    total_steps = 4 if dbt_dir_path is not None else 2
+    errors, warnings, asset_index = _validate_asset_references(
+        assets_dir=assets_dir,
+        existing_warnings=warnings,
+        total_steps=total_steps,
+    )
+
     if dbt_dir_path is not None:
-        print()
-        errors, warnings = _validate_dbt_chain(
-            assets_dir=assets_dir,
+        dbt_errors, warnings = _validate_dbt_chain(
+            index=asset_index,
             dbt_dir=Path(dbt_dir_path).resolve(),
             existing_warnings=warnings,
         )
+        errors += dbt_errors
     else:
         print()
-        print("Skipping dbt dependency chain checks (use --dbt-dir to enable).")
+        print(
+            "  ℹ️  Dataset → dbt model and column-level checks skipped "
+            "(use --dbt-dir to enable)."
+        )
 
     print()
     print("=" * 50)
@@ -208,45 +219,28 @@ def validate(
         sys.exit(1)
 
 
-def _validate_dbt_chain(
+def _validate_asset_references(
     assets_dir: Path,
-    dbt_dir: Path,
     existing_warnings: int,
-) -> tuple[int, int]:
+    *,
+    total_steps: int = 2,
+) -> tuple[int, int, "AssetIndex"]:
     """
-    Validate the full Dashboard → Chart → Dataset → dbt model dependency chain.
+    Validate Dashboard → Chart and Chart → Dataset UUID cross-references.
+
+    Always runs regardless of whether a dbt directory is provided.
 
     Args:
         assets_dir: Path to the Superset assets directory.
-        dbt_dir: Path to the dbt project root.
         existing_warnings: Warning count accumulated by the caller so far.
+        total_steps: Total number of validation steps (used for labelling).
 
     Returns:
-        Tuple of (error_count, warning_count) where warning_count includes
-        existing_warnings plus any new ones found here.
+        Tuple of (error_count, warning_count, asset_index).
     """
-    print("Checking dbt dependency chain...")
+    print("Checking asset dependency chain...")
 
-    if not dbt_dir.exists():
-        print(
-            f"  ❌ dbt directory not found: {dbt_dir}",
-            file=sys.stderr,
-        )
-        return 1, existing_warnings
-
-    # Load dbt registry
-    try:
-        dbt_registry = build_dbt_registry(dbt_dir)
-    except Exception as exc:  # noqa: BLE001
-        print(f"  ❌ Failed to load dbt registry: {exc}", file=sys.stderr)
-        return 1, existing_warnings
-
-    model_count = len(dbt_registry.models)
-    print(f"  Loaded {model_count} dbt models from {dbt_dir.name}/")
-
-    # Build asset index
     index: AssetIndex = build_asset_index(assets_dir)
-
     errors = 0
     warnings = existing_warnings
 
@@ -254,7 +248,7 @@ def _validate_dbt_chain(
     # 1. Dashboard → Chart: all referenced chart UUIDs must exist locally
     # ------------------------------------------------------------------
     print()
-    print("  [1/4] Dashboard → Chart UUID references...")
+    print(f"  [1/{total_steps}] Dashboard → Chart UUID references...")
     dashboard_errors = 0
     for dash in index.dashboards.values():
         for chart_uuid in dash.chart_uuids:
@@ -273,7 +267,7 @@ def _validate_dbt_chain(
     # 2. Chart → Dataset: dataset_uuid must reference an existing dataset
     # ------------------------------------------------------------------
     print()
-    print("  [2/4] Chart → Dataset UUID references...")
+    print(f"  [2/{total_steps}] Chart → Dataset UUID references...")
     chart_uuid_errors = 0
     for chart in index.charts.values():
         if chart.dataset_uuid is None:
@@ -287,6 +281,49 @@ def _validate_dbt_chain(
             chart_uuid_errors += 1
     if chart_uuid_errors == 0:
         print(f"    ✅ All {len(index.charts)} chart(s) have valid dataset references")
+
+    return errors, warnings, index
+
+
+def _validate_dbt_chain(
+    index: AssetIndex,
+    dbt_dir: Path,
+    existing_warnings: int,
+) -> tuple[int, int]:
+    """
+    Validate the Dataset → dbt model and column-level dependency chain (steps 3–4).
+
+    Requires a pre-built AssetIndex (from _validate_asset_references) so that
+    the index is not reconstructed unnecessarily.
+
+    Args:
+        index: Pre-built AssetIndex for the assets directory.
+        dbt_dir: Path to the dbt project root.
+        existing_warnings: Warning count accumulated by the caller so far.
+
+    Returns:
+        Tuple of (error_count, warning_count) for steps 3–4 only.
+    """
+
+    if not dbt_dir.exists():
+        print(
+            f"  ❌ dbt directory not found: {dbt_dir}",
+            file=sys.stderr,
+        )
+        return 1, existing_warnings
+
+    # Load dbt registry
+    try:
+        dbt_registry = build_dbt_registry(dbt_dir)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ❌ Failed to load dbt registry: {exc}", file=sys.stderr)
+        return 1, existing_warnings
+
+    model_count = len(dbt_registry.models)
+    print(f"  Loaded {model_count} dbt models from {dbt_dir.name}/")
+
+    errors = 0
+    warnings = existing_warnings
 
     # ------------------------------------------------------------------
     # 3. Dataset → dbt model: table_name must match a known dbt model

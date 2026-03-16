@@ -10,6 +10,72 @@ from preset_cli.auth.oauth_interactive import InteractiveOAuthAuth
 from yarl import URL
 
 
+class SupersetTokenAuth(requests.auth.AuthBase):
+    """
+    requests.AuthBase that integrates InteractiveOAuthAuth with automatic
+    token refresh on 401 "Token has expired" responses.
+
+    Tokens are fetched via InteractiveOAuthAuth.get_token() on every request,
+    which transparently handles local-cache expiry and refresh-token rotation.
+    When the Superset server rejects a token with 401 (e.g. because the server
+    clock differs from the local cache expiry), the auth handler forces an
+    immediate refresh-token exchange and retries the original request once —
+    avoiding interactive browser prompts as long as the refresh token is valid.
+    """
+
+    def __init__(self, oauth_auth: InteractiveOAuthAuth) -> None:
+        self._oauth_auth = oauth_auth
+
+    def __call__(self, r: requests.PreparedRequest) -> requests.PreparedRequest:
+        r.headers["Authorization"] = f"Bearer {self._oauth_auth.get_token()}"
+        r.register_hook("response", self._handle_401)
+        return r
+
+    def _force_refresh(self) -> str:
+        """Force a token refresh via the refresh-token grant, bypassing local cache."""
+        try:
+            # Directly invoke the refresh-token grant without re-checking local expiry.
+            # _refresh_access_token() updates _access_token, _token_expires, and
+            # re-writes the cache file, keeping subsequent calls efficient.
+            return self._oauth_auth._refresh_access_token()  # noqa: SLF001
+        except Exception:
+            # Refresh token itself has expired — fall back to interactive browser flow.
+            self._oauth_auth.clear_cached_tokens()
+            return self._oauth_auth.get_token()
+
+    def _handle_401(
+        self, response: requests.Response, **kwargs: object
+    ) -> requests.Response:
+        if response.status_code != 401:
+            return response
+
+        # Only retry when Superset explicitly signals token expiry.
+        try:
+            msg = response.json().get("msg", "").lower()
+        except Exception:
+            msg = ""
+
+        if "expired" not in msg:
+            return response
+
+        # Consume response body so the connection can be reused.
+        _ = response.content
+        response.raw.release_conn()
+
+        new_token = self._force_refresh()
+
+        # Retry the original request with the refreshed token.
+        prep = response.request.copy()
+        prep.headers["Authorization"] = f"Bearer {new_token}"
+        # Remove this hook from the retry to prevent infinite recursion.
+        prep.deregister_hook("response", self._handle_401)
+
+        new_response = response.connection.send(prep, **kwargs)
+        new_response.history.append(response)
+        new_response.request = prep
+        return new_response
+
+
 def get_instance_config(instance_name: str) -> dict[str, str]:
     """
     Get Superset instance configuration from sup config.
@@ -45,20 +111,15 @@ def get_instance_config(instance_name: str) -> dict[str, str]:
         return {}
 
 
-def get_oauth_token_with_pkce(instance_name: str) -> str | None:
+def _create_oauth_auth(instance_name: str) -> InteractiveOAuthAuth | None:
     """
-    Get OAuth access token for a Superset instance, using cached tokens when available.
-
-    Tokens are cached in ~/.sup/tokens/<hostname>.json and reused across
-    invocations. The interactive browser flow (PKCE) is only triggered when no
-    valid cached token exists and the refresh token has also expired, matching
-    the behavior of the sup CLI.
+    Build an InteractiveOAuthAuth instance for the given Superset instance.
 
     Args:
         instance_name: Name of the instance (e.g., 'superset-qa')
 
     Returns:
-        Access token string or None if failed
+        Configured InteractiveOAuthAuth object or None if configuration is missing
     """
     config = get_instance_config(instance_name)
     if not config:
@@ -80,13 +141,37 @@ def get_oauth_token_with_pkce(instance_name: str) -> str | None:
         return None
 
     try:
-        auth = InteractiveOAuthAuth(
+        return InteractiveOAuthAuth(
             base_url=URL(base_url),
             authorization_url=URL(oauth_authorization_url),
             token_url=URL(oauth_token_url),
             client_id=client_id,
             scope=scope,
         )
+    except Exception as e:
+        print(f"  ❌ Error initialising OAuth auth: {e}", file=sys.stderr)
+        return None
+
+
+def get_oauth_token_with_pkce(instance_name: str) -> str | None:
+    """
+    Get OAuth access token for a Superset instance, using cached tokens when available.
+
+    Tokens are cached in ~/.sup/tokens/<hostname>.json and reused across
+    invocations. The interactive browser flow (PKCE) is only triggered when no
+    valid cached token exists and the refresh token has also expired, matching
+    the behavior of the sup CLI.
+
+    Args:
+        instance_name: Name of the instance (e.g., 'superset-qa')
+
+    Returns:
+        Access token string or None if failed
+    """
+    auth = _create_oauth_auth(instance_name)
+    if not auth:
+        return None
+    try:
         return auth.get_token()
     except Exception as e:
         print(f"  ❌ Error obtaining OAuth token: {e}", file=sys.stderr)
@@ -97,29 +182,32 @@ def create_authenticated_session(instance_name: str) -> requests.Session | None:
     """
     Create an authenticated requests session for Superset API.
 
+    The session uses SupersetTokenAuth which calls InteractiveOAuthAuth.get_token()
+    on every request. This means token refresh (via the OAuth refresh-token grant)
+    happens automatically when the local cache detects expiry, and a forced refresh
+    is triggered on any 401 "Token has expired" response from the server — without
+    requiring browser interaction as long as the refresh token remains valid.
+
     Args:
         instance_name: Name of the instance (e.g., 'superset-qa')
 
     Returns:
         Authenticated requests Session or None if failed
     """
-    config = get_instance_config(instance_name)
-    if not config or not config.get("url"):
+    oauth_auth = _create_oauth_auth(instance_name)
+    if not oauth_auth:
         return None
 
-    # Get OAuth token
-    access_token = get_oauth_token_with_pkce(instance_name)
-    if not access_token:
+    # Eagerly validate credentials so callers get an immediate failure on bad auth.
+    try:
+        oauth_auth.get_token()
+    except Exception as e:
+        print(f"  ❌ Error obtaining OAuth token: {e}", file=sys.stderr)
         return None
 
-    # Create session with auth header
     session = requests.Session()
-    session.headers.update(
-        {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        }
-    )
+    session.auth = SupersetTokenAuth(oauth_auth)
+    session.headers.update({"Content-Type": "application/json"})
 
     return session
 
