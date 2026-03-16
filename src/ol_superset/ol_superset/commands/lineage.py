@@ -140,9 +140,7 @@ def _build_graph(
                 continue
 
             dataset = (
-                index.datasets.get(chart.dataset_uuid)
-                if chart.dataset_uuid
-                else None
+                index.datasets.get(chart.dataset_uuid) if chart.dataset_uuid else None
             )
 
             dataset_out: dict | None = None
@@ -216,10 +214,7 @@ def _render_text(
                     if ds["is_virtual"]:
                         dbt_tag = "  →  [virtual SQL]"
                     elif ds["dbt_model"]:
-                        dbt_tag = (
-                            f"  →  dbt:{ds['dbt_layer']}."
-                            f"{ds['dbt_model']}"
-                        )
+                        dbt_tag = f"  →  dbt:{ds['dbt_layer']}.{ds['dbt_model']}"
                     else:
                         dbt_tag = "  →  ⚠️  no dbt model"
                 print(
