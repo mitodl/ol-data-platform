@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: 836dd1f0-3e2e-45a9-a721-62a471a43de8  # marts__combined_course_enrollment_detail
+dataset_uuid: a9301703-0ac1-4eb7-a409-f65da5d8cba1  # Enrollment_Activity_Counts_Dataset
 description: null
 params:
   adhoc_filters:
