@@ -5,11 +5,16 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from cyclopts import Parameter
 
-from ol_superset.lib.asset_index import AssetIndex, DatasetAsset, build_asset_index
+from ol_superset.lib.asset_index import (
+    AssetIndex,
+    DashboardAsset,
+    DatasetAsset,
+    build_asset_index,
+)
 from ol_superset.lib.dbt_registry import DbtRegistry, build_dbt_registry
 from ol_superset.lib.utils import get_assets_dir
 
@@ -123,10 +128,10 @@ def _dataset_dbt_label(dataset: DatasetAsset, dbt_registry: DbtRegistry | None) 
 
 
 def _build_graph(
-    dashboards: list,
+    dashboards: list[DashboardAsset],
     index: AssetIndex,
     dbt_registry: DbtRegistry | None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Build a structured list of dashboard → chart → dataset → model dicts."""
     result = []
     for dash in dashboards:
@@ -143,7 +148,7 @@ def _build_graph(
                 index.datasets.get(chart.dataset_uuid) if chart.dataset_uuid else None
             )
 
-            dataset_out: dict | None = None
+            dataset_out: dict[str, Any] | None = None
             if dataset is not None:
                 model = None
                 if dbt_registry and not dataset.sql:
@@ -193,7 +198,7 @@ def _build_graph(
 
 
 def _render_text(
-    dashboards: list,
+    dashboards: list[DashboardAsset],
     index: AssetIndex,
     dbt_registry: DbtRegistry | None,
 ) -> None:
@@ -225,7 +230,7 @@ def _render_text(
 
 
 def _render_json(
-    dashboards: list,
+    dashboards: list[DashboardAsset],
     index: AssetIndex,
     dbt_registry: DbtRegistry | None,
 ) -> None:
@@ -234,7 +239,7 @@ def _render_json(
 
 
 def _render_mermaid(
-    dashboards: list,
+    dashboards: list[DashboardAsset],
     index: AssetIndex,
     dbt_registry: DbtRegistry | None,
 ) -> None:

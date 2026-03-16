@@ -189,7 +189,7 @@ def build_dbt_registry(dbt_dir: Path) -> DbtRegistry:
     return registry
 
 
-def extract_sql_table_refs(sql: str) -> set[str]:
+def extract_sql_table_refs(sql: str | None) -> set[str]:
     """
     Extract table names referenced in a virtual dataset SQL string.
 
