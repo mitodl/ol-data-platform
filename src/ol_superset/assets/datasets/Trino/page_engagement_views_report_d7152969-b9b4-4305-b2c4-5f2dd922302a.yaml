@@ -158,7 +158,7 @@ columns:
   python_date_format: null
   type: INTEGER
   verbose_name: null
-database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929  # Trino
 default_endpoint: null
 description: Auto refreshed at 2026-03-13T15:46:32.393334+00:00
 extra: null
