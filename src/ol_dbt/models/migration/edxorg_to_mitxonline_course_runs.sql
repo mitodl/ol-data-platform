@@ -61,6 +61,7 @@ select distinct
     , edx_courseruns.courserun_title
     , edx_courseruns.courseware_id
     , edx_courseruns.run_tag
+    , {{ from_iso8601_timestamp('edx_courseruns.courserun_enrollment_start_date') }} as enrollment_start
     , least(
         {{ from_iso8601_timestamp('coalesce(edx_courseruns.courserun_enrollment_end_date, edx_courseruns.courserun_end_date)') }}
          ---default to current timestamp - 1 day to avoid having courses open for enrollment on mitxonline
