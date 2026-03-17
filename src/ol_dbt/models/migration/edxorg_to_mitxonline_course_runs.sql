@@ -89,5 +89,4 @@ left join mitxonline_courseruns
 left join edx_signatories
     on edx_courseruns.courseware_id = edx_signatories.courserun_readable_id
 where
-    {{ from_iso8601_timestamp('edx_courseruns.courserun_end_date') }} < current_date  -- unenrollable runs
-    and mitxonline_courseruns.course_number is null  -- not already in mitxonline course runs
+    mitxonline_courseruns.course_number is null
