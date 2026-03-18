@@ -1132,3 +1132,41 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["user_email", "chapter_title", "courserun_readable_id", "platform"]
+
+- name: course_staff_report
+  description: Report of course staff members (instructors, staff, etc.) across all
+    platforms and their last course activity date
+  columns:
+  - name: platform
+    description: string, name of the platform (e.g. MITx Online, xPRO, edX.org, Residential
+      MITx)
+    tests:
+    - not_null
+  - name: user_username
+    description: string, username of the course staff member on the platform
+    tests:
+    - not_null
+  - name: user_email
+    description: string, email address of the course staff member
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: courserun_start_on
+    description: timestamp, date and time when the course run starts. May be null.
+  - name: courserun_end_on
+    description: timestamp, date and time when the course run ends. May be null.
+  - name: courserun_is_current
+    description: boolean, indicating if the course run is currently running. True
+      if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
+      is in the past and courserun_end_on is in the future.
+  - name: course_roles
+    description: string, comma-separated list of privilege levels assigned to the
+      user for working in this course run (e.g. instructor, staff, beta_testers)
+  - name: last_course_activity_date
+    description: date, the most recent date the staff member had any course activity
+      in this course run. May be null if the staff member has no recorded course activity.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "user_username", "courserun_readable_id"]
