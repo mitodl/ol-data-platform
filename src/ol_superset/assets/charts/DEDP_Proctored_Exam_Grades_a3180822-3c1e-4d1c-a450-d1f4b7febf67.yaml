@@ -1,0 +1,44 @@
+cache_timeout: null
+certification_details: null
+certified_by: null
+dataset_uuid: b22c2064-0dd4-4e1a-9cdf-a74a9302f39d  # marts__micromasters_dedp_exam_grades
+description: null
+params:
+  adhoc_filters: []
+  all_columns:
+  - course_number
+  - course_title
+  - examrun_courserun_readable_id
+  - user_edxorg_username
+  - user_mitxonline_username
+  - user_full_name
+  - user_micromasters_email
+  - user_mitxonline_email
+  - proctoredexamgrade_passing_grade
+  - proctoredexamgrade_percentage_grade
+  - proctoredexamgrade_created_on
+  - semester
+  allow_render_html: true
+  color_pn: false
+  comparison_color_scheme: Green
+  comparison_type: values
+  conditional_formatting: []
+  extra_form_data: {}
+  groupby: []
+  include_search: true
+  order_by_cols: []
+  order_desc: true
+  percent_metric_calculation: row_limit
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 10000
+  server_page_length: 10
+  show_cell_bars: false
+  table_timestamp_format: smart_date
+  temporal_columns_lookup: {}
+  time_grain_sqla: P1D
+  viz_type: table
+slice_name: DEDP Proctored Exam Grades
+uuid: a3180822-3c1e-4d1c-a450-d1f4b7febf67
+version: 1.0.0
+viz_type: table
