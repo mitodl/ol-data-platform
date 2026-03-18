@@ -11,6 +11,7 @@ Checks:
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -513,6 +514,18 @@ def validate(
             ),
         ),
     ] = None,
+    auto_compile: Annotated[
+        bool,
+        Parameter(
+            name=["--auto-compile"],
+            help=(
+                "Run 'dbt parse' before validation to regenerate manifest.json. "
+                "This is fast and offline (no database required). "
+                "Use when you want the manifest to reflect recent model changes. "
+                "For compiled SQL accuracy, run 'dbt compile' manually first."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
@@ -565,6 +578,9 @@ def validate(
         Skip a specific check:
             ol-dbt validate --skip select_star
 
+        Regenerate manifest before validating:
+            ol-dbt validate --auto-compile
+
     """
     all_checks = {"yaml_sql_sync", "upstream_refs", "docs_coverage", "yaml_integrity", "select_star"}
     if skip_checks and only_checks:
@@ -593,6 +609,28 @@ def validate(
         sys.exit(1)
 
     models_dir = dbt_dir / "models"
+
+    # Auto-compile: run dbt parse to regenerate manifest.json before validation.
+    # dbt parse is fast and offline (no database required).
+    if auto_compile:
+        if output_format == "text":
+            console.print("[dim]Running: dbt parse ...[/]")
+        try:
+            subprocess.run(  # noqa: S603, S607
+                ["dbt", "parse"],
+                cwd=str(dbt_dir),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            if output_format == "text":
+                console.print("[dim]dbt parse succeeded — manifest regenerated.[/]")
+        except subprocess.CalledProcessError as exc:
+            err_console.print(f"[yellow]Warning:[/] dbt parse failed: {exc.stderr[-200:] if exc.stderr else exc}")
+            err_console.print("  Validation will continue with existing or no manifest.")
+        except FileNotFoundError:
+            err_console.print("[yellow]Warning:[/] 'dbt' command not found; skipping auto-compile.")
+            err_console.print("  Install dbt and ensure it is on PATH, or run dbt parse manually.")
 
     # Resolve compiled SQL directory (Jinja-free, most accurate)
     compiled_dir: Path | None = None
