@@ -202,6 +202,8 @@ class ParsedModel:
     """Non-None if sqlglot could not parse the SQL."""
     compiled_path: Path | None = None
     """Path to the compiled SQL file used for parsing, if any."""
+    source_path: Path | None = None
+    """Path to the raw (Jinja) SQL source file."""
 
 
 def _extract_select_columns(select: exp.Select) -> tuple[set[str], bool]:
@@ -221,45 +223,95 @@ def _extract_select_columns(select: exp.Select) -> tuple[set[str], bool]:
     return cols, has_star
 
 
-def _build_cte_column_map(parsed: exp.Expression) -> dict[str, tuple[set[str], bool]]:
-    """Build a map of CTE alias -> ``(columns, has_star)`` for all CTEs in *parsed*.
+def _build_cte_column_map(parsed: exp.Expression) -> dict[str, tuple[set[str], bool, str]]:
+    """Build a map of CTE alias -> ``(columns, has_star, star_source)`` for all CTEs.
 
     Iterates CTEs in definition order so later CTEs can reference earlier ones.
     Works for both ``exp.Select`` (sqlglot's representation of ``WITH … SELECT``)
     and ``exp.With`` nodes.
+
+    Handles three CTE body types:
+
+    * ``exp.Select`` — standard SELECT; columns extracted directly.
+    * ``exp.Union`` — UNION ALL / UNION model; the *leftmost* SELECT branch is used
+      to derive column names (all branches must share the same schema).
+    * Anything else — skipped (no column info available).
+
+    A CTE whose own SELECT * draws from another already-resolved CTE is expanded
+    inline so that downstream CTEs (and the outermost SELECT) can in turn resolve
+    their stars through it.
+
+    ``star_source`` is the name of the relation that an unresolved CTE star draws
+    from, enabling callers to trace passthrough CTE chains back to the original
+    ref/source placeholder.
     """
-    cte_cols: dict[str, tuple[set[str], bool]] = {}
+    cte_cols: dict[str, tuple[set[str], bool, str]] = {}
 
     for cte in parsed.find_all(exp.CTE):
         cte_name = cte.alias.lower()
         cte_query = cte.args.get("this")
-        if not isinstance(cte_query, exp.Select):
+
+        # Resolve the representative SELECT for this CTE body.
+        if isinstance(cte_query, exp.Select):
+            cte_select: exp.Select | None = cte_query
+        elif isinstance(cte_query, exp.Union):
+            # UNION ALL / UNION: take the leftmost branch as the authoritative schema.
+            cte_select = _leftmost_select_from_union(cte_query)
+        else:
             continue
-        cols, has_star = _extract_select_columns(cte_query)
+
+        if cte_select is None:
+            continue
+
+        cols, has_star = _extract_select_columns(cte_select)
         if has_star:
             # Try to resolve the star from an already-processed CTE
-            resolved, still_star = _try_resolve_star(cte_query, cte_cols)
+            resolved, still_star = _try_resolve_star(cte_select, cte_cols)
             if not still_star:
-                cte_cols[cte_name] = (cols | resolved, False)
+                cte_cols[cte_name] = (cols | resolved, False, "")
                 continue
-        cte_cols[cte_name] = (cols, has_star)
+        star_src = _get_star_source(cte_select) if has_star else ""
+        cte_cols[cte_name] = (cols, has_star, star_src)
 
     return cte_cols
 
 
 def _try_resolve_star(
     select: exp.Select,
-    cte_cols: dict[str, tuple[set[str], bool]],
+    cte_cols: dict[str, tuple[set[str], bool, str]],
 ) -> tuple[set[str], bool]:
     """Attempt to expand SELECT * by resolving the source from *cte_cols*.
 
     Returns ``(columns, has_unresolved_star)``.  When the star's source is a
     known CTE with fully resolved columns, returns those columns and False.
     Otherwise returns an empty set and True.
+
+    Also handles ``SELECT * FROM (VALUES …) AS alias (col1, col2, …)`` by
+    extracting the column names from the subquery alias list.
     """
     from_clause = select.args.get("from_")
     if from_clause is None:
         return set(), True
+
+    # VALUES inline table: SELECT * FROM (VALUES …) AS alias (col1, col2)
+    # sqlglot represents this as a Values node directly under From (not wrapped in Subquery).
+    values_node = from_clause.find(exp.Values)
+    if values_node is not None:
+        alias_node = from_clause.find(exp.TableAlias)
+        if alias_node is not None:
+            alias_cols = alias_node.args.get("columns") or []
+            if alias_cols:
+                return {c.name.lower() for c in alias_cols if hasattr(c, "name")}, False
+
+    # VALUES subquery: SELECT * FROM (VALUES …) AS alias (col1, col2)
+    # sqlglot represents this as a Subquery whose alias has a columns list.
+    subquery = from_clause.find(exp.Subquery)
+    if subquery is not None:
+        alias_node = subquery.args.get("alias")
+        if alias_node is not None:
+            alias_cols = alias_node.args.get("columns") or []
+            if alias_cols:
+                return {c.name.lower() for c in alias_cols if hasattr(c, "name")}, False
 
     # Gather FROM source + any JOINs
     joins = select.args.get("joins") or []
@@ -276,7 +328,7 @@ def _try_resolve_star(
     if len(source_tables) == 1:
         source_name = source_tables[0]
         if source_name in cte_cols:
-            resolved_cols, cte_has_star = cte_cols[source_name]
+            resolved_cols, cte_has_star, _src = cte_cols[source_name]
             if not cte_has_star:
                 return resolved_cols, False
 
@@ -346,6 +398,42 @@ def _get_star_source(select: exp.Select) -> str:
     return table.alias_or_name.lower() if table else ""
 
 
+def _resolve_star_source_through_ctes(
+    star_source: str,
+    cte_cols: dict[str, tuple[set[str], bool, str]],
+) -> str:
+    """Walk through thin passthrough CTEs to find the ultimate star source.
+
+    Some models have a CTE that is just ``SELECT * FROM ref_<upstream>`` and
+    then the final SELECT does ``SELECT * FROM that_cte``.  The outermost
+    ``star_source`` is the CTE name, but for registry-based resolution we
+    need the actual ref/source placeholder.
+
+    Follows the chain up to 20 hops; returns the first source that is NOT
+    itself a passthrough CTE (i.e., a ref/source placeholder or a CTE with
+    explicit columns).
+    """
+    seen: set[str] = set()
+    current = star_source
+    for _ in range(20):
+        if current in seen:
+            break
+        seen.add(current)
+        entry = cte_cols.get(current)
+        if entry is None:
+            # Not a known CTE — it's an external table/ref/source placeholder
+            break
+        _cols, still_star, inner_src = entry
+        if not still_star:
+            # This CTE resolved; the chain stops here (use current CTE as source)
+            break
+        if not inner_src or inner_src == current:
+            break
+        # Passthrough: this CTE's own star draws from inner_src → follow it
+        current = inner_src
+    return current
+
+
 def parse_model_sql(name: str, sql: str) -> ParsedModel:
     """Parse *sql* content for model *name* and extract column metadata."""
     stripped = strip_jinja(sql)
@@ -387,10 +475,13 @@ def parse_model_sql(name: str, sql: str) -> ParsedModel:
             result.has_star = False
             result.star_resolved = True
         else:
-            # Record that star is present and from which source
+            # Record that star is present and from which source.
+            # If the direct source is a passthrough CTE, trace it back to the
+            # actual ref/source placeholder so registry-based resolution works.
+            raw_src = _get_star_source(select)
             result.output_columns = cols  # explicit aliases alongside * (rare but valid)
             result.has_star = True
-            result.star_source = _get_star_source(select)
+            result.star_source = _resolve_star_source_through_ctes(raw_src, cte_cols)
     else:
         result.output_columns = cols
         result.has_star = False
@@ -417,6 +508,7 @@ def parse_model_file(path: Path, compiled_dir: Path | None = None) -> ParsedMode
             # Column extraction from compiled SQL (accurate, Jinja-free).
             result = _parse_clean_sql(path.stem, compiled_sql)
             result.compiled_path = compiled_path
+            result.source_path = path
             # Lineage (refs/sources) must come from the raw SQL because compiled
             # SQL replaces {{ ref('x') }} with physical relation names that have no
             # reliable 'ref_' prefix convention.
@@ -427,7 +519,9 @@ def parse_model_file(path: Path, compiled_dir: Path | None = None) -> ParsedMode
             result.source_placeholder_map = jinja_result.source_placeholder_map
             return result
 
-    return parse_model_sql(path.stem, raw_sql)
+    result = parse_model_sql(path.stem, raw_sql)
+    result.source_path = path
+    return result
 
 
 def _find_compiled_sql(model_name: str, compiled_dir: Path) -> tuple[str | None, Path | None]:
@@ -474,9 +568,10 @@ def _parse_clean_sql(name: str, sql: str) -> ParsedModel:
             result.output_columns = cols | resolved_star
             result.star_resolved = True
         else:
+            raw_src = _get_star_source(select)
             result.output_columns = cols
             result.has_star = True
-            result.star_source = _get_star_source(select)
+            result.star_source = _resolve_star_source_through_ctes(raw_src, cte_cols)
     else:
         result.output_columns = cols
 

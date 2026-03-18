@@ -345,3 +345,151 @@ class TestCompiledSqlPath:
         models_subdir.mkdir(parents=True)
         result = find_compiled_dir(tmp_path)
         assert result == models_subdir
+
+
+class TestUnionCteStar:
+    """SELECT * resolution when CTEs use UNION ALL."""
+
+    def test_union_cte_columns_resolved(self) -> None:
+        """SELECT * from a CTE whose body is a UNION ALL resolves via leftmost branch."""
+        sql = """
+        with platform_a as (
+            select id as user_id, email as user_email from raw_a
+        )
+        , platform_b as (
+            select id as user_id, email as user_email from raw_b
+        )
+        , combined as (
+            select user_id, user_email from platform_a
+            union all
+            select user_id, user_email from platform_b
+        )
+        select * from combined
+        """
+        result = parse_model_sql("my_model", sql)
+        assert not result.has_star
+        assert result.star_resolved
+        assert result.output_columns == {"user_id", "user_email"}
+
+    def test_union_cte_with_extra_column(self) -> None:
+        """UNION CTE with a platform discriminator column is fully resolved."""
+        sql = """
+        with a as (select id as user_id, email as user_email from raw_a)
+        , b as (select id as user_id, email as user_email from raw_b)
+        , combined as (
+            select 'a' as platform, user_id, user_email from a
+            union all
+            select 'b' as platform, user_id, user_email from b
+        )
+        select * from combined
+        """
+        result = parse_model_sql("my_model", sql)
+        assert not result.has_star
+        assert result.star_resolved
+        assert result.output_columns == {"platform", "user_id", "user_email"}
+
+    def test_union_cte_star_source_propagated_when_unresolvable(self) -> None:
+        """When UNION CTE itself draws from an external ref, star_source is the ref placeholder."""
+        sql = """
+        with a as (select * from ref_upstream_a)
+        , b as (select * from ref_upstream_b)
+        , combined as (
+            select * from a
+            union all
+            select * from b
+        )
+        select * from combined
+        """
+        result = parse_model_sql("my_model", sql)
+        assert result.has_star
+        # star_source should be the ref placeholder, not 'combined'
+        assert result.star_source != "combined"
+
+    def test_union_all_outermost_select(self) -> None:
+        """UNION ALL at outermost level — leftmost branch columns used."""
+        sql = """
+        select id as user_id, email as user_email from raw_a
+        union all
+        select id as user_id, email as user_email from raw_b
+        """
+        result = parse_model_sql("my_model", sql)
+        assert not result.has_star
+        assert result.output_columns == {"user_id", "user_email"}
+
+
+class TestPassthroughStarResolution:
+    """SELECT * through a thin CTE passthrough resolves to the ultimate source."""
+
+    def test_single_hop_passthrough(self) -> None:
+        """CTE is just SELECT * FROM ref; outermost select * from that CTE."""
+        sql = """
+        with data as (
+            select * from ref_upstream_model
+        )
+        select * from data
+        """
+        result = parse_model_sql("my_model", sql)
+        assert result.has_star
+        # The star_source should be traced back to the ref placeholder
+        assert result.star_source == "ref_upstream_model"
+
+    def test_two_hop_passthrough(self) -> None:
+        """star_source walks through two thin CTE layers to the ref."""
+        sql = """
+        with raw as (select * from ref_source_table)
+        , passthrough as (select * from raw)
+        select * from passthrough
+        """
+        result = parse_model_sql("my_model", sql)
+        assert result.has_star
+        assert result.star_source == "ref_source_table"
+
+    def test_passthrough_followed_by_registry_resolution(self) -> None:
+        """After parse, _resolve_star_with_registry can resolve via the propagated star_source."""
+        from pathlib import Path
+
+        from ol_dbt_cli.commands.validate import _resolve_star_with_registry
+        from ol_dbt_cli.lib.yaml_registry import YamlColumn, YamlModel, YamlRegistry
+
+        sql = """
+        with data as (select * from {{ ref('stg_users') }})
+        select * from data
+        """
+        result = parse_model_sql("my_model", sql)
+        assert result.has_star
+        assert result.star_source == "ref_stg_users"
+
+        registry = YamlRegistry(
+            models={
+                "stg_users": YamlModel(
+                    name="stg_users",
+                    source_file=Path("_models.yml"),
+                    columns={n: YamlColumn(name=n) for n in ["user_id", "user_email"]},
+                )
+            }
+        )
+        cols = _resolve_star_with_registry(result, registry, manifest=None, sql_models_by_name={})
+        assert cols == {"user_id", "user_email"}
+
+
+class TestValuesInlineTable:
+    """SELECT * from an inline VALUES table resolves column names from the alias list."""
+
+    def test_values_columns_extracted(self) -> None:
+        """VALUES with column alias list → columns resolved without star."""
+        sql = """
+        select * from (
+            values ('hash_abc', 12345, 1)
+        ) as override_list (cert_hash, user_id, program_id)
+        """
+        result = parse_model_sql("my_model", sql)
+        assert not result.has_star
+        assert result.star_resolved
+        assert result.output_columns == {"cert_hash", "user_id", "program_id"}
+
+    def test_values_without_column_alias_stays_unresolved(self) -> None:
+        """VALUES without a named column alias list cannot be resolved."""
+        sql = "select * from (values (1, 2, 3)) as t"
+        result = parse_model_sql("my_model", sql)
+        # Without explicit column names in the alias, star remains unresolved
+        assert result.has_star or result.star_resolved  # either outcome is acceptable

@@ -13,6 +13,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
+import sqlglot
+import sqlglot.expressions as exp
 from cyclopts import Parameter
 from rich.console import Console
 
@@ -28,9 +30,11 @@ from ol_dbt_cli.lib.manifest import (
 )
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
+    _leftmost_select_from_union,
     find_compiled_dir,
     parse_model_file,
     parse_model_sql_at_content,
+    strip_jinja,
 )
 from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
 
@@ -114,6 +118,90 @@ def _common_prefix_ratio(a: str, b: str) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Column-read analysis (for impact false-negative detection)
+# ---------------------------------------------------------------------------
+
+
+def _get_columns_read_from_ref(
+    downstream_parsed: ParsedModel,
+    upstream_name: str,
+) -> set[str] | None:
+    """Find columns a downstream model reads from an upstream model ref.
+
+    Handles the case where a column is read from upstream but aliased to a
+    different name in the output, so the renamed output column won't appear
+    in ``child.column_names`` even though the upstream column is used.
+
+    Returns the set of column names read from the upstream, or ``None`` if
+    the SQL is unavailable or the upstream is not referenced.
+    """
+    if upstream_name not in downstream_parsed.refs:
+        return None
+
+    ref_placeholder = next(
+        (k for k, v in downstream_parsed.ref_placeholder_map.items() if v == upstream_name),
+        None,
+    )
+    if ref_placeholder is None:
+        return None
+
+    sql_path = downstream_parsed.compiled_path or downstream_parsed.source_path
+    if sql_path is None or not sql_path.exists():
+        return None
+
+    try:
+        raw_sql = sql_path.read_text()
+        if downstream_parsed.compiled_path:
+            clean_sql = raw_sql
+        else:
+            clean_sql = strip_jinja(raw_sql).clean_sql
+
+        stmts = sqlglot.parse(clean_sql, dialect="trino", error_level=sqlglot.ErrorLevel.IGNORE)
+        parsed_sql = next((s for s in reversed(stmts) if s is not None), None)
+        if parsed_sql is None:
+            return None
+    except Exception:  # noqa: BLE001
+        return None
+
+    # Find CTE names that are thin passthroughs to the upstream ref placeholder
+    passthrough_aliases: set[str] = {ref_placeholder.lower()}
+    for cte in parsed_sql.find_all(exp.CTE):
+        cte_name = cte.alias_or_name.lower()
+        cte_query = cte.args.get("this")
+
+        cte_select: exp.Select | None = None
+        if isinstance(cte_query, exp.Select):
+            cte_select = cte_query
+        elif isinstance(cte_query, exp.Union):
+            cte_select = _leftmost_select_from_union(cte_query)
+
+        if cte_select is None:
+            continue
+
+        from_clause = cte_select.args.get("from_")
+        if from_clause is None:
+            continue
+        from_table = from_clause.find(exp.Table)
+        if from_table and from_table.alias_or_name.lower() in passthrough_aliases:
+            if cte_select.find(exp.Star) is not None:
+                passthrough_aliases.add(cte_name)
+
+    # Collect column names referenced with a qualifying table from the passthrough set
+    cols_read: set[str] = set()
+    for col_node in parsed_sql.find_all(exp.Column):
+        table = col_node.args.get("table")
+        if table is None:
+            continue
+        table_name = table.name.lower() if hasattr(table, "name") else str(table).lower()
+        if table_name in passthrough_aliases:
+            col_name = col_node.name.lower()
+            if col_name and col_name != "*":
+                cols_read.add(col_name)
+
+    return cols_read if cols_read else None
+
+
+# ---------------------------------------------------------------------------
 # Downstream impact tracing
 # ---------------------------------------------------------------------------
 
@@ -122,6 +210,7 @@ def _get_downstream_manifest(
     unique_id: str,
     registry: ManifestRegistry,
     removed_cols: set[str],
+    sql_models_by_name: dict[str, ParsedModel],
 ) -> list[DownstreamImpact]:
     """Walk forward lineage via manifest to find models consuming *removed_cols*."""
     results: list[DownstreamImpact] = []
@@ -135,6 +224,17 @@ def _get_downstream_manifest(
                 continue
             seen.add(child.unique_id)
             affected = removed_cols & child.column_names
+            if not affected and child.columns:
+                # The manifest column list doesn't include the removed columns, but
+                # the model might still read them (and alias them to different output
+                # names). Fall back to SQL-level column-read analysis.
+                child_parsed = sql_models_by_name.get(child.name)
+                # Extract the upstream model name from the unique_id (format: model.pkg.name)
+                upstream_name = current_id.rsplit(".", 1)[-1] if "." in current_id else current_id
+                if child_parsed and upstream_name:
+                    cols_read = _get_columns_read_from_ref(child_parsed, upstream_name)
+                    if cols_read:
+                        affected = removed_cols & cols_read
             if affected or not child.columns:
                 # If child has no column metadata, flag it as potentially affected
                 results.append(
@@ -178,6 +278,14 @@ def _get_downstream_yaml(
             yaml_m = yaml_registry.get_model(child_name)
             child_cols = yaml_m.column_names if yaml_m else set()
             affected = removed_cols & child_cols
+            if not affected and yaml_m is not None:
+                # The YAML column list doesn't show the removed columns, but the model
+                # might read them and alias them. Fall back to SQL-level analysis.
+                child_parsed = sql_models_by_name.get(child_name)
+                if child_parsed:
+                    cols_read = _get_columns_read_from_ref(child_parsed, current)
+                    if cols_read:
+                        affected = removed_cols & cols_read
             if affected or yaml_m is None:
                 results.append(
                     DownstreamImpact(
@@ -241,7 +349,9 @@ def _analyse_model(
     if manifest is not None:
         manifest_model = manifest.get_model(model_name)
         if manifest_model is not None:
-            downstream = _get_downstream_manifest(manifest_model.unique_id, manifest, removed_or_renamed_from)
+            downstream = _get_downstream_manifest(
+                manifest_model.unique_id, manifest, removed_or_renamed_from, sql_models_by_name
+            )
             manifest_available = True
         else:
             downstream = _get_downstream_yaml(model_name, removed_or_renamed_from, yaml_registry, sql_models_by_name)
@@ -506,6 +616,7 @@ def impact(
         console.print(f"\n[bold]Analysing {len(target_names)} model(s) for column-level impact[/]\n")
 
     alerts: list[ImpactAlert] = []
+    models_without_compiled: list[str] = []
     for name in target_names:
         sql_file = sql_file_map.get(name)
         if sql_file is None:
@@ -521,6 +632,12 @@ def impact(
         )
         if alert is not None:
             alerts.append(alert)
+        # Track downstream models missing compiled SQL when manifest is present
+        if compiled_dir is not None and alert is not None:
+            for d in alert.downstream:
+                d_parsed = sql_models_by_name.get(d.model_name)
+                if d_parsed is not None and d_parsed.compiled_path is None:
+                    models_without_compiled.append(d.model_name)
 
     # Sort: BREAKING first, then WARNING, then INFO
     order = {AlertLevel.BREAKING: 0, AlertLevel.WARNING: 1, AlertLevel.INFO: 2}
@@ -535,6 +652,14 @@ def impact(
         console.print(
             f"\n[bold]Summary:[/] {breaking} breaking, {warnings} warning(s) across {len(alerts)} changed model(s)."
         )
+        if models_without_compiled:
+            unique_missing = sorted(set(models_without_compiled))
+            changed_str = " ".join(f"{n}+" for n in target_names)
+            console.print(
+                f"\n[yellow]⚠️  {len(unique_missing)} downstream model(s) had no compiled SQL — "
+                "analysis used raw SQL (less accurate).[/]"
+            )
+            console.print(f"   Run [bold]dbt compile --select {changed_str}[/] for complete analysis.")
 
     if any(a.level == AlertLevel.BREAKING for a in alerts):
         sys.exit(1)
