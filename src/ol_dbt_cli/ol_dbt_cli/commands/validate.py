@@ -520,12 +520,24 @@ def validate(
             name=["--auto-compile"],
             help=(
                 "Run 'dbt parse' before validation to regenerate manifest.json. "
-                "This is fast and offline (no database required). "
+                "Uses --target (default: dev_local, a local DuckDB instance) so no "
+                "network or credentials are required. "
                 "Use when you want the manifest to reflect recent model changes. "
                 "For compiled SQL accuracy, run 'dbt compile' manually first."
             ),
         ),
     ] = False,
+    compile_target: Annotated[
+        str,
+        Parameter(
+            name=["--target", "-t"],
+            help=(
+                "dbt target to use when --auto-compile is set (default: dev_local). "
+                "dev_local uses a local DuckDB instance and requires no network access. "
+                "Other targets (dev_qa, production) require Trino credentials."
+            ),
+        ),
+    ] = "dev_local",
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
@@ -578,8 +590,11 @@ def validate(
         Skip a specific check:
             ol-dbt validate --skip select_star
 
-        Regenerate manifest before validating:
+        Regenerate manifest before validating (uses dev_local DuckDB by default):
             ol-dbt validate --auto-compile
+
+        Regenerate manifest using a specific target:
+            ol-dbt validate --auto-compile --target dev_qa
 
     """
     all_checks = {"yaml_sql_sync", "upstream_refs", "docs_coverage", "yaml_integrity", "select_star"}
@@ -611,13 +626,14 @@ def validate(
     models_dir = dbt_dir / "models"
 
     # Auto-compile: run dbt parse to regenerate manifest.json before validation.
-    # dbt parse is fast and offline (no database required).
+    # Uses dev_local (DuckDB) by default — no network or credentials required.
     if auto_compile:
+        cmd = ["dbt", "parse", "--target", compile_target]
         if output_format == "text":
-            console.print("[dim]Running: dbt parse ...[/]")
+            console.print(f"[dim]Running: {' '.join(cmd)} ...[/]")
         try:
             subprocess.run(  # noqa: S603, S607
-                ["dbt", "parse"],
+                cmd,
                 cwd=str(dbt_dir),
                 capture_output=True,
                 text=True,

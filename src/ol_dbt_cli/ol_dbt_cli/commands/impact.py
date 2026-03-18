@@ -517,11 +517,22 @@ def impact(
             name=["--auto-compile"],
             help=(
                 "Run 'dbt compile' on changed models and their downstream dependents before "
-                "analysis to ensure compiled SQL is up to date. Requires dbt to be installed "
-                "and configured."
+                "analysis to ensure compiled SQL is up to date. Uses --target (default: dev_local, "
+                "a local DuckDB instance) so no network or credentials are required."
             ),
         ),
     ] = False,
+    compile_target: Annotated[
+        str,
+        Parameter(
+            name=["--target", "-t"],
+            help=(
+                "dbt target to use when --auto-compile is set (default: dev_local). "
+                "dev_local uses a local DuckDB instance and requires no network access. "
+                "Other targets (dev_qa, production) require Trino credentials."
+            ),
+        ),
+    ] = "dev_local",
 ) -> None:
     """Analyse column-level impact of in-progress dbt model changes.
 
@@ -550,8 +561,11 @@ def impact(
         JSON output for CI integration:
             ol-dbt impact --format json
 
-        Compile changed models and downstream before analysis:
+        Compile changed models and downstream before analysis (uses dev_local DuckDB):
             ol-dbt impact --auto-compile
+
+        Compile using a specific target:
+            ol-dbt impact --auto-compile --target dev_qa
 
     """
     # Resolve dbt project directory
@@ -630,14 +644,16 @@ def impact(
     if output_format == "text":
         console.print(f"\n[bold]Analysing {len(target_names)} model(s) for column-level impact[/]\n")
 
-    # Auto-compile: run dbt compile on changed models + their downstream deps
+    # Auto-compile: run dbt compile on changed models + their downstream deps.
+    # Uses dev_local (DuckDB) by default — no network or credentials required.
     if auto_compile and target_names:
         selector = " ".join(f"{n}+" for n in target_names)
+        cmd = ["dbt", "compile", "--target", compile_target, "--select", selector]
         if output_format == "text":
-            console.print(f"[dim]Running: dbt compile --select {selector} ...[/]")
+            console.print(f"[dim]Running: {' '.join(cmd)} ...[/]")
         try:
             subprocess.run(  # noqa: S603, S607
-                ["dbt", "compile", "--select", selector],
+                cmd,
                 cwd=str(dbt_dir),
                 capture_output=True,
                 text=True,
