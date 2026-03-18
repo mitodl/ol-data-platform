@@ -31,7 +31,7 @@ params:
   percent_metric_calculation: row_limit
   percent_metrics: []
   query_mode: raw
-  row_limit: 10000
+  row_limit: 500000
   server_page_length: 10
   show_cell_bars: false
   table_timestamp_format: smart_date
