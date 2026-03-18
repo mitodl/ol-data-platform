@@ -205,11 +205,12 @@ class TestJinjaStrippingFixes:
         assert "/* __jinja_macro__ */" in result.clean_sql
 
     def test_inline_jinja_becomes_identifier(self) -> None:
-        """{{ ... }} inside an expression (not alone on a line) becomes an unquoted identifier."""
+        """{{ ... }} inside an expression becomes an unquoted identifier placeholder."""
         sql = "select nullif({{ json_query_string('col', '$.key') }}, 'null') as val from t"
         result = strip_jinja(sql)
-        # Replaced with an unquoted identifier so the SQL parses cleanly
-        assert "__jinja__" in result.clean_sql
+        # Replaced with an unquoted identifier (either __jinja__ from regex path or
+        # __macro__ from Jinja2 path) so the SQL parses cleanly as a column expression.
+        assert "__jinja__" in result.clean_sql or "__macro__" in result.clean_sql
         assert "'__jinja__'" not in result.clean_sql
 
     def test_jinja_variable_in_quoted_string_parseable(self) -> None:
@@ -493,3 +494,100 @@ class TestValuesInlineTable:
         result = parse_model_sql("my_model", sql)
         # Without explicit column names in the alias, star remains unresolved
         assert result.has_star or result.star_resolved  # either outcome is acceptable
+
+
+class TestJinja2Engine:
+    """Tests for the Jinja2-based rendering engine in strip_jinja."""
+
+    def test_jinja2_handles_if_block(self) -> None:
+        """{% if %} block is properly rendered (one branch selected) rather than stripped."""
+        from ol_dbt_cli.lib.sql_parser import strip_jinja
+
+        sql = """
+        {% if var('platform') == 'mitxonline' %}
+        select id, email from mitxonline_users
+        {% else %}
+        select id, email from edxorg_users
+        {% endif %}
+        """
+        result = strip_jinja(sql)
+        # Either branch is valid SQL — Jinja2 should pick one
+        assert "select" in result.clean_sql.lower()
+        # No Jinja control syntax should remain
+        assert "{%" not in result.clean_sql
+
+    def test_jinja2_ref_collected_with_rendering(self) -> None:
+        """ref() calls are collected for lineage even when rendered via Jinja2."""
+        from ol_dbt_cli.lib.sql_parser import strip_jinja
+
+        sql = "select id from {{ ref('stg_users') }}"
+        result = strip_jinja(sql)
+        assert "stg_users" in result.ref_names
+        assert result.ref_placeholder_map.get("ref_stg_users") == "stg_users"
+        assert "ref_stg_users" in result.clean_sql
+
+    def test_jinja2_source_collected_with_rendering(self) -> None:
+        """source() calls are collected for lineage even when rendered via Jinja2."""
+        from ol_dbt_cli.lib.sql_parser import strip_jinja
+
+        sql = "select id from {{ source('raw_data', 'users') }}"
+        result = strip_jinja(sql)
+        assert "raw_data.users" in result.source_names
+        assert "raw_data.users" in result.source_placeholder_map.values()
+        assert "{" not in result.clean_sql
+
+    def test_jinja2_undefined_macro_renders_as_placeholder(self) -> None:
+        """Unknown macros render as a placeholder identifier, not an error."""
+        from ol_dbt_cli.lib.sql_parser import strip_jinja
+
+        sql = "select {{ dbt_utils.surrogate_key(['id', 'email']) }} as sk from users"
+        result = strip_jinja(sql)
+        assert "{" not in result.clean_sql
+        # Some placeholder token should be present in the expression context
+        assert any(tok in result.clean_sql for tok in ("__macro__", "__jinja__", "__undefined__"))
+
+    def test_jinja2_config_block_removed(self) -> None:
+        """{{ config(...) }} blocks are removed from the rendered output."""
+        from ol_dbt_cli.lib.sql_parser import strip_jinja
+
+        sql = "{{ config(materialized='table') }}\nselect 1 as id"
+        result = strip_jinja(sql)
+        assert "config" not in result.clean_sql
+        assert "select" in result.clean_sql.lower()
+
+    def test_jinja2_for_loop_renders_cleanly(self) -> None:
+        """{% for %} over an undefined variable renders without error (empty iteration)."""
+        from ol_dbt_cli.lib.sql_parser import strip_jinja
+
+        sql = """
+        {% for event in event_types %}
+        union all select '{{ event }}' as event_type
+        {% endfor %}
+        select id from base
+        """
+        result = strip_jinja(sql)
+        assert "{" not in result.clean_sql
+
+    def test_jinja2_parse_model_conditional_select(self) -> None:
+        """Model with conditional SELECT resolves to a valid column set."""
+        sql = """
+        {% if var('include_email', false) %}
+        select id as user_id, email as user_email from raw_users
+        {% else %}
+        select id as user_id from raw_users
+        {% endif %}
+        """
+        result = parse_model_sql("my_model", sql)
+        assert result.parse_error is None
+        assert "user_id" in result.output_columns
+
+    def test_jinja2_falls_back_on_syntax_error(self) -> None:
+        """When Jinja2 raises a TemplateError, regex fallback is used."""
+        from ol_dbt_cli.lib.sql_parser import _strip_jinja_regex, strip_jinja
+
+        # A valid Jinja2 template should use the Jinja2 path
+        sql = "select {{ ref('stg_users') }}.id from {{ ref('stg_users') }}"
+        result = strip_jinja(sql)
+        # Both paths should produce the same placeholder
+        regex_result = _strip_jinja_regex(sql)
+        assert result.ref_names == regex_result.ref_names

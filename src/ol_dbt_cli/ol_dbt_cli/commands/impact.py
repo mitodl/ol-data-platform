@@ -7,6 +7,7 @@ to alert when those changes will break or require work in downstream models.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -510,6 +511,17 @@ def impact(
             ),
         ),
     ] = None,
+    auto_compile: Annotated[
+        bool,
+        Parameter(
+            name=["--auto-compile"],
+            help=(
+                "Run 'dbt compile' on changed models and their downstream dependents before "
+                "analysis to ensure compiled SQL is up to date. Requires dbt to be installed "
+                "and configured."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Analyse column-level impact of in-progress dbt model changes.
 
@@ -537,6 +549,9 @@ def impact(
 
         JSON output for CI integration:
             ol-dbt impact --format json
+
+        Compile changed models and downstream before analysis:
+            ol-dbt impact --auto-compile
 
     """
     # Resolve dbt project directory
@@ -614,6 +629,36 @@ def impact(
 
     if output_format == "text":
         console.print(f"\n[bold]Analysing {len(target_names)} model(s) for column-level impact[/]\n")
+
+    # Auto-compile: run dbt compile on changed models + their downstream deps
+    if auto_compile and target_names:
+        selector = " ".join(f"{n}+" for n in target_names)
+        if output_format == "text":
+            console.print(f"[dim]Running: dbt compile --select {selector} ...[/]")
+        try:
+            subprocess.run(  # noqa: S603, S607
+                ["dbt", "compile", "--select", selector],
+                cwd=str(dbt_dir),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            if output_format == "text":
+                console.print("[dim]dbt compile succeeded.[/]")
+            # Re-detect compiled dir after compile
+            compiled_dir = find_compiled_dir(dbt_dir) if compiled_dir is None else compiled_dir
+            # Reload parsed models with fresh compiled SQL
+            for name, path in sql_file_map.items():
+                try:
+                    sql_models_by_name[name] = parse_model_file(path, compiled_dir=compiled_dir)
+                except Exception:  # noqa: BLE001, S110
+                    pass
+        except subprocess.CalledProcessError as exc:
+            err_console.print(f"[yellow]Warning:[/] dbt compile failed: {exc.stderr[-200:] if exc.stderr else exc}")
+            err_console.print("  Analysis will continue with raw SQL.")
+        except FileNotFoundError:
+            err_console.print("[yellow]Warning:[/] 'dbt' command not found; skipping auto-compile.")
+            err_console.print("  Install dbt and ensure it is on PATH, or run dbt compile manually.")
 
     alerts: list[ImpactAlert] = []
     models_without_compiled: list[str] = []

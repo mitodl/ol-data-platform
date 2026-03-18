@@ -1,6 +1,6 @@
 """sqlglot-based SQL column extractor for dbt models.
 
-Handles Jinja templating by regex-stripping macros before parsing, allowing
+Handles Jinja templating using Jinja2 rendering with safe fallbacks, allowing
 sqlglot to analyse the SQL structure. This is an offline fallback; when
 ``target/manifest.json`` is available use :mod:`.manifest` instead.
 """
@@ -11,11 +11,153 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import jinja2
+import markupsafe
 import sqlglot
 import sqlglot.expressions as exp
 
 # ---------------------------------------------------------------------------
-# Jinja stripping
+# Jinja2 rendering (primary path)
+# ---------------------------------------------------------------------------
+
+
+class _SqlSafeUndefined(jinja2.Undefined):
+    """Jinja2 Undefined that renders as safe SQL placeholders instead of raising.
+
+    This allows dbt SQL templates that reference undefined variables, macros,
+    and adapter-specific functions to render without errors.  The rendered SQL
+    will contain placeholder tokens (``__undefined__``, ``__macro__``) that
+    sqlglot ignores or treats as opaque identifiers.
+    """
+
+    def __str__(self) -> str:
+        return "__undefined__"
+
+    def __call__(self, *args: object, **kwargs: object) -> markupsafe.Markup:
+        return markupsafe.Markup("__macro__")
+
+    def __getattr__(self, name: str) -> _SqlSafeUndefined:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return _SqlSafeUndefined(name=name)
+
+    def __iter__(self):  # noqa: ANN201
+        return iter([])
+
+    def __len__(self) -> int:
+        return 0
+
+    def __bool__(self) -> bool:
+        return False
+
+
+def _make_jinja_env(
+    ref_names: list[str],
+    source_names: list[str],
+    ref_placeholder_map: dict[str, str],
+    source_placeholder_map: dict[str, str],
+) -> jinja2.Environment:
+    """Build a Jinja2 environment with dbt-compatible globals.
+
+    The ``ref()`` and ``source()`` globals collect lineage side-effects into
+    the provided lists/maps while returning SQL-safe placeholder identifiers
+    that downstream sqlglot parsing can handle.
+    """
+
+    def _ref(model_name: str) -> markupsafe.Markup:
+        ref_names.append(model_name)
+        placeholder = f"ref_{_to_identifier(model_name)}"
+        ref_placeholder_map[placeholder] = model_name
+        return markupsafe.Markup(placeholder)  # noqa: S704
+
+    def _source(source_name: str, table_name: str) -> markupsafe.Markup:
+        source_key = f"{source_name}.{table_name}"
+        source_names.append(source_key)
+        placeholder = f"source_{_to_identifier(source_name)}_{_to_identifier(table_name)}"
+        source_placeholder_map[placeholder] = source_key
+        return markupsafe.Markup(placeholder)  # noqa: S704
+
+    def _config(**_kwargs: object) -> markupsafe.Markup:
+        return markupsafe.Markup("")  # noqa: S704
+
+    def _var(name: str, default: object = "") -> str:
+        return str(default) if default else "__var__"
+
+    def _env_var(name: str, default: object = "") -> str:
+        return str(default) if default else "__env_var__"
+
+    def _is_incremental() -> bool:
+        return False
+
+    def _run_query(sql: str) -> list[object]:  # noqa: ARG001
+        return []
+
+    env = jinja2.Environment(
+        undefined=_SqlSafeUndefined,
+        autoescape=False,  # noqa: S701 — generating SQL, not HTML; autoescaping not applicable
+        # Allow Jinja2 to handle dbt's {%- -%} whitespace-trimming syntax
+        trim_blocks=False,
+        lstrip_blocks=False,
+    )
+    env.globals.update(
+        {
+            "ref": _ref,
+            "source": _source,
+            "config": _config,
+            "var": _var,
+            "env_var": _env_var,
+            "is_incremental": _is_incremental,
+            "run_query": _run_query,
+            # Common dbt utils / adapter namespaces — render as safe undefined
+            "dbt_utils": _SqlSafeUndefined(name="dbt_utils"),
+            "dbt": _SqlSafeUndefined(name="dbt"),
+            "adapter": _SqlSafeUndefined(name="adapter"),
+            "modules": _SqlSafeUndefined(name="modules"),
+            "this": _SqlSafeUndefined(name="this"),
+            "model": _SqlSafeUndefined(name="model"),
+            "execute": False,
+            "flags": _SqlSafeUndefined(name="flags"),
+            "graph": _SqlSafeUndefined(name="graph"),
+            "invocation_id": "__invocation_id__",
+            "thread_id": "__thread_id__",
+            "target": _SqlSafeUndefined(name="target"),
+            "schemas": _SqlSafeUndefined(name="schemas"),
+        }
+    )
+    return env
+
+
+def _render_jinja(sql: str) -> tuple[str, list[str], list[str], dict[str, str], dict[str, str]]:
+    """Render a dbt SQL template using Jinja2.
+
+    Returns ``(rendered_sql, ref_names, source_names, ref_placeholder_map, source_placeholder_map)``.
+    Raises ``jinja2.TemplateError`` if rendering fails.
+
+    Unlike the regex-based :func:`strip_jinja`, this function properly evaluates
+    ``{% if %}`` / ``{% for %}`` control blocks rather than simply stripping them,
+    producing SQL that represents *one* valid execution path.
+    """
+    ref_names: list[str] = []
+    source_names: list[str] = []
+    ref_placeholder_map: dict[str, str] = {}
+    source_placeholder_map: dict[str, str] = {}
+
+    env = _make_jinja_env(ref_names, source_names, ref_placeholder_map, source_placeholder_map)
+    template = env.from_string(sql)
+    rendered = template.render()
+
+    # Block-level macro injections (macros that inject CTE SQL fragments) render as
+    # "__macro__" which occupies a statement-level position where a string literal
+    # is invalid SQL.  Replace standalone __macro__ / __undefined__ lines with SQL comments.
+    rendered = re.sub(r"(?m)^[^\S\r\n]*(?:__macro__|__undefined__)[^\S\r\n]*$", "/* __jinja_macro__ */", rendered)
+    # Collapse any broken column expressions (same post-processing as regex path).
+    rendered = _collapse_broken_column_expressions(rendered)
+
+    return rendered, ref_names, source_names, ref_placeholder_map, source_placeholder_map
+
+
+# ---------------------------------------------------------------------------
+# Jinja stripping (regex fallback)
 # ---------------------------------------------------------------------------
 
 # Replace {{ ref('model_name') }} with ref_model_name (a valid SQL identifier)
@@ -55,10 +197,12 @@ _BLOCK_MACRO_RE = re.compile(r"(?m)^[^\S\r\n]*\{\{[^}]+\}\}[^\S\r\n]*$", re.DOTA
 #
 # The regex uses a tempered greedy token `(?:(?!<next_jinja_col>)[^\n]*\n)*?` to
 # avoid consuming past the next broken-column placeholder.
+# Matches both ``__jinja__`` (regex path) and ``__macro__`` (Jinja2 path) placeholders.
+_BROKEN_COL_PLACEHOLDER = r"(?:__jinja__|__macro__|__undefined__)"
 _BROKEN_COL_RE = re.compile(
-    r"([ \t]*,[ \t]*)__jinja__(?![ \t]+as\b)"  # column-sep + placeholder, no direct alias
+    rf"([ \t]*,[ \t]*){_BROKEN_COL_PLACEHOLDER}(?![ \t]+as\b)"  # column-sep + placeholder, no direct alias
     r"[^\n]*\n"  # rest of the first (broken) line
-    r"(?:(?![ \t]*,[ \t]*__jinja__)[^\n]*\n)*?"  # optional continuation lines (stop before next __jinja__ col)
+    rf"(?:(?![ \t]*,[ \t]*{_BROKEN_COL_PLACEHOLDER})[^\n]*\n)*?"  # optional continuation lines
     r"[ \t]*\)[ \t]+as[ \t]+(\w+)[ \t]*(?:--[^\n]*)?(?:\n|$)",  # ) as alias — must be last token on line
 )
 
@@ -117,12 +261,39 @@ def _collapse_broken_column_expressions(sql: str) -> str:
 
 
 def strip_jinja(sql: str) -> JinjaStripResult:
-    """Strip Jinja from *sql* and return a :class:`JinjaStripResult`.
+    """Process Jinja in *sql* and return a :class:`JinjaStripResult`.
 
-    The returned ``clean_sql`` is valid SQL (modulo Trino dialect quirks) and
-    can be handed to sqlglot. The placeholder maps allow callers to reverse-look-up
-    which original ``ref()`` or ``source()`` a parsed identifier came from.
+    **Primary path**: Jinja2 rendering with :class:`_SqlSafeUndefined`.  This
+    properly evaluates ``{% if %}`` / ``{% for %}`` control blocks rather than
+    simply stripping them, producing SQL that represents one valid execution path.
+
+    **Fallback**: Regex-based stripping is used when Jinja2 rendering raises a
+    ``TemplateError`` (e.g. syntax errors from unusual Jinja constructs in the
+    wild).  The fallback produces a ``clean_sql`` where all ``{% ... %}`` blocks
+    are stripped and ``{{ ... }}`` blocks are replaced with placeholder tokens.
+
+    In both cases the returned ``clean_sql`` is valid SQL (modulo Trino dialect
+    quirks) and can be handed to sqlglot.  The placeholder maps allow callers to
+    reverse-look-up which original ``ref()`` or ``source()`` a parsed identifier
+    came from.
     """
+    try:
+        rendered, ref_names, source_names, ref_placeholder_map, source_placeholder_map = _render_jinja(sql)
+        return JinjaStripResult(
+            clean_sql=rendered,
+            ref_names=ref_names,
+            source_names=source_names,
+            ref_placeholder_map=ref_placeholder_map,
+            source_placeholder_map=source_placeholder_map,
+        )
+    except jinja2.TemplateError:
+        pass
+
+    return _strip_jinja_regex(sql)
+
+
+def _strip_jinja_regex(sql: str) -> JinjaStripResult:
+    """Regex-based Jinja stripping — fallback when Jinja2 rendering fails."""
     ref_names: list[str] = []
     source_names: list[str] = []
     ref_placeholder_map: dict[str, str] = {}
