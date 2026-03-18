@@ -18,6 +18,7 @@ params:
   - proctoredexamgrade_percentage_grade
   - proctoredexamgrade_created_on
   - semester
+  row_limit: 500000
   allow_render_html: true
   color_pn: false
   comparison_color_scheme: Green
