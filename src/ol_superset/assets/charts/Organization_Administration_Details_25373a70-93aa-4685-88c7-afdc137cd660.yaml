@@ -48,19 +48,7 @@ params:
   row_limit: 10000
   table_timestamp_format: smart_date
   allow_render_html: true
-  column_config:
-    SUM(active_count):
-      showCellBars: false
-    SUM(certificate_count):
-      showCellBars: false
-    SUM(chatbot_used_count):
-      showCellBars: false
-    SUM(enrolled_count):
-      showCellBars: false
-    SUM(problems_count):
-      showCellBars: false
-    SUM(videos_watched):
-      showCellBars: false
+  column_config:[]
   show_cell_bars: true
   color_pn: true
   comparison_color_scheme: Green
