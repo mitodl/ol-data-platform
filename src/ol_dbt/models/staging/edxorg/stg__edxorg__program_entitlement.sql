@@ -10,7 +10,9 @@ with source as (
         , "program title" as program_title
         , "partner key" as organization_key
         , email as user_email
+        , username as user_username
         , cast("user id" as integer) as user_id
+        , nullif(concat_ws(' ', "first name", "last name"), '') as user_full_name
         , cast(entitlements as integer) as number_of_entitlements
         , cast("redeemed entitlements" as integer) as number_of_redeemed_entitlements
         , cast(date_parse("purchase date", '%m/%d/%Y') as date) as purchase_date
