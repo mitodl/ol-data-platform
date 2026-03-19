@@ -4,7 +4,6 @@ certified_by: null
 certification_details: null
 viz_type: table
 params:
-  datasource: 152__table
   viz_type: table
   query_mode: raw
   groupby: []
