@@ -37,7 +37,7 @@ with edx_certificate as (
         , edx_certificate_user.user_full_name
         , edx_certificate_user.user_gender
         , edx_certificate_user.user_birth_year
-        , edx_certificate_user.user_address_country
+        , edx_certificate_user.user_address_country as user_country
     from edx_certificate_user
     left join mitx_user as mitx_user1 on edx_certificate_user.user_mitxonline_username = mitx_user1.user_mitxonline_username
     left join mitx_user as mitx_user2 on lower(edx_certificate_user.user_email) = lower(mitx_user2.user_mitxonline_email)
@@ -48,9 +48,12 @@ with edx_certificate as (
 )
 
 , entitlement_users as (
-    select
+    select distinct
         lower(program_entitlements.user_email) as user_email
         , coalesce(mitx_user.user_full_name, program_entitlements.user_full_name, '') as user_full_name
+        , mitx_user.user_gender
+        , mitx_user.user_birth_year
+        , mitx_user.user_address_country as user_country
     from program_entitlements
     left join mitx_user
          on program_entitlements.user_edxorg_id = mitx_user.user_edxorg_id
@@ -64,9 +67,9 @@ with edx_certificate as (
 select
     coalesce(cert_users.user_email, entitlement_users.user_email) as user_email
     , coalesce(cert_users.user_full_name, entitlement_users.user_full_name) as user_full_name
-    , cert_users.user_gender
-    , cert_users.user_birth_year
-    , cert_users.user_address_country
+    , coalesce(cert_users.user_gender, entitlement_users.user_gender) as user_gender
+    , coalesce(cert_users.user_birth_year, entitlement_users.user_birth_year) as user_birth_year
+    , coalesce(cert_users.user_country, entitlement_users.user_country) as user_country
 from cert_users
 full outer join entitlement_users
     on cert_users.user_email = entitlement_users.user_email

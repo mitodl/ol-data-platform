@@ -475,6 +475,10 @@ models:
   - name: user_username
     data_type: varchar
     description: username of the learner on edX.org
+  - name: user_full_name
+    data_type: varchar
+    description: full name of the learner who purchased the program bundle, derived
+      from first name and last name fields
   - name: user_email
     data_type: varchar
     description: email address of the learner who purchased the program bundle
