@@ -417,3 +417,162 @@ class TestResolveStarWithRegistry:
         )
         result = _resolve_star_with_registry(parsed, YamlRegistry(), manifest=None, sql_models_by_name={})
         assert result is None
+
+
+class TestBrokenRefColumns:
+    """Tests for _check_broken_ref_columns — existing breakage detection."""
+
+    def _make_parsed(
+        self,
+        name: str,
+        sql_file: Path,
+        refs: list[str],
+        placeholder_map: dict[str, str],
+        sql: str,
+    ) -> ParsedModel:
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+
+        sql_file.write_text(sql)
+        m = ParsedModel(name=name, refs=refs, ref_placeholder_map=placeholder_map)
+        m.source_path = sql_file
+        return m
+
+    def test_detects_missing_column_qualified(self, tmp_path: Path) -> None:
+        """ERROR when a qualified column read from ref() is absent from upstream output."""
+        from ol_dbt_cli.commands.validate import _check_broken_ref_columns
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        sql = """
+        with src as (select * from ref_stg_users)
+        select src.user_id, src.deleted_col from src
+        """
+        downstream = self._make_parsed(
+            "downstream",
+            tmp_path / "downstream.sql",
+            refs=["stg_users"],
+            placeholder_map={"ref_stg_users": "stg_users"},
+            sql=sql,
+        )
+        upstream = ParsedModel(name="stg_users", output_columns={"user_id", "user_email"})
+        report_obj = __import__("ol_dbt_cli.commands.validate", fromlist=["ValidationReport"]).ValidationReport()
+        _check_broken_ref_columns(
+            "downstream",
+            downstream,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={"stg_users": upstream},
+            report=report_obj,
+        )
+        errors = report_obj.errors
+        assert len(errors) == 1
+        assert errors[0].check == "broken_ref_columns"
+        assert "deleted_col" in errors[0].message
+
+    def test_detects_missing_column_unqualified(self, tmp_path: Path) -> None:
+        """ERROR for unqualified column in passthrough CTE that doesn't exist upstream."""
+        from ol_dbt_cli.commands.validate import _check_broken_ref_columns
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        sql = """
+        with src as (select * from ref_stg_users)
+        select user_id, removed_col from src
+        """
+        downstream = self._make_parsed(
+            "downstream",
+            tmp_path / "downstream.sql",
+            refs=["stg_users"],
+            placeholder_map={"ref_stg_users": "stg_users"},
+            sql=sql,
+        )
+        upstream = ParsedModel(name="stg_users", output_columns={"user_id", "user_email"})
+        report_obj = __import__("ol_dbt_cli.commands.validate", fromlist=["ValidationReport"]).ValidationReport()
+        _check_broken_ref_columns(
+            "downstream",
+            downstream,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={"stg_users": upstream},
+            report=report_obj,
+        )
+        errors = report_obj.errors
+        assert any(e.check == "broken_ref_columns" and "removed_col" in e.message for e in errors)
+
+    def test_no_error_when_all_columns_exist(self, tmp_path: Path) -> None:
+        """No error when all consumed columns are present in upstream output."""
+        from ol_dbt_cli.commands.validate import _check_broken_ref_columns
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        sql = """
+        with src as (select * from ref_stg_users)
+        select src.user_id, src.user_email from src
+        """
+        downstream = self._make_parsed(
+            "downstream",
+            tmp_path / "downstream.sql",
+            refs=["stg_users"],
+            placeholder_map={"ref_stg_users": "stg_users"},
+            sql=sql,
+        )
+        upstream = ParsedModel(name="stg_users", output_columns={"user_id", "user_email"})
+        report_obj = __import__("ol_dbt_cli.commands.validate", fromlist=["ValidationReport"]).ValidationReport()
+        _check_broken_ref_columns(
+            "downstream",
+            downstream,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={"stg_users": upstream},
+            report=report_obj,
+        )
+        assert not report_obj.errors
+
+    def test_skips_when_upstream_unknown(self, tmp_path: Path) -> None:
+        """Silently skips when the upstream model has no resolvable output columns."""
+        from ol_dbt_cli.commands.validate import _check_broken_ref_columns
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        sql = "select src.col_a from ref_stg_users src"
+        downstream = self._make_parsed(
+            "downstream",
+            tmp_path / "downstream.sql",
+            refs=["stg_users"],
+            placeholder_map={"ref_stg_users": "stg_users"},
+            sql=sql,
+        )
+        # Upstream not in sql_models_by_name and no manifest/YAML
+        report_obj = __import__("ol_dbt_cli.commands.validate", fromlist=["ValidationReport"]).ValidationReport()
+        _check_broken_ref_columns(
+            "downstream",
+            downstream,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={},
+            report=report_obj,
+        )
+        assert not report_obj.issues  # no warning or error — skip silently
+
+    def test_skips_when_consumed_columns_unknown(self, tmp_path: Path) -> None:
+        """Silently skips when the downstream SQL cannot determine which columns are read."""
+        from ol_dbt_cli.commands.validate import _check_broken_ref_columns
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        # No SQL file path → get_columns_read_from_ref returns None
+        downstream = ParsedModel(
+            name="downstream",
+            refs=["stg_users"],
+            ref_placeholder_map={"ref_stg_users": "stg_users"},
+        )
+        upstream = ParsedModel(name="stg_users", output_columns={"user_id"})
+        report_obj = __import__("ol_dbt_cli.commands.validate", fromlist=["ValidationReport"]).ValidationReport()
+        _check_broken_ref_columns(
+            "downstream",
+            downstream,
+            YamlRegistry(),
+            manifest=None,
+            sql_models_by_name={"stg_users": upstream},
+            report=report_obj,
+        )
+        assert not report_obj.issues

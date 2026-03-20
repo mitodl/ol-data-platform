@@ -384,6 +384,9 @@ def _extract_select_columns(select: exp.Select) -> tuple[set[str], bool]:
     for expr in select.expressions:
         if isinstance(expr, exp.Star):
             has_star = True
+        elif isinstance(expr, exp.Column) and isinstance(expr.this, exp.Star):
+            # table.* pattern — treat as a star that needs resolution
+            has_star = True
         elif isinstance(expr, exp.Alias):
             cols.add(expr.alias.lower())
         elif isinstance(expr, exp.Column):
@@ -765,3 +768,183 @@ def find_compiled_dir(dbt_dir: Path) -> Path | None:
 def parse_model_sql_at_content(name: str, sql_content: str) -> ParsedModel:
     """Parse SQL content (e.g., from git show) for the named model."""
     return parse_model_sql(name, sql_content)
+
+
+def get_columns_read_from_ref(
+    downstream_parsed: ParsedModel,
+    upstream_name: str,
+) -> set[str] | None:
+    """Find columns a downstream model reads from an upstream model ref.
+
+    Uses two detection passes:
+
+    1. **Qualified refs** — ``alias.col_name`` where ``alias`` is a passthrough
+       CTE alias (or the ref placeholder itself).
+    2. **Unqualified refs** — bare ``col_name`` inside a SELECT or WHERE clause
+       whose only FROM source is a passthrough alias with no joins to other
+       tables.  This covers the dominant dbt CTE pattern::
+
+           with src as (select * from {{ ref('upstream') }})
+           select col_a, col_b from src where col_c > 0
+
+    Returns the set of column names read from the upstream, or ``None`` if the
+    SQL is unavailable or the upstream model is not referenced.
+    """
+    if upstream_name not in downstream_parsed.refs:
+        return None
+
+    ref_placeholder = next(
+        (k for k, v in downstream_parsed.ref_placeholder_map.items() if v == upstream_name),
+        None,
+    )
+    if ref_placeholder is None:
+        return None
+
+    # Always use the raw (Jinja) SQL source for column-read analysis.
+    # Compiled SQL replaces {{ ref('x') }} with physical relation names that have
+    # no reliable connection to the ref_placeholder_map keys — the placeholder
+    # names (e.g. ref_stg_users) only appear in the Jinja-rendered raw SQL.
+    sql_path = downstream_parsed.source_path or downstream_parsed.compiled_path
+    if sql_path is None or not sql_path.exists():
+        return None
+
+    try:
+        raw_sql = sql_path.read_text()
+        clean_sql = strip_jinja(raw_sql).clean_sql
+
+        stmts = sqlglot.parse(clean_sql, dialect="trino", error_level=sqlglot.ErrorLevel.IGNORE)
+        parsed_sql = next((s for s in reversed(stmts) if s is not None), None)
+        if parsed_sql is None:
+            return None
+    except Exception:  # noqa: BLE001
+        return None
+
+    # Build the set of passthrough CTE aliases: the ref placeholder itself plus
+    # any CTE that does SELECT * from another passthrough alias.
+    # Also track explicit column aliases that each passthrough CTE ADDS on top of
+    # the upstream's * — these are computed by the CTE itself (e.g. ROW_NUMBER()
+    # window functions, derived columns) and must NOT be attributed to the upstream.
+    passthrough_aliases: set[str] = {ref_placeholder.lower()}
+    passthrough_added_cols: dict[str, set[str]] = {}  # cte_name -> added aliases
+    for cte in parsed_sql.find_all(exp.CTE):
+        cte_name = cte.alias_or_name.lower()
+        cte_query = cte.args.get("this")
+
+        if isinstance(cte_query, exp.Select):
+            cte_select: exp.Select | None = cte_query
+        elif isinstance(cte_query, exp.Union):
+            cte_select = _leftmost_select_from_union(cte_query)
+        else:
+            continue
+
+        if cte_select is None:
+            continue
+        from_clause = cte_select.args.get("from_")
+        if from_clause is None:
+            continue
+        # Only treat a CTE as a passthrough when its FROM is a direct table reference
+        # (not a subquery like SELECT * FROM (SELECT ...) WHERE ...). Subquery-wrapped
+        # CTEs add computed columns (e.g. ROW_NUMBER()) that shouldn't be attributed to
+        # the upstream.
+        from_source = from_clause.this
+        if not isinstance(from_source, exp.Table):
+            continue
+        from_alias = (from_source.alias or from_source.name).lower()
+        if from_alias in passthrough_aliases:
+            # Check for a top-level SELECT * — use only top-level expressions to avoid
+            # matching Star nodes nested inside COUNT(*) or similar aggregate calls.
+            has_top_level_star = any(
+                isinstance(e, exp.Star) or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star))
+                for e in cte_select.expressions
+            )
+            if has_top_level_star:
+                passthrough_aliases.add(cte_name)
+                # Collect any explicit aliases this passthrough CTE adds beyond *.
+                # Downstream selects referencing those aliases should not attribute
+                # them to the upstream (they're computed inside this CTE).
+                # Include nested aliases too: Jinja truncation can break multi-line
+                # expressions (e.g. `if(cond, __macro__, null) as col`) and push the
+                # alias inside the function subtree rather than at the top level.
+                added: set[str] = set()
+                for expr in cte_select.expressions:
+                    if isinstance(expr, exp.Alias):
+                        added.add(expr.alias.lower())
+                        # Also capture any aliases nested inside (Jinja-collapsed exprs)
+                        for nested in expr.find_all(exp.Alias):
+                            if nested is not expr and nested.alias:
+                                added.add(nested.alias.lower())
+                    elif isinstance(expr, exp.Column) and isinstance(expr.this, exp.Star):
+                        pass  # table.* — not an added alias
+                    elif isinstance(expr, exp.Star):
+                        pass  # bare * — not an added alias
+                    else:
+                        if hasattr(expr, "alias") and expr.alias:
+                            added.add(expr.alias.lower())
+                        # Jinja collapse may place the alias inside a nested subtree
+                        for nested in expr.find_all(exp.Alias):
+                            if nested.alias:
+                                added.add(nested.alias.lower())
+                passthrough_added_cols[cte_name] = added
+
+    # Aggregate all added-by-passthrough columns — any bare column ref matching one of
+    # these names in a Pass 2 context is a CTE-computed column, not an upstream column.
+    passthrough_computed: set[str] = set().union(*passthrough_added_cols.values()) if passthrough_added_cols else set()
+
+    # Jinja placeholder tokens produced by strip_jinja for non-ref expressions;
+    # these are not real column names and must be excluded from the result.
+    jinja_placeholders = frozenset({"__macro__", "__jinja__", "__undefined__", "__var__"})
+
+    cols_read: set[str] = set()
+
+    # Pass 1: qualified column refs — ``passthrough_alias.col_name``
+    # Skip columns that were explicitly added (computed) by the passthrough CTE itself,
+    # since those are not from the original upstream.
+    for col_node in parsed_sql.find_all(exp.Column):
+        table = col_node.args.get("table")
+        if table is None:
+            continue
+        table_name = table.name.lower() if hasattr(table, "name") else str(table).lower()
+        if table_name in passthrough_aliases:
+            col_name = col_node.name.lower()
+            cte_added = passthrough_added_cols.get(table_name, set())
+            if col_name and col_name != "*" and col_name not in jinja_placeholders and col_name not in cte_added:
+                cols_read.add(col_name)
+
+    # Pass 2: unqualified column refs in SELECT/WHERE of passthrough-only sources.
+    # Skipped when JOINs to non-passthrough tables are present (ambiguity risk).
+    # Also skipped when the immediate FROM is a subquery (not a direct table ref),
+    # since a subquery-wrapped source may add computed columns (e.g. ROW_NUMBER())
+    # that should not be attributed to the upstream.
+    for select_node in parsed_sql.find_all(exp.Select):
+        from_clause = select_node.args.get("from_")
+        if from_clause is None:
+            continue
+        # Require a direct table reference (not a subquery) in the FROM clause.
+        from_source = from_clause.this
+        if not isinstance(from_source, exp.Table):
+            continue
+        from_alias = (from_source.alias or from_source.name).lower()
+        if from_alias not in passthrough_aliases:
+            continue
+        joins = select_node.args.get("joins") or []
+        if any(
+            (jt := j.find(exp.Table)) is not None and jt.alias_or_name.lower() not in passthrough_aliases for j in joins
+        ):
+            continue
+        clauses: list[exp.Expression] = list(select_node.expressions)
+        where = select_node.args.get("where")
+        if where is not None:
+            clauses.append(where)
+        for clause in clauses:
+            for col_node in clause.find_all(exp.Column):
+                if col_node.args.get("table") is None:
+                    col_name = col_node.name.lower()
+                    if (
+                        col_name
+                        and col_name != "*"
+                        and col_name not in jinja_placeholders
+                        and col_name not in passthrough_computed
+                    ):
+                        cols_read.add(col_name)
+
+    return cols_read if cols_read else None

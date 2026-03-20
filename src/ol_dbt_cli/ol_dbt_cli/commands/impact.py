@@ -14,8 +14,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
-import sqlglot
-import sqlglot.expressions as exp
 from cyclopts import Parameter
 from rich.console import Console
 
@@ -31,11 +29,10 @@ from ol_dbt_cli.lib.manifest import (
 )
 from ol_dbt_cli.lib.sql_parser import (
     ParsedModel,
-    _leftmost_select_from_union,
     find_compiled_dir,
+    get_columns_read_from_ref,
     parse_model_file,
     parse_model_sql_at_content,
-    strip_jinja,
 )
 from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
 
@@ -119,130 +116,6 @@ def _common_prefix_ratio(a: str, b: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Column-read analysis (for impact false-negative detection)
-# ---------------------------------------------------------------------------
-
-
-def _get_columns_read_from_ref(
-    downstream_parsed: ParsedModel,
-    upstream_name: str,
-) -> set[str] | None:
-    """Find columns a downstream model reads from an upstream model ref.
-
-    Handles the case where a column is read from upstream but aliased to a
-    different name in the output, so the renamed output column won't appear
-    in ``child.column_names`` even though the upstream column is used.
-
-    Detects two patterns:
-
-    1. **Qualified refs** — ``src.col_name`` where ``src`` is a passthrough
-       CTE alias (or the ref placeholder itself).
-    2. **Unqualified refs** — bare ``col_name`` inside a SELECT or WHERE
-       clause whose only FROM source is a passthrough alias with no joins to
-       other tables.  This is the common dbt CTE pattern::
-
-           with src as (select * from {{ ref('upstream') }})
-           select col_a, col_b from src where col_c > 0
-
-    Returns the set of column names read from the upstream, or ``None`` if
-    the SQL is unavailable or the upstream is not referenced.
-    """
-    if upstream_name not in downstream_parsed.refs:
-        return None
-
-    ref_placeholder = next(
-        (k for k, v in downstream_parsed.ref_placeholder_map.items() if v == upstream_name),
-        None,
-    )
-    if ref_placeholder is None:
-        return None
-
-    sql_path = downstream_parsed.compiled_path or downstream_parsed.source_path
-    if sql_path is None or not sql_path.exists():
-        return None
-
-    try:
-        raw_sql = sql_path.read_text()
-        if downstream_parsed.compiled_path:
-            clean_sql = raw_sql
-        else:
-            clean_sql = strip_jinja(raw_sql).clean_sql
-
-        stmts = sqlglot.parse(clean_sql, dialect="trino", error_level=sqlglot.ErrorLevel.IGNORE)
-        parsed_sql = next((s for s in reversed(stmts) if s is not None), None)
-        if parsed_sql is None:
-            return None
-    except Exception:  # noqa: BLE001
-        return None
-
-    # Find CTE names that are thin passthroughs to the upstream ref placeholder.
-    # A passthrough CTE does SELECT * from another passthrough (chains are followed).
-    passthrough_aliases: set[str] = {ref_placeholder.lower()}
-    for cte in parsed_sql.find_all(exp.CTE):
-        cte_name = cte.alias_or_name.lower()
-        cte_query = cte.args.get("this")
-
-        cte_select: exp.Select | None = None
-        if isinstance(cte_query, exp.Select):
-            cte_select = cte_query
-        elif isinstance(cte_query, exp.Union):
-            cte_select = _leftmost_select_from_union(cte_query)
-
-        if cte_select is None:
-            continue
-
-        from_clause = cte_select.args.get("from_")
-        if from_clause is None:
-            continue
-        from_table = from_clause.find(exp.Table)
-        if from_table and from_table.alias_or_name.lower() in passthrough_aliases:
-            if cte_select.find(exp.Star) is not None:
-                passthrough_aliases.add(cte_name)
-
-    cols_read: set[str] = set()
-
-    # Pass 1: qualified column refs — ``passthrough_alias.col_name``
-    for col_node in parsed_sql.find_all(exp.Column):
-        table = col_node.args.get("table")
-        if table is None:
-            continue
-        table_name = table.name.lower() if hasattr(table, "name") else str(table).lower()
-        if table_name in passthrough_aliases:
-            col_name = col_node.name.lower()
-            if col_name and col_name != "*":
-                cols_read.add(col_name)
-
-    # Pass 2: unqualified column refs inside SELECT/WHERE of passthrough-only sources.
-    # Only applies when there are no JOINs to non-passthrough tables (avoids
-    # attributing columns from joined tables to the upstream ref).
-    for select_node in parsed_sql.find_all(exp.Select):
-        from_clause = select_node.args.get("from_")
-        if from_clause is None:
-            continue
-        from_table = from_clause.find(exp.Table)
-        if from_table is None or from_table.alias_or_name.lower() not in passthrough_aliases:
-            continue
-        joins = select_node.args.get("joins") or []
-        if any(
-            (jt := j.find(exp.Table)) is not None and jt.alias_or_name.lower() not in passthrough_aliases for j in joins
-        ):
-            continue
-        # Collect bare column refs from the SELECT list and WHERE clause.
-        clauses: list[exp.Expression] = list(select_node.expressions)
-        where = select_node.args.get("where")
-        if where is not None:
-            clauses.append(where)
-        for clause in clauses:
-            for col_node in clause.find_all(exp.Column):
-                if col_node.args.get("table") is None:
-                    col_name = col_node.name.lower()
-                    if col_name and col_name != "*":
-                        cols_read.add(col_name)
-
-    return cols_read if cols_read else None
-
-
-# ---------------------------------------------------------------------------
 # Downstream impact tracing
 # ---------------------------------------------------------------------------
 
@@ -257,7 +130,7 @@ def _get_downstream_manifest(
 
     SQL analysis is the primary signal.  For each downstream child:
 
-    1. If compiled/raw SQL is available, use :func:`_get_columns_read_from_ref`
+    1. If compiled/raw SQL is available, use :func:`get_columns_read_from_ref`
        (qualified + unqualified column reads) combined with output-column
        passthrough detection to determine what is consumed.  When SQL is
        conclusive, the result is authoritative — children confirmed not to
@@ -284,7 +157,7 @@ def _get_downstream_manifest(
 
             if child_parsed is not None:
                 # SQL-first: qualified + unqualified column reads from the upstream ref
-                sql_cols = _get_columns_read_from_ref(child_parsed, upstream_name)
+                sql_cols = get_columns_read_from_ref(child_parsed, upstream_name)
                 if sql_cols is not None:
                     sql_conclusive = True
                     affected = removed_cols & sql_cols
@@ -362,7 +235,7 @@ def _get_downstream_yaml(
 
             if child_parsed is not None:
                 # SQL-first: qualified + unqualified column reads from the upstream ref
-                sql_cols = _get_columns_read_from_ref(child_parsed, current)
+                sql_cols = get_columns_read_from_ref(child_parsed, current)
                 if sql_cols is not None:
                     sql_conclusive = True
                     affected = removed_cols & sql_cols

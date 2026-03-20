@@ -38,8 +38,7 @@ class TestGetColumnsReadFromRef:
 
     def test_detects_qualified_column_read_via_cte(self, tmp_path: Path) -> None:
         """Model reads upstream column via thin passthrough CTE with qualified access."""
-        from ol_dbt_cli.commands.impact import _get_columns_read_from_ref
-        from ol_dbt_cli.lib.sql_parser import parse_model_sql
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
 
         sql = """
         with src as (
@@ -58,15 +57,14 @@ class TestGetColumnsReadFromRef:
         parsed.ref_placeholder_map = {"ref_stg_users": "stg_users"}
         parsed.source_path = sql_file
 
-        result = _get_columns_read_from_ref(parsed, "stg_users")
+        result = get_columns_read_from_ref(parsed, "stg_users")
         assert result is not None
         assert "user_email" in result
         assert "user_id" in result
 
     def test_detects_unqualified_column_read_direct_from_ref(self, tmp_path: Path) -> None:
         """Bare column refs directly FROM the ref placeholder are detected."""
-        from ol_dbt_cli.commands.impact import _get_columns_read_from_ref
-        from ol_dbt_cli.lib.sql_parser import parse_model_sql
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
 
         sql = "select user_id, email from ref_stg_users"
         sql_file = tmp_path / "downstream.sql"
@@ -77,15 +75,14 @@ class TestGetColumnsReadFromRef:
         parsed.ref_placeholder_map = {"ref_stg_users": "stg_users"}
         parsed.source_path = sql_file
 
-        result = _get_columns_read_from_ref(parsed, "stg_users")
+        result = get_columns_read_from_ref(parsed, "stg_users")
         assert result is not None
         assert "user_id" in result
         assert "email" in result
 
     def test_detects_unqualified_column_read_via_passthrough_cte(self, tmp_path: Path) -> None:
         """Bare column refs inside a CTE that SELECT * from the upstream are detected."""
-        from ol_dbt_cli.commands.impact import _get_columns_read_from_ref
-        from ol_dbt_cli.lib.sql_parser import parse_model_sql
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
 
         sql = """
         with src as (
@@ -108,7 +105,7 @@ class TestGetColumnsReadFromRef:
         parsed.ref_placeholder_map = {"ref_stg_users": "stg_users"}
         parsed.source_path = sql_file
 
-        result = _get_columns_read_from_ref(parsed, "stg_users")
+        result = get_columns_read_from_ref(parsed, "stg_users")
         assert result is not None
         assert "user_email" in result
         assert "user_id" in result
@@ -116,8 +113,7 @@ class TestGetColumnsReadFromRef:
 
     def test_detects_unqualified_column_in_where_clause(self, tmp_path: Path) -> None:
         """Bare column refs in WHERE clause of passthrough-sourced SELECT are detected."""
-        from ol_dbt_cli.commands.impact import _get_columns_read_from_ref
-        from ol_dbt_cli.lib.sql_parser import parse_model_sql
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
 
         sql = """
         with src as (
@@ -137,14 +133,13 @@ class TestGetColumnsReadFromRef:
         parsed.ref_placeholder_map = {"ref_stg_enrollments": "stg_enrollments"}
         parsed.source_path = sql_file
 
-        result = _get_columns_read_from_ref(parsed, "stg_enrollments")
+        result = get_columns_read_from_ref(parsed, "stg_enrollments")
         assert result is not None
         assert "courserunenrollment_is_active" in result
 
     def test_skips_unqualified_refs_when_join_present(self, tmp_path: Path) -> None:
         """When there are JOINs to non-passthrough tables, unqualified refs are not attributed."""
-        from ol_dbt_cli.commands.impact import _get_columns_read_from_ref
-        from ol_dbt_cli.lib.sql_parser import parse_model_sql
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
 
         sql = """
         with src as (
@@ -164,15 +159,14 @@ class TestGetColumnsReadFromRef:
         parsed.ref_placeholder_map = {"ref_stg_users": "stg_users"}
         parsed.source_path = sql_file
 
-        result = _get_columns_read_from_ref(parsed, "stg_users")
+        result = get_columns_read_from_ref(parsed, "stg_users")
         # Unqualified columns are ambiguous with a join present — only qualified refs count
         if result is not None:
             assert "course_id" not in result  # course_id likely from other_table
 
     def test_returns_none_when_upstream_not_referenced(self, tmp_path: Path) -> None:
         """Returns None when the upstream model is not referenced in the SQL."""
-        from ol_dbt_cli.commands.impact import _get_columns_read_from_ref
-        from ol_dbt_cli.lib.sql_parser import parse_model_sql
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
 
         sql = "select user_id, email from ref_other_model"
         sql_file = tmp_path / "downstream.sql"
@@ -183,13 +177,12 @@ class TestGetColumnsReadFromRef:
         parsed.ref_placeholder_map = {"ref_other_model": "other_model"}
         parsed.source_path = sql_file
 
-        result = _get_columns_read_from_ref(parsed, "stg_users")
+        result = get_columns_read_from_ref(parsed, "stg_users")
         assert result is None
 
     def test_detects_aliased_column_read(self, tmp_path: Path) -> None:
         """Column read from upstream but aliased to different name in output is detected."""
-        from ol_dbt_cli.commands.impact import _get_columns_read_from_ref
-        from ol_dbt_cli.lib.sql_parser import parse_model_sql
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
 
         # This model reads user_email from upstream, but outputs it as user_edxorg_email.
         # With manifest column intersection, user_email is not in output columns,
@@ -212,7 +205,7 @@ class TestGetColumnsReadFromRef:
         parsed.ref_placeholder_map = {"ref_stg_edxorg_program_entitlement": "stg_edxorg_program_entitlement"}
         parsed.source_path = sql_file
 
-        cols_read = _get_columns_read_from_ref(parsed, "stg_edxorg_program_entitlement")
+        cols_read = get_columns_read_from_ref(parsed, "stg_edxorg_program_entitlement")
         assert cols_read is not None
         # user_email is read from the upstream even though it's aliased in output
         assert "user_email" in cols_read

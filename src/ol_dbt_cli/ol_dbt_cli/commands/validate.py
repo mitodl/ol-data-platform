@@ -23,7 +23,7 @@ from rich.console import Console
 
 from ol_dbt_cli.lib.git_utils import get_changed_sql_models, get_repo_root
 from ol_dbt_cli.lib.manifest import ManifestRegistry, find_manifest, load_manifest
-from ol_dbt_cli.lib.sql_parser import ParsedModel, find_compiled_dir, parse_model_file
+from ol_dbt_cli.lib.sql_parser import ParsedModel, find_compiled_dir, get_columns_read_from_ref, parse_model_file
 from ol_dbt_cli.lib.yaml_registry import YamlRegistry, build_yaml_registry
 
 console = Console()
@@ -183,8 +183,91 @@ def _check_upstream_refs(
 
 
 # ---------------------------------------------------------------------------
-# Check 3: Docs coverage
+# Check 3: Broken ref column references
 # ---------------------------------------------------------------------------
+
+
+def _resolve_upstream_sql_columns(
+    ref_name: str,
+    sql_models_by_name: dict[str, ParsedModel],
+    manifest: ManifestRegistry | None,
+    yaml_registry: YamlRegistry,
+) -> set[str] | None:
+    """Return the output-column set for *ref_name* using SQL as the primary source.
+
+    Priority: SQL-parsed output (most accurate) → manifest columns → YAML columns.
+    Returns None when no source is available or the upstream uses an unresolved
+    SELECT * with no known explicit aliases.
+
+    When the upstream model uses ``SELECT cte.*, extra_col FROM ...`` (has_star=True
+    with explicit aliases), the explicit aliases are combined with manifest/YAML columns
+    to build the most complete possible set.  This avoids false positives for columns
+    that are definitely present as explicit aliases alongside the star.
+    """
+    upstream_parsed = sql_models_by_name.get(ref_name)
+    if upstream_parsed is not None and upstream_parsed.output_columns and not upstream_parsed.has_star:
+        return upstream_parsed.output_columns
+
+    # When has_star=True the upstream may have explicit aliases alongside *.
+    # Collect those as a "partial" set — they are definitively in the output.
+    partial: set[str] = upstream_parsed.output_columns if upstream_parsed is not None else set()
+
+    declared: set[str] = set()
+    if manifest is not None:
+        m = manifest.get_model(ref_name)
+        if m is not None and m.columns:
+            declared = m.column_names
+    if not declared:
+        yaml_m = yaml_registry.get_model(ref_name)
+        if yaml_m is not None and yaml_m.columns:
+            declared = yaml_m.column_names
+
+    combined = partial | declared
+    return combined if combined else None
+
+
+def _check_broken_ref_columns(
+    model_name: str,
+    parsed: ParsedModel,
+    yaml_registry: YamlRegistry,
+    manifest: ManifestRegistry | None,
+    sql_models_by_name: dict[str, ParsedModel],
+    report: ValidationReport,
+) -> None:
+    """Detect columns that a model reads from a ref() but that don't exist upstream.
+
+    Uses SQL-first analysis to determine which columns are consumed from each
+    upstream ref, then compares against that upstream's SQL output columns.
+    Reports an ERROR for each column referenced that is absent from the upstream.
+
+    Skips silently when:
+    - The downstream SQL cannot be parsed (no compiled/raw SQL path available).
+    - The upstream column set is unknown (unresolved SELECT *, no manifest/YAML).
+    - No columns can be attributed to a specific upstream ref.
+    """
+    for ref_name in parsed.refs:
+        upstream_cols = _resolve_upstream_sql_columns(ref_name, sql_models_by_name, manifest, yaml_registry)
+        if upstream_cols is None:
+            continue  # can't determine upstream schema — skip
+
+        consumed = get_columns_read_from_ref(parsed, ref_name)
+        if consumed is None:
+            continue  # can't determine what downstream reads — skip
+
+        broken = consumed - upstream_cols
+        if broken:
+            report.add(
+                "broken_ref_columns",
+                Severity.ERROR,
+                model_name,
+                f"References column(s) from ref('{ref_name}') that don't exist upstream: {sorted(broken)}",
+                f"Upstream '{ref_name}' outputs: {sorted(upstream_cols)}. "
+                "Update the model to use the correct column names.",
+            )
+
+
+# ---------------------------------------------------------------------------
+# Check 4: Docs coverage# ---------------------------------------------------------------------------
 
 
 def _check_docs_coverage(
@@ -203,7 +286,7 @@ def _check_docs_coverage(
 
 
 # ---------------------------------------------------------------------------
-# Check 4: YAML references non-existent SQL model
+# Check 5: YAML references non-existent SQL model
 # ---------------------------------------------------------------------------
 
 
@@ -282,7 +365,7 @@ def _resolve_star_with_registry(
 
 
 # ---------------------------------------------------------------------------
-# Check 5: SELECT * usage
+# Check 6: SELECT * usage
 # ---------------------------------------------------------------------------
 
 
@@ -481,7 +564,7 @@ def validate(
             name=["--skip"],
             help=(
                 "Comma-separated list of checks to skip: "
-                "yaml_sql_sync, upstream_refs, docs_coverage, yaml_integrity, select_star."
+                "yaml_sql_sync, upstream_refs, broken_ref_columns, docs_coverage, yaml_integrity, select_star."
             ),
         ),
     ] = None,
@@ -491,7 +574,7 @@ def validate(
             name=["--only"],
             help=(
                 "Comma-separated list of checks to run exclusively (all others are skipped): "
-                "yaml_sql_sync, upstream_refs, docs_coverage, yaml_integrity, select_star. "
+                "yaml_sql_sync, upstream_refs, broken_ref_columns, docs_coverage, yaml_integrity, select_star. "
                 "Mutually exclusive with --skip."
             ),
         ),
@@ -541,13 +624,14 @@ def validate(
 ) -> None:
     """Validate dbt model SQL and YAML schema files for consistency.
 
-    Runs five checks:
+    Runs six checks:
 
-    1. yaml_sql_sync  — columns in YAML match columns in SQL SELECT output
-    2. upstream_refs  — columns referenced from upstream ref() models exist
-    3. docs_coverage  — every .sql model has a YAML definition
-    4. yaml_integrity — every YAML model entry has a corresponding .sql file
-    5. select_star    — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
+    1. yaml_sql_sync       — columns in YAML match columns in SQL SELECT output
+    2. upstream_refs       — warns when an upstream ref()'s column list is unresolvable
+    3. broken_ref_columns  — columns read from a ref() that don't exist in the upstream output
+    4. docs_coverage       — every .sql model has a YAML definition
+    5. yaml_integrity      — every YAML model entry has a corresponding .sql file
+    6. select_star         — flag models using SELECT * (WARNING when unresolvable, INFO when resolved)
 
     Uses dbt manifest.json when available (run `dbt parse` first) for accurate
     column resolution. Falls back to sqlglot-based raw SQL parsing otherwise.
@@ -597,7 +681,14 @@ def validate(
             ol-dbt validate --auto-compile --target dev_qa
 
     """
-    all_checks = {"yaml_sql_sync", "upstream_refs", "docs_coverage", "yaml_integrity", "select_star"}
+    all_checks = {
+        "yaml_sql_sync",
+        "upstream_refs",
+        "broken_ref_columns",
+        "docs_coverage",
+        "yaml_integrity",
+        "select_star",
+    }
     if skip_checks and only_checks:
         console.print("[bold red]Error:[/] --skip and --only are mutually exclusive.")
         raise SystemExit(1)
@@ -744,6 +835,9 @@ def validate(
 
         if "upstream_refs" not in skipped and parsed is not None:
             _check_upstream_refs(name, parsed, yaml_registry, manifest, sql_models_by_name, report)
+
+        if "broken_ref_columns" not in skipped and parsed is not None:
+            _check_broken_ref_columns(name, parsed, yaml_registry, manifest, sql_models_by_name, report)
 
         if "docs_coverage" not in skipped:
             _check_docs_coverage(name, yaml_registry, report)
