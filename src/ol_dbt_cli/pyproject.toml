@@ -1,0 +1,36 @@
+[project]
+name = "ol-dbt-cli"
+version = "0.1.0"
+description = "CLI for dbt project analysis, validation, and impact assessment"
+authors = [{ name = "MIT Open Learning Engineering", email = "ol-data@mit.edu" }]
+requires-python = "~=3.13,<3.15"
+license = "BSD-3-Clause"
+dependencies = [
+    "cyclopts>=4.0",
+    "jinja2>=3.1",
+    "markupsafe>=2.1",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "sqlglot>=25.0",
+]
+
+[project.scripts]
+ol-dbt = "ol_dbt_cli.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatchling.build.targets.wheel]
+packages = ["ol_dbt_cli"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "S", "B", "UP", "D"]
+ignore = ["S603", "S607", "D100", "D101", "D102", "D103", "D104"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
