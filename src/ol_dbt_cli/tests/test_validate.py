@@ -576,3 +576,107 @@ class TestBrokenRefColumns:
             report=report_obj,
         )
         assert not report_obj.issues
+
+
+class TestUpstreamRefsSeedResolution:
+    """Seeds are ref()-able nodes — manifest should resolve them without warnings."""
+
+    def test_seed_ref_resolves_via_manifest_no_warning(self, tmp_path: Path) -> None:
+        """A ref() pointing to a seed that has columns in the manifest must not warn."""
+        from ol_dbt_cli.commands.validate import _check_upstream_refs
+        from ol_dbt_cli.lib.manifest import ManifestColumn, ManifestModel, ManifestRegistry
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        # Build a manifest that includes a seed with column definitions.
+        registry = ManifestRegistry()
+        seed = ManifestModel(
+            unique_id="seed.pkg.platforms",
+            name="platforms",
+            resource_type="seed",
+            original_file_path="seeds/platforms.csv",
+            schema="public",
+            database="",
+            columns={
+                "id": ManifestColumn(name="id"),
+                "name": ManifestColumn(name="name"),
+            },
+        )
+        registry.nodes[seed.unique_id] = seed
+        registry.by_name[seed.name] = seed
+
+        # Downstream model refs the seed.
+        downstream = ParsedModel(
+            name="dim_platform",
+            refs=["platforms"],
+            ref_placeholder_map={"ref_platforms": "platforms"},
+        )
+        report_obj = ValidationReport()
+        _check_upstream_refs(
+            "dim_platform",
+            downstream,
+            YamlRegistry(),
+            manifest=registry,
+            sql_models_by_name={},
+            report=report_obj,
+        )
+        # Seed columns are known → no warning
+        assert not report_obj.issues
+
+    def test_seed_not_in_manifest_by_name_produces_warning(self, tmp_path: Path) -> None:
+        """When a seed is missing from manifest.by_name (old behaviour), warn about it.
+
+        This test documents the *fixed* behaviour: seeds ARE indexed in by_name, so
+        the warning should NOT fire when columns are present.  Compare with a manifest
+        that genuinely has no entry for the seed — that should still warn.
+        """
+        from ol_dbt_cli.commands.validate import _check_upstream_refs
+        from ol_dbt_cli.lib.manifest import ManifestRegistry
+        from ol_dbt_cli.lib.sql_parser import ParsedModel
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        # Empty manifest — seed is not resolvable anywhere.
+        empty_registry = ManifestRegistry()
+
+        downstream = ParsedModel(
+            name="dim_platform",
+            refs=["platforms"],
+            ref_placeholder_map={"ref_platforms": "platforms"},
+        )
+        report_obj = ValidationReport()
+        _check_upstream_refs(
+            "dim_platform",
+            downstream,
+            YamlRegistry(),
+            manifest=empty_registry,
+            sql_models_by_name={},
+            report=report_obj,
+        )
+        # No columns anywhere → should produce a warning
+        assert any("platforms" in issue.message for issue in report_obj.issues)
+
+    def test_resolve_upstream_columns_finds_seed_in_manifest(self) -> None:
+        """_resolve_upstream_columns returns column set for a seed indexed in by_name."""
+        from ol_dbt_cli.commands.validate import _resolve_upstream_columns
+        from ol_dbt_cli.lib.manifest import ManifestColumn, ManifestModel, ManifestRegistry
+        from ol_dbt_cli.lib.yaml_registry import YamlRegistry
+
+        registry = ManifestRegistry()
+        seed = ManifestModel(
+            unique_id="seed.pkg.user_course_roles",
+            name="user_course_roles",
+            resource_type="seed",
+            original_file_path="seeds/user_course_roles.csv",
+            schema="public",
+            database="",
+            columns={
+                "user_id": ManifestColumn(name="user_id"),
+                "course_id": ManifestColumn(name="course_id"),
+                "role": ManifestColumn(name="role"),
+            },
+        )
+        registry.nodes[seed.unique_id] = seed
+        registry.by_name[seed.name] = seed
+
+        cols = _resolve_upstream_columns("user_course_roles", YamlRegistry(), registry, {})
+        assert cols == {"user_id", "course_id", "role"}
