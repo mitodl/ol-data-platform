@@ -27,8 +27,8 @@ app = cyclopts.App(
          $ ol-dbt validate
 
       4. JSON output for CI pipelines:
-         $ ol-dbt impact --output json
-         $ ol-dbt validate --output json
+         $ ol-dbt impact --format json
+         $ ol-dbt validate --format json
 
     Use --help on any command for detailed usage.
     """,

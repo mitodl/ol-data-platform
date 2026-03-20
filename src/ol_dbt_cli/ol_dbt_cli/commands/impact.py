@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections import deque
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -141,10 +142,10 @@ def _get_downstream_manifest(
     """
     results: list[DownstreamImpact] = []
     seen: set[str] = set()
-    queue: list[tuple[str, int]] = [(unique_id, 0)]
+    queue: deque[tuple[str, int]] = deque([(unique_id, 0)])
 
     while queue:
-        current_id, depth = queue.pop(0)
+        current_id, depth = queue.popleft()
         upstream_name = current_id.rsplit(".", 1)[-1] if "." in current_id else current_id
         for child in registry.get_children(current_id):
             if child.unique_id in seen:
@@ -220,10 +221,10 @@ def _get_downstream_yaml(
 
     results: list[DownstreamImpact] = []
     seen: set[str] = set()
-    queue: list[tuple[str, int]] = [(model_name, 0)]
+    queue: deque[tuple[str, int]] = deque([(model_name, 0)])
 
     while queue:
-        current, depth = queue.pop(0)
+        current, depth = queue.popleft()
         for child_name in ref_to_parents.get(current, []):
             if child_name in seen:
                 continue
@@ -286,13 +287,14 @@ def _analyse_model(
     manifest: ManifestRegistry | None,
     sql_models_by_name: dict[str, ParsedModel],
     repo_root: Path,
+    compiled_dir: Path | None = None,
 ) -> ImpactAlert | None:
     """Return an :class:`ImpactAlert` for *model_name* if there are column changes."""
     # Current column set
     current_parsed = sql_models_by_name.get(model_name)
     if current_parsed is None:
         try:
-            current_parsed = parse_model_file(sql_file)
+            current_parsed = parse_model_file(sql_file, compiled_dir=compiled_dir)
         except Exception:  # noqa: BLE001
             return None
 
@@ -596,11 +598,16 @@ def impact(
     sql_file_map: dict[str, Path] = {f.stem: f for f in all_sql_files}
 
     sql_models_by_name: dict[str, ParsedModel] = {}
+    parse_errors: dict[str, str] = {}
     for name, path in sql_file_map.items():
         try:
-            sql_models_by_name[name] = parse_model_file(path, compiled_dir=compiled_dir)
-        except Exception:  # noqa: BLE001, S110
-            pass
+            parsed = parse_model_file(path, compiled_dir=compiled_dir)
+            sql_models_by_name[name] = parsed
+            # parse_model_file may succeed but record internal parse errors
+            if parsed.parse_error:
+                parse_errors[name] = parsed.parse_error
+        except Exception as exc:  # noqa: BLE001
+            parse_errors[name] = str(exc)
 
     # Determine which models to analyse
     if model:
@@ -614,6 +621,15 @@ def impact(
         if not target_names:
             console.print(f"[dim]No SQL model changes detected vs {base_ref}.[/]")
             return
+
+    # Warn about any models in the target set that failed to parse — these will be
+    # analysed with limited accuracy (no output-column info) and may miss downstream impacts.
+    for name in target_names:
+        if name in parse_errors:
+            err_console.print(
+                f"[yellow]Warning:[/] Could not parse '{name}': {parse_errors[name][:200]}. "
+                "Downstream impact may be incomplete."
+            )
 
     if output_format == "text":
         console.print(f"\n[bold]Analysing {len(target_names)} model(s) for column-level impact[/]\n")
@@ -664,6 +680,7 @@ def impact(
             manifest,
             sql_models_by_name,
             repo_root,
+            compiled_dir=compiled_dir,
         )
         if alert is not None:
             alerts.append(alert)

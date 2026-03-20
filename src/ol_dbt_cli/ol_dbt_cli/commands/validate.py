@@ -2,10 +2,11 @@
 
 Checks:
   1. SQL/YAML sync: columns declared in YAML vs columns produced by SQL
-  2. Upstream reference validation: column referenced from ref() actually exists upstream
-  3. Docs coverage: .sql models with no YAML definition
-  4. YAML integrity: YAML entries for models that have no corresponding .sql file
-  5. SELECT *: models using SELECT * that hides column-level lineage
+  2. Upstream reference resolution: warn when column list for a ref() cannot be resolved
+  3. Broken ref columns: columns consumed from a ref() that don't exist upstream
+  4. Docs coverage: .sql models with no YAML definition
+  5. YAML integrity: YAML entries for models that have no corresponding .sql file
+  6. SELECT *: models using SELECT * that hides column-level lineage
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import sys
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 from cyclopts import Parameter
 from rich.console import Console
@@ -179,6 +180,19 @@ def _check_upstream_refs(
                 model_name,
                 f"Cannot resolve column list for ref('{ref_name}')",
                 "Run `dbt parse` to generate manifest.json for accurate upstream column resolution.",
+            )
+
+    # Also warn for source() calls — we cannot resolve sources without additional
+    # manifest APIs, but surfacing them signals that lineage is incomplete.
+    for source_ref in parsed.source_refs:
+        if manifest is None or manifest.get_source(source_ref) is None:
+            report.add(
+                "upstream_refs",
+                Severity.WARNING,
+                model_name,
+                f"Cannot resolve column list for source('{source_ref}')",
+                "Run `dbt parse` to generate manifest.json and ensure sources are "
+                "properly declared for accurate upstream column resolution.",
             )
 
 
@@ -466,6 +480,16 @@ def _resolve_model_targets(
     resolved: list[str] = []
     unknown: list[str] = []
 
+    resolved_models_dir = models_dir.resolve()
+
+    def _is_under_models_dir(p: Path) -> bool:
+        """Return True iff *p* is within *models_dir* (prevents path traversal)."""
+        try:
+            p.resolve().relative_to(resolved_models_dir)
+            return True
+        except ValueError:
+            return False
+
     # Flatten comma-separated values so users can do --model a,b or --model a --model b
     tokens: list[str] = []
     for raw in raw_values:
@@ -481,16 +505,16 @@ def _resolve_model_targets(
         candidate_dirs: list[Path] = []
 
         as_abs = Path(token)
-        if as_abs.is_absolute() and as_abs.is_dir():
+        if as_abs.is_absolute() and as_abs.is_dir() and _is_under_models_dir(as_abs):
             candidate_dirs.append(as_abs)
 
         as_rel = models_dir / token
-        if as_rel.is_dir():
+        if as_rel.is_dir() and _is_under_models_dir(as_rel):
             candidate_dirs.append(as_rel)
 
         # Fuzzy: find any subdirectory whose name matches the token
         if not candidate_dirs:
-            candidate_dirs = [p for p in models_dir.rglob(token) if p.is_dir()]
+            candidate_dirs = [p for p in models_dir.rglob(token) if p.is_dir() and _is_under_models_dir(p)]
 
         if candidate_dirs:
             before = len(resolved)
@@ -809,9 +833,13 @@ def validate(
     sql_models_by_name: dict[str, ParsedModel] = {}
     for name, path in sql_file_map_all.items():
         try:
-            sql_models_by_name[name] = parse_model_file(path, compiled_dir=compiled_dir)
-        except Exception:  # noqa: BLE001, S110
-            pass
+            parsed_m = parse_model_file(path, compiled_dir=compiled_dir)
+            sql_models_by_name[name] = parsed_m
+        except Exception as exc:  # noqa: BLE001
+            # Store a minimal ParsedModel so the model still appears in checks
+            # that don't require column data (e.g. docs_coverage) and the failure
+            # is visible rather than silently suppressed.
+            sql_models_by_name[name] = ParsedModel(name=name, parse_error=str(exc))
 
     # Second pass: upgrade SELECT * models using YAML/manifest column declarations.
     # This runs over ALL parsed models (not just target_names) so upstream models
@@ -826,24 +854,43 @@ def validate(
 
     report = ValidationReport()
 
+    # Emit parse errors as validation issues for targeted models so users know
+    # why SQL-dependent checks are skipped for affected models.
+    for name in target_names:
+        pm = sql_models_by_name.get(name)
+        if pm is not None and pm.parse_error:
+            report.add(
+                "yaml_sql_sync",
+                Severity.WARNING,
+                name,
+                f"SQL parse failed: {pm.parse_error[:200]}",
+                "SQL-dependent checks (yaml_sql_sync, upstream_refs, broken_ref_columns, "
+                "select_star) are skipped for this model.",
+            )
+
     # Run checks per model
     for name in target_names:
         parsed = sql_models_by_name.get(name)
+        # Skip SQL-dependent checks when the model failed to parse.
+        # Use cast() to narrow the type for type checkers without assert (S101).
+        sql_ok = parsed is not None and not parsed.parse_error
 
-        if "yaml_sql_sync" not in skipped and parsed is not None:
-            _check_yaml_sql_sync(name, yaml_registry, parsed, report)
+        if "yaml_sql_sync" not in skipped and sql_ok:
+            _check_yaml_sql_sync(name, yaml_registry, cast("ParsedModel", parsed), report)
 
-        if "upstream_refs" not in skipped and parsed is not None:
-            _check_upstream_refs(name, parsed, yaml_registry, manifest, sql_models_by_name, report)
+        if "upstream_refs" not in skipped and sql_ok:
+            _check_upstream_refs(name, cast("ParsedModel", parsed), yaml_registry, manifest, sql_models_by_name, report)
 
-        if "broken_ref_columns" not in skipped and parsed is not None:
-            _check_broken_ref_columns(name, parsed, yaml_registry, manifest, sql_models_by_name, report)
+        if "broken_ref_columns" not in skipped and sql_ok:
+            _check_broken_ref_columns(
+                name, cast("ParsedModel", parsed), yaml_registry, manifest, sql_models_by_name, report
+            )
 
         if "docs_coverage" not in skipped:
             _check_docs_coverage(name, yaml_registry, report)
 
-        if "select_star" not in skipped and parsed is not None:
-            _check_select_star(name, parsed, report)
+        if "select_star" not in skipped and sql_ok:
+            _check_select_star(name, cast("ParsedModel", parsed), report)
 
     # YAML integrity is a global check — run once
     if "yaml_integrity" not in skipped:

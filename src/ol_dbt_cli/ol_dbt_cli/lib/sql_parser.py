@@ -80,11 +80,13 @@ def _make_jinja_env(
     def _config(**_kwargs: object) -> markupsafe.Markup:
         return markupsafe.Markup("")  # noqa: S704
 
-    def _var(name: str, default: object = "") -> str:
-        return str(default) if default else "__var__"
+    _no_default: object = object()
 
-    def _env_var(name: str, default: object = "") -> str:
-        return str(default) if default else "__env_var__"
+    def _var(name: str, default: object = _no_default) -> object:
+        return "__var__" if default is _no_default else default
+
+    def _env_var(name: str, default: object = _no_default) -> object:
+        return "__env_var__" if default is _no_default else default
 
     def _is_incremental() -> bool:
         return False
