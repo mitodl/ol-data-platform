@@ -1,28 +1,9 @@
-slice_name: Organization Administration Details
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8  # organization_administration_report
+description: null
 params:
-  viz_type: table
-  query_mode: raw
-  groupby: []
-  temporal_columns_lookup:
-    activity_date: true
-  metrics: []
-  all_columns:
-  - activity_date
-  - courserun_readable_id
-  - user_email
-  - certificate_count
-  - chatbot_used_count
-  - enrolled_count
-  - videos_watched
-  - problems_count
-  - active_count
-  - organization_key
-  - organization_name
-  percent_metrics: []
   adhoc_filters:
   - clause: WHERE
     comparator: No filter
@@ -44,18 +25,37 @@ params:
     operatorId: IS_NOT_NULL
     sqlExpression: null
     subject: organization_name
-  order_by_cols: []
-  row_limit: 10000
-  table_timestamp_format: smart_date
+  all_columns:
+  - activity_date
+  - courserun_readable_id
+  - user_email
+  - certificate_count
+  - chatbot_used_count
+  - enrolled_count
+  - videos_watched
+  - problems_count
+  - active_count
+  - organization_key
+  - organization_name
   allow_render_html: true
-  column_config: {}
-  show_cell_bars: true
   color_pn: true
+  column_config: {}
   comparison_color_scheme: Green
-  conditional_formatting: []
   comparison_type: values
+  conditional_formatting: []
   extra_form_data: {}
-cache_timeout: null
+  groupby: []
+  metrics: []
+  order_by_cols: []
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 10000
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup:
+    activity_date: true
+  viz_type: table
+slice_name: Organization Administration Details
 uuid: 25373a70-93aa-4685-88c7-afdc137cd660
 version: 1.0.0
-dataset_uuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8 # organization_administration_report
+viz_type: table
