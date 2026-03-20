@@ -33,6 +33,7 @@ dev = [
     "dagster-dg-cli>=1.12.10",
     "dagster-webserver>=1.12.10",
     "mypy",
+    "ol-dbt-cli",
     "pre-commit>=4.0.0,<5",
     "pytest>=9.0.1,<10",
     "ruff",
@@ -40,6 +41,9 @@ dev = [
     "sqlfluff[rs]>=4.0.0",
     "types-boto3>=1.42.65",
 ]
+
+[tool.uv.sources]
+ol-dbt-cli = {workspace = true}
 
 # The ol_orchestrate package has been moved to packages/ol-orchestrate-lib/
 # and is managed as a workspace member package
