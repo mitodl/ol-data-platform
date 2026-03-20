@@ -216,7 +216,7 @@ models:
       - not_null
     - name: userlist_title
       description: str, title or name of the user list
-    - name: userlist_author_user_id
+    - name: user_id
       description: int, foreign key referencing the user who created this list
     - name: userlist_description
       description: str, description or summary of the user list content

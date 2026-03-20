@@ -38,9 +38,6 @@ models:
     description: str, source email address of the ticket
   - name: ticket_source_rel
     description: str, the relationship of the source channel to the ticket. e.g. "follow_up"
-  - name: ticket_source_ticket_id
-    description: str, the ID of the source ticket, if this ticket is a follow-up to
-      another ticket.
   - name: brand_name
     description: str, the name of the brand associated with the ticket
   - name: group_name
@@ -75,11 +72,6 @@ models:
     description: str, the satisfaction rating comment of the ticket
   - name: ticket_satisfaction_rating_reason
     description: str, the satisfaction rating reason
-  - name: ticket_is_from_messaging_channel
-    description: bool, true if the ticket's via type is a messaging channel.
-  - name: ticket_custom_fields
-    description: array, custom fields for the ticket. e.g. [{"MicroMasters Program":"supply_chain_management"},{"Ticket
-      Type":"course_information"}]
   - name: ticket_due_at
     description: timestamp, if this is a ticket of type "task" it has a due date.
   - name: ticket_unix_timestamp
@@ -96,6 +88,10 @@ models:
     description: timestamp, the time when the ticket was last updated
     tests:
     - not_null
+  - name: custom_fields
+    description: string, custom fields JSON for the ticket
+  - name: ticket_via_object
+    description: string, via object JSON describing how the ticket was created
 
 - name: int__zendesk__ticket_comment
   description: Comments associated with Zendesk tickets

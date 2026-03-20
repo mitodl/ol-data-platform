@@ -483,7 +483,7 @@ models:
     description: float, the list price for the bootcamp run sourced from installment
   - name: total_paid
     description: float, total price paid for the bootcamp run from fulfilled order
-  - name: admitted_date
+  - name: application_admitted_date
     description: timestamp, specifying when the application review step is approved.
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:

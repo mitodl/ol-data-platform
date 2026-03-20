@@ -114,6 +114,8 @@ models:
     description: str, name of the problem within the course
   - name: discussion_topic_name
     description: str, name of the discussion topic within the course
+  - name: percetage_problems_attempted
+    description: float, percentage of problems attempted
 
 - name: enrollment_detail_report
   description: Enrollment detail report for MITxOnline, xPro and edX.org courses.
@@ -369,6 +371,8 @@ models:
       normal behavior.
   - name: created_timestamp
     description: timestamp, date and time when probability was calculated
+  - name: courserungrade_grade
+    description: float, the grade value from the courserun grade
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "openedx_user_id", "platform"]
@@ -396,7 +400,7 @@ models:
       on the ai_agent. May be blank for ResourceRecommendationBot.
   - name: human_message
     description: str, the human message
-  - name: agent_message
+  - name: ai_message
     description: str, the agent message
   - name: message_index
     description: int, the order of the message in the chat session.
@@ -468,10 +472,10 @@ models:
     description: boolean, true if the learner is rewatching the video
   - name: video_watched_count
     description: int, count of videos watched
-  - name: enrolled_indicator
+  - name: enrolled_ind
     description: boolean, true if courserunenrollment_enrollment_status is null else
       false
-  - name: ever_active_indicator
+  - name: ever_active_ind
     description: boolean, true if user had any video, problem, navigation, discussion,
       chatbot , unique_course_certificate_earners otherwise false
 

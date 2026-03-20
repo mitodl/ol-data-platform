@@ -939,7 +939,7 @@ models:
     description: timestamp, specifying when enrollment ends
   - name: courserun_instructors
     description: array, array of instructors' name
-  - name: self_paced
+  - name: courserun_is_self_paced
     description: boolean, indicating whether the course is self_paced or instructor-paced
 
 - name: stg__edxorg__s3__courseware_studentmodule
@@ -1219,7 +1219,7 @@ models:
     description: str, title of the signatory
   - name: signatory_organization
     description: str, organization of the signatory
-  - name: signature_image_url
+  - name: signatory_image_url
     description: str, url of signature image file on edX platform
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
