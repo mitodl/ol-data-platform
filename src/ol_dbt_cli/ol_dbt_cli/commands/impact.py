@@ -133,6 +133,17 @@ def _get_columns_read_from_ref(
     different name in the output, so the renamed output column won't appear
     in ``child.column_names`` even though the upstream column is used.
 
+    Detects two patterns:
+
+    1. **Qualified refs** — ``src.col_name`` where ``src`` is a passthrough
+       CTE alias (or the ref placeholder itself).
+    2. **Unqualified refs** — bare ``col_name`` inside a SELECT or WHERE
+       clause whose only FROM source is a passthrough alias with no joins to
+       other tables.  This is the common dbt CTE pattern::
+
+           with src as (select * from {{ ref('upstream') }})
+           select col_a, col_b from src where col_c > 0
+
     Returns the set of column names read from the upstream, or ``None`` if
     the SQL is unavailable or the upstream is not referenced.
     """
@@ -164,7 +175,8 @@ def _get_columns_read_from_ref(
     except Exception:  # noqa: BLE001
         return None
 
-    # Find CTE names that are thin passthroughs to the upstream ref placeholder
+    # Find CTE names that are thin passthroughs to the upstream ref placeholder.
+    # A passthrough CTE does SELECT * from another passthrough (chains are followed).
     passthrough_aliases: set[str] = {ref_placeholder.lower()}
     for cte in parsed_sql.find_all(exp.CTE):
         cte_name = cte.alias_or_name.lower()
@@ -187,8 +199,9 @@ def _get_columns_read_from_ref(
             if cte_select.find(exp.Star) is not None:
                 passthrough_aliases.add(cte_name)
 
-    # Collect column names referenced with a qualifying table from the passthrough set
     cols_read: set[str] = set()
+
+    # Pass 1: qualified column refs — ``passthrough_alias.col_name``
     for col_node in parsed_sql.find_all(exp.Column):
         table = col_node.args.get("table")
         if table is None:
@@ -198,6 +211,33 @@ def _get_columns_read_from_ref(
             col_name = col_node.name.lower()
             if col_name and col_name != "*":
                 cols_read.add(col_name)
+
+    # Pass 2: unqualified column refs inside SELECT/WHERE of passthrough-only sources.
+    # Only applies when there are no JOINs to non-passthrough tables (avoids
+    # attributing columns from joined tables to the upstream ref).
+    for select_node in parsed_sql.find_all(exp.Select):
+        from_clause = select_node.args.get("from_")
+        if from_clause is None:
+            continue
+        from_table = from_clause.find(exp.Table)
+        if from_table is None or from_table.alias_or_name.lower() not in passthrough_aliases:
+            continue
+        joins = select_node.args.get("joins") or []
+        if any(
+            (jt := j.find(exp.Table)) is not None and jt.alias_or_name.lower() not in passthrough_aliases for j in joins
+        ):
+            continue
+        # Collect bare column refs from the SELECT list and WHERE clause.
+        clauses: list[exp.Expression] = list(select_node.expressions)
+        where = select_node.args.get("where")
+        if where is not None:
+            clauses.append(where)
+        for clause in clauses:
+            for col_node in clause.find_all(exp.Column):
+                if col_node.args.get("table") is None:
+                    col_name = col_node.name.lower()
+                    if col_name and col_name != "*":
+                        cols_read.add(col_name)
 
     return cols_read if cols_read else None
 
@@ -213,31 +253,63 @@ def _get_downstream_manifest(
     removed_cols: set[str],
     sql_models_by_name: dict[str, ParsedModel],
 ) -> list[DownstreamImpact]:
-    """Walk forward lineage via manifest to find models consuming *removed_cols*."""
+    """Walk forward lineage via manifest to find models consuming *removed_cols*.
+
+    SQL analysis is the primary signal.  For each downstream child:
+
+    1. If compiled/raw SQL is available, use :func:`_get_columns_read_from_ref`
+       (qualified + unqualified column reads) combined with output-column
+       passthrough detection to determine what is consumed.  When SQL is
+       conclusive, the result is authoritative — children confirmed not to
+       consume the removed columns are not flagged.
+    2. If no SQL is available, fall back to manifest column metadata.
+       Children with no metadata at all are flagged as potentially affected
+       (``affected_columns`` empty = "column metadata unavailable").
+    """
     results: list[DownstreamImpact] = []
     seen: set[str] = set()
     queue: list[tuple[str, int]] = [(unique_id, 0)]
 
     while queue:
         current_id, depth = queue.pop(0)
+        upstream_name = current_id.rsplit(".", 1)[-1] if "." in current_id else current_id
         for child in registry.get_children(current_id):
             if child.unique_id in seen:
                 continue
             seen.add(child.unique_id)
-            affected = removed_cols & child.column_names
-            if not affected and child.columns:
-                # The manifest column list doesn't include the removed columns, but
-                # the model might still read them (and alias them to different output
-                # names). Fall back to SQL-level column-read analysis.
-                child_parsed = sql_models_by_name.get(child.name)
-                # Extract the upstream model name from the unique_id (format: model.pkg.name)
-                upstream_name = current_id.rsplit(".", 1)[-1] if "." in current_id else current_id
-                if child_parsed and upstream_name:
-                    cols_read = _get_columns_read_from_ref(child_parsed, upstream_name)
-                    if cols_read:
-                        affected = removed_cols & cols_read
-            if affected or not child.columns:
-                # If child has no column metadata, flag it as potentially affected
+
+            child_parsed = sql_models_by_name.get(child.name)
+            affected: set[str] = set()
+            sql_conclusive = False
+
+            if child_parsed is not None:
+                # SQL-first: qualified + unqualified column reads from the upstream ref
+                sql_cols = _get_columns_read_from_ref(child_parsed, upstream_name)
+                if sql_cols is not None:
+                    sql_conclusive = True
+                    affected = removed_cols & sql_cols
+
+                # Output-column passthrough: if the downstream model's final SELECT
+                # emits a removed column, it is flowing through from upstream.
+                output_passthrough = removed_cols & child_parsed.output_columns
+                if output_passthrough:
+                    sql_conclusive = True
+                    affected |= output_passthrough
+
+            if not sql_conclusive:
+                # SQL analysis was unavailable — fall back to manifest column metadata.
+                affected = removed_cols & child.column_names
+                if affected or not child.columns:
+                    results.append(
+                        DownstreamImpact(
+                            model_name=child.name,
+                            unique_id=child.unique_id,
+                            affected_columns=sorted(affected),
+                            depth=depth + 1,
+                        )
+                    )
+            elif affected:
+                # SQL confirmed the child consumes one or more removed columns.
                 results.append(
                     DownstreamImpact(
                         model_name=child.name,
@@ -246,6 +318,8 @@ def _get_downstream_manifest(
                         depth=depth + 1,
                     )
                 )
+            # else: SQL analysis ran and confirmed no consumption — child is safe, skip it.
+
             queue.append((child.unique_id, depth + 1))
     return results
 
@@ -256,7 +330,12 @@ def _get_downstream_yaml(
     yaml_registry: YamlRegistry,
     sql_models_by_name: dict[str, ParsedModel],
 ) -> list[DownstreamImpact]:
-    """Walk forward lineage via YAML + sql_parser refs to find consumers of *removed_cols*."""
+    """Walk forward lineage via YAML + sql_parser refs to find consumers of *removed_cols*.
+
+    SQL analysis is the primary signal (same strategy as
+    :func:`_get_downstream_manifest`).  YAML column lists are used only as a
+    last resort when no compiled/raw SQL is available.
+    """
     # Build a ref graph: for each parsed model, which models does it reference?
     # Then invert to get children.
     ref_to_parents: dict[str, list[str]] = {}
@@ -276,18 +355,38 @@ def _get_downstream_yaml(
             if child_name in seen:
                 continue
             seen.add(child_name)
-            yaml_m = yaml_registry.get_model(child_name)
-            child_cols = yaml_m.column_names if yaml_m else set()
-            affected = removed_cols & child_cols
-            if not affected and yaml_m is not None:
-                # The YAML column list doesn't show the removed columns, but the model
-                # might read them and alias them. Fall back to SQL-level analysis.
-                child_parsed = sql_models_by_name.get(child_name)
-                if child_parsed:
-                    cols_read = _get_columns_read_from_ref(child_parsed, current)
-                    if cols_read:
-                        affected = removed_cols & cols_read
-            if affected or yaml_m is None:
+
+            child_parsed = sql_models_by_name.get(child_name)
+            affected: set[str] = set()
+            sql_conclusive = False
+
+            if child_parsed is not None:
+                # SQL-first: qualified + unqualified column reads from the upstream ref
+                sql_cols = _get_columns_read_from_ref(child_parsed, current)
+                if sql_cols is not None:
+                    sql_conclusive = True
+                    affected = removed_cols & sql_cols
+
+                # Output-column passthrough
+                output_passthrough = removed_cols & child_parsed.output_columns
+                if output_passthrough:
+                    sql_conclusive = True
+                    affected |= output_passthrough
+
+            if not sql_conclusive:
+                # SQL unavailable — fall back to YAML column metadata.
+                yaml_m = yaml_registry.get_model(child_name)
+                child_cols = yaml_m.column_names if yaml_m else set()
+                affected = removed_cols & child_cols
+                if affected or yaml_m is None:
+                    results.append(
+                        DownstreamImpact(
+                            model_name=child_name,
+                            affected_columns=sorted(affected),
+                            depth=depth + 1,
+                        )
+                    )
+            elif affected:
                 results.append(
                     DownstreamImpact(
                         model_name=child_name,
@@ -295,6 +394,8 @@ def _get_downstream_yaml(
                         depth=depth + 1,
                     )
                 )
+            # else: SQL confirmed no consumption — skip.
+
             queue.append((child_name, depth + 1))
     return results
 
