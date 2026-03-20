@@ -225,7 +225,7 @@ position:
     parents:
     - ROOT_ID
     type: TABS
-published: false
+published: true
 slug: null
 theme_uuid: null
 uuid: a7cad7b0-07ad-4a28-b3a0-6a19782228c2
