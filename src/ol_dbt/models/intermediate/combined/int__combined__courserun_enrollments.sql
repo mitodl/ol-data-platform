@@ -227,7 +227,23 @@ with mitx_enrollments as (
 )
 
 select
-    combined_enrollments.*
+    combined_enrollments.platform
+    , combined_enrollments.courserunenrollment_id
+    , combined_enrollments.courserunenrollment_is_active
+    , combined_enrollments.courserunenrollment_created_on
+    , combined_enrollments.courserunenrollment_enrollment_mode
+    , combined_enrollments.courserunenrollment_enrollment_status
+    , combined_enrollments.courserunenrollment_is_edx_enrolled
+    , combined_enrollments.courserun_upgrade_deadline
+    , combined_enrollments.user_id
+    , combined_enrollments.courserun_id
+    , combined_enrollments.courserun_title
+    , combined_enrollments.courserun_readable_id
+    , combined_enrollments.user_username
+    , combined_enrollments.user_email
+    , combined_enrollments.user_full_name
+    , combined_enrollments.courserungrade_grade
+    , combined_enrollments.courserungrade_is_passing
     , coalesce(combined_courseruns.course_title, combined_enrollments.courserun_title) as course_title
     , coalesce(
         combined_courseruns.course_readable_id

@@ -55,7 +55,14 @@ with products as (
 )
 
 select
-    product_subquery.*
+    product_subquery.product_id
+    , product_subquery.product_is_active
+    , product_subquery.product_created_on
+    , product_subquery.product_updated_on
+    , product_subquery.product_is_private
+    , product_subquery.courserun_id
+    , product_subquery.program_id
+    , product_subquery.product_type
     , latest_productversion.productversion_price as product_list_price
     , latest_productversion.productversion_description as product_description
     , courseruns.course_id
