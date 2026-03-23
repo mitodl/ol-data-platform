@@ -199,7 +199,7 @@ models:
   - name: courserun_title
     description: str, title of the course run
   - name: email_opted_in
-    description: int, if this field is 0 then we've recieved an email optout otherwise
+    description: int, if this field is 0 then we've received an email optout otherwise
       it will be 1
 
 - name: irx__mitxonline__openedx__mysql__assessment_assessment
