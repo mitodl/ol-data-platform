@@ -1,0 +1,232 @@
+certification_details: ''
+certified_by: ''
+css: ''
+dashboard_title: Course Staff and Admins
+description: null
+metadata:
+  chart_configuration:
+    '253':
+      crossFilters:
+        chartsInScope:
+        - 254
+        scope: global
+      id: 253
+    '254':
+      crossFilters:
+        chartsInScope:
+        - 253
+        scope: global
+      id: 254
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 253
+    - 254
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 253
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-6hPXc9XNtjtujHZNp2Hnf
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: platform
+      datasetUuid: 0242e111-f314-42a7-8c6b-fb4cb4084bc2
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-6hPXc9XNtjtujHZNp2Hnf
+    chartsInScope:
+    - 253
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-eoO95ZUpZ9IxLwlu5hTEr
+    name: Course Run Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: 0242e111-f314-42a7-8c6b-fb4cb4084bc2
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    chartsInScope:
+    - 253
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-A8qxfPrAE5x2v3fLV9t5G
+    name: Current Course Run
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope: []
+    targets:
+    - column:
+        name: courserun_is_current
+      datasetUuid: 0242e111-f314-42a7-8c6b-fb4cb4084bc2
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
+position:
+  CHART-e97ieVHwpCFifFDSsjOIN:
+    children: []
+    id: CHART-e97ieVHwpCFifFDSsjOIN
+    meta:
+      chartId: 254
+      height: 50
+      sliceName: Course Staff and Admins Last Updated
+      uuid: 6f8ec385-961d-4238-96e9-539524960b7c
+      width: 4
+    parents:
+    - ROOT_ID
+    - TABS-KqBeyhRnBNUt1ALUQ58rd
+    - TAB-QNe85nuDvOWA_lAUGqU0f
+    - ROW-BPfcyBhlwVz-H03Nbu0yY
+    type: CHART
+  CHART-explore-253-1:
+    children: []
+    id: CHART-explore-253-1
+    meta:
+      chartId: 253
+      height: 89
+      sliceName: Course Staff and Admins
+      uuid: c1f43a88-7db6-4a80-931a-a789988bae47
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-KqBeyhRnBNUt1ALUQ58rd
+    - TAB-0xKM2Hlt8DUDPSY-XWrpj
+    - ROW-Q_-sx86DDwHzMVTKGatN-
+    type: CHART
+  DASHBOARD_VERSION_KEY: v2
+  GRID_ID:
+    children: []
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: Course Staff and Admins
+    type: HEADER
+  ROOT_ID:
+    children:
+    - TABS-KqBeyhRnBNUt1ALUQ58rd
+    id: ROOT_ID
+    type: ROOT
+  ROW-BPfcyBhlwVz-H03Nbu0yY:
+    children:
+    - CHART-e97ieVHwpCFifFDSsjOIN
+    id: ROW-BPfcyBhlwVz-H03Nbu0yY
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-KqBeyhRnBNUt1ALUQ58rd
+    - TAB-QNe85nuDvOWA_lAUGqU0f
+    type: ROW
+  ROW-Q_-sx86DDwHzMVTKGatN-:
+    children:
+    - CHART-explore-253-1
+    id: ROW-Q_-sx86DDwHzMVTKGatN-
+    meta:
+      '0': ROOT_ID
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-KqBeyhRnBNUt1ALUQ58rd
+    - TAB-0xKM2Hlt8DUDPSY-XWrpj
+    type: ROW
+  TAB-0xKM2Hlt8DUDPSY-XWrpj:
+    children:
+    - ROW-Q_-sx86DDwHzMVTKGatN-
+    id: TAB-0xKM2Hlt8DUDPSY-XWrpj
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Data
+    parents:
+    - ROOT_ID
+    - TABS-KqBeyhRnBNUt1ALUQ58rd
+    type: TAB
+  TAB-QNe85nuDvOWA_lAUGqU0f:
+    children:
+    - ROW-BPfcyBhlwVz-H03Nbu0yY
+    id: TAB-QNe85nuDvOWA_lAUGqU0f
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Help
+    parents:
+    - ROOT_ID
+    - TABS-KqBeyhRnBNUt1ALUQ58rd
+    type: TAB
+  TABS-KqBeyhRnBNUt1ALUQ58rd:
+    children:
+    - TAB-0xKM2Hlt8DUDPSY-XWrpj
+    - TAB-QNe85nuDvOWA_lAUGqU0f
+    id: TABS-KqBeyhRnBNUt1ALUQ58rd
+    meta: {}
+    parents:
+    - ROOT_ID
+    type: TABS
+published: true
+slug: null
+theme_uuid: null
+uuid: a7cad7b0-07ad-4a28-b3a0-6a19782228c2
+version: 1.0.0
