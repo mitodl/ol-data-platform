@@ -1879,7 +1879,7 @@ models:
     description: timestamp, datetime when this row was created
   - name: blockcompletion_updated_on
     description: timestamp, datetime when this row was last updated
-  - name: block_key
+  - name: block_fk
     description: string, foreign key to dim_course_content, referencing the block
       ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
       code}.

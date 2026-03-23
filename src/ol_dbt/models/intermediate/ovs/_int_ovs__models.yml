@@ -50,3 +50,7 @@ models:
     - not_null
     - accepted_values:
         values: ['{{ var("mitxonline") }}', '{{ var("mitxpro") }}']
+  - name: collection_id
+    description: string, ID of the video collection
+  - name: video_status
+    description: string, publication status of the video

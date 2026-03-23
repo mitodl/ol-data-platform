@@ -175,6 +175,8 @@ models:
     description: int, foreign key to ecommerce_couponpaymentversion
     tests:
     - not_null
+  - name: is_latest_couponversion
+    description: boolean, whether this is the latest coupon version
 - name: int__mitxpro__ecommerce_couponredemption
   description: A row in this table is added when an order uses a coupon code
   columns:
@@ -1187,8 +1189,8 @@ models:
     description: boolean, whether the program is on an external platform
     tests:
     - not_null
-  - name: platform_id
-    description: int, id of the program platform
+  - name: platform_name
+    description: str, name of the program platform
   - name: cms_programpage_description
     description: str, the description displayed on the page
   - name: cms_programpage_duration
@@ -1288,8 +1290,8 @@ models:
   - name: short_program_code
     description: str, a short portion of the readable course id that contains the
       program code. Examples include ML, QCF, AIPS, and DSBD.
-  - name: platform_id
-    description: int, id of the course platform
+  - name: platform_name
+    description: str, name of the course platform
   - name: cms_coursepage_description
     description: str, the description displayed on the page
   - name: cms_coursepage_duration

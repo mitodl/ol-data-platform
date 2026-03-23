@@ -267,6 +267,8 @@ models:
       is in the past and courserun_end_on is in the future.
     tests:
     - not_null
+  - name: course_title
+    description: string, title of the course
 
 - name: int__combined__course_structure
   description: this table contains the latest course structure of the courses from

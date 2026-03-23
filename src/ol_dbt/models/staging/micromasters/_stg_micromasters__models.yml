@@ -88,6 +88,8 @@ models:
     description: json, cybersource data for a payment
     tests:
     - not_null
+  - name: receipt_transaction_uuid
+    description: string, the UUID of the transaction from the receipt
   - name: order_id
     description: int, primary key in ecommerce_order
 

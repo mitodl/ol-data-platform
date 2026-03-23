@@ -9,7 +9,7 @@ models:
     description: string, defaulted to xPro
     tests:
     - not_null
-  - name: product_id
+  - name: productid
     description: int, foreign key in ecommerce_product
   - name: product_name
     description: str, title of the course run

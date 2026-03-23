@@ -1122,9 +1122,6 @@ models:
     tests:
     - unique
     - not_null
-  - name: program_code
-    description: str, The portion of the Open edX ID that contains the program code
-      e.g. course-v1:xPRO+MLx2's department code would be ML
   - name: course_edx_readable_id
     description: str, The edx course ID of the course in the format as {org}/{course}
     tests:
@@ -2101,8 +2098,8 @@ models:
     description: str, user's residential country
   - name: user_nationality
     description: str, user's nationality
-  - name: user_gdpr_degree
-    description: str, same as user's country
+  - name: user_gdpr_agree
+    description: str, indicating whether the user agreed to GDPR terms, e.g. "yes" or "no"
   - name: user_gdpr_consent_date
     description: timestamp, date and time when the user provided consent to the GDPR
   - name: enrollment_type
@@ -2183,8 +2180,8 @@ models:
     description: str, user's residential zip code
   - name: user_address_country
     description: str, user's residential country
-  - name: user_gdpr_degree
-    description: str, same as user's country
+  - name: user_gdpr_agree
+    description: str, user's GDPR consent status, e.g. accepted, not_accepted, or unknown
   - name: user_gdpr_consent_date
     description: timestamp, date and time when the user provided consent to the GDPR
   - name: is_enrolled
@@ -2235,7 +2232,7 @@ models:
     description: timestamp, datetime when this row was created
   - name: blockcompletion_updated_on
     description: timestamp, datetime when this row was last updated
-  - name: block_key
+  - name: block_fk
     description: string, foreign key to dim_course_content, referencing the block
       ID of the page that is being navigated by the user. e.g. block-v1:{org}+{course}+{run}type@vertical+block@{hash
       code}.

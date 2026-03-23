@@ -580,13 +580,13 @@ models:
   - name: product_created_on
     description: timestamp, date and time when the product was created on MITx Online
       or xPro
-  - name: start_date
+  - name: start_on
     description: timestamp, date and time when the course or program starts
-  - name: end_date
+  - name: end_on
     description: timestamp, date and time when the course or program ends
-  - name: enrollment_start
+  - name: enrollment_start_on
     description: timestamp, date and time when the course or program enrollment starts
-  - name: enrollment_end
+  - name: enrollment_end_on
     description: timestamp, date and time when the course or program enrollment ends
   - name: upgrade_deadline
     description: timestamp, date and time beyond which the learner can not enroll
@@ -712,6 +712,9 @@ models:
     description: boolean, indicating if the course run is currently running. True
       if courserun_start_on is in the past and blank courserun_end_on, or courserun_start_on
       is in the past and courserun_end_on is in the future.
+  - name: course_number
+    description: str, unique string for the course. It can contain letters, numbers,
+      or periods. e.g. 6.002.1x
 
 - name: marts__combined_total_course_engagements
   description: Total courserun engagement statistics from MITx Online, xPro, edX.org,

@@ -607,9 +607,9 @@ models:
     description: str, discount amount in readable format. It can be fixed discount
       which is $<dollar amount> off, fixed-price which is $<dollar amount> or percent-discount
       which is <percentage> % off
-  - name: discount_amount
-    description: numeric, actual discount dollar amount. For percent-discount coupon,
-      this is calculated as line_price * percentage off
+  - name: coupon_amount
+    description: numeric, actual coupon discount dollar amount. For percent-discount
+      coupon, this is calculated as line_price * percentage off
   - name: coupon_id
     description: int, foreign key to ecommerce_coupon
   - name: coupon_type

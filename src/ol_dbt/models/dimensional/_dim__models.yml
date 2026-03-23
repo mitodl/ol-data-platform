@@ -46,7 +46,7 @@ models:
   - name: video_played_count
     description: integer, will be 1 if the learner played the video otherwise it will
       be 0
-  - name: video_completes
+  - name: video_completed_count
     description: integer, will be 1 if the learner completed the video otherwise it
       will be 0
 
@@ -100,14 +100,18 @@ models:
     description: string, name of the video
   - name: start_date
     description: timestamp, start date
-  - name: end_date
-    description: timestamp, end date
+  - name: due_date
+    description: timestamp, due date
   - name: edx_video_id
     description: string, internal edx video ID on the open edX platform
   - name: html5_sources
     description: array, html5 video sources
   - name: transcripts
     description: json, video transcripts
+  - name: video_duration
+    description: float, duration of video in seconds
+  - name: video_edx_uuid
+    description: string, edX UUID of the video
 
 - name: dim_problem
   description: problem metadata across the Open edX platforms
@@ -134,8 +138,8 @@ models:
     description: int, maximum number of attempts allowed for this problem
   - name: start_date
     description: timestamp, start date of the problem
-  - name: end_date
-    description: timestamp, end date of the problem
+  - name: due_date
+    description: timestamp, due date of the problem
   - name: weight
     description: int, weight of the problem in the course
   - name: problem_types
@@ -171,6 +175,8 @@ models:
   - name: discussion_type
     description: string, indicates whether the topic is a course-wide discussion or
       a component-specific discussion. Possible values are course-wide and component-specific.
+  - name: discussion_block_pk
+    description: string, primary key for discussion block
 
 - name: dim_course_content
   description: Slowly Changing Dimension model for course content, including courses,
@@ -514,8 +520,8 @@ models:
       {"6a3f44c9265a44d6911996711fe4bafd_2_1":["choice_0","choice_2"]}
   - name: success
     description: str, It's either 'correct' or 'incorrect'
-  - name: current_grade
-    description: number, current grade value
+  - name: grade
+    description: number, grade value
   - name: max_grade
     description: number, maximum possible grade value for the problem
   - name: event_timestamp
@@ -573,8 +579,6 @@ models:
   - name: event_timestamp
     description: timestamp, datetime when this row was last updated. A change in this
       field implies that there was a state change.
-  - name: problem_id
-    description: str, unique identifier for a problem in the studentmodule state data
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_id",
@@ -649,6 +653,10 @@ models:
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event.
+  - name: page_url
+    description: string, URL of the page where the discussion event occurred
+  - name: user_forums_roles
+    description: string, roles of the user in the forums
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["courserun_readable_id", "openedx_user_id", "event_type", "event_json",
@@ -800,6 +808,8 @@ models:
   - name: sequential_block_fk
     description: string, foreign key to dim_course_content, referencing sequential/unit
       block ID within which this problem belongs to
+  - name: discussion_type
+    description: string, type of discussion event
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["openedx_user_id", "courserun_readable_id", "discussion_topic_fk",

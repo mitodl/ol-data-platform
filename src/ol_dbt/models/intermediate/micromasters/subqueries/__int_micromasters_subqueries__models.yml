@@ -114,8 +114,6 @@ models:
 - name: __micromasters_program_certificates_dedp_from_micromasters
   description: DEDP program certificate earners according to the micromasters database
   columns:
-  - name: user_mitxonline_username
-    description: str, username on MITx Online
   - name: micromasters_program_id
     description: int, sequential ID representing a program in MicroMasters
   - name: mitxonline_program_id
@@ -168,8 +166,6 @@ models:
       program
     tests:
     - not_null
-  - name: user_micromasters_id
-    description: int, user id in the micromasters database
 
 - name: __micromasters_program_certificates_non_dedp
   description: Non DEDP program certificate earners. Data come from learners report

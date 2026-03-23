@@ -28,28 +28,6 @@ models:
     description: string, the description of the team
   - name: team_id
     description: string, the unique id of the team
-  - name: name
-    description: string, the name of the team
-  - name: topic_id
-    description: int, foreign key to courses_coursetopic representing a single course
-      topic
-  - name: organization_protected
-    description: boolean, whether or not the team is a protected organization
-  - name: language
-    description: string, the language the team uses
-  - name: last_activity_at
-    description: timestamp, the last time the team was active
-  - name: discussion_topic_id
-    description: int, foreign key to courses_discussiontopic representing a single
-      discussion
-  - name: course_id
-    description: string, unique ID representing a single xPro course run
-  - name: id
-    description: int, the auto-incremented ID for this table
-  - name: country
-    description: string, the country that the team is based in
-  - name: date_created
-    description: timestamp, the date the team was created
 
 - name: irx__xpro__openedx__mysql__teams_membership
   description: Stores data on unique user and course team relationships.
@@ -63,10 +41,6 @@ models:
     description: int, foreign key to the users_user table
   - name: team_id
     description: string, the unique id of the team
-  - name: last_activity_at
-    description: timestamp, the last time the course team was active
-  - name: date_joined
-    description: timestamp, the date the user joined the course team
 
 - name: irx__xpro__openedx__mysql__student_courseenrollment
   description: Stores the mapping of students to the courses they are enrolled in.
@@ -82,10 +56,6 @@ models:
     description: int, the auto-incremented ID for this table
   - name: is_active
     description: boolean, whether the user has been active in a course
-  - name: created
-    description: timestamp, specifying when the user first enrolled in the course
-  - name: user_id
-    description: int, the foreign key to the users_user table
 
 - name: irx__xpro__openedx__mysql__grades_persistentcoursegrade
   description: xPro open edX course grades
@@ -172,7 +142,7 @@ models:
     description: str, user's last name. This field is not populated on production.
   - name: email
     description: str, user's email associated with their account
-  - name: password
+  - name: pass_word
     description: str, hashed password
   - name: is_staff
     description: boolean, indicating whether user can log into admin site
