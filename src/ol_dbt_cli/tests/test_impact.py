@@ -210,6 +210,181 @@ class TestGetColumnsReadFromRef:
         # user_email is read from the upstream even though it's aliased in output
         assert "user_email" in cols_read
 
+    def test_unnest_lateral_alias_not_attributed_to_upstream(self, tmp_path: Path) -> None:
+        """UNNEST lateral join column aliases must not be attributed to the upstream ref.
+
+        Pattern: ``cross join unnest(...) as t(col)`` produces ``col`` as an unqualified
+        name in the SELECT, but it comes from UNNEST, not from the upstream ref.
+        False positive: was incorrectly flagging ``col`` as missing from upstream.
+        """
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = """
+        with websitecontent as (
+            select * from ref_stg_websites
+        )
+        select
+            websitecontent.course_uuid,
+            department_number,
+            upper(department_number) as department_name
+        from websitecontent
+        cross join unnest(cast(json_parse(department_numbers_json) as array(varchar)))
+            as t(department_number)
+        """
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["stg_websites"]
+        parsed.ref_placeholder_map = {"ref_stg_websites": "stg_websites"}
+        parsed.source_path = sql_file
+
+        result = get_columns_read_from_ref(parsed, "stg_websites")
+        # course_uuid is a real upstream column (qualified via passthrough alias)
+        assert result is not None
+        assert "course_uuid" in result
+        # department_number comes from UNNEST — not from the upstream ref
+        assert "department_number" not in result
+        assert "department_name" not in result
+
+    def test_unnest_lateral_alias_in_cte_not_attributed_to_upstream(self, tmp_path: Path) -> None:
+        """UNNEST-produced columns inside a passthrough CTE SELECT must not be attributed.
+
+        Pattern: a CTE selects an unqualified UNNEST column alongside qualified upstream
+        columns.  The UNNEST column is not from the upstream ref.
+        """
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = """
+        with source as (
+            select * from ref_stg_cms
+        ),
+        unnested as (
+            select
+                source.page_id,
+                member_json
+            from source
+            cross join unnest(source.members_array) as t(member_json)
+        )
+        select
+            unnested.page_id,
+            json_query(unnested.member_json, 'lax $.name') as member_name
+        from unnested
+        """
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["stg_cms"]
+        parsed.ref_placeholder_map = {"ref_stg_cms": "stg_cms"}
+        parsed.source_path = sql_file
+
+        result = get_columns_read_from_ref(parsed, "stg_cms")
+        # page_id is a real upstream column
+        assert result is not None
+        assert "page_id" in result
+        # member_json is a UNNEST alias — not from the upstream
+        assert "member_json" not in result
+
+    def test_join_table_columns_not_attributed_to_upstream(self, tmp_path: Path) -> None:
+        """Unaliased qualified columns from JOIN tables must not be attributed to upstream.
+
+        Pattern: ``select src.*, other.col from src join other`` — ``col`` is from
+        ``other``, not from ``src``.  The passthrough CTE detection must capture it
+        in ``added`` so downstream refs to it are not flagged.
+        """
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = """
+        with courseruns as (
+            select * from ref_stg_courserun
+        ),
+        courses as (
+            select * from ref_stg_course
+        ),
+        enriched as (
+            select
+                courseruns.*,
+                courses.course_title,
+                courses.course_org
+            from courseruns
+            inner join courses on courseruns.course_id = courses.course_id
+        )
+        select
+            enriched.courserun_id,
+            enriched.course_title,
+            enriched.course_org,
+            enriched.enrollment_count
+        from enriched
+        """
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["stg_courserun", "stg_course"]
+        parsed.ref_placeholder_map = {
+            "ref_stg_courserun": "stg_courserun",
+            "ref_stg_course": "stg_course",
+        }
+        parsed.source_path = sql_file
+
+        result = get_columns_read_from_ref(parsed, "stg_courserun")
+        assert result is not None
+        # courserun_id and enrollment_count come from stg_courserun
+        assert "courserun_id" in result
+        assert "enrollment_count" in result
+        # course_title and course_org come from stg_course, not stg_courserun
+        assert "course_title" not in result
+        assert "course_org" not in result
+
+    def test_passthrough_chain_computed_column_not_attributed_to_upstream(self, tmp_path: Path) -> None:
+        """Passthrough chain: a computed column must not be attributed to the upstream.
+
+        A column added in an early passthrough CTE (via a Jinja macro) must not be
+        attributed to the upstream ref even when accessed via a later passthrough CTE in
+        the chain.  CTE B passes through CTE A with ``select *``; downstream reading
+        ``cte_b.computed_col`` should not trigger a missing-column error.
+        """
+        from ol_dbt_cli.lib.sql_parser import get_columns_read_from_ref, parse_model_sql
+
+        sql = """
+        with base as (
+            select
+                *,
+                __macro__ as hashed_id
+            from ref_stg_learners
+        ),
+        deduplicated as (
+            select
+                *,
+                row_number() over (partition by user_id order by created_on desc) as row_num
+            from base
+        )
+        select
+            deduplicated.user_id,
+            deduplicated.user_email,
+            deduplicated.hashed_id
+        from deduplicated
+        where deduplicated.row_num = 1
+        """
+        sql_file = tmp_path / "downstream.sql"
+        sql_file.write_text(sql)
+
+        parsed = parse_model_sql("downstream", sql)
+        parsed.refs = ["stg_learners"]
+        parsed.ref_placeholder_map = {"ref_stg_learners": "stg_learners"}
+        parsed.source_path = sql_file
+
+        result = get_columns_read_from_ref(parsed, "stg_learners")
+        assert result is not None
+        # user_id and user_email are real upstream columns
+        assert "user_id" in result
+        assert "user_email" in result
+        # hashed_id was added by the base CTE via macro — not from upstream
+        assert "hashed_id" not in result
+        # row_num was added by the deduplicated CTE — not from upstream
+        assert "row_num" not in result
+
 
 class TestOutputColumnPassthrough:
     """Tests for output-column passthrough detection in downstream impact functions."""

@@ -879,6 +879,16 @@ def get_columns_read_from_ref(
                         pass  # table.* — not an added alias
                     elif isinstance(expr, exp.Star):
                         pass  # bare * — not an added alias
+                    elif isinstance(expr, exp.Column):
+                        # Unaliased qualified column from a non-passthrough table — the
+                        # column was adopted from a JOIN target, not inherited from the
+                        # upstream ref.  Downstream refs to this column name must not be
+                        # attributed back to the original upstream.
+                        tbl = expr.args.get("table")
+                        if tbl is not None:
+                            qualifier = tbl.name.lower() if hasattr(tbl, "name") else str(tbl).lower()
+                            if qualifier not in passthrough_aliases:
+                                added.add(expr.name.lower())
                     else:
                         if hasattr(expr, "alias") and expr.alias:
                             added.add(expr.alias.lower())
@@ -899,8 +909,8 @@ def get_columns_read_from_ref(
     cols_read: set[str] = set()
 
     # Pass 1: qualified column refs — ``passthrough_alias.col_name``
-    # Skip columns that were explicitly added (computed) by the passthrough CTE itself,
-    # since those are not from the original upstream.
+    # Skip columns that were added by ANY passthrough CTE in the chain (not just the
+    # immediate CTE), since a column added two hops up is still not from the upstream.
     for col_node in parsed_sql.find_all(exp.Column):
         table = col_node.args.get("table")
         if table is None:
@@ -908,8 +918,12 @@ def get_columns_read_from_ref(
         table_name = table.name.lower() if hasattr(table, "name") else str(table).lower()
         if table_name in passthrough_aliases:
             col_name = col_node.name.lower()
-            cte_added = passthrough_added_cols.get(table_name, set())
-            if col_name and col_name != "*" and col_name not in jinja_placeholders and col_name not in cte_added:
+            if (
+                col_name
+                and col_name != "*"
+                and col_name not in jinja_placeholders
+                and col_name not in passthrough_computed
+            ):
                 cols_read.add(col_name)
 
     # Pass 2: unqualified column refs in SELECT/WHERE of passthrough-only sources.
@@ -930,7 +944,12 @@ def get_columns_read_from_ref(
             continue
         joins = select_node.args.get("joins") or []
         if any(
-            (jt := j.find(exp.Table)) is not None and jt.alias_or_name.lower() not in passthrough_aliases for j in joins
+            # Non-passthrough regular table join — column attribution is ambiguous.
+            ((jt := j.find(exp.Table)) is not None and jt.alias_or_name.lower() not in passthrough_aliases)
+            # UNNEST lateral join — produces new column names that are not from the upstream
+            # ref and that j.find(exp.Table) would miss (UNNEST is not an exp.Table node).
+            or j.find(exp.Unnest) is not None
+            for j in joins
         ):
             continue
         clauses: list[exp.Expression] = list(select_node.expressions)
