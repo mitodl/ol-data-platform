@@ -41,7 +41,8 @@ models:
     description: str, Youtube, Cloudfront or Null.
     tests:
     - accepted_values:
-        values: ["Youtube", "Cloudfront"]
+        arguments:
+          values: ["Youtube", "Cloudfront"]
   - name: courserun_readable_id
     description: str, the open edX course ID that the video collection associated
       with. May be blank.

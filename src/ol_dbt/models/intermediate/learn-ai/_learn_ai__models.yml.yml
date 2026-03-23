@@ -126,4 +126,5 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["checkpoint_namespace", "checkpoint_id", "chatsession_thread_id"]
+      arguments:
+        column_list: ["checkpoint_namespace", "checkpoint_id", "chatsession_thread_id"]

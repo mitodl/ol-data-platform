@@ -66,18 +66,20 @@ models:
     description: str, user gender (could be blank)
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say']
+        arguments:
+          values: ['Male', 'Female', 'Other/Prefer Not to Say']
   - name: user_has_agreed_to_terms_of_service
     description: boolean, whether the user has agreed to term of service
   - name: user_highest_education
     description: str, user's level of education reported on edx
     tests:
     - accepted_values:
-        values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-          "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
-            \ school", "Elementary/primary school", "No formal education", "Other\
-            \ education", "Doctorate in science or engineering", "Doctorate in another\
-            \ field"]
+        arguments:
+          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
+            "Associate degree", "Secondary/high school", "Junior secondary/junior\
+              \ high/middle school", "Elementary/primary school", "No formal education",
+            "Other education", "Doctorate in science or engineering", "Doctorate in\
+              \ another field"]
   - name: user_is_verified
     description: boolean, whether the user is a verified MicroMasters user (currently
       false to all users on production)
@@ -109,8 +111,8 @@ models:
     description: str, street address where user lives in
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__micromasters__app__postgres__auth_user')
-
+      arguments:
+        compare_model: ref('stg__micromasters__app__postgres__auth_user')
 - name: __micromasters_program_certificates_dedp_from_micromasters
   description: DEDP program certificate earners according to the micromasters database
   columns:
@@ -199,7 +201,8 @@ models:
       program
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_edxorg_username", "micromasters_program_id"]
+      arguments:
+        column_list: ["user_edxorg_username", "micromasters_program_id"]
 
 - name: __micromasters_course_certificates_dedp_from_micromasters
   description: DEDP course certificates from MicroMasters database
@@ -258,10 +261,11 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_micromasters_id", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_micromasters_id", "courserun_readable_id"]
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__micromasters__app__postgres__grades_coursecertificate')
-
+      arguments:
+        compare_model: ref('stg__micromasters__app__postgres__grades_coursecertificate')
 - name: __micromasters_course_certificates_dedp_from_mitxonline
   description: DEDP course certificates earned (excluded revoked) on MITxOnline
   columns:
@@ -318,8 +322,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_username", "courserun_readable_id", "micromasters_program_id",
-        "mitxonline_program_id"]
+      arguments:
+        column_list: ["user_mitxonline_username", "courserun_readable_id", "micromasters_program_id",
+          "mitxonline_program_id"]
 
 - name: __micromasters_course_certificates_non_dedp_from_edxorg
   description: Non-DEDP program course certificates earned on edX.org
@@ -373,7 +378,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_edxorg_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_edxorg_username", "courserun_readable_id"]
 
 - name: __micromasters_course_grades_dedp_from_micromasters
   description: DEDP course grades from MicroMasters database
@@ -415,11 +421,11 @@ models:
     description: timestamp, date and time when this grade was initially calculated
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_micromasters_id", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_micromasters_id", "courserun_readable_id"]
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__micromasters__app__postgres__grades_combinedcoursegrade')
-
-
+      arguments:
+        compare_model: ref('stg__micromasters__app__postgres__grades_combinedcoursegrade')
 - name: __micromasters_course_grades_dedp_from_mitxonline
   description: DEDP course grades on MITx Online
   columns:
@@ -469,8 +475,9 @@ models:
     description: timestamp, date and time when this grade was initially calculated
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_username", "courserun_readable_id", "micromasters_program_id",
-        "mitxonline_program_id"]
+      arguments:
+        column_list: ["user_mitxonline_username", "courserun_readable_id", "micromasters_program_id",
+          "mitxonline_program_id"]
 
 - name: __micromasters_course_grades_non_dedp_from_edxorg
   description: Non-DEDP program course certificates on edX.org
@@ -516,4 +523,5 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_edxorg_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_edxorg_username", "courserun_readable_id"]

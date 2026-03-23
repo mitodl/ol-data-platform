@@ -155,7 +155,8 @@ models:
     description: timestamp, specifying when the enrollment was initially
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'xPRO Global Alumni'"
+        arguments:
+          row_condition: "platform != 'xPRO Global Alumni'"
   - name: courserunenrollment_enrollment_mode
     description: string, enrollment mode for user on the corresponding platform
   - name: courserunenrollment_enrollment_status
@@ -351,7 +352,8 @@ models:
     description: boolean, true if the learner has taken the final exam in the course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "openedx_user_id", "courserun_readable_id", "problem_block_fk"]
+      arguments:
+        column_list: ["platform", "openedx_user_id", "courserun_readable_id", "problem_block_fk"]
 
 - name: student_risk_probability_report
   description: A report that contains student risk probability scores and course grade
@@ -376,7 +378,8 @@ models:
     description: float, the grade value from the courserun grade
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "openedx_user_id", "platform"]
+      arguments:
+        column_list: ["courserun_readable_id", "openedx_user_id", "platform"]
 
 - name: chatbot_usage_report
   description: AI chatbot interactions from Learn AI application including TutorBot,
@@ -438,7 +441,8 @@ models:
     description: int, a count of 1 if the user engaged with the course otherwise 0
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "organization_key", "user_email", "activity_date"]
+      arguments:
+        column_list: ["courserun_readable_id", "organization_key", "user_email", "activity_date"]
 
 - name: instructor_module_report
   description: A report showing chatbot data for later roll-up at the instructor level.
@@ -504,7 +508,8 @@ models:
     description: int, max position of the course content block within a course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "user_email", "section_title"]
+      arguments:
+        column_list: ["courserun_readable_id", "user_email", "section_title"]
 
 - name: Enrollment_Activity_Counts_Dataset
   description: A report that contains enrollment activity metrics
@@ -551,8 +556,9 @@ models:
       on that particular activity date for a user and courserun
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "user_email", "platform", "course_readable_id",
-        "activity_date"]
+      arguments:
+        column_list: ["courserun_readable_id", "user_email", "platform", "course_readable_id",
+          "activity_date"]
 
 - name: learner_demographics_and_cert_info
   description: A report that contains learner demographics and cerificate information
@@ -604,7 +610,8 @@ models:
       program credentials
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_hashed_id"]
+      arguments:
+        column_list: ["user_hashed_id"]
 
 - name: combined_enrollments_with_gender_and_date
   description: A report that contains learner enrollment details with demographic
@@ -716,24 +723,29 @@ models:
     description: str, user's job industry
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_hashed_id", "courserun_readable_id"]
-      row_condition: "platform='edX.org'"
+      arguments:
+        column_list: ["user_hashed_id", "courserun_readable_id"]
+        row_condition: "platform='edX.org'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id", "user_hashed_id"]
-      row_condition: "platform ='MITx Online'"
+      arguments:
+        column_list: ["courserunenrollment_id", "user_hashed_id"]
+        row_condition: "platform ='MITx Online'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id", "combined_orders_hash_id", "user_hashed_id"]
-      row_condition: "platform ='xPro'"
+      arguments:
+        column_list: ["courserunenrollment_id", "combined_orders_hash_id", "user_hashed_id"]
+        row_condition: "platform ='xPro'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_hashed_id", "courserun_readable_id"]
-      row_condition: "platform ='xPRO Global Alumni'"
+      arguments:
+        column_list: ["user_hashed_id", "courserun_readable_id"]
+        row_condition: "platform ='xPRO Global Alumni'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id", "order_reference_number", "user_hashed_id"]
-      row_condition: "platform='Bootcamps'"
+      arguments:
+        column_list: ["courserunenrollment_id", "order_reference_number", "user_hashed_id"]
+        row_condition: "platform='Bootcamps'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id", "user_hashed_id"]
-      row_condition: "platform ='Residential MITx'"
-
+      arguments:
+        column_list: ["courserunenrollment_id", "user_hashed_id"]
+        row_condition: "platform ='Residential MITx'"
 - name: engagement_problem_completion_summary
   description: A report that contains learner engagement details with problem completion
     information
@@ -762,8 +774,9 @@ models:
       number of problems
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "course_title", "courserun_readable_id", "subsection_title",
-        "subsection_block_index", "chapter_block_fk"]
+      arguments:
+        column_list: ["user_email", "course_title", "courserun_readable_id", "subsection_title",
+          "subsection_block_index", "chapter_block_fk"]
 
 - name: engagement_problem_completion_raw
   description: A report that contains learner engagement info with problem data
@@ -799,8 +812,9 @@ models:
       number of problems
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "platform", "courserun_readable_id", "course_title",
-        "section_title", "section_block_index"]
+      arguments:
+        column_list: ["user_email", "platform", "courserun_readable_id", "course_title",
+          "section_title", "section_block_index"]
 
 - name: page_engagement_views_report
   description: Page engagement report showing user activity at the unit, subsection,
@@ -854,7 +868,8 @@ models:
       does not match.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "openedx_user_id", "courserun_readable_id", "block_fk"]
+      arguments:
+        column_list: ["platform", "openedx_user_id", "courserun_readable_id", "block_fk"]
 
 - name: program_enrollment_with_user_report
   description: Program enrollment report enriched with user demographic data and course
@@ -969,12 +984,13 @@ models:
   # TODO: Investigate whether the upstream mart's conditional grain is the correct design or if
   # it should be simplified/fixed upstream (see issue #TBD)
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
-      row_condition: "program_id !=2 and platform_name !='edX.org'"
+      arguments:
+        column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
+        row_condition: "program_id !=2 and platform_name !='edX.org'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "user_email"]
-      row_condition: "program_id =2 and platform_name ='edX.org'"
-
+      arguments:
+        column_list: ["user_username", "user_email"]
+        row_condition: "program_id =2 and platform_name ='edX.org'"
 - name: problem_engagement_detail_report
   description: Problem engagement detail report showing user performance at the problem
     level across course runs. Includes attempt counts, grade information, and course
@@ -1091,7 +1107,8 @@ models:
       for MITx Online courses
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courseactivity_date", "user_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["courseactivity_date", "user_username", "courserun_readable_id"]
 
 - name: combined_video_engagements_counts_report
   description: Combined video engagement report across all platforms with video counts
@@ -1136,7 +1153,8 @@ models:
       the user has watched
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "chapter_title", "courserun_readable_id", "platform"]
+      arguments:
+        column_list: ["user_email", "chapter_title", "courserun_readable_id", "platform"]
 
 - name: course_staff_report
   description: Report of course staff members (instructors, staff, etc.) across all
@@ -1174,7 +1192,8 @@ models:
       in this course run. May be null if the staff member has no recorded course activity.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "user_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["platform", "user_username", "courserun_readable_id"]
 
 - name: data_detail_nav
   description: Report of navigatation events
@@ -1203,5 +1222,6 @@ models:
     description: timestamp, date and time when the navigation event was recorded.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "course_title", "courserun_readable_id", "user_username",
-        "event_type", "starting_position", "ending_position", "event_timestamp"]
+      arguments:
+        column_list: ["platform", "course_title", "courserun_readable_id", "user_username",
+          "event_type", "starting_position", "ending_position", "event_timestamp"]
