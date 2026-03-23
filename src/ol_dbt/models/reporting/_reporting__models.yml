@@ -115,7 +115,7 @@ models:
   - name: discussion_topic_name
     description: str, name of the discussion topic within the course
   - name: percetage_problems_attempted
-    description: float, percentage of problems attempted
+    description: float, percentage of problems attempted (note: column name is misspelled as "percetage" upstream and retained here for compatibility)
 
 - name: enrollment_detail_report
   description: Enrollment detail report for MITxOnline, xPro and edX.org courses.
