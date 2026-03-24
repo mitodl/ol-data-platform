@@ -11,6 +11,7 @@ with
             block_display_name as coursestructure_xml_block_display_name,
             xml_attributes as coursestructure_xml_block_attributes,
             xml_path as coursestructure_xml_block_path,
+            raw_xml as coursestructure_xml_raw_xml,
             edx_video_id as video_edx_id,
             cast(nullif(trim(duration), '') as decimal(38, 4)) as video_duration,
             max_attempts as problem_max_attempts,

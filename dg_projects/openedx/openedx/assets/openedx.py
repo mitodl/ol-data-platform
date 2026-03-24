@@ -2,7 +2,9 @@
 # - Model the different asset objects according to their type
 
 import hashlib
+import io
 import json
+import tarfile
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -266,12 +268,14 @@ def course_xml(context: AssetExecutionContext, courseware):  # noqa: ARG001
             automation_condition=upstream_or_code_changes(),
             description=(
                 "Non-XML files extracted from the course archive (e.g. SRT subtitles, "
-                "HTML content, PDFs), bundled as a tar archive for downstream use."
+                "HTML content, PDFs), materialized individually to S3 under "
+                "{source_system}/{course_id}/static/ for downstream processing."
             ),
             io_manager_key="s3file_io_manager",
             key=AssetKey(("openedx", "processed_data", "course_static_assets")),
         ),
     },
+    required_resource_keys={"openedx"},
 )
 def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath):
     # Download the remote file to the current working directory
@@ -318,14 +322,14 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
 
     # Process comprehensive XML block data and collect non-XML assets
     source_system = context.resources.openedx.deployment
-    xml_blocks, static_assets_path = process_course_xml_blocks(
+    xml_blocks, static_assets = process_course_xml_blocks(
         course_xml_path, source_system
     )
     course_xml_blocks_file = Path(
         NamedTemporaryFile(delete=False, suffix="_xml_blocks.jsonl").name
     )
     with jsonlines.open(course_xml_blocks_file, "w") as writer:
-        writer.write_all(xml_blocks)
+        writer.write_all(block.model_dump() for block in xml_blocks)
     course_xml_blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_xml_blocks').path)}/{source_system}/{context.partition_key}/{data_version}.json"  # noqa: E501
     yield Output(
         (course_xml_blocks_file, course_xml_blocks_object_key),
@@ -338,14 +342,26 @@ def extract_courserun_details(context: AssetExecutionContext, course_xml: UPath)
         },
     )
 
+    # Materialize non-XML static assets to S3. Each file is stored individually
+    # under {source_system}/{course_id}/static/{relative_path} inside the tar,
+    # preserving the original archive structure for downstream processing.
+    static_assets_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_static_assets.tar.gz").name
+    )
+    with tarfile.open(static_assets_file, "w:gz") as assets_tar:
+        for relative_path, asset_bytes in static_assets:
+            info = tarfile.TarInfo(name=relative_path)
+            info.size = len(asset_bytes)
+            assets_tar.addfile(info, io.BytesIO(asset_bytes))
     course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{source_system}/{context.partition_key}/{data_version}.tar.gz"  # noqa: E501
     yield Output(
-        (static_assets_path, course_static_assets_object_key),
+        (static_assets_file, course_static_assets_object_key),
         output_name="course_static_assets",
         data_version=DataVersion(data_version),
         metadata={
             "course_id": context.partition_key,
             "object_key": course_static_assets_object_key,
+            "asset_count": len(static_assets),
         },
     )
 
