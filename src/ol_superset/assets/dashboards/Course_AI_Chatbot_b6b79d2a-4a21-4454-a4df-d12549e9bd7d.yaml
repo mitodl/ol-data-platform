@@ -37,11 +37,12 @@ metadata:
     - 128
     - 130
     controlValues:
+      creatable: true
       defaultToFirstItem: false
       enableEmptyFilter: false
       inverseSelection: false
-      multiSelect: false
-      searchAllOptions: false
+      multiSelect: true
+      searchAllOptions: true
     defaultDataMask:
       extraFormData: {}
       filterState: {}
@@ -54,9 +55,6 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
-    tabsInScope:
-    - TAB-f9kZjFZJcGqYTdBxpCR2o
-    - TAB-yHMV5QOM_44gkFJMD_pSv
     targets:
     - column:
         name: ai_agent
@@ -65,11 +63,40 @@ metadata:
   - cascadeParentIds:
     - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
     controlValues:
+      creatable: true
       defaultToFirstItem: false
       enableEmptyFilter: false
       inverseSelection: false
       multiSelect: true
-      searchAllOptions: false
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-2pJ275QI_XYBjBj1zZmxV
+    name: Course Run Readable ID
+    scope:
+      excluded:
+      - 123
+      rootPath:
+      - ROOT_ID
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: b1f7c663-9faf-4c95-bdeb-d786a3f4cd3c
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
+    - NATIVE_FILTER-2pJ275QI_XYBjBj1zZmxV
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
     defaultDataMask:
       extraFormData: {}
       filterState: {}
@@ -111,7 +138,7 @@ position:
     id: CHART-sTqJ0pHCNGMuy7rHtXgQC
     meta:
       chartId: 123
-      height: 62
+      height: 55
       sliceName: Course AI Chatbot Table Metadata
       sliceNameOverride: Data Last Updated
       uuid: 3ac40124-8856-4823-8b81-4be13975e103
@@ -141,7 +168,7 @@ position:
       code: "<a href='https://mitodl.github.io/ol-data-platform/#!/model/model.open_learning.chatbot_usage_report#columns'\
         \ target='_blank'>Column definition</a>\n\n\n<br>\n\n\nThis dashboard contains\
         \ data from:\n  - chatbot_usage_report "
-      height: 61
+      height: 55
       width: 4
     parents:
     - ROOT_ID
@@ -149,11 +176,39 @@ position:
     - TAB-yHMV5QOM_44gkFJMD_pSv
     - ROW-uEEd4Ft-bsGgnyJenH_96
     type: MARKDOWN
+  MARKDOWN-XR1Hj4MhOd_ZezZ9ZW8cb:
+    children: []
+    id: MARKDOWN-XR1Hj4MhOd_ZezZ9ZW8cb
+    meta:
+      code: '### Change Log
+
+        **3/23/26**: Add Course Run Readable ID filter
+
+        '
+      height: 50
+      width: 12
+    parents:
+    - ROOT_ID
+    - TABS-91LTelNaHDRsdMUp1WbUT
+    - TAB-yHMV5QOM_44gkFJMD_pSv
+    - ROW-RS57Ck8DOViWHMkqfuavs
+    type: MARKDOWN
   ROOT_ID:
     children:
     - TABS-91LTelNaHDRsdMUp1WbUT
     id: ROOT_ID
     type: ROOT
+  ROW-RS57Ck8DOViWHMkqfuavs:
+    children:
+    - MARKDOWN-XR1Hj4MhOd_ZezZ9ZW8cb
+    id: ROW-RS57Ck8DOViWHMkqfuavs
+    meta:
+      background: BACKGROUND_TRANSPARENT
+    parents:
+    - ROOT_ID
+    - TABS-91LTelNaHDRsdMUp1WbUT
+    - TAB-yHMV5QOM_44gkFJMD_pSv
+    type: ROW
   ROW-jaTfpZ9FTUha0GcGgt4td:
     children:
     - CHART-explore-128-1
@@ -193,6 +248,7 @@ position:
   TAB-yHMV5QOM_44gkFJMD_pSv:
     children:
     - ROW-uEEd4Ft-bsGgnyJenH_96
+    - ROW-RS57Ck8DOViWHMkqfuavs
     id: TAB-yHMV5QOM_44gkFJMD_pSv
     meta:
       defaultText: Tab title
