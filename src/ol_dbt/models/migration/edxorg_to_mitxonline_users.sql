@@ -14,6 +14,18 @@ with edx_certificate as (
     from {{ ref('stg__edxorg__program_entitlement') }}
 )
 
+, retired_users as (
+    select
+         distinct user_id
+    from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
+    where
+        courserun_platform = '{{ var("edxorg") }}'
+        and (
+            user_email like 'retired__user%'
+            or user_username like 'retired__user%'
+        )
+)
+
 , mitx_user as (
     select * from {{ ref('int__mitx__users') }}
 )
@@ -41,10 +53,12 @@ with edx_certificate as (
     from edx_certificate_user
     left join mitx_user as mitx_user1 on edx_certificate_user.user_mitxonline_username = mitx_user1.user_mitxonline_username
     left join mitx_user as mitx_user2 on lower(edx_certificate_user.user_email) = lower(mitx_user2.user_mitxonline_email)
+    left join retired_users on edx_certificate_user.user_id = retired_users.user_id
     where
         edx_certificate_user.row_number = 1
         and mitx_user1.user_mitxonline_username is null
         and mitx_user2.user_mitxonline_email is null
+        and retired_users.user_id is null
 )
 
 , entitlement_users as (
