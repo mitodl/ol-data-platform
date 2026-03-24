@@ -15,15 +15,10 @@ with edx_certificate as (
 )
 
 , retired_users as (
-    select
-         distinct user_id
-    from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
+    select user_id
+    from {{ ref('int__edxorg__mitx_users') }}
     where
-        courserun_platform = '{{ var("edxorg") }}'
-        and (
-            user_email like 'retired__user%'
-            or user_username like 'retired__user%'
-        )
+        user_is_active = false
 )
 
 , mitx_user as (

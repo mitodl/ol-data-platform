@@ -3,15 +3,10 @@ with combined_enrollments as (
 )
 
 , retired_users as (
-    select
-         distinct user_id
-    from {{ ref('stg__edxorg__bigquery__mitx_user_info_combo') }}
+    select cast(user_id as varchar) as user_id
+    from {{ ref('int__edxorg__mitx_users') }}
     where
-        courserun_platform = '{{ var("edxorg") }}'
-        and (
-            user_email like 'retired__user%'
-            or user_username like 'retired__user%'
-        )
+        user_is_active = false
 )
 
 , edxorg_grade as (
@@ -199,7 +194,7 @@ left join edx_to_mitxonline_certificate_revision
 left join edx_signatories
     on edxorg_enrollment.courserun_readable_id = edx_signatories.courserun_readable_id
 left join retired_users
-    on edxorg_enrollment.user_id = cast(retired_users.user_id as varchar)
+    on edxorg_enrollment.user_id = retired_users.user_id
 where
     edxorg_enrollment.courseruncertificate_created_on is not null
     and mitxonline_enrollment.user_email is null
