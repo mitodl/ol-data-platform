@@ -5,18 +5,18 @@ dashboard_title: Course AI Chatbot
 description: null
 metadata:
   chart_configuration:
-    '130':
-      crossFilters:
-        chartsInScope:
-        - 128
-        scope: global
-      id: 130
     '128':
       crossFilters:
         chartsInScope:
         - 130
         scope: global
       id: 128
+    '130':
+      crossFilters:
+        chartsInScope:
+        - 128
+        scope: global
+      id: 130
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: false
