@@ -5,18 +5,18 @@ dashboard_title: Course AI Chatbot
 description: null
 metadata:
   chart_configuration:
-    '123':
+    '130':
       crossFilters:
         chartsInScope:
         - 128
         scope: global
-      id: 123
-    '195':
+      id: 130
+    '128':
       crossFilters:
         chartsInScope:
         - 130
         scope: global
-      id: 195
+      id: 128
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: false
@@ -137,7 +137,7 @@ position:
     children: []
     id: CHART-explore-128-1
     meta:
-      chartId: 195
+      chartId: 128
       height: 105
       sliceName: Course AI Chatbot
       uuid: 92488983-505d-4642-a76d-6d5225275577
@@ -152,7 +152,7 @@ position:
     children: []
     id: CHART-sTqJ0pHCNGMuy7rHtXgQC
     meta:
-      chartId: 123
+      chartId: 130
       height: 55
       sliceName: Course AI Chatbot Table Metadata
       sliceNameOverride: Data Last Updated
