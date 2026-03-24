@@ -2,999 +2,1212 @@
 version: 2
 
 sources:
-    - name: ol_warehouse_raw_data
-      loader: airbyte
-      database: '{{ target.database }}'
-      schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
-      tables:
-          - name: raw__irx__edxorg__bigquery__mitx_course
-            description: MITx courses metadata from edX.org and MITxOnline provided by IRx
-            columns:
-                - name: course_id
-                  description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
-                - name: course_title
-                  description: str, The title of the course
-                - name: url
-                  description: str, The url path of the course
-                - name: course_number
-                  description: str, The MIT course number for this course e.g. SysEngx1 is the course number for MITxPRO/SysEngx1/1T2018
-                - name: course_key_version
-                  description: str, version number of course key. e.g. v1
-                - name: semester
-                  description: str, The semester during which the course was launched e.g Fall 2020
-                - name: course_launch
-                  description: date, The date on which the course launches
-                - name: course_wrap
-                  description: date, The date on which the course wraps up
-                - name: institution
-                  description: str, The institution that is linked to the course
-                - name: content_type
-                  description: str, indicate whether this is Course, Exam, Residential, Other or blank
-                - name: modules
-                  description: str
-                - name: report_year
-                  description: int, currently single digit
-                - name: finance_year
-                  description: int, finance year
-                - name: instructors
-                  description: str, List of instructors associated with the course
-                - name: faculty_kerberos
-                  description: str, A list of kerberos usernames of the faculty associated with the course
-                - name: nchapters
-                  description: int, Number of chapters/modules in the course
-                - name: visible_nchapters
-                  description: int
-                - name: tags
-                  description: str, Tags associated with the course
-                - name: new_or_rerun
-                  description: str, Indicator whether the course is new or a re-run
-                - name: registration_open
-                  description: date, registration open date for the course
-                - name: short_title
-                  description: str, short title of the course
-                - name: subject_short_title
-                  description: str, short title for the course subject
-                - name: clean_course_number
-                  description: str
-                - name: self_paced
-                  description: int, Indicate whether or not the course is self paced e.g 1 or blank
-                - name: micromasters_description
-                  description: str, The MicroMasters indicator of the course (if applicable) e.g. DEDP
-                - name: _4_way_category_by_name
-                  description: str
-                - name: new_4_way
-                  description: str
-                - name: mit_content
-                  description: int
-                - name: phase
-                  description: str
-                - name: sheetorder
-                  description: int
-                - name: sheetorder2
-                  description: int
-                - name: andrews_short_title
-                  description: str
+- name: ol_warehouse_raw_data
+  loader: airbyte
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__irx__edxorg__bigquery__mitx_course
+    description: MITx courses metadata from edX.org and MITxOnline provided by IRx
+    columns:
+    - name: course_id
+      description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
+    - name: course_title
+      description: str, The title of the course
+    - name: url
+      description: str, The url path of the course
+    - name: course_number
+      description: str, The MIT course number for this course e.g. SysEngx1 is the
+        course number for MITxPRO/SysEngx1/1T2018
+    - name: course_key_version
+      description: str, version number of course key. e.g. v1
+    - name: semester
+      description: str, The semester during which the course was launched e.g Fall
+        2020
+    - name: course_launch
+      description: date, The date on which the course launches
+    - name: course_wrap
+      description: date, The date on which the course wraps up
+    - name: institution
+      description: str, The institution that is linked to the course
+    - name: content_type
+      description: str, indicate whether this is Course, Exam, Residential, Other
+        or blank
+    - name: modules
+      description: str
+    - name: report_year
+      description: int, currently single digit
+    - name: finance_year
+      description: int, finance year
+    - name: instructors
+      description: str, List of instructors associated with the course
+    - name: faculty_kerberos
+      description: str, A list of kerberos usernames of the faculty associated with
+        the course
+    - name: nchapters
+      description: int, Number of chapters/modules in the course
+    - name: visible_nchapters
+      description: int
+    - name: tags
+      description: str, Tags associated with the course
+    - name: new_or_rerun
+      description: str, Indicator whether the course is new or a re-run
+    - name: registration_open
+      description: date, registration open date for the course
+    - name: short_title
+      description: str, short title of the course
+    - name: subject_short_title
+      description: str, short title for the course subject
+    - name: clean_course_number
+      description: str
+    - name: self_paced
+      description: int, Indicate whether or not the course is self paced e.g 1 or
+        blank
+    - name: micromasters_description
+      description: str, The MicroMasters indicator of the course (if applicable) e.g.
+        DEDP
+    - name: _4_way_category_by_name
+      description: str
+    - name: new_4_way
+      description: str
+    - name: mit_content
+      description: int
+    - name: phase
+      description: str
+    - name: sheetorder
+      description: int
+    - name: sheetorder2
+      description: int
+    - name: andrews_short_title
+      description: str
 
-          - name: raw__irx__edxorg__bigquery__mitx_person_course
-            description: IRx source table contains user activities from edX.org, MITxOnline/xPro open edx and certain enrollment/certificate fields
-            columns:
-                - name: course_id
-                  description: str, The canonical ID of the course in the format as {org}/{course number}/{semester}. Note that this is old format as IR
-                      converts any new format (course-v1:{org}+{course}+{run}) into old ones
-                - name: user_id
-                  description: int, Numerical user ID of a learner on a specific edX platform - MITx Online/xPro open edx or edx.org
-                - name: username
-                  description: str, username of a learner on the edX platform
-                - name: registered
-                  description: boolean, indicating that the user registered in the course (obsolete - should always be true)
-                - name: viewed
-                  description: boolean, indicating that the user visited the course at least once
-                - name: explored
-                  description: boolean, indicating that the user viewed at least half of the chapters of the course
-                - name: completed
-                  description: boolean, indicating that the user completed the course with a passing grade
-                - name: loe
-                  description: str, user's Level of education in one of "p", "m" , "b", "a", "hs", "jhs", "el" "p_se", "p_oth", blank or null. blank means
-                      User did not specify level of education. Null means this student signed up before this information was collected
-                - name: yob
-                  description: int, user's Year of birth
-                - name: gender
-                  description: str, gender, one of "m", "f", "o", blank or NULL. blank means User did not specify a gender. Null means this student signed
-                      up before this information was collected
-                - name: profile_country
-                  description: str, two-letter country code as specified by user in their profile (only available after ~mid-2014)
-                - name: start_time
-                  description: timestamp, timestamp of user's enrollment in the course
-                - name: verified_enroll_time
-                  description: timestamp, timestamp on when user initially had their first id-verified enrollment event
-                - name: verified_unenroll_time
-                  description: timestamp, timestamp on when user had their last id-verified unenrollment event, if any. Null if there were no unenrollment
-                      events
-                - name: mode
-                  description: str, enrollment mode, e.g. honor, audit, verified
-                - name: is_active
-                  description: int, indicating if enrollment is active or not (1 or 0)
-                - name: grade
-                  description: float, Final grade user earned in the course, (range between 0.0 to 1.0)
-                - name: passing_grade
-                  description: float, Passing grade for the course, (range between 0.0 to 1.0)
-                - name: cert_created_date
-                  description: timestamp, timestamp when certificate was generated (if applicable)
-                - name: cert_modified_date
-                  description: timestamp, timestamp when certificate was modified (if applicable)
-                - name: cert_status
-                  description: str, one of downloadable, notpassing, audit_passing, unavailable, audit_notpassing where downloadable should = earned
-                - name: certified
-                  description: boolean, indicating that the user earned a certificate in the course
-                - name: ip
-                  description: str, Modal value of the IP address from which this user connected, from tracking logs
-                - name: postalcode
-                  description: str, Postal code corresponding to modal IP address
-                - name: cc_by_ip
-                  description: str, Two-letter country code corresponding to the modal IP address
-                - name: countrylabel
-                  description: str, Full name of country corresponding to modal IP address
-                - name: continent
-                  description: str, Full name of continent corresponding to modal IP address
-                - name: city
-                  description: str, Full name of city corresponding to modal IP address
-                - name: region
-                  description: str, Two-Letter code of region or U.S. State corresponding to modal IP address
-                - name: subdivision
-                  description: str, Full name of region/subdivision or U.S. State corresponding to modal IP address
-                - name: un_major_region
-                  description: str, UN defined sub-continent major geographic regions corresponding to modal IP address
-                - name: un_economic_group
-                  description: str, UN defined major geographical economic groups (developing and developed nations) corresponding to modal IP address
-                - name: un_developing_nation
-                  description: str, UN defined developing nation groups files corresponding to modal IP address
-                - name: un_special_region
-                  description: str, Special Regions corresponding to modal IP address (Latin America and the Caribbean, Sub-Saharan-Africa)
-                - name: latitude
-                  description: str, Latitude of city corresponding to modal IP address
-                - name: longitude
-                  description: str, Longitude of city corresponding to modal IP address
-                - name: modal_agent
-                  description: str, Most frequently used method of accessing course materials (mobile or desktop)
-                - name: ever_mobile
-                  description: int, indicating if user has ever accessed course materials using a mobile browser or app (0 or 1)
-                - name: ever_desktop
-                  description: int, indicating if user has ever accessed course materials using a desktop browser (0 or 1)
-                - name: first_event
-                  description: timestamp, timestamp of first event of user from tracking logs
-                - name: last_event
-                  description: timestamp, timestamp of last event of user from tracking logs
-                - name: nevents
-                  description: int, Number of tracking log events
-                - name: ndays_act
-                  description: int, Number of days with activity from tracking logs
-                - name: nplay_video
-                  description: int, Number of video play events from tracking logs
-                - name: nchapters
-                  description: int, Number of chapters visited by the user
-                - name: nforum_posts
-                  description: int, Number of forum posts and comments made by user
-                - name: nforum_votes
-                  description: int, Number of votes received by user's forum posts
-                - name: nforum_endorsed
-                  description: int, Number of endorsed forum posts by user
-                - name: nforum_threads
-                  description: int, Number of forum post threads by user
-                - name: nforum_comments
-                  description: int, Number of forum post comments by user
-                - name: nforum_pinned
-                  description: int, Number of forum posts by user which were pinned (good indicator of staff)
-                - name: roles
-                  description: str, One of 3 values, 'Student', Staff' or null null means that user does not have course role or discussion forum role assigned
-                      from edX data
-                - name: nprogcheck
-                  description: int, Number of progress check events from tracking logs
-                - name: nproblem_check
-                  description: int, Number of problem check events from tracking logs
-                - name: nforum_events
-                  description: int, Number of all kinds of forum events from tracking logs
-                - name: y1_anomalous
-                  description: int, indicate if this user was anomalously missing and had to be side-loaded from mongo then this field = 1, else null
-                - name: email_domain
-                  description: str, domain of the email address of the user, i.e. what appears after the '@'
-                - name: language
-                  description: str, modal transcript language
-                - name: language_download
-                  description: int, modal transcript language download for any video
-                - name: language_nevents
-                  description: int, modal transcript language events
-                - name: language_ndiff
-                  description: int, count of different transcript languages
-                - name: ntranscript
-                  description: int, Number of video transcript events from tracking logs
-                - name: nshow_answer
-                  description: int, Number of show answer events from tracking logs
-                - name: nvideo
-                  description: int, Number of video events (of all kinds) from tracking logs
-                - name: nvideos_unique_viewed
-                  description: int, Number of unique Videos viewed per user within a course
-                - name: nvideos_total_watched
-                  description: float, Total percentage of all videos watched per user within a course
-                - name: nseq_goto
-                  description: int, Number of 'sequence goto' navigational events from tracking logs
-                - name: nseek_video
-                  description: int, Number of 'video seek' events from tracking logs
-                - name: npause_video
-                  description: int, Number of 'video pause' events from tracking logs
-                - name: avg_dt
-                  description: float, Average time difference in seconds between consecutive events from tracking logs
-                - name: sdv_dt
-                  description: float, Standard deviation of difference in seconds between consecutive events from tracking logs
-                - name: max_dt
-                  description: float, Maximum difference in seconds between consecutive events from tracking logs
-                - name: n_dt
-                  description: float, Number of consecutive events used in time difference computations from tracking logs
-                - name: sum_dt
-                  description: float, Total elapsed time (in seconds) spent by user on this course, based on time difference of consecutive events, with
-                      5 min max cutoff, from tracking logs
-                - name: roles_isbetatester
-                  description: int, indicating if user is a course beta tester (1 or null) null means user does not have course role assigned
-                - name: roles_isinstructor
-                  description: int, indicating if user is a course instructor (1 or null) null means user does not have course role assigned
-                - name: roles_isstaff
-                  description: int, indicating if user is course staff (1 or null) null means user does not have course role assigned
-                - name: roles_isccx
-                  description: int, indicating if user is ccx coach (1 or null) null means user does not have course role assigned
-                - name: roles_issales
-                  description: int, indicating if user is sales (1 or null) null means user does not have course role assigned
-                - name: roles_isfinance
-                  description: int, indicating if user is finance admin (1 or null) null means user does not have course role assigned
-                - name: roles_islibrary
-                  description: int, indicating if user is library user (1 or null) null means user does not have course role assigned
-                - name: forumroles_isadmin
-                  description: int, indicating if user is forum admin (1 or null) null means user does not have a discussion forum role assigned
-                - name: forumroles_iscommunityta
-                  description: int, indicating if user is a community TA (1 or null) null means user does not have a discussion forum role assigned
-                - name: forumroles_ismoderator
-                  description: int, indicating if user is a forum moderator (1 or null) null means user does not have a discussion forum role assigned
-                - name: forumroles_isstudent
-                  description: int, indicating if user is a student on the forum (1 or null) null means user does not have a discussion forum role assigned
+  - name: raw__irx__edxorg__bigquery__mitx_person_course
+    description: IRx source table contains user activities from edX.org, MITxOnline/xPro
+      open edx and certain enrollment/certificate fields
+    columns:
+    - name: course_id
+      description: str, The canonical ID of the course in the format as {org}/{course
+        number}/{semester}. Note that this is old format as IR converts any new format
+        (course-v1:{org}+{course}+{run}) into old ones
+    - name: user_id
+      description: int, Numerical user ID of a learner on a specific edX platform
+        - MITx Online/xPro open edx or edx.org
+    - name: username
+      description: str, username of a learner on the edX platform
+    - name: registered
+      description: boolean, indicating that the user registered in the course (obsolete
+        - should always be true)
+    - name: viewed
+      description: boolean, indicating that the user visited the course at least once
+    - name: explored
+      description: boolean, indicating that the user viewed at least half of the chapters
+        of the course
+    - name: completed
+      description: boolean, indicating that the user completed the course with a passing
+        grade
+    - name: loe
+      description: str, user's Level of education in one of "p", "m" , "b", "a", "hs",
+        "jhs", "el" "p_se", "p_oth", blank or null. blank means User did not specify
+        level of education. Null means this student signed up before this information
+        was collected
+    - name: yob
+      description: int, user's Year of birth
+    - name: gender
+      description: str, gender, one of "m", "f", "o", blank or NULL. blank means User
+        did not specify a gender. Null means this student signed up before this information
+        was collected
+    - name: profile_country
+      description: str, two-letter country code as specified by user in their profile
+        (only available after ~mid-2014)
+    - name: start_time
+      description: timestamp, timestamp of user's enrollment in the course
+    - name: verified_enroll_time
+      description: timestamp, timestamp on when user initially had their first id-verified
+        enrollment event
+    - name: verified_unenroll_time
+      description: timestamp, timestamp on when user had their last id-verified unenrollment
+        event, if any. Null if there were no unenrollment events
+    - name: mode
+      description: str, enrollment mode, e.g. honor, audit, verified
+    - name: is_active
+      description: int, indicating if enrollment is active or not (1 or 0)
+    - name: grade
+      description: float, Final grade user earned in the course, (range between 0.0
+        to 1.0)
+    - name: passing_grade
+      description: float, Passing grade for the course, (range between 0.0 to 1.0)
+    - name: cert_created_date
+      description: timestamp, timestamp when certificate was generated (if applicable)
+    - name: cert_modified_date
+      description: timestamp, timestamp when certificate was modified (if applicable)
+    - name: cert_status
+      description: str, one of downloadable, notpassing, audit_passing, unavailable,
+        audit_notpassing where downloadable should = earned
+    - name: certified
+      description: boolean, indicating that the user earned a certificate in the course
+    - name: ip
+      description: str, Modal value of the IP address from which this user connected,
+        from tracking logs
+    - name: postalcode
+      description: str, Postal code corresponding to modal IP address
+    - name: cc_by_ip
+      description: str, Two-letter country code corresponding to the modal IP address
+    - name: countrylabel
+      description: str, Full name of country corresponding to modal IP address
+    - name: continent
+      description: str, Full name of continent corresponding to modal IP address
+    - name: city
+      description: str, Full name of city corresponding to modal IP address
+    - name: region
+      description: str, Two-Letter code of region or U.S. State corresponding to modal
+        IP address
+    - name: subdivision
+      description: str, Full name of region/subdivision or U.S. State corresponding
+        to modal IP address
+    - name: un_major_region
+      description: str, UN defined sub-continent major geographic regions corresponding
+        to modal IP address
+    - name: un_economic_group
+      description: str, UN defined major geographical economic groups (developing
+        and developed nations) corresponding to modal IP address
+    - name: un_developing_nation
+      description: str, UN defined developing nation groups files corresponding to
+        modal IP address
+    - name: un_special_region
+      description: str, Special Regions corresponding to modal IP address (Latin America
+        and the Caribbean, Sub-Saharan-Africa)
+    - name: latitude
+      description: str, Latitude of city corresponding to modal IP address
+    - name: longitude
+      description: str, Longitude of city corresponding to modal IP address
+    - name: modal_agent
+      description: str, Most frequently used method of accessing course materials
+        (mobile or desktop)
+    - name: ever_mobile
+      description: int, indicating if user has ever accessed course materials using
+        a mobile browser or app (0 or 1)
+    - name: ever_desktop
+      description: int, indicating if user has ever accessed course materials using
+        a desktop browser (0 or 1)
+    - name: first_event
+      description: timestamp, timestamp of first event of user from tracking logs
+    - name: last_event
+      description: timestamp, timestamp of last event of user from tracking logs
+    - name: nevents
+      description: int, Number of tracking log events
+    - name: ndays_act
+      description: int, Number of days with activity from tracking logs
+    - name: nplay_video
+      description: int, Number of video play events from tracking logs
+    - name: nchapters
+      description: int, Number of chapters visited by the user
+    - name: nforum_posts
+      description: int, Number of forum posts and comments made by user
+    - name: nforum_votes
+      description: int, Number of votes received by user's forum posts
+    - name: nforum_endorsed
+      description: int, Number of endorsed forum posts by user
+    - name: nforum_threads
+      description: int, Number of forum post threads by user
+    - name: nforum_comments
+      description: int, Number of forum post comments by user
+    - name: nforum_pinned
+      description: int, Number of forum posts by user which were pinned (good indicator
+        of staff)
+    - name: roles
+      description: str, One of 3 values, 'Student', Staff' or null null means that
+        user does not have course role or discussion forum role assigned from edX
+        data
+    - name: nprogcheck
+      description: int, Number of progress check events from tracking logs
+    - name: nproblem_check
+      description: int, Number of problem check events from tracking logs
+    - name: nforum_events
+      description: int, Number of all kinds of forum events from tracking logs
+    - name: y1_anomalous
+      description: int, indicate if this user was anomalously missing and had to be
+        side-loaded from mongo then this field = 1, else null
+    - name: email_domain
+      description: str, domain of the email address of the user, i.e. what appears
+        after the '@'
+    - name: language
+      description: str, modal transcript language
+    - name: language_download
+      description: int, modal transcript language download for any video
+    - name: language_nevents
+      description: int, modal transcript language events
+    - name: language_ndiff
+      description: int, count of different transcript languages
+    - name: ntranscript
+      description: int, Number of video transcript events from tracking logs
+    - name: nshow_answer
+      description: int, Number of show answer events from tracking logs
+    - name: nvideo
+      description: int, Number of video events (of all kinds) from tracking logs
+    - name: nvideos_unique_viewed
+      description: int, Number of unique Videos viewed per user within a course
+    - name: nvideos_total_watched
+      description: float, Total percentage of all videos watched per user within a
+        course
+    - name: nseq_goto
+      description: int, Number of 'sequence goto' navigational events from tracking
+        logs
+    - name: nseek_video
+      description: int, Number of 'video seek' events from tracking logs
+    - name: npause_video
+      description: int, Number of 'video pause' events from tracking logs
+    - name: avg_dt
+      description: float, Average time difference in seconds between consecutive events
+        from tracking logs
+    - name: sdv_dt
+      description: float, Standard deviation of difference in seconds between consecutive
+        events from tracking logs
+    - name: max_dt
+      description: float, Maximum difference in seconds between consecutive events
+        from tracking logs
+    - name: n_dt
+      description: float, Number of consecutive events used in time difference computations
+        from tracking logs
+    - name: sum_dt
+      description: float, Total elapsed time (in seconds) spent by user on this course,
+        based on time difference of consecutive events, with 5 min max cutoff, from
+        tracking logs
+    - name: roles_isbetatester
+      description: int, indicating if user is a course beta tester (1 or null) null
+        means user does not have course role assigned
+    - name: roles_isinstructor
+      description: int, indicating if user is a course instructor (1 or null) null
+        means user does not have course role assigned
+    - name: roles_isstaff
+      description: int, indicating if user is course staff (1 or null) null means
+        user does not have course role assigned
+    - name: roles_isccx
+      description: int, indicating if user is ccx coach (1 or null) null means user
+        does not have course role assigned
+    - name: roles_issales
+      description: int, indicating if user is sales (1 or null) null means user does
+        not have course role assigned
+    - name: roles_isfinance
+      description: int, indicating if user is finance admin (1 or null) null means
+        user does not have course role assigned
+    - name: roles_islibrary
+      description: int, indicating if user is library user (1 or null) null means
+        user does not have course role assigned
+    - name: forumroles_isadmin
+      description: int, indicating if user is forum admin (1 or null) null means user
+        does not have a discussion forum role assigned
+    - name: forumroles_iscommunityta
+      description: int, indicating if user is a community TA (1 or null) null means
+        user does not have a discussion forum role assigned
+    - name: forumroles_ismoderator
+      description: int, indicating if user is a forum moderator (1 or null) null means
+        user does not have a discussion forum role assigned
+    - name: forumroles_isstudent
+      description: int, indicating if user is a student on the forum (1 or null) null
+        means user does not have a discussion forum role assigned
 
-          - name: raw__irx__edxorg__bigquery__mitx_user_info_combo
-            description: source table contains users from edX.org, MITxOnline/xPro open edx sources and complete enrollments/certificates fields from edX.org
-                provided by IRx
-            columns:
-                - name: user_id
-                  description: int, Numerical user ID of a learner on a specific edX platform - MITx Online/xPro open edx or edx.org
-                - name: username
-                  description: str, The username of the learner on the edX platform (not unique)
-                - name: email
-                  description: str, The email address of the learner on the edX platform
-                - name: id_map_hash_id
-                  description: str, A hashed ID mapping learner user ID's to external systems
-                - name: is_staff
-                  description: int, Whether the user is a staff member of edx, 1 indicates staff member
-                - name: profile_language
-                  description: str, Language selected by the user as their default profile language (No longer used) History - User’s preferred language,
-                      asked during the sign up process for the 6.002x prototype course given in the Spring of 2012. Sometimes written in those languages.
-                      EdX stopped collecting this data after MITx transitioned to edX, but never removed the values for the first group of students.
-                - name: profile_location
-                  description: str, location chosen by the user on their profile (No longer used) History- User’s location, asked during the sign up process
-                      for the 6.002x prototype course given in the Spring of 2012. edX stopped collecting this column after MITx transitioned to edX, so
-                      it is only available for the first batch of students.
-                - name: profile_name
-                  description: str, The full name of the user on the edX platform
-                - name: profile_mailing_address
-                  description: str, Mailing address provided by the learner on their profile
-                - name: profile_allow_certificate
-                  description: int, Whether or not the profile allows certificate (No longer used) History - Prior to 10 Feb 2014, this field was set to
-                      0 (false) if log analysis revealed that the student was accessing the edX site from a country that the U.S. had embargoed. This restriction
-                      is no longer in effect.
-                - name: profile_goals
-                  description: str, The intended goals of the learner provided on their profile
-                - name: profile_gender
-                  description: str, Gender selected by the user on their profile
-                - name: profile_country
-                  description: str, Country selected by the learner on their profile
-                - name: profile_level_of_education
-                  description: str, user's Level of education- blank means User did not specify level of education. Null means this student signed up before
-                      this information was collected
-                - name: profile_year_of_birth
-                  description: int, A year of birth provided by the learner on their profile
-                - name: profile_meta
-                  description: str, extra metadata on learner's profile. JSON data in text field
-                - name: profile_courseware
-                  description: str, The courseware under which the profile was created History - At one point, it was part of a way to do A/B tests, but
-                      it has not been used for anything meaningful since the conclusion of the prototype course in the spring of 2012.
-                - name: profile_city
-                  description: str, City selected the learner on their profile (Not currently used) History - Added in Jan 2014, not yet implemented.
-                - name: date_joined
-                  description: timestamp, timestamp that the account was created.
-                - name: last_login
-                  description: timestamp, Timestamp indicating the last time the user logged into the edX platform
-                - name: enrollment_course_id
-                  description: str, course ID user is enrolling in. It's in the format as org/number/semester
-                - name: enrollment_mode
-                  description: str, indicate what kind of enrollment it is - mode, no-id-professional, audit, honor, verified, professional, credit
-                - name: enrollment_created
-                  description: timestamp, Timestamp indicating when the enrollment event was created
-                - name: enrollment_is_active
-                  description: int, Whether or not the enrollment is active. 1 means active
-                - name: certificate_id
-                  description: int, The ID of the certificate obtained by the user. Null if the user obtained no certificate.
-                - name: certificate_course_id
-                  description: str, The course ID associated with the certificate. It's in the format as org/number/semester
-                - name: certificate_user_id
-                  description: int, The user ID tied to the certificate
-                - name: certificate_mode
-                  description: str, The enrollment mode associated with the certificate
-                - name: certificate_distinction
-                  description: int, This was used for letters of distinction for 188.1x, but is not being used for any current courses
-                - name: certificate_created_date
-                  description: timestamp, Timestamp indicating when the certificate was created
-                - name: certificate_modified_date
-                  description: timestamp, Timestamp indicating the last time the certificate was modified
-                - name: certificate_name
-                  description: str, The name of the user that is listed on the certificate
-                - name: certificate_key
-                  description: str, A random string that is used to match server requests to responses sent to the LMS. Used internally only
-                - name: certificate_status
-                  description: str, Status of the generation of the certificate
-                - name: certificate_download_url
-                  description: str, the full URL to the certificate
-                - name: certificate_download_uuid
-                  description: str, A hash code that identifies this student’s certificate. Included as part of the download_url.
-                - name: certificate_verify_uuid
-                  description: str, A hash code that verifies the validity of a certificate. Included on the certificate itself as part of a URL.
-                - name: certificate_grade
-                  description: float, The grade when the certificate was generated
-                - name: certificate_error_reason
-                  description: str, indicate any errors encountered during certificate generation. Used internally only.
-                - name: edxinstructordash_grade
-                  description: float, A grade downloaded separately from the instructor dashboards. This is mostly null for all tables generated by the
-                      simeon CLI tool version 0.0.1
-                - name: edxinstructordash_grade_timestamp
-                  description: str, Timestamp indicating when the grades from the instructor dashboards were generated
-                - name: y1_anomalous
-                  description: int, relic from processes that the edx2bigquery package used to handle
+  - name: raw__irx__edxorg__bigquery__mitx_user_info_combo
+    description: source table contains users from edX.org, MITxOnline/xPro open edx
+      sources and complete enrollments/certificates fields from edX.org provided by
+      IRx
+    columns:
+    - name: user_id
+      description: int, Numerical user ID of a learner on a specific edX platform
+        - MITx Online/xPro open edx or edx.org
+    - name: username
+      description: str, The username of the learner on the edX platform (not unique)
+    - name: email
+      description: str, The email address of the learner on the edX platform
+    - name: id_map_hash_id
+      description: str, A hashed ID mapping learner user ID's to external systems
+    - name: is_staff
+      description: int, Whether the user is a staff member of edx, 1 indicates staff
+        member
+    - name: profile_language
+      description: str, Language selected by the user as their default profile language
+        (No longer used) History - User’s preferred language, asked during the sign
+        up process for the 6.002x prototype course given in the Spring of 2012. Sometimes
+        written in those languages. EdX stopped collecting this data after MITx transitioned
+        to edX, but never removed the values for the first group of students.
+    - name: profile_location
+      description: str, location chosen by the user on their profile (No longer used)
+        History- User’s location, asked during the sign up process for the 6.002x
+        prototype course given in the Spring of 2012. edX stopped collecting this
+        column after MITx transitioned to edX, so it is only available for the first
+        batch of students.
+    - name: profile_name
+      description: str, The full name of the user on the edX platform
+    - name: profile_mailing_address
+      description: str, Mailing address provided by the learner on their profile
+    - name: profile_allow_certificate
+      description: int, Whether or not the profile allows certificate (No longer used)
+        History - Prior to 10 Feb 2014, this field was set to 0 (false) if log analysis
+        revealed that the student was accessing the edX site from a country that the
+        U.S. had embargoed. This restriction is no longer in effect.
+    - name: profile_goals
+      description: str, The intended goals of the learner provided on their profile
+    - name: profile_gender
+      description: str, Gender selected by the user on their profile
+    - name: profile_country
+      description: str, Country selected by the learner on their profile
+    - name: profile_level_of_education
+      description: str, user's Level of education- blank means User did not specify
+        level of education. Null means this student signed up before this information
+        was collected
+    - name: profile_year_of_birth
+      description: int, A year of birth provided by the learner on their profile
+    - name: profile_meta
+      description: str, extra metadata on learner's profile. JSON data in text field
+    - name: profile_courseware
+      description: str, The courseware under which the profile was created History
+        - At one point, it was part of a way to do A/B tests, but it has not been
+        used for anything meaningful since the conclusion of the prototype course
+        in the spring of 2012.
+    - name: profile_city
+      description: str, City selected the learner on their profile (Not currently
+        used) History - Added in Jan 2014, not yet implemented.
+    - name: date_joined
+      description: timestamp, timestamp that the account was created.
+    - name: last_login
+      description: timestamp, Timestamp indicating the last time the user logged into
+        the edX platform
+    - name: enrollment_course_id
+      description: str, course ID user is enrolling in. It's in the format as org/number/semester
+    - name: enrollment_mode
+      description: str, indicate what kind of enrollment it is - mode, no-id-professional,
+        audit, honor, verified, professional, credit
+    - name: enrollment_created
+      description: timestamp, Timestamp indicating when the enrollment event was created
+    - name: enrollment_is_active
+      description: int, Whether or not the enrollment is active. 1 means active
+    - name: certificate_id
+      description: int, The ID of the certificate obtained by the user. Null if the
+        user obtained no certificate.
+    - name: certificate_course_id
+      description: str, The course ID associated with the certificate. It's in the
+        format as org/number/semester
+    - name: certificate_user_id
+      description: int, The user ID tied to the certificate
+    - name: certificate_mode
+      description: str, The enrollment mode associated with the certificate
+    - name: certificate_distinction
+      description: int, This was used for letters of distinction for 188.1x, but is
+        not being used for any current courses
+    - name: certificate_created_date
+      description: timestamp, Timestamp indicating when the certificate was created
+    - name: certificate_modified_date
+      description: timestamp, Timestamp indicating the last time the certificate was
+        modified
+    - name: certificate_name
+      description: str, The name of the user that is listed on the certificate
+    - name: certificate_key
+      description: str, A random string that is used to match server requests to responses
+        sent to the LMS. Used internally only
+    - name: certificate_status
+      description: str, Status of the generation of the certificate
+    - name: certificate_download_url
+      description: str, the full URL to the certificate
+    - name: certificate_download_uuid
+      description: str, A hash code that identifies this student’s certificate. Included
+        as part of the download_url.
+    - name: certificate_verify_uuid
+      description: str, A hash code that verifies the validity of a certificate. Included
+        on the certificate itself as part of a URL.
+    - name: certificate_grade
+      description: float, The grade when the certificate was generated
+    - name: certificate_error_reason
+      description: str, indicate any errors encountered during certificate generation.
+        Used internally only.
+    - name: edxinstructordash_grade
+      description: float, A grade downloaded separately from the instructor dashboards.
+        This is mostly null for all tables generated by the simeon CLI tool version
+        0.0.1
+    - name: edxinstructordash_grade_timestamp
+      description: str, Timestamp indicating when the grades from the instructor dashboards
+        were generated
+    - name: y1_anomalous
+      description: int, relic from processes that the edx2bigquery package used to
+        handle
 
-          - name: raw__irx__edxorg__bigquery__email_opt_in
-            description: It contains email opt-in preferences for edX.org courses provided by IRx. If users enroll in multiple courses, the email and username
-                in this table are expected to be the most recent data.
-            columns:
-                - name: course_id
-                  description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
-                - name: user_id
-                  description: int, Numerical user ID of a learner on a specific edX platform - MITx Online/xPro open edx or edx.org
-                - name: username
-                  description: str, username of a learner on the edX platform
-                - name: email
-                  description: str, The email address of the learner on the edX platform
-                - name: full_name
-                  description: str, The full name of the user on the edX platform
-                - name: is_opted_in_for_email
-                  description: boolean, indicating if the learner has opted to receive marketing emails
-                - name: preference_set_datetime
-                  description: timestamp, specifying when email opt in preference was most recently updated
+  - name: raw__irx__edxorg__bigquery__email_opt_in
+    description: It contains email opt-in preferences for edX.org courses provided
+      by IRx. If users enroll in multiple courses, the email and username in this
+      table are expected to be the most recent data.
+    columns:
+    - name: course_id
+      description: str, The canonical ID of the course in the format as {org}/{course}/{run}.
+    - name: user_id
+      description: int, Numerical user ID of a learner on a specific edX platform
+        - MITx Online/xPro open edx or edx.org
+    - name: username
+      description: str, username of a learner on the edX platform
+    - name: email
+      description: str, The email address of the learner on the edX platform
+    - name: full_name
+      description: str, The full name of the user on the edX platform
+    - name: is_opted_in_for_email
+      description: boolean, indicating if the learner has opted to receive marketing
+        emails
+    - name: preference_set_datetime
+      description: timestamp, specifying when email opt in preference was most recently
+        updated
 
-          - name: raw__edxorg__program_learner_report
-            description: learners program and course performance in MicroMasters and XSeries programs from edX.org
-            columns:
-                - name: authoring institution
-                  description: str, the name of the organization that is the author for the program for which this report was generated. Currently, it's
-                      MITx for all records.
-                - name: program type
-                  description: str, the type of the program. The value are 'MicroMasters' and 'XSeries' for MITx programs on edX.org
-                - name: program uuid
-                  description: str, the UUID of the program on edX.org. 'MIT Finance' and 'Finance' are two different UUIDs, as they have different required
-                      courses. 'Statistics and Data Science' is split into 'Statistics and Data Science' and 'Statistics and Data Science (General track)',
-                      which are also two different program UUIDs
-                - name: program title
-                  description: str, title of the program on edX.org
-                - name: user_id
-                  description: str, the edX learner ID in the LMS in a user's course run enrollment record.
-                - name: username
-                  description: str, username of the user on edX.org
-                - name: name
-                  description: str, The full name of an edX learner in the LMS in a user's user profile record. Retired users will have no full name available.
-                - name: user roles
-                  description: str, roles assigned to the user. A user can have multiple roles. Values are beta_testers, data_researcher, finance_admin,
-                      sales_admin, instructor, staff, etc.
-                - name: course run key
-                  description: str, the key of the course-run the learner has enrolled in, formatted as course-v1:{org}+{course}+{run}
-                - name: course title
-                  description: str, the course run title on edX.org
-                - name: track
-                  description: str, the course mode of the learner's enrollment in this course-run. Also called enrollment mode. Values are 'audit', 'verified',
-                      'honor' and 'credit' in this table.
-                - name: letter grade
-                  description: str, the letter grade for the user in the course run. This value is based on the course run's grading policy. The letter
-                      grade may be blank if the grading/credentials task has not yet run for this learner. Values are 'A', 'B', 'C', 'D', 'F', 'Pass'.
-                - name: grade
-                  description: str, the current grade for the user in this course-run as a decimal (e.g. 0.84). If this value is null, the user does not
-                      yet have a course grade in this course-run.
-                - name: currently enrolled
-                  description: str, whether the learner is currently enrolled in the course. 'true' or 'false'
-                - name: purchased as bundle
-                  description: str, whether the learner has purchased this course as bundle. 'true' or 'false'
-                - name: completed
-                  description: str, whether the learner completed the course run. 'true' if a verified learner has earned a certificate in a course run
-                      that counts towards program completion. This is based on the user's course certificate in the LMS. A course certificate counts towards
-                      completion if the learner has passed the course and the course run mode matches the mode of the course. Learner certificates for unverified
-                      accounts do not count towards program completion until the account is verified.
-                - name: completed program
-                  description: str, whether the learner has passed each of the courses in the program with a grade that qualifies them for a verified certificate.
-                      'true' or 'false'.
-                - name: date completed
-                  description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that the learner earned a passing certificate for this course
-                      run. If a user passes the course before verification, then the completed date will reflect the date the certificate was generated
-                      for that verified learner.
-                - name: date program certificate awarded
-                  description: str, the date in the format 'YYYY-MM-DDTHH:mm:ssZ' in UTC that the learner has passed each of the courses in the program
-                      and was awarded a program certificate.
-                - name: last activity date
-                  description: str, the date in the format 'YYYY-MM-DD' in UTC that the learner was last active in the course run.
-                - name: date first enrolled
-                  description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that the learner enrolled in this course run for the first time.
-                      For example, if the learner enrolled in the course run, unenrolled, and then re-enrolled, this value would represent the time that
-                      they enrolled in the course run for the first time.
-                - name: date last unenrolled
-                  description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that the learner last unenrolled in this course run. This will
-                      be null if the learner has never unenrolled from this course run. For example, if the learner enrolled in the course run, unenrolled,
-                      reenrolled, and then unenrolled, this value would represent the most recent time that they unenrolled in the course run.
-                - name: date first upgraded to verified
-                  description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that the learner first upgraded to the verified track course mode.
-                - name: course run start date
-                  description: str, the start date of the course run in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC
+  - name: raw__edxorg__program_learner_report
+    description: learners program and course performance in MicroMasters and XSeries
+      programs from edX.org
+    columns:
+    - name: authoring institution
+      description: str, the name of the organization that is the author for the program
+        for which this report was generated. Currently, it's MITx for all records.
+    - name: program type
+      description: str, the type of the program. The value are 'MicroMasters' and
+        'XSeries' for MITx programs on edX.org
+    - name: program uuid
+      description: str, the UUID of the program on edX.org. 'MIT Finance' and 'Finance'
+        are two different UUIDs, as they have different required courses. 'Statistics
+        and Data Science' is split into 'Statistics and Data Science' and 'Statistics
+        and Data Science (General track)', which are also two different program UUIDs
+    - name: program title
+      description: str, title of the program on edX.org
+    - name: user_id
+      description: str, the edX learner ID in the LMS in a user's course run enrollment
+        record.
+    - name: username
+      description: str, username of the user on edX.org
+    - name: name
+      description: str, The full name of an edX learner in the LMS in a user's user
+        profile record. Retired users will have no full name available.
+    - name: user roles
+      description: str, roles assigned to the user. A user can have multiple roles.
+        Values are beta_testers, data_researcher, finance_admin, sales_admin, instructor,
+        staff, etc.
+    - name: course run key
+      description: str, the key of the course-run the learner has enrolled in, formatted
+        as course-v1:{org}+{course}+{run}
+    - name: course title
+      description: str, the course run title on edX.org
+    - name: track
+      description: str, the course mode of the learner's enrollment in this course-run.
+        Also called enrollment mode. Values are 'audit', 'verified', 'honor' and 'credit'
+        in this table.
+    - name: letter grade
+      description: str, the letter grade for the user in the course run. This value
+        is based on the course run's grading policy. The letter grade may be blank
+        if the grading/credentials task has not yet run for this learner. Values are
+        'A', 'B', 'C', 'D', 'F', 'Pass'.
+    - name: grade
+      description: str, the current grade for the user in this course-run as a decimal
+        (e.g. 0.84). If this value is null, the user does not yet have a course grade
+        in this course-run.
+    - name: currently enrolled
+      description: str, whether the learner is currently enrolled in the course. 'true'
+        or 'false'
+    - name: purchased as bundle
+      description: str, whether the learner has purchased this course as bundle. 'true'
+        or 'false'
+    - name: completed
+      description: str, whether the learner completed the course run. 'true' if a
+        verified learner has earned a certificate in a course run that counts towards
+        program completion. This is based on the user's course certificate in the
+        LMS. A course certificate counts towards completion if the learner has passed
+        the course and the course run mode matches the mode of the course. Learner
+        certificates for unverified accounts do not count towards program completion
+        until the account is verified.
+    - name: completed program
+      description: str, whether the learner has passed each of the courses in the
+        program with a grade that qualifies them for a verified certificate. 'true'
+        or 'false'.
+    - name: date completed
+      description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that
+        the learner earned a passing certificate for this course run. If a user passes
+        the course before verification, then the completed date will reflect the date
+        the certificate was generated for that verified learner.
+    - name: date program certificate awarded
+      description: str, the date in the format 'YYYY-MM-DDTHH:mm:ssZ' in UTC that
+        the learner has passed each of the courses in the program and was awarded
+        a program certificate.
+    - name: last activity date
+      description: str, the date in the format 'YYYY-MM-DD' in UTC that the learner
+        was last active in the course run.
+    - name: date first enrolled
+      description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that
+        the learner enrolled in this course run for the first time. For example, if
+        the learner enrolled in the course run, unenrolled, and then re-enrolled,
+        this value would represent the time that they enrolled in the course run for
+        the first time.
+    - name: date last unenrolled
+      description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that
+        the learner last unenrolled in this course run. This will be null if the learner
+        has never unenrolled from this course run. For example, if the learner enrolled
+        in the course run, unenrolled, reenrolled, and then unenrolled, this value
+        would represent the most recent time that they unenrolled in the course run.
+    - name: date first upgraded to verified
+      description: str, the date in the format 'YYYY-MM-DD HH:mm:ss Z' in UTC that
+        the learner first upgraded to the verified track course mode.
+    - name: course run start date
+      description: str, the start date of the course run in the format 'YYYY-MM-DD
+        HH:mm:ss Z' in UTC
 
 
-          - name: raw__edxorg__s3__tracking_logs
-            description: edX.org event data that are emitted by server, the browser, or the mobile device to capture information about user's interactions
-                with a course
-            columns:
-                - name: username
-                  description: str, username of the open edX user who caused the event to be emitted. Some events are recorded with a blank username. This
-                      can occur when a user logs out, or the login session times out, while a browser window remains open. EdX recommends to ignore these
-                      events.
-                - name: context
-                  description: object, it includes member fields that provide contextual information. Common fields apply to all events are course_id, org_id,
-                      path, user_id. Other member fields for applicable events are course_user_tags, module.
-                - name: event_source
-                  description: str, specifies the source of the interaction that triggered the event. The values are - browser, mobile, server, task
-                - name: event_type
-                  description: str, type of event triggered. Values depend on event_source.
-                - name: name
-                  description: str, type of event triggered. When this field is present for an event, it supersedes the event_type field.
-                - name: event
-                  description: object, it includes member fields that identify specifics of each triggered event. Different member fields are supplied for
-                      different events.
-                - name: page
-                  description: str, url of the page the user was visiting when the event was emitted.
-                - name: session
-                  description: str, 32-character value to identify the user’s session. All browser events and the server 'enrollment' events include a session
-                      value. Other server events and mobile events do not include a session value.
-                - name: ip
-                  description: str, IP address of the user who triggered the event. Empty for mobile events.
-                - name: host
-                  description: str, the site visited by the user. e.g. courses.edx.org
-                - name: time
-                  description: str, time at which the event was emitted in YYYY-MM-dd HH:mm:ss.SSSSSS format
-                - name: agent
-                  description: str, browser agent string of the user who triggered the event.
-                - name: accept_language
-                  description: str, value from the HTTP Accept-Language request-header field
-                - name: referer
-                  description: str, URI from the HTTP Referer request-header field
-                - name: log_file
-                  description: str, internal used field for log file location
-                - name: _ab_source_file_url
-                  description: str, url path for the raw log file
+  - name: raw__edxorg__s3__tracking_logs
+    description: edX.org event data that are emitted by server, the browser, or the
+      mobile device to capture information about user's interactions with a course
+    columns:
+    - name: username
+      description: str, username of the open edX user who caused the event to be emitted.
+        Some events are recorded with a blank username. This can occur when a user
+        logs out, or the login session times out, while a browser window remains open.
+        EdX recommends to ignore these events.
+    - name: context
+      description: object, it includes member fields that provide contextual information.
+        Common fields apply to all events are course_id, org_id, path, user_id. Other
+        member fields for applicable events are course_user_tags, module.
+    - name: event_source
+      description: str, specifies the source of the interaction that triggered the
+        event. The values are - browser, mobile, server, task
+    - name: event_type
+      description: str, type of event triggered. Values depend on event_source.
+    - name: name
+      description: str, type of event triggered. When this field is present for an
+        event, it supersedes the event_type field.
+    - name: event
+      description: object, it includes member fields that identify specifics of each
+        triggered event. Different member fields are supplied for different events.
+    - name: page
+      description: str, url of the page the user was visiting when the event was emitted.
+    - name: session
+      description: str, 32-character value to identify the user’s session. All browser
+        events and the server 'enrollment' events include a session value. Other server
+        events and mobile events do not include a session value.
+    - name: ip
+      description: str, IP address of the user who triggered the event. Empty for
+        mobile events.
+    - name: host
+      description: str, the site visited by the user. e.g. courses.edx.org
+    - name: time
+      description: str, time at which the event was emitted in YYYY-MM-dd HH:mm:ss.SSSSSS
+        format
+    - name: agent
+      description: str, browser agent string of the user who triggered the event.
+    - name: accept_language
+      description: str, value from the HTTP Accept-Language request-header field
+    - name: referer
+      description: str, URI from the HTTP Referer request-header field
+    - name: log_file
+      description: str, internal used field for log file location
+    - name: _ab_source_file_url
+      description: str, url path for the raw log file
 
-          - name: raw__edxorg__s3__tables__student_courseenrollment
-            description: edX.org course enrollments ingested from CSV files on OL S3 bucket
-            columns:
-                - name: id
-                  description: str, primary key for course run enrollment
-                - name: course_id
-                  description: str, open edX Course Key formatted as course-v1:org+course_number+run.
-                - name: user_id
-                  description: str, user ID on edX.org
-                - name: mode
-                  description: str, indicating what kind of enrollment it is. Possible values are honor, audit, credit, verified, unpaid-executive-education,
-                      professional, no-id-professional.
-                - name: is_active
-                  description: str, indicating whether this enrollment is active
-                - name: created
-                  description: str, time when this enrollment was created
+  - name: raw__edxorg__s3__tables__student_courseenrollment
+    description: edX.org course enrollments ingested from CSV files on OL S3 bucket
+    columns:
+    - name: id
+      description: str, primary key for course run enrollment
+    - name: course_id
+      description: str, open edX Course Key formatted as course-v1:org+course_number+run.
+    - name: user_id
+      description: str, user ID on edX.org
+    - name: mode
+      description: str, indicating what kind of enrollment it is. Possible values
+        are honor, audit, credit, verified, unpaid-executive-education, professional,
+        no-id-professional.
+    - name: is_active
+      description: str, indicating whether this enrollment is active
+    - name: created
+      description: str, time when this enrollment was created
 
-          - name: raw__edxorg__s3__tables__grades_persistentcoursegrade
-            description: edx.org course grades ingested from CSV files on OL S3 bucket
-            columns:
-                - name: course_id
-                  description: str, open edX Course Key formatted as course-v1:org+course_number+run.
-                - name: user_id
-                  description: str, user ID on edX.org
-                - name: grading_policy_hash
-                  description: str, a SHA-1 digest of the course grading policy, used to detect and update grades whenever the policy changes
-                - name: percent_grade
-                  description: str, calculated course grade as a decimal percentage, per grading policy. e.g. 0.91 means 91%
-                - name: letter_grade
-                  description: str, calculated course grade as a letter value (e.g., A-D, Pass), per grading policy If the learner's grade is Fail or F,
-                      this value is empty.
-                - name: passed_timestamp
-                  description: timestamp, date and time when the learner first passed the course. If this value is empty, the learner never passed the course.
-                      If this value is non-empty but the letter_grade value is empty, the learner transitioned from passing to not passing.
-                - name: created
-                  description: str, time when the course grade was first calculated for this user for this course run.
-                - name: modified
-                  description: str, time when the course grade was was last updated for this user for this course run
+  - name: raw__edxorg__s3__tables__grades_persistentcoursegrade
+    description: edx.org course grades ingested from CSV files on OL S3 bucket
+    columns:
+    - name: course_id
+      description: str, open edX Course Key formatted as course-v1:org+course_number+run.
+    - name: user_id
+      description: str, user ID on edX.org
+    - name: grading_policy_hash
+      description: str, a SHA-1 digest of the course grading policy, used to detect
+        and update grades whenever the policy changes
+    - name: percent_grade
+      description: str, calculated course grade as a decimal percentage, per grading
+        policy. e.g. 0.91 means 91%
+    - name: letter_grade
+      description: str, calculated course grade as a letter value (e.g., A-D, Pass),
+        per grading policy If the learner's grade is Fail or F, this value is empty.
+    - name: passed_timestamp
+      description: timestamp, date and time when the learner first passed the course.
+        If this value is empty, the learner never passed the course. If this value
+        is non-empty but the letter_grade value is empty, the learner transitioned
+        from passing to not passing.
+    - name: created
+      description: str, time when the course grade was first calculated for this user
+        for this course run.
+    - name: modified
+      description: str, time when the course grade was was last updated for this user
+        for this course run
 
-          - name: raw__edxorg__s3__course_blocks
-            columns:
-                - name: block_id
-                  description: str, Unique ID for a distinct piece of content in a course, formatted as block-v1:{org}+{course}+{run}type@{block type}+block@{hash
-                      code}
-                - name: block_index
-                  description: int, sequence number giving order in which this block content appears within the course
-                - name: block_parent
-                  description: str, parent block ID, same format as block_id field
-                - name: block_type
-                  description: str, category/type of the block, it identifies core structural elements of a course. Value includes but not limited to course,
-                      chapter, sequential, vertical, discussion, html, problem, video, etc.
-                - name: block_title
-                  description: str, title of the block extracted from the metadata field of the block. This field comes from name field for the section,
-                      subsection, or unit on the Studio 'Course Outline' page
-                - name: block_details
-                  description: str, json string of the block. It contains the attribute fields like category, children and metadata. Different block type
-                      may have different member fields inside metadata.
-                - name: course_id
-                  description: str, course ID wrapped in quotes. e.g., ["MITx-CTL.SC1x_1-3T2022"]
-                - name: course_title
-                  description: str, title of the course extracted from the metadata field of 'course' block
-                - name: course_content_hash
-                  description: str, sha256 hashed string of the course content.
-                - name: block_content_hash
-                  description: str, sha256 hashed string of the block content in a course
-                - name: course_start
-                  description: str, date indicating when the course starts, extracted from metadata of the 'course' block
-                - name: retrieved_at
-                  description: timestamp, time indicating when this block was initially retrieved from S3
+  - name: raw__edxorg__s3__course_blocks
+    columns:
+    - name: block_id
+      description: str, Unique ID for a distinct piece of content in a course, formatted
+        as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
+    - name: block_index
+      description: int, sequence number giving order in which this block content appears
+        within the course
+    - name: block_parent
+      description: str, parent block ID, same format as block_id field
+    - name: block_type
+      description: str, category/type of the block, it identifies core structural
+        elements of a course. Value includes but not limited to course, chapter, sequential,
+        vertical, discussion, html, problem, video, etc.
+    - name: block_title
+      description: str, title of the block extracted from the metadata field of the
+        block. This field comes from name field for the section, subsection, or unit
+        on the Studio 'Course Outline' page
+    - name: block_details
+      description: str, json string of the block. It contains the attribute fields
+        like category, children and metadata. Different block type may have different
+        member fields inside metadata.
+    - name: course_id
+      description: str, course ID wrapped in quotes. e.g., ["MITx-CTL.SC1x_1-3T2022"]
+    - name: course_title
+      description: str, title of the course extracted from the metadata field of 'course'
+        block
+    - name: course_content_hash
+      description: str, sha256 hashed string of the course content.
+    - name: block_content_hash
+      description: str, sha256 hashed string of the block content in a course
+    - name: course_start
+      description: str, date indicating when the course starts, extracted from metadata
+        of the 'course' block
+    - name: retrieved_at
+      description: timestamp, time indicating when this block was initially retrieved
+        from S3
 
-          - name: raw__edxorg__s3__course_xml_blocks
-            description: Comprehensive block-level data extracted from edX.org course XML archives, including all course components from the XML structure
-            columns:
-                - name: course_id
-                  description: str, course ID formatted as course-v1:{org}+{course}+{run}
-                - name: source_system
-                  description: str, ETL source system identifier (e.g. "prod", "edge")
-                - name: block_id
-                  description: str, unique identifier for the block extracted from XML url_name attribute or filename
-                - name: block_type
-                  description: str, category/type of the XML block such as chapter, sequential, vertical, video, problem, html, discussion, lti, etc.
-                - name: block_display_name
-                  description: str, display name of the block from the XML display_name attribute
-                - name: xml_attributes
-                  description: json, complete set of XML attributes for the block as a JSON object
-                - name: xml_path
-                  description: str, path to the XML file within the course archive
-                - name: raw_xml
-                  description: str, full raw XML string of the block element, preserved for downstream enrichment without requiring reprocessing of archives
-                - name: edx_video_id
-                  description: str, for video blocks, the edX video ID
-                - name: duration
-                  description: str, for video blocks, the duration in seconds
-                - name: max_attempts
-                  description: str, for problem blocks, maximum number of attempts allowed
-                - name: weight
-                  description: str, for problem blocks, the weight/points value
-                - name: markdown
-                  description: str, for problem blocks, markdown content if present
-                - name: retrieved_at
-                  description: timestamp, ISO8601 timestamp when the block data was extracted
+  - name: raw__edxorg__s3__course_xml_blocks
+    description: Comprehensive block-level data extracted from edX.org course XML
+      archives, including all course components from the XML structure
+    columns:
+    - name: course_id
+      description: str, course ID formatted as course-v1:{org}+{course}+{run}
+    - name: source_system
+      description: str, ETL source system identifier (e.g. "prod", "edge")
+    - name: block_id
+      description: str, unique identifier for the block extracted from XML url_name
+        attribute or filename
+    - name: block_type
+      description: str, category/type of the XML block such as chapter, sequential,
+        vertical, video, problem, html, discussion, lti, etc.
+    - name: block_display_name
+      description: str, display name of the block from the XML display_name attribute
+    - name: xml_attributes
+      description: json, complete set of XML attributes for the block as a JSON object
+    - name: xml_path
+      description: str, path to the XML file within the course archive
+    - name: raw_xml
+      description: str, full raw XML string of the block element, preserved for downstream
+        enrichment without requiring reprocessing of archives
+    - name: edx_video_id
+      description: str, for video blocks, the edX video ID
+    - name: duration
+      description: str, for video blocks, the duration in seconds
+    - name: max_attempts
+      description: str, for problem blocks, maximum number of attempts allowed
+    - name: weight
+      description: str, for problem blocks, the weight/points value
+    - name: markdown
+      description: str, for problem blocks, markdown content if present
+    - name: retrieved_at
+      description: timestamp, ISO8601 timestamp when the block data was extracted
 
-          - name: raw__edxorg__s3__tables__auth_user
-            description: edx.org user data
-            columns:
-                - name: id
-                  description: str, primary key for this user table
-                - name: username
-                  description: str, the unique username for a user on edX.org.
-                - name: first_name
-                  description: str, not used; a user’s full name is stored in auth_userprofile.name instead.
-                - name: last_name
-                  description: str, not used; a user’s full name is stored in auth_userprofile.name instead.
-                - name: email
-                  description: str, the user’s email address, which is the primary mechanism users use to log in.
-                - name: password
-                  description: str, the hashed version of the user’s password
-                - name: is_staff
-                  description: str, set to '1' if the user is a staff member of edx, who have Admin privileges in the LMS
-                - name: is_active
-                  description: str, set to '1' if the user has clicked on the activation link that was sent to them when they created their account, and
-                      false if user hasn't activated the account or the account is soft deleted
-                - name: is_superuser
-                  description: str, controls access to django_admin views. Set to '1' only for site admins. '0' for almost everybody.
-                - name: last_login
-                  description: str, date and time string of the user’s last login. Should not be used as a proxy for activity, since people can use the
-                      site all the time and go days between logging in and out.
-                - name: date_joined
-                  description: str, date and time string indicating when the account was created. This is not the date that the user activated the account.
-                - name: status
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: email_key
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: avatar_type
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: country
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: show_country
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: date_of_birth
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: interesting_tags
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: ignored_tags
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: email_tag_filter_strategy
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: display_tag_filter_strategy
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
-                - name: consecutive_days_visit_count
-                  description: str, obsolete column that was added by an application called Askbot, a discussion forum package that is no longer part of
-                      the system. Only users who were part of the prototype 6.002x course run in Spring 2012 may have any information in these columns.
+  - name: raw__edxorg__s3__tables__auth_user
+    description: edx.org user data
+    columns:
+    - name: id
+      description: str, primary key for this user table
+    - name: username
+      description: str, the unique username for a user on edX.org.
+    - name: first_name
+      description: str, not used; a user’s full name is stored in auth_userprofile.name
+        instead.
+    - name: last_name
+      description: str, not used; a user’s full name is stored in auth_userprofile.name
+        instead.
+    - name: email
+      description: str, the user’s email address, which is the primary mechanism users
+        use to log in.
+    - name: password
+      description: str, the hashed version of the user’s password
+    - name: is_staff
+      description: str, set to '1' if the user is a staff member of edx, who have
+        Admin privileges in the LMS
+    - name: is_active
+      description: str, set to '1' if the user has clicked on the activation link
+        that was sent to them when they created their account, and false if user hasn't
+        activated the account or the account is soft deleted
+    - name: is_superuser
+      description: str, controls access to django_admin views. Set to '1' only for
+        site admins. '0' for almost everybody.
+    - name: last_login
+      description: str, date and time string of the user’s last login. Should not
+        be used as a proxy for activity, since people can use the site all the time
+        and go days between logging in and out.
+    - name: date_joined
+      description: str, date and time string indicating when the account was created.
+        This is not the date that the user activated the account.
+    - name: status
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: email_key
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: avatar_type
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: country
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: show_country
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: date_of_birth
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: interesting_tags
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: ignored_tags
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: email_tag_filter_strategy
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: display_tag_filter_strategy
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
+    - name: consecutive_days_visit_count
+      description: str, obsolete column that was added by an application called Askbot,
+        a discussion forum package that is no longer part of the system. Only users
+        who were part of the prototype 6.002x course run in Spring 2012 may have any
+        information in these columns.
 
-          - name: raw__edxorg__s3__tables__auth_userprofile
-            description: edx.org user profile data
-            columns:
-                - name: id
-                  description: str, primary key for user profile table
-                - name: user_id
-                  description: str, foreign key to auth_user.id
-                - name: name
-                  description: str, a user’s full name. Name changes are logged in the meta field.
-                - name: meta
-                  description: str, freeform text field that stores arbitrary JSON metadata e.g. old_names, old_emails for the user
-                - name: gender
-                  description: str, possible values are m, f, o, t, b, blank, or NULL
-                - name: level_of_education
-                  description: str, learner's Level of education in one or two letters.
-                - name: year_of_birth
-                  description: str, learner's birth year.
-                - name: goals
-                  description: text, collected during registration to answer question "Tell us why you’re interested in edX"
-                - name: country
-                  description: str, two digit country code. Null for user profiles created before 18 Sep 2014.
-                - name: bio
-                  description: text, one or more paragraphs of biographical information that the learner enters as profile information. Added 22 Apr 2015.
-                - name: profile_image_uploaded_at
-                  description: str, the date and time when a learner uploaded a profile image to show with profile information. Added 22 Apr 2015.
-                - name: city
-                  description: str, not currently used. NULL for all user profiles except a few rows that may have incomplete or bad data
-                - name: language
-                  description: str, no longer used. User’s preferred language, asked during the sign up process for the 6.002x prototype course given in
-                      Spring 2012. EdX stopped collecting this data after MITx transitioned to edX
-                - name: location
-                  description: str, no longer used. User’s location, asked during the sign up process for the 6.002x prototype course given in Spring 2012.
-                      Like language, edX stopped collecting this column after MITx transitioned to edX, so it is only available for the first batch of learners.
-                - name: courseware
-                  description: str, no longer used. This column was added for use with an A/B testing feature, but it has not been used for anything meaningful
-                      since the prototype course concluded in Spring 2012.
-                - name: mailing_address
-                  description: str, no longer used. This column contains NULL for learners who register after 17 May 2016 as well as for learners who registered
-                      accounts for the prototype course.
+  - name: raw__edxorg__s3__tables__auth_userprofile
+    description: edx.org user profile data
+    columns:
+    - name: id
+      description: str, primary key for user profile table
+    - name: user_id
+      description: str, foreign key to auth_user.id
+    - name: name
+      description: str, a user’s full name. Name changes are logged in the meta field.
+    - name: meta
+      description: str, freeform text field that stores arbitrary JSON metadata e.g.
+        old_names, old_emails for the user
+    - name: gender
+      description: str, possible values are m, f, o, t, b, blank, or NULL
+    - name: level_of_education
+      description: str, learner's Level of education in one or two letters.
+    - name: year_of_birth
+      description: str, learner's birth year.
+    - name: goals
+      description: text, collected during registration to answer question "Tell us
+        why you’re interested in edX"
+    - name: country
+      description: str, two digit country code. Null for user profiles created before
+        18 Sep 2014.
+    - name: bio
+      description: text, one or more paragraphs of biographical information that the
+        learner enters as profile information. Added 22 Apr 2015.
+    - name: profile_image_uploaded_at
+      description: str, the date and time when a learner uploaded a profile image
+        to show with profile information. Added 22 Apr 2015.
+    - name: city
+      description: str, not currently used. NULL for all user profiles except a few
+        rows that may have incomplete or bad data
+    - name: language
+      description: str, no longer used. User’s preferred language, asked during the
+        sign up process for the 6.002x prototype course given in Spring 2012. EdX
+        stopped collecting this data after MITx transitioned to edX
+    - name: location
+      description: str, no longer used. User’s location, asked during the sign up
+        process for the 6.002x prototype course given in Spring 2012. Like language,
+        edX stopped collecting this column after MITx transitioned to edX, so it is
+        only available for the first batch of learners.
+    - name: courseware
+      description: str, no longer used. This column was added for use with an A/B
+        testing feature, but it has not been used for anything meaningful since the
+        prototype course concluded in Spring 2012.
+    - name: mailing_address
+      description: str, no longer used. This column contains NULL for learners who
+        register after 17 May 2016 as well as for learners who registered accounts
+        for the prototype course.
 
-          - name: raw__edxorg__s3__tables__certificates_generatedcertificate
-            description: edx.org course runs certificate data
-            columns:
-                - name: id
-                  description: str, primary key for certificates_generatedcertificate table
-                - name: user_id
-                  description: str, foreign key to auth_user.id
-                - name: course_id
-                  description: str, open edX Course ID formatted as {org}/{course number}/{run} for older runs prior to 3T2015, and course-v1:{org}+{course}+{run}
-                      for newer runs.
-                - name: download_url
-                  description: str, url location for the generated certificate. Used internally only.
-                - name: download_uuid
-                  description: str, the unique identifier for the generated certificate. Used internally only.
-                - name: verify_uuid
-                  description: str, a hash code that verifies the validity of a certificate. Included on the certificate itself as part of a URL.
-                - name: grade
-                  description: str, the grade ranged from '0' to '1' computed the at the time of certificate generation. It is suggested that the grades_persistentcoursegrade
-                      table be used instead of this grade.
-                - name: mode
-                  description: str, contains the value in student_courseenrollment.mode field at the time the certificate was generated
-                - name: status
-                  description: str, after certificates have been issued, the status will be one of the possible values- audit_notpassing, audit_passing,
-                      deleted, deleting, downloadable, error, generating, notpassing, restricted , unavailable, unverified
-                - name: error_reason
-                  description: st, used internally only
-                - name: distinction
-                  description: str, not used. currently all '0'
-                - name: name
-                  description: str, the name of the learner that was set at the time the certificate was generated.
-                - name: key
-                  description: str, used internally only.
-                - name: created_date
-                  description: str, date and time string indicating when the certificate was created
-                - name: modified_date
-                  description: str, date and time string indicating when the certificate was last modified
+  - name: raw__edxorg__s3__tables__certificates_generatedcertificate
+    description: edx.org course runs certificate data
+    columns:
+    - name: id
+      description: str, primary key for certificates_generatedcertificate table
+    - name: user_id
+      description: str, foreign key to auth_user.id
+    - name: course_id
+      description: str, open edX Course ID formatted as {org}/{course number}/{run}
+        for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+        runs.
+    - name: download_url
+      description: str, url location for the generated certificate. Used internally
+        only.
+    - name: download_uuid
+      description: str, the unique identifier for the generated certificate. Used
+        internally only.
+    - name: verify_uuid
+      description: str, a hash code that verifies the validity of a certificate. Included
+        on the certificate itself as part of a URL.
+    - name: grade
+      description: str, the grade ranged from '0' to '1' computed the at the time
+        of certificate generation. It is suggested that the grades_persistentcoursegrade
+        table be used instead of this grade.
+    - name: mode
+      description: str, contains the value in student_courseenrollment.mode field
+        at the time the certificate was generated
+    - name: status
+      description: str, after certificates have been issued, the status will be one
+        of the possible values- audit_notpassing, audit_passing, deleted, deleting,
+        downloadable, error, generating, notpassing, restricted , unavailable, unverified
+    - name: error_reason
+      description: st, used internally only
+    - name: distinction
+      description: str, not used. currently all '0'
+    - name: name
+      description: str, the name of the learner that was set at the time the certificate
+        was generated.
+    - name: key
+      description: str, used internally only.
+    - name: created_date
+      description: str, date and time string indicating when the certificate was created
+    - name: modified_date
+      description: str, date and time string indicating when the certificate was last
+        modified
 
-          - name: raw__edxorg__s3__tables__student_courseaccessrole
-            description: edX.org student course access roles that lists the users who have a privileged role or roles for working in a course
-            columns:
-                - name: course_id
-                  description: str, open edX Course ID formatted as {org}/{course number}/{run} for older runs prior to 3T2015, and course-v1:{org}+{course}+{run}
-                      for newer runs.
-                - name: org
-                  description: str, the organization the course belongs to. e.g. MITx
-                - name: role
-                  description: str, the privilege level assigned to the user for working in this course. Possible values are instructor, staff, beta_testers,
-                      data_researcher, ccx_coach, limited_staff, sales_admin, beta_testers, finance_admin
-                - name: user_id
-                  description: str, foreign key to auth_user.id
+  - name: raw__edxorg__s3__tables__student_courseaccessrole
+    description: edX.org student course access roles that lists the users who have
+      a privileged role or roles for working in a course
+    columns:
+    - name: course_id
+      description: str, open edX Course ID formatted as {org}/{course number}/{run}
+        for older runs prior to 3T2015, and course-v1:{org}+{course}+{run} for newer
+        runs.
+    - name: org
+      description: str, the organization the course belongs to. e.g. MITx
+    - name: role
+      description: str, the privilege level assigned to the user for working in this
+        course. Possible values are instructor, staff, beta_testers, data_researcher,
+        ccx_coach, limited_staff, sales_admin, beta_testers, finance_admin
+    - name: user_id
+      description: str, foreign key to auth_user.id
 
-          - name: raw__edxorg__s3__course_structure__course_metadata
-            description: edX.org course metadata extracted from course archive
-            columns:
-                - name: course_id
-                  description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
-                - name: course_number
-                  description: str, unique string for the course. It can contain letters, numbers, or periods. e.g. CTL.SC2x
-                - name: semester
-                  description: str, the run tag from the course ID, e.g., 2T2023
-                - name: title
-                  description: str, title of the course run
-                - name: course_start
-                  description: str, specifying when the course begins
-                - name: course_end
-                  description: str, specifying when the course ends
-                - name: enrollment_start
-                  description: str, specifying when enrollment starts
-                - name: enrollment_end
-                  description: str, specifying when enrollment ends
-                - name: institution
-                  description: str, institution for the course, e.g., MITx
-                - name: instructor_info
-                  description: str, instructors metadata
-                - name: self_paced
-                  description: boolean, indicating whether the course is self_paced or instructor-paced
+  - name: raw__edxorg__s3__course_structure__course_metadata
+    description: edX.org course metadata extracted from course archive
+    columns:
+    - name: course_id
+      description: str, open edX Course ID formatted as course-v1:{org}+{course}+{run}
+    - name: course_number
+      description: str, unique string for the course. It can contain letters, numbers,
+        or periods. e.g. CTL.SC2x
+    - name: semester
+      description: str, the run tag from the course ID, e.g., 2T2023
+    - name: title
+      description: str, title of the course run
+    - name: course_start
+      description: str, specifying when the course begins
+    - name: course_end
+      description: str, specifying when the course ends
+    - name: enrollment_start
+      description: str, specifying when enrollment starts
+    - name: enrollment_end
+      description: str, specifying when enrollment ends
+    - name: institution
+      description: str, institution for the course, e.g., MITx
+    - name: instructor_info
+      description: str, instructors metadata
+    - name: self_paced
+      description: boolean, indicating whether the course is self_paced or instructor-paced
 
-          - name: raw__edxorg__s3__tables__courseware_studentmodule
-            columns:
-                - name: id
-                  description: str, primary key in courseware_studentmodule
-                - name: student_id
-                  description: str, reference user id in auth_user from open edX
-                - name: course_id
-                  description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
-                - name: module_id
-                  description: str, block ID for a distinct piece of content in a course, referencing course_structure
-                - name: module_type
-                  description: str, category/type of the block, referencing course_structure.
-                - name: state
-                  description: str, JSON text indicating the learner's last known state within a course.
-                - name: done
-                  description: str, not used. The value is 'na' in every row
-                - name: grade
-                  description: str, floating point value indicating the total unweighted grade for this problem that the learner has scored. e.g. how many
-                      responses they got right within the problem. This data is also available in courseactivity_problemcheck
-                - name: max_grade
-                  description: str, floating point value indicating the total possible unweighted grade for this problem, or basically the number of responses
-                      that are in this problem. This data is also available in courseactivity_problemcheck
-                - name: created
-                  description: timestamp, datetime when this row was created, which is typically when the learner first accesses this piece of content.
-                - name: modified
-                  description: timestamp, datetime when this row was last updated. A change in this field implies that there was a state change.
+  - name: raw__edxorg__s3__tables__courseware_studentmodule
+    columns:
+    - name: id
+      description: str, primary key in courseware_studentmodule
+    - name: student_id
+      description: str, reference user id in auth_user from open edX
+    - name: course_id
+      description: str, Open edX Course ID in the format course-v1:{org}+{course code}+{run_tag}
+    - name: module_id
+      description: str, block ID for a distinct piece of content in a course, referencing
+        course_structure
+    - name: module_type
+      description: str, category/type of the block, referencing course_structure.
+    - name: state
+      description: str, JSON text indicating the learner's last known state within
+        a course.
+    - name: done
+      description: str, not used. The value is 'na' in every row
+    - name: grade
+      description: str, floating point value indicating the total unweighted grade
+        for this problem that the learner has scored. e.g. how many responses they
+        got right within the problem. This data is also available in courseactivity_problemcheck
+    - name: max_grade
+      description: str, floating point value indicating the total possible unweighted
+        grade for this problem, or basically the number of responses that are in this
+        problem. This data is also available in courseactivity_problemcheck
+    - name: created
+      description: timestamp, datetime when this row was created, which is typically
+        when the learner first accesses this piece of content.
+    - name: modified
+      description: timestamp, datetime when this row was last updated. A change in
+        this field implies that there was a state change.
 
-          - name: raw__edxorg__s3__course_structure__course_video
-            description: edX.org course video metadata
-            columns:
-                - name: courserun_id
-                  description: str, edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-                - name: video_block_id
-                  description: str, hash code or module name for the video. This value is the last part of video block ID string, e.g., block-v1:{org}+{course}+{run}type@{block
-                      type}+block@{module name or hash code}.
-                - name: edx_video_id
-                  description: str, video ID on the edX platform. This value is the same as the edx_video_id field in the coursestructure_block_metadata
-                      JSON for the video block.
-                - name: duration
-                  description: float, the length of the video, in seconds. May be 0.0.
+  - name: raw__edxorg__s3__course_structure__course_video
+    description: edX.org course video metadata
+    columns:
+    - name: courserun_id
+      description: str, edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: video_block_id
+      description: str, hash code or module name for the video. This value is the
+        last part of video block ID string, e.g., block-v1:{org}+{course}+{run}type@{block
+        type}+block@{module name or hash code}.
+    - name: edx_video_id
+      description: str, video ID on the edX platform. This value is the same as the
+        edx_video_id field in the coursestructure_block_metadata JSON for the video
+        block.
+    - name: duration
+      description: float, the length of the video, in seconds. May be 0.0.
 
-          - name: raw__edxorg__s3__program
-            description: this table includes all the programs running on edX.org
-            columns:
-                - name: uuid
-                  description: str, UUID of the program on edX.org.
-                - name: title
-                  description: str, title of the program on edX.org
-                - name: subtitle
-                  description: str, subtitle of the program on edX.org
-                - name: type
-                  description: str, type of the program. e.g., MicroMasters, XSeries
-                - name: status
-                  description: str, status of the program. Possible values are active, retired, unpublished or deleted
-                - name: authoring_organizations
-                  description: str, name of the organization that authored the program. e.g., MITx , HarvardX
-                - name: data_modified_timestamp
-                  description: str, timestamp when the data was last modified
+  - name: raw__edxorg__s3__program
+    description: this table includes all the programs running on edX.org
+    columns:
+    - name: uuid
+      description: str, UUID of the program on edX.org.
+    - name: title
+      description: str, title of the program on edX.org
+    - name: subtitle
+      description: str, subtitle of the program on edX.org
+    - name: type
+      description: str, type of the program. e.g., MicroMasters, XSeries
+    - name: status
+      description: str, status of the program. Possible values are active, retired,
+        unpublished or deleted
+    - name: authoring_organizations
+      description: str, name of the organization that authored the program. e.g.,
+        MITx , HarvardX
+    - name: data_modified_timestamp
+      description: str, timestamp when the data was last modified
 
-          - name: raw__edxorg__s3__program_course
-            description: this table includes all the program courses running on edX.org
-            columns:
-                - name: program_uuid
-                  description: str, UUID of the program on edX.org.
-                - name: course_key
-                  description: str, readable ID for the course in {org}+{course} format. e.g., MITx+15.415.1x
-                - name: course_title
-                  description: str, title of the course
-                - name: course_description
-                  description: str, short description of the course
-                - name: course_type
-                  description: str, type of the course. e.g., audit, verified, professional
+  - name: raw__edxorg__s3__program_course
+    description: this table includes all the program courses running on edX.org
+    columns:
+    - name: program_uuid
+      description: str, UUID of the program on edX.org.
+    - name: course_key
+      description: str, readable ID for the course in {org}+{course} format. e.g.,
+        MITx+15.415.1x
+    - name: course_title
+      description: str, title of the course
+    - name: course_description
+      description: str, short description of the course
+    - name: course_type
+      description: str, type of the course. e.g., audit, verified, professional
 
-          - name: raw__edxorg__s3__mitx_course
-            description: MITx courses on edX.org, sourced from the discovery API
-            columns:
-                - name: course_key
-                  description: str, unique identifier for the course in {org}+{course number} format. e.g., MITx+15.415.1x
-                - name: title
-                  description: str, title of the course
-                - name: short_description
-                  description: str, the short description of the course and its content
-                - name: full_description
-                  description: str, the long description of the course and its content.
-                - name: level_type
-                  description: str, the course’s level of difficulty. Values can be 'high_school', 'introductory', 'intermediate', or 'advanced'.
-                - name: course_type
-                  description: str, audit, verified-audit, credit-verified-audit, or professional
-                - name: owner
-                  description: str, list of organizations associated with the course, e.g., MITx
-                - name: marketing_url
-                  description: str, the URL for the course about page.
-                - name: image
-                  description: json, course image
-                - name: subjects
-                  description: json, the academic subjects that this course covers.
-                - name: prerequisites
-                  description: array, array of courses a learner must complete before enrolling in the current course. May be empty.
-                - name: prerequisites_raw
-                  description: text, any courses a learner must complete before enrolling in the current course
-                - name: modified
-                  description: timestamp, the date and time the course was last modified.
+  - name: raw__edxorg__s3__mitx_course
+    description: MITx courses on edX.org, sourced from the discovery API
+    columns:
+    - name: course_key
+      description: str, unique identifier for the course in {org}+{course number}
+        format. e.g., MITx+15.415.1x
+    - name: title
+      description: str, title of the course
+    - name: short_description
+      description: str, the short description of the course and its content
+    - name: full_description
+      description: str, the long description of the course and its content.
+    - name: level_type
+      description: str, the course’s level of difficulty. Values can be 'high_school',
+        'introductory', 'intermediate', or 'advanced'.
+    - name: course_type
+      description: str, audit, verified-audit, credit-verified-audit, or professional
+    - name: owner
+      description: str, list of organizations associated with the course, e.g., MITx
+    - name: marketing_url
+      description: str, the URL for the course about page.
+    - name: image
+      description: json, course image
+    - name: subjects
+      description: json, the academic subjects that this course covers.
+    - name: prerequisites
+      description: array, array of courses a learner must complete before enrolling
+        in the current course. May be empty.
+    - name: prerequisites_raw
+      description: text, any courses a learner must complete before enrolling in the
+        current course
+    - name: modified
+      description: timestamp, the date and time the course was last modified.
 
-          - name: raw__edxorg__s3__mitx_course_run
-            description: MITx course runs on edX.org, sourced from the discovery API
-            columns:
-                - name: run_key
-                  description: str, unique identifier for the course run in {org}+{course number}+{run} format.
-                - name: title
-                  description: str, title of the course
-                - name: short_description
-                  description: str, the short description of the course and its content
-                - name: full_description
-                  description: str, the long description of the course and its content.
-                - name: level_type
-                  description: str, the course’s level of difficulty. Possible values are 'high_school', 'introductory', 'intermediate', or 'advanced'.
-                - name: languages
-                  description: str, the language for this course run.
-                - name: image
-                  description: array, course image
-                - name: pacing_type
-                  description: str, the pacing of the course. Possible values are 'self-paced' or 'instructor-paced'.
-                - name: enrollment_type
-                  description: str, audit, verified, credit, or professional.
-                - name: courserun_is_enrollable
-                  description: boolean, whether the course is currently open for enrollment
-                - name: availability
-                  description: str, the availability of the course run. Possible values are 'Upcoming', 'Starting Soon', 'Current' or 'Archived'
-                - name: status
-                  description: str, the status of the course run. Possible values are 'published', 'unpublished', or 'reviewed'
-                - name: seats
-                  description: array, list of the available modes for this course. The member field includes type, price, currency, upgrade_deadline, credit_provider
-                      and credit_hours
-                - name: staff
-                  description: array, list of instructors associated with the course
-                - name: weeks_to_complete
-                  description: int, the number of weeks to complete the course.
-                - name: min_effort
-                  description: int, the minimum number of estimated hours of effort per week.
-                - name: max_effort
-                  description: int, the maximum number of estimated hours of effort per week.
-                - name: estimated_hours
-                  description: int, the estimated number of hours to complete the course.
-                - name: start_on
-                  description: timestamp, the course start date.
-                - name: end_on
-                  description: datetime, the course end date.
-                - name: enrollment_start
-                  description: timestamp, the course enrollment start date.
-                - name: enrollment_end
-                  description: timestamp, the course enrollment end date.
-                - name: announcement
-                  description: timestamp, date and time when the course will be announced and visible.
-                - name: modified
-                  description: timestamp, the date and time the course was last modified.
+  - name: raw__edxorg__s3__mitx_course_run
+    description: MITx course runs on edX.org, sourced from the discovery API
+    columns:
+    - name: run_key
+      description: str, unique identifier for the course run in {org}+{course number}+{run}
+        format.
+    - name: title
+      description: str, title of the course
+    - name: short_description
+      description: str, the short description of the course and its content
+    - name: full_description
+      description: str, the long description of the course and its content.
+    - name: level_type
+      description: str, the course’s level of difficulty. Possible values are 'high_school',
+        'introductory', 'intermediate', or 'advanced'.
+    - name: languages
+      description: str, the language for this course run.
+    - name: image
+      description: array, course image
+    - name: pacing_type
+      description: str, the pacing of the course. Possible values are 'self-paced'
+        or 'instructor-paced'.
+    - name: enrollment_type
+      description: str, audit, verified, credit, or professional.
+    - name: courserun_is_enrollable
+      description: boolean, whether the course is currently open for enrollment
+    - name: availability
+      description: str, the availability of the course run. Possible values are 'Upcoming',
+        'Starting Soon', 'Current' or 'Archived'
+    - name: status
+      description: str, the status of the course run. Possible values are 'published',
+        'unpublished', or 'reviewed'
+    - name: seats
+      description: array, list of the available modes for this course. The member
+        field includes type, price, currency, upgrade_deadline, credit_provider and
+        credit_hours
+    - name: staff
+      description: array, list of instructors associated with the course
+    - name: weeks_to_complete
+      description: int, the number of weeks to complete the course.
+    - name: min_effort
+      description: int, the minimum number of estimated hours of effort per week.
+    - name: max_effort
+      description: int, the maximum number of estimated hours of effort per week.
+    - name: estimated_hours
+      description: int, the estimated number of hours to complete the course.
+    - name: start_on
+      description: timestamp, the course start date.
+    - name: end_on
+      description: datetime, the course end date.
+    - name: enrollment_start
+      description: timestamp, the course enrollment start date.
+    - name: enrollment_end
+      description: timestamp, the course enrollment end date.
+    - name: announcement
+      description: timestamp, date and time when the course will be announced and
+        visible.
+    - name: modified
+      description: timestamp, the date and time the course was last modified.
 
-          - name: raw__edxorg__s3__course_structure__course_certificate_signatory
-            description: edx course certificate signatory data
-            columns:
-                - name: id
-                  description: int, ID for the certificate signatory
-                - name: course_id
-                  description: str, course readable ID formatted in {org}+{course number}+{run}
-                - name: certificate_id
-                  description: int, ID used to identify the course certificate
-                - name: signatory_name
-                  description: str, name of the signatory
-                - name: title
-                  description: str, title of the signatory
-                - name: organization
-                  description: str, organization of the signatory
-                - name: signature_image_path
-                  description: str, relative path to the signature image file on edX platform
+  - name: raw__edxorg__s3__course_structure__course_certificate_signatory
+    description: edx course certificate signatory data
+    columns:
+    - name: id
+      description: int, ID for the certificate signatory
+    - name: course_id
+      description: str, course readable ID formatted in {org}+{course number}+{run}
+    - name: certificate_id
+      description: int, ID used to identify the course certificate
+    - name: signatory_name
+      description: str, name of the signatory
+    - name: title
+      description: str, title of the signatory
+    - name: organization
+      description: str, organization of the signatory
+    - name: signature_image_path
+      description: str, relative path to the signature image file on edX platform
 
-          - name: raw__edxorg__s3__course_structure__course_policy
-            description: edx course policy data
-            columns:
-                - name: course_id
-                  description: str, course readable ID formatted in {org}+{course number}+{run}
-                - name: display_coursenumber
-                  description: str, the course number to display to users
-                - name: self_paced
-                  description: boolean, whether the course is self-paced or instructor-paced
-                - name: advanced_modules
-                  description: array, list of advanced modules indicating what custom xblocks are in use in a course. e.g.["lti_consumer"]
-                - name: tabs
-                  description: array, metadata about additional static tabs added to the course
-                - name: discussion_settings
-                  description: object, discussion (forum) configurations. Member fields example - enable_graded_units, posting_restrictions, provider, etc.
+  - name: raw__edxorg__s3__course_structure__course_policy
+    description: edx course policy data
+    columns:
+    - name: course_id
+      description: str, course readable ID formatted in {org}+{course number}+{run}
+    - name: display_coursenumber
+      description: str, the course number to display to users
+    - name: self_paced
+      description: boolean, whether the course is self-paced or instructor-paced
+    - name: advanced_modules
+      description: array, list of advanced modules indicating what custom xblocks
+        are in use in a course. e.g.["lti_consumer"]
+    - name: tabs
+      description: array, metadata about additional static tabs added to the course
+    - name: discussion_settings
+      description: object, discussion (forum) configurations. Member fields example
+        - enable_graded_units, posting_restrictions, provider, etc.
 
-          - name: raw__edxorg__program_entitlement
-            description: this table includes all the program entitlements on edX.org, which indicates the learners who have purchased a program bundle and
-                their entitlement details.
-            columns:
-                - name: email
-                  data_type: varchar
-                  description: email address of the learner who purchased the program bundle
-                - name: entitlements
-                  data_type: varchar
-                  description: number of courses in the program that the learner has access to using the program bundle entitlement.
-                - name: expiration date
-                  data_type: varchar
-                  description: the date that the entitlement expires
-                - name: first name
-                  data_type: varchar
-                  description: first name of the learner who purchased the program bundle
-                - name: last name
-                  data_type: varchar
-                  description: last name of the learner who purchased the program bundle
-                - name: partner key
-                  data_type: varchar
-                  description: the organization that offers the program. e.g., MITx
-                - name: program title
-                  data_type: varchar
-                  description: title of the program that the learner purchased
-                - name: program type
-                  data_type: varchar
-                  description: type of the program. e.g., MicroMasters, XSeries
-                - name: purchase date
-                  data_type: varchar
-                  description: the date that the learner purchased the program bundle
-                - name: redeemed entitlements
-                  data_type: varchar
-                  description: number of courses in the program that the learner has redeemed access to using the program bundle entitlement
-                - name: unredeemed entitlements
-                  data_type: varchar
-                  description: number of courses in the program that the learner has not redeemed access to using the program bundle entitlement
-                - name: user id
-                  data_type: varchar
-                  description: user ID on edX.org
-                - name: username
-                  data_type: varchar
-                  description: username of the learner on edX.org
+  - name: raw__edxorg__program_entitlement
+    description: this table includes all the program entitlements on edX.org, which
+      indicates the learners who have purchased a program bundle and their entitlement
+      details.
+    columns:
+    - name: email
+      data_type: varchar
+      description: email address of the learner who purchased the program bundle
+    - name: entitlements
+      data_type: varchar
+      description: number of courses in the program that the learner has access to
+        using the program bundle entitlement.
+    - name: expiration date
+      data_type: varchar
+      description: the date that the entitlement expires
+    - name: first name
+      data_type: varchar
+      description: first name of the learner who purchased the program bundle
+    - name: last name
+      data_type: varchar
+      description: last name of the learner who purchased the program bundle
+    - name: partner key
+      data_type: varchar
+      description: the organization that offers the program. e.g., MITx
+    - name: program title
+      data_type: varchar
+      description: title of the program that the learner purchased
+    - name: program type
+      data_type: varchar
+      description: type of the program. e.g., MicroMasters, XSeries
+    - name: purchase date
+      data_type: varchar
+      description: the date that the learner purchased the program bundle
+    - name: redeemed entitlements
+      data_type: varchar
+      description: number of courses in the program that the learner has redeemed
+        access to using the program bundle entitlement
+    - name: unredeemed entitlements
+      data_type: varchar
+      description: number of courses in the program that the learner has not redeemed
+        access to using the program bundle entitlement
+    - name: user id
+      data_type: varchar
+      description: user ID on edX.org
+    - name: username
+      data_type: varchar
+      description: username of the learner on edX.org
