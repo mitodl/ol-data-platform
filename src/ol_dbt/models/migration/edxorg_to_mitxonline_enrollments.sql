@@ -2,6 +2,13 @@ with combined_enrollments as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
+, retired_users as (
+    select cast(user_id as varchar) as user_id
+    from {{ ref('int__edxorg__mitx_users') }}
+    where
+        user_is_active = false
+)
+
 , edxorg_grade as (
     select
           {{ format_course_id('courseruncertificate_courserun_readable_id', false) }} as courserun_readable_id
@@ -186,7 +193,10 @@ left join edx_to_mitxonline_certificate_revision
     on edxorg_enrollment.courserun_readable_id = edx_to_mitxonline_certificate_revision.courserun_readable_id
 left join edx_signatories
     on edxorg_enrollment.courserun_readable_id = edx_signatories.courserun_readable_id
+left join retired_users
+    on edxorg_enrollment.user_id = retired_users.user_id
 where
     edxorg_enrollment.courseruncertificate_created_on is not null
     and mitxonline_enrollment.user_email is null
     and mitx__users.user_mitxonline_email is null
+    and retired_users.user_id is null
