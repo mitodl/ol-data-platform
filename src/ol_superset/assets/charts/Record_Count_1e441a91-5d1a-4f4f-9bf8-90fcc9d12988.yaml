@@ -1,8 +1,8 @@
-cache_timeout: null
-certification_details: null
-certified_by: null
-dataset_uuid: a400a4f0-c9df-4e7f-95e7-c16ea107e673 # combined_enrollments_with_gender_and_date
+slice_name: Record Count
 description: null
+certified_by: null
+certification_details: null
+viz_type: big_number_total
 params:
   adhoc_filters: []
   annotation_layers: []
@@ -21,7 +21,22 @@ params:
   time_format: smart_date
   viz_type: big_number_total
   y_axis_format: SMART_NUMBER
-slice_name: Record Count
+  datasource: 174__table
+query_context: '{"datasource": {"id": 38, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "columns": [], "metrics": [{"expressionType": "SQL", "sqlExpression": "COUNT(*)",
+  "column": null, "aggregate": null, "datasourceWarning": false, "hasCustomLabel":
+  true, "label": "Record Count", "optionName": "metric_odjay9cgkon_z1khg8fnb8o"}],
+  "annotation_layers": [], "series_limit": 0, "order_desc": true, "url_params": {},
+  "custom_params": {}, "custom_form_data": {}}], "form_data": {"datasource": "38__table",
+  "viz_type": "big_number_total", "slice_id": 40, "metric": {"expressionType": "SQL",
+  "sqlExpression": "COUNT(*)", "column": null, "aggregate": null, "datasourceWarning":
+  false, "hasCustomLabel": true, "label": "Record Count", "optionName": "metric_odjay9cgkon_z1khg8fnb8o"},
+  "adhoc_filters": [], "header_font_size": 0.4, "subheader_font_size": 0.15, "y_axis_format":
+  "SMART_NUMBER", "time_format": "smart_date", "extra_form_data": {}, "dashboards":
+  [], "force": false, "result_format": "json", "result_type": "full"}, "result_format":
+  "json", "result_type": "full"}'
+cache_timeout: null
 uuid: 1e441a91-5d1a-4f4f-9bf8-90fcc9d12988
 version: 1.0.0
-viz_type: big_number_total
+dataset_uuid: a400a4f0-c9df-4e7f-95e7-c16ea107e673

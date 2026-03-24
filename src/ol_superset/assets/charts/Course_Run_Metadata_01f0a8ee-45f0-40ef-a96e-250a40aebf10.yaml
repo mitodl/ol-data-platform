@@ -1,8 +1,8 @@
-cache_timeout: null
-certification_details: null
-certified_by: null
-dataset_uuid: 836dd1f0-3e2e-45a9-a721-62a471a43de8  # marts__combined_course_enrollment_detail
+slice_name: Course Run Metadata
 description: null
+certified_by: null
+certification_details: null
+viz_type: table
 params:
   adhoc_filters: []
   all_columns: []
@@ -28,7 +28,23 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
   viz_type: table
-slice_name: Course Run Metadata
+  datasource: 54__table
+query_context: '{"datasource": {"id": 54, "type": "table"}, "force": false, "queries":
+  [{"filters": [], "extras": {"having": "", "where": ""}, "applied_time_extras": {},
+  "columns": ["course_title", "course_readable_id", "courserun_title", "courserun_readable_id",
+  "platform", "courserun_start_on", "courserun_end_on", "courserun_upgrade_deadline"],
+  "metrics": [], "orderby": [], "annotation_layers": [], "row_limit": 1000, "series_limit":
+  0, "order_desc": true, "url_params": {}, "custom_params": {}, "custom_form_data":
+  {}, "post_processing": []}], "form_data": {"datasource": "54__table", "viz_type":
+  "table", "slice_id": 35, "query_mode": "aggregate", "groupby": ["course_title",
+  "course_readable_id", "courserun_title", "courserun_readable_id", "platform", "courserun_start_on",
+  "courserun_end_on", "courserun_upgrade_deadline"], "temporal_columns_lookup": {},
+  "all_columns": [], "percent_metrics": [], "adhoc_filters": [], "order_by_cols":
+  [], "row_limit": 1000, "order_desc": true, "table_timestamp_format": "smart_date",
+  "show_cell_bars": true, "color_pn": true, "extra_form_data": {}, "dashboards": [16,
+  24], "force": false, "result_format": "json", "result_type": "full"}, "result_format":
+  "json", "result_type": "full"}'
+cache_timeout: null
 uuid: 01f0a8ee-45f0-40ef-a96e-250a40aebf10
 version: 1.0.0
-viz_type: table
+dataset_uuid: 836dd1f0-3e2e-45a9-a721-62a471a43de8
