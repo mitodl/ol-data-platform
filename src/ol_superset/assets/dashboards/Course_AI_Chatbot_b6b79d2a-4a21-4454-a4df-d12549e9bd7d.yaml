@@ -55,6 +55,9 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
+    tabsInScope:
+    - TAB-f9kZjFZJcGqYTdBxpCR2o
+    - TAB-yHMV5QOM_44gkFJMD_pSv
     targets:
     - column:
         name: ai_agent
@@ -62,6 +65,9 @@ metadata:
     type: NATIVE_FILTER
   - cascadeParentIds:
     - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
+    chartsInScope:
+    - 128
+    - 130
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -78,10 +84,13 @@ metadata:
     id: NATIVE_FILTER-2pJ275QI_XYBjBj1zZmxV
     name: Course Run Readable ID
     scope:
-      excluded:
-      - 123
+      excluded: []
       rootPath:
-      - ROOT_ID
+      - TAB-f9kZjFZJcGqYTdBxpCR2o
+      - TAB-yHMV5QOM_44gkFJMD_pSv
+    tabsInScope:
+    - TAB-f9kZjFZJcGqYTdBxpCR2o
+    - TAB-yHMV5QOM_44gkFJMD_pSv
     targets:
     - column:
         name: courserun_readable_id
@@ -90,6 +99,9 @@ metadata:
   - cascadeParentIds:
     - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
     - NATIVE_FILTER-2pJ275QI_XYBjBj1zZmxV
+    chartsInScope:
+    - 128
+    - 130
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -109,6 +121,9 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
+    tabsInScope:
+    - TAB-f9kZjFZJcGqYTdBxpCR2o
+    - TAB-yHMV5QOM_44gkFJMD_pSv
     targets:
     - column:
         name: resource_id
