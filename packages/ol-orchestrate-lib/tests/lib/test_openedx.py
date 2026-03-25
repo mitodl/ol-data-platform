@@ -314,3 +314,44 @@ def test_process_course_xml_blocks_source_system_tracking():
             assert block.source_system == source_sys
 
     temp_dir.cleanup()
+
+
+def test_process_course_xml_blocks_structural_dirs_excluded():
+    """Test that archive structural directories are not included as blocks.
+
+    drafts/ - Studio draft workspace, not published content
+    assets/ - Static file storage directory, not a block type
+    static/ - Static file storage directory, not a block type
+    """
+    temp_dir = TemporaryDirectory()
+    archive_path = Path(temp_dir.name) / "test.tar.gz"
+    course_root = Path(temp_dir.name) / "course_root"
+    course_root.mkdir()
+
+    (course_root / "course.xml").write_text(
+        '<course url_name="test" org="TestX" course="TEST"/>'
+    )
+
+    # Create a real block
+    chapter_dir = course_root / "chapter"
+    chapter_dir.mkdir()
+    (chapter_dir / "ch1.xml").write_text('<chapter display_name="Ch1"/>')
+
+    # Create structural directories with XML files that should be excluded
+    for dir_name in ["drafts", "assets", "static"]:
+        d = course_root / dir_name
+        d.mkdir()
+        (d / "something.xml").write_text(f'<{dir_name} display_name="Should be excluded"/>')
+
+    with tarfile.open(archive_path, "w:gz") as tar:
+        tar.add(course_root, arcname="course_root")
+
+    blocks, _ = process_course_xml_blocks(archive_path, "test")
+    block_types = {b.block_type for b in blocks}
+
+    assert "drafts" not in block_types, "drafts/ directory should be excluded"
+    assert "assets" not in block_types, "assets/ directory should be excluded"
+    assert "static" not in block_types, "static/ directory should be excluded"
+    assert "chapter" in block_types, "Real block types should still be included"
+
+    temp_dir.cleanup()

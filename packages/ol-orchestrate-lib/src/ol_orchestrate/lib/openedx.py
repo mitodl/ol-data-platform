@@ -457,6 +457,12 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
             if block_type == "course":
                 continue
 
+            # Skip archive structural directories that are not course block types:
+            # - drafts/: Studio draft workspace, not published content
+            # - assets/ and static/: Static file storage directories, not blocks
+            if block_type in {"drafts", "assets", "static"}:
+                continue
+
             xml_data = tf.extractfile(member)
             if not xml_data:
                 continue
