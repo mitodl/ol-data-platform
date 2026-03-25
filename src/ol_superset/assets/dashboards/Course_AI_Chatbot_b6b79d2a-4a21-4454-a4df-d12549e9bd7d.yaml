@@ -19,7 +19,7 @@ metadata:
       id: 130
   color_scheme: ''
   color_scheme_domain: []
-  cross_filters_enabled: false
+  cross_filters_enabled: true
   expanded_slices: {}
   global_chart_configuration:
     chartsInScope:
