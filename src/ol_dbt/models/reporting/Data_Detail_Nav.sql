@@ -18,7 +18,7 @@ select
 from  navigation_events
 inner join combined__course_runs
     on navigation_events.courserun_readable_id = combined__course_runs.courserun_readable_id
-group by
+group by 
     navigation_events.platform
     , combined__course_runs.course_title
     , navigation_events.courserun_readable_id
