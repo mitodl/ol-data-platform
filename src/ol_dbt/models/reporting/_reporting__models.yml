@@ -1191,15 +1191,16 @@ models:
       code}+{run_tag}
     tests:
     - not_null
+  - name: user_username
+    description: string, username of the user who triggered the navigation event
   - name: event_type
     description: string, type of the navigation event
   - name: starting_position
-    description: string, when the navigation event starts.
+    description: string, when the navigation event starts. 
   - name: ending_position
     description: string, when the navigation event ends.
   - name: event_timestamp
     description: timestamp, date and time when the navigation event was recorded.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "course_title", "courserun_readable_id", "event_type",
-        "event_timestamp"]
+      column_list: ["platform", "course_title", "courserun_readable_id", "user_username", "event_type", "event_timestamp"]

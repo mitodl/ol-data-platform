@@ -10,6 +10,7 @@ select
     navigation_events.platform
     , combined__course_runs.course_title
     , navigation_events.courserun_readable_id
+    , navigation_events.user_username
     , navigation_events.event_type
     , navigation_events.starting_position
     , navigation_events.ending_position
