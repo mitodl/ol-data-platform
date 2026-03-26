@@ -1177,7 +1177,7 @@ models:
       column_list: ["platform", "user_username", "courserun_readable_id"]
 
 - name: Data_Detail_Nav
-  description: Report of navigatation events
+  description: Report of navigation events
   columns:
   - name: platform
     description: string, name of the platform (e.g. MITx Online, xPro, edX.org, Residential
