@@ -17,4 +17,3 @@ select
 from  navigation_events
 inner join combined__course_runs
     on navigation_events.courserun_readable_id = combined__course_runs.courserun_readable_id
-where navigation_events.platform in ('edxorg', 'mitxonline')
