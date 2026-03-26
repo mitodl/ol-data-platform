@@ -36,3 +36,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ol_orchestrate"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests requiring local archive files (skip in CI)",
+]
