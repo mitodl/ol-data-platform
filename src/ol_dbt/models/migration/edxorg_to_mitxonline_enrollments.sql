@@ -154,10 +154,10 @@ with combined_enrollments as (
     --- Exclude PEx runs as these are transient and don't need to be migrated. Anyone who earned a certificate
       -- in them also earned a certificate in the corresponding non-PEx version of the course
     and combined_enrollments.courserun_readable_id not like '%PEx%'
-    -- Exclude course-v1:MITx+15.390.1x_SPA+1T1015 as it has been migrated but the courserun_readable_id was updated to
+    -- Exclude MITx/15.390.1x_SPA/1T1015 as it has been migrated but the courserun_readable_id was updated to
     --- course-v1:MITx+15.390.1x_SPA+1T2015 on mitxonline and we want to avoid trying to migrate it again with the
       -- incorrect courserun_readable_id
-    and combined_enrollments.courserun_readable_id !='course-v1:MITx+15.390.1x_SPA+1T1015'
+    and combined_enrollments.courserun_readable_id != 'MITx/15.390.1x_SPA/1T1015'
     -- Exclude retired users
     and combined_enrollments.user_email not like 'retired__user%'
     and combined_enrollments.user_username not like 'retired__user%'
