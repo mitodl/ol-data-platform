@@ -154,9 +154,12 @@ with combined_enrollments as (
     --- Exclude PEx runs as these are transient and don't need to be migrated. Anyone who earned a certificate
       -- in them also earned a certificate in the corresponding non-PEx version of the course
     and combined_enrollments.courserun_readable_id not like '%PEx%'
-    -- Exclude MITx/15.390.1x_SPA/1T1015 as it has been migrated but the courserun_readable_id was updated to
-    --- course-v1:MITx+15.390.1x_SPA+1T2015 on mitxonline and we want to avoid trying to migrate it again with the
-      -- incorrect courserun_readable_id
+    -- Exclude MITx/15.390.1x_SPA/1T1015. In edX it uses the legacy course ID
+    --   source (edx.org) courserun_readable_id: MITx/15.390.1x_SPA/1T1015
+    --   normalized (MITx Online) course-v1 ID: course-v1:MITx+15.390.1x_SPA+1T2015
+    -- This run has already been migrated under the normalized ID, so we exclude
+    -- the legacy ID here to avoid attempting a duplicate migration with the
+    -- outdated courserun_readable_id.
     and combined_enrollments.courserun_readable_id != 'MITx/15.390.1x_SPA/1T1015'
     -- Exclude retired users
     and combined_enrollments.user_email not like 'retired__user%'
