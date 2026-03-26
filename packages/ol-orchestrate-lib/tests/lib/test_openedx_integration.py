@@ -96,7 +96,9 @@ def skip_if_missing(archive_path):
 
 @pytest.mark.integration
 @pytest.mark.parametrize("archive_path,source_system,expected_course_id", ARCHIVES)
-def test_real_archive_returns_typed_blocks(archive_path, source_system, expected_course_id):
+def test_real_archive_returns_typed_blocks(
+    archive_path, source_system, expected_course_id
+):
     """All blocks are CourseXmlBlock instances with required fields populated."""
     if not archive_exists(archive_path):
         pytest.skip(f"Archive not found: {archive_path}")
@@ -133,14 +135,18 @@ def test_real_archive_course_id(archive_path, source_system, expected_course_id)
 
 @pytest.mark.integration
 @pytest.mark.parametrize("archive_path,source_system,expected_course_id", ARCHIVES)
-def test_real_archive_no_excluded_block_types(archive_path, source_system, expected_course_id):
+def test_real_archive_no_excluded_block_types(
+    archive_path, source_system, expected_course_id
+):
     """No blocks should be from excluded structural directories."""
     if not archive_exists(archive_path):
         pytest.skip(f"Archive not found: {archive_path}")
 
     blocks, _ = process_course_xml_blocks(Path(archive_path), source_system)
 
-    found_excluded = {b.block_type for b in blocks if b.block_type in EXCLUDED_BLOCK_TYPES}
+    found_excluded = {
+        b.block_type for b in blocks if b.block_type in EXCLUDED_BLOCK_TYPES
+    }
     assert not found_excluded, (
         f"Found excluded block types: {found_excluded}. "
         "drafts/assets/static/course directories should be filtered."
@@ -166,7 +172,9 @@ def test_real_archive_raw_xml_is_valid(archive_path, source_system, expected_cou
 
 @pytest.mark.integration
 @pytest.mark.parametrize("archive_path,source_system,expected_course_id", ARCHIVES)
-def test_real_archive_model_dump_json_serializable(archive_path, source_system, expected_course_id):
+def test_real_archive_model_dump_json_serializable(
+    archive_path, source_system, expected_course_id
+):
     """All blocks can be serialized to JSON (as required by the jsonlines writer)."""
     if not archive_exists(archive_path):
         pytest.skip(f"Archive not found: {archive_path}")
@@ -180,7 +188,9 @@ def test_real_archive_model_dump_json_serializable(archive_path, source_system, 
 
 @pytest.mark.integration
 @pytest.mark.parametrize("archive_path,source_system,expected_course_id", ARCHIVES)
-def test_real_archive_static_assets_are_bytes(archive_path, source_system, expected_course_id):
+def test_real_archive_static_assets_are_bytes(
+    archive_path, source_system, expected_course_id
+):
     """Static assets are returned as (str, bytes) tuples."""
     if not archive_exists(archive_path):
         pytest.skip(f"Archive not found: {archive_path}")
@@ -194,7 +204,9 @@ def test_real_archive_static_assets_are_bytes(archive_path, source_system, expec
 
 @pytest.mark.integration
 @pytest.mark.parametrize("archive_path,source_system,expected_course_id", ARCHIVES)
-def test_real_archive_static_assets_rebundleable(archive_path, source_system, expected_course_id):
+def test_real_archive_static_assets_rebundleable(
+    archive_path, source_system, expected_course_id
+):
     """Static assets can be rebundled into a tar.gz (as done by the Dagster asset)."""
     import io
 

@@ -341,7 +341,9 @@ def test_process_course_xml_blocks_structural_dirs_excluded():
     for dir_name in ["drafts", "assets", "static"]:
         d = course_root / dir_name
         d.mkdir()
-        (d / "something.xml").write_text(f'<{dir_name} display_name="Should be excluded"/>')
+        (d / "something.xml").write_text(
+            f'<{dir_name} display_name="Should be excluded"/>'
+        )
 
     with tarfile.open(archive_path, "w:gz") as tar:
         tar.add(course_root, arcname="course_root")
