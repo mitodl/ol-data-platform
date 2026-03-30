@@ -40,6 +40,21 @@ with mitxonline_payments as (
     select * from mitxpro_payments
 )
 
+-- Bridge from payment/receipt → order → user (payment sources carry null user_id by design)
+, order_user_lookup as (
+    select
+        order_id
+        , user_id
+        , 'mitxonline' as platform
+    from {{ ref('int__mitxonline__ecommerce_order') }}
+    union all
+    select
+        order_id
+        , order_purchaser_user_id as user_id
+        , 'mitxpro' as platform
+    from {{ ref('int__mitxpro__ecommerce_order') }}
+)
+
 -- Join to dimensions for FKs
 , user_lookup as (
     select
@@ -75,12 +90,15 @@ with mitxonline_payments as (
         , dim_payment_method.payment_method_pk as payment_method_fk
         , {{ iso8601_to_date_key('transaction_created_on') }} as payment_date_key
     from combined_payments
+    left join order_user_lookup as oul
+        on combined_payments.order_id = oul.order_id
+        and combined_payments.platform = oul.platform
     left join user_lookup as ul_mitxonline
         on combined_payments.platform = 'mitxonline'
-        and combined_payments.user_id = ul_mitxonline.mitxonline_application_user_id
+        and oul.user_id = ul_mitxonline.mitxonline_application_user_id
     left join user_lookup as ul_mitxpro
         on combined_payments.platform = 'mitxpro'
-        and combined_payments.user_id = ul_mitxpro.mitxpro_application_user_id
+        and oul.user_id = ul_mitxpro.mitxpro_application_user_id
     left join dim_platform_lookup
         on combined_payments.platform = dim_platform_lookup.platform_readable_id
     left join dim_payment_method on combined_payments.payment_method = dim_payment_method.payment_method_code
@@ -106,7 +124,13 @@ with mitxonline_payments as (
     from payments_with_fks
 
     {% if is_incremental() %}
-    where transaction_created_on >= (select max(transaction_created_on) from {{ this }})
+    where (
+        transaction_created_on > (
+            select max(transaction_created_on) from {{ this }}
+            where platform = payments_with_fks.platform
+        )
+        or transaction_created_on is null
+    )
     {% endif %}
 )
 

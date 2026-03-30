@@ -96,13 +96,19 @@ with
         select *
         from micromasters_programs
     ),
+    dim_platform_lookup as (
+        select platform_pk, platform_readable_id
+        from {{ ref('dim_platform') }}
+    ),
     with_platform_fk as (
         select
             combined.*,
-            cast(null as varchar) as platform_fk,  -- dim_platform not in Phase 1-2
+            dim_platform_lookup.platform_pk as platform_fk,
             {{ safe_parse_iso8601_date("first_published_date") }} as published_date,
             {{ iso8601_to_date_key('first_published_date') }} as published_date_key
         from combined
+        left join dim_platform_lookup
+            on combined.platform_code = dim_platform_lookup.platform_readable_id
     )
 
 select {{ dbt_utils.generate_surrogate_key(["source_id", "platform_code"]) }} as program_pk, *

@@ -100,6 +100,11 @@ with mitxonline_discussion_events as (
     where is_current = true
 )
 
+, dim_platform_lookup as (
+    select platform_pk, platform_readable_id
+    from {{ ref('dim_platform') }}
+)
+
 , combined as (
     select
         'mitxonline' as platform
@@ -201,7 +206,7 @@ with mitxonline_discussion_events as (
 )
 
 select
-    cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2; align with other fact tables
+    dim_platform_lookup.platform_pk as platform_fk
     , combined.platform
     , user_fk
     , openedx_user_id
@@ -223,3 +228,5 @@ from combined
 left join dim_course_run
     on combined.courserun_readable_id = dim_course_run.courserun_readable_id
     and dim_course_run.platform = combined.platform
+left join dim_platform_lookup
+    on combined.platform = dim_platform_lookup.platform_readable_id

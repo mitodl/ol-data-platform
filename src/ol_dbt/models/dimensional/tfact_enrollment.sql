@@ -182,8 +182,13 @@ with mitxonline_enrollments as (
     from enrollments_with_fks
 
     {% if is_incremental() %}
-    where enrollment_created_on >= (select max(enrollment_created_on) from {{ this }})
-       or enrollment_created_on is null
+    where (
+        enrollment_created_on > (
+            select max(enrollment_created_on) from {{ this }}
+            where platform = enrollments_with_fks.platform
+        )
+        or enrollment_created_on is null
+    )
     {% endif %}
 )
 

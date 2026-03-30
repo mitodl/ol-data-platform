@@ -3,10 +3,18 @@
 ) }}
 
 -- Program requirements define which courses belong to which programs
-with mitxonline_program_requirements as (
+with micromasters_course_keys as (
+    select
+        course_id
+        , course_edx_key as course_readable_id
+    from {{ ref('stg__micromasters__app__postgres__courses_course') }}
+)
+
+, mitxonline_program_requirements as (
     select
         program_id
         , course_id
+        , cast(null as varchar) as course_readable_id
         , true as is_required
         , 'mitxonline' as platform
         , 'mitxonline' as platform_code
@@ -17,6 +25,7 @@ with mitxonline_program_requirements as (
     select
         program_id
         , course_id
+        , cast(null as varchar) as course_readable_id
         , true as is_required
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
@@ -25,12 +34,14 @@ with mitxonline_program_requirements as (
 
 , micromasters_requirements as (
     select
-        program_id
-        , course_id
+        r.program_id
+        , cast(null as integer) as course_id  -- MicroMasters uses readable_id path
+        , ck.course_readable_id
         , true as is_required
         , 'micromasters' as platform
         , 'micromasters' as platform_code
-    from {{ ref('int__micromasters__program_requirements') }}
+    from {{ ref('int__micromasters__program_requirements') }} r
+    inner join micromasters_course_keys ck on r.course_id = ck.course_id
 )
 
 , combined_requirements as (
@@ -68,8 +79,15 @@ with mitxonline_program_requirements as (
         on combined_requirements.program_id = dim_program.source_id
         and combined_requirements.platform_code = dim_program.platform_code
     inner join dim_course
-        on combined_requirements.course_id = dim_course.source_id
-        and combined_requirements.platform_code = dim_course.primary_platform
+        on (
+            -- Standard path: integer source_id + platform match
+            (combined_requirements.platform_code != 'micromasters'
+                and combined_requirements.course_id = dim_course.source_id
+                and combined_requirements.platform_code = dim_course.primary_platform)
+            -- MicroMasters path: courses are edxorg rows in dim_course; match on readable_id
+            or (combined_requirements.platform_code = 'micromasters'
+                and combined_requirements.course_readable_id = dim_course.course_readable_id)
+        )
 )
 
 select
