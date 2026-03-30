@@ -2,6 +2,13 @@ with combined_enrollments as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
 
+, retired_users as (
+    select cast(user_id as varchar) as user_id
+    from {{ ref('int__edxorg__mitx_users') }}
+    where
+        user_is_active = false
+)
+
 , edxorg_grade as (
     select
           {{ format_course_id('courseruncertificate_courserun_readable_id', false) }} as courserun_readable_id
@@ -147,6 +154,13 @@ with combined_enrollments as (
     --- Exclude PEx runs as these are transient and don't need to be migrated. Anyone who earned a certificate
       -- in them also earned a certificate in the corresponding non-PEx version of the course
     and combined_enrollments.courserun_readable_id not like '%PEx%'
+    -- Exclude MITx/15.390.1x_SPA/1T1015. In edX it uses the legacy course ID
+    --   source (edx.org) courserun_readable_id: MITx/15.390.1x_SPA/1T1015
+    --   normalized (MITx Online) course-v1 ID: course-v1:MITx+15.390.1x_SPA+1T2015
+    -- This run has already been migrated under the normalized ID, so we exclude
+    -- the legacy ID here to avoid attempting a duplicate migration with the
+    -- outdated courserun_readable_id.
+    and combined_enrollments.courserun_readable_id != 'MITx/15.390.1x_SPA/1T1015'
     -- Exclude retired users
     and combined_enrollments.user_email not like 'retired__user%'
     and combined_enrollments.user_username not like 'retired__user%'
@@ -186,7 +200,10 @@ left join edx_to_mitxonline_certificate_revision
     on edxorg_enrollment.courserun_readable_id = edx_to_mitxonline_certificate_revision.courserun_readable_id
 left join edx_signatories
     on edxorg_enrollment.courserun_readable_id = edx_signatories.courserun_readable_id
+left join retired_users
+    on edxorg_enrollment.user_id = retired_users.user_id
 where
     edxorg_enrollment.courseruncertificate_created_on is not null
     and mitxonline_enrollment.user_email is null
     and mitx__users.user_mitxonline_email is null
+    and retired_users.user_id is null

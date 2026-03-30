@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: f33af055-8200-464d-bd40-fee6194e0fd4  # Enrollment_Activity_Counts_Dataset
+dataset_uuid: f33af055-8200-464d-bd40-fee6194e0fd4
 description: null
 params:
   adhoc_filters:

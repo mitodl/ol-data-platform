@@ -1175,3 +1175,33 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       column_list: ["platform", "user_username", "courserun_readable_id"]
+
+- name: data_detail_nav
+  description: Report of navigatation events
+  columns:
+  - name: platform
+    description: string, name of the platform (e.g. MITx Online, xPro, edX.org, Residential
+      MITx)
+    tests:
+    - not_null
+  - name: course_title
+    description: string, title of the course
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: user_username
+    description: string, username of the user who triggered the navigation event
+  - name: event_type
+    description: string, type of the navigation event
+  - name: starting_position
+    description: string, when the navigation event starts.
+  - name: ending_position
+    description: string, when the navigation event ends.
+  - name: event_timestamp
+    description: timestamp, date and time when the navigation event was recorded.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      column_list: ["platform", "course_title", "courserun_readable_id", "user_username",
+        "event_type", "starting_position", "ending_position", "event_timestamp"]
