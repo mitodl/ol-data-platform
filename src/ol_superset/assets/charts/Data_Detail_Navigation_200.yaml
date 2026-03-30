@@ -46,4 +46,4 @@ query_context: '{"datasource":{"id":175,"type":"table"},"force":false,"queries":
 cache_timeout: null
 uuid: cf8305f6-fe5d-4791-8185-3051b76f4738
 version: 1.0.0
-dataset_uuid: 2e7e66d9-731a-405a-8605-660304ab7540
+dataset_uuid: 2e7e66d9-731a-405a-8605-660304ab7540  # data_detail_nav
