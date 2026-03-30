@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: 32e283f5-fc02-403a-9c92-b8286352cdba  # Data_Detail_Nav
+dataset_uuid: 2e7e66d9-731a-405a-8605-660304ab7540  # data_detail_nav
 description: null
 params:
   adhoc_filters:
@@ -19,15 +19,14 @@ params:
   - ending_position
   - event_timestamp
   allow_render_html: true
-  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
   extra_form_data: {}
   groupby: []
-  metrics: []
   order_by_cols: []
   order_desc: true
+  percent_metric_calculation: row_limit
   percent_metrics: []
   query_mode: raw
   row_limit: 1000
@@ -36,7 +35,6 @@ params:
   table_timestamp_format: smart_date
   temporal_columns_lookup:
     event_timestamp: true
-  time_grain_sqla: P1D
   viz_type: table
 slice_name: Data Detail Navigation
 uuid: cf8305f6-fe5d-4791-8185-3051b76f4738
