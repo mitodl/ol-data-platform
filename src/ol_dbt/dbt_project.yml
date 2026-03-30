@@ -4,14 +4,13 @@
 # name or the intended use of these models
 name: 'open_learning'
 version: '0.1.0'
-config-version: 2
 
 # This setting configures which "profile" dbt uses for this project.
 profile: 'open_learning'
 
 # Load AWS credentials for DuckDB Iceberg access
 on-run-start:
-- "{{ duckdb_init() }}"
+- "{% if target.type == 'duckdb' %}{{ duckdb_init() }}{% endif %}"
 
 # These configurations specify where dbt should look for different types of files.
 # The `model-paths` config, for example, states that models in this project can be
@@ -74,7 +73,7 @@ vars:
 models:
   open_learning:
     +grants:
-      select: ['read_only_production', 'ol_data_analyst', production_analyst', 'ol_data_engineer']
+      select: ['read_only_production', 'ol_data_analyst', 'production_analyst', 'ol_data_engineer']
       insert: ['production_analyst', 'ol_data_engineer']
       update: ['production_analyst', 'ol_data_engineer']
       delete: ['production_analyst', 'ol_data_engineer']
@@ -119,11 +118,10 @@ models:
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
           'ol_business_analyst', 'reverse_etl', 'mit_irx']
+    +properties:
+      format: "'PARQUET'"
     +meta:
-      properties:
-        format: "'PARQUET'"
       required_docs: true
-      sample:
 
 
 # Test severity config
@@ -133,5 +131,4 @@ tests:
     +error_if: ">10"
 
 flags:
-  require_certificate_validation: true
   require_generic_test_arguments_property: true
