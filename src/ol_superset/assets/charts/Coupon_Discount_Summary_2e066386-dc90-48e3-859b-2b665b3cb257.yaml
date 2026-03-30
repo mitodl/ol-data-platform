@@ -45,7 +45,7 @@ params:
   order_desc: true
   percent_metrics: []
   query_mode: aggregate
-  row_limit: 1000
+  row_limit: 100000
   server_page_length: 10
   show_cell_bars: true
   table_timestamp_format: smart_date
