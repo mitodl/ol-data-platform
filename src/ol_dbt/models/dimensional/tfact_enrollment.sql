@@ -90,6 +90,16 @@ with mitxonline_enrollments as (
 -- Join to dimensions for FKs
 -- dim_user not in Phase 1-2
 
+, user_lookup as (
+    select
+        user_pk
+        , mitxonline_application_user_id
+        , mitxpro_application_user_id
+        , edxorg_openedx_user_id
+    from {{ ref('dim_user') }}
+    where user_pk is not null
+)
+
 , dim_course_run as (
     select courserun_pk, source_id, courserun_readable_id, platform_fk, platform
     from {{ ref('dim_course_run') }}
@@ -103,15 +113,39 @@ with mitxonline_enrollments as (
 
 -- dim_platform not in Phase 1-2
 
+, dim_platform_lookup as (
+    select platform_pk, platform_readable_id
+    from {{ ref('dim_platform') }}
+)
+
 , enrollments_with_fks as (
     select
         combined_enrollments.*
-        , cast(null as varchar) as user_fk  -- dim_user: user_pk is varchar (surrogate key)
+        , coalesce(
+            case when combined_enrollments.platform = 'mitxonline'
+                then ul_mitxonline.user_pk
+            end,
+            case when combined_enrollments.platform = 'mitxpro'
+                then ul_mitxpro.user_pk
+            end,
+            case when combined_enrollments.platform = 'edxorg'
+                then ul_edxorg.user_pk
+            end
+        ) as user_fk
         , dim_course_run.courserun_pk as courserun_fk
         , dim_program.program_pk as program_fk
-        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
+        , dim_platform_lookup.platform_pk as platform_fk
         , {{ iso8601_to_date_key('enrollment_created_on') }} as enrollment_date_key
     from combined_enrollments
+    left join user_lookup as ul_mitxonline
+        on combined_enrollments.platform = 'mitxonline'
+        and combined_enrollments.user_id = ul_mitxonline.mitxonline_application_user_id
+    left join user_lookup as ul_mitxpro
+        on combined_enrollments.platform = 'mitxpro'
+        and combined_enrollments.user_id = ul_mitxpro.mitxpro_application_user_id
+    left join user_lookup as ul_edxorg
+        on combined_enrollments.platform = 'edxorg'
+        and combined_enrollments.user_id = ul_edxorg.edxorg_openedx_user_id
     left join dim_course_run
         on combined_enrollments.platform = dim_course_run.platform
         and (
@@ -123,6 +157,8 @@ with mitxonline_enrollments as (
     left join dim_program
         on combined_enrollments.program_id = dim_program.source_id
         and combined_enrollments.platform_code = dim_program.platform_code
+    left join dim_platform_lookup
+        on combined_enrollments.platform = dim_platform_lookup.platform_readable_id
 )
 
 , final as (

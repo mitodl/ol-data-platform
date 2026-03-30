@@ -1,7 +1,8 @@
 {{ config(
     materialized='incremental',
     unique_key='product_pk',
-    incremental_strategy='delete+insert'
+    incremental_strategy='delete+insert',
+    on_schema_change='append_new_columns'
 ) }}
 
 with mitxonline_products as (
@@ -52,12 +53,17 @@ with mitxonline_products as (
 
 -- dim_platform not in Phase 1-2, setting platform_fk to null
 
+, dim_platform_lookup as (
+    select platform_pk, platform_readable_id
+    from {{ ref('dim_platform') }}
+)
+
 , products_with_fks as (
     select
         combined_products.*
         , dim_course_run.courserun_pk as courserun_fk
         , dim_program.program_pk as program_fk
-        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
+        , dim_platform_lookup.platform_pk as platform_fk
         , {{ iso8601_to_date_key('product_created_on') }} as created_date_key
     from combined_products
     left join dim_course_run
@@ -66,6 +72,8 @@ with mitxonline_products as (
     left join dim_program
         on combined_products.program_id = dim_program.source_id
         and combined_products.platform_code = dim_program.platform_code
+    left join dim_platform_lookup
+        on combined_products.platform = dim_platform_lookup.platform_readable_id
 )
 
 , final as (

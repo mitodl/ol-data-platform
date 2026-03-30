@@ -91,13 +91,18 @@ with mitxonline_courseruns as (
 , courseruns_with_all_fks as (
     select
         courseruns_with_fk.*
-        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
+        , dim_platform_lookup.platform_pk as platform_fk
         -- Create date keys for date dimension joins (parse to timestamp then format as YYYYMMDD)
         , {{ iso8601_to_date_key('courserun_start_on') }} as courserun_start_date_key
         , {{ iso8601_to_date_key('courserun_end_on') }} as courserun_end_date_key
         , {{ iso8601_to_date_key('enrollment_start') }} as enrollment_start_date_key
         , {{ iso8601_to_date_key('enrollment_end') }} as enrollment_end_date_key
     from courseruns_with_fk
+    left join (
+        select platform_pk, platform_readable_id
+        from {{ ref('dim_platform') }}
+    ) as dim_platform_lookup
+        on courseruns_with_fk.platform = dim_platform_lookup.platform_readable_id
 )
 
 , final as (

@@ -52,6 +52,15 @@ with mitxonline_orders as (
 )
 
 -- Join to dimensions for FKs
+, user_lookup as (
+    select
+        user_pk
+        , mitxonline_application_user_id
+        , mitxpro_application_user_id
+    from {{ ref('dim_user') }}
+    where user_pk is not null
+)
+
 , dim_discount_type as (
     select discount_type_pk, discount_type_code
     from {{ ref('dim_discount_type') }}
@@ -63,16 +72,36 @@ with mitxonline_orders as (
     where is_current = true
 )
 
+, dim_platform_lookup as (
+    select platform_pk, platform_readable_id
+    from {{ ref('dim_platform') }}
+)
+
 , orders_with_fks as (
     select
         combined_orders.*
-        , cast(null as varchar) as user_fk  -- dim_user: user_pk is varchar (surrogate key)
-        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
+        , coalesce(
+            case when combined_orders.platform = 'mitxonline'
+                then ul_mitxonline.user_pk
+            end,
+            case when combined_orders.platform = 'mitxpro'
+                then ul_mitxpro.user_pk
+            end
+        ) as user_fk
+        , dim_platform_lookup.platform_pk as platform_fk
         , dim_discount_type.discount_type_pk as discount_type_fk
         , dim_product.product_pk as product_fk
         , {{ iso8601_to_date_key('order_created_on') }} as order_date_key
         , {{ iso8601_to_date_key('order_updated_on') }} as order_updated_date_key
     from combined_orders
+    left join user_lookup as ul_mitxonline
+        on combined_orders.platform = 'mitxonline'
+        and combined_orders.user_id = ul_mitxonline.mitxonline_application_user_id
+    left join user_lookup as ul_mitxpro
+        on combined_orders.platform = 'mitxpro'
+        and combined_orders.user_id = ul_mitxpro.mitxpro_application_user_id
+    left join dim_platform_lookup
+        on combined_orders.platform = dim_platform_lookup.platform_readable_id
     left join dim_discount_type on combined_orders.discount_type_code = dim_discount_type.discount_type_code
     left join dim_product
         on cast(combined_orders.product_id as varchar) = cast(dim_product.source_product_id as varchar)

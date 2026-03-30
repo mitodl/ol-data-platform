@@ -23,10 +23,22 @@ with mitxonline_program_requirements as (
     from {{ ref('int__mitxpro__coursesinprogram') }}
 )
 
+, micromasters_requirements as (
+    select
+        program_id
+        , course_id
+        , true as is_required
+        , 'micromasters' as platform
+        , 'micromasters' as platform_code
+    from {{ ref('int__micromasters__program_requirements') }}
+)
+
 , combined_requirements as (
     select * from mitxonline_program_requirements
     union all
     select * from mitxpro_program_requirements
+    union all
+    select * from micromasters_requirements
 )
 
 -- Join to dimensions to get FKs

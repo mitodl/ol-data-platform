@@ -38,7 +38,14 @@ with mitxonline_certificates as (
     select * from mitxpro_certificates
 )
 
--- dim_user not in Phase 1-2 (not joined)
+, user_lookup as (
+    select
+        user_pk
+        , mitxonline_application_user_id
+        , mitxpro_application_user_id
+    from {{ ref('dim_user') }}
+    where user_pk is not null
+)
 
 , dim_course_run as (
     select courserun_pk, source_id, platform
@@ -48,6 +55,11 @@ with mitxonline_certificates as (
 
 -- dim_platform not in Phase 1-2
 
+, dim_platform_lookup as (
+    select platform_pk, platform_readable_id
+    from {{ ref('dim_platform') }}
+)
+
 , dim_certificate_type as (
     select certificate_type_pk, certificate_type_code
     from {{ ref('dim_certificate_type') }}
@@ -56,15 +68,30 @@ with mitxonline_certificates as (
 , certificates_with_fks as (
     select
         combined_certificates.*
-        , cast(null as varchar) as user_fk  -- dim_user not in Phase 1-2
+        , coalesce(
+            case when combined_certificates.platform = 'mitxonline'
+                then ul_mitxonline.user_pk
+            end,
+            case when combined_certificates.platform = 'mitxpro'
+                then ul_mitxpro.user_pk
+            end
+        ) as user_fk
         , dim_course_run.courserun_pk as courserun_fk
-        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
+        , dim_platform_lookup.platform_pk as platform_fk
         , dim_certificate_type.certificate_type_pk as certificate_type_fk
         , {{ iso8601_to_date_key('certificate_created_on') }} as certificate_issued_date_key
     from combined_certificates
+    left join user_lookup as ul_mitxonline
+        on combined_certificates.platform = 'mitxonline'
+        and combined_certificates.user_id = ul_mitxonline.mitxonline_application_user_id
+    left join user_lookup as ul_mitxpro
+        on combined_certificates.platform = 'mitxpro'
+        and combined_certificates.user_id = ul_mitxpro.mitxpro_application_user_id
     left join dim_course_run
         on combined_certificates.courserun_id = dim_course_run.source_id
         and combined_certificates.platform = dim_course_run.platform
+    left join dim_platform_lookup
+        on combined_certificates.platform = dim_platform_lookup.platform_readable_id
     left join dim_certificate_type
         on dim_certificate_type.certificate_type_code = case combined_certificates.platform
             when 'mitxonline' then 'verified'

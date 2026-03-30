@@ -30,13 +30,31 @@ with mitxonline_courses as (
     from {{ ref('int__mitxpro__courses') }}
 )
 
+, edxorg_courses as (
+    select
+        course_readable_id
+        , cast(null as integer) as source_id
+        , courserun_title as course_title
+        , course_number
+        , cast(null as varchar) as course_description
+        , courserun_is_published as course_is_live
+        , 'edxorg' as platform
+    from {{ ref('int__edxorg__mitx_courseruns') }}
+    qualify row_number() over (
+        partition by course_readable_id
+        order by courserun_start_date desc nulls last
+    ) = 1
+)
+
 , combined_courses as (
     select * from mitxonline_courses
     union all
     select * from mitxpro_courses
+    union all
+    select * from edxorg_courses
 )
 
--- Deduplicate by course_readable_id (prefer most recent platform)
+-- Deduplicate by course_readable_id (prefer mitxonline > mitxpro > edxorg)
 , deduped_courses as (
     select
         *
@@ -46,6 +64,8 @@ with mitxonline_courses as (
                 case platform
                     when 'mitxonline' then 1
                     when 'mitxpro' then 2
+                    when 'edxorg' then 3
+                    else 4
                 end
         ) as row_num
     from combined_courses
@@ -59,8 +79,8 @@ with mitxonline_courses as (
 , new_and_changed_courses as (
     select
         {{ dbt_utils.generate_surrogate_key([
-            'course_readable_id',
-            'cast(current_timestamp as varchar)'
+            'platform',
+            'course_readable_id'
         ]) }} as course_pk
         , course_readable_id
         , source_id

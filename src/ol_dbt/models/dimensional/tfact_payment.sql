@@ -41,6 +41,20 @@ with mitxonline_payments as (
 )
 
 -- Join to dimensions for FKs
+, user_lookup as (
+    select
+        user_pk
+        , mitxonline_application_user_id
+        , mitxpro_application_user_id
+    from {{ ref('dim_user') }}
+    where user_pk is not null
+)
+
+, dim_platform_lookup as (
+    select platform_pk, platform_readable_id
+    from {{ ref('dim_platform') }}
+)
+
 , dim_payment_method as (
     select payment_method_pk, payment_method_code
     from {{ ref('dim_payment_method') }}
@@ -49,11 +63,26 @@ with mitxonline_payments as (
 , payments_with_fks as (
     select
         combined_payments.*
-        , cast(null as varchar) as user_fk  -- dim_user: user_pk is varchar (surrogate key)
-        , cast(null as varchar) as platform_fk  -- dim_platform not in Phase 1-2
+        , coalesce(
+            case when combined_payments.platform = 'mitxonline'
+                then ul_mitxonline.user_pk
+            end,
+            case when combined_payments.platform = 'mitxpro'
+                then ul_mitxpro.user_pk
+            end
+        ) as user_fk
+        , dim_platform_lookup.platform_pk as platform_fk
         , dim_payment_method.payment_method_pk as payment_method_fk
         , {{ iso8601_to_date_key('transaction_created_on') }} as payment_date_key
     from combined_payments
+    left join user_lookup as ul_mitxonline
+        on combined_payments.platform = 'mitxonline'
+        and combined_payments.user_id = ul_mitxonline.mitxonline_application_user_id
+    left join user_lookup as ul_mitxpro
+        on combined_payments.platform = 'mitxpro'
+        and combined_payments.user_id = ul_mitxpro.mitxpro_application_user_id
+    left join dim_platform_lookup
+        on combined_payments.platform = dim_platform_lookup.platform_readable_id
     left join dim_payment_method on combined_payments.payment_method = dim_payment_method.payment_method_code
 )
 

@@ -1,3 +1,7 @@
+{{ config(
+    materialized='table'
+) }}
+
 -- MITx users from MITx Online and edX with dedup
 -- For users exist on both MITx Online and edX.org
 with mitx_users as (
