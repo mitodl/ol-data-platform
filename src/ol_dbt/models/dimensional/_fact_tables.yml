@@ -262,6 +262,12 @@ models:
     - relationships:
         to: ref('dim_platform')
         field: platform_pk
+  - name: certificate_type_fk
+    description: Foreign key to dim_certificate_type
+    tests:
+    - relationships:
+        to: ref('dim_certificate_type')
+        field: certificate_type_pk
   - name: platform
     description: Platform identifier string
     tests:
