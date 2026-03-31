@@ -22,7 +22,7 @@
 **Phase B:** 0/4 complete ⏳
 **Phase C:** 0/3 complete ⏳
 **Phase D:** 7/7 complete ✅
-**Phase E:** 0/6 complete ⏳
+**Phase E:** 6/6 complete ✅
 **Phase F:** 0/4 complete ⏳
 
 ---
@@ -1085,14 +1085,25 @@ replace `cast(null as varchar) as platform_fk` with the joined `platform_pk`.
 
 ---
 
-## Phase E — Missing Platform Coverage ⏳
+## Phase E — Missing Platform Coverage ✅
 
 > These tasks extend the dimensional layer to cover platforms and data types that
 > are currently completely absent. Each is independent.
 
 ---
 
-### E1 · Add MicroMasters Enrollments to `tfact_enrollment` ⏳
+### E1 · Add MicroMasters Enrollments to `tfact_enrollment` ✅
+
+**Investigation finding:** `int__micromasters__course_enrollments` sources from
+`int__mitx__courserun_enrollments_with_programs`, which in turn pulls from
+`int__mitx__courserun_enrollments` (edxorg) and `int__mitxonline__courserunenrollments_with_programs`
+(mitxonline). These records are already included in the `edxorg_enrollments` and
+`mitxonline_enrollments` CTEs in `tfact_enrollment`. Adding a micromasters UNION would
+cause duplicate enrollment rows.
+
+**What was done instead:** E5 (residential) and the existing edxorg/mitxonline paths cover
+all MicroMasters course enrollment records. To add MicroMasters *program context* to existing
+enrollments, a JOIN-based approach is needed (not a union). Tracked as Obs-3 below.
 
 **Files:**
 - `src/ol_dbt/models/dimensional/tfact_enrollment.sql`
@@ -1125,97 +1136,50 @@ resolve to `dim_user.user_pk`, add `micromasters_user_id` as a column to `dim_us
 
 ---
 
-### E2 · Add MicroMasters Orders to `tfact_order` ⏳
+### E2 · Add MicroMasters Orders to `tfact_order` ✅
 
-**File:** `src/ol_dbt/models/dimensional/tfact_order.sql`
-
-**Available source:** `{{ ref('int__micromasters__orders') }}`
-
-Key columns (inspect model before implementing):
-- `order_id`, `user_id`, `order_total_price_paid`, `order_status`, `order_created_on`
-
-Add a `micromasters_orders` CTE and union into `combined_orders`. User FK lookup
-requires `micromasters_user_id` in `dim_user` (see E4).
+**Implemented:** Added `micromasters_orders` CTE from `int__micromasters__orders` and
+unioned into `combined_orders`. User FK resolved via `micromasters_user_id` in `dim_user`.
+`platform = 'micromasters'`, `platform_code = 'micromasters'`.
 
 ---
 
-### E3 · Add MicroMasters Certificates to `tfact_certificate` ⏳
+### E3 · Add MicroMasters Certificates to `tfact_certificate` ✅
 
-**File:** `src/ol_dbt/models/dimensional/tfact_certificate.sql`
-
-**Available source:** `{{ ref('int__micromasters__course_certificates') }}`
-
-This model already resolves DEDP certificates from multiple sources (MicroMasters,
-MITx Online, edX.org) via subqueries. Add a `micromasters_certificates` CTE using
-`user_id`, `courserun_readable_id`, and `certificate_created_on`.
+**Implemented:** Added `micromasters_certificates` CTE from `int__micromasters__course_certificates`.
+- `user_fk` resolved via email join to `dim_user` (no integer user_id in source)
+- `courserun_fk` via `courserun_readable_id` join (same path as edxorg)
+- `certificate_type_code = 'honor'` (MicroMasters edxorg certs are honor mode)
+- Added `user_email` as carrier column to all certificate CTEs (null for non-micromasters)
 
 ---
 
-### E4 · Add `micromasters_user_id` to `dim_user` ⏳
+### E4 · Add `micromasters_user_id` to `dim_user` ✅
 
-**File:** `src/ol_dbt/models/dimensional/dim_user.sql`
-
-**Problem:**
-`dim_user` has columns for `mitxonline_application_user_id`, `mitxpro_application_user_id`,
-and `edxorg_openedx_user_id`, but no `micromasters_user_id`. MicroMasters enrollment,
-order, and certificate fact tables all carry MicroMasters-internal integer user IDs.
-Without this column, `user_fk` will always be NULL for MicroMasters facts.
-
-**Available source:** `int__micromasters__users` exposes `user_id` (MicroMasters integer)
-cross-referenced to `user_email`, which can be used to join to existing `dim_user` rows
-via the surrogate key `generate_surrogate_key(['email'])`.
-
-**Fix:** Add `micromasters_user_id` to the `dim_user` SELECT list. For users who exist
-in both MicroMasters and MITx Online (via email match), populate the column in the
-MITx Online branch of the UNION. For MicroMasters-only users (no MITx Online account),
-add a new `micromasters_only_users` CTE.
+**Implemented:** `int__mitx__users` already exposes `user_micromasters_id`. Added to:
+- `mitx_users` CTE (select from `int__mitx__users`)
+- `mitx_users_view`, `users_with_global_id`, `combined_users` (mitx branch)
+- All other UNION branches as `null as micromasters_user_id`
+- `agg_view` as `max(micromasters_user_id)`
+- Final SELECT as `agg.micromasters_user_id`
 
 ---
 
-### E5 · Add Residential Enrollments to `tfact_enrollment` ⏳
+### E5 · Add Residential Enrollments to `tfact_enrollment` ✅
 
-**File:** `src/ol_dbt/models/dimensional/tfact_enrollment.sql`
-
-**Available source:** `{{ ref('int__mitxresidential__courserun_enrollments') }}`
-
-Residential has a staging layer (`src/ol_dbt/models/staging/mitxresidential/`) and
-intermediate models covering enrollments, grades, and engagement. The enrollment
-intermediate already exists. `dim_course_run` already includes residential course runs
-(via engagement fact tables that reference `'residential'`).
-
-Check `int__mitxresidential__courserun_enrollments` columns before implementing:
-`user_id` likely maps to `dim_user.residential_openedx_user_id` (confirm column name
-in `dim_user`).
+**Implemented:** Added `residential_enrollments` CTE from `int__mitxresidential__courserun_enrollments`.
+- `platform = 'residential'`, `platform_code = 'residential'`
+- `user_fk` resolved via `residential_openedx_user_id` (already in `dim_user`)
+- `courserun_fk` via `courserun_readable_id` join
 
 ---
 
-### E6 · Add xPro Product FK to `tfact_order` via `ecommerce_line` ⏳
+### E6 · Add xPro Product FK to `tfact_order` via `ecommerce_line` ✅
 
-**File:** `src/ol_dbt/models/dimensional/tfact_order.sql`
-
-**Problem:**
-`mitxpro_orders` sets `cast(null as bigint) as product_id`, so `product_fk = NULL`
-for all xPro orders.
-
-**Available source:** `{{ ref('int__mitxpro__ecommerce_line') }}` — this intermediate
-already exists and exposes `order_id`, `product_id`, `courserun_id`, `program_id`.
-
-**Fix — add a line-item bridge:**
-```sql
-, mitxpro_order_product_lookup as (
-    select
-        order_id
-        , product_id
-    from {{ ref('int__mitxpro__ecommerce_line') }}
-    qualify row_number() over (partition by order_id order by product_id) = 1
-)
-```
-
-Then join to `combined_orders` on `order_id` for xPro rows, using the `product_id`
-from the line item to resolve `product_fk` via `dim_product`.
-
-Note: one order can have multiple line items. Use `QUALIFY` or a pre-aggregated CTE
-to avoid fan-out — the most common case is one line per order, but verify.
+**Implemented:** Added `mitxpro_order_product_lookup` CTE from `int__mitxpro__ecommerce_line`
+joining on `order_id` for xPro rows. The `product_fk` now resolves for xPro orders via
+`coalesce(mitxpro_order_product_lookup.product_id, combined_orders.product_id)` keyed
+against `dim_product.source_product_id`.
 
 ---
 
@@ -1413,6 +1377,24 @@ FROM ol_warehouse_production_kdelaney_dimensional.dim_program
 GROUP BY platform_code;
 -- micromasters row will show with_fk = 0 until resolved
 ```
+
+---
+
+### Obs-3 · MicroMasters program context missing from `tfact_enrollment` ⏳
+
+**Discovered during:** E1 investigation
+
+**Problem:** `int__micromasters__course_enrollments` sources from the same underlying
+enrollment records as `edxorg_enrollments` and `mitxonline_enrollments` in `tfact_enrollment`.
+Adding it as a new UNION branch would cause duplicate enrollment rows. The actual value
+of E1 is attaching **MicroMasters program context** (`program_fk`) to edxorg/mitxonline
+enrollment rows for courses that are part of a MicroMasters program.
+
+**Correct fix:** Add a JOIN from the fact table to a micromasters program lookup CTE
+(built from `int__micromasters__course_enrollments`), that maps `courserun_readable_id`
+→ `micromasters_program_id`. Then use `micromasters_program_id` to resolve `program_fk`
+via `dim_program (platform_code = 'micromasters')`. This supplements the existing
+`mitxonline program_id → dim_program` join path.
 
 ---
 
