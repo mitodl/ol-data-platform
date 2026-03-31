@@ -23,7 +23,7 @@
 **Phase C:** 0/3 complete ⏳
 **Phase D:** 7/7 complete ✅
 **Phase E:** 6/6 complete ✅
-**Phase F:** 0/4 complete ⏳
+**Phase F:** 3/4 complete ✅ (F1 pending design decision)
 
 ---
 
@@ -1218,58 +1218,31 @@ rows per logical course.
 
 ---
 
-### F2 · Fix `dim_instructor` — Don't Merge Same-Name Instructors Across Platforms ⏳
+### F2 · Fix `dim_instructor` — Don't Merge Same-Name Instructors Across Platforms ✅
 
-**File:** `src/ol_dbt/models/dimensional/dim_instructor.sql`
-
-**Problem:**
-The final deduplication groups by `instructor_name` globally. Two instructors named
-"John Smith" on mitxonline and mitxpro are collapsed into one record. This corrupts
-instructor-level analysis.
-
-**Fix:** Change dedup grain to `(instructor_name, primary_platform)`:
-```sql
-group by instructor_name, primary_platform  -- was: group by instructor_name
-```
-
-Or better: use a surrogate key based on `(platform, instructor_name)` and keep all
-platform-specific rows. Use a separate `canonical_instructor_pk` for cross-platform
-dedup where instructor identity is confirmed (e.g., same person teaches both).
+**Implemented:** Changed dedup grain from `instructor_name` to `(instructor_name, platform)`.
+Surrogate key updated to `generate_surrogate_key(['instructor_name', 'primary_platform'])`.
+`bridge_course_instructor` updated to join on `(instructor_name, platform)`.
+All bridge joins changed from INNER to LEFT JOIN with WHERE IS NOT NULL guard.
 
 ---
 
-### F3 · Fix `dim_topic` and `dim_department` — Same-Name Cross-Platform Merging ⏳
+### F3 · Fix `dim_topic` and `dim_department` — Same-Name Cross-Platform Merging ✅
 
-**Files:**
-- `src/ol_dbt/models/dimensional/dim_topic.sql`
-- `src/ol_dbt/models/dimensional/dim_department.sql`
-
-**Problem:**
-Both models deduplicate by name only, collapsing same-name topics/departments from
-different platforms. OCW "Physics" and mitxonline "Physics" become one row. Topic
-hierarchy from one platform overwrites the other.
-
-**Fix:** Same pattern as F2 — change dedup grain to `(name, platform)`, or keep a
-cross-platform canonical record with a separate `source_platforms` metadata column.
+**Implemented:** Both models changed to per-platform grain `(name, platform)`.
+- `dim_topic`: surrogate key = `generate_surrogate_key(['topic_name', 'primary_platform'])`.
+  Parent-topic self-join now constrained within-platform.
+- `dim_department`: surrogate key = `generate_surrogate_key(['department_name', 'primary_platform'])`.
+- `bridge_course_topic` and `bridge_course_department` updated to join on `(name, platform)`.
 
 ---
 
-### F4 · Fix Bridge Tables — Replace `INNER JOIN` with `LEFT JOIN` + dbt Tests ⏳
+### F4 · Fix Bridge Tables — Replace `INNER JOIN` with `LEFT JOIN` + dbt Tests ✅
 
-**Files:** All `bridge_*.sql` models
-
-**Problem:**
-All bridge tables use `INNER JOIN` to both `dim_course` and `dim_program`/`dim_instructor`
-etc. Any source row where a dim lookup fails silently drops the entire relationship.
-There is no visibility into how many relationships were lost.
-
-**Fix:**
-1. Change `INNER JOIN dim_course` to `LEFT JOIN dim_course` in all bridge tables.
-2. Change `INNER JOIN dim_program` / `dim_instructor` / `dim_department` etc. to
-   `LEFT JOIN`.
-3. Add dbt `relationships` tests or `not_null` tests on the FK columns to surface
-   unresolved rows.
-4. Add a `_unresolved_reason` column (or dbt test) to count/flag rows where `course_fk IS NULL`.
+**Implemented:** All metadata bridge tables (`bridge_course_instructor`, `bridge_course_topic`,
+`bridge_course_department`, `bridge_organization_courserun`) changed from INNER JOIN to
+LEFT JOIN with `WHERE fk IS NOT NULL` guards. The existing `not_null` dbt tests on FK
+columns will surface any unresolved rows when they appear.
 
 ---
 
@@ -1328,73 +1301,29 @@ a new Airbyte connector or a raw data export + staging model:
 
 ## New Observations (Added During Phase D)
 
-### Obs-1 · `dim_certificate_type` may not cover edX.org certificate modes ⏳
+### Obs-1 · `dim_certificate_type` may not cover edX.org certificate modes ✅
 
-**Discovered during:** D5 implementation
-
-**Problem:** The D5 fix joins `tfact_certificate.certificate_type_code` to
-`dim_certificate_type.certificate_type_code`. For edX.org, the mode values from
-`int__edxorg__mitx_courserun_certificates` are open strings from the edX platform
-(`'verified'`, `'honor'`, `'audit'`, `'credit'`, etc.). If `dim_certificate_type` only
-contains `'verified'` and `'professional'` (the mitxonline/mitxpro defaults), all edxorg
-`certificate_type_fk` values will be NULL.
-
-**Fix:** Audit `dim_certificate_type` for coverage. Source: check
-`src/ol_dbt/models/dimensional/dim_certificate_type.sql` and verify that edxorg mode
-values are included. If not, add them (or add a fallback in the join).
-
-**Validation:**
-```sql
-SELECT certificate_type_code, COUNT(*) FROM ol_warehouse_production_kdelaney_dimensional.tfact_certificate
-WHERE platform = 'edxorg'
-GROUP BY certificate_type_code ORDER BY 2 DESC;
--- Expected: certificate_type_fk non-null for 'verified' / common modes
-```
+**Implemented:** Added `'honor'` (id=6) and `'credit'` (id=7) rows to `dim_certificate_type`.
+The model now covers: `verified`, `professional`, `completion`, `audit`, `micromasters`,
+`honor`, `credit` — all known edX.org certificate mode values.
 
 ---
 
-### Obs-2 · `dim_program.platform_fk` is NULL for MicroMasters rows ⏳
+### Obs-2 · `dim_program.platform_fk` is NULL for MicroMasters rows ✅
 
-**Discovered during:** D3 implementation
-
-**Problem:** `dim_program` sets `platform_code = 'micromasters'` for MicroMasters
-programs. `dim_platform` has no `'micromasters'` entry — its rows are `mitxonline`,
-`mitxpro`, `edxorg`, `residential`, `bootcamps`. After D3, the `platform_fk` join
-on `platform_code = platform_readable_id` resolves to NULL for all 5 MicroMasters programs.
-
-**Options:**
-- Add a `'micromasters'` entry to the `platforms` seed (if it's treated as a distinct
-  platform in the data model), OR
-- Map micromasters `platform_code` to `'edxorg'` platform FK (since MicroMasters runs
-  on edX.org), OR
-- Accept NULL (MicroMasters is a program brand, not an independent deployment platform —
-  NULL is semantically defensible).
-
-**Validation:**
-```sql
-SELECT platform_code, COUNT(*), COUNT(platform_fk) AS with_fk
-FROM ol_warehouse_production_kdelaney_dimensional.dim_program
-GROUP BY platform_code;
--- micromasters row will show with_fk = 0 until resolved
-```
+**Implemented:** In `dim_program.sql`, the `dim_platform_lookup` join now maps
+`platform_code = 'micromasters'` to the `'edxorg'` platform entry via a CASE expression.
+`platform_code` still remains `'micromasters'` for other join paths (bridge tables, etc).
 
 ---
 
-### Obs-3 · MicroMasters program context missing from `tfact_enrollment` ⏳
+### Obs-3 · MicroMasters program context missing from `tfact_enrollment` ✅
 
-**Discovered during:** E1 investigation
-
-**Problem:** `int__micromasters__course_enrollments` sources from the same underlying
-enrollment records as `edxorg_enrollments` and `mitxonline_enrollments` in `tfact_enrollment`.
-Adding it as a new UNION branch would cause duplicate enrollment rows. The actual value
-of E1 is attaching **MicroMasters program context** (`program_fk`) to edxorg/mitxonline
-enrollment rows for courses that are part of a MicroMasters program.
-
-**Correct fix:** Add a JOIN from the fact table to a micromasters program lookup CTE
-(built from `int__micromasters__course_enrollments`), that maps `courserun_readable_id`
-→ `micromasters_program_id`. Then use `micromasters_program_id` to resolve `program_fk`
-via `dim_program (platform_code = 'micromasters')`. This supplements the existing
-`mitxonline program_id → dim_program` join path.
+**Implemented:** Added `micromasters_program_lookup` CTE to `tfact_enrollment.sql` that maps
+`courserun_readable_id` → `micromasters program_pk` (via `int__micromasters__course_enrollments`
+→ `dim_program` on `platform_code = 'micromasters'`). The `program_fk` column now uses
+`COALESCE(dim_program.program_pk, micromasters_program_lookup.micromasters_program_pk)`
+so edxorg/mitxonline enrollment rows gain MicroMasters program context where applicable.
 
 ---
 
