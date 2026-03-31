@@ -23,7 +23,11 @@ with mitxonline_courses as (
         course_readable_id
         , course_id as source_id
         , course_title
-        , cast(null as varchar) as course_number  -- mitxpro doesn't have course_number
+        -- Extract course_number from readable_id (format: course-v1:{org}+{course_number})
+        , case
+            when cardinality(split(course_readable_id, '+')) >= 2
+                then split(course_readable_id, '+')[2]
+        end as course_number
         , cast(null as varchar) as course_description  -- mitxpro doesn't have course_description
         , course_is_live
         , 'mitxpro' as platform
