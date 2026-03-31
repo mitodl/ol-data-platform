@@ -232,7 +232,8 @@ def _describe_local_view(
         for ext in ["httpfs", "aws", "iceberg"]:
             conn.execute(f"LOAD {ext}")
         conn.execute("CALL load_aws_credentials()")
-        rows = conn.execute(f"DESCRIBE {view_name}").fetchall()  # noqa: S608
+        quoted_view_name = '"' + view_name.replace('"', '""') + '"'
+        rows = conn.execute(f"DESCRIBE {quoted_view_name}").fetchall()  # noqa: S608
     # DESCRIBE returns: column_name, column_type, null, key, default, extra
     return [{"name": row[0], "data_type": row[1]} for row in rows]
 
@@ -277,8 +278,12 @@ def _build_staging_sql_from_columns(
     dbt-codegen's generate_base_model macro emits, so the output is a drop-in
     replacement when Trino is unavailable.
     """
-    col_lines = ",\n        ".join(col["name"] for col in columns)
     source_ref = f"{{{{ source('{source_name}', '{table_name}') }}}}"  # noqa: S608
+    if not columns:
+        return (  # noqa: S608
+            f"with source as (\n    select * from {source_ref}\n)\n\nselect * from source\n"  # noqa: S608
+        )
+    col_lines = ",\n        ".join(col["name"] for col in columns)
     return (
         f"with source as (\n"  # noqa: S608
         f"    select * from {source_ref}\n"

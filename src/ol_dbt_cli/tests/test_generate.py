@@ -300,7 +300,8 @@ class TestDescribeLocalView:
             mock_conn = self._mock_duckdb_connect(mock_connect, [])
             _describe_local_view(db, "ol_warehouse_production_raw", "my_table")
         describe_call = mock_conn.execute.call_args_list[-1]
-        assert "glue__ol_warehouse_production_raw__my_table" in describe_call[0][0]
+        # View name is double-quoted to handle non-identifier characters.
+        assert '"glue__ol_warehouse_production_raw__my_table"' in describe_call[0][0]
 
     def test_loads_required_extensions(self, tmp_path: Path) -> None:
         db = tmp_path / "local.duckdb"
@@ -390,7 +391,9 @@ class TestBuildStagingSqlFromColumns:
     def test_empty_columns_produces_valid_sql(self) -> None:
         result = _build_staging_sql_from_columns("my_source", "users", [])
         assert "with source as" in result
-        assert "renamed as" in result
+        # Empty columns: falls back to select * from source (no renamed CTE)
+        assert "select * from source" in result
+        assert "renamed as" not in result
 
     def test_different_source_and_table_names(self) -> None:
         result = _build_staging_sql_from_columns("ol_warehouse_raw_data", "raw__app__orders", self._COLS)

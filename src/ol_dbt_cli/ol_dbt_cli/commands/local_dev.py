@@ -138,7 +138,12 @@ def _register_single_table(
     is_updated = view_name in existing_registrations
     # Escape single quotes in the S3 path so the SQL string literal is safe.
     escaped_location = metadata_location.replace("'", "''")
-    create_view_sql = f"CREATE OR REPLACE VIEW {view_name} AS\nSELECT * FROM iceberg_scan('{escaped_location}')\n"
+    # Double-quote and escape the view identifier so Glue names with hyphens
+    # or other non-identifier characters don't break the CREATE VIEW statement.
+    quoted_view_name = '"' + view_name.replace('"', '""') + '"'
+    create_view_sql = (
+        f"CREATE OR REPLACE VIEW {quoted_view_name} AS\nSELECT * FROM iceberg_scan('{escaped_location}')\n"
+    )
 
     try:
         with duckdb.connect(str(duckdb_path)) as conn:
@@ -250,7 +255,10 @@ def _register_tables_in_duckdb(
 
             is_updated = view_name in existing_registrations
             escaped_location = metadata_location.replace("'", "''")
-            create_view_sql = f"CREATE OR REPLACE VIEW {view_name} AS\nSELECT * FROM iceberg_scan('{escaped_location}')"
+            quoted_view_name = '"' + view_name.replace('"', '""') + '"'
+            create_view_sql = (
+                f"CREATE OR REPLACE VIEW {quoted_view_name} AS\nSELECT * FROM iceberg_scan('{escaped_location}')"
+            )
             if verbose:
                 status = "UPDATE" if is_updated else "NEW"
                 print(f"\n-- [{status}] {table_name}")
@@ -490,8 +498,9 @@ def _get_tables_and_views(conn: trino.dbapi.Connection, catalog: str, schema: st
     tables = [row[0] for row in cursor.fetchall()]
 
     try:
+        safe_schema = schema.replace("'", "''")
         cursor.execute(
-            f"SELECT table_name FROM {catalog}.information_schema.views WHERE table_schema = '{schema}'"  # noqa: S608
+            f"SELECT table_name FROM {catalog}.information_schema.views WHERE table_schema = '{safe_schema}'"  # noqa: S608
         )
         views = [row[0] for row in cursor.fetchall()]
     except Exception:  # noqa: BLE001

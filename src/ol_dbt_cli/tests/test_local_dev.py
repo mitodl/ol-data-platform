@@ -120,7 +120,7 @@ class TestRegisterSingleTable:
         assert view_name == "glue__my_db__users"
         assert extra == "new"
         mock_conn.execute.assert_any_call(
-            "CREATE OR REPLACE VIEW glue__my_db__users AS\nSELECT * FROM iceberg_scan('s3://bucket/users/v1.json')\n"
+            "CREATE OR REPLACE VIEW \"glue__my_db__users\" AS\nSELECT * FROM iceberg_scan('s3://bucket/users/v1.json')\n"
         )
 
     def test_registers_updated_table_when_location_changed(self, tmp_path: Path) -> None:
