@@ -1,6 +1,6 @@
 {{ config(
     materialized='incremental',
-    unique_key='courserun_pk',
+    unique_key=['courserun_pk', 'effective_date'],
     incremental_strategy='delete+insert',
     on_schema_change='append_new_columns'
 ) }}

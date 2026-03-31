@@ -171,7 +171,11 @@ with mitxonline_certificates as (
     from certificates_with_fks
 
     {% if is_incremental() %}
-    where certificate_created_on >= (select max(certificate_created_on) from {{ this }})
+    where certificate_created_on > (
+            select max(certificate_created_on) from {{ this }}
+            where platform = certificates_with_fks.platform
+        )
+        or certificate_created_on is null
     {% endif %}
 )
 

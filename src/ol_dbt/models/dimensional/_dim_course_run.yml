@@ -29,8 +29,11 @@ models:
     tests:
     - not_null
   - name: course_fk
-    description: Foreign key to dim_course (null for edxorg runs and for non-edxorg
-      runs where the course has not yet been loaded into dim_course)
+    description: >
+      Foreign key to dim_course. Null when no matching course exists in dim_course —
+      edxorg runs attempt a join (extracting course_readable_id from courserun_readable_id)
+      but will be null until edxorg courses are loaded. Non-edxorg nulls indicate
+      courses not yet in dim_course.
     tests:
     - not_null:
         where: "platform != 'edxorg'"
