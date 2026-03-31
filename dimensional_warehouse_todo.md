@@ -23,7 +23,7 @@
 **Phase C:** 0/3 complete ⏳
 **Phase D:** 7/7 complete ✅
 **Phase E:** 6/6 complete ✅
-**Phase F:** 3/4 complete ✅ (F1 pending design decision)
+**Phase F:** 4/4 complete ✅
 
 ---
 
@@ -1183,38 +1183,23 @@ against `dim_product.source_product_id`.
 
 ---
 
-## Phase F — Deduplication & Grain Corrections ⏳
+## Phase F — Deduplication & Grain Corrections ✅
 
 > These are design-level correctness issues. They change the semantic meaning of the
 > dimension tables. Coordinate with downstream consumers before deploying.
 
 ---
 
-### F1 · Change `dim_course` Grain to `(platform, course_readable_id)` ⏳
+### F1 · Change `dim_course` Grain to `(platform, course_readable_id)` ✅
 
-**File:** `src/ol_dbt/models/dimensional/dim_course.sql`
+**Implemented (Option B):** Removed cross-platform deduplication. Every
+`(platform, course_readable_id)` pair is now a distinct row.
 
-**Problem:**
-`dim_course` deduplicates by `course_readable_id` only, preferring mitxonline. If the
-same `course_readable_id` exists on both mitxonline and mitxpro (or edxorg), only the
-mitxonline version is kept. xPro and edxorg versions are silently dropped. This prevents
-cross-platform course analysis and produces misleading "no data" for xPro courses that
-share readable IDs with mitxonline.
-
-**Decision required:** Choose between two approaches:
-
-**Option A — Keep current grain, make dedup explicit:**
-Document that `dim_course` represents the canonical course regardless of platform and
-add a `source_platforms` array column listing all platforms that have this course.
-Simpler — no grain change, no FK cascade impact.
-
-**Option B — Change grain to `(platform, course_readable_id)`:**
-Remove the cross-platform dedup entirely. Every (platform, course_readable_id) gets its
-own row. The surrogate key `generate_surrogate_key(['platform', 'course_readable_id'])`
-remains stable. Downstream fact tables using `course_fk` will each point to the
-platform-specific course row. Enables true cross-platform comparison.
-**Breaking change** — any report joining on `course_pk` will need to handle multiple
-rows per logical course.
+- `dim_course`: removed `deduped_courses` CTE. `current_courses = combined_courses`.
+  SCD Type 2 incremental logic now keys on `(course_readable_id, primary_platform)`.
+- `dim_course_run`: added `primary_platform` to the `dim_course` join to prevent fan-out.
+- `bridge_program_course`: MicroMasters path scoped to `edxorg` rows only.
+  Converted remaining `INNER JOINs` to `LEFT JOIN` with `WHERE IS NOT NULL` guard.
 
 ---
 
