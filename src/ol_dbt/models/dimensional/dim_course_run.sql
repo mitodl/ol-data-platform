@@ -63,6 +63,7 @@ with mitxonline_courseruns as (
     select
         course_pk
         , course_readable_id
+        , primary_platform
     from {{ ref('dim_course') }}
     where is_current = true
 )
@@ -73,7 +74,8 @@ with mitxonline_courseruns as (
         , dim_course.course_pk as course_fk
     from combined_courseruns
     left join dim_course
-        on
+        on combined_courseruns.platform = dim_course.primary_platform
+        and
             -- Extract course ID from course run ID
             -- course-v1 format: course-v1:{org}+{course}+{run} → strip the last +{run} segment
             case

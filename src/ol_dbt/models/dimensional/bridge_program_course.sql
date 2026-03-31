@@ -75,18 +75,19 @@ with micromasters_course_keys as (
         -- business logic or manual curation.
         , 1 as course_order
     from combined_requirements
-    inner join dim_program
+    left join dim_program
         on combined_requirements.program_id = dim_program.source_id
         and combined_requirements.platform_code = dim_program.platform_code
-    inner join dim_course
+    left join dim_course
         on (
             -- Standard path: integer source_id + platform match
             (combined_requirements.platform_code != 'micromasters'
                 and combined_requirements.course_id = dim_course.source_id
                 and combined_requirements.platform_code = dim_course.primary_platform)
-            -- MicroMasters path: courses are edxorg rows in dim_course; match on readable_id
+            -- MicroMasters path: courses run on edxorg; match on readable_id scoped to edxorg
             or (combined_requirements.platform_code = 'micromasters'
-                and combined_requirements.course_readable_id = dim_course.course_readable_id)
+                and combined_requirements.course_readable_id = dim_course.course_readable_id
+                and dim_course.primary_platform = 'edxorg')
         )
 )
 
@@ -96,3 +97,5 @@ select
     , is_required
     , course_order
 from bridge
+where program_fk is not null
+    and course_fk is not null

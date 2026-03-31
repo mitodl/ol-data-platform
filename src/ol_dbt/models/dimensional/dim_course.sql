@@ -54,25 +54,11 @@ with mitxonline_courses as (
     select * from edxorg_courses
 )
 
--- Deduplicate by course_readable_id (prefer mitxonline > mitxpro > edxorg)
-, deduped_courses as (
-    select
-        *
-        , row_number() over (
-            partition by course_readable_id
-            order by
-                case platform
-                    when 'mitxonline' then 1
-                    when 'mitxpro' then 2
-                    when 'edxorg' then 3
-                    else 4
-                end
-        ) as row_num
-    from combined_courses
-)
-
+-- All (platform, course_readable_id) combinations are kept as distinct rows.
+-- No cross-platform deduplication: the same course_readable_id on mitxonline and
+-- mitxpro/edxorg produces separate rows, each with its own course_pk.
 , current_courses as (
-    select * from deduped_courses where row_num = 1
+    select * from combined_courses
 )
 
 -- SCD Type 2 logic: Detect changes
@@ -101,6 +87,7 @@ with mitxonline_courses as (
         from {{ this }} as existing
         where
             existing.course_readable_id = current_courses.course_readable_id
+            and existing.primary_platform = current_courses.platform
             and existing.is_current = true
             and existing.course_title = current_courses.course_title
             and coalesce(existing.course_description, '') = coalesce(current_courses.course_description, '')
@@ -127,6 +114,7 @@ with mitxonline_courses as (
     from {{ this }} as existing
     inner join new_and_changed_courses as new_records
         on existing.course_readable_id = new_records.course_readable_id
+        and existing.primary_platform = new_records.primary_platform
     where existing.is_current = true
 )
 
