@@ -223,3 +223,78 @@ class TestRegisterSingleTable:
             assert "glue__my_db__users" in row
             assert "my_db" in row
             assert "users" in row
+
+
+class TestRegisterTablesInDuckdbDryRun:
+    """Tests for _register_tables_in_duckdb dry-run counter accuracy."""
+
+    def test_dry_run_counts_new_tables(self, tmp_path: Path) -> None:
+        """Dry-run should increment results['new'] for tables not in existing_registrations."""
+        from ol_dbt_cli.commands.local_dev import _register_tables_in_duckdb
+
+        tables = [
+            {"name": "users", "metadata_location": "s3://bucket/users/v1.json"},
+            {"name": "orders", "metadata_location": "s3://bucket/orders/v1.json"},
+        ]
+        results = _register_tables_in_duckdb(tables, "my_db", tmp_path / "local.duckdb", dry_run=True, verbose=False)
+        assert results["success"] == 2
+        assert results["new"] == 2
+        assert results["updated"] == 0
+        assert results["skipped"] == 0
+
+    def test_dry_run_counts_updated_tables(self, tmp_path: Path) -> None:
+        """Dry-run should increment results['updated'] when metadata_location changed."""
+        from ol_dbt_cli.commands.local_dev import _register_tables_in_duckdb
+
+        db = tmp_path / "local.duckdb"
+        import duckdb
+
+        with duckdb.connect(str(db)) as conn:
+            conn.execute("""
+                CREATE TABLE _glue_source_registry (
+                    view_name VARCHAR PRIMARY KEY,
+                    glue_database VARCHAR,
+                    glue_table VARCHAR,
+                    metadata_location VARCHAR,
+                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                "INSERT INTO _glue_source_registry VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                ("glue__my_db__users", "my_db", "users", "s3://bucket/users/v1.json"),
+            )
+
+        tables = [{"name": "users", "metadata_location": "s3://bucket/users/v2.json"}]
+        results = _register_tables_in_duckdb(tables, "my_db", db, dry_run=True, verbose=False)
+        assert results["success"] == 1
+        assert results["updated"] == 1
+        assert results["new"] == 0
+
+    def test_dry_run_counts_skipped_tables(self, tmp_path: Path) -> None:
+        """Dry-run should increment results['skipped'] when metadata_location unchanged."""
+        from ol_dbt_cli.commands.local_dev import _register_tables_in_duckdb
+
+        db = tmp_path / "local.duckdb"
+        import duckdb
+
+        with duckdb.connect(str(db)) as conn:
+            conn.execute("""
+                CREATE TABLE _glue_source_registry (
+                    view_name VARCHAR PRIMARY KEY,
+                    glue_database VARCHAR,
+                    glue_table VARCHAR,
+                    metadata_location VARCHAR,
+                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                "INSERT INTO _glue_source_registry VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                ("glue__my_db__users", "my_db", "users", "s3://bucket/users/v1.json"),
+            )
+
+        tables = [{"name": "users", "metadata_location": "s3://bucket/users/v1.json"}]
+        results = _register_tables_in_duckdb(tables, "my_db", db, dry_run=True, verbose=False)
+        assert results["skipped"] == 1
+        assert results["success"] == 0
+        assert results["new"] == 0
+        assert results["updated"] == 0

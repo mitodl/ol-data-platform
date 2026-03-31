@@ -264,6 +264,10 @@ def _register_tables_in_duckdb(
                 print(f"\n-- [{status}] {table_name}")
                 print(create_view_sql)
             results["success"] += 1
+            if is_updated:
+                results["updated"] += 1
+            else:
+                results["new"] += 1
     else:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
