@@ -1,11 +1,272 @@
+certification_details: null
+certified_by: null
+css: ''
 dashboard_title: Course Enrollment Activity
 description: null
-css: ''
-slug: null
-certified_by: null
-certification_details: null
-published: true
-uuid: 101c4123-af4c-492b-a087-246d06569a1d
+metadata:
+  chart_configuration:
+    '135':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 135
+    '141':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 48
+        scope: global
+      id: 141
+    '166':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 166
+    '177':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 177
+    '197':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        scope: global
+      id: 197
+    '205':
+      crossFilters:
+        chartsInScope:
+        - 30
+        - 31
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 205
+    '207':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 31
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 207
+    '217':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 35
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 217
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  expanded_slices: {}
+  global_chart_configuration:
+    chartsInScope:
+    - 29
+    - 30
+    - 31
+    - 33
+    - 34
+    - 35
+    - 37
+    - 40
+    - 47
+    - 48
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors: {}
+  native_filter_configuration:
+  - cascadeParentIds: []
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-utHLk7LX3
+    name: Current Course Run
+    scope:
+      excluded: []
+      rootPath:
+      - TAB-IrJ-x9PlMg
+      - TAB-osBZ2O8ld
+      - TAB-_pOh7o03l
+      - TAB-P0rdvX94a
+    targets:
+    - column:
+        name: courserun_is_current
+      datasetUuid: f33af055-8200-464d-bd40-fee6194e0fd4
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-utHLk7LX3
+    - NATIVE_FILTER-nY8Zd_tn-
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-AkV8Bbdm5
+    name: Platform
+    scope:
+      excluded: []
+      rootPath:
+      - TAB-IrJ-x9PlMg
+      - TAB-osBZ2O8ld
+      - TAB-_pOh7o03l
+      - TAB-P0rdvX94a
+    targets:
+    - column:
+        name: platform
+      datasetUuid: f33af055-8200-464d-bd40-fee6194e0fd4
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-AkV8Bbdm5
+    - NATIVE_FILTER-utHLk7LX3
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-nY8Zd_tn-
+    name: Course
+    scope:
+      excluded: []
+      rootPath:
+      - TAB-IrJ-x9PlMg
+      - TAB-osBZ2O8ld
+      - TAB-_pOh7o03l
+      - TAB-P0rdvX94a
+    targets:
+    - column:
+        name: course_readable_id
+      datasetUuid: f33af055-8200-464d-bd40-fee6194e0fd4
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-AkV8Bbdm5
+    - NATIVE_FILTER-nY8Zd_tn-
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-zDg6QtAXM
+    name: Course Run Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - TAB-IrJ-x9PlMg
+      - TAB-osBZ2O8ld
+      - TAB-_pOh7o03l
+      - TAB-P0rdvX94a
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: f33af055-8200-464d-bd40-fee6194e0fd4
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors:
+  - audit_count
+  - certificate_count
+  - enrollment_count
+  - learner_count
+  - unenrolled_count
+  - verified_count
+  timed_refresh_immune_slices: []
 position:
   CHART-1YCvDd7c7w:
     children: []
@@ -66,6 +327,16 @@ position:
     - TABS-vInPJCeC3e
     - TAB-IrJ-x9PlMg
     - ROW-Tms7xIfT2s
+    type: CHART
+  CHART-G97MUWI1:
+    children: []
+    id: CHART-G97MUWI1
+    meta:
+      chartId: 180
+      height: 50
+      sliceName: Latest Dashboard Activity Recorded Date
+      uuid: af403a98-7ff4-407a-b1c9-5161ffc10522
+      width: 4
     type: CHART
   CHART-LhKRNTk1Yy:
     children: []
@@ -186,10 +457,18 @@ position:
     children: []
     id: MARKDOWN-ets2puYxfUos_7MsVXezR
     meta:
-      code: "### Change Log\n\n**2/2/26**: Standardized filter name: 'Enrolled \"\
-        Current\" Course Run' \u2192 'Current Course Run'; Enabled search on User\
-        \ Email filterCurrent\\\"\\\n\\ Course Run' \\u2192 'Current Course Run';\
-        \ Enabled search on Course Run Readable\\\n\\ ID filter\"\n"
+      code: '### Change Log
+
+
+        **2/2/26**: Standardized filter name: ''Enrolled "Current" Course Run'' →
+        ''Current Course Run''; Enabled search on User Email filterCurrent\"\
+
+        \ Course Run'' \u2192 ''Current Course Run''; Enabled search on Course Run
+        Readable\
+
+        \ ID filter"
+
+        '
       height: 50
       width: 8
     parents:
@@ -392,279 +671,8 @@ position:
     parents:
     - ROOT_ID
     type: TABS
-  CHART-G97MUWI1:
-    children: []
-    id: CHART-G97MUWI1
-    meta:
-      chartId: 180
-      height: 50
-      sliceName: Latest Dashboard Activity Recorded Date
-      uuid: af403a98-7ff4-407a-b1c9-5161ffc10522
-      width: 4
-    type: CHART
-metadata:
-  chart_configuration:
-    '135':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 135
-    '141':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 48
-        scope: global
-      id: 141
-    '166':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 166
-    '177':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 177
-    '197':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        scope: global
-      id: 197
-    '205':
-      crossFilters:
-        chartsInScope:
-        - 30
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 205
-    '207':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 207
-    '217':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 35
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 217
-  color_scheme: ''
-  cross_filters_enabled: true
-  expanded_slices: {}
-  global_chart_configuration:
-    chartsInScope:
-    - 29
-    - 30
-    - 31
-    - 33
-    - 34
-    - 35
-    - 37
-    - 40
-    - 47
-    - 48
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-  label_colors: {}
-  native_filter_configuration:
-  - id: NATIVE_FILTER-utHLk7LX3
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    name: Current Course Run
-    filterType: filter_select
-    targets:
-    - column:
-        name: courserun_is_current
-      datasetUuid: f33af055-8200-464d-bd40-fee6194e0fd4
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds: []
-    scope:
-      excluded: []
-      rootPath:
-      - TAB-IrJ-x9PlMg
-      - TAB-osBZ2O8ld
-      - TAB-_pOh7o03l
-      - TAB-P0rdvX94a
-    type: NATIVE_FILTER
-    description: ''
-  - id: NATIVE_FILTER-AkV8Bbdm5
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    name: Platform
-    filterType: filter_select
-    targets:
-    - column:
-        name: platform
-      datasetUuid: f33af055-8200-464d-bd40-fee6194e0fd4
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-utHLk7LX3
-    - NATIVE_FILTER-nY8Zd_tn-
-    scope:
-      excluded: []
-      rootPath:
-      - TAB-IrJ-x9PlMg
-      - TAB-osBZ2O8ld
-      - TAB-_pOh7o03l
-      - TAB-P0rdvX94a
-    type: NATIVE_FILTER
-    description: ''
-  - id: NATIVE_FILTER-nY8Zd_tn-
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    name: Course
-    filterType: filter_select
-    targets:
-    - column:
-        name: course_readable_id
-      datasetUuid: f33af055-8200-464d-bd40-fee6194e0fd4
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-AkV8Bbdm5
-    - NATIVE_FILTER-utHLk7LX3
-    scope:
-      excluded: []
-      rootPath:
-      - TAB-IrJ-x9PlMg
-      - TAB-osBZ2O8ld
-      - TAB-_pOh7o03l
-      - TAB-P0rdvX94a
-    type: NATIVE_FILTER
-    description: ''
-  - id: NATIVE_FILTER-zDg6QtAXM
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: true
-      inverseSelection: false
-    name: Course Run Readable ID
-    filterType: filter_select
-    targets:
-    - column:
-        name: courserun_readable_id
-      datasetUuid: f33af055-8200-464d-bd40-fee6194e0fd4
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-AkV8Bbdm5
-    - NATIVE_FILTER-nY8Zd_tn-
-    scope:
-      excluded: []
-      rootPath:
-      - TAB-IrJ-x9PlMg
-      - TAB-osBZ2O8ld
-      - TAB-_pOh7o03l
-      - TAB-P0rdvX94a
-    type: NATIVE_FILTER
-    description: ''
-  refresh_frequency: 0
-  timed_refresh_immune_slices: []
-  shared_label_colors:
-  - audit_count
-  - certificate_count
-  - enrollment_count
-  - learner_count
-  - unenrolled_count
-  - verified_count
-  map_label_colors: {}
-  color_scheme_domain: []
+published: true
+slug: null
 theme_uuid: null
+uuid: 101c4123-af4c-492b-a087-246d06569a1d
 version: 1.0.0
