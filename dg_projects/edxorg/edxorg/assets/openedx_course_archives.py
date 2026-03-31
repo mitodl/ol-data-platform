@@ -93,6 +93,16 @@ def dummy_edxorg_course_xml(): ...
             io_manager_key="s3file_io_manager",
             key=AssetKey(("edxorg", "processed_data", "course_static_assets")),
         ),
+        "course_static_assets_manifest": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Manifest JSON listing every non-XML static file in the course archive "
+                "(path, MIME type, size). Versioned by a content hash so downstream "
+                "consumers can detect changes without fetching the full archive."
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("edxorg", "processed_data", "course_static_assets_manifest")),
+        ),
     },
 )
 def extract_edxorg_courserun_metadata(
@@ -183,7 +193,7 @@ def extract_edxorg_courserun_metadata(
     )
 
     # Process comprehensive XML block data and collect non-XML assets
-    xml_blocks, static_assets = process_course_xml_blocks(
+    xml_blocks, static_bundle = process_course_xml_blocks(
         course_xml_path, partition_dict["source_system"]
     )
     course_xml_blocks_file = Path(
@@ -203,26 +213,46 @@ def extract_edxorg_courserun_metadata(
         },
     )
 
-    # Materialize non-XML static assets to S3. Each file is stored individually
-    # under {source_system}/{course_id}/static/{relative_path} inside the tar,
-    # preserving the original archive structure for downstream processing.
+    # Materialize non-XML static assets to S3. Files are bundled into a single
+    # tar archive per course. The data_version is a content hash of the static
+    # files themselves, so it only changes when the assets actually change.
     static_assets_file = Path(
         NamedTemporaryFile(delete=False, suffix="_static_assets.tar.gz").name
     )
     with tarfile.open(static_assets_file, "w:gz") as assets_tar:
-        for relative_path, asset_bytes in static_assets:
+        for relative_path, asset_bytes in static_bundle.files:
             info = tarfile.TarInfo(name=relative_path)
             info.size = len(asset_bytes)
             assets_tar.addfile(info, io.BytesIO(asset_bytes))
-    course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.tar.gz"  # noqa: E501
+    course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{static_bundle.data_version}.tar.gz"  # noqa: E501
     yield Output(
         (static_assets_file, course_static_assets_object_key),
         output_name="course_static_assets",
-        data_version=DataVersion(data_version),
+        data_version=DataVersion(static_bundle.data_version),
         metadata={
             "course_id": partition_dict["course_id"],
             "object_key": course_static_assets_object_key,
-            "asset_count": len(static_assets),
+            "asset_count": static_bundle.manifest["file_count"],
+        },
+    )
+
+    # Materialize the manifest as a separate lightweight JSON object so downstream
+    # consumers can inspect available files and check the version without fetching
+    # the full archive. The key uses a fixed name (manifest.json) so it is always
+    # overwritten with the latest and cheaply readable without knowing the version.
+    static_manifest_file = Path(
+        NamedTemporaryFile(delete=False, suffix="_static_manifest.json").name
+    )
+    static_manifest_file.write_text(json.dumps(static_bundle.manifest, indent=2))
+    course_static_assets_manifest_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets_manifest').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/manifest.json"  # noqa: E501
+    yield Output(
+        (static_manifest_file, course_static_assets_manifest_object_key),
+        output_name="course_static_assets_manifest",
+        data_version=DataVersion(static_bundle.data_version),
+        metadata={
+            "course_id": partition_dict["course_id"],
+            "object_key": course_static_assets_manifest_object_key,
+            "asset_count": static_bundle.manifest["file_count"],
         },
     )
 

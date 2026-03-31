@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 import logging
+import mimetypes
 import tarfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -373,10 +374,36 @@ class CourseXmlBlock(BaseModel):
     )
 
 
+class CourseStaticAssetsBundle(BaseModel):
+    """Bundle of non-XML static assets extracted from a course archive.
+
+    Encapsulates the raw file data alongside a content-addressed version and a
+    machine-readable manifest. Callers can materialize `files` into a tar archive
+    and `manifest` as a separate lightweight JSON object, allowing downstream
+    consumers to check the version cheaply without fetching the full archive.
+    """
+
+    data_version: str = Field(
+        description=(
+            "SHA-256 hex digest computed over all file contents sorted by path. "
+            "Changes only when the actual content of the static assets changes."
+        )
+    )
+    manifest: dict[str, Any] = Field(
+        description=(
+            "Manifest ready for JSON serialization. Contains: data_version, "
+            "file_count, and files (list of {path, mime_type, size_bytes})."
+        )
+    )
+    files: list[tuple[str, bytes]] = Field(
+        description="(relative_path, content) pairs for building the tar archive."
+    )
+
+
 def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
     archive_path: Path,
     source_system: str,
-) -> tuple[list[CourseXmlBlock], list[tuple[str, bytes]]]:
+) -> tuple[list[CourseXmlBlock], CourseStaticAssetsBundle]:
     """
     Extract block information from course XML archives and collect non-XML assets.
 
@@ -385,9 +412,12 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
     raw XML of every block is preserved for downstream enrichment. This avoids
     reprocessing archives when new fields are needed.
 
-    Non-XML files (e.g. SRT subtitles, HTML content, PDFs) are returned as a list of
-    (relative_path, bytes) tuples so callers can materialize them individually to S3
-    under a structured path (e.g. {source_system}/{course_id}/static/{filename}).
+    Non-XML files (e.g. SRT subtitles, HTML content, PDFs) are collected and returned
+    as a CourseStaticAssetsBundle containing the raw files, a content-addressed
+    data_version (SHA-256 of all file contents sorted by path), and a manifest JSON
+    describing each file's path, MIME type, and size. Files under structural directories
+    (drafts/, assets/, static/) are excluded from both XML block parsing and static
+    asset collection.
 
     The root course.xml file is skipped because it is already processed by
     process_course_xml() to extract course-level metadata. The course/{run_tag}.xml
@@ -397,9 +427,8 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
     :param archive_path: The path to the tar archive for the course bundle
     :param source_system: The ETL source system (e.g. "prod", "edge", "mitxonline")
 
-    :return: A tuple of (list of CourseXmlBlock,
-        list of (relative_path, bytes) for non-XML assets)
-    :rtype: tuple[list[CourseXmlBlock], list[tuple[str, bytes]]]
+    :return: A tuple of (list of CourseXmlBlock, CourseStaticAssetsBundle)
+    :rtype: tuple[list[CourseXmlBlock], CourseStaticAssetsBundle]
     """
     log = logging.getLogger(__name__)
 
@@ -436,15 +465,6 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
             if len(path_parts) < 2:  # noqa: PLR2004
                 continue
 
-            if not member.path.endswith(".xml"):
-                # Collect non-XML files as (relative_path, bytes) for S3 materialization
-                file_data = tf.extractfile(member)
-                if file_data:
-                    # Strip archive root prefix to get a clean relative path
-                    relative_path = "/".join(path_parts[1:])
-                    static_assets.append((relative_path, file_data.read()))
-                continue
-
             block_type = path_parts[1]
 
             # Skip the root course.xml — already processed by process_course_xml()
@@ -460,7 +480,18 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
             # Skip archive structural directories that are not course block types:
             # - drafts/: Studio draft workspace, not published content
             # - assets/ and static/: Static file storage directories, not blocks
+            # NOTE: This check must come before the non-XML branch so that non-XML
+            # files in these directories (e.g. draft images, PDFs) are also excluded.
             if block_type in {"drafts", "assets", "static"}:
+                continue
+
+            if not member.path.endswith(".xml"):
+                # Collect non-XML files as (relative_path, bytes) for S3 materialization
+                file_data = tf.extractfile(member)
+                if file_data:
+                    # Strip archive root prefix to get a clean relative path
+                    relative_path = "/".join(path_parts[1:])
+                    static_assets.append((relative_path, file_data.read()))
                 continue
 
             xml_data = tf.extractfile(member)
@@ -507,4 +538,31 @@ def process_course_xml_blocks(  # noqa: C901, PLR0912, PLR0915
                 log.warning("Skipping malformed XML file: %s", member.path)
                 continue
 
-    return blocks, static_assets
+    # Build the static assets bundle: compute a content-addressed version hash
+    # and a manifest describing each file so downstream consumers can detect
+    # changes and inspect available content without extracting the full archive.
+    hasher = hashlib.sha256()
+    manifest_files: list[dict[str, Any]] = []
+    for relative_path, content in sorted(static_assets, key=lambda x: x[0]):
+        hasher.update(content)
+        mime_type, _ = mimetypes.guess_type(relative_path)
+        manifest_files.append(
+            {
+                "path": relative_path,
+                "mime_type": mime_type or "application/octet-stream",
+                "size_bytes": len(content),
+            }
+        )
+    data_version = hasher.hexdigest()
+    manifest: dict[str, Any] = {
+        "data_version": data_version,
+        "file_count": len(static_assets),
+        "files": manifest_files,
+    }
+    bundle = CourseStaticAssetsBundle(
+        data_version=data_version,
+        manifest=manifest,
+        files=static_assets,
+    )
+
+    return blocks, bundle
