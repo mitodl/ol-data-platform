@@ -40,13 +40,15 @@ with mitxonline_payments as (
     select * from mitxpro_payments
 )
 
--- Bridge from payment/receipt → order → user (payment sources carry null user_id by design)
+-- Bridge from payment/receipt → order → user (payment sources carry null user_id by design).
+-- Use staging order tables (order grain) rather than the intermediate models, which join
+-- to lines and would fan out for multi-line orders.
 , order_user_lookup as (
     select
         order_id
-        , user_id
+        , order_purchaser_user_id as user_id
         , 'mitxonline' as platform
-    from {{ ref('int__mitxonline__ecommerce_order') }}
+    from {{ ref('stg__mitxonline__app__postgres__ecommerce_order') }}
     union all
     select
         order_id
