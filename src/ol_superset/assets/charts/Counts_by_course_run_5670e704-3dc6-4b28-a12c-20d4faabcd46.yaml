@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: f33af055-8200-464d-bd40-fee6194e0fd4
+dataset_uuid: f33af055-8200-464d-bd40-fee6194e0fd4  # Enrollment_Activity_Counts_Dataset
 description: null
 params:
   adhoc_filters:
@@ -145,10 +145,12 @@ params:
   orientation: vertical
   rich_tooltip: true
   row_limit: 10
+  showTooltipTotal: true
   show_empty_columns: true
   show_legend: true
   sort_series_type: sum
   stack: null
+  time_shift_color: true
   timeseries_limit_metric:
     aggregate: SUM
     column:
@@ -178,6 +180,8 @@ params:
   truncateXAxis: true
   truncate_metric: true
   viz_type: echarts_timeseries_bar
+  xAxisForceCategorical: true
+  xAxisLabelInterval: auto
   x_axis: courserun_readable_id
   x_axis_sort: max
   x_axis_sort_asc: false
