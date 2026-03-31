@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from ol_dbt_cli.commands.generate import (
     _adjust_source_schema_pattern,
+    _build_sources_content_from_local,
+    _build_staging_sql_from_columns,
+    _describe_local_view,
+    _discover_tables_from_local_db,
     _extract_domain,
     _merge_sources_content,
 )
@@ -211,3 +219,179 @@ sources:
     )
     def test_extract_domain_parametrized(self, prefix: str, expected_domain: str) -> None:
         assert _extract_domain(prefix) == expected_domain
+
+
+class TestDiscoverTablesFromLocalDb:
+    """Tests for _discover_tables_from_local_db — reads from the _glue_source_registry."""
+
+    def _mock_duckdb_connect(self, mock_connect: MagicMock, rows: Sequence[tuple[str, ...]]) -> MagicMock:
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.fetchall.return_value = rows
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_connect.return_value.__exit__.return_value = False
+        return mock_conn
+
+    def test_raises_if_db_not_found(self, tmp_path: Path) -> None:
+        missing = tmp_path / "nonexistent.duckdb"
+        with pytest.raises(FileNotFoundError, match="Run `ol-dbt local register`"):
+            _discover_tables_from_local_db(missing, "my_db", "raw__prefix__")
+
+    def test_returns_matching_table_names(self, tmp_path: Path) -> None:
+        db = tmp_path / "local.duckdb"
+        db.touch()
+        with patch("ol_dbt_cli.commands.generate.duckdb.connect") as mock_connect:
+            self._mock_duckdb_connect(mock_connect, [("raw__prefix__table_a",), ("raw__prefix__table_b",)])
+            result = _discover_tables_from_local_db(db, "my_db", "raw__prefix__")
+        assert result == ["raw__prefix__table_a", "raw__prefix__table_b"]
+
+    def test_strips_trailing_wildcards_from_prefix(self, tmp_path: Path) -> None:
+        """Trailing _ and % are stripped before appending the LIKE wildcard."""
+        db = tmp_path / "local.duckdb"
+        db.touch()
+        with patch("ol_dbt_cli.commands.generate.duckdb.connect") as mock_connect:
+            mock_conn = self._mock_duckdb_connect(mock_connect, [])
+            _discover_tables_from_local_db(db, "my_db", "raw__prefix__%")
+        # The LIKE parameter should end with a single % (clean + appended)
+        executed_args = mock_conn.execute.call_args[0]
+        assert executed_args[1][1] == "raw__prefix%"
+
+    def test_returns_empty_list_when_no_matches(self, tmp_path: Path) -> None:
+        db = tmp_path / "local.duckdb"
+        db.touch()
+        with patch("ol_dbt_cli.commands.generate.duckdb.connect") as mock_connect:
+            self._mock_duckdb_connect(mock_connect, [])
+            result = _discover_tables_from_local_db(db, "my_db", "raw__nomatch__")
+        assert result == []
+
+    def test_opens_db_in_read_only_mode(self, tmp_path: Path) -> None:
+        db = tmp_path / "local.duckdb"
+        db.touch()
+        with patch("ol_dbt_cli.commands.generate.duckdb.connect") as mock_connect:
+            self._mock_duckdb_connect(mock_connect, [])
+            _discover_tables_from_local_db(db, "my_db", "raw__prefix__")
+        mock_connect.assert_called_once_with(str(db), read_only=True)
+
+
+class TestDescribeLocalView:
+    """Tests for _describe_local_view — DESCRIBE against a registered DuckDB view."""
+
+    def _mock_duckdb_connect(
+        self, mock_connect: MagicMock, describe_rows: Sequence[tuple[str | None, ...]]
+    ) -> MagicMock:
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.fetchall.return_value = describe_rows
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_connect.return_value.__exit__.return_value = False
+        return mock_conn
+
+    def test_returns_column_name_and_type(self, tmp_path: Path) -> None:
+        db = tmp_path / "local.duckdb"
+        db.touch()
+        rows = [("id", "BIGINT", "YES", None, None, None), ("name", "VARCHAR", "YES", None, None, None)]
+        with patch("ol_dbt_cli.commands.generate.duckdb.connect") as mock_connect:
+            self._mock_duckdb_connect(mock_connect, rows)
+            result = _describe_local_view(db, "my_db", "users")
+        assert result == [{"name": "id", "data_type": "BIGINT"}, {"name": "name", "data_type": "VARCHAR"}]
+
+    def test_view_name_uses_glue_convention(self, tmp_path: Path) -> None:
+        db = tmp_path / "local.duckdb"
+        db.touch()
+        with patch("ol_dbt_cli.commands.generate.duckdb.connect") as mock_connect:
+            mock_conn = self._mock_duckdb_connect(mock_connect, [])
+            _describe_local_view(db, "ol_warehouse_production_raw", "my_table")
+        describe_call = mock_conn.execute.call_args_list[-1]
+        assert "glue__ol_warehouse_production_raw__my_table" in describe_call[0][0]
+
+    def test_loads_required_extensions(self, tmp_path: Path) -> None:
+        db = tmp_path / "local.duckdb"
+        db.touch()
+        with patch("ol_dbt_cli.commands.generate.duckdb.connect") as mock_connect:
+            mock_conn = self._mock_duckdb_connect(mock_connect, [])
+            _describe_local_view(db, "my_db", "orders")
+        load_calls = [c for c in mock_conn.execute.call_args_list if c[0][0].startswith("LOAD ")]
+        loaded = [c[0][0].split()[-1] for c in load_calls]
+        assert "httpfs" in loaded
+        assert "aws" in loaded
+        assert "iceberg" in loaded
+
+    def test_calls_load_aws_credentials(self, tmp_path: Path) -> None:
+        db = tmp_path / "local.duckdb"
+        db.touch()
+        with patch("ol_dbt_cli.commands.generate.duckdb.connect") as mock_connect:
+            mock_conn = self._mock_duckdb_connect(mock_connect, [])
+            _describe_local_view(db, "my_db", "orders")
+        mock_conn.execute.assert_any_call("CALL load_aws_credentials()")
+
+
+class TestBuildSourcesContentFromLocal:
+    """Tests for _build_sources_content_from_local — YAML generation from local schemas."""
+
+    _TABLES_WITH_COLS: list[tuple[str, list[dict[str, str]]]] = [
+        ("raw__app__users", [{"name": "id", "data_type": "BIGINT"}, {"name": "email", "data_type": "VARCHAR"}]),
+        ("raw__app__orders", [{"name": "order_id", "data_type": "BIGINT"}]),
+    ]
+
+    def test_source_name_matches_glue_database(self) -> None:
+        result = _build_sources_content_from_local("my_glue_db", self._TABLES_WITH_COLS)
+        assert "name: my_glue_db" in result
+
+    def test_all_tables_present(self) -> None:
+        result = _build_sources_content_from_local("my_glue_db", self._TABLES_WITH_COLS)
+        assert "raw__app__users" in result
+        assert "raw__app__orders" in result
+
+    def test_column_names_present(self) -> None:
+        result = _build_sources_content_from_local("my_glue_db", self._TABLES_WITH_COLS)
+        assert "name: id" in result
+        assert "name: email" in result
+        assert "name: order_id" in result
+
+    def test_data_types_present(self) -> None:
+        result = _build_sources_content_from_local("my_glue_db", self._TABLES_WITH_COLS)
+        assert "BIGINT" in result
+        assert "VARCHAR" in result
+
+    def test_version_field_present(self) -> None:
+        result = _build_sources_content_from_local("my_glue_db", self._TABLES_WITH_COLS)
+        assert "version: 2" in result
+
+    def test_empty_tables_list(self) -> None:
+        result = _build_sources_content_from_local("my_glue_db", [])
+        assert "my_glue_db" in result
+        assert "tables:" in result
+
+
+class TestBuildStagingSqlFromColumns:
+    """Tests for _build_staging_sql_from_columns — minimal staging SQL scaffold."""
+
+    _COLS = [{"name": "id", "data_type": "BIGINT"}, {"name": "email", "data_type": "VARCHAR"}]
+
+    def test_contains_with_source_as(self) -> None:
+        result = _build_staging_sql_from_columns("my_source", "users", self._COLS)
+        assert "with source as" in result
+
+    def test_contains_renamed_as(self) -> None:
+        result = _build_staging_sql_from_columns("my_source", "users", self._COLS)
+        assert "renamed as" in result
+
+    def test_source_macro_call_present(self) -> None:
+        result = _build_staging_sql_from_columns("my_source", "users", self._COLS)
+        assert "source('my_source', 'users')" in result
+
+    def test_all_column_names_in_select(self) -> None:
+        result = _build_staging_sql_from_columns("my_source", "users", self._COLS)
+        assert "id" in result
+        assert "email" in result
+
+    def test_ends_with_select_star_from_renamed(self) -> None:
+        result = _build_staging_sql_from_columns("my_source", "users", self._COLS)
+        assert "select * from renamed" in result
+
+    def test_empty_columns_produces_valid_sql(self) -> None:
+        result = _build_staging_sql_from_columns("my_source", "users", [])
+        assert "with source as" in result
+        assert "renamed as" in result
+
+    def test_different_source_and_table_names(self) -> None:
+        result = _build_staging_sql_from_columns("ol_warehouse_raw_data", "raw__app__orders", self._COLS)
+        assert "source('ol_warehouse_raw_data', 'raw__app__orders')" in result

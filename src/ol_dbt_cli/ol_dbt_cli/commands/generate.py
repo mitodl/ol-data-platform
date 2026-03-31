@@ -3,6 +3,10 @@
 Provides commands for:
 - Generating dbt source YAML definitions from database schemas
 - Generating staging model SQL + YAML from source tables
+
+Tables can be discovered either via dbt-codegen macros (requires Trino credentials)
+or directly from the local DuckDB database populated by `ol-dbt local register`
+(requires only AWS credentials).
 """
 
 from __future__ import annotations
@@ -11,14 +15,19 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Annotated
 
+import duckdb
 import yaml
-from cyclopts import App
+from cyclopts import App, Parameter
 
 generate_app = App(
     name="generate",
     help="Scaffold dbt sources and staging models.",
 )
+
+# Default path for the local DuckDB database (matches local_dev.py)
+_DEFAULT_DUCKDB_PATH = Path.home() / ".ol-dbt" / "local.duckdb"
 
 
 def _extract_domain(prefix: str) -> str:
@@ -180,6 +189,108 @@ def _merge_sources_content(  # noqa: C901, PLR0912, PLR0915
 
 
 # ============================================================================
+# Local DuckDB helpers
+# ============================================================================
+
+
+def _discover_tables_from_local_db(
+    duckdb_path: Path,
+    glue_database: str,
+    prefix: str,
+) -> list[str]:
+    """Return table names from the local DuckDB registry matching a prefix.
+
+    Reads the _glue_source_registry table populated by `ol-dbt local register`.
+    Does not require Trino credentials — only the local DuckDB file.
+    """
+    if not duckdb_path.exists():
+        msg = f"Local DuckDB database not found: {duckdb_path}. Run `ol-dbt local register` first."
+        raise FileNotFoundError(msg)
+
+    clean_prefix = prefix.rstrip("_%")
+    with duckdb.connect(str(duckdb_path), read_only=True) as conn:
+        rows = conn.execute(
+            "SELECT glue_table FROM _glue_source_registry WHERE glue_database = ? AND glue_table LIKE ?",
+            (glue_database, f"{clean_prefix}%"),
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
+def _describe_local_view(
+    duckdb_path: Path,
+    glue_database: str,
+    table_name: str,
+) -> list[dict[str, str]]:
+    """Return column name/type pairs for a registered Iceberg view.
+
+    Opens the local DuckDB file, loads the required extensions, and runs DESCRIBE
+    on the registered view to fetch column metadata from Iceberg table metadata on S3.
+    Requires AWS credentials (same as `ol-dbt local register`).
+    """
+    view_name = f"glue__{glue_database}__{table_name}"
+    with duckdb.connect(str(duckdb_path)) as conn:
+        for ext in ["httpfs", "aws", "iceberg"]:
+            conn.execute(f"LOAD {ext}")
+        conn.execute("CALL load_aws_credentials()")
+        rows = conn.execute(f"DESCRIBE {view_name}").fetchall()  # noqa: S608
+    # DESCRIBE returns: column_name, column_type, null, key, default, extra
+    return [{"name": row[0], "data_type": row[1]} for row in rows]
+
+
+def _build_sources_content_from_local(
+    glue_database: str,
+    tables_with_columns: list[tuple[str, list[dict[str, str]]]],
+) -> str:
+    """Build a sources YAML string from locally-discovered table schemas.
+
+    The returned YAML uses the Glue database name as the source name; callers
+    should pass it through _adjust_source_schema_pattern to normalise it.
+    """
+    tables = [
+        {
+            "name": table_name,
+            "description": "",
+            "columns": [{"name": col["name"], "data_type": col["data_type"], "description": ""} for col in columns],
+        }
+        for table_name, columns in tables_with_columns
+    ]
+    source_yaml: dict[str, object] = {
+        "version": 2,
+        "sources": [
+            {
+                "name": glue_database,
+                "tables": tables,
+            }
+        ],
+    }
+    return yaml.dump(source_yaml, default_flow_style=False, sort_keys=False, width=1000, indent=2)
+
+
+def _build_staging_sql_from_columns(
+    source_name: str,
+    table_name: str,
+    columns: list[dict[str, str]],
+) -> str:
+    """Build a minimal staging SQL model from a list of columns.
+
+    Produces the same ``with source as / renamed as / select`` structure that
+    dbt-codegen's generate_base_model macro emits, so the output is a drop-in
+    replacement when Trino is unavailable.
+    """
+    col_lines = ",\n        ".join(col["name"] for col in columns)
+    source_ref = f"{{{{ source('{source_name}', '{table_name}') }}}}"  # noqa: S608
+    return (
+        f"with source as (\n"  # noqa: S608
+        f"    select * from {source_ref}\n"
+        f"),\nrenamed as (\n"
+        f"    select\n"
+        f"        {col_lines}\n"
+        f"    from source\n"
+        f")\n\nselect * from renamed\n"
+    )
+
+
+# ============================================================================
 # CLI Commands
 # ============================================================================
 
@@ -191,18 +302,32 @@ def sources(  # noqa: C901, PLR0915
     output_directory: str = ".",
     database: str | None = None,
     target: str | None = None,
+    use_local_db: Annotated[
+        bool,
+        Parameter(help="Discover tables from local DuckDB (populated by `ol-dbt local register`) instead of Trino."),
+    ] = False,
+    duckdb_path: Annotated[
+        Path,
+        Parameter(help="Path to local DuckDB database file."),
+    ] = _DEFAULT_DUCKDB_PATH,
 ) -> list[str] | None:
     """Generate a dbt sources YAML file for tables matching a schema and prefix.
 
-    Discovers tables via dbt-codegen's generate_source macro and writes (or merges into)
-    a _<domain>__sources.yml file in the appropriate staging subdirectory.
+    Discovers tables either via dbt-codegen's generate_source macro (default,
+    requires Trino credentials) or from the local DuckDB database populated by
+    `ol-dbt local register` (--use-local-db, requires only AWS credentials).
+
+    Writes (or merges into) a _<domain>__sources.yml file in the appropriate
+    staging subdirectory.
 
     Args:
-        schema: Database schema to discover tables from.
+        schema: Glue database / Trino schema to discover tables from.
         prefix: Table name prefix to filter by (e.g., raw__mitlearn__app__postgres__).
         output_directory: Subdirectory within models/staging/<domain>/ to write to.
-        database: Optional database name override.
-        target: Optional dbt target to use.
+        database: Optional database name override (Trino path only).
+        target: Optional dbt target to use (Trino path only).
+        use_local_db: Use local DuckDB instead of Trino.
+        duckdb_path: Path to the local DuckDB file.
 
     """
     dbt_project_dir = Path("src") / "ol_dbt"
@@ -219,22 +344,50 @@ def sources(  # noqa: C901, PLR0915
     sources_filename = f"_{domain}__sources.yml" if domain else "_sources.yml"
     sources_file_path = output_path / sources_filename
 
-    source_args: dict[str, object] = {
-        "schema_name": schema,
-        "generate_columns": True,
-        "include_descriptions": True,
-        "table_pattern": f"{prefix}%",
-    }
-    if database:
-        source_args["database_name"] = database
+    if use_local_db:
+        print(f"Discovering tables from local DuckDB: {duckdb_path}")
+        try:
+            discovered_tables = _discover_tables_from_local_db(duckdb_path, schema, prefix)
+        except FileNotFoundError as e:
+            print(f"✗ {e}")
+            return None
 
-    result = _run_dbt_command(str(dbt_project_dir), ["generate_source", "--args", json.dumps(source_args)], target)
+        if not discovered_tables:
+            print(f"No tables found in local DB for database={schema!r}, prefix={prefix!r}")
+            return None
 
-    source_content_match = re.search(r"(version:.*)", result.stdout.strip(), re.DOTALL)
-    if not source_content_match:
-        return None
+        print(f"Found {len(discovered_tables)} tables. Fetching column schemas from Iceberg metadata...")
+        tables_with_columns: list[tuple[str, list[dict[str, str]]]] = []
+        for table_name in discovered_tables:
+            try:
+                columns = _describe_local_view(duckdb_path, schema, table_name)
+                tables_with_columns.append((table_name, columns))
+                print(f"  ✓ {table_name} ({len(columns)} columns)")
+            except Exception as e:  # noqa: BLE001
+                print(f"  ✗ {table_name}: {e}")
 
-    generated_content = source_content_match.group(1)
+        if not tables_with_columns:
+            print("No tables could be described. Check AWS credentials.")
+            return None
+
+        generated_content = _build_sources_content_from_local(schema, tables_with_columns)
+    else:
+        source_args: dict[str, object] = {
+            "schema_name": schema,
+            "generate_columns": True,
+            "include_descriptions": True,
+            "table_pattern": f"{prefix}%",
+        }
+        if database:
+            source_args["database_name"] = database
+
+        result = _run_dbt_command(str(dbt_project_dir), ["generate_source", "--args", json.dumps(source_args)], target)
+
+        source_content_match = re.search(r"(version:.*)", result.stdout.strip(), re.DOTALL)
+        if not source_content_match:
+            return None
+
+        generated_content = source_content_match.group(1)
 
     if sources_file_path.exists():
         print(f"Merging with existing sources file: {sources_file_path}")
@@ -261,13 +414,13 @@ def sources(  # noqa: C901, PLR0915
 
     print(f"Generated sources file: {sources_file_path}")
 
-    discovered_tables: list[str] = []
+    discovered_tables_list: list[str] = []
     for table_match in re.findall(r"- name: ([^\n]+)", generated_content):
         name = table_match.strip()
         if name.startswith(prefix.rstrip("_")):
-            discovered_tables.append(name)
+            discovered_tables_list.append(name)
 
-    return discovered_tables
+    return discovered_tables_list
 
 
 @generate_app.command
@@ -279,21 +432,31 @@ def staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
     target: str | None = None,
     apply_transformations: bool = True,  # noqa: FBT001, FBT002
     entity_type: str | None = None,
+    use_local_db: Annotated[
+        bool,
+        Parameter(help="Build staging SQL from local DuckDB column schemas instead of dbt-codegen macros."),
+    ] = False,
+    duckdb_path: Annotated[
+        Path,
+        Parameter(help="Path to local DuckDB database file."),
+    ] = _DEFAULT_DUCKDB_PATH,
 ) -> None:
     """Generate dbt staging SQL models and YAML for tables matching a schema and prefix.
 
-    For each discovered table, generates a staging SQL file using the
-    generate_base_model_enhanced macro, then produces a consolidated models YAML
-    via generate_model_yaml_enhanced.
+    For each discovered table, generates a staging SQL file either using the
+    generate_base_model_enhanced macro (default, requires Trino) or by reading
+    column schemas directly from the local DuckDB Iceberg views (--use-local-db).
 
     Args:
-        schema: Database schema to discover tables from.
+        schema: Glue database / Trino schema to discover tables from.
         prefix: Table name prefix to filter by.
         tables: Explicit list of table names (skips discovery if provided).
         directory: Subdirectory within models/staging/ for the generated files.
-        target: Optional dbt target to use.
-        apply_transformations: Apply semantic column transformations (default: True).
-        entity_type: Override auto-detected entity type for transformations.
+        target: Optional dbt target (Trino path only).
+        apply_transformations: Apply semantic column transformations (Trino path only).
+        entity_type: Override auto-detected entity type (Trino path only).
+        use_local_db: Use local DuckDB instead of Trino macros.
+        duckdb_path: Path to the local DuckDB file.
 
     """
     dbt_project_dir = Path("src") / "ol_dbt"
@@ -310,18 +473,27 @@ def staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
 
     discovered_tables = tables
     if not discovered_tables:
-        source_args = {
-            "schema_name": schema,
-            "generate_columns": True,
-            "include_descriptions": True,
-            "table_pattern": f"{prefix}%",
-        }
-        result = _run_dbt_command(str(dbt_project_dir), ["generate_source", "--args", json.dumps(source_args)], target)
-        discovered_tables = []
-        for table_match in re.findall(r"- name: ([^\n]+)", result.stdout.strip()):
-            name = table_match.strip()
-            if name.startswith(prefix.rstrip("_")):
-                discovered_tables.append(name)
+        if use_local_db:
+            try:
+                discovered_tables = _discover_tables_from_local_db(duckdb_path, schema, prefix)
+            except FileNotFoundError as e:
+                print(f"✗ {e}")
+                return
+        else:
+            source_args = {
+                "schema_name": schema,
+                "generate_columns": True,
+                "include_descriptions": True,
+                "table_pattern": f"{prefix}%",
+            }
+            result = _run_dbt_command(
+                str(dbt_project_dir), ["generate_source", "--args", json.dumps(source_args)], target
+            )
+            discovered_tables = []
+            for table_match in re.findall(r"- name: ([^\n]+)", result.stdout.strip()):
+                name = table_match.strip()
+                if name.startswith(prefix.rstrip("_")):
+                    discovered_tables.append(name)
 
     if not discovered_tables:
         return
@@ -340,29 +512,39 @@ def staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
         model_name = f"stg__{source}__{table_suffix}"
         sql_file_path = staging_dir / f"{model_name}.sql"
 
-        try:
-            base_model_args = json.dumps(
-                {
-                    "source_name": "ol_warehouse_raw_data",
-                    "table_name": table_name,
-                    "apply_transformations": apply_transformations,
-                    "entity_type": entity_type,
-                }
-            )
-            result_sql = _run_dbt_command(
-                str(dbt_project_dir),
-                ["generate_base_model_enhanced", "--args", base_model_args],
-                target,
-            )
-            sql_match = re.search(r"(with source as.*)", result_sql.stdout.strip(), re.DOTALL)
-            if sql_match:
-                sql_file_path.write_text(sql_match.group(1))
-                print(f"Generated SQL for {table_name}")
+        if use_local_db:
+            try:
+                columns = _describe_local_view(duckdb_path, schema, table_name)
+                sql_content = _build_staging_sql_from_columns("ol_warehouse_raw_data", table_name, columns)
+                sql_file_path.write_text(sql_content)
+                print(f"Generated SQL for {table_name} ({len(columns)} columns)")
                 generated_models.append(model_name)
-            else:
-                print(f"Could not extract SQL content for {table_name}")
-        except Exception as e:  # noqa: BLE001
-            print(f"Error processing table {table_name}: {e}")
+            except Exception as e:  # noqa: BLE001
+                print(f"Error processing table {table_name}: {e}")
+        else:
+            try:
+                base_model_args = json.dumps(
+                    {
+                        "source_name": "ol_warehouse_raw_data",
+                        "table_name": table_name,
+                        "apply_transformations": apply_transformations,
+                        "entity_type": entity_type,
+                    }
+                )
+                result_sql = _run_dbt_command(
+                    str(dbt_project_dir),
+                    ["generate_base_model_enhanced", "--args", base_model_args],
+                    target,
+                )
+                sql_match = re.search(r"(with source as.*)", result_sql.stdout.strip(), re.DOTALL)
+                if sql_match:
+                    sql_file_path.write_text(sql_match.group(1))
+                    print(f"Generated SQL for {table_name}")
+                    generated_models.append(model_name)
+                else:
+                    print(f"Could not extract SQL content for {table_name}")
+            except Exception as e:  # noqa: BLE001
+                print(f"Error processing table {table_name}: {e}")
 
     if not generated_models:
         return
@@ -370,75 +552,100 @@ def staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
     domain = _extract_domain(prefix)
     consolidated_yaml_path = staging_dir / f"_stg_{domain}__models.yml"
 
-    try:
-        print("Parsing dbt project to register new models...")
-        try:
-            _run_dbt_command(str(dbt_project_dir), ["parse"], target)
-            print("dbt parse completed successfully")
-        except Exception as e:  # noqa: BLE001
-            print(f"Warning: dbt parse failed: {e} — continuing anyway")
-
-        model_yaml_args = json.dumps(
-            {
-                "model_names": generated_models,
-                "upstream_descriptions": True,
-                "include_data_types": True,
-            }
-        )
-        result_yaml = _run_dbt_command(
-            str(dbt_project_dir),
-            ["generate_model_yaml_enhanced", "--args", model_yaml_args],
-            target,
-        )
-
-        yaml_match = re.search(r"(version:.*)", result_yaml.stdout.strip(), re.DOTALL)
-        if not yaml_match:
-            msg = "Failed to extract YAML content from generate_model_yaml_enhanced output"
-            raise ValueError(msg)
-
-        generated_yaml_content = yaml_match.group(1)
-
+    if use_local_db:
+        # dbt macros unavailable — generate a basic models YAML skeleton
         if consolidated_yaml_path.exists():
-            print(f"Merging with existing models YAML: {consolidated_yaml_path}")
-            existing_yaml = yaml.safe_load(consolidated_yaml_path.read_text())
-            new_yaml = yaml.safe_load(generated_yaml_content)
-
+            existing_yaml = yaml.safe_load(consolidated_yaml_path.read_text()) or {}
             existing_models_map = {m["name"]: m for m in existing_yaml.get("models", [])}
-            for new_model in new_yaml.get("models", []):
-                mname = new_model["name"]
-                if mname in existing_models_map:
-                    existing_model = existing_models_map[mname]
-                    if existing_model.get("description", "").strip():
-                        new_model["description"] = existing_model["description"]
-                    existing_cols = {c["name"]: c for c in existing_model.get("columns", [])}
-                    for new_col in new_model.get("columns", []):
-                        col_has_desc = (
-                            new_col["name"] in existing_cols
-                            and existing_cols[new_col["name"]].get("description", "").strip()
-                        )
-                        if col_has_desc:
-                            new_col["description"] = existing_cols[new_col["name"]]["description"]
-                existing_models_map[mname] = new_model
-
+            for model_name in generated_models:
+                if model_name not in existing_models_map:
+                    existing_models_map[model_name] = {"name": model_name, "description": "", "columns": []}
             existing_yaml["models"] = sorted(existing_models_map.values(), key=lambda x: x["name"])
-            consolidated_content = yaml.dump(
-                existing_yaml, default_flow_style=False, sort_keys=False, width=1000, indent=2
+            consolidated_yaml_path.write_text(
+                yaml.dump(existing_yaml, default_flow_style=False, sort_keys=False, width=1000, indent=2)
             )
         else:
-            print(f"Creating new models YAML: {consolidated_yaml_path}")
-            consolidated_content = generated_yaml_content
+            basic = {
+                "version": 2,
+                "models": [{"name": m, "description": "", "columns": []} for m in sorted(generated_models)],
+            }
+            consolidated_yaml_path.write_text(
+                yaml.dump(basic, default_flow_style=False, sort_keys=False, width=1000, indent=2)
+            )
+        print(f"Generated models YAML skeleton with {len(generated_models)} models")
+    else:
+        try:
+            print("Parsing dbt project to register new models...")
+            try:
+                _run_dbt_command(str(dbt_project_dir), ["parse"], target)
+                print("dbt parse completed successfully")
+            except Exception as e:  # noqa: BLE001
+                print(f"Warning: dbt parse failed: {e} — continuing anyway")
 
-        consolidated_yaml_path.write_text(consolidated_content)
-        print(f"Generated consolidated YAML with {len(generated_models)} models")
+            model_yaml_args = json.dumps(
+                {
+                    "model_names": generated_models,
+                    "upstream_descriptions": True,
+                    "include_data_types": True,
+                }
+            )
+            result_yaml = _run_dbt_command(
+                str(dbt_project_dir),
+                ["generate_model_yaml_enhanced", "--args", model_yaml_args],
+                target,
+            )
 
-    except Exception as e:  # noqa: BLE001
-        print(f"Error generating model YAML: {e}")
-        print("Falling back to basic YAML structure")
-        basic = {"version": 2, "models": [{"name": m, "description": "", "columns": []} for m in generated_models]}
-        consolidated_yaml_path.write_text(
-            yaml.dump(basic, default_flow_style=False, sort_keys=False, width=1000, indent=2)
-        )
-        print(f"Generated basic YAML with {len(generated_models)} models")
+            yaml_match = re.search(r"(version:.*)", result_yaml.stdout.strip(), re.DOTALL)
+            if not yaml_match:
+                msg = "Failed to extract YAML content from generate_model_yaml_enhanced output"
+                raise ValueError(msg)
+
+            generated_yaml_content = yaml_match.group(1)
+
+            if consolidated_yaml_path.exists():
+                print(f"Merging with existing models YAML: {consolidated_yaml_path}")
+                existing_yaml = yaml.safe_load(consolidated_yaml_path.read_text())
+                new_yaml = yaml.safe_load(generated_yaml_content)
+
+                existing_models_map = {m["name"]: m for m in existing_yaml.get("models", [])}
+                for new_model in new_yaml.get("models", []):
+                    mname = new_model["name"]
+                    if mname in existing_models_map:
+                        existing_model = existing_models_map[mname]
+                        if existing_model.get("description", "").strip():
+                            new_model["description"] = existing_model["description"]
+                        existing_cols = {c["name"]: c for c in existing_model.get("columns", [])}
+                        for new_col in new_model.get("columns", []):
+                            col_has_desc = (
+                                new_col["name"] in existing_cols
+                                and existing_cols[new_col["name"]].get("description", "").strip()
+                            )
+                            if col_has_desc:
+                                new_col["description"] = existing_cols[new_col["name"]]["description"]
+                    existing_models_map[mname] = new_model
+
+                existing_yaml["models"] = sorted(existing_models_map.values(), key=lambda x: x["name"])
+                consolidated_content = yaml.dump(
+                    existing_yaml, default_flow_style=False, sort_keys=False, width=1000, indent=2
+                )
+            else:
+                print(f"Creating new models YAML: {consolidated_yaml_path}")
+                consolidated_content = generated_yaml_content
+
+            consolidated_yaml_path.write_text(consolidated_content)
+            print(f"Generated consolidated YAML with {len(generated_models)} models")
+
+        except Exception as e:  # noqa: BLE001
+            print(f"Error generating model YAML: {e}")
+            print("Falling back to basic YAML structure")
+            basic = {
+                "version": 2,
+                "models": [{"name": m, "description": "", "columns": []} for m in generated_models],
+            }
+            consolidated_yaml_path.write_text(
+                yaml.dump(basic, default_flow_style=False, sort_keys=False, width=1000, indent=2)
+            )
+            print(f"Generated basic YAML with {len(generated_models)} models")
 
 
 @generate_app.command
@@ -449,21 +656,33 @@ def all(  # noqa: A001
     target: str | None = None,
     apply_transformations: bool = True,  # noqa: FBT001, FBT002
     entity_type: str | None = None,
+    use_local_db: Annotated[
+        bool,
+        Parameter(help="Use local DuckDB for table discovery and column schemas instead of Trino."),
+    ] = False,
+    duckdb_path: Annotated[
+        Path,
+        Parameter(help="Path to local DuckDB database file."),
+    ] = _DEFAULT_DUCKDB_PATH,
 ) -> None:
     """Generate both dbt sources YAML and staging models for a schema/prefix.
 
     Convenience command combining `generate sources` and `generate staging-models`.
+    Pass --use-local-db to discover tables and column schemas from the local DuckDB
+    database (populated by `ol-dbt local register`) instead of Trino.
 
     Args:
-        schema: Database schema to discover tables from.
+        schema: Glue database / Trino schema to discover tables from.
         prefix: Table name prefix to filter by.
-        database: Optional database name override.
-        target: Optional dbt target to use.
-        apply_transformations: Apply semantic column transformations (default: True).
-        entity_type: Override auto-detected entity type for transformations.
+        database: Optional database name override (Trino path only).
+        target: Optional dbt target (Trino path only).
+        apply_transformations: Apply semantic column transformations (Trino path only).
+        entity_type: Override auto-detected entity type (Trino path only).
+        use_local_db: Use local DuckDB instead of Trino.
+        duckdb_path: Path to the local DuckDB file.
 
     """
-    discovered = sources(schema, prefix, ".", database, target)
+    discovered = sources(schema, prefix, ".", database, target, use_local_db=use_local_db, duckdb_path=duckdb_path)
 
     if discovered:
         staging_models(
@@ -473,6 +692,8 @@ def all(  # noqa: A001
             target=target,
             apply_transformations=apply_transformations,
             entity_type=entity_type,
+            use_local_db=use_local_db,
+            duckdb_path=duckdb_path,
         )
         print(f"Generated staging models for {len(discovered)} tables")
     else:
