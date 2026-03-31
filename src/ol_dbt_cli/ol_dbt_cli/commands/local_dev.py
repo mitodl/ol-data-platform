@@ -20,6 +20,8 @@ import duckdb
 import trino
 from trino.auth import OAuth2Authentication
 
+from ol_dbt_cli.lib.git_utils import get_repo_root
+
 if TYPE_CHECKING:
     pass
 
@@ -134,23 +136,24 @@ def _register_single_table(
             return ("skipped", view_name, None)
 
     is_updated = view_name in existing_registrations
-    create_view_sql = f"CREATE OR REPLACE VIEW {view_name} AS\nSELECT * FROM iceberg_scan('{metadata_location}')\n"
+    # Escape single quotes in the S3 path so the SQL string literal is safe.
+    escaped_location = metadata_location.replace("'", "''")
+    create_view_sql = f"CREATE OR REPLACE VIEW {view_name} AS\nSELECT * FROM iceberg_scan('{escaped_location}')\n"
 
     try:
-        conn = duckdb.connect(str(duckdb_path))
-        for ext in ["httpfs", "aws", "iceberg"]:
-            conn.execute(f"LOAD {ext}")
-        conn.execute("CALL load_aws_credentials()")
-        conn.execute(create_view_sql)
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO _glue_source_registry
-            (view_name, glue_database, glue_table, metadata_location, registered_at)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """,
-            (view_name, database_name, table_name, metadata_location),
-        )
-        conn.close()
+        with duckdb.connect(str(duckdb_path)) as conn:
+            for ext in ["httpfs", "aws", "iceberg"]:
+                conn.execute(f"LOAD {ext}")
+            conn.execute("CALL load_aws_credentials()")
+            conn.execute(create_view_sql)
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO _glue_source_registry
+                (view_name, glue_database, glue_table, metadata_location, registered_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (view_name, database_name, table_name, metadata_location),
+            )
     except Exception as e:  # noqa: BLE001
         return ("error", view_name, str(e))
 
@@ -213,7 +216,19 @@ def _register_tables_in_duckdb(
         # only need to LOAD (not INSTALL) extensions in their own connections.
         setup_conn.close()
     else:
+        # Dry-run: read existing registrations from the DB (read-only) if it exists,
+        # so skip/update reporting accurately reflects what would happen in a real run.
         existing_registrations = {}
+        if duckdb_path.exists():
+            try:
+                with duckdb.connect(str(duckdb_path), read_only=True) as ro_conn:
+                    rows = ro_conn.execute(
+                        "SELECT view_name, metadata_location FROM _glue_source_registry WHERE glue_database = ?",
+                        (database_name,),
+                    ).fetchall()
+                    existing_registrations = {row[0]: row[1] for row in rows}
+            except Exception:  # noqa: BLE001
+                existing_registrations = {}
         if verbose:
             print("\n🔍 DRY RUN MODE - No actual changes will be made\n")
 
@@ -236,9 +251,8 @@ def _register_tables_in_duckdb(
                     continue
 
             is_updated = view_name in existing_registrations
-            create_view_sql = (
-                f"CREATE OR REPLACE VIEW {view_name} AS\nSELECT * FROM iceberg_scan('{metadata_location}')"
-            )
+            escaped_location = metadata_location.replace("'", "''")
+            create_view_sql = f"CREATE OR REPLACE VIEW {view_name} AS\nSELECT * FROM iceberg_scan('{escaped_location}')"
             if verbose:
                 status = "UPDATE" if is_updated else "NEW"
                 print(f"\n-- [{status}] {table_name}")
@@ -474,7 +488,7 @@ def _get_all_eligible_schemas(conn: trino.dbapi.Connection, catalog: str, base_s
 def _get_tables_and_views(conn: trino.dbapi.Connection, catalog: str, schema: str) -> dict[str, list[str]]:
     """Return tables and views present in a Trino schema."""
     cursor = conn.cursor()
-    cursor.execute(f"SHOW TABLES FROM {catalog}.{schema}")
+    cursor.execute(f'SHOW TABLES FROM "{catalog}"."{schema}"')
     tables = [row[0] for row in cursor.fetchall()]
 
     try:
@@ -500,7 +514,7 @@ def _drop_objects(
     counts: dict[str, int] = {"tables": 0, "views": 0}
 
     for view in objects["views"]:
-        sql = f"DROP VIEW IF EXISTS {catalog}.{schema}.{view}"
+        sql = f'DROP VIEW IF EXISTS "{catalog}"."{schema}"."{view}"'
         if dry_run:
             print(f"  [DRY RUN] Would execute: {sql}")
         else:
@@ -512,7 +526,7 @@ def _drop_objects(
                 print(f"  ✗ Failed to drop view {view}: {e}")
 
     for table in objects["tables"]:
-        sql = f"DROP TABLE IF EXISTS {catalog}.{schema}.{table}"
+        sql = f'DROP TABLE IF EXISTS "{catalog}"."{schema}"."{table}"'
         if dry_run:
             print(f"  [DRY RUN] Would execute: {sql}")
         else:
@@ -985,37 +999,41 @@ def setup(
         print("✗ uv is not installed. Install from: https://github.com/astral-sh/uv")
         all_good = False
 
-    result = subprocess.run(["aws", "sts", "get-caller-identity"], capture_output=True, text=True, check=False)
-    if result.returncode == 0:
-        identity = json.loads(result.stdout)
-        account = identity.get("Account", "unknown")
-        user = identity.get("Arn", "").split("/")[-1]
-        print(f"✓ AWS credentials configured (Account: {account}, User: {user})")
+    if shutil.which("aws"):
+        result = subprocess.run(["aws", "sts", "get-caller-identity"], capture_output=True, text=True, check=False)  # noqa: S603
+        if result.returncode == 0:
+            identity = json.loads(result.stdout)
+            account = identity.get("Account", "unknown")
+            user = identity.get("Arn", "").split("/")[-1]
+            print(f"✓ AWS credentials configured (Account: {account}, User: {user})")
+        else:
+            print("✗ AWS credentials not configured. Run 'aws configure'")
+            all_good = False
+
+        glue_check = subprocess.run(
+            ["aws", "glue", "get-databases", "--max-results", "1"],  # noqa: S603
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if glue_check.returncode == 0:
+            print("✓ AWS Glue access verified")
+        else:
+            print("⚠ Cannot access AWS Glue. Check IAM permissions (glue:GetDatabase, glue:GetTables)")
+
+        s3_check = subprocess.run(
+            ["aws", "s3", "ls", "s3://ol-data-lake-raw-production/"],  # noqa: S603
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if s3_check.returncode == 0:
+            print("✓ S3 production bucket access verified")
+        else:
+            print("⚠ Cannot access s3://ol-data-lake-raw-production/ — Iceberg reads may fail")
     else:
-        print("✗ AWS credentials not configured. Run 'aws configure'")
+        print("✗ AWS CLI is not installed. Install from: https://aws.amazon.com/cli/")
         all_good = False
-
-    glue_check = subprocess.run(
-        ["aws", "glue", "get-databases", "--max-results", "1"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if glue_check.returncode == 0:
-        print("✓ AWS Glue access verified")
-    else:
-        print("⚠ Cannot access AWS Glue. Check IAM permissions (glue:GetDatabase, glue:GetTables)")
-
-    s3_check = subprocess.run(
-        ["aws", "s3", "ls", "s3://ol-data-lake-raw-production/"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if s3_check.returncode == 0:
-        print("✓ S3 production bucket access verified")
-    else:
-        print("⚠ Cannot access s3://ol-data-lake-raw-production/ — Iceberg reads may fail")
 
     if not all_good:
         print("\n✗ Prerequisites check failed. Fix issues above and try again.")
@@ -1074,7 +1092,7 @@ def setup(
     print("Step 4: Installing dbt Dependencies")
     print("=" * 70)
 
-    project_root = Path(__file__).parent.parent.parent.parent.parent.parent
+    project_root = get_repo_root()
     dbt_dir = project_root / "src" / "ol_dbt"
 
     if dbt_dir.exists():

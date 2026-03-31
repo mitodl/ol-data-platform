@@ -329,7 +329,7 @@ def staging_models(  # noqa: C901, PLR0912, PLR0913, PLR0915
     generated_models: list[str] = []
 
     for table_name in discovered_tables:
-        source_match = re.match(r"raw__([a-z]+)__", table_name)
+        source_match = re.match(r"raw__([a-z][a-z0-9_]*)__", table_name)
         if not source_match:
             continue
         source = source_match.group(1)

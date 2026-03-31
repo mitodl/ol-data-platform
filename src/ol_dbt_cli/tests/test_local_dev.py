@@ -66,6 +66,11 @@ class TestValidateSchemaSafety:
 class TestRegisterSingleTable:
     """Tests for _register_single_table — per-thread DuckDB view registration."""
 
+    def _mock_duckdb_connect(self, mock_connect: MagicMock, mock_conn: MagicMock) -> None:
+        """Wire mock_connect so that `with duckdb.connect(...) as conn:` yields mock_conn."""
+        mock_connect.return_value.__enter__.return_value = mock_conn
+        mock_connect.return_value.__exit__.return_value = False
+
     def _make_table(self, name: str = "users", location: str = "s3://bucket/users/v1.json") -> dict[str, str]:
         return {"name": name, "metadata_location": location}
 
@@ -89,7 +94,7 @@ class TestRegisterSingleTable:
 
         with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
             mock_conn = MagicMock()
-            mock_connect.return_value = mock_conn
+            self._mock_duckdb_connect(mock_connect, mock_conn)
 
             status, view_name, extra = _register_single_table(
                 table, "my_db", tmp_path / "test.duckdb", existing, force=False
@@ -105,7 +110,7 @@ class TestRegisterSingleTable:
 
         with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
             mock_conn = MagicMock()
-            mock_connect.return_value = mock_conn
+            self._mock_duckdb_connect(mock_connect, mock_conn)
 
             status, view_name, extra = _register_single_table(
                 table, "my_db", tmp_path / "test.duckdb", existing, force=False
@@ -125,7 +130,7 @@ class TestRegisterSingleTable:
 
         with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
             mock_conn = MagicMock()
-            mock_connect.return_value = mock_conn
+            self._mock_duckdb_connect(mock_connect, mock_conn)
 
             status, view_name, extra = _register_single_table(
                 table, "my_db", tmp_path / "test.duckdb", existing, force=False
@@ -141,7 +146,7 @@ class TestRegisterSingleTable:
 
         with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
             mock_conn = MagicMock()
-            mock_connect.return_value = mock_conn
+            self._mock_duckdb_connect(mock_connect, mock_conn)
 
             status, view_name, extra = _register_single_table(
                 table, "my_db", tmp_path / "test.duckdb", existing, force=True
@@ -158,7 +163,7 @@ class TestRegisterSingleTable:
         with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
             mock_conn = MagicMock()
             mock_conn.execute.side_effect = RuntimeError("Iceberg manifest read failed")
-            mock_connect.return_value = mock_conn
+            self._mock_duckdb_connect(mock_connect, mock_conn)
 
             status, view_name, extra = _register_single_table(
                 table, "my_db", tmp_path / "test.duckdb", existing, force=False
@@ -174,7 +179,7 @@ class TestRegisterSingleTable:
 
         with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
             mock_conn = MagicMock()
-            mock_connect.return_value = mock_conn
+            self._mock_duckdb_connect(mock_connect, mock_conn)
 
             _register_single_table(table, "my_db", tmp_path / "test.duckdb", {}, force=False)
 
@@ -201,7 +206,7 @@ class TestRegisterSingleTable:
 
         with patch("ol_dbt_cli.commands.local_dev.duckdb.connect") as mock_connect:
             mock_conn = MagicMock()
-            mock_connect.return_value = mock_conn
+            self._mock_duckdb_connect(mock_connect, mock_conn)
 
             _register_single_table(table, "my_db", tmp_path / "test.duckdb", {}, force=False)
 
