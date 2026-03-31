@@ -34,7 +34,7 @@ with mitxonline_course_topics as (
 )
 
 , dim_topic as (
-    select topic_pk, topic_name
+    select topic_pk, topic_name, primary_platform
     from {{ ref('dim_topic') }}
 )
 

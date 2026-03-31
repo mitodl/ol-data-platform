@@ -34,7 +34,7 @@ with mitxonline_course_instructors as (
 )
 
 , dim_instructor as (
-    select instructor_pk, instructor_name
+    select instructor_pk, instructor_name, primary_platform
     from {{ ref('dim_instructor') }}
 )
 

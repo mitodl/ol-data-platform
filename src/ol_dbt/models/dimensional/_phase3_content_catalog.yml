@@ -39,10 +39,6 @@ models:
     description: Topic or subject area name
     tests:
     - not_null
-  - name: source_topic_id
-    description: Original topic ID from source system
-  - name: source_parent_topic_id
-    description: Parent topic ID from source system (for hierarchy)
   - name: parent_topic_fk
     description: Self-referencing FK to parent topic within the same platform
   - name: primary_platform

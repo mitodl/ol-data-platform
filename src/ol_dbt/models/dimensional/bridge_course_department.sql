@@ -24,7 +24,7 @@ with mitxonline_course_departments as (
 )
 
 , dim_department as (
-    select department_pk, department_name
+    select department_pk, department_name, primary_platform
     from {{ ref('dim_department') }}
 )
 

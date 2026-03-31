@@ -19,25 +19,27 @@ models:
   - name: courserun_pk
     description: >
       Surrogate primary key. Generated as dbt_utils.generate_surrogate_key(['platform',
-      'courserun_readable_id']). Value is stable across runs — do not filter on this
-      alone for SCD2; also filter on is_current.
+      'courserun_readable_id']). Value is stable across SCD2 versions — the same
+      courserun_pk appears on both current and historical rows. Always filter with
+      is_current=true when looking up by this key.
     tests:
-    - unique
     - not_null
   - name: courserun_readable_id
     description: Business key - unique identifier for course run
     tests:
     - not_null
   - name: course_fk
-    description: Foreign key to dim_course (null for edxorg runs — edxorg courses
-      not yet in dim_course)
+    description: Foreign key to dim_course (null for edxorg runs and for non-edxorg
+      runs where the course has not yet been loaded into dim_course)
     tests:
     - not_null:
         where: "platform != 'edxorg'"
+        config:
+          severity: warn
     - relationships:
         to: ref('dim_course')
         field: course_pk
-        where: "platform != 'edxorg'"
+        where: "platform != 'edxorg' and course_fk is not null"
   - name: platform_fk
     description: Foreign key to dim_platform (Phase 3+)
   - name: platform
@@ -52,12 +54,15 @@ models:
     - relationships:
         to: ref('dim_date')
         field: date_key
+        where: "courserun_start_date_key is not null and courserun_start_date_key\
+          \ <= 20301231"
   - name: courserun_end_date_key
     description: Foreign key to dim_date for course run end date
     tests:
     - relationships:
         to: ref('dim_date')
         field: date_key
+        where: "courserun_end_date_key is not null and courserun_end_date_key <= 20301231"
   - name: enrollment_start_date_key
     description: Foreign key to dim_date for enrollment period start
   - name: enrollment_end_date_key

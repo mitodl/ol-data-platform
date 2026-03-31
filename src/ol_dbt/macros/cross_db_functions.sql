@@ -228,13 +228,13 @@
 {%- endmacro %}
 
 {% macro duckdb__iso8601_to_date_key(varchar_field) -%}
-    {# DuckDB: strptime + strftime #}
+    {# DuckDB: try_strptime returns NULL on invalid input instead of throwing #}
     CASE
         WHEN {{ varchar_field }} IS NULL THEN NULL
         WHEN LENGTH({{ varchar_field }}) = 10 THEN
-            CAST(strftime(strptime({{ varchar_field }}, '%Y-%m-%d'), '%Y%m%d') AS INTEGER)
+            CAST(strftime(try_strptime({{ varchar_field }}, '%Y-%m-%d'), '%Y%m%d') AS INTEGER)
         WHEN LENGTH({{ varchar_field }}) >= 19 THEN
-            CAST(strftime(strptime(SUBSTR({{ varchar_field }}, 1, 19), '%Y-%m-%dT%H:%M:%S'), '%Y%m%d') AS INTEGER)
+            CAST(strftime(try_strptime(SUBSTR({{ varchar_field }}, 1, 19), '%Y-%m-%dT%H:%M:%S'), '%Y%m%d') AS INTEGER)
         ELSE NULL
     END
 {%- endmacro %}

@@ -8,7 +8,7 @@
 -- Consolidate enrollments from all platforms
 with mitxonline_enrollments as (
     select
-        courserunenrollment_id as enrollment_id
+        cast(courserunenrollment_id as varchar) as enrollment_id
         , user_id
         , courserun_id
         , cast(null as varchar) as courserun_readable_id  -- join key for edxorg only
@@ -24,7 +24,7 @@ with mitxonline_enrollments as (
 
 , mitxpro_enrollments as (
     select
-        courserunenrollment_id as enrollment_id
+        cast(courserunenrollment_id as varchar) as enrollment_id
         , user_id
         , courserun_id
         , cast(null as varchar) as courserun_readable_id  -- join key for edxorg only
@@ -63,7 +63,7 @@ with mitxonline_enrollments as (
 -- a separate mapping effort and is tracked as future work.
 , program_enrollments as (
     select
-        programenrollment_id as enrollment_id
+        cast(programenrollment_id as varchar) as enrollment_id
         , user_id
         , null as courserun_id
         , cast(null as varchar) as courserun_readable_id  -- join key for edxorg only

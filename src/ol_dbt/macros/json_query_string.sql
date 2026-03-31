@@ -22,8 +22,8 @@
 
 {%- macro duckdb__json_query_string(json_col, json_path) -%}
   {# DuckDB: Use json_extract_string which returns unquoted string values #}
-  {# Keep the path as a single-quoted string literal to support keys with special chars (e.g. "image-alt") #}
-  json_extract_string({{ json_col }}, {{ json_path | replace("'", "\"") }})
+  {# json_path is already a single-quoted SQL string literal (e.g. '$.field'), use it directly #}
+  json_extract_string({{ json_col }}, {{ json_path }})
 {%- endmacro -%}
 
 {%- macro starrocks__json_query_string(json_col, json_path) -%}
