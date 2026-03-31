@@ -4,37 +4,46 @@ import sys
 
 import cyclopts
 
+from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
+from ol_dbt_cli.commands.local_dev import local_app
 from ol_dbt_cli.commands.validate import validate
 
 app = cyclopts.App(
     name="ol-dbt",
     help="""
-    ol-dbt: dbt project analysis and validation CLI
+    ol-dbt: dbt project tooling CLI
 
-    Tools for the engineering team to reason about in-progress dbt changes,
-    validate model quality, and understand column-level impact.
+    Tools for the engineering team to develop, validate, and analyse dbt changes.
 
     Common workflows:
 
-      1. Check what columns break downstream before opening a PR:
+      1. Set up local DuckDB + Iceberg development environment:
+         $ ol-dbt local setup
+
+      2. Register Iceberg tables as DuckDB views:
+         $ ol-dbt local register --all-layers
+
+      3. Scaffold sources and staging models for a new data source:
+         $ ol-dbt generate all --schema ol_warehouse_production_raw --prefix raw__myapp__
+
+      4. Check what columns break downstream before opening a PR:
          $ ol-dbt impact
 
-      2. Validate model SQL/YAML consistency for changed models:
+      5. Validate model SQL/YAML consistency:
          $ ol-dbt validate --model staging
 
-      3. Full validation of all models:
-         $ ol-dbt validate
-
-      4. JSON output for CI pipelines:
+      6. JSON output for CI pipelines:
          $ ol-dbt impact --format json
          $ ol-dbt validate --format json
 
-    Use --help on any command for detailed usage.
+    Use --help on any subcommand for detailed usage.
     """,
     version="0.1.0",
 )
 
+app.command(local_app)
+app.command(generate_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
 

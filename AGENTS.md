@@ -122,7 +122,7 @@ SKIP=sqlfluff-lint pre-commit run --all-files
 
 **Generate dbt staging models automatically**:
 ```bash
-uv run python bin/dbt-create-staging-models.py generate-all \
+ol-dbt generate all \
   --schema ol_warehouse_production_raw \
   --prefix raw__mitlearn__app__postgres__user \
   --target production
