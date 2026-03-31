@@ -23,7 +23,7 @@ building data applications.
 
 # dbt Staging Model Generation
 
-This repository includes a script for automatically generating dbt source definitions and staging models from database tables. The script is located at `bin/dbt-create-staging-models.py`.
+The `ol-dbt` CLI provides commands for automatically generating dbt source definitions and staging models from database tables. Install it with `uv sync` and then run `ol-dbt generate --help`.
 
 ## Prerequisites
 
@@ -38,7 +38,7 @@ The script provides three main commands:
 ### 1. Generate Sources Only
 
 ```bash
-uv run python bin/dbt-create-staging-models.py generate-sources \
+ol-dbt generate sources \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production
@@ -47,7 +47,7 @@ uv run python bin/dbt-create-staging-models.py generate-sources \
 ### 2. Generate Staging Models Only
 
 ```bash
-uv run python bin/dbt-create-staging-models.py generate-staging-models \
+ol-dbt generate staging-models \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production
@@ -56,7 +56,7 @@ uv run python bin/dbt-create-staging-models.py generate-staging-models \
 ### 3. Generate Both Sources and Staging Models
 
 ```bash
-uv run python bin/dbt-create-staging-models.py generate-all \
+ol-dbt generate all \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production
@@ -118,7 +118,7 @@ The system auto-detects entity types from table names:
 
 ### Generate MITlearn User Tables with Enhanced Transformations
 ```bash
-python bin/dbt-create-staging-models.py generate-all \
+ol-dbt generate all \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production
@@ -126,7 +126,7 @@ python bin/dbt-create-staging-models.py generate-all \
 
 ### Generate Without Transformations (Legacy Mode)
 ```bash
-python bin/dbt-create-staging-models.py generate-all \
+ol-dbt generate all \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production \
@@ -135,7 +135,7 @@ python bin/dbt-create-staging-models.py generate-all \
 
 ### Override Entity Type Detection
 ```bash
-python bin/dbt-create-staging-models.py generate-all \
+ol-dbt generate all \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production \
@@ -144,7 +144,7 @@ python bin/dbt-create-staging-models.py generate-all \
 
 ### Basic Generate MITlearn User Tables
 ```bash
-python bin/dbt-create-staging-models.py generate-all \
+ol-dbt generate all \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__user \
     --target production
@@ -158,7 +158,7 @@ This creates:
 
 ### Add Additional Tables to Existing Sources
 ```bash
-python bin/dbt-create-staging-models.py generate-sources \
+ol-dbt generate sources \
     --schema ol_warehouse_production_raw \
     --prefix raw__mitlearn__app__postgres__auth \
     --target production
