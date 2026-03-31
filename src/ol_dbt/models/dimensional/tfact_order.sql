@@ -46,7 +46,9 @@ with mitxonline_orders as (
 )
 
 , micromasters_orders as (
-    select
+    -- int__micromasters__orders is grain (order_id, line_id); deduplicate to order grain
+    -- since all columns selected here are order-level attributes (no line-level fields needed)
+    select distinct
         order_id
         , user_id  -- MicroMasters integer user ID (matches dim_user.micromasters_user_id)
         , order_state
