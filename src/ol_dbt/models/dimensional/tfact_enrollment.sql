@@ -41,8 +41,7 @@ with mitxonline_enrollments as (
 , edxorg_enrollments as (
     select
         -- Stable surrogate key: edxorg has no enrollment_id; use natural key (user + course run)
-        {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }}
-            as enrollment_id
+        {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }} as enrollment_id
         , user_id
         , null as courserun_id  -- edxorg has no integer source_id; join on readable_id instead
         , courserun_readable_id

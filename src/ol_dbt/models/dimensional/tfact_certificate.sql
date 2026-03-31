@@ -38,8 +38,7 @@ with mitxonline_certificates as (
 
 , edxorg_certificates as (
     select
-        {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }}
-            as certificate_id
+        {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }} as certificate_id
         , user_id
         , cast(null as integer) as courserun_id  -- edxorg has no integer source_id
         , courserun_readable_id
@@ -54,8 +53,7 @@ with mitxonline_certificates as (
 
 , micromasters_certificates as (
     select
-        {{ dbt_utils.generate_surrogate_key(['user_email', 'courserun_readable_id']) }}
-            as certificate_id
+        {{ dbt_utils.generate_surrogate_key(['user_email', 'courserun_readable_id']) }} as certificate_id
         , cast(null as integer) as user_id  -- no integer user ID; resolved via user_email
         , cast(null as integer) as courserun_id
         , courserun_readable_id

@@ -1,0 +1,104 @@
+---
+version: 2
+
+models:
+- name: bridge_program_course
+  description: >
+    Many-to-many bridge table connecting programs to their required courses.
+    Allows analysis of program composition and cross-program course sharing.
+  tests:
+    # Ensure no duplicate program-course pairs
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - program_fk
+      - course_fk
+  columns:
+  - name: program_fk
+    description: Foreign key to dim_program
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_program')
+        field: program_pk
+  - name: course_fk
+    description: Foreign key to dim_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: is_required
+    description: Boolean indicating if course is required for program completion
+    tests:
+    - not_null
+  - name: course_order
+    description: Sequence/order of course within program curriculum
+
+- name: bridge_course_instructor
+  description: Many-to-many relationship between courses and instructors
+  columns:
+  - name: course_fk
+    description: Foreign key to dim_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: instructor_fk
+    description: Foreign key to dim_instructor
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_instructor')
+        field: instructor_pk
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - course_fk
+      - instructor_fk
+
+- name: bridge_course_topic
+  description: Many-to-many relationship between courses and topics
+  columns:
+  - name: course_fk
+    description: Foreign key to dim_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: topic_fk
+    description: Foreign key to dim_topic
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_topic')
+        field: topic_pk
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - course_fk
+      - topic_fk
+
+- name: bridge_course_department
+  description: Many-to-many relationship between courses and departments
+  columns:
+  - name: course_fk
+    description: Foreign key to dim_course
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_course')
+        field: course_pk
+  - name: department_fk
+    description: Foreign key to dim_department
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_department')
+        field: department_pk
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - course_fk
+      - department_fk

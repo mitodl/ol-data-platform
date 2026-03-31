@@ -23,6 +23,8 @@ models:
     description: Business key - readable course ID (e.g., course-v1:MITx+6.00.1x)
     tests:
     - not_null
+  - name: source_id
+    description: Integer source system ID for this course (null for edxorg courses)
   - name: course_number
     description: Course number (e.g., 6.00.1x)
   - name: course_title
