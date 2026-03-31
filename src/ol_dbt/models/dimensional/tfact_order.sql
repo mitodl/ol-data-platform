@@ -5,18 +5,24 @@
     on_schema_change='append_new_columns'
 ) }}
 
--- Consolidate orders from all platforms
+-- E-commerce order line fact table. Grain: one row per (order_id, line_id, platform).
+-- All source models are natively at line grain (one product per line).
+-- order_total_price_paid is a repeated order-header value — NOT additive across lines
+-- of the same order. Use line_price for revenue aggregations.
 with mitxonline_orders as (
+    -- int__mitxonline__ecommerce_order grain: (order_id, line_id)
     select
-        order_id
+        cast(line_id as varchar) as line_id
+        , order_id
         , user_id
+        , product_id
+        , product_price as line_price
         , order_state
         , order_total_price_paid
         , order_reference_number
         , order_created_on
-        , order_created_on as order_updated_on  -- mitxonline doesn't have updated_on, use created_on
+        , order_created_on as order_updated_on  -- mitxonline has no updated_on
         , 'mitxonline' as platform
-        , product_id
         , case
             when discount_amount_text like 'Fixed Price: 0%' then 'free'
             when substr(discount_amount_text, length(discount_amount_text), 1) = '%' then 'percentage'
@@ -27,37 +33,44 @@ with mitxonline_orders as (
 )
 
 , mitxpro_orders as (
+    -- Join order header to lines to achieve (order_id, line_id) grain.
+    -- int__mitxpro__ecommerce_order is at order grain; int__mitxpro__ecommerce_line has lines.
     select
-        order_id
-        , order_purchaser_user_id as user_id  -- mitxpro calls it order_purchaser_user_id
-        , order_state
-        , order_total_price_paid
-        , cast(null as varchar) as order_reference_number  -- mitxpro doesn't have reference_number
-        , order_created_on
-        , order_updated_on
+        cast(lines.line_id as varchar) as line_id
+        , orders.order_id
+        , orders.order_purchaser_user_id as user_id
+        , lines.product_id
+        , lines.product_price as line_price
+        , orders.order_state
+        , orders.order_total_price_paid
+        , cast(null as varchar) as order_reference_number
+        , orders.order_created_on
+        , orders.order_updated_on
         , 'mitxpro' as platform
-        , cast(null as bigint) as product_id
         , case
-            when couponpaymentversion_discount_type = 'percent-off' then 'percentage'
-            when couponpaymentversion_discount_type = 'dollars-off' then 'fixed_amount'
+            when orders.couponpaymentversion_discount_type = 'percent-off' then 'percentage'
+            when orders.couponpaymentversion_discount_type = 'dollars-off' then 'fixed_amount'
             else null
           end as discount_type_code
-    from {{ ref('int__mitxpro__ecommerce_order') }}
+    from {{ ref('int__mitxpro__ecommerce_order') }} as orders
+    inner join {{ ref('int__mitxpro__ecommerce_line') }} as lines
+        on orders.order_id = lines.order_id
 )
 
 , micromasters_orders as (
-    -- int__micromasters__orders is grain (order_id, line_id); deduplicate to order grain
-    -- since all columns selected here are order-level attributes (no line-level fields needed)
-    select distinct
-        order_id
-        , user_id  -- MicroMasters integer user ID (matches dim_user.micromasters_user_id)
+    -- int__micromasters__orders grain: (order_id, line_id)
+    select
+        cast(line_id as varchar) as line_id
+        , order_id
+        , user_id
+        , cast(null as bigint) as product_id  -- no dim_product coverage for micromasters
+        , line_price
         , order_state
         , order_total_price_paid
         , cast(null as varchar) as order_reference_number
         , order_created_on
-        , order_created_on as order_updated_on  -- micromasters doesn't have updated_on
+        , order_created_on as order_updated_on  -- micromasters has no updated_on
         , 'micromasters' as platform
-        , cast(null as bigint) as product_id
         , null as discount_type_code
     from {{ ref('int__micromasters__orders') }}
 )
@@ -70,7 +83,6 @@ with mitxonline_orders as (
     select * from micromasters_orders
 )
 
--- Join to dimensions for FKs
 , user_lookup as (
     select
         user_pk
@@ -79,13 +91,6 @@ with mitxonline_orders as (
         , micromasters_user_id
     from {{ ref('dim_user') }}
     where user_pk is not null
-)
-
-, mitxpro_order_product_lookup as (
-    select
-        order_id
-        , product_id
-    from {{ ref('int__mitxpro__ecommerce_line') }}
 )
 
 , dim_discount_type as (
@@ -135,16 +140,10 @@ with mitxonline_orders as (
         and combined_orders.user_id = ul_micromasters.micromasters_user_id
     left join dim_platform_lookup
         on combined_orders.platform = dim_platform_lookup.platform_readable_id
-    left join dim_discount_type on combined_orders.discount_type_code = dim_discount_type.discount_type_code
-    left join mitxpro_order_product_lookup
-        on combined_orders.platform = 'mitxpro'
-        and combined_orders.order_id = mitxpro_order_product_lookup.order_id
+    left join dim_discount_type
+        on combined_orders.discount_type_code = dim_discount_type.discount_type_code
     left join dim_product
-        on coalesce(
-            -- mitxpro: product_id comes from line lookup; mitxonline: from order directly
-            case when combined_orders.platform = 'mitxpro' then cast(mitxpro_order_product_lookup.product_id as varchar) end,
-            cast(combined_orders.product_id as varchar)
-        ) = cast(dim_product.source_product_id as varchar)
+        on cast(combined_orders.product_id as varchar) = cast(dim_product.source_product_id as varchar)
         and combined_orders.platform = dim_product.platform
 )
 
@@ -152,9 +151,11 @@ with mitxonline_orders as (
     select
         {{ dbt_utils.generate_surrogate_key([
             'cast(order_id as varchar)',
+            'line_id',
             'platform'
         ]) }} as order_key
         , order_id
+        , line_id
         , order_date_key
         , order_updated_date_key
         , user_fk
@@ -163,6 +164,7 @@ with mitxonline_orders as (
         , product_fk
         , platform
         , order_state
+        , line_price
         , order_total_price_paid
         , order_reference_number
         , order_updated_on

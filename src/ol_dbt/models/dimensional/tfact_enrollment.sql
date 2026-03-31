@@ -187,8 +187,10 @@ with mitxonline_enrollments as (
         on (
             -- mitxonline/mitxpro: join on integer source_id
             (combined_enrollments.platform in ('mitxonline', 'mitxpro') and combined_enrollments.courserun_id = dim_course_run.source_id and combined_enrollments.platform = dim_course_run.platform)
-            -- edxorg, residential: join on readable_id
-            or (combined_enrollments.platform in ('edxorg', 'residential') and combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id)
+            -- edxorg, residential: join on readable_id + platform to prevent fan-out
+            -- (dim_course_run grain is (platform, courserun_readable_id); same readable_id
+            -- can exist across platforms)
+            or (combined_enrollments.platform in ('edxorg', 'residential') and combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id and combined_enrollments.platform = dim_course_run.platform)
         )
     left join dim_program
         on combined_enrollments.program_id = dim_program.source_id

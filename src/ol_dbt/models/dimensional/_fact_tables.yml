@@ -59,21 +59,29 @@ models:
 
 - name: tfact_order
   description: >
-    Transaction fact table for e-commerce orders across platforms.
-    Grain: One row per order.
+    Transaction fact table for e-commerce order lines across platforms.
+    Grain: one row per (order_id, line_id, platform) — one line per product ordered.
+    order_total_price_paid is a repeated order-header value and is NOT additive across
+    lines of the same order. Use line_price for revenue aggregations.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
       - order_id
+      - line_id
       - platform
   columns:
   - name: order_key
-    description: Surrogate key for order
+    description: >
+      Surrogate primary key. Generated from (order_id, line_id, platform).
     tests:
     - unique
     - not_null
   - name: order_id
     description: Source system order ID
+    tests:
+    - not_null
+  - name: line_id
+    description: Source system order line ID (one line per product in an order)
     tests:
     - not_null
   - name: order_date_key
@@ -90,9 +98,12 @@ models:
         to: ref('dim_date')
         field: date_key
   - name: user_fk
-    description: Foreign key to dim_user (Phase 3+)
+    description: Foreign key to dim_user
   - name: platform_fk
-    description: Foreign key to dim_platform (Phase 3+)
+    description: Foreign key to dim_platform
+  - name: product_fk
+    description: Foreign key to dim_product (current version of the product on this
+      line)
   - name: platform
     description: Platform identifier string
     tests:
@@ -101,8 +112,13 @@ models:
     description: Order state (fulfilled, cancelled, etc.)
     tests:
     - not_null
+  - name: line_price
+    description: Price of the product on this line (additive revenue measure)
   - name: order_total_price_paid
-    description: Total amount paid for order (additive measure)
+    description: >
+      Total amount paid for the entire order. Repeated across all lines of the same
+      order —
+      NOT additive across lines. Use line_price for revenue aggregations.
   - name: order_reference_number
     description: Order reference/confirmation number
   - name: order_updated_on
