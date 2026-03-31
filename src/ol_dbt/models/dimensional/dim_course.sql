@@ -35,6 +35,9 @@ with mitxonline_courses as (
 )
 
 , edxorg_courses as (
+    -- edxorg has no native course table — courses are represented only at the courserun level.
+    -- One row per course_readable_id, using the most-recent course run to supply course-level
+    -- attributes (title, course_number, is_live). source_id is always null for edxorg courses.
     select
         course_readable_id
         , cast(null as integer) as source_id

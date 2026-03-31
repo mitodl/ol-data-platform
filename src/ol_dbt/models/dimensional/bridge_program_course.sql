@@ -33,7 +33,11 @@ with micromasters_course_keys as (
 )
 
 , micromasters_requirements as (
-    select
+    -- int__micromasters__program_requirements is at (program_id, course_id, electiveset_id)
+    -- grain. A course can satisfy multiple elective sets within the same program, producing
+    -- duplicate (program_id, course_readable_id) pairs. Since the bridge only models
+    -- program→course membership (not which elective set), deduplicate here.
+    select distinct
         r.program_id
         , cast(null as integer) as course_id  -- MicroMasters uses readable_id path
         , ck.course_readable_id

@@ -20,6 +20,10 @@ with enrollments as (
     select * from {{ ref('int__mitxonline__program_requirements') }}
 )
 
+-- NOTE: int__mitxonline__ecommerce_order is at (order_id, line_id) grain, not order grain.
+-- A user may have ordered the same course run across multiple orders (e.g., repurchase after
+-- refund). The SELECT DISTINCT in dedp_enrollments_verified_in_mitxonline (below) is required
+-- to collapse back to (user_id, courserun_id) grain and MUST be preserved if that CTE changes.
 , mitxonline_orders as (
     select * from {{ ref('int__mitxonline__ecommerce_order') }}
 )

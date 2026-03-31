@@ -7,6 +7,11 @@ models:
     Master course catalog dimension (SCD Type 2) representing abstract course concepts
     across all platforms. One course may have multiple runs (see dim_course_run).
     Tracks historical changes to course metadata.
+    Note: edxorg has no native course-level table. edxorg courses are derived from
+    courserun records, with one row per course_readable_id using the most-recent course
+    run to supply attributes (title, course_number, is_live). source_id is always
+    null
+    for edxorg courses.
   meta:
     owner: data_team
   columns:
@@ -24,7 +29,10 @@ models:
     tests:
     - not_null
   - name: source_id
-    description: Integer source system ID for this course (null for edxorg courses)
+    description: >
+      Integer source system ID for this course. Null for edxorg courses — edxorg
+      exposes no native integer course ID; course records are synthesized from the
+      most-recent course run sharing the same course_readable_id.
   - name: course_number
     description: Course number (e.g., 6.00.1x)
   - name: course_title

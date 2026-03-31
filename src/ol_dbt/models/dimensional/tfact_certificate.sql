@@ -179,4 +179,11 @@ with mitxonline_certificates as (
     {% endif %}
 )
 
+-- Defensive dedup: the UNION ALL across 4 platform CTEs has no upstream uniqueness guarantee.
+-- If any intermediate develops grain drift, this guard prevents duplicate certificate_key values
+-- from silently entering the fact table and corrupting incremental MERGE operations.
 select * from final
+qualify row_number() over (
+    partition by certificate_key
+    order by certificate_created_on desc nulls last
+) = 1
