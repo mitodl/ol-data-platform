@@ -5,15 +5,17 @@ models:
 - name: tfact_enrollment
   description: >
     Transaction fact table capturing enrollment events across all platforms.
-    Grain: One row per enrollment (course run or program).
+    Grain: One row per enrollment (course run or program), discriminated by enrollment_type.
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
       - enrollment_id
       - platform
+      - enrollment_type
   columns:
   - name: enrollment_key
-    description: Surrogate key for enrollment
+    description: >
+      Surrogate primary key. Generated from (enrollment_id, platform, enrollment_type).
     tests:
     - unique
     - not_null
@@ -21,6 +23,13 @@ models:
     description: Source system enrollment ID
     tests:
     - not_null
+  - name: enrollment_type
+    description: Discriminator — 'course' for course run enrollments, 'program' for
+      program enrollments
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['course', 'program']
   - name: enrollment_date_key
     description: Foreign key to dim_date for enrollment creation date
     tests:
@@ -29,7 +38,12 @@ models:
         to: ref('dim_date')
         field: date_key
   - name: user_fk
-    description: Foreign key to dim_user (Phase 3+)
+    description: Foreign key to dim_user
+    tests:
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
   - name: courserun_fk
     description: Foreign key to dim_course_run (null for program enrollments)
     tests:
@@ -43,7 +57,12 @@ models:
         to: ref('dim_program')
         field: program_pk
   - name: platform_fk
-    description: Foreign key to dim_platform (Phase 3+)
+    description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: platform
     description: Platform identifier string
     tests:
@@ -99,11 +118,26 @@ models:
         field: date_key
   - name: user_fk
     description: Foreign key to dim_user
+    tests:
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
   - name: platform_fk
     description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: product_fk
     description: Foreign key to dim_product (current version of the product on this
       line)
+    tests:
+    - relationships:
+        to: ref('dim_product')
+        field: product_pk
+        where: "product_fk is not null"
   - name: platform
     description: Platform identifier string
     tests:
@@ -153,9 +187,16 @@ models:
         to: ref('dim_date')
         field: date_key
   - name: user_fk
-    description: Foreign key to dim_user (Phase 3+)
+    description: >
+      Foreign key to dim_user. Always null — payment gateway callbacks do not carry
+      user identity. Resolvable via order_id join to tfact_order (tracked as D1).
   - name: platform_fk
-    description: Foreign key to dim_platform (Phase 3+)
+    description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: platform
     description: Platform identifier string
     tests:
@@ -202,7 +243,12 @@ models:
         to: ref('dim_date')
         field: date_key
   - name: user_fk
-    description: Foreign key to dim_user (Phase 3+)
+    description: Foreign key to dim_user
+    tests:
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
   - name: courserun_fk
     description: Foreign key to dim_course_run
     tests:
@@ -210,7 +256,12 @@ models:
         to: ref('dim_course_run')
         field: courserun_pk
   - name: platform_fk
-    description: Foreign key to dim_platform (Phase 3+)
+    description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
   - name: platform
     description: Platform identifier string
     tests:

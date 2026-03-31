@@ -209,6 +209,7 @@ with mitxonline_enrollments as (
             "case when program_id is not null then 'program' else 'course' end"
         ]) }} as enrollment_key
         , enrollment_id
+        , case when program_id is not null then 'program' else 'course' end as enrollment_type
         , enrollment_date_key
         , user_fk
         , courserun_fk

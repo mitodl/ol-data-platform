@@ -7,6 +7,11 @@ models:
     Master program catalog dimension. Programs do not have distinct runs like courses.
     Represents program offerings across MIT Open Learning platforms including
     MicroMasters, Professional Certificates, and other program types.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - source_id
+      - platform_code
   columns:
   - name: program_pk
     description: Surrogate key primary key
