@@ -45,10 +45,27 @@ with mitxonline_orders as (
     from {{ ref('int__mitxpro__ecommerce_order') }}
 )
 
+, micromasters_orders as (
+    select
+        order_id
+        , user_id  -- MicroMasters integer user ID (matches dim_user.micromasters_user_id)
+        , order_state
+        , order_total_price_paid
+        , cast(null as varchar) as order_reference_number
+        , order_created_on
+        , order_created_on as order_updated_on  -- micromasters doesn't have updated_on
+        , 'micromasters' as platform
+        , cast(null as bigint) as product_id
+        , null as discount_type_code
+    from {{ ref('int__micromasters__orders') }}
+)
+
 , combined_orders as (
     select * from mitxonline_orders
     union all
     select * from mitxpro_orders
+    union all
+    select * from micromasters_orders
 )
 
 -- Join to dimensions for FKs
@@ -57,8 +74,16 @@ with mitxonline_orders as (
         user_pk
         , mitxonline_application_user_id
         , mitxpro_application_user_id
+        , micromasters_user_id
     from {{ ref('dim_user') }}
     where user_pk is not null
+)
+
+, mitxpro_order_product_lookup as (
+    select
+        order_id
+        , product_id
+    from {{ ref('int__mitxpro__ecommerce_line') }}
 )
 
 , dim_discount_type as (
@@ -86,6 +111,9 @@ with mitxonline_orders as (
             end,
             case when combined_orders.platform = 'mitxpro'
                 then ul_mitxpro.user_pk
+            end,
+            case when combined_orders.platform = 'micromasters'
+                then ul_micromasters.user_pk
             end
         ) as user_fk
         , dim_platform_lookup.platform_pk as platform_fk
@@ -100,11 +128,21 @@ with mitxonline_orders as (
     left join user_lookup as ul_mitxpro
         on combined_orders.platform = 'mitxpro'
         and combined_orders.user_id = ul_mitxpro.mitxpro_application_user_id
+    left join user_lookup as ul_micromasters
+        on combined_orders.platform = 'micromasters'
+        and combined_orders.user_id = ul_micromasters.micromasters_user_id
     left join dim_platform_lookup
         on combined_orders.platform = dim_platform_lookup.platform_readable_id
     left join dim_discount_type on combined_orders.discount_type_code = dim_discount_type.discount_type_code
+    left join mitxpro_order_product_lookup
+        on combined_orders.platform = 'mitxpro'
+        and combined_orders.order_id = mitxpro_order_product_lookup.order_id
     left join dim_product
-        on cast(combined_orders.product_id as varchar) = cast(dim_product.source_product_id as varchar)
+        on coalesce(
+            -- mitxpro: product_id comes from line lookup; mitxonline: from order directly
+            case when combined_orders.platform = 'mitxpro' then cast(mitxpro_order_product_lookup.product_id as varchar) end,
+            cast(combined_orders.product_id as varchar)
+        ) = cast(dim_product.source_product_id as varchar)
         and combined_orders.platform = dim_product.platform
 )
 

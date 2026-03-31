@@ -17,6 +17,7 @@ with mitxonline_certificates as (
         , courseruncertificate_created_on as certificate_created_on
         , 'verified' as certificate_type_code
         , 'mitxonline' as platform
+        , cast(null as varchar) as user_email  -- micromasters join key only
     from {{ ref('int__mitxonline__courserun_certificates') }}
 )
 
@@ -31,6 +32,7 @@ with mitxonline_certificates as (
         , courseruncertificate_created_on as certificate_created_on
         , 'professional' as certificate_type_code
         , 'mitxpro' as platform
+        , cast(null as varchar) as user_email  -- micromasters join key only
     from {{ ref('int__mitxpro__courserun_certificates') }}
 )
 
@@ -46,7 +48,24 @@ with mitxonline_certificates as (
         , courseruncertificate_created_on as certificate_created_on
         , courseruncertificate_mode as certificate_type_code
         , 'edxorg' as platform
+        , cast(null as varchar) as user_email  -- micromasters join key only
     from {{ ref('int__edxorg__mitx_courserun_certificates') }}
+)
+
+, micromasters_certificates as (
+    select
+        {{ dbt_utils.generate_surrogate_key(['user_email', 'courserun_readable_id']) }}
+            as certificate_id
+        , cast(null as integer) as user_id  -- no integer user ID; resolved via user_email
+        , cast(null as integer) as courserun_id
+        , courserun_readable_id
+        , courseruncertificate_uuid as certificate_uuid
+        , false as certificate_is_revoked
+        , courseruncertificate_created_on as certificate_created_on
+        , 'honor' as certificate_type_code  -- MicroMasters edxorg certs are honor mode
+        , 'micromasters' as platform
+        , user_email
+    from {{ ref('int__micromasters__course_certificates') }}
 )
 
 , combined_certificates as (
@@ -55,11 +74,14 @@ with mitxonline_certificates as (
     select * from mitxpro_certificates
     union all
     select * from edxorg_certificates
+    union all
+    select * from micromasters_certificates
 )
 
 , user_lookup as (
     select
         user_pk
+        , email
         , mitxonline_application_user_id
         , mitxpro_application_user_id
         , edxorg_openedx_user_id
@@ -96,6 +118,9 @@ with mitxonline_certificates as (
             end,
             case when combined_certificates.platform = 'edxorg'
                 then ul_edxorg.user_pk
+            end,
+            case when combined_certificates.platform = 'micromasters'
+                then ul_micromasters.user_pk
             end
         ) as user_fk
         , dim_course_run.courserun_pk as courserun_fk
@@ -112,12 +137,15 @@ with mitxonline_certificates as (
     left join user_lookup as ul_edxorg
         on combined_certificates.platform = 'edxorg'
         and combined_certificates.user_id = ul_edxorg.edxorg_openedx_user_id
+    left join user_lookup as ul_micromasters
+        on combined_certificates.platform = 'micromasters'
+        and combined_certificates.user_email = ul_micromasters.email
     left join dim_course_run
-        on combined_certificates.platform = dim_course_run.platform
-        and (
-            (combined_certificates.platform != 'edxorg'
-                and combined_certificates.courserun_id = dim_course_run.source_id)
-            or (combined_certificates.platform = 'edxorg'
+        on (
+            (combined_certificates.platform in ('mitxonline', 'mitxpro')
+                and combined_certificates.courserun_id = dim_course_run.source_id
+                and combined_certificates.platform = dim_course_run.platform)
+            or (combined_certificates.platform in ('edxorg', 'micromasters')
                 and combined_certificates.courserun_readable_id = dim_course_run.courserun_readable_id)
         )
     left join dim_platform_lookup

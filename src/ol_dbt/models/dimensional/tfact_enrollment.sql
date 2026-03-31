@@ -77,12 +77,30 @@ with mitxonline_enrollments as (
     from {{ ref('int__mitxonline__programenrollments') }}
 )
 
+, residential_enrollments as (
+    select
+        cast(courserunenrollment_id as varchar) as enrollment_id
+        , user_id
+        , null as courserun_id
+        , courserun_readable_id
+        , null as program_id
+        , courserunenrollment_created_on as enrollment_created_on
+        , courserunenrollment_is_active as enrollment_is_active
+        , courserunenrollment_enrollment_mode as enrollment_mode
+        , null as enrollment_status
+        , 'residential' as platform
+        , 'residential' as platform_code
+    from {{ ref('int__mitxresidential__courserun_enrollments') }}
+)
+
 , combined_enrollments as (
     select * from mitxonline_enrollments
     union all
     select * from mitxpro_enrollments
     union all
     select * from edxorg_enrollments
+    union all
+    select * from residential_enrollments
     union all
     select * from program_enrollments
 )
@@ -96,6 +114,8 @@ with mitxonline_enrollments as (
         , mitxonline_application_user_id
         , mitxpro_application_user_id
         , edxorg_openedx_user_id
+        , micromasters_user_id
+        , residential_openedx_user_id
     from {{ ref('dim_user') }}
     where user_pk is not null
 )
@@ -130,6 +150,9 @@ with mitxonline_enrollments as (
             end,
             case when combined_enrollments.platform = 'edxorg'
                 then ul_edxorg.user_pk
+            end,
+            case when combined_enrollments.platform = 'residential'
+                then ul_residential.user_pk
             end
         ) as user_fk
         , dim_course_run.courserun_pk as courserun_fk
@@ -146,13 +169,15 @@ with mitxonline_enrollments as (
     left join user_lookup as ul_edxorg
         on combined_enrollments.platform = 'edxorg'
         and combined_enrollments.user_id = ul_edxorg.edxorg_openedx_user_id
+    left join user_lookup as ul_residential
+        on combined_enrollments.platform = 'residential'
+        and combined_enrollments.user_id = ul_residential.residential_openedx_user_id
     left join dim_course_run
-        on combined_enrollments.platform = dim_course_run.platform
-        and (
+        on (
             -- mitxonline/mitxpro: join on integer source_id
-            (combined_enrollments.platform != 'edxorg' and combined_enrollments.courserun_id = dim_course_run.source_id)
-            -- edxorg: has no integer source_id; join on readable_id instead
-            or (combined_enrollments.platform = 'edxorg' and combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id)
+            (combined_enrollments.platform in ('mitxonline', 'mitxpro') and combined_enrollments.courserun_id = dim_course_run.source_id and combined_enrollments.platform = dim_course_run.platform)
+            -- edxorg, residential: join on readable_id
+            or (combined_enrollments.platform in ('edxorg', 'residential') and combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id)
         )
     left join dim_program
         on combined_enrollments.program_id = dim_program.source_id
