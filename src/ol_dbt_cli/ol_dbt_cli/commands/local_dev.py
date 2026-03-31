@@ -176,45 +176,43 @@ def _register_tables_in_duckdb(
         if verbose:
             print(f"\nConnecting to DuckDB: {duckdb_path}")
         duckdb_path.parent.mkdir(parents=True, exist_ok=True)
-        setup_conn = duckdb.connect(str(duckdb_path))
-
-        if verbose:
-            print("Loading DuckDB extensions...")
-        for ext in ["httpfs", "aws", "iceberg"]:
-            setup_conn.execute(f"INSTALL {ext}")
-            setup_conn.execute(f"LOAD {ext}")
-        if verbose:
-            print("  ✓ Extensions loaded")
-
-        setup_conn.execute("CALL load_aws_credentials()")
-        if verbose:
-            print("  ✓ AWS credentials loaded")
-
-        setup_conn.execute("""
-            CREATE TABLE IF NOT EXISTS _glue_source_registry (
-                view_name VARCHAR PRIMARY KEY,
-                glue_database VARCHAR,
-                glue_table VARCHAR,
-                metadata_location VARCHAR,
-                registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
 
         existing_registrations: dict[str, str] = {}
-        if not force:
-            try:
-                rows = setup_conn.execute(
-                    "SELECT view_name, metadata_location FROM _glue_source_registry WHERE glue_database = ?",
-                    (database_name,),
-                ).fetchall()
-                existing_registrations = {row[0]: row[1] for row in rows}
-            except Exception:  # noqa: BLE001
-                existing_registrations = {}
+        with duckdb.connect(str(duckdb_path)) as setup_conn:
+            if verbose:
+                print("Loading DuckDB extensions...")
+            for ext in ["httpfs", "aws", "iceberg"]:
+                setup_conn.execute(f"INSTALL {ext}")
+                setup_conn.execute(f"LOAD {ext}")
+            if verbose:
+                print("  ✓ Extensions loaded")
 
-        # Close setup connection — worker threads open their own per-connection.
+            setup_conn.execute("CALL load_aws_credentials()")
+            if verbose:
+                print("  ✓ AWS credentials loaded")
+
+            setup_conn.execute("""
+                CREATE TABLE IF NOT EXISTS _glue_source_registry (
+                    view_name VARCHAR PRIMARY KEY,
+                    glue_database VARCHAR,
+                    glue_table VARCHAR,
+                    metadata_location VARCHAR,
+                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            if not force:
+                try:
+                    rows = setup_conn.execute(
+                        "SELECT view_name, metadata_location FROM _glue_source_registry WHERE glue_database = ?",
+                        (database_name,),
+                    ).fetchall()
+                    existing_registrations = {row[0]: row[1] for row in rows}
+                except Exception:  # noqa: BLE001
+                    existing_registrations = {}
+        # setup_conn is now closed — worker threads open their own per-connection.
         # DuckDB persists extensions and the registry table to the file, so workers
         # only need to LOAD (not INSTALL) extensions in their own connections.
-        setup_conn.close()
     else:
         # Dry-run: read existing registrations from the DB (read-only) if it exists,
         # so skip/update reporting accurately reflects what would happen in a real run.
