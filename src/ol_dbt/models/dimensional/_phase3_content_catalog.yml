@@ -4,10 +4,11 @@ version: 2
 models:
 - name: dim_instructor
   description: Instructor dimension containing faculty and course instructors from
-    all platforms
+    all platforms. Grain is (instructor_name, primary_platform) — same name on different
+    platforms are kept as separate rows.
   columns:
   - name: instructor_pk
-    description: Primary key - surrogate key generated from instructor_name
+    description: Primary key - surrogate key generated from (instructor_name, primary_platform)
     tests:
     - unique
     - not_null
@@ -22,13 +23,15 @@ models:
   - name: instructor_bio_long
     description: Full biographical description in HTML format
   - name: primary_platform
-    description: Platform where this instructor was first recorded
+    description: Platform where this instructor record originates
 
 - name: dim_topic
-  description: Topic taxonomy dimension with hierarchical structure
+  description: Topic taxonomy dimension with hierarchical structure. Grain is (topic_name,
+    primary_platform) — same topic name from different platforms are kept as separate
+    rows with platform-scoped parent-child relationships.
   columns:
   - name: topic_pk
-    description: Primary key - surrogate key generated from topic_name
+    description: Primary key - surrogate key generated from (topic_name, primary_platform)
     tests:
     - unique
     - not_null
@@ -41,15 +44,16 @@ models:
   - name: source_parent_topic_id
     description: Parent topic ID from source system (for hierarchy)
   - name: parent_topic_fk
-    description: Self-referencing FK to parent topic (for hierarchical navigation)
+    description: Self-referencing FK to parent topic within the same platform
   - name: primary_platform
-    description: Platform where this topic was first recorded
+    description: Platform where this topic record originates
 
 - name: dim_department
-  description: MIT department dimension
+  description: MIT department dimension. Grain is (department_name, primary_platform)
+    — same department name from different platforms are kept as separate rows.
   columns:
   - name: department_pk
-    description: Primary key - surrogate key generated from department_name
+    description: Primary key - surrogate key generated from (department_name, primary_platform)
     tests:
     - unique
     - not_null
@@ -60,7 +64,7 @@ models:
   - name: department_number
     description: MIT department number (e.g., "6" for EECS, "18" for Math)
   - name: primary_platform
-    description: Platform where this department was first recorded
+    description: Platform where this department record originates
 
 - name: bridge_course_instructor
   description: Many-to-many relationship between courses and instructors

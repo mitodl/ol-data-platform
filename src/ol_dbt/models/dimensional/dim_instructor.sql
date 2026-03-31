@@ -41,21 +41,22 @@ with mitxonline_instructors as (
     select * from ocw_instructors
 )
 
--- Deduplicate by instructor_name (same person can teach on multiple platforms)
+-- Keep per-platform rows — same name on different platforms are distinct instructors.
+-- Use (instructor_name, platform) as the dedup grain.
 , deduped_instructors as (
     select
         instructor_name
         , max(instructor_title) as instructor_title
         , max(instructor_bio_short) as instructor_bio_short
         , max(instructor_bio_long) as instructor_bio_long
-        , min(platform) as primary_platform
+        , platform as primary_platform
     from combined_instructors
     where instructor_name is not null
-    group by instructor_name
+    group by instructor_name, platform
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['instructor_name']) }} as instructor_pk
+    {{ dbt_utils.generate_surrogate_key(['instructor_name', 'primary_platform']) }} as instructor_pk
     , instructor_name
     , instructor_title
     , instructor_bio_short

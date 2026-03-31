@@ -33,15 +33,18 @@ with mitxonline_course_departments as (
         dim_course.course_pk as course_fk
         , dim_department.department_pk as department_fk
     from combined_course_departments
-    inner join dim_course
+    left join dim_course
         on combined_course_departments.course_id = dim_course.source_id
         and combined_course_departments.platform = dim_course.primary_platform
-    inner join dim_department
+    left join dim_department
         on combined_course_departments.department_name = dim_department.department_name
+        and combined_course_departments.platform = dim_department.primary_platform
 )
 
--- Deduplicate in case same department-course pair exists multiple times
+-- Include only fully-resolved rows; unresolved FKs indicate dim coverage gaps
 select distinct
     course_fk
     , department_fk
 from bridge
+where course_fk is not null
+    and department_fk is not null

@@ -27,18 +27,18 @@ with ocw_departments as (
     select * from mitxonline_departments
 )
 
--- Deduplicate by department_name
+-- Keep per-platform rows — same department name from different platforms are separate records.
 , deduped_departments as (
     select
         department_name
         , max(department_number) as department_number  -- OCW typically has this
-        , min(platform) as primary_platform
+        , platform as primary_platform
     from combined_departments
-    group by department_name
+    group by department_name, platform
 )
 
 select
-    {{ dbt_utils.generate_surrogate_key(['department_name']) }} as department_pk
+    {{ dbt_utils.generate_surrogate_key(['department_name', 'primary_platform']) }} as department_pk
     , department_name
     , department_number
     , primary_platform

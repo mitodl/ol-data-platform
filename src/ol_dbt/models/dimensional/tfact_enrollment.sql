@@ -131,6 +131,18 @@ with mitxonline_enrollments as (
     from {{ ref('dim_program') }}
 )
 
+-- MicroMasters program lookup: maps courserun_readable_id to micromasters program_pk.
+-- Used to enrich edxorg/mitxonline enrollment rows that belong to MM programs.
+, micromasters_program_lookup as (
+    select distinct
+        courserun_readable_id
+        , dim_program.program_pk as micromasters_program_pk
+    from {{ ref('int__micromasters__course_enrollments') }} as mm_enroll
+    inner join dim_program
+        on cast(mm_enroll.micromasters_program_id as varchar) = cast(dim_program.source_id as varchar)
+        and dim_program.platform_code = 'micromasters'
+)
+
 -- dim_platform not in Phase 1-2
 
 , dim_platform_lookup as (
@@ -156,7 +168,7 @@ with mitxonline_enrollments as (
             end
         ) as user_fk
         , dim_course_run.courserun_pk as courserun_fk
-        , dim_program.program_pk as program_fk
+        , coalesce(dim_program.program_pk, micromasters_program_lookup.micromasters_program_pk) as program_fk
         , dim_platform_lookup.platform_pk as platform_fk
         , {{ iso8601_to_date_key('enrollment_created_on') }} as enrollment_date_key
     from combined_enrollments
@@ -182,6 +194,8 @@ with mitxonline_enrollments as (
     left join dim_program
         on combined_enrollments.program_id = dim_program.source_id
         and combined_enrollments.platform_code = dim_program.platform_code
+    left join micromasters_program_lookup
+        on combined_enrollments.courserun_readable_id = micromasters_program_lookup.courserun_readable_id
     left join dim_platform_lookup
         on combined_enrollments.platform = dim_platform_lookup.platform_readable_id
 )

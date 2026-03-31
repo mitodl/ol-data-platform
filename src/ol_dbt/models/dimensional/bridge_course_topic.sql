@@ -43,15 +43,18 @@ with mitxonline_course_topics as (
         dim_course.course_pk as course_fk
         , dim_topic.topic_pk as topic_fk
     from combined_course_topics
-    inner join dim_course
+    left join dim_course
         on combined_course_topics.course_id = dim_course.source_id
         and combined_course_topics.platform = dim_course.primary_platform
-    inner join dim_topic
+    left join dim_topic
         on combined_course_topics.topic_name = dim_topic.topic_name
+        and combined_course_topics.platform = dim_topic.primary_platform
 )
 
--- Deduplicate in case same topic-course pair exists multiple times
+-- Include only fully-resolved rows; unresolved FKs indicate dim coverage gaps
 select distinct
     course_fk
     , topic_fk
 from bridge
+where course_fk is not null
+    and topic_fk is not null

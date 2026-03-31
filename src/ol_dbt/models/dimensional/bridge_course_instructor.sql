@@ -43,15 +43,18 @@ with mitxonline_course_instructors as (
         dim_course.course_pk as course_fk
         , dim_instructor.instructor_pk as instructor_fk
     from combined_course_instructors
-    inner join dim_course
+    left join dim_course
         on combined_course_instructors.course_id = dim_course.source_id
         and combined_course_instructors.platform = dim_course.primary_platform
-    inner join dim_instructor
+    left join dim_instructor
         on combined_course_instructors.instructor_name = dim_instructor.instructor_name
+        and combined_course_instructors.platform = dim_instructor.primary_platform
 )
 
--- Deduplicate in case same instructor-course pair exists multiple times
+-- Include only fully-resolved rows; unresolved FKs indicate dim coverage gaps
 select distinct
     course_fk
     , instructor_fk
 from bridge
+where course_fk is not null
+    and instructor_fk is not null

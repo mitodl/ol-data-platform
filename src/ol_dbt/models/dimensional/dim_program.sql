@@ -108,7 +108,10 @@ with
             {{ iso8601_to_date_key('first_published_date') }} as published_date_key
         from combined
         left join dim_platform_lookup
-            on combined.platform_code = dim_platform_lookup.platform_readable_id
+            -- MicroMasters programs run on edX.org; map to that platform FK
+            on case when combined.platform_code = 'micromasters' then 'edxorg'
+               else combined.platform_code
+            end = dim_platform_lookup.platform_readable_id
     )
 
 select {{ dbt_utils.generate_surrogate_key(["source_id", "platform_code"]) }} as program_pk, *

@@ -38,7 +38,9 @@ select
     , b2b_mappings.b2b_contract_start_date
     , b2b_mappings.b2b_contract_end_date
 from b2b_mappings
-inner join dim_organization as org
+left join dim_organization as org
     on b2b_mappings.organization_key = org.organization_key
-inner join dim_course_run as cr
+left join dim_course_run as cr
     on b2b_mappings.courserun_readable_id = cr.courserun_readable_id
+where org.organization_pk is not null
+    and cr.courserun_pk is not null

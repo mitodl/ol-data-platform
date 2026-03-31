@@ -11,3 +11,7 @@ union all
 select 4, 'audit', 'Audit Certificate', false
 union all
 select 5, 'micromasters', 'MicroMasters Credential', true
+union all
+select 6, 'honor', 'Honor Certificate', false
+union all
+select 7, 'credit', 'Credit Certificate', true

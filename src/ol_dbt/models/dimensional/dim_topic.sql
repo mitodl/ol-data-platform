@@ -79,27 +79,28 @@ with mitxonline_topics_raw as (
     select * from ocw_topics
 )
 
--- Deduplicate by topic_name; join on parent_topic_name (name-based, cross-platform safe)
+-- Keep per-platform rows — same topic name from different platforms are tracked separately.
+-- Parent-child resolution is done within-platform before dedup.
 , deduped_topics as (
     select
         topic_name
         , min(parent_topic_name) as parent_topic_name
-        , min(platform) as primary_platform
+        , platform as primary_platform
     from combined_topics
     where topic_name is not null
-    group by topic_name
+    group by topic_name, platform
 )
 
 , deduped_with_pk as (
     select
-        {{ dbt_utils.generate_surrogate_key(['topic_name']) }} as topic_pk
+        {{ dbt_utils.generate_surrogate_key(['topic_name', 'primary_platform']) }} as topic_pk
         , topic_name
         , parent_topic_name
         , primary_platform
     from deduped_topics
 )
 
--- Resolve parent_topic_fk via self-join on topic_name (stable across platforms)
+-- Resolve parent_topic_fk within the same platform
 , with_parent_fk as (
     select
         child.topic_pk
@@ -110,6 +111,7 @@ with mitxonline_topics_raw as (
     from deduped_with_pk as child
     left join deduped_with_pk as parent
         on child.parent_topic_name = parent.topic_name
+        and child.primary_platform = parent.primary_platform
         and child.parent_topic_name is not null
 )
 
