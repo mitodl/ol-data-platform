@@ -117,7 +117,14 @@ with program_requirements as (
 )
 
 select
-    combined_requirements.*
+    combined_requirements.programrequirement_requirement_id
+    , combined_requirements.course_id
+    , combined_requirements.program_id
+    , combined_requirements.programrequirement_type
+    , combined_requirements.programrequirement_title
+    , combined_requirements.electiveset_required_number
+    , combined_requirements.programrequirement_parent_requirement_id
+    , combined_requirements.programrequirement_is_a_nested_requirement
     , coalesce(core_courses_count.program_num_core_courses, 0)
     + coalesce(elective_courses_count.program_num_elective_courses, 0) as program_num_required_courses
 from combined_requirements

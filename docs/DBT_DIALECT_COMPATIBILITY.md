@@ -83,7 +83,7 @@ Build only the models you're actively working on locally, fallback to Glue for e
 
 ```bash
 # Register all production Glue tables as views
-python bin/dbt-local-dev.py register
+ol-dbt local register
 
 # Build only your target model and immediate dependencies
 dbt run --target dev_local --select +your_model_name

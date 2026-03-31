@@ -199,5 +199,433 @@ models:
   - name: courserun_title
     description: str, title of the course run
   - name: email_opted_in
-    description: int, if this field is 0 then we've recieved an email optout otherwise
+    description: int, if this field is 0 then we've received an email optout otherwise
       it will be 1
+
+- name: irx__mitxonline__openedx__mysql__assessment_assessment
+  description: Peer assessments submitted for open response assessment submissions
+    in MITx Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: scorer_id
+    description: string, the anonymous student ID of the scorer
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: score_type
+    description: string, the type of score - peer, self, etc.
+
+- name: irx__mitxonline__openedx__mysql__assessment_assessmentfeedback
+  description: Feedback submitted by learners after completing peer assessment in
+    MITx Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: submission_uuid
+    description: string, UUID of the original submission
+  - name: feedback_text
+    description: string, free-text feedback from the learner
+
+- name: irx__mitxonline__openedx__mysql__assessment_assessmentfeedback_assessments
+  description: Junction table linking assessment feedback to assessments in MITx Online
+    OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: assessment_id
+    description: int, foreign key to assessment_assessment
+  - name: assessmentfeedback_id
+    description: int, foreign key to assessment_assessmentfeedback
+  - name: id
+    description: int, auto-incremented ID for this table
+
+- name: irx__mitxonline__openedx__mysql__assessment_assessmentfeedback_options
+  description: Junction table linking assessment feedback to selected feedback options
+    in MITx Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: assessmentfeedbackoption_id
+    description: int, foreign key to assessment_assessmentfeedbackoption
+  - name: assessmentfeedback_id
+    description: int, foreign key to assessment_assessmentfeedback
+  - name: id
+    description: int, auto-incremented ID for this table
+
+- name: irx__mitxonline__openedx__mysql__assessment_assessmentfeedbackoption
+  description: Predefined options that learners can select when giving feedback on
+    assessments in MITx Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: text
+    description: string, the text of the feedback option
+  - name: id
+    description: int, auto-incremented ID for this table
+
+- name: irx__mitxonline__openedx__mysql__assessment_assessmentpart
+  description: Individual criterion scores within a peer assessment in MITx Online
+    OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: assessment_id
+    description: int, foreign key to assessment_assessment
+  - name: option_id
+    description: int, foreign key to the criterion option selected
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: feedback
+    description: string, free-text feedback for this criterion
+
+- name: irx__mitxonline__openedx__mysql__assessment_peerworkflow
+  description: Tracks progress of a learner through the peer assessment workflow in
+    MITx Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: cancelled_at
+    description: timestamp, when the workflow was cancelled
+  - name: grading_completed_at
+    description: timestamp, when all grading was completed
+  - name: student_id
+    description: string, anonymous student ID
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+
+- name: irx__mitxonline__openedx__mysql__assessment_peerworkflowitem
+  description: Individual peer review assignments within a peer workflow in MITx Online
+    OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: started_at
+    description: timestamp, when this peer review was started
+  - name: assessment_id
+    description: int, foreign key to assessment_assessment
+  - name: author_id
+    description: string, anonymous student ID of the submission author
+  - name: id
+    description: int, auto-incremented ID for this table
+
+- name: irx__mitxonline__openedx__mysql__assessment_studenttrainingworkflow
+  description: Tracks a learner's progress through student training examples in MITx
+    Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: student_id
+    description: string, anonymous student ID of the learner
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: item_id
+    description: string, the item ID within the course
+
+- name: irx__mitxonline__openedx__mysql__assessment_studenttrainingworkflowitem
+  description: Individual training example review assignments in a student training
+    workflow in MITx Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: workflow_id
+    description: int, foreign key to assessment_studenttrainingworkflow
+  - name: order_num
+    description: int, order of this training item within the workflow
+  - name: started_at
+    description: timestamp, when this training item was started
+  - name: id
+    description: int, auto-incremented ID for this table
+
+- name: irx__mitxonline__openedx__mysql__auth_userprofile
+  description: User profile information for MITx Online OpenedX learners enrolled
+    in at least one course
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: user_id
+    description: int, foreign key to auth_user
+  - name: name
+    description: string, full name of the learner
+  - name: language
+    description: string, preferred language of the learner
+  - name: location
+    description: string, location of the learner
+  - name: meta
+    description: string, JSON metadata
+  - name: courseware
+    description: string, courseware identifier
+  - name: gender
+    description: string, gender of the learner
+  - name: mailing_address
+    description: string, mailing address
+  - name: year_of_birth
+    description: int, year of birth
+  - name: level_of_education
+    description: string, highest level of education
+  - name: goals
+    description: string, learner goals
+  - name: country
+    description: string, country of the learner
+  - name: city
+    description: string, city of the learner
+  - name: bio
+    description: string, learner biography
+  - name: profile_image_uploaded_at
+    description: timestamp, when the profile image was uploaded
+  - name: state
+    description: string, state or province
+
+- name: irx__mitxonline__openedx__mysql__certificates_generatedcertificate
+  description: Generated course certificates for MITx Online OpenedX learners, deduplicated
+    to most recent record
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: user_id
+    description: int, foreign key to auth_user
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: key
+    description: string, unique certificate key
+  - name: name
+    description: string, name on the certificate
+  - name: distinction
+    description: boolean, whether the certificate has distinction
+  - name: verify_uuid
+    description: string, UUID for certificate verification
+  - name: download_uuid
+    description: string, UUID for certificate download
+  - name: download_url
+    description: string, URL to download the certificate
+  - name: grade
+    description: string, grade achieved
+  - name: created_date
+    description: timestamp, when the certificate was created
+  - name: modified_date
+    description: timestamp, when the certificate was last modified
+  - name: mode
+    description: string, the course mode e.g. verified
+  - name: status
+    description: string, certificate status
+  - name: error_reason
+    description: string, reason for any error in certificate generation
+
+- name: irx__mitxonline__openedx__mysql__course_groups_cohortmembership
+  description: Cohort group memberships for MITx Online OpenedX learners
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: user_id
+    description: int, foreign key to auth_user
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: group_type
+    description: string, the type of user group
+  - name: name
+    description: string, name of the cohort group
+
+- name: irx__mitxonline__openedx__mysql__credit_crediteligibility
+  description: Credit eligibility records for MITx Online OpenedX learners
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: created
+    description: timestamp, when the eligibility was created
+  - name: modified
+    description: timestamp, when the eligibility was last modified
+  - name: username
+    description: string, username of the eligible learner
+  - name: deadline
+    description: timestamp, deadline to claim credit
+  - name: course_id
+    description: string, unique course key from credit_creditcourse
+
+- name: irx__mitxonline__openedx__mysql__django_comment_client_role_users
+  description: Discussion forum role assignments for MITx Online OpenedX learners
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: user_id
+    description: int, foreign key to auth_user
+  - name: name
+    description: string, name of the discussion role e.g. Moderator
+
+- name: irx__mitxonline__openedx__mysql__student_anonymoususerid
+  description: Mapping of MITx Online OpenedX learners to their anonymous user IDs
+    per course
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: anonymous_user_id
+    description: string, the anonymous user ID for this learner in this course
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: id
+    description: int, auto-incremented ID for this table
+
+- name: irx__mitxonline__openedx__mysql__student_courseaccessrole
+  description: Course staff and instructor role assignments in MITx Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: org
+    description: string, organization identifier
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: user_id
+    description: int, foreign key to auth_user
+  - name: role
+    description: string, the role name e.g. instructor, staff
+
+- name: irx__mitxonline__openedx__mysql__student_languageproficiency
+  description: Language proficiency records for MITx Online OpenedX learners enrolled
+    in at least one course
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: user_profile_id
+    description: int, foreign key to auth_userprofile
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: code
+    description: string, BCP-47 language code
+
+- name: irx__mitxonline__openedx__mysql__submissions_score
+  description: Scores for open response assessment submissions in MITx Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: points_earned
+    description: int, points earned on this submission
+  - name: reset
+    description: boolean, whether the score was reset
+  - name: submission_id
+    description: int, foreign key to submissions_submission
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: student_item_id
+    description: int, foreign key to submissions_studentitem
+
+- name: irx__mitxonline__openedx__mysql__submissions_scoresummary
+  description: Summary of highest and latest scores for student items in MITx Online
+    OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: highest_id
+    description: int, foreign key to submissions_score for the highest score
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: latest_id
+    description: int, foreign key to submissions_score for the latest score
+  - name: student_item_id
+    description: int, foreign key to submissions_studentitem
+
+- name: irx__mitxonline__openedx__mysql__submissions_studentitem
+  description: Student items representing individual assessment submissions in MITx
+    Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: student_id
+    description: string, anonymous student ID of the learner
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: item_id
+    description: string, the item ID within the course
+
+- name: irx__mitxonline__openedx__mysql__submissions_submission
+  description: Open response assessment submissions in MITx Online OpenedX, filtered
+    to enrolled students
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: team_submission_id
+    description: string, team submission UUID if this is a team submission
+  - name: submitted_at
+    description: timestamp, when the submission was submitted
+  - name: status
+    description: string, status of the submission
+  - name: id
+    description: int, auto-incremented ID for this table
+
+- name: irx__mitxonline__openedx__mysql__user_api_usercoursetag
+  description: User-specific tags within a course context in MITx Online OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: id
+    description: int, auto-incremented ID for this table
+  - name: user_id
+    description: int, foreign key to auth_user
+
+- name: irx__mitxonline__openedx__mysql__workflow_assessmentworkflow
+  description: Top-level assessment workflow state for each learner submission in
+    MITx Online OpenedX, deduplicated to most recent record
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: course_id
+    description: string, unique ID representing a single MITx Online course run
+  - name: status
+    description: string, current status of the assessment workflow
+  - name: modified
+    description: timestamp, when the workflow was last modified
+  - name: id
+    description: int, auto-incremented ID for this table
+
+- name: irx__mitxonline__openedx__mysql__workflow_assessmentworkflowstep
+  description: Individual step states within an assessment workflow in MITx Online
+    OpenedX
+  config:
+    grants:
+      select: ['mit_irx']
+  columns:
+  - name: workflow_id
+    description: int, foreign key to workflow_assessmentworkflow
+  - name: skipped
+    description: boolean, whether this step was skipped
+  - name: order_num
+    description: int, order of this step in the workflow
+  - name: assessment_completed_at
+    description: timestamp, when this step's assessment was completed

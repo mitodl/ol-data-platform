@@ -5,18 +5,7 @@ dashboard_title: Course Engagement
 description: null
 metadata:
   chart_configuration:
-    '13':
-      crossFilters:
-        chartsInScope:
-        - 53
-        - 54
-        - 56
-        - 73
-        - 118
-        - 147
-        scope: global
-      id: 13
-    '26':
+    '127':
       crossFilters:
         chartsInScope:
         - 54
@@ -26,41 +15,19 @@ metadata:
         - 118
         - 147
         scope: global
-      id: 26
-    '28':
-      crossFilters:
-        chartsInScope:
-        - 53
-        - 56
-        - 72
-        - 73
-        - 118
-        - 147
-        scope: global
-      id: 28
-    '48':
+      id: 127
+    '129':
       crossFilters:
         chartsInScope:
         - 53
         - 54
         - 56
-        - 72
-        - 73
-        - 147
-        scope: global
-      id: 48
-    '49':
-      crossFilters:
-        chartsInScope:
-        - 53
-        - 54
-        - 56
-        - 72
         - 73
         - 118
+        - 147
         scope: global
-      id: 49
-    '6':
+      id: 129
+    '157':
       crossFilters:
         chartsInScope:
         - 53
@@ -70,7 +37,40 @@ metadata:
         - 118
         - 147
         scope: global
-      id: 6
+      id: 157
+    '168':
+      crossFilters:
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 72
+        - 73
+        - 118
+        scope: global
+      id: 168
+    '180':
+      crossFilters:
+        chartsInScope:
+        - 53
+        - 56
+        - 72
+        - 73
+        - 118
+        - 147
+        scope: global
+      id: 180
+    '212':
+      crossFilters:
+        chartsInScope:
+        - 53
+        - 54
+        - 56
+        - 72
+        - 73
+        - 147
+        scope: global
+      id: 212
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
@@ -270,7 +270,7 @@ position:
     children: []
     id: CHART-O1--dVq0WF
     meta:
-      chartId: 26
+      chartId: 127
       height: 50
       sliceName: Problem Results
       uuid: f07a7065-db29-4749-a4c6-d2c75c9d55f8
@@ -285,7 +285,7 @@ position:
     children: []
     id: CHART-explore-118-1
     meta:
-      chartId: 48
+      chartId: 212
       height: 73
       sliceName: Video Engagement per Section
       uuid: 52f9966c-2de9-41fd-b29a-ccd1781696cb
@@ -300,7 +300,7 @@ position:
     children: []
     id: CHART-explore-147-1
     meta:
-      chartId: 49
+      chartId: 168
       height: 31
       sliceName: Course Run Metadata
       uuid: 23fb7405-da8f-4983-839d-b1d7fb07e733
@@ -315,7 +315,7 @@ position:
     children: []
     id: CHART-explore-72-1
     meta:
-      chartId: 13
+      chartId: 129
       height: 50
       sliceName: Content Engagement
       uuid: 984bd054-65c0-4f76-b7ee-7fb0608ccd6e
@@ -330,7 +330,7 @@ position:
     children: []
     id: CHART-explore-73-1
     meta:
-      chartId: 6
+      chartId: 157
       height: 50
       sliceName: Engagement Totals
       uuid: 24ea41c4-da94-443a-af6b-77bc7e09c303
@@ -345,7 +345,7 @@ position:
     children: []
     id: CHART-hi-amt3MFS
     meta:
-      chartId: 18
+      chartId: 220
       height: 30
       sliceName: Learners Enrolled
       uuid: c0066291-5b04-437d-b41d-3a4412aa8c82
@@ -360,7 +360,7 @@ position:
     children: []
     id: CHART-vsfvuZT3xS
     meta:
-      chartId: 28
+      chartId: 180
       height: 50
       sliceName: Latest Dashboard Activity Recorded Date
       uuid: af403a98-7ff4-407a-b1c9-5161ffc10522

@@ -1,53 +1,11 @@
-certification_details: ''
-certified_by: ''
+certification_details: null
+certified_by: null
 css: ''
 dashboard_title: Course Enrollment Activity
 description: null
 metadata:
   chart_configuration:
-    '29':
-      crossFilters:
-        chartsInScope:
-        - 30
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 29
-    '30':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 31
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 30
-    '31':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 33
-        - 34
-        - 35
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 31
-    '34':
+    '135':
       crossFilters:
         chartsInScope:
         - 29
@@ -60,36 +18,8 @@ metadata:
         - 47
         - 48
         scope: global
-      id: 34
-    '35':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 37
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 35
-    '37':
-      crossFilters:
-        chartsInScope:
-        - 29
-        - 30
-        - 31
-        - 33
-        - 34
-        - 35
-        - 40
-        - 47
-        - 48
-        scope: global
-      id: 37
-    '47':
+      id: 135
+    '141':
       crossFilters:
         chartsInScope:
         - 29
@@ -102,8 +32,36 @@ metadata:
         - 40
         - 48
         scope: global
-      id: 47
-    '48':
+      id: 141
+    '166':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 166
+    '177':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 177
+    '197':
       crossFilters:
         chartsInScope:
         - 29
@@ -116,7 +74,49 @@ metadata:
         - 40
         - 47
         scope: global
-      id: 48
+      id: 197
+    '205':
+      crossFilters:
+        chartsInScope:
+        - 30
+        - 31
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 205
+    '207':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 31
+        - 33
+        - 34
+        - 35
+        - 37
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 207
+    '217':
+      crossFilters:
+        chartsInScope:
+        - 29
+        - 30
+        - 31
+        - 33
+        - 34
+        - 35
+        - 40
+        - 47
+        - 48
+        scope: global
+      id: 217
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
@@ -138,26 +138,11 @@ metadata:
       rootPath:
       - ROOT_ID
   label_colors: {}
-  map_label_colors:
-    audit_count: '#1FA8C9'
-    certificate_count: '#454E7C'
-    enrollment_count: '#5AC189'
-    learner_count: '#1FA8C9'
-    unenrolled_count: '#FF7F44'
-    verified_count: '#666666'
+  map_label_colors: {}
   native_filter_configuration:
   - cascadeParentIds: []
-    chartsInScope:
-    - 29
-    - 30
-    - 31
-    - 33
-    - 34
-    - 35
-    - 40
-    - 47
-    - 48
     controlValues:
+      creatable: true
       defaultToFirstItem: false
       enableEmptyFilter: false
       inverseSelection: false
@@ -178,11 +163,6 @@ metadata:
       - TAB-osBZ2O8ld
       - TAB-_pOh7o03l
       - TAB-P0rdvX94a
-    tabsInScope:
-    - TAB-IrJ-x9PlMg
-    - TAB-osBZ2O8ld
-    - TAB-_pOh7o03l
-    - TAB-P0rdvX94a
     targets:
     - column:
         name: courserun_is_current
@@ -191,16 +171,8 @@ metadata:
   - cascadeParentIds:
     - NATIVE_FILTER-utHLk7LX3
     - NATIVE_FILTER-nY8Zd_tn-
-    chartsInScope:
-    - 29
-    - 30
-    - 31
-    - 33
-    - 34
-    - 35
-    - 40
-    - 47
     controlValues:
+      creatable: true
       defaultToFirstItem: false
       enableEmptyFilter: false
       inverseSelection: false
@@ -221,10 +193,6 @@ metadata:
       - TAB-osBZ2O8ld
       - TAB-_pOh7o03l
       - TAB-P0rdvX94a
-    tabsInScope:
-    - TAB-IrJ-x9PlMg
-    - TAB-osBZ2O8ld
-    - TAB-_pOh7o03l
     targets:
     - column:
         name: platform
@@ -292,10 +260,10 @@ metadata:
     type: NATIVE_FILTER
   refresh_frequency: 0
   shared_label_colors:
-  - learner_count
   - audit_count
   - certificate_count
   - enrollment_count
+  - learner_count
   - unenrolled_count
   - verified_count
   timed_refresh_immune_slices: []
@@ -304,7 +272,7 @@ position:
     children: []
     id: CHART-1YCvDd7c7w
     meta:
-      chartId: 31
+      chartId: 177
       height: 50
       sliceName: Enrollment Geography
       uuid: 118ba89d-4c33-4720-b22e-a2576ff93316
@@ -319,7 +287,7 @@ position:
     children: []
     id: CHART-7_4tzNyAvI
     meta:
-      chartId: 33
+      chartId: 144
       height: 55
       sliceName: Enrollment Activity Over Time
       uuid: 07019136-a885-4261-8960-cfca368642d7
@@ -334,7 +302,7 @@ position:
     children: []
     id: CHART-CAXu2Bxatz
     meta:
-      chartId: 48
+      chartId: 197
       height: 50
       sliceName: Learner Performance
       uuid: d747faf0-d2f8-4dde-84ca-54b60775e051
@@ -349,7 +317,7 @@ position:
     children: []
     id: CHART-FVQKiNc8fC
     meta:
-      chartId: 29
+      chartId: 205
       height: 50
       sliceName: Enrollment Demographics by Education
       uuid: aa6bdf8d-b5be-4142-a3fc-df4f0032189e
@@ -360,11 +328,21 @@ position:
     - TAB-IrJ-x9PlMg
     - ROW-Tms7xIfT2s
     type: CHART
+  CHART-G97MUWI1:
+    children: []
+    id: CHART-G97MUWI1
+    meta:
+      chartId: 180
+      height: 50
+      sliceName: Latest Dashboard Activity Recorded Date
+      uuid: af403a98-7ff4-407a-b1c9-5161ffc10522
+      width: 4
+    type: CHART
   CHART-LhKRNTk1Yy:
     children: []
     id: CHART-LhKRNTk1Yy
     meta:
-      chartId: 34
+      chartId: 135
       height: 58
       sliceName: Individual Enrollment Detail
       uuid: f8aa5d0c-f838-4236-9057-4f118d340a53
@@ -379,7 +357,7 @@ position:
     children: []
     id: CHART-QU2zng2NWM
     meta:
-      chartId: 30
+      chartId: 207
       height: 55
       sliceName: Enrollment Demographics by Gender
       uuid: e9c00f99-deb8-4a1f-99d4-d4e592b7c8db
@@ -394,7 +372,7 @@ position:
     children: []
     id: CHART-a-f7r9-KXp
     meta:
-      chartId: 40
+      chartId: 150
       height: 24
       sliceName: Record Count
       uuid: 1e441a91-5d1a-4f4f-9bf8-90fcc9d12988
@@ -409,7 +387,7 @@ position:
     children: []
     id: CHART-fpVX6Tu1bJ
     meta:
-      chartId: 35
+      chartId: 166
       height: 29
       sliceName: Course Run Metadata
       uuid: 01f0a8ee-45f0-40ef-a96e-250a40aebf10
@@ -424,7 +402,7 @@ position:
     children: []
     id: CHART-g4FRspfqRg
     meta:
-      chartId: 47
+      chartId: 141
       height: 69
       sliceName: Counts by course run
       uuid: 5670e704-3dc6-4b28-a12c-20d4faabcd46
@@ -439,7 +417,7 @@ position:
     children: []
     id: CHART-vIx6wWhMxD
     meta:
-      chartId: 37
+      chartId: 217
       height: 19
       sliceName: Latest Dashboard Activity Recorded Date
       uuid: 582d2109-e097-4acc-a39e-f19932afa98d

@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: f33af055-8200-464d-bd40-fee6194e0fd4
+dataset_uuid: f33af055-8200-464d-bd40-fee6194e0fd4  # Enrollment_Activity_Counts_Dataset
 description: null
 params:
   adhoc_filters:
@@ -45,21 +45,20 @@ params:
     optionName: metric_ti2ke7lhs38_42hl8omb7xp
     sqlExpression: null
   only_total: true
-  order_desc: true
   orientation: vertical
   rich_tooltip: true
   row_limit: 10000
+  showTooltipTotal: true
   show_empty_columns: true
   show_legend: true
   sort_series_type: sum
+  time_shift_color: true
   tooltipTimeFormat: smart_date
   truncateXAxis: true
   truncate_metric: true
   viz_type: echarts_timeseries_bar
+  xAxisLabelInterval: auto
   x_axis: user_gender
-  x_axis_sort_asc: true
-  x_axis_sort_series: name
-  x_axis_sort_series_ascending: true
   x_axis_time_format: smart_date
   x_axis_title_margin: 15
   y_axis_bounds:
