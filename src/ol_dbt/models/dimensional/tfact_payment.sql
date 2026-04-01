@@ -54,7 +54,7 @@ with mitxonline_payments as (
         order_id
         , order_purchaser_user_id as user_id
         , 'mitxpro' as platform
-    from {{ ref('int__mitxpro__ecommerce_order') }}
+    from {{ ref('stg__mitxpro__app__postgres__ecommerce_order') }}
 )
 
 -- Join to dimensions for FKs

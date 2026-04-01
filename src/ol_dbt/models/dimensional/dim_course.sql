@@ -38,19 +38,31 @@ with mitxonline_courses as (
     -- edxorg has no native course table — courses are represented only at the courserun level.
     -- One row per course_readable_id, using the most-recent course run to supply course-level
     -- attributes (title, course_number, is_live). source_id is always null for edxorg courses.
+    -- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
     select
         course_readable_id
-        , cast(null as integer) as source_id
-        , courserun_title as course_title
+        , source_id
+        , course_title
         , course_number
-        , cast(null as varchar) as course_description
-        , courserun_is_published as course_is_live
-        , 'edxorg' as platform
-    from {{ ref('int__edxorg__mitx_courseruns') }}
-    qualify row_number() over (
-        partition by course_readable_id
-        order by courserun_start_date desc nulls last
-    ) = 1
+        , course_description
+        , course_is_live
+        , platform
+    from (
+        select
+            course_readable_id
+            , cast(null as integer) as source_id
+            , courserun_title as course_title
+            , course_number
+            , cast(null as varchar) as course_description
+            , courserun_is_published as course_is_live
+            , 'edxorg' as platform
+            , row_number() over (
+                partition by course_readable_id
+                order by courserun_start_date desc nulls last
+            ) as _row_num
+        from {{ ref('int__edxorg__mitx_courseruns') }}
+    )
+    where _row_num = 1
 )
 
 , combined_courses as (

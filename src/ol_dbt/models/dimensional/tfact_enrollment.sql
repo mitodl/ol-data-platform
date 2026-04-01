@@ -236,6 +236,29 @@ with mitxonline_enrollments as (
 -- Defensive dedup: the UNION ALL across 5 platform CTEs has no upstream uniqueness guarantee.
 -- If any intermediate develops grain drift, this guard prevents duplicate enrollment_key values
 -- from silently entering the fact table and corrupting incremental MERGE operations.
+-- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
+, final_deduped as (
+    select
+        enrollment_key
+        , enrollment_id
+        , enrollment_type
+        , enrollment_date_key
+        , user_fk
+        , courserun_fk
+        , program_fk
+        , platform_fk
+        , platform
+        , enrollment_is_active
+        , enrollment_mode
+        , enrollment_status
+        , enrollment_created_on
+        , row_number() over (
+            partition by enrollment_key
+            order by enrollment_created_on desc nulls last
+        ) as _row_num
+    from final
+)
+
 select
     enrollment_key
     , enrollment_id
@@ -250,8 +273,5 @@ select
     , enrollment_mode
     , enrollment_status
     , enrollment_created_on
-from final
-qualify row_number() over (
-    partition by enrollment_key
-    order by enrollment_created_on desc nulls last
-) = 1
+from final_deduped
+where _row_num = 1

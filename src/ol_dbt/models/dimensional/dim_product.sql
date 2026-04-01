@@ -39,11 +39,24 @@ with mitxonline_products as (
     select * from mitxpro_products
 )
 
--- Join to get courserun_fk and program_fk
+-- Guard against dim_course_run SCD2 expiration gap: multiple is_current=true rows
+-- for the same (source_id, platform) can fan out product rows. Pick the latest.
 , dim_course_run as (
     select courserun_pk, source_id, platform_fk, platform
-    from {{ ref('dim_course_run') }}
-    where is_current = true
+    from (
+        select
+            courserun_pk
+            , source_id
+            , platform_fk
+            , platform
+            , row_number() over (
+                partition by source_id, platform
+                order by effective_date desc nulls last
+            ) as _row_num
+        from {{ ref('dim_course_run') }}
+        where is_current = true
+    )
+    where _row_num = 1
 )
 
 , dim_program as (

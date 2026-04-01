@@ -182,6 +182,27 @@ with mitxonline_certificates as (
 -- Defensive dedup: the UNION ALL across 4 platform CTEs has no upstream uniqueness guarantee.
 -- If any intermediate develops grain drift, this guard prevents duplicate certificate_key values
 -- from silently entering the fact table and corrupting incremental MERGE operations.
+-- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
+, final_deduped as (
+    select
+        certificate_key
+        , certificate_id
+        , certificate_issued_date_key
+        , user_fk
+        , courserun_fk
+        , platform_fk
+        , certificate_type_fk
+        , platform
+        , certificate_uuid
+        , certificate_is_revoked
+        , certificate_created_on
+        , row_number() over (
+            partition by certificate_key
+            order by certificate_created_on desc nulls last
+        ) as _row_num
+    from final
+)
+
 select
     certificate_key
     , certificate_id
@@ -194,8 +215,5 @@ select
     , certificate_uuid
     , certificate_is_revoked
     , certificate_created_on
-from final
-qualify row_number() over (
-    partition by certificate_key
-    order by certificate_created_on desc nulls last
-) = 1
+from final_deduped
+where _row_num = 1
