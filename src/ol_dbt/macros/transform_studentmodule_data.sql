@@ -25,10 +25,10 @@
 
   )
 
-  , studentmodulehistoryextended as (
+  -- Read the raw history table and extract the attempt number per row.
+  , studentmodulehistory_raw as (
     select
-      studentmodulehistoryextended_id
-      , studentmodule_id
+      studentmodule_id
       , studentmodule_state_data
       , cast(studentmodule_problem_grade as varchar) as grade
       , cast(studentmodule_problem_max_grade as varchar) as max_grade
@@ -46,10 +46,30 @@
 
   )
 
-    -- Pull out arrays from the state data
-    -- Exclude rows without an attempt number, as these are not valid problem events
-    -- Records from historyextended that join to studentmodule with fallback/default logic
-    , history_joined as (
+  -- Pre-aggregate to one row per (studentmodule_id, attempt), keeping the
+  -- earliest history entry for each attempt. The history table often contains
+  -- many state-update rows per attempt (student clicks "check" multiple times
+  -- within a single attempt), which fans out the downstream join and forces
+  -- an expensive global shuffle for the TopNRanking dedup. Collapsing here —
+  -- at the source, before any joins — eliminates that fan-out entirely and is
+  -- semantically equivalent to what the outer deduped_combined CTE would keep.
+  , studentmodulehistoryextended as (
+    select
+      studentmodule_id
+      , min_by(studentmodule_state_data, studentmodule_created_on) as studentmodule_state_data
+      , min_by(grade, studentmodule_created_on) as grade
+      , min_by(max_grade, studentmodule_created_on) as max_grade
+      , min(studentmodule_created_on) as studentmodule_created_on
+      , attempt
+    from studentmodulehistory_raw
+    where attempt is not null
+    group by studentmodule_id, attempt
+  )
+
+  -- Pull out arrays from the state data
+  -- Exclude rows without an attempt number, as these are not valid problem events
+  -- Records from historyextended that join to studentmodule with fallback/default logic
+  , history_joined as (
     select
       sm.user_id
       , sm.courserun_readable_id
@@ -77,7 +97,6 @@
       from studentmodule sm
       inner join studentmodulehistoryextended smhe
         on sm.studentmodule_id = smhe.studentmodule_id
-      where smhe.attempt is not null
   )
 
   select
