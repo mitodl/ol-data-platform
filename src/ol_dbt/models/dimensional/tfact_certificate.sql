@@ -8,7 +8,7 @@
 -- Consolidate certificates from all platforms
 with mitxonline_certificates as (
     select
-        courseruncertificate_id as certificate_id
+        cast(courseruncertificate_id as varchar) as certificate_id
         , user_id
         , courserun_id
         , cast(null as varchar) as courserun_readable_id  -- edxorg join key only
@@ -23,7 +23,7 @@ with mitxonline_certificates as (
 
 , mitxpro_certificates as (
     select
-        courseruncertificate_id as certificate_id
+        cast(courseruncertificate_id as varchar) as certificate_id
         , user_id
         , courserun_id
         , cast(null as varchar) as courserun_readable_id  -- edxorg join key only
