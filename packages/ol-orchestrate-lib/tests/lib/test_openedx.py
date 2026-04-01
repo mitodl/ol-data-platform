@@ -6,7 +6,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
-from ol_orchestrate.lib.openedx import CourseXmlBlock, process_course_xml_blocks
+from ol_orchestrate.lib.openedx import (
+    CourseStaticAssetsBundle,
+    CourseXmlBlock,
+    process_course_xml_blocks,
+)
 
 
 @pytest.fixture
@@ -91,13 +95,23 @@ def sample_course_archive():
         '<lti_v2 display_name="Custom LTI" url_name="lti_block"/>\n'
     )
 
-    # static non-XML assets
+    # static non-XML assets — in the excluded `static/` directory;
+    # these should NOT appear in the bundle (excluded by directory filter)
     static_dir = course_root / "static"
     static_dir.mkdir()
-    (static_dir / "subtitle.srt").write_text(
+    (static_dir / "logo.png").write_text("fake png data")
+
+    # non-XML content files in non-excluded directories — these SHOULD be collected
+    subtitles_dir = course_root / "subtitles"
+    subtitles_dir.mkdir()
+    (subtitles_dir / "subtitle.srt").write_text(
         "1\n00:00:00,000 --> 00:00:05,000\nSample subtitle"
     )
-    (static_dir / "content.html").write_text("<html><body>Sample HTML</body></html>")
+
+    html_content_dir = course_root / "html"
+    (html_content_dir / "content.html").write_text(
+        "<html><body>Sample HTML</body></html>"
+    )
 
     with tarfile.open(archive_path, "w:gz") as tar:
         tar.add(course_root, arcname="course_root")
@@ -220,19 +234,28 @@ def test_process_course_xml_blocks_xml_attributes(sample_course_archive):
 
 
 def test_process_course_xml_blocks_static_assets(sample_course_archive):
-    """Test that non-XML static assets are returned as (path, bytes) tuples."""
+    """Test that non-XML static assets are returned as a CourseStaticAssetsBundle."""
     archive_path, _ = sample_course_archive
-    _, static_assets = process_course_xml_blocks(archive_path, "prod")
+    _, bundle = process_course_xml_blocks(archive_path, "prod")
 
-    assert len(static_assets) > 0, "Should have static assets"
-    for relative_path, asset_bytes in static_assets:
+    assert isinstance(bundle, CourseStaticAssetsBundle)
+    assert len(bundle.files) > 0, "Should have static assets"
+    for relative_path, asset_bytes in bundle.files:
         assert isinstance(relative_path, str), "Path should be a string"
         assert isinstance(asset_bytes, bytes), "Content should be bytes"
         assert len(asset_bytes) > 0, "Asset should not be empty"
 
-    paths = [p for p, _ in static_assets]
+    paths = [p for p, _ in bundle.files]
     assert any("subtitle.srt" in p for p in paths), "Should include SRT file"
     assert any("content.html" in p for p in paths), "Should include HTML file"
+
+    # Files from excluded structural directories must not appear in the bundle
+    excluded_dirs = {"drafts", "assets", "static"}
+    for path in paths:
+        top_dir = path.split("/")[0]
+        assert top_dir not in excluded_dirs, (
+            f"File from excluded directory '{top_dir}' should not be in bundle: {path}"
+        )
 
 
 def test_process_course_xml_blocks_model_dump_serializable(sample_course_archive):
