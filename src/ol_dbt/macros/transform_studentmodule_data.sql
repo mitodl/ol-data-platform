@@ -14,7 +14,7 @@
       , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
     from {{ studentmodule_table }}
     where coursestructure_block_category = 'problem'
-    {% if is_incremental %}
+    {% if is_incremental() %}
       and from_iso8601_timestamp_nanos(studentmodule_created_on) > (
           select max(event_timestamp) from {{ this }}
           where platform = '{{ platform }}'
@@ -33,7 +33,7 @@
       , from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) as studentmodule_created_on
       , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
     from {{ studentmodulehistory_table }}
-    {% if is_incremental %}
+    {% if is_incremental() %}
       where from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) > (
           select max(event_timestamp) from {{ this }}
             where platform = '{{ platform }}'
