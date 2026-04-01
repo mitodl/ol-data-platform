@@ -131,4 +131,5 @@ tests:
     +error_if: ">10"
 
 flags:
+  require_certificate_validation: true
   require_generic_test_arguments_property: true
