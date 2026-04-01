@@ -1,4 +1,4 @@
-{% macro generate_studentmodule_problem_events(studentmodule_table, studentmodulehistory_table, user_id_field, platform='mitxonline') %}
+{% macro generate_studentmodule_problem_events(studentmodule_table, studentmodulehistory_table, user_id_field, platform='mitxonline', watermark_expr=none) %}
   with studentmodule as (
     select
       studentmodule_id
@@ -14,7 +14,9 @@
       , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
     from {{ studentmodule_table }}
     where coursestructure_block_category = 'problem'
-    {% if is_incremental() %}
+    {% if watermark_expr %}
+      and from_iso8601_timestamp_nanos(studentmodule_created_on) > {{ watermark_expr }}
+    {% elif is_incremental() %}
       and from_iso8601_timestamp_nanos(studentmodule_created_on) > (
           select max(event_timestamp) from {{ this }}
           where platform = '{{ platform }}'
@@ -33,7 +35,9 @@
       , from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) as studentmodule_created_on
       , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
     from {{ studentmodulehistory_table }}
-    {% if is_incremental() %}
+    {% if watermark_expr %}
+      where from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) > {{ watermark_expr }}
+    {% elif is_incremental() %}
       where from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) > (
           select max(event_timestamp) from {{ this }}
             where platform = '{{ platform }}'
@@ -69,8 +73,9 @@
                 'lax $.student_answers')
             as varchar
         ) as answers
+      -- inner join: only rows with a history entry that has an attempt are valid events
       from studentmodule sm
-      left join studentmodulehistoryextended smhe
+      inner join studentmodulehistoryextended smhe
         on sm.studentmodule_id = smhe.studentmodule_id
       where smhe.attempt is not null
   )
