@@ -5,7 +5,7 @@
     unique_key=['user_username', 'useractivity_context_object', 'useractivity_event_source',
     'useractivity_event_type', 'useractivity_event_object', 'useractivity_timestamp'],
     incremental_strategy='delete+insert',
-    meta={'views_enabled': false}
+    views_enabled=false
 ) }}
 
 with source as (

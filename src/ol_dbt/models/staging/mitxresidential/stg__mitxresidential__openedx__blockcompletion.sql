@@ -2,7 +2,7 @@
     materialized="incremental",
     unique_key="blockcompletion_id",
     incremental_strategy='delete+insert',
-    meta={'views_enabled': false}
+    views_enabled=false
 ) }}
 
 with source as (
