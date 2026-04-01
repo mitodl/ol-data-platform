@@ -226,7 +226,16 @@ with mitxonline_enrollments as (
     where (
         enrollment_created_on > (
             select max(enrollment_created_on) from {{ this }}
-            where platform = enrollments_with_fks.platform
+            where
+                platform = enrollments_with_fks.platform
+                -- Scope watermark to enrollment_type so course and program enrollments
+                -- on the same platform don't contaminate each other's high-water mark.
+                -- A recently-ingested course enrollment must not silently filter out
+                -- program enrollments with older timestamps on the next incremental run.
+                and enrollment_type = case
+                    when enrollments_with_fks.program_id is not null then 'program'
+                    else 'course'
+                end
         )
         or enrollment_created_on is null
     )
