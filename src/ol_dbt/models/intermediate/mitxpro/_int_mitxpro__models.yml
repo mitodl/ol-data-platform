@@ -71,7 +71,8 @@ models:
       or 'card'.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["order_id", "b2border_id", "line_id", "coupon_id"]
+      arguments:
+        column_list: ["order_id", "b2border_id", "line_id", "coupon_id"]
 - name: int__mitxpro__b2becommerce_b2bcouponredemption
   description: A B2B coupon is considered redeemed when it's used to place an order.
     The coupon provides a discount on the company's bulk order.
@@ -101,7 +102,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["b2border_id", "b2bcoupon_id"]
+      arguments:
+        column_list: ["b2border_id", "b2bcoupon_id"]
 - name: int__mitxpro__ecommerce_allcoupons
   description: B2B and regular coupons combined into one table
   columns:
@@ -150,7 +152,8 @@ models:
       for records sourced from b2b.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["b2bcoupon_id", "coupon_id"]
+      arguments:
+        column_list: ["b2bcoupon_id", "coupon_id"]
 - name: int__mitxpro__ecommerce_couponversion
   description: A version of a coupon linked to a specific couponpaymentversion record
   columns:
@@ -203,7 +206,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["couponversion_id", "order_id"]
+      arguments:
+        column_list: ["couponversion_id", "order_id"]
 - name: int__mitxpro__b2becommerce_b2breceipt
   description: Data returned from cybersource when a user pays for a b2b order
   columns:
@@ -247,8 +251,8 @@ models:
     description: str, address country from cybersource payment
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__b2becommerce_b2breceipt')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__b2becommerce_b2breceipt')
 - name: int__mitxpro__b2becommerce_b2border
   description: A B2B order is created when a company or other purchaser buys enrollment
     codes for many of learners through the xpro web form. This creates full price
@@ -327,8 +331,8 @@ models:
     description: string, ID of Salesforce Opportunity
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__b2becommerce_b2border')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__b2becommerce_b2border')
 - name: int__mitxpro__b2becommerce_b2bcoupon
   description: B2B coupons are coupons that allow us to give a discount to companies
     buying bulk seats for their employees
@@ -378,7 +382,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__b2becommerce_b2bcoupon')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__b2becommerce_b2bcoupon')
 - name: int__mitxpro__ecommerce_productcouponassignment
   description: Coupon assignments made through bulk coupon assignment google sheets.
     These coupons can be redeemed by users with a specific email for a specific product
@@ -421,7 +426,8 @@ models:
     description: int, foreign key in courses_programrun
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_productcouponassignment')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_productcouponassignment')
 - name: int__mitxpro__ecommerce_couponproduct
   description: This table is used to limit coupons to a specific product. Coupons
     which do not have a record in this table are redeemable for all products
@@ -453,9 +459,11 @@ models:
       type is a program
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coupon_id", "product_id"]
+      arguments:
+        column_list: ["coupon_id", "product_id"]
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_couponproduct')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_couponproduct')
 - name: int__mitxpro__ecommerce_couponpaymentversion
   description: The ecommerce_couponpaymentversion holds information about a batch
     of coupons. A coupon payment version has information about the dollar or percentage
@@ -530,7 +538,9 @@ models:
       for their employees to enroll in courses or programs
     tests:
     - accepted_values:
-        values: ["credit_card", "purchase_order", "marketing", "sales", "staff", ""]
+        arguments:
+          values: ["credit_card", "purchase_order", "marketing", "sales", "staff",
+            ""]
   - name: couponpaymentversion_payment_transaction
     description: string, string that identifies the payment invoice for coupon purchases
       by companies
@@ -544,7 +554,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_couponpaymentversion')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_couponpaymentversion')
 - name: int__mitxpro__ecommerce_coupon
   description: A coupon code that can be used to recieve a discount on a course or
     program
@@ -586,7 +597,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_coupon')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_coupon')
 - name: int__mitxpro__ecommerce_company
   description: A company that purchases bulk enrollments to xpro courses or programs
   columns:
@@ -610,7 +622,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_company')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_company')
 - name: int__mitxpro__ecommerce_basketrunselection
   description: The course runs the user selected for the basket items in their basket.
     If the basket item is a course run, there is one ecommerce_basketrunselection
@@ -645,9 +658,11 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["basket_id", "courserun_id"]
+      arguments:
+        column_list: ["basket_id", "courserun_id"]
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_basketrunselection')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_basketrunselection')
 - name: int__mitxpro__ecommerce_basketitem
   description: The ecommerce_products that the user has in their basket but has not
     purchased yet
@@ -673,7 +688,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_basketitem')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_basketitem')
 - name: int__mitxpro__ecommerce_basket
   description: Checkout basket that contains courseware that a users wants to purchase
     but has not purchased yet
@@ -692,7 +708,8 @@ models:
     description: int, foreign key to the ecommerce_coupons table
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_basket')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_basket')
 - name: int__mitxpro__ecommerce_receipt
   description: Data returned from cybersource when a user pays for an order
   columns:
@@ -763,8 +780,8 @@ models:
       payment transaction, e.g., sale
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_receipt')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_receipt')
 - name: int__mitxpro__ecommerce_order
   columns:
   - name: order_id
@@ -778,7 +795,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['fulfilled', 'failed', 'created', 'refunded']
+        arguments:
+          values: ['fulfilled', 'failed', 'created', 'refunded']
   - name: order_total_price_paid
     description: number, total order amount
     tests:
@@ -849,7 +867,8 @@ models:
     description: str, address country from cybersource payment
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_order')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_order')
 - name: int__mitxpro__ecommerce_linerunselection
   description: The course runs the user selected when purchsing the courseware object.
     If the courseware object is a course run, there is one ecommerce_line_run_selection
@@ -879,9 +898,11 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["line_id", "courserun_id"]
+      arguments:
+        column_list: ["line_id", "courserun_id"]
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_linerunselection')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_linerunselection')
 - name: int__mitxpro__ecommerce_line
   columns:
   - name: line_id
@@ -929,7 +950,8 @@ models:
     description: int, primary key representing a single MITxPro program run
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_line')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_line')
 - name: int__mitxpro__ecommerce_productversion
   columns:
   - name: productversion_id
@@ -967,8 +989,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_productversion')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_productversion')
 - name: int__mitxpro__ecommerce_product
   description: Intermediate model of xPro Products.
   columns:
@@ -1013,10 +1035,12 @@ models:
     description: int, foreign key to courses_course representing a single xPro course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["product_type", "program_id", "courserun_id"]
-      row_condition: "product_is_active"
+      arguments:
+        column_list: ["product_type", "program_id", "courserun_id"]
+        row_condition: "product_is_active"
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__ecommerce_product')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__ecommerce_product')
 - name: int__mitxpro__courserunenrollments
   description: Intermediate model of enrollments in xPro
   columns:
@@ -1046,8 +1070,9 @@ models:
       are 'deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled'
     tests:
     - accepted_values:
-        values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
-          '', null]
+        arguments:
+          values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
+            '', null]
   - name: courserunenrollment_enrollment_mode
     description: str, indicating what kind of enrollment this is. Possible values
       are audit or no-id-professional. For 'audit' enrollments on edx platform, they
@@ -1056,7 +1081,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['audit', 'no-id-professional']
+        arguments:
+          values: ['audit', 'no-id-professional']
   - name: courserunenrollment_is_edx_enrolled
     description: boolean, indicating whether the user is enrolled on edx
     tests:
@@ -1093,9 +1119,11 @@ models:
       for enrollments that are made through bulk purchases by companies
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__courses_courserunenrollment')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__courses_courserunenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_id", "ecommerce_order_id"]
+      arguments:
+        column_list: ["user_id", "courserun_id", "ecommerce_order_id"]
 
 - name: int__mitxpro__programenrollments
   description: Intermediate model of enrollments in xPro.
@@ -1126,8 +1154,9 @@ models:
       are 'deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled'
     tests:
     - accepted_values:
-        values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
-          '', null]
+        arguments:
+          values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
+            '', null]
   - name: program_title
     description: str, title of the course run
     tests:
@@ -1147,9 +1176,11 @@ models:
       for enrollments that are made through bulk purchases by companies
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__courses_programenrollment')
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__courses_programenrollment')
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "program_id", "ecommerce_order_id"]
+      arguments:
+        column_list: ["user_id", "program_id", "ecommerce_order_id"]
 - name: int__mitxpro__platforms
   description: Intermediate model of platforms in MITxPro
   columns:
@@ -1258,8 +1289,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__courses_programrun')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__courses_programrun')
 - name: int__mitxpro__courses
   description: Intermediate model of courses in MITxPro
   columns:
@@ -1429,7 +1460,8 @@ models:
     description: str, user gender. May be null if user didn't specify.
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say', '']
+        arguments:
+          values: ['Male', 'Female', 'Other/Prefer Not to Say', '']
   - name: user_birth_year
     description: int, user birth year
   - name: user_company
@@ -1444,27 +1476,30 @@ models:
     description: str, company size
     tests:
     - accepted_values:
-        values: ['Small/Start-up (1+ employees)', 'Small/Home office (1-9 employees)',
-          'Small (10-99 employees)', 'Small to medium-sized (100-999 employees)',
-          'Medium-sized (1000-9999 employees)', 'Large Enterprise (10,000+ employees)',
-          "Other (N/A or Don''t know)"]
+        arguments:
+          values: ['Small/Start-up (1+ employees)', 'Small/Home office (1-9 employees)',
+            'Small (10-99 employees)', 'Small to medium-sized (100-999 employees)',
+            'Medium-sized (1000-9999 employees)', 'Large Enterprise (10,000+ employees)',
+            "Other (N/A or Don''t know)"]
   - name: user_years_experience
     description: str, years experience
     tests:
     - accepted_values:
-        values: ['Less than 2 years', '2-5 years', '6 - 10 years', '11 - 15 years',
-          '16 - 20 years', 'More than 20 years', 'Prefer not to say']
+        arguments:
+          values: ['Less than 2 years', '2-5 years', '6 - 10 years', '11 - 15 years',
+            '16 - 20 years', 'More than 20 years', 'Prefer not to say']
   - name: user_leadership_level
     description: str, user leadership level
   - name: user_highest_education
     description: str, user highest education
     tests:
     - accepted_values:
-        values: '{{ var("highest_education_values") }}'
+        arguments:
+          values: '{{ var("highest_education_values") }}'
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__users_user')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__users_user')
 - name: int__mitxpro__courserun_grades
   description: Intermediate model for mitxpro course run grades
   columns:
@@ -1511,8 +1546,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('int__mitxpro__users')
-        field: user_id
+        arguments:
+          to: ref('int__mitxpro__users')
+          field: user_id
   - name: user_username
     description: str, username
     tests:
@@ -1523,8 +1559,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__courses_courserungrade')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__courses_courserungrade')
 - name: int__mitxpro__courserun_certificates
   columns:
   - name: courseruncertificate_id
@@ -1585,8 +1621,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__courses_courseruncertificate')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__courses_courseruncertificate')
 - name: int__mitxpro__program_certificates
   columns:
   - name: programcertificate_id
@@ -1637,8 +1673,8 @@ models:
     - unique
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__app__postgres__courses_programcertificate')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__app__postgres__courses_programcertificate')
 - name: int__mitxpro__coursetopic
   columns:
   - name: coursetopic_id
@@ -1705,7 +1741,8 @@ models:
     description: int, number of unique chapters visited within a course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id"]
 
 - name: int__mitxpro__user_courseactivity_video
   description: It tracks xPro open edX users video activities within a course
@@ -1755,25 +1792,29 @@ models:
       go to a different point in time for seek_video event
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'seek_video'"
+        arguments:
+          row_condition: "useractivity_event_type = 'seek_video'"
   - name: useractivity_video_new_time
     description: number, time in the video, in seconds, that the user selected as
       the destination point for seek_video event
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'seek_video'"
+        arguments:
+          row_condition: "useractivity_event_type = 'seek_video'"
   - name: useractivity_video_new_speed
     description: number, new speed that the user selected for the video to play for
       speed_change_video event. e.g. 0.75, 1.0, 1.25, 1.50.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'speed_change_video'"
+        arguments:
+          row_condition: "useractivity_event_type = 'speed_change_video'"
   - name: useractivity_video_old_speed
     description: number, old speed at which the video was playing for speed_change_video
       event.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'speed_change_video'"
+        arguments:
+          row_condition: "useractivity_event_type = 'speed_change_video'"
   - name: useractivity_timestamp
     description: timestamp, time when this event was emitted
     tests:
@@ -1837,8 +1878,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
-        "useractivity_problem_attempts", "useractivity_problem_success", "useractivity_timestamp"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+          "useractivity_problem_attempts", "useractivity_problem_success", "useractivity_timestamp"]
 
 - name: int__mitxpro__courses_to_topics
   columns:
@@ -1859,7 +1901,8 @@ models:
       is the parent topic for 'Technology:Data Science'
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["course_id", "coursetopic_id"]
+      arguments:
+        column_list: ["course_id", "coursetopic_id"]
 
 - name: int__mitxpro__coursesinprogram
   description: MIT xPro courses in programs. stg__mitxpro__app__postgres__cms_coursesinprogrampage
@@ -1876,7 +1919,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["course_id", "program_id"]
+      arguments:
+        column_list: ["course_id", "program_id"]
 
 - name: int__mitxpro__coursesfaculty
   columns:
@@ -1972,8 +2016,8 @@ models:
     description: boolean, indicating if the course content is the latest version
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxpro__openedx__api__course_structure')
-
+      arguments:
+        compare_model: ref('stg__mitxpro__openedx__api__course_structure')
 - name: int__mitxpro__user_courseactivity_discussion
   description: MIT xPro learners discussion forum interaction within a course
   columns:
@@ -2013,7 +2057,8 @@ models:
       May be Null for edx.forum.searched event
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type != 'edx.forum.searched'"
+        arguments:
+          row_condition: "useractivity_event_type != 'edx.forum.searched'"
   - name: useractivity_discussion_post_title
     description: str, title for the specific discussion post. May be Null for edx.forum.searched
       event.
@@ -2032,7 +2077,8 @@ models:
       page. Applicable for edx.forum.searched event.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'edx.forum.searched'"
+        arguments:
+          row_condition: "useractivity_event_type = 'edx.forum.searched'"
   - name: useractivity_discussion_roles
     description: >
       array, Identifies a user who doesn't have discussion management privileges
@@ -2046,8 +2092,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
-        "useractivity_discussion_post_id", "useractivity_path", "useractivity_timestamp"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
+          "useractivity_discussion_post_id", "useractivity_path", "useractivity_timestamp"]
 
 - name: int__mitxpro__user_courseactivity_problemsubmitted
   description: MIT xPro learners problem submission activities within a course
@@ -2135,8 +2182,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
-        "useractivity_timestamp"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+          "useractivity_timestamp"]
 
 - name: int__mitxpro__user_courseactivities_daily
   description: MIT xPro daily aggregate learner activities within a course
@@ -2159,7 +2207,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
 
 - name: int__mitxpro__courserun_videos
   description: course videos on MIT xPro open edx
@@ -2190,4 +2239,5 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "video_edx_uuid"]
+      arguments:
+        column_list: ["courserun_readable_id", "video_edx_uuid"]

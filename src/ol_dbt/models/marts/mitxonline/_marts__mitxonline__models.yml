@@ -73,12 +73,14 @@ models:
     description: str, user gender
     tests:
     - accepted_values:
-        values: '{{ var("gender_values") }}'
+        arguments:
+          values: '{{ var("gender_values") }}'
   - name: user_highest_education
     description: str, user highest education
     tests:
     - accepted_values:
-        values: '{{ var("highest_education_values") }}'
+        arguments:
+          values: '{{ var("highest_education_values") }}'
   - name: latest_income_usd
     description: numeric, latest user income in usd
   - name: latest_original_income
@@ -150,7 +152,8 @@ models:
     description: str, user's job industry in user's profile on MITx Online
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id"]
 
 - name: marts__mitxonline_course_engagements_daily
   description: MITx Online learners daily course engagement statistics
@@ -193,7 +196,8 @@ models:
       for the user
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
 
 - name: marts__mitxonline_video_engagements
   description: MITx Online learners video engagements - play, pause, seek or stop
@@ -331,7 +335,8 @@ models:
     description: timestamp, datetime on when the course ends
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "problem_id", "problem_submission_timestamp"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "problem_id", "problem_submission_timestamp"]
 
 - name: marts__mitxonline_problem_summary
   description: MITx Online learners problem performance summary with a particular
@@ -376,7 +381,8 @@ models:
     description: timestamp, datetime on when the course ends
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "problem_id"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "problem_id"]
 
 - name: marts__mitxonline_discussions
   description: MITx Online learners discussion engagements - created, viewed, responded
@@ -425,7 +431,8 @@ models:
       May be Null for edx.forum.searched event
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "discussion_event_type != 'edx.forum.searched'"
+        arguments:
+          row_condition: "discussion_event_type != 'edx.forum.searched'"
   - name: post_title
     description: str, title for the specific discussion post. May be Null for edx.forum.searched
       event.
@@ -441,5 +448,6 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "discussion_event_type",
-        "post_id", "discussion_event_path", "discussion_event_timestamp"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "discussion_event_type",
+          "post_id", "discussion_event_path", "discussion_event_timestamp"]

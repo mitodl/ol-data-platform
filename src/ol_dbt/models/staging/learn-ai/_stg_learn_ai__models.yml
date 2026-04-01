@@ -134,7 +134,8 @@ models:
 
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["checkpoint_namespace", "chatsession_thread_id", "checkpoint_id"]
+      arguments:
+        column_list: ["checkpoint_namespace", "chatsession_thread_id", "checkpoint_id"]
 
 - name: stg__learn_ai__app__postgres__chatbots_tutorbotoutput
   description: TutorBot chat history

@@ -49,8 +49,8 @@ models:
     description: str, user highest education. May be null.
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxresidential__openedx__auth_user')
-
+      arguments:
+        compare_model: ref('stg__mitxresidential__openedx__auth_user')
 - name: int__mitxresidential__courseruns
   description: Residential MITx open edX courses
   columns:
@@ -89,8 +89,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxresidential__openedx__courserun')
-
+      arguments:
+        compare_model: ref('stg__mitxresidential__openedx__courserun')
 - name: int__mitxresidential__courserun_enrollments
   description: Residential MITx open edX course run enrollments
   columns:
@@ -135,8 +135,8 @@ models:
     description: str, user's full name on Residential MITx open edx platform.
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxresidential__openedx__courserun_enrollment')
-
+      arguments:
+        compare_model: ref('stg__mitxresidential__openedx__courserun_enrollment')
 - name: int__mitxresidential__courserun_grades
   description: Residential MITx open edX course grades
   columns:
@@ -156,8 +156,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('int__mitxresidential__users')
-        field: user_id
+        arguments:
+          to: ref('int__mitxresidential__users')
+          field: user_id
   - name: courserungrade_grade
     description: float, calculated course grade as a decimal percentage, per grading
       policy. e.g. 0.91 means 91%
@@ -186,8 +187,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxresidential__openedx__courserun_grade')
-
+      arguments:
+        compare_model: ref('stg__mitxresidential__openedx__courserun_grade')
 - name: int__mitxresidential__user_courseactivity_problemcheck
   description: Residential MITx users problem_check activities within a course
   columns:
@@ -247,8 +248,10 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
-        "useractivity_problem_student_answers", "useractivity_problem_attempts", "useractivity_timestamp"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+          "useractivity_problem_student_answers", "useractivity_problem_attempts",
+          "useractivity_timestamp"]
 
 - name: int__mitxresidential__user_courseactivity_problemsubmitted
   description: Residential MITx learners problem submission activities within a course
@@ -348,7 +351,8 @@ models:
       May be Null for edx.forum.searched event
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type != 'edx.forum.searched'"
+        arguments:
+          row_condition: "useractivity_event_type != 'edx.forum.searched'"
   - name: useractivity_discussion_post_title
     description: str, title for the specific discussion post. May be Null for edx.forum.searched
       event.
@@ -367,7 +371,8 @@ models:
       page. Applicable for edx.forum.searched event.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'edx.forum.searched'"
+        arguments:
+          row_condition: "useractivity_event_type = 'edx.forum.searched'"
   - name: useractivity_discussion_roles
     description: >
       array, Identifies a user who doesn't have discussion management privileges
@@ -381,8 +386,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
-        "useractivity_discussion_post_id", "useractivity_timestamp"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "useractivity_event_type",
+          "useractivity_discussion_post_id", "useractivity_timestamp"]
 
 - name: int__mitxresidential__user_courseactivity_showanswer
   description: Residential MITx learners show answer events within a course
@@ -416,8 +422,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
-        "useractivity_timestamp"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "useractivity_problem_id",
+          "useractivity_timestamp"]
 
 - name: int__mitxresidential__user_courseactivity_video
   description: Residential MITx learners discussion forum activities within a course
@@ -478,19 +485,22 @@ models:
       the destination point for seek_video event
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'seek_video'"
+        arguments:
+          row_condition: "useractivity_event_type = 'seek_video'"
   - name: useractivity_video_new_speed
     description: number, new speed that the user selected for the video to play for
       speed_change_video event. e.g. 0.75, 1.0, 1.25, 1.50.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'speed_change_video'"
+        arguments:
+          row_condition: "useractivity_event_type = 'speed_change_video'"
   - name: useractivity_video_old_speed
     description: number, old speed at which the video was playing for speed_change_video
       event.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "useractivity_event_type = 'speed_change_video'"
+        arguments:
+          row_condition: "useractivity_event_type = 'speed_change_video'"
   - name: useractivity_timestamp
     description: timestamp, time when this event was emitted
     tests:
@@ -534,7 +544,8 @@ models:
       course
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id"]
 
 - name: int__mitxresidential__user_courseactivities_daily
   description: Residential MITx learners activities aggregated daily per course
@@ -558,7 +569,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
+      arguments:
+        column_list: ["user_username", "courserun_readable_id", "courseactivity_date"]
 
 - name: int__mitxresidential__courserun_videos
   description: course videos on Residential MITx open edx
@@ -587,7 +599,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "video_edx_uuid"]
+      arguments:
+        column_list: ["courserun_readable_id", "video_edx_uuid"]
 
 - name: int__mitxresidential__course_structure
   description: This table contains the historical changes made to the course structure.
@@ -651,11 +664,13 @@ models:
       chapter.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "coursestructure_block_category != 'course'"
+        arguments:
+          row_condition: "coursestructure_block_category != 'course'"
   - name: coursestructure_chapter_title
     description: str, title of chapter within which this child block belongs to.
   - name: coursestructure_is_latest
     description: boolean, indicating if the course content is the latest version
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__mitxresidential__openedx__api__course_structure')
+      arguments:
+        compare_model: ref('stg__mitxresidential__openedx__api__course_structure')

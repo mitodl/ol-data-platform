@@ -23,7 +23,8 @@ models:
     description: int, foreign key for ecommerce_orders
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["order_id", "coupon_id"]
+      arguments:
+        column_list: ["order_id", "coupon_id"]
 
 - name: stg__micromasters__app__postgres__ecommerce_receipt
   description: Data returned from cybersource when a user pays for an order
@@ -182,7 +183,8 @@ models:
     description: int, foreign key for users_user
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "coupon_id"]
+      arguments:
+        column_list: ["user_id", "coupon_id"]
 
 - name: stg__micromasters__app__postgres__ecommerce_couponinvoice
   description: the ecommerce_couponinvoice table is used to identify batches of coupons
@@ -221,7 +223,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['standard', 'discounted-previous-course']
+        arguments:
+          values: ['standard', 'discounted-previous-course']
   - name: coupon_object_id
     description: int, id in either coures_course or courses_program for the course
       entity for which the coupon can be redeemed
@@ -233,7 +236,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['fixed-discount', 'fixed-price', 'percent-discount']
+        arguments:
+          values: ['fixed-discount', 'fixed-price', 'percent-discount']
   - name: coupon_amount
     description: numeric, discount amount. May be a percent or dollar amount
     tests:
@@ -342,15 +346,17 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__courses_course')
-        field: course_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_course')
+          field: course_id
   - name: user_id
     description: int, foreign key to auth_user
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__auth_user')
-        field: user_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__auth_user')
+          field: user_id
   - name: coursecertificate_created_on
     description: timestamp, date and time when DEDP course certificate was initially
       created
@@ -375,15 +381,17 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__courses_course')
-        field: course_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_course')
+          field: course_id
   - name: user_id
     description: int, foreign key to auth_user
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__auth_user')
-        field: user_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__auth_user')
+          field: user_id
   - name: coursegrade_grade
     description: float, calculated course grade, combined from course run and proctored
       exam using formula - course run grade * 0.4 + exam grade * 0.6, range between
@@ -412,15 +420,17 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__courses_courserun')
-        field: courserun_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_courserun')
+          field: courserun_id
   - name: user_id
     description: int, foreign key to auth_user
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__auth_user')
-        field: user_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__auth_user')
+          field: user_id
   - name: courserungrade_grade
     description: float, course run grade range between 0.0 to 1.0
     tests:
@@ -430,7 +440,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["complete", "pending"]
+        arguments:
+          values: ["complete", "pending"]
   - name: courserungrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
       set for this course
@@ -448,7 +459,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_id", "user_id"]
+      arguments:
+        column_list: ["courserun_id", "user_id"]
 
 - name: stg__micromasters__app__postgres__grades_proctoredexamgrade
   description: DEDP proctored exam grades stored in MicroMasters database
@@ -506,7 +518,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "examrun_id"]
+      arguments:
+        column_list: ["user_id", "examrun_id"]
 
 - name: stg__micromasters__app__postgres__auth_user
   columns:
@@ -544,8 +557,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__auth_user')
-        field: user_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__auth_user')
+          field: user_id
   - name: user_full_name
     description: str, user's full name on profile
     tests:
@@ -573,16 +587,18 @@ models:
     description: str, user's level of education reported on edx
     tests:
     - accepted_values:
-        values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-          "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
-            \ school", "Elementary/primary school", "No formal education", "Other\
-            \ education", "Doctorate in science or engineering", "Doctorate in another\
-            \ field"]
+        arguments:
+          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
+            "Associate degree", "Secondary/high school", "Junior secondary/junior\
+              \ high/middle school", "Elementary/primary school", "No formal education",
+            "Other education", "Doctorate in science or engineering", "Doctorate in\
+              \ another field"]
   - name: user_gender
     description: str, user gender (could be blank)
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say']
+        arguments:
+          values: ['Male', 'Female', 'Other/Prefer Not to Say']
   - name: user_mail_id
     description: str, UUID generated for user profile (used in automatic/bulk emails)
     tests:
@@ -615,7 +631,8 @@ models:
       to logged in users" (public_to_mm) or "Private" (private)
     tests:
     - accepted_values:
-        values: ['Public to everyone', 'Public to logged in users', 'Private']
+        arguments:
+          values: ['Public to everyone', 'Public to logged in users', 'Private']
   - name: user_preferred_language
     description: str, user's preferred language
   - name: user_mailing_address
@@ -659,21 +676,24 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__auth_user')
-        field: user_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__auth_user')
+          field: user_id
   - name: user_auth_provider
     description: str, social auth provider. It's either "edxorg" or "mitxonline"
     tests:
     - not_null
     - accepted_values:
-        values: ['edxorg', 'mitxonline']
+        arguments:
+          values: ['edxorg', 'mitxonline']
   - name: user_username
     description: str, user name string to identify a user within a social auth provider
     tests:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "user_auth_provider"]
+      arguments:
+        column_list: ["user_username", "user_auth_provider"]
 
 
 - name: stg__micromasters__app__postgres__courses_course
@@ -695,8 +715,9 @@ models:
     description: int, foreign key to courses_program
     tests:
     - relationships:
-        to: ref('stg__micromasters__app__postgres__courses_program')
-        field: program_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_program')
+          field: program_id
   - name: course_position_in_program
     description: int, sequential number indicating the course position in a program
     tests:
@@ -714,7 +735,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["program_id", "course_position_in_program"]
+      arguments:
+        column_list: ["program_id", "course_position_in_program"]
 
 - name: stg__micromasters__app__postgres__courses_courserun
   columns:
@@ -732,8 +754,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__courses_course')
-        field: course_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_course')
+          field: course_id
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag},
       maybe blank
@@ -827,8 +850,9 @@ models:
     description: int, foreign key to courses_program
     tests:
     - relationships:
-        to: ref('stg__micromasters__app__postgres__courses_program')
-        field: program_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_program')
+          field: program_id
   - name: electiveset_title
     description: str, title of the elective requirement set
     tests:
@@ -846,11 +870,13 @@ models:
     description: int, foreign key to courses_course
     tests:
     - relationships:
-        to: ref('stg__micromasters__app__postgres__courses_course')
-        field: course_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_course')
+          field: course_id
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["course_id", "electiveset_id"]
+      arguments:
+        column_list: ["course_id", "electiveset_id"]
 
 
 - name: stg__micromasters__app__postgres__profiles_education
@@ -865,14 +891,16 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__profiles_profile')
-        field: user_profile_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__profiles_profile')
+          field: user_profile_id
   - name: user_education_degree
     description: str, user education degree
     tests:
     - accepted_values:
-        values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-          "Associate degree", "Secondary/high school", "Other education"]
+        arguments:
+          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
+            "Associate degree", "Secondary/high school", "Other education"]
   - name: user_field_of_study
     description: str, field of study for this education degree
   - name: user_education_is_online_degree
@@ -903,8 +931,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__micromasters__app__postgres__profiles_profile')
-        field: user_profile_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__profiles_profile')
+          field: user_profile_id
   - name: user_company_name
     description: str, name of the company for this employment
     tests:
@@ -944,7 +973,8 @@ models:
     description: str, share hash for the program enrollment
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "program_id"]
+      arguments:
+        column_list: ["user_id", "program_id"]
 
 - name: stg__micromasters__app__postgres__exams_examrun
   description: DEDP proctored exam runs from MicroMasters application database

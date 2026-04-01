@@ -62,7 +62,7 @@ params:
   percent_metric_calculation: row_limit
   percent_metrics: []
   query_mode: aggregate
-  row_limit: 50000
+  row_limit: 100000
   server_page_length: 10
   server_pagination: false
   show_cell_bars: true

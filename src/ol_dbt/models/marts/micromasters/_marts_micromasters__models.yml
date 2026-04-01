@@ -44,7 +44,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_micromasters_email", "user_mitxonline_email", "proctoredexamgrade_created_on"]
+      arguments:
+        column_list: ["user_micromasters_email", "user_mitxonline_email", "proctoredexamgrade_created_on"]
 
 - name: marts__micromasters_course_certificates
   description: course certificates earned for MicroMasters programs. This include
@@ -107,8 +108,9 @@ models:
       for MITx/6.041x_3/2T2016.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
-        "mitxonline_program_id"]
+      arguments:
+        column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
+          "mitxonline_program_id"]
 
 - name: marts__micromasters_summary_timeseries
   description: Time series of MicroMasters aggregate statistics.
@@ -239,7 +241,8 @@ models:
       edX.org
     tests:
     - accepted_values:
-        values: '{{ var("gender_values") }}'
+        arguments:
+          values: '{{ var("gender_values") }}'
   - name: user_first_name
     description: str, first name from user's profile on MITx Online or MicroMasters
   - name: user_last_name

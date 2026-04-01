@@ -211,13 +211,15 @@ models:
       Null for course blocks.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "block_category != 'course'"
+        arguments:
+          row_condition: "block_category != 'course'"
   - name: sequential_block_id
     description: str, block id of sequential/unit within which this child block belongs
       to. Null for course and chapter blocks.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "block_category not in ('course', 'chapter')"
+        arguments:
+          row_condition: "block_category not in ('course', 'chapter')"
   - name: block_category
     description: string, category/type of the content block. Possible values are course,
       chapter, sequential, vertical, discussion, html, problem, video, etc.
@@ -243,9 +245,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "block_id"]
-      row_condition: "is_latest = true"
-
+      arguments:
+        column_list: ["courserun_readable_id", "block_id"]
+        row_condition: "is_latest = true"
 - name: dim_user
   description: Eventually a dimensional model for users from different platforms.
     It will contain one record for a user that's potentially a part of different platforms
@@ -407,8 +409,9 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "block_fk",
-        "event_json", "event_timestamp"]
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "block_fk",
+          "event_json", "event_timestamp"]
 
 - name: tfact_video_events
   description: Transactional fact table for learner video events in a course
@@ -463,7 +466,8 @@ models:
       the video.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "event_type = 'seek_video'"
+        arguments:
+          row_condition: "event_type = 'seek_video'"
   - name: event_timestamp
     description: timestamp, timestamp (with time zone) indicating the time at which
       the event occurred, formatted as timestamp(9)
@@ -474,8 +478,9 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "video_block_fk",
-        "event_type", "event_json", "event_timestamp"]
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id", "video_block_fk",
+          "event_type", "event_json", "event_timestamp"]
 
 - name: tfact_problem_events
   description: Transactional fact table for learner problem events in a course
@@ -534,8 +539,9 @@ models:
       event. For less common/event-specific attributes.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
-        "event_json", "event_timestamp"]
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
+          "event_json", "event_timestamp"]
 
 - name: tfact_studentmodule_problems
   description: Transactional fact table for studentmodule problem events flattened
@@ -581,8 +587,9 @@ models:
       field implies that there was a state change.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_id",
-        "attempt"]
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_id",
+          "attempt"]
 
 - name: tfact_discussion_events
   description: Transactional fact table for learner discussion events in a course
@@ -623,13 +630,15 @@ models:
       course-wide discussion. Populated for all discussion events except for edx.forum.searched
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "event_type != 'edx.forum.searched'"
+        arguments:
+          row_condition: "event_type != 'edx.forum.searched'"
   - name: post_id
     description: string, a unique identifier for this discussion event. Populated
       for all discussion events except for edx.forum.searched
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "event_type != 'edx.forum.searched'"
+        arguments:
+          row_condition: "event_type != 'edx.forum.searched'"
   - name: post_title
     description: string, title to identify the post.
   - name: post_content
@@ -659,8 +668,9 @@ models:
     description: string, roles of the user in the forums
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "openedx_user_id", "event_type", "event_json",
-        "event_timestamp"]
+      arguments:
+        column_list: ["courserun_readable_id", "openedx_user_id", "event_type", "event_json",
+          "event_timestamp"]
 
 - name: afact_course_page_engagement
   description: Aggregate fact table summarizing course page engagement by learner
@@ -705,7 +715,8 @@ models:
     description: timestamp, last view timestamp for this vertical
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "block_fk"]
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id", "block_fk"]
 
 - name: afact_problem_engagement
   description: Aggregate fact table summarizing problem engagement by learners within
@@ -750,7 +761,8 @@ models:
     description: timestamp, last attempt timestamp for this problem
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_fk"]
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_fk"]
 
 - name: afact_discussion_engagement
   description: Aggregate fact table summarizing learner engagement in discussion posts
@@ -812,8 +824,9 @@ models:
     description: string, type of discussion event
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "discussion_topic_fk",
-        "commentable_id", 'post_id']
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id", "discussion_topic_fk",
+          "commentable_id", 'post_id']
 
 - name: tfact_chatbot_events
   description: Transactional fact table for learner chatbot events in a course

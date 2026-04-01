@@ -4,14 +4,13 @@
 # name or the intended use of these models
 name: 'open_learning'
 version: '0.1.0'
-config-version: 2
 
 # This setting configures which "profile" dbt uses for this project.
 profile: 'open_learning'
 
 # Load AWS credentials for DuckDB Iceberg access
 on-run-start:
-- "{{ duckdb_init() }}"
+- "{% if target.type == 'duckdb' %}{{ duckdb_init() }}{% endif %}"
 
 # These configurations specify where dbt should look for different types of files.
 # The `model-paths` config, for example, states that models in this project can be
@@ -22,8 +21,6 @@ test-paths: ["tests"]
 seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
-
-target-path: "target"  # directory which will store compiled SQL files
 clean-targets:         # directories to be removed by `dbt clean`
 - "target"
 - "dbt_packages"
@@ -75,11 +72,8 @@ vars:
 # using the `{{ config(...) }}` macro.
 models:
   open_learning:
-    +properties:
-      format: "'PARQUET'"
-    +required_docs: true
     +grants:
-      select: ['read_only_production', 'ol_data_analyst', production_analyst', 'ol_data_engineer']
+      select: ['read_only_production', 'ol_data_analyst', 'production_analyst', 'ol_data_engineer']
       insert: ['production_analyst', 'ol_data_engineer']
       update: ['production_analyst', 'ol_data_engineer']
       delete: ['production_analyst', 'ol_data_engineer']
@@ -124,7 +118,10 @@ models:
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
           'ol_business_analyst', 'reverse_etl', 'mit_irx']
-    sample:
+    +properties:
+      format: "'PARQUET'"
+    +meta:
+      required_docs: true
 
 
 # Test severity config
@@ -135,3 +132,4 @@ tests:
 
 flags:
   require_certificate_validation: true
+  require_generic_test_arguments_property: true

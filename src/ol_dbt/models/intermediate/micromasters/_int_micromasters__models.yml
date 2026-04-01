@@ -81,7 +81,8 @@ models:
     - unique
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_micromasters_email", "proctoredexamgrade_exam_on"]
+      arguments:
+        column_list: ["user_micromasters_email", "proctoredexamgrade_exam_on"]
 
 - name: int__micromasters__course_enrollments
   description: MicroMasters enrollments. Enrollments in courses that satisfy the requirements
@@ -144,8 +145,9 @@ models:
     description: boolean, specifying if the program is DEDP
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "platform", "courserun_readable_id", "micromasters_program_id",
-        "mitxonline_program_id"]
+      arguments:
+        column_list: ["user_id", "platform", "courserun_readable_id", "micromasters_program_id",
+          "mitxonline_program_id"]
 
 - name: int__micromasters__programs
   description: Intermediate model for programs in MicroMasters
@@ -172,7 +174,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__micromasters__app__postgres__courses_program')
+      arguments:
+        compare_model: ref('stg__micromasters__app__postgres__courses_program')
 - name: int__micromasters__program_requirements
   description: Intermediate model for program requirements in MicroMasters
   columns:
@@ -180,14 +183,16 @@ models:
     description: int, foreign key to courses_program
     tests:
     - relationships:
-        to: ref('stg__micromasters__app__postgres__courses_program')
-        field: program_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_program')
+          field: program_id
   - name: course_id
     description: int, foreign key to courses_course
     tests:
     - relationships:
-        to: ref('stg__micromasters__app__postgres__courses_course')
-        field: course_id
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_course')
+          field: course_id
   - name: electiveset_id
     description: int, sequential ID representing a elective requirement set for a
       program in MicroMasters
@@ -198,7 +203,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["Core", "Elective"]
+        arguments:
+          values: ["Core", "Elective"]
   - name: program_num_required_courses
     description: int, indicating the number of required courses to earn certificate
     tests:
@@ -242,7 +248,8 @@ models:
       edX.org
     tests:
     - accepted_values:
-        values: '{{ var("gender_values") }}'
+        arguments:
+          values: '{{ var("gender_values") }}'
   - name: user_first_name
     description: str, first name on user's profile from MITx Online or MicroMasters.
   - name: user_last_name
@@ -276,7 +283,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "program_readable_id"]
+      arguments:
+        column_list: ["user_email", "program_readable_id"]
 
 - name: int__micromasters__course_certificates
   description: course certificates earned for MicroMasters programs. This include
@@ -337,8 +345,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
-        "mitxonline_program_id"]
+      arguments:
+        column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
+          "mitxonline_program_id"]
 
 - name: int__micromasters__course_grades
   description: course grades for MicroMasters programs. Grades for courses that satisfy
@@ -395,8 +404,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
-        "mitxonline_program_id"]
+      arguments:
+        column_list: ["user_email", "courserun_readable_id", "micromasters_program_id",
+          "mitxonline_program_id"]
 
 - name: int__micromasters__users
   description: MicroMasters users
@@ -469,7 +479,8 @@ models:
     description: str, user gender (could be blank)
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say']
+        arguments:
+          values: ['Male', 'Female', 'Other/Prefer Not to Say']
   - name: user_birth_date
     description: timestamp, user's date of birth
   - name: user_phone_number
@@ -480,11 +491,12 @@ models:
       exist
     tests:
     - accepted_values:
-        values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-          "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
-            \ school", "Elementary/primary school", "No formal education", "Other\
-            \ education", "Doctorate in science or engineering", "Doctorate in another\
-            \ field"]
+        arguments:
+          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
+            "Associate degree", "Secondary/high school", "Junior secondary/junior\
+              \ high/middle school", "Elementary/primary school", "No formal education",
+            "Other education", "Doctorate in science or engineering", "Doctorate in\
+              \ another field"]
   - name: user_company_name
     description: str, this is the most recent company this user works for, pulled
       from users employment history in MicroMasters database
@@ -496,8 +508,8 @@ models:
       from users employment history in MicroMasters database
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('__micromasters__users')
-
+      arguments:
+        compare_model: ref('__micromasters__users')
 - name: int__micromasters__orders
   columns:
   - name: order_id
@@ -622,8 +634,8 @@ models:
       or refunded orders
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__micromasters__app__postgres__ecommerce_order')
-
+      arguments:
+        compare_model: ref('stg__micromasters__app__postgres__ecommerce_order')
 - name: int__micromasters__program_enrollments
   description: MicroMasters program enrolled users
   columns:
@@ -653,7 +665,8 @@ models:
       before this information was collected
     tests:
     - accepted_values:
-        values: '{{ var("gender_values") }}'
+        arguments:
+          values: '{{ var("gender_values") }}'
   - name: user_country
     description: str, Country from user's profile on MITx Online or MicroMasters
   - name: user_address_city
@@ -682,4 +695,5 @@ models:
       edx.org.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_edxorg_username", "program_title", "user_email"]
+      arguments:
+        column_list: ["user_edxorg_username", "program_title", "user_email"]

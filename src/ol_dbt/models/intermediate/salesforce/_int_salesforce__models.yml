@@ -19,7 +19,8 @@ models:
       New Business
     tests:
     - accepted_values:
-        values: ["Existing Business", "Expansion Business", "New Business"]
+        arguments:
+          values: ["Existing Business", "Expansion Business", "New Business"]
   - name: opportunity_business_type
     description: string, string, indicating business type - B2C (Business to Consumer),
       B2B (Business to Business) or B2X (Business-to-Exchange). B2X is inactive. There
@@ -95,8 +96,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__salesforce__opportunity')
-
+      arguments:
+        compare_model: ref('stg__salesforce__opportunity')
 - name: int__salesforce__opportunitylineitem
   description: Salesforce opportunity product line items
   columns:
@@ -111,8 +112,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('int__salesforce__opportunity')
-        field: opportunity_id
+        arguments:
+          to: ref('int__salesforce__opportunity')
+          field: opportunity_id
   - name: opportunitylineitem_product_name
     description: string, product name of the line item
     tests:
@@ -153,4 +155,5 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      compare_model: ref('stg__salesforce__opportunitylineitem')
+      arguments:
+        compare_model: ref('stg__salesforce__opportunitylineitem')

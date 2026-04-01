@@ -137,7 +137,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['fulfilled', 'failed', 'created', 'refunded']
+        arguments:
+          values: ['fulfilled', 'failed', 'created', 'refunded']
   - name: order_total_price_paid
     description: number, total order amount
     tests:
@@ -175,7 +176,8 @@ models:
       are 'deferred', 'refunded'
     tests:
     - accepted_values:
-        values: ['deferred', 'refunded', null]
+        arguments:
+          values: ['deferred', 'refunded', null]
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the run
     tests:
@@ -197,7 +199,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_id"]
+      arguments:
+        column_list: ["user_id", "courserun_id"]
 - name: stg__bootcamps__app__postgres__auth_user
   columns:
   - name: user_id
@@ -277,7 +280,8 @@ models:
     description: str, user gender. May be null if user didn't specify.
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say']
+        arguments:
+          values: ['Male', 'Female', 'Other/Prefer Not to Say']
   - name: user_birth_year
     description: int, user birth year
   - name: user_company
@@ -300,16 +304,18 @@ models:
     description: str, company size
     tests:
     - accepted_values:
-        values: ['Small/Start-up (1+ employees)', 'Small/Home office (1-9 employees)',
-          'Small (10-99 employees)', 'Small to medium-sized (100-999 employees)',
-          'Medium-sized (1000-9999 employees)', 'Large Enterprise (10,000+ employees)',
-          "Other (N/A or Don''t know)"]
+        arguments:
+          values: ['Small/Start-up (1+ employees)', 'Small/Home office (1-9 employees)',
+            'Small (10-99 employees)', 'Small to medium-sized (100-999 employees)',
+            'Medium-sized (1000-9999 employees)', 'Large Enterprise (10,000+ employees)',
+            "Other (N/A or Don''t know)"]
   - name: user_years_experience
     description: str, years experience
     tests:
     - accepted_values:
-        values: ['Less than 2 years', '2-5 years', '6 - 10 years', '11 - 15 years',
-          '16 - 20 years', 'More than 20 years', 'Prefer not to say']
+        arguments:
+          values: ['Less than 2 years', '2-5 years', '6 - 10 years', '11 - 15 years',
+            '16 - 20 years', 'More than 20 years', 'Prefer not to say']
   - name: user_id
     description: int, unique ID for each user on the bootcamp platform
     tests:
@@ -319,7 +325,8 @@ models:
     description: str, user highest education
     tests:
     - accepted_values:
-        values: '{{ var("highest_education_values") }}'
+        arguments:
+          values: '{{ var("highest_education_values") }}'
     - not_null
 
 - name: stg__bootcamps__app__postgres__courses_course
@@ -384,15 +391,17 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__bootcamps__app__postgres__courses_courserun')
-        field: courserun_id
+        arguments:
+          to: ref('stg__bootcamps__app__postgres__courses_courserun')
+          field: courserun_id
   - name: user_id
     description: str, foreign key to auth_user representing a single user
     tests:
     - not_null
     - relationships:
-        to: ref('stg__bootcamps__app__postgres__auth_user')
-        field: user_id
+        arguments:
+          to: ref('stg__bootcamps__app__postgres__auth_user')
+          field: user_id
   - name: courseruncertificate_url
     description: str, the full URL to the certificate on Bootcamps if it's not revoked
     tests:
@@ -405,7 +414,8 @@ models:
     description: boolean, indicating whether the certificate is revoked and invalid
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_id"]
+      arguments:
+        column_list: ["user_id", "courserun_id"]
 
 - name: stg__bootcamps__app__postgres__django_contenttype
   description: stores the django models for the bootcamp app
@@ -446,10 +456,12 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['videointerviewsubmission', 'quizsubmission']
+        arguments:
+          values: ['videointerviewsubmission', 'quizsubmission']
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["course_id", "applicationstep_step_order"]
+      arguments:
+        column_list: ["course_id", "applicationstep_step_order"]
 
 - name: stg__bootcamps__app__postgres__applications_courserun_applicationstep
   description: defines due date for the bootcamp application step in a bootcamp run
@@ -506,14 +518,16 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['pending', 'rejected', 'approved', 'waitlisted']
+        arguments:
+          values: ['pending', 'rejected', 'approved', 'waitlisted']
   - name: submission_status
     description: str, submission state for the bootcamp application. Possible values
       are pending and submitted.
     tests:
     - not_null
     - accepted_values:
-        values: ['pending', 'submitted']
+        arguments:
+          values: ['pending', 'submitted']
   - name: submission_submitted_on
     description: timestamp, specifying when the interview submission is fulfilled
   - name: submission_reviewed_on
@@ -530,7 +544,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["application_id", "courserun_applicationstep_id"]
+      arguments:
+        column_list: ["application_id", "courserun_applicationstep_id"]
 
 - name: stg__bootcamps__app__postgres__applications_courserun_application
   description: tracks users bootcamp applications
@@ -555,9 +570,10 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['awaiting_profile_completion', 'awaiting_resume', 'awaiting_user_submissions',
-          'awaiting_submission_review', 'awaiting_payment', 'complete', 'rejected',
-          'refunded']
+        arguments:
+          values: ['awaiting_profile_completion', 'awaiting_resume', 'awaiting_user_submissions',
+            'awaiting_submission_review', 'awaiting_payment', 'complete', 'rejected',
+            'refunded']
   - name: application_linkedin_url
     description: str, linkedIn profile url for the user in a bootcamp application
   - name: application_resume_file
@@ -596,7 +612,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_id", "user_id"]
+      arguments:
+        column_list: ["courserun_id", "user_id"]
 
 - name: stg__bootcamps__app__postgres__courses_installment
   description: defines installment payments for the bootcamp run
@@ -621,4 +638,5 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_id", "installment_deadline"]
+      arguments:
+        column_list: ["courserun_id", "installment_deadline"]
