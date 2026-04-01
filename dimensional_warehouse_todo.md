@@ -17,13 +17,14 @@
 | ✅ Done | Code committed to `feature/dimensional-model-expansion`; compile passes |
 | ⏳ Pending | Not yet started |
 
-**Last updated:** 2026-03-30
+**Last updated:** 2026-04-01
 **Phase A:** 8/8 complete ✅
 **Phase B:** 0/4 complete ⏳
 **Phase C:** 0/3 complete ⏳
 **Phase D:** 7/7 complete ✅
 **Phase E:** 6/6 complete ✅
 **Phase F:** 4/4 complete ✅
+**Phase G:** 6/6 complete ✅
 
 ---
 
@@ -1312,6 +1313,233 @@ so edxorg/mitxonline enrollment rows gain MicroMasters program context where app
 
 ---
 
+## Phase G — Grain Audit Findings ⏳
+
+> Added 2026-04-01 after a comprehensive grain audit of all dimensional models.
+> Each issue was identified by analyzing the declared grain of every intermediate model
+> referenced by the dimensional layer, then tracing fan-out paths and fragile dedup patterns.
+
+---
+
+### G1 · Fix `bridge_program_course` MicroMasters Elective-Set Fan-Out ⏳
+
+**File:** `src/ol_dbt/models/dimensional/bridge_program_course.sql`
+
+**Priority:** HIGH — will cause uniqueness test failure once real data includes elective-set courses.
+
+**Problem:**
+`int__micromasters__program_requirements` has grain `(program_id, course_id, electiveset_id)`.
+A single course can satisfy multiple elective sets within the same MicroMasters program.
+The `micromasters_requirements` CTE in `bridge_program_course.sql` selects from this
+intermediate without deduplicating on `(program_id, course_id)`. After the `dim_program`
+and `dim_course` joins, multiple rows with identical `(program_fk, course_fk)` reach the
+final output, violating the `unique_combination_of_columns(program_fk, course_fk)` test.
+
+**Fix:**
+In the `micromasters_requirements` CTE, deduplicate before the dim joins:
+
+```sql
+, micromasters_requirements_deduped as (
+    select distinct
+        program_id
+        , course_readable_id
+        , platform_code
+        , is_required        -- or use min(is_required) if the column exists
+    from micromasters_requirements
+)
+```
+
+Then join `micromasters_requirements_deduped` (not the raw CTE) to `dim_program`
+and `dim_course`. The bridge should represent the program → course relationship once
+per pair, regardless of how many elective sets the course appears in.
+
+**Validation:**
+```bash
+dbt test --select bridge_program_course -t dev_local
+# unique_combination_of_columns_bridge_program_course_program_fk__course_fk should pass
+```
+
+---
+
+### G2 · Add Defensive QUALIFY Guard to `tfact_enrollment` ⏳
+
+**File:** `src/ol_dbt/models/dimensional/tfact_enrollment.sql`
+
+**Priority:** MEDIUM — prevents silent data corruption on incremental runs.
+
+**Problem:**
+The final CTE is a direct pass-through from `enrollments_with_fks` (a UNION ALL of 5
+platform CTEs) with no final deduplication. If any upstream intermediate develops
+duplicates at its declared grain — or if incremental boundary conditions produce
+off-by-one overlaps — duplicate `enrollment_key` values enter the fact table and silently
+violate the `unique_key` constraint used in incremental `MERGE`.
+
+**Fix:**
+Add a QUALIFY guard to the final SELECT:
+
+```sql
+select
+    <all columns>
+from enrollments_with_fks
+qualify row_number() over (
+    partition by enrollment_key
+    order by enrollment_created_on desc nulls last
+) = 1
+```
+
+This is a defensive guard, not a correction of known duplicates. It ensures correctness
+under any upstream grain drift without masking the root cause (which should still be
+fixed upstream if it occurs).
+
+**Validation:**
+```bash
+dbt test --select tfact_enrollment -t dev_local
+```
+
+---
+
+### G3 · Add Defensive QUALIFY Guard to `tfact_certificate` + Verify edxorg Enrollment Join ⏳
+
+**File:** `src/ol_dbt/models/dimensional/tfact_certificate.sql`
+**File (investigate):** `src/ol_dbt/models/intermediate/edxorg/int__edxorg__mitx_courserun_certificates.sql`
+
+**Priority:** MEDIUM — the edxorg path has a structural join risk; the QUALIFY guard covers all platforms.
+
+**Problem (two parts):**
+
+1. Same defensive dedup gap as G2 — no QUALIFY guard on the final SELECT in `tfact_certificate`.
+
+2. Higher-risk upstream: `int__edxorg__mitx_courserun_certificates` (used as the edxorg
+   certificate source) `LEFT JOINs` to `int__edxorg__mitx_courserun_enrollments` on
+   `(user_username, courserun_readable_id)`. If a user has multiple enrollment records for
+   the same course run (audit followed by re-enroll, etc.), this join fans out the certificate
+   row. The grain of `int__edxorg__mitx_courserun_enrollments` must be verified before
+   the QUALIFY guard can be considered sufficient vs. requiring an upstream fix.
+
+**Fix:**
+
+Step 1 — verify `int__edxorg__mitx_courserun_enrollments` grain:
+```sql
+-- Is (user_username, courserun_readable_id) unique?
+select user_username, courserun_readable_id, count(*)
+from {{ ref('int__edxorg__mitx_courserun_enrollments') }}
+group by 1, 2
+having count(*) > 1
+limit 10;
+```
+
+If duplicates exist: add a `QUALIFY row_number() OVER (PARTITION BY user_username,
+courserun_readable_id ORDER BY ...) = 1` guard inside
+`int__edxorg__mitx_courserun_certificates` before the offending join.
+
+Step 2 — regardless of step 1 result, add QUALIFY guard to `tfact_certificate` final SELECT:
+```sql
+qualify row_number() over (
+    partition by certificate_key
+    order by certificate_created_on desc nulls last
+) = 1
+```
+
+**Validation:**
+```bash
+dbt test --select tfact_certificate -t dev_local
+```
+
+---
+
+### G4 · Harden `int__mitxonline__courserunenrollments` DEDP Fan-Out Guard ⏳
+
+**File:** `src/ol_dbt/models/intermediate/mitxonline/int__mitxonline__courserunenrollments.sql`
+
+**Priority:** LOW-MEDIUM — currently protected by `select distinct`, but the pattern is fragile.
+
+**Problem:**
+The `dedp_enrollments_verified_in_mitxonline` CTE (lines ~63–80) references
+`int__mitxonline__ecommerce_order`, which is at `(order_id, line_id)` grain — not order
+grain. The join on `(user_id, courserun_id)` fans out for users who purchased the same
+course run across multiple orders (e.g., repurchase after refund). The `select distinct
+(user_id, courserun_id)` currently guards against this, but:
+
+- The guard is non-obvious — a future refactor could silently remove it.
+- Adding extra columns to the CTE without re-applying `select distinct` would re-introduce
+  the fan-out.
+
+**Fix (near-term):** Add an explicit comment above the `select distinct`:
+```sql
+-- IMPORTANT: int__mitxonline__ecommerce_order is at (order_id, line_id) grain.
+-- A user may have ordered the same course run across multiple orders (repurchase).
+-- The SELECT DISTINCT is required to collapse back to (user_id, courserun_id) grain
+-- and must be preserved if this CTE is modified.
+```
+
+**Fix (medium-term):** Replace the `int__mitxonline__ecommerce_order` reference with a
+direct join to `stg__mitxonline__app__postgres__ecommerce_order` +
+`stg__mitxonline__app__postgres__ecommerce_line`, which avoids inheriting the line-grain
+intermediate entirely. Keep `select distinct` as a deliberate safety measure.
+
+---
+
+### G5 · Verify `int__edxorg__mitx_courserun_certificates` Enrollment Join Grain ⏳
+
+**Files:**
+- `src/ol_dbt/models/intermediate/edxorg/int__edxorg__mitx_courserun_certificates.sql`
+- `src/ol_dbt/models/intermediate/edxorg/int__edxorg__mitx_courserun_enrollments.sql`
+
+**Priority:** LOW-MEDIUM — investigation task; may require no code change, or a QUALIFY guard.
+
+**Problem:**
+`int__edxorg__mitx_courserun_certificates` LEFT JOINs to `int__edxorg__mitx_courserun_enrollments`
+on `(user_edxorg_username, courserun_readable_id)`. If the enrollment intermediate is not
+uniquely grained on this pair, the join fans out each certificate row.
+
+**Steps:**
+1. Read `int__edxorg__mitx_courserun_enrollments.sql` and identify the declared grain.
+2. Run the duplicate-check query above (see G3 Step 1).
+3. If duplicates are possible: add a QUALIFY guard inside the enrollment intermediate
+   (`QUALIFY row_number() OVER (PARTITION BY user_username, courserun_readable_id ORDER BY
+   enrollment_created_on DESC NULLS LAST) = 1`) or in the certificate intermediate before
+   the join.
+4. If grain is already unique: close this task as confirmed-safe and add a comment to
+   the certificate intermediate noting the verified grain.
+
+**This task is a prerequisite for fully resolving G3.**
+
+---
+
+### G6 · Document `dim_course` edxorg QUALIFY Collapse in YAML ⏳
+
+**File:** `src/ol_dbt/models/dimensional/_dim_course.yml`
+**File:** `src/ol_dbt/models/dimensional/dim_course.sql` (comment only)
+
+**Priority:** LOW — documentation only, no behavior change.
+
+**Problem:**
+`dim_course` uses `QUALIFY row_number() OVER (PARTITION BY course_readable_id ORDER BY
+courserun_start_date DESC NULLS LAST) = 1` to collapse edxorg courserun-grain data to
+course grain (because edxorg has no integer course ID — only courserun-level records).
+This means the course title, course number, and `is_live` for an edxorg course are
+sourced from its **most-recent course run**. This is intentional but undocumented.
+
+**Fix:**
+In `_dim_course.yml`, add to the model description:
+
+> For edxorg, course-level attributes (title, course_number, is_live) are derived from
+> the most recent course run sharing the same `course_readable_id`, because edxorg exposes
+> no native course-level record. `source_id` is always null for edxorg courses.
+
+Add to the `source_id` column description:
+
+> Null for edxorg courses (edxorg has no integer course ID; courses are represented by
+> their most-recent course run's metadata).
+
+In `dim_course.sql`, add a comment above the edxorg `QUALIFY`:
+```sql
+-- edxorg has no native course table — one row per course_readable_id,
+-- using the most-recent course run to represent the course.
+```
+
+---
+
 ## Updated Dependency Graph
 
 ```
@@ -1337,6 +1565,14 @@ F1 ─── (independent, but coordinate with downstream)
 F2 ─── (independent)
 F3 ─── (independent)
 F4 ─── (independent, run after E tasks to capture new platforms)
+
+Phase G (grain audit):
+G1 ─── (independent)
+G2 ─── (independent)
+G3 ─── G5 (verify enrollment join grain before deciding G3 scope)
+G4 ─── (independent)
+G5 ─── (investigation; prerequisite for G3)
+G6 ─── (independent, documentation only)
 ```
 
 ---
