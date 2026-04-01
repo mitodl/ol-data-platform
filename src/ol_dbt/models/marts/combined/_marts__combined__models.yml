@@ -31,7 +31,8 @@ models:
       code} e.g.program-v1:xPRO+MLx
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "program_title", "program_readable_id", "course_readable_id"]
+      arguments:
+        column_list: ["platform", "program_title", "program_readable_id", "course_readable_id"]
 
 - name: marts__combined__users
   description: Mart model for users from different platforms
@@ -47,7 +48,8 @@ models:
       if their account is active. May be null for some xPRO Emeritus learners.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platforms != 'xPRO Emeritus'"
+        arguments:
+          row_condition: "platforms != 'xPRO Emeritus'"
   - name: user_joined_on
     description: timestamp, user join timestamp on the corresponding platform including
       xpro, bootcamps, edX.org, MITx Online, and Residential MITx. If the user is
@@ -136,10 +138,10 @@ models:
     description: boolean, Set to true if the user has recieved a DEDP program credential
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_username", "user_edxorg_username", "user_mitxpro_username",
-        "user_bootcamps_username", "platforms"]
-      row_condition: "platforms not in ('xPRO Emeritus', 'xPRO Global Alumni')"
-
+      arguments:
+        column_list: ["user_mitxonline_username", "user_edxorg_username", "user_mitxpro_username",
+          "user_bootcamps_username", "platforms"]
+        row_condition: "platforms not in ('xPRO Emeritus', 'xPRO Global Alumni')"
 - name: marts__combined__orders
   description: ecommerce regular b2c orders
   columns:
@@ -228,14 +230,16 @@ models:
       edX.org.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+        arguments:
+          row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
   - name: product_readable_id
     description: string, the product identifier either referring to courserun_readable_id,
       programrun_readable_id, or program_readable_id. May be null for bootcamps and
       edX.org.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
+        arguments:
+          row_condition: "platform != 'Bootcamps' and platform != 'edX.org'"
   - name: product_type
     description: string, readable product type - either course run or program. May
       be null for bootcamps and edX.org
@@ -294,7 +298,8 @@ models:
     description: str, foreign key to combined_users
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["order_id", "line_id", "platform"]
+      arguments:
+        column_list: ["order_id", "line_id", "platform"]
 
 - name: marts__combined_course_enrollment_detail
   description: course enrollment detail with certificates, orders and coupons from
@@ -305,7 +310,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: '{{ var("platforms") }}'
+        arguments:
+          values: '{{ var("platforms") }}'
   - name: courserunenrollment_id
     description: int, internal ID and foreign key to courserunenrollments on the corresponding
       platform. Null for enrollments on edX.org.
@@ -318,7 +324,8 @@ models:
       May be null for some Bootcamps courses. Examples include MITx/6.00.2x and course-v1:MITxT+14.740x.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'Bootcamps'"
+        arguments:
+          row_condition: "platform != 'Bootcamps'"
   - name: course_title
     description: str, title of the course. May be null for some edX.org and Residential
       courses
@@ -349,7 +356,8 @@ models:
       created
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "courseruncertificate_is_earned = true"
+        arguments:
+          row_condition: "courseruncertificate_is_earned = true"
   - name: courseruncertificate_is_earned
     description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
       edX.org or xpro.mit.edu.
@@ -364,7 +372,8 @@ models:
     description: timestamp, specifying when the enrollment was initially
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'xPRO Global Alumni'"
+        arguments:
+          row_condition: "platform != 'xPRO Global Alumni'"
   - name: courserunenrollment_enrollment_mode
     description: string, enrollment mode for user on the corresponding platform
   - name: courserunenrollment_enrollment_status
@@ -411,7 +420,8 @@ models:
       May be null for some xPRO Emeritus learners.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform != 'xPRO Emeritus'"
+        arguments:
+          row_condition: "platform != 'xPRO Emeritus'"
   - name: user_full_name
     description: str, user full name on the platform user enrolled.
   - name: user_highest_education
@@ -424,7 +434,8 @@ models:
       xPRO Emeritus and Global Alumni learners.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform not in ('xPRO Emeritus', 'xPRO Global Alumni')"
+        arguments:
+          row_condition: "platform not in ('xPRO Emeritus', 'xPRO Global Alumni')"
   - name: user_hashed_id
     description: str, foreign key to combined_users to identify the user
     tests:
@@ -434,27 +445,33 @@ models:
       Null for xPRO Emeritus and Global Alumni learners.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
-        row_condition: "platform not in ('xPRO Emeritus', 'xPRO Global Alumni')"
+        arguments:
+          row_condition: "platform not in ('xPRO Emeritus', 'xPRO Global Alumni')"
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_hashed_id", "courserun_readable_id"]
-      row_condition: "platform='edX.org'"
+      arguments:
+        column_list: ["user_hashed_id", "courserun_readable_id"]
+        row_condition: "platform='edX.org'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id"]
-      row_condition: "platform ='MITx Online'"
+      arguments:
+        column_list: ["courserunenrollment_id"]
+        row_condition: "platform ='MITx Online'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id", "combined_orders_hash_id"]
-      row_condition: "platform ='xPro'"
+      arguments:
+        column_list: ["courserunenrollment_id", "combined_orders_hash_id"]
+        row_condition: "platform ='xPro'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "courserun_readable_id"]
-      row_condition: "platform ='xPRO Global Alumni'"
+      arguments:
+        column_list: ["user_email", "courserun_readable_id"]
+        row_condition: "platform ='xPRO Global Alumni'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id", "order_reference_number"]
-      row_condition: "platform='Bootcamps'"
+      arguments:
+        column_list: ["courserunenrollment_id", "order_reference_number"]
+        row_condition: "platform='Bootcamps'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserunenrollment_id"]
-      row_condition: "platform ='Residential MITx'"
-
+      arguments:
+        column_list: ["courserunenrollment_id"]
+        row_condition: "platform ='Residential MITx'"
 - name: marts__combined_program_enrollment_detail
   description: Mart model for program enrollments and certificates from different
     platforms
@@ -532,12 +549,13 @@ models:
       completion certificate date
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
-      row_condition: "program_id !=2 and platform_name !='edX.org'"
+      arguments:
+        column_list: ["program_title", "user_username", "platform_name", "programenrollment_created_on"]
+        row_condition: "program_id !=2 and platform_name !='edX.org'"
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "user_email"]
-      row_condition: "program_id =2 and platform_name ='edX.org'"
-
+      arguments:
+        column_list: ["user_username", "user_email"]
+        row_condition: "program_id =2 and platform_name ='edX.org'"
 - name: marts__combined__products
   description: combined course or program products from MITx Online, xPro, or edX.org
   columns:
@@ -763,7 +781,8 @@ models:
       a particular course run
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "courserun_readable_id", "user_username"]
+      arguments:
+        column_list: ["platform", "courserun_readable_id", "user_username"]
 
 - name: marts__combined_course_engagements
   description: Learners daily course engagement statistics from MITx Online, xPro,
@@ -828,7 +847,8 @@ models:
       is in the past and courserun_end_on is in the future.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["platform", "user_username", "courserun_readable_id", "courseactivity_date"]
+      arguments:
+        column_list: ["platform", "user_username", "courserun_readable_id", "courseactivity_date"]
 
 - name: marts__combined_problem_submissions
   description: Learners problem submissions/responses history in a course from MITx
@@ -982,5 +1002,6 @@ models:
       use a coupon
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["b2bcoupon_id", "discount_id", "platform", "couponpaymentversion_id",
-        "b2b_contract_number", "product_readable_id"]
+      arguments:
+        column_list: ["b2bcoupon_id", "discount_id", "platform", "couponpaymentversion_id",
+          "b2b_contract_number", "product_readable_id"]

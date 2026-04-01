@@ -1,13 +1,12 @@
 -- xPro user activities from tracking logs
 -- Due to size of the raw table, build this model as incremental and apply dedup on new rows
 {{ config(
-    materialized='incremental',
-    unique_key = ['user_username', 'useractivity_context_object', 'useractivity_event_source',
+    materialized="incremental",
+    unique_key=['user_username', 'useractivity_context_object', 'useractivity_event_source',
     'useractivity_event_type', 'useractivity_event_object', 'useractivity_timestamp'],
     incremental_strategy='delete+insert',
-    views_enabled=false,
-  )
-}}
+    views_enabled=false
+) }}
 
 with source as (
     select * from {{ source('ol_warehouse_raw_data','raw__xpro__openedx__tracking_logs') }}

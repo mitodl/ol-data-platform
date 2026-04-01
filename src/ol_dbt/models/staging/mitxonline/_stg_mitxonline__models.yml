@@ -19,7 +19,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id"]
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id"]
 
 - name: stg__mitxonline__app__postgres__courses_courserunenrollment
   columns:
@@ -41,7 +42,8 @@ models:
       Options are 'deferred', 'transferred', 'refunded', 'unenrolled', maybe blank
     tests:
     - accepted_values:
-        values: ['deferred', 'transferred', 'refunded', 'unenrolled']
+        arguments:
+          values: ['deferred', 'transferred', 'refunded', 'unenrolled']
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the run
     tests:
@@ -66,15 +68,17 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_id", "user_id"]
+      arguments:
+        column_list: ["courserun_id", "user_id"]
   - dbt_utils.recency:
-      datepart: day
-      field: from_iso8601_timestamp_nanos(courserunenrollment_created_on)
-      interval: 2
       config:
         severity: error
         error_if: "!=0"
 
+      arguments:
+        datepart: day
+        field: from_iso8601_timestamp_nanos(courserunenrollment_created_on)
+        interval: 2
 - name: stg__mitxonline__app__postgres__courses_programenrollment
   columns:
   - name: programenrollment_id
@@ -109,7 +113,8 @@ models:
     description: str, enrollment mode for user
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["program_id", "user_id"]
+      arguments:
+        column_list: ["program_id", "user_id"]
 
 - name: stg__mitxonline__app__postgres__ecommerce_basketdiscount
   columns:
@@ -181,8 +186,9 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["approved", "auto-approved", "created", "pending-manual-approval",
-          "denied", "reset"]
+        arguments:
+          values: ["approved", "auto-approved", "created", "pending-manual-approval",
+            "denied", "reset"]
   - name: flexiblepriceapplication_income_usd
     description: numeric, user income in usd
   - name: flexiblepriceapplication_original_income
@@ -226,7 +232,8 @@ models:
       tier the user applied for
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courseware_object_id", "contenttype_id", "user_id"]
+      arguments:
+        column_list: ["courseware_object_id", "contenttype_id", "user_id"]
 
 - name: stg__mitxonline__app__postgres__flexiblepricing_flexiblepricetier
   columns:
@@ -388,7 +395,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["percent-off", "dollars-off", "fixed-price"]
+        arguments:
+          values: ["percent-off", "dollars-off", "fixed-price"]
   - name: discount_amount_text
     description: str, discount amount in readable format. It can be percent-off which
       is <dollar amount>% off, dollars-off which is $<dollar amount> off or fixed-price
@@ -399,7 +407,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["one-time", "one-time-per-user", "unlimited"]
+        arguments:
+          values: ["one-time", "one-time-per-user", "unlimited"]
   - name: discount_max_redemptions
     description: int, maximum times a coupon can be redeemed
   - name: discount_code
@@ -411,8 +420,9 @@ models:
       "sales", "financial-assistance", "customer-support", "staff", "legacy"
     tests:
     - accepted_values:
-        values: ["marketing", "sales", "financial-assistance", "customer-support",
-          "staff", "legacy"]
+        arguments:
+          values: ["marketing", "sales", "financial-assistance", "customer-support",
+            "staff", "legacy"]
   - name: discount_activated_on
     description: timestamp, specifying when the discount is activated
   - name: discount_expires_on
@@ -465,7 +475,8 @@ models:
     description: string, transaction type, one of "refund" and "payment"
     tests:
     - accepted_values:
-        values: ["refund", "payment"]
+        arguments:
+          values: ["refund", "payment"]
 
 - name: stg__mitxonline__app__postgres__ecommerce_line
   description: ""
@@ -549,8 +560,9 @@ models:
       "declined", "errored", "refunded", "review", "partially_refunded"
     tests:
     - accepted_values:
-        values: ["pending", "fulfilled", "canceled", "declined", "errored", "refunded",
-          "review", "partially_refunded"]
+        arguments:
+          values: ["pending", "fulfilled", "canceled", "declined", "errored", "refunded",
+            "review", "partially_refunded"]
     - not_null
   - name: order_created_on
     description: timestamp, specifying when the order was initially created
@@ -633,9 +645,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["product_object_id", "contenttype_id"]
-      row_condition: "product_is_active"
-
+      arguments:
+        column_list: ["product_object_id", "contenttype_id"]
+        row_condition: "product_is_active"
 - name: stg__mitxonline__app__postgres__django_contenttype
   columns:
   - name: contenttype_id
@@ -749,26 +761,30 @@ models:
     description: str, user gender
     tests:
     - accepted_values:
-        values: '{{ var("gender_values") }}'
+        arguments:
+          values: '{{ var("gender_values") }}'
   - name: user_company_size
     description: str, company size
     tests:
     - accepted_values:
-        values: ['Small/Start-up (1+ employees)', 'Small/Home office (1-9 employees)',
-          'Small (10-99 employees)', 'Small to medium-sized (100-999 employees)',
-          'Medium-sized (1000-9999 employees)', 'Large Enterprise (10,000+ employees)',
-          "Other (N/A or Don''t know)"]
+        arguments:
+          values: ['Small/Start-up (1+ employees)', 'Small/Home office (1-9 employees)',
+            'Small (10-99 employees)', 'Small to medium-sized (100-999 employees)',
+            'Medium-sized (1000-9999 employees)', 'Large Enterprise (10,000+ employees)',
+            "Other (N/A or Don''t know)"]
   - name: user_years_experience
     description: str, years experience
     tests:
     - accepted_values:
-        values: ['Less than 2 years', '2-5 years', '6 - 10 years', '11 - 15 years',
-          '16 - 20 years', 'More than 20 years', 'Prefer not to say']
+        arguments:
+          values: ['Less than 2 years', '2-5 years', '6 - 10 years', '11 - 15 years',
+            '16 - 20 years', 'More than 20 years', 'Prefer not to say']
   - name: user_highest_education
     description: str, user highest education
     tests:
     - accepted_values:
-        values: '{{ var("highest_education_values") }}'
+        arguments:
+          values: '{{ var("highest_education_values") }}'
   - name: user_profile_created_on
     description: timestamp, date and time when this profile data was initially created
   - name: user_profile_updated_on
@@ -872,15 +888,17 @@ models:
     description: int, foreign key to courses_course representing a single course
     tests:
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_course')
-        field: course_id
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_course')
+          field: course_id
   - name: program_id
     description: int, foreign key to courses_program representing a single program
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_program')
-        field: program_id
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_program')
+          field: program_id
   - name: programrequirement_node_type
     description: str, different types of nodes that exist in a requirement tree -
       program_root (represent a program) - course (represent a reference to a course)
@@ -888,7 +906,8 @@ models:
       operation over a set of courses)
     tests:
     - accepted_values:
-        values: ["program_root", "course", "program", "operator"]
+        arguments:
+          values: ["program_root", "course", "program", "operator"]
   - name: programrequirement_path
     description: str, the full materialized path for each node (readonly) e.g. 0001
       is root path, 00010001 is the path to a node in this requirement tree
@@ -909,15 +928,16 @@ models:
       min_number_of or blank
     tests:
     - accepted_values:
-        values: ["all_of", "min_number_of"]
+        arguments:
+          values: ["all_of", "min_number_of"]
   - name: programrequirement_operator_value
     description: int, value of the operator for this requirement e.g. if operator
       is all_of, the corresponding operator_value 3 means all of 3 courses
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["program_id", "programrequirement_depth"]
-      row_condition: "programrequirement_depth=1"
-
+      arguments:
+        column_list: ["program_id", "programrequirement_depth"]
+        row_condition: "programrequirement_depth=1"
 - name: stg__mitxonline__app__postgres__courses_courserun
   columns:
   - name: courserun_id
@@ -942,8 +962,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_course')
-        field: course_id
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_course')
+          field: course_id
   - name: courserun_readable_id
     description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
@@ -962,7 +983,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["MITx Online", "edX.org"]
+        arguments:
+          values: ["MITx Online", "edX.org"]
   - name: courserun_url
     description: str, url location for the course run in MITx Online
   - name: courserun_is_self_paced
@@ -1023,18 +1045,21 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_department')
-        field: coursedepartment_id
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_department')
+          field: coursedepartment_id
   - name: course_id
     description: int, foreign key to courses_course representing a single course
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_course')
-        field: course_id
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_course')
+          field: course_id
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursedepartment_id", "course_id"]
+      arguments:
+        column_list: ["coursedepartment_id", "course_id"]
 
 - name: stg__mitxonline__app__postgres__courses_blockedcountry
   columns:
@@ -1052,8 +1077,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_course')
-        field: course_id
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_course')
+          field: course_id
   - name: blockedcountry_created_on
     description: timestamp, specifying when a blocked country record was initially
       created
@@ -1062,7 +1088,8 @@ models:
       updated
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["blockedcountry_code", "course_id"]
+      arguments:
+        column_list: ["blockedcountry_code", "course_id"]
 
 - name: stg__mitxonline__app__postgres__courses_courseruncertificate
   columns:
@@ -1100,7 +1127,8 @@ models:
     description: boolean, indicating whether the certificate is revoked and invalid
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_id"]
+      arguments:
+        column_list: ["user_id", "courserun_id"]
 
 - name: stg__mitxonline__app__postgres__courses_programcertificate
   columns:
@@ -1120,8 +1148,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_program')
-        field: program_id
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_program')
+          field: program_id
   - name: user_id
     description: str, foreign key to users_user representing a single user
     tests:
@@ -1136,7 +1165,8 @@ models:
     description: boolean, indicating whether the certificate is revoked and invalid
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "program_id"]
+      arguments:
+        column_list: ["user_id", "program_id"]
 
 - name: stg__mitxonline__app__postgres__courses_courserungrade
   columns:
@@ -1151,8 +1181,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxonline__app__postgres__courses_courserun')
-        field: courserun_id
+        arguments:
+          to: ref('stg__mitxonline__app__postgres__courses_courserun')
+          field: courserun_id
   - name: user_id
     description: str, foreign key to users_user representing a single user
     tests:
@@ -1175,7 +1206,8 @@ models:
     description: timestamp, specifying when a grade was most recently updated
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_id"]
+      arguments:
+        column_list: ["user_id", "courserun_id"]
 
 - name: stg__mitxonline__openedx__mysql__auth_user
   description: MITx Online open edX users
@@ -1283,8 +1315,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
-        "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
+      arguments:
+        column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
+          "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
 
 - name: stg__mitxonline__openedx__api__course_structure
   description: This table captures the historical changes made to the MITx Online
@@ -1346,8 +1379,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
-        "coursestructure_retrieved_at"]
+      arguments:
+        column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
+          "coursestructure_retrieved_at"]
 
 - name: stg__mitxonline__openedx__mysql__courseware_studentmodule
   description: It holds the most current course state and score per course section
@@ -1400,7 +1434,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
 
 - name: stg__mitxonline__openedx__mysql__grades_subsectiongrade
   description: Persistent values for learners' subsection (aka sequential) grades.
@@ -1468,7 +1503,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
+      arguments:
+        column_list: ["openedx_user_id", "courserun_readable_id", "coursestructure_block_id"]
 
 - name: stg__mitxonline__openedx__mysql__grades_subsectiongradeoverride
   description: Stores the most recent override grades for a given subsection
@@ -1564,12 +1600,14 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
-          'sales_admin', 'beta_testers', 'library_user', 'org_course_creator_group',
-          'course_creator_group', 'support']
+        arguments:
+          values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
+            'sales_admin', 'beta_testers', 'library_user', 'org_course_creator_group',
+            'course_creator_group', 'support']
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "openedx_user_id", "courseaccess_role"]
+      arguments:
+        column_list: ["courserun_readable_id", "openedx_user_id", "courseaccess_role"]
 
 - name: stg__mitxonline__openedx__mysql__edxval_video
   description: video content on MITx Online open edx
@@ -1623,7 +1661,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "video_id"]
+      arguments:
+        column_list: ["courserun_readable_id", "video_id"]
 
 - name: stg__mitxonline__app__postgres__cms_wagtail_page
   columns:
@@ -1799,7 +1838,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["coursetopic_name", "coursetopic_parent_id"]
+      arguments:
+        column_list: ["coursetopic_name", "coursetopic_parent_id"]
 
 - name: stg__mitxonline__app__postgres__cms_coursepage_topics
   columns:

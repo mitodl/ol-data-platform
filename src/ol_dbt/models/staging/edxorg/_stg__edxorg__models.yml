@@ -15,7 +15,8 @@ models:
       open edx or edx.org
     tests:
     - accepted_values:
-        values: '{{ var("platforms") }}'
+        arguments:
+          values: '{{ var("platforms") }}'
   - name: courserun_title
     description: str, The title of the course run, maybe blank
   - name: courserun_url
@@ -67,7 +68,8 @@ models:
       open edx or edx.org
     tests:
     - accepted_values:
-        values: '{{ var("platforms") }}'
+        arguments:
+          values: '{{ var("platforms") }}'
   - name: user_username
     description: str, username of a learner on the edX platform (some blank from source)
   - name: user_gender
@@ -75,18 +77,20 @@ models:
       means this student signed up before this information was collected
     tests:
     - accepted_values:
-        values: '{{ var("gender_values") }}'
+        arguments:
+          values: '{{ var("gender_values") }}'
   - name: user_highest_education
     description: str, user's Level of education- blank means User did not specify
       level of education. Null means this student signed up before this information
       was collected
     tests:
     - accepted_values:
-        values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-          "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
-            \ school", "Elementary/primary school", "No formal education", "Other\
-            \ education", "Doctorate in science or engineering", "Doctorate in another\
-            \ field", "", null]
+        arguments:
+          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
+            "Associate degree", "Secondary/high school", "Junior secondary/junior\
+              \ high/middle school", "Elementary/primary school", "No formal education",
+            "Other education", "Doctorate in science or engineering", "Doctorate in\
+              \ another field", "", null]
   - name: user_birth_year
     description: int, A year of birth provided by the learner on their profile
   - name: user_profile_country
@@ -178,7 +182,8 @@ models:
     description: timestamp, timestamp of last event of user from tracking logs
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_id", "courserun_readable_id"]
 
 - name: stg__edxorg__bigquery__mitx_user_info_combo
   description: This contains users from edX.org, MITxOnline/xPro open edx sources
@@ -209,7 +214,8 @@ models:
     description: str, Gender selected by the user on their profile
     tests:
     - accepted_values:
-        values: '{{ var("gender_values") }}'
+        arguments:
+          values: '{{ var("gender_values") }}'
   - name: user_country
     description: str, Country selected by the learner on their profile
   - name: user_city
@@ -221,11 +227,12 @@ models:
       was collected
     tests:
     - accepted_values:
-        values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-          "Associate degree", "Secondary/high school", "Junior secondary/junior high/middle\
-            \ school", "Elementary/primary school", "No formal education", "Other\
-            \ education", "Doctorate in science or engineering", "Doctorate in another\
-            \ field", "", null]
+        arguments:
+          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
+            "Associate degree", "Secondary/high school", "Junior secondary/junior\
+              \ high/middle school", "Elementary/primary school", "No formal education",
+            "Other education", "Doctorate in science or engineering", "Doctorate in\
+              \ another field", "", null]
   - name: user_birth_year
     description: int, A year of birth provided by the learner on their profile
   - name: user_profile_meta
@@ -310,7 +317,8 @@ models:
       open edx or edx.org
     tests:
     - accepted_values:
-        values: '{{ var("platforms") }}'
+        arguments:
+          values: '{{ var("platforms") }}'
   - name: user_is_opted_in_for_email
     description: boolean, indicating if the learner has opted to receive marketing
       emails
@@ -319,7 +327,8 @@ models:
       updated
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_id", "courserun_readable_id"]
 
 - name: stg__edxorg__s3__program_learner_report
   description: learners program and course records in MicroMasters and XSeries programs
@@ -336,7 +345,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['MicroMasters', 'XSeries']
+        arguments:
+          values: ['MicroMasters', 'XSeries']
   - name: program_uuid
     description: str, the UUID of the program on edX.org. Each program and its separate
       track have a different UUID.
@@ -447,7 +457,8 @@ models:
       to the verified track course mode.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id", "program_uuid"]
+      arguments:
+        column_list: ["user_id", "courserun_readable_id", "program_uuid"]
 
 - name: stg__edxorg__program_entitlement
   description: staging model for edX.org program entitlement records
@@ -584,8 +595,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
-        "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
+      arguments:
+        column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
+          "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
 
 - name: stg__edxorg__s3__courserun_enrollment
   description: edX.org course run enrollments
@@ -618,7 +630,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_id", "courserun_readable_id"]
 
 - name: stg__edxorg__s3__courserun_grade
   description: edx.org course grades ingested from CSV files on OL S3 bucket
@@ -661,7 +674,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_id", "courserun_readable_id"]
 
 - name: stg__edxorg__s3__course_structure
   description: This table captures the historical changes made to the edX.org course
@@ -720,8 +734,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
-        "coursestructure_retrieved_at"]
+      arguments:
+        column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
+          "coursestructure_retrieved_at"]
 
 - name: stg__edxorg__s3__user
   description: edx.org user data
@@ -786,12 +801,14 @@ models:
     description: str, learner's gender in readable text
     tests:
     - accepted_values:
-        values: '{{ var("gender_values") }}'
+        arguments:
+          values: '{{ var("gender_values") }}'
   - name: user_highest_education
     description: str, learner's Level of education in readable text.
     tests:
     - accepted_values:
-        values: '{{ var("highest_education_values") }}'
+        arguments:
+          values: '{{ var("highest_education_values") }}'
   - name: user_year_of_birth
     description: int, learner's birth year.
   - name: user_address_country
@@ -831,8 +848,9 @@ models:
       downloadable, error, generating, notpassing, restricted , unavailable, unverified
     tests:
     - accepted_values:
-        values: ["audit_notpassing", "audit_passing", "deleted", "deleting", "downloadable",
-          "error", "generating", "notpassing", "restricted", "unavailable", "unverified"]
+        arguments:
+          values: ["audit_notpassing", "audit_passing", "deleted", "deleting", "downloadable",
+            "error", "generating", "notpassing", "restricted", "unavailable", "unverified"]
   - name: courseruncertificate_download_url
     description: str, url location for the generated certificate. Used internally
       only.
@@ -862,7 +880,8 @@ models:
       last modified
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "user_id"]
+      arguments:
+        column_list: ["courserun_readable_id", "user_id"]
 
 - name: stg__edxorg__s3__user_courseaccessrole
   description: edX.org student course access roles that lists the users who have a
@@ -892,11 +911,13 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
-          'sales_admin', 'beta_testers', 'ccx_coach']
+        arguments:
+          values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
+            'sales_admin', 'beta_testers', 'ccx_coach']
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "user_id", "courseaccess_role"]
+      arguments:
+        column_list: ["courserun_readable_id", "user_id", "courseaccess_role"]
 
 - name: stg__edxorg__s3__courserun
   description: edX.org course metadata extracted from course archive
@@ -996,7 +1017,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id", "coursestructure_block_id"]
+      arguments:
+        column_list: ["user_id", "courserun_readable_id", "coursestructure_block_id"]
 
 - name: stg__edxorg__s3__course_video
   description: edX.org course video metadata
@@ -1026,7 +1048,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "video_block_id"]
+      arguments:
+        column_list: ["courserun_readable_id", "video_block_id"]
 
 - name: stg__edxorg__s3__programs
   description: this table includes all the programs running on edX.org
@@ -1076,7 +1099,8 @@ models:
     description: str, type of the course. e.g., audit, verified, professional
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["program_uuid", "course_readable_id"]
+      arguments:
+        column_list: ["program_uuid", "course_readable_id"]
 
 - name: stg__edxorg__api__course
   description: MITx courses on edX.org, sourced from the discovery API
@@ -1223,7 +1247,8 @@ models:
     description: str, url of signature image file on edX platform
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["signatory_id", "courserun_readable_id"]
+      arguments:
+        column_list: ["signatory_id", "courserun_readable_id"]
 
 - name: stg__edxorg__s3__course_policy
   description: edx course policy data

@@ -71,14 +71,14 @@ models:
     description: str, user gender. May be null.
     tests:
     - accepted_values:
-        values: ['Male', 'Female', 'Other/Prefer Not to Say']
+        arguments:
+          values: ['Male', 'Female', 'Other/Prefer Not to Say']
   - name: user_highest_education
     description: str, user highest education. May be null.
     tests:
     - accepted_values:
-        values: '{{ var("highest_education_values") }}'
-
-
+        arguments:
+          values: '{{ var("highest_education_values") }}'
 - name: stg__mitxresidential__openedx__user_courseaccessrole
   description: This table lists the users who have a privileged role or roles for
     working in a course on Residential MITx Platform
@@ -107,12 +107,14 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['staff', 'data_researcher', 'instructor', 'beta_testers', 'finance_admin',
-          'sales_admin', 'library_user', 'org_course_creator_group', 'library_user',
-          'support']
+        arguments:
+          values: ['staff', 'data_researcher', 'instructor', 'beta_testers', 'finance_admin',
+            'sales_admin', 'library_user', 'org_course_creator_group', 'library_user',
+            'support']
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "user_id", "courseaccess_role"]
+      arguments:
+        column_list: ["courserun_readable_id", "user_id", "courseaccess_role"]
 
 - name: stg__mitxresidential__openedx__courserun
   description: Residential MITx open edX courses
@@ -186,8 +188,9 @@ models:
     tests:
     - not_null
     - relationships:
-        to: ref('stg__mitxresidential__openedx__auth_user')
-        field: user_id
+        arguments:
+          to: ref('stg__mitxresidential__openedx__auth_user')
+          field: user_id
   - name: courserunenrollment_enrollment_mode
     description: str, enrollment mode e.g. honor or audit
     tests:
@@ -202,7 +205,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "user_id"]
+      arguments:
+        column_list: ["courserun_readable_id", "user_id"]
 
 - name: stg__mitxresidential__openedx__courserun_grade
   description: Residential MITx open edX course grades
@@ -245,7 +249,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "user_id"]
+      arguments:
+        column_list: ["courserun_readable_id", "user_id"]
 
 - name: stg__mitxresidential__openedx__tracking_logs__user_activity
   description: Residential MITx event data that are emitted by server and the browser
@@ -314,8 +319,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
-        "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
+      arguments:
+        column_list: ["user_username", "useractivity_context_object", "useractivity_event_source",
+          "useractivity_event_type", "useractivity_event_object", "useractivity_timestamp"]
 
 - name: stg__mitxresidential__openedx__courseware_studentmodule
   description: It holds the most current course state and score per course section
@@ -368,7 +374,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_id", "courserun_readable_id", "coursestructure_block_id"]
+      arguments:
+        column_list: ["user_id", "courserun_readable_id", "coursestructure_block_id"]
 
 - name: stg__mitxresidential__openedx__edxval_video
   description: video content on the Residential MITx open edx platform
@@ -420,7 +427,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "video_id"]
+      arguments:
+        column_list: ["courserun_readable_id", "video_id"]
 
 - name: stg__mitxresidential__openedx__api__course_structure
   description: This table captures the historical changes made to the Residential
@@ -482,8 +490,9 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
-        "coursestructure_retrieved_at"]
+      arguments:
+        column_list: ["courserun_readable_id", "coursestructure_block_id", "coursestructure_content_hash",
+          "coursestructure_retrieved_at"]
 
 - name: stg__mitxresidential__openedx__courseware_studentmodulehistoryextended
   description: History of studentmodule in Residential MITx open edx platform

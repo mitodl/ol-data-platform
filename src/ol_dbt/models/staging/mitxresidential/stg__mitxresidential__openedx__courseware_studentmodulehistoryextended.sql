@@ -1,10 +1,9 @@
 {{ config(
-    materialized='incremental',
-    unique_key = 'studentmodulehistoryextended_id',
+    materialized="incremental",
+    unique_key="studentmodulehistoryextended_id",
     incremental_strategy='delete+insert',
-    views_enabled=false,
-  )
-}}
+    views_enabled=false
+) }}
 
 with source as (
 

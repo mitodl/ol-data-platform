@@ -110,7 +110,8 @@ models:
     description: str, course_speciality. e.g. Architectural Engineering
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["course_uuid", "course_topic", "course_subtopic", "course_speciality"]
+      arguments:
+        column_list: ["course_uuid", "course_topic", "course_subtopic", "course_speciality"]
 
 - name: int__ocw__course_instructors
   description: supporting table containing tabular instructor profile data for OCW
@@ -142,7 +143,8 @@ models:
     description: str, instructor's salutation e.g. Dr.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["course_uuid", "course_instructor_uuid"]
+      arguments:
+        column_list: ["course_uuid", "course_instructor_uuid"]
 
 - name: int__ocw__course_departments
   description: supporting table containing tabular department number and name for
@@ -163,7 +165,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["course_uuid", "course_department_number"]
+      arguments:
+        column_list: ["course_uuid", "course_department_number"]
 
 - name: int__ocw__resources
   description: supporting table for resources in OCW
@@ -254,4 +257,5 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["course_uuid", "resource_uuid"]
+      arguments:
+        column_list: ["course_uuid", "resource_uuid"]

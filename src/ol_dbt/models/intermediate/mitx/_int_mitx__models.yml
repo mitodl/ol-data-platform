@@ -60,15 +60,17 @@ models:
       in the micromasters database
     tests:
     - relationships:
-        to: ref('int__micromasters__programs')
-        field: program_id
+        arguments:
+          to: ref('int__micromasters__programs')
+          field: program_id
   - name: mitxonline_program_id
     description: int, foreign key to courses_program representing a single program
       in the mitxonline database
     tests:
     - relationships:
-        to: ref('int__mitxonline__programs')
-        field: program_id
+        arguments:
+          to: ref('int__mitxonline__programs')
+          field: program_id
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
       or periods. e.g. 6.002.1x
@@ -88,7 +90,8 @@ models:
     description: str, one of 'Elective' or 'Core'
     tests:
     - accepted_values:
-        values: ["Elective", "Core"]
+        arguments:
+          values: ["Elective", "Core"]
     - not_null
   - name: programrequirement_title
     description: str, the title of the requirement
@@ -219,7 +222,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["MITx Online", "edX.org"]
+        arguments:
+          values: ["MITx Online", "edX.org"]
   - name: courserunenrollment_id
     description: int, internal ID and foreign key to courserunenrollments in MITx
       Online. Null for enrollments on edX.org.
@@ -247,7 +251,8 @@ models:
       'enrolled', 'unenrolled', maybe blank
     tests:
     - accepted_values:
-        values: ['deferred', 'transferred', 'refunded', 'unenrolled']
+        arguments:
+          values: ['deferred', 'transferred', 'refunded', 'unenrolled']
   - name: courserunenrollment_is_edx_enrolled
     description: boolean, indicating whether the user is enrolled on edX platform.
       For edx.org course enrollment, it would always be true.
@@ -298,7 +303,8 @@ models:
     description: str, country code provided by the user from MITx Online or edX.org
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
 
 - name: int__mitx__courserun_enrollments_with_programs
   description: MITx courserun enrollments combined from MITx Online and edX.org. For
@@ -312,7 +318,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["MITx Online", "edX.org"]
+        arguments:
+          values: ["MITx Online", "edX.org"]
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the run
     tests:
@@ -335,7 +342,8 @@ models:
       'enrolled', 'unenrolled', maybe blank
     tests:
     - accepted_values:
-        values: ['deferred', 'transferred', 'refunded', 'unenrolled']
+        arguments:
+          values: ['deferred', 'transferred', 'refunded', 'unenrolled']
   - name: user_id
     description: int, user ID on the corresponding platform - MITx Online or edX.org
     tests:
@@ -381,8 +389,9 @@ models:
     description: int, primary key representing the program in the MicroMasters database
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id",
-        "micromasters_program_id", "mitxonline_program_id"]
+      arguments:
+        column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id",
+          "micromasters_program_id", "mitxonline_program_id"]
 - name: int__mitx__courserun_certificates
   description: MITx course certificates combined from MITx Online and edX.org. It
     includes certificates that are not revoked from MITx Online, and downloadable
@@ -394,7 +403,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["MITx Online", "edX.org"]
+        arguments:
+          values: ["MITx Online", "edX.org"]
   - name: courserun_title
     description: str, title of the course run, maybe blank for some edX.org runs
   - name: course_number
@@ -430,7 +440,8 @@ models:
     description: str, user full name on edX.org or MITxOnline
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
 
 - name: int__mitx__courserun_grades
   description: MITx course grades combined from MITx Online and edX.org
@@ -441,7 +452,8 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ["MITx Online", "edX.org"]
+        arguments:
+          values: ["MITx Online", "edX.org"]
   - name: course_number
     description: str, unique string for the course. It can contain letters, numbers,
       or periods. e.g. 6.002.1x
@@ -476,7 +488,8 @@ models:
     - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
+      arguments:
+        column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id"]
 
 - name: int__mitx__program_certificates
   description: MITx program certificates combined from MicroMasters and MITx Online
@@ -505,4 +518,5 @@ models:
       is timestamp for when program certificates were initially created
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
-      column_list: ["user_email", "program_title"]
+      arguments:
+        column_list: ["user_email", "program_title"]
