@@ -106,6 +106,17 @@ with mitxonline_payments as (
     left join dim_payment_method on combined_payments.payment_method = dim_payment_method.payment_method_code
 )
 
+{% if is_incremental() %}
+-- Pre-compute per-platform watermarks to avoid the correlated subquery anti-pattern.
+-- Without this, Trino fans out to (left rows × target rows per platform) intermediate
+-- rows for the AssignUniqueId + LeftJoin + StreamingAggregate execution pattern.
+, incremental_watermarks as (
+    select platform, max(transaction_created_on) as max_created_on
+    from {{ this }}
+    group by platform
+)
+{% endif %}
+
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
@@ -117,21 +128,21 @@ with mitxonline_payments as (
         , payment_date_key
         , user_fk
         , platform_fk
-        , platform
+        , pwf.platform
         , payment_method_fk
         , transaction_amount
         , transaction_type
         , transaction_status
         , transaction_created_on
-    from payments_with_fks
+    from payments_with_fks as pwf
 
     {% if is_incremental() %}
+    -- left join preserves payments from platforms not yet in the target table
+    left join incremental_watermarks w on w.platform = pwf.platform
     where (
-        transaction_created_on > (
-            select max(transaction_created_on) from {{ this }}
-            where platform = payments_with_fks.platform
-        )
-        or transaction_created_on is null
+        w.max_created_on is null  -- platform not yet in target, include all
+        or pwf.transaction_created_on > w.max_created_on
+        or pwf.transaction_created_on is null
     )
     {% endif %}
 )

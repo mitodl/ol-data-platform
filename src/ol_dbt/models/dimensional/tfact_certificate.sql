@@ -152,6 +152,19 @@ with mitxonline_certificates as (
         on dim_certificate_type.certificate_type_code = combined_certificates.certificate_type_code
 )
 
+{% if is_incremental() %}
+-- Pre-compute per-platform watermarks in a single scan of {{ this }}.
+-- The correlated subquery pattern (WHERE platform = outer.platform) causes
+-- Trino to execute AssignUniqueId + LeftJoin(all target rows on platform) +
+-- StreamingAggregate, producing a 25B-row intermediate at 7TB.
+-- A pre-computed CTE + regular equijoin eliminates that fan-out entirely.
+, incremental_watermarks as (
+    select platform, max(certificate_created_on) as max_created_on
+    from {{ this }}
+    group by platform
+)
+{% endif %}
+
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
@@ -164,18 +177,20 @@ with mitxonline_certificates as (
         , courserun_fk
         , platform_fk
         , certificate_type_fk
-        , platform
+        , cwf.platform
         , certificate_uuid
         , certificate_is_revoked
         , certificate_created_on
-    from certificates_with_fks
+    from certificates_with_fks as cwf
 
     {% if is_incremental() %}
-    where certificate_created_on > (
-            select max(certificate_created_on) from {{ this }}
-            where platform = certificates_with_fks.platform
-        )
-        or certificate_created_on is null
+    -- left join preserves certificates from platforms not yet in the target table
+    left join incremental_watermarks w on w.platform = cwf.platform
+    where (
+        w.max_created_on is null  -- platform not yet in target, include all
+        or cwf.certificate_created_on > w.max_created_on
+        or cwf.certificate_created_on is null
+    )
     {% endif %}
 )
 

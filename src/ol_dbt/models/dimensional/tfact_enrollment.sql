@@ -201,6 +201,18 @@ with mitxonline_enrollments as (
         on combined_enrollments.platform = dim_platform_lookup.platform_readable_id
 )
 
+{% if is_incremental() %}
+-- Pre-compute per-(platform, enrollment_type) watermarks to avoid the correlated
+-- subquery anti-pattern. Without this, Trino executes the WHERE as:
+--   AssignUniqueId + LeftJoin(all target rows on platform+type) + StreamingAggregate
+-- which fans out to billions of intermediate rows.
+, incremental_watermarks as (
+    select platform, enrollment_type, max(enrollment_created_on) as max_created_on
+    from {{ this }}
+    group by platform, enrollment_type
+)
+{% endif %}
+
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
@@ -220,24 +232,17 @@ with mitxonline_enrollments as (
         , enrollment_mode
         , enrollment_status
         , enrollment_created_on
-    from enrollments_with_fks
+    from enrollments_with_fks as ewf
 
     {% if is_incremental() %}
+    -- left join preserves enrollments from platforms/types not yet in the target table
+    left join incremental_watermarks w
+        on w.platform = ewf.platform
+        and w.enrollment_type = case when ewf.program_id is not null then 'program' else 'course' end
     where (
-        enrollment_created_on > (
-            select max(enrollment_created_on) from {{ this }}
-            where
-                platform = enrollments_with_fks.platform
-                -- Scope watermark to enrollment_type so course and program enrollments
-                -- on the same platform don't contaminate each other's high-water mark.
-                -- A recently-ingested course enrollment must not silently filter out
-                -- program enrollments with older timestamps on the next incremental run.
-                and enrollment_type = case
-                    when enrollments_with_fks.program_id is not null then 'program'
-                    else 'course'
-                end
-        )
-        or enrollment_created_on is null
+        w.max_created_on is null  -- platform/type not yet in target, include all
+        or ewf.enrollment_created_on > w.max_created_on
+        or ewf.enrollment_created_on is null
     )
     {% endif %}
 )

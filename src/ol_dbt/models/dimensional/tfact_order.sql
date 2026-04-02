@@ -147,6 +147,17 @@ with mitxonline_orders as (
         and combined_orders.platform = dim_product.platform
 )
 
+{% if is_incremental() %}
+-- Pre-compute per-platform watermarks to avoid the correlated subquery anti-pattern.
+-- Without this, Trino fans out to (left rows × target rows per platform) intermediate
+-- rows for the AssignUniqueId + LeftJoin + StreamingAggregate execution pattern.
+, incremental_watermarks as (
+    select platform, max(order_updated_on) as max_updated_on
+    from {{ this }}
+    group by platform
+)
+{% endif %}
+
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
@@ -162,23 +173,23 @@ with mitxonline_orders as (
         , platform_fk
         , discount_type_fk
         , product_fk
-        , platform
+        , owf.platform
         , order_state
         , line_price
         , order_total_price_paid
         , order_reference_number
         , order_updated_on
-    from orders_with_fks
+    from orders_with_fks as owf
 
     {% if is_incremental() %}
     -- Per-platform max prevents xPro updates from advancing the global watermark
     -- past MITx Online order creation times, which would cause silent data loss.
+    -- left join preserves orders from platforms not yet in the target table
+    left join incremental_watermarks w on w.platform = owf.platform
     where (
-        order_updated_on >= (
-            select max(order_updated_on) from {{ this }}
-            where platform = orders_with_fks.platform
-        )
-        or order_updated_on is null
+        w.max_updated_on is null  -- platform not yet in target, include all
+        or owf.order_updated_on >= w.max_updated_on
+        or owf.order_updated_on is null
     )
     {% endif %}
 )
