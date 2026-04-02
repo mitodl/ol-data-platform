@@ -348,6 +348,8 @@ models:
     description: str, when the user joined on MITx Pro.
   - name: user_joined_on_residential
     description: str, when the user joined on Residential MITx.
+  - name: micromasters_user_id
+    description: int, user ID on the MicroMasters platform
 
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
@@ -693,6 +695,9 @@ models:
     description: string, URL of the page where the discussion event occurred
   - name: user_forums_roles
     description: string, roles of the user in the forums
+  - name: courserun_fk
+    description: string, foreign key to dim_course_run, referencing the course run
+      where the discussion event occurred
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -917,3 +922,6 @@ models:
     description: string, unique identifier for the chat thread in the Learn AI database.
   - name: learn_ai_checkpoint_pk
     description: int, foreign key to chatbots_djangocheckpoint in Learn AI database
+  - name: platform_fk
+    description: string, foreign key to dim_platform, referencing the platform where
+      the chatbot event occurred

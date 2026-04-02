@@ -144,6 +144,10 @@ models:
     description: str, open edX ID formatted as course-v1:{org}+{course code} for MITx
       Online and xPro courses, and {org}/{course} for edX.org courses. May be null
       for some Bootcamps courses.
+  - name: courseruncertificate_created_on
+    description: timestamp, date and time when the course certificate was initially
+      created on the corresponding platform; null when the learner has not yet earned
+      a certificate
 
 - name: int__combined__courserun_certificates
   description: course certificates model combined from different platforms. It excludes

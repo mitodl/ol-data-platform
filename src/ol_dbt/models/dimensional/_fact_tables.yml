@@ -157,6 +157,9 @@ models:
     description: Order reference/confirmation number
   - name: order_updated_on
     description: Order last update timestamp (for incremental processing)
+  - name: discount_type_fk
+    description: Foreign key to dim_discount_type; null when no discount was applied
+      to this order line
 
 - name: tfact_payment
   description: >

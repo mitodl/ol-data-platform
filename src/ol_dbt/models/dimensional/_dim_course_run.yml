@@ -87,3 +87,13 @@ models:
     description: Boolean indicating current version
     tests:
     - not_null
+  - name: courserun_start_on
+    description: timestamp, the start date/time of the course run (raw timestamp column)
+  - name: courserun_end_on
+    description: timestamp, the end date/time of the course run (raw timestamp column)
+  - name: enrollment_start
+    description: timestamp, the start of the enrollment window for this course run
+  - name: enrollment_end
+    description: timestamp, the end of the enrollment window for this course run
+  - name: source_id
+    description: string, source system identifier for this course run record

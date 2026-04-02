@@ -278,3 +278,6 @@ models:
       program-v1:MITx+DEDP
     tests:
     - not_null
+  - name: program_is_dedp
+    description: boolean, indicates whether this program is the Data, Economics, and
+      Design of Policy (DEDP) program

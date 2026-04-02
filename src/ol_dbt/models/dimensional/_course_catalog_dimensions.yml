@@ -41,6 +41,9 @@ models:
     - not_null
   - name: parent_topic_fk
     description: Self-referencing FK to parent topic within the same platform
+  - name: parent_topic_name
+    description: string, display name of the parent topic in the hierarchy; null for
+      top-level topics
   - name: primary_platform
     description: Platform where this topic record originates
 
