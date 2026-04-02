@@ -1,6 +1,7 @@
 with problem_structure as (
     select
-        courserun_readable_id
+        platform
+        , courserun_readable_id
         , block_id as problem_block_fk
         , sequential_block_id as sequential_block_fk
         , chapter_block_id as chapter_block_fk
@@ -68,6 +69,7 @@ with problem_structure as (
     left join problem_structure
         on problem_attempt_aggregated.problem_block_fk = problem_structure.problem_block_fk
          and problem_attempt_aggregated.courserun_readable_id = problem_structure.courserun_readable_id
+         and problem_attempt_aggregated.platform = problem_structure.platform
 )
 
 select

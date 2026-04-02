@@ -144,7 +144,8 @@ with mitxonline_certificates as (
                 and combined_certificates.courserun_id = dim_course_run.source_id
                 and combined_certificates.platform = dim_course_run.platform)
             or (combined_certificates.platform in ('edxorg', 'micromasters')
-                and combined_certificates.courserun_readable_id = dim_course_run.courserun_readable_id)
+                and combined_certificates.courserun_readable_id = dim_course_run.courserun_readable_id
+                and dim_course_run.platform = 'edxorg')
         )
     left join dim_platform_lookup
         on combined_certificates.platform = dim_platform_lookup.platform_readable_id

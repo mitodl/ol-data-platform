@@ -1,6 +1,7 @@
 with vertical_structure as (
     select
-        courserun_readable_id
+        platform
+        , courserun_readable_id
         , block_id
         , block_index
         , sequential_block_id as sequential_block_fk
@@ -44,6 +45,7 @@ with vertical_structure as (
     left join vertical_structure
         on page_navigation_events.block_fk = vertical_structure.block_id
         and page_navigation_events.courserun_readable_id = vertical_structure.courserun_readable_id
+        and page_navigation_events.platform = vertical_structure.platform
 )
 
 select

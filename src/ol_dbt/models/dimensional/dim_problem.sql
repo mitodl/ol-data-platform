@@ -1,6 +1,7 @@
 with problems as (
     select
         content_block_pk
+        , platform
         , block_id
         , block_title
         , courserun_readable_id
@@ -10,7 +11,7 @@ with problems as (
         , nullif({{ json_query_string('block_metadata', "'$.due'") }}, 'null') as due_date
         , nullif({{ json_query_string('block_metadata', "'$.weight'") }}, 'null') as weight
         , row_number() over (
-            partition by block_id
+            partition by platform, block_id
             order by is_latest desc, retrieved_at desc
         ) as row_num
     from {{ ref('dim_course_content') }}
@@ -89,6 +90,7 @@ with problems as (
 , combined as (
     select
         problems.content_block_pk as content_block_fk
+        , problems.platform
         , problems.markdown
         , problems.max_attempts
         , problems.start_date
@@ -108,6 +110,7 @@ with problems as (
 select
     problem_block_pk
     , content_block_fk
+    , platform
     , courserun_readable_id
     , problem_name
     , markdown

@@ -16,7 +16,8 @@ with mitxonline_course_structure as (
 
 , combined as (
     select
-        courserun_readable_id
+        'mitxonline' as platform
+        , courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
         , coursestructure_parent_block_id
@@ -29,7 +30,8 @@ with mitxonline_course_structure as (
     union distinct
 
     select
-        courserun_readable_id
+        'edxorg' as platform
+        , courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
         , coursestructure_parent_block_id
@@ -42,7 +44,8 @@ with mitxonline_course_structure as (
     union distinct
 
     select
-        courserun_readable_id
+        'mitxpro' as platform
+        , courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
         , coursestructure_parent_block_id
@@ -55,7 +58,8 @@ with mitxonline_course_structure as (
     union distinct
 
     select
-        courserun_readable_id
+        'residential' as platform
+        , courserun_readable_id
         , coursestructure_block_index
         , coursestructure_block_id
         , coursestructure_parent_block_id
@@ -68,10 +72,11 @@ with mitxonline_course_structure as (
 
 , latest_course_structure as (
     select
-        courserun_readable_id
+        platform
+        , courserun_readable_id
         , max(coursestructure_retrieved_at) as max_retrieved_date
     from combined
-    group by courserun_readable_id
+    group by platform, courserun_readable_id
 )
 
 , combined_with_hierarchy as (
@@ -80,28 +85,28 @@ with mitxonline_course_structure as (
         , last_value(
             case when coursestructure_block_category = 'sequential' then coursestructure_block_id end
         ) ignore nulls over (
-            partition by courserun_readable_id, coursestructure_retrieved_at
+            partition by platform, courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as sequential_block_id
         , last_value(
             case when coursestructure_block_category = 'sequential' then coursestructure_block_title end
         ) ignore nulls over (
-            partition by courserun_readable_id, coursestructure_retrieved_at
+            partition by platform, courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as sequential_title
         , last_value(
             case when coursestructure_block_category = 'chapter' then coursestructure_block_id end
         ) ignore nulls over (
-            partition by courserun_readable_id, coursestructure_retrieved_at
+            partition by platform, courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as chapter_block_id
         , last_value(
             case when coursestructure_block_category = 'chapter' then coursestructure_block_title end
         ) ignore nulls over (
-            partition by courserun_readable_id, coursestructure_retrieved_at
+            partition by platform, courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as chapter_title
@@ -110,7 +115,8 @@ with mitxonline_course_structure as (
 
 , combined_course_content as (
     select
-        combined_with_hierarchy.courserun_readable_id
+        combined_with_hierarchy.platform
+        , combined_with_hierarchy.courserun_readable_id
         , combined_with_hierarchy.coursestructure_block_index as block_index
         , combined_with_hierarchy.coursestructure_block_id as block_id
         , combined_with_hierarchy.coursestructure_parent_block_id as parent_block_id
@@ -126,12 +132,14 @@ with mitxonline_course_structure as (
     from combined_with_hierarchy
     left join latest_course_structure
         on
-            combined_with_hierarchy.courserun_readable_id = latest_course_structure.courserun_readable_id
+            combined_with_hierarchy.platform = latest_course_structure.platform
+            and combined_with_hierarchy.courserun_readable_id = latest_course_structure.courserun_readable_id
             and combined_with_hierarchy.coursestructure_retrieved_at = latest_course_structure.max_retrieved_date
 )
 
 select
     {{ dbt_utils.generate_surrogate_key(['block_id','retrieved_at']) }} as content_block_pk
+    , platform
     , courserun_readable_id
     , block_index
     , block_id

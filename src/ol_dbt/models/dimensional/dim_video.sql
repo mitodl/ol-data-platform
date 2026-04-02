@@ -1,6 +1,7 @@
 with video_content as (
     select
         content_block_pk
+        , platform
         , block_id
         , block_title
         , courserun_readable_id
@@ -13,7 +14,7 @@ with video_content as (
         , nullif({{ json_query_string('block_metadata', "'$.transcripts'") }}, 'null') as transcripts
         , nullif({{ json_query_string('block_metadata', "'$.edx_video_id'") }}, 'null') as video_edx_uuid
         , row_number() over (
-            partition by block_id
+            partition by platform, block_id
             order by is_latest desc, retrieved_at desc
         ) as row_num
     from {{ ref('dim_course_content') }}
@@ -68,6 +69,7 @@ with video_content as (
 , combined as (
     select
         video_content.block_id as video_block_pk
+        , video_content.platform
         , video_content.video_id
         , video_content.content_block_pk as content_block_fk
         , video_content.courserun_readable_id
@@ -89,6 +91,7 @@ with video_content as (
 
 select
     video_block_pk
+    , platform
     , content_block_fk
     , courserun_readable_id
     , video_edx_uuid

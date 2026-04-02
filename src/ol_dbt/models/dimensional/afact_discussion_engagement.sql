@@ -63,5 +63,7 @@ left join discussion_topics
     on
         aggregated.commentable_id = discussion_topics.commentable_id
         and aggregated.courserun_readable_id = discussion_topics.courserun_readable_id
+        and aggregated.platform = discussion_topics.platform
 left join course_content
     on discussion_topics.content_block_fk = course_content.content_block_pk
+    and discussion_topics.platform = course_content.platform
