@@ -238,34 +238,54 @@ with mitxonline_problem_events as (
 -- history record); aggregating here collapses multiple submissions for the same attempt to
 -- the latest state, matching the per-attempt grain of this model. Without this aggregation,
 -- 57M+ per-submission rows flow into the dedup window function unnecessarily.
+--
+-- row_number() over (...) replaces Trino-specific max_by() to keep the model portable
+-- across DuckDB and other adapters.
+, combined_studentmodule_ranked as (
+    select
+        sp.platform
+        , sp.user_fk
+        , sp.openedx_user_id
+        , sp.user_username
+        , sp.courserun_readable_id
+        , 'problem_check' as event_type
+        , sp.correct_map as event_json
+        , sp.problem_block_id
+        , sp.answers
+        , sp.attempt
+        , sp.success
+        , sp.grade
+        , sp.max_grade
+        , sp.event_timestamp
+        , row_number() over (
+            partition by sp.platform, sp.openedx_user_id, sp.courserun_readable_id, sp.problem_block_id, sp.attempt
+            order by sp.event_timestamp desc
+        ) as rn
+    from {{ ref('tfact_studentmodule_problems') }} as sp
+    {% if is_incremental() %}
+    left join watermarks on watermarks.platform = sp.platform
+    where (watermarks.max_ts is null or sp.event_timestamp > watermarks.max_ts)
+    {% endif %}
+)
+
 , combined_studentmodule as (
     select
         platform
-        , max_by(user_fk, event_timestamp) as user_fk
+        , user_fk
         , openedx_user_id
-        , max_by(user_username, event_timestamp) as user_username
+        , user_username
         , courserun_readable_id
-        , 'problem_check' as event_type
-        , max_by(correct_map, event_timestamp) as event_json
+        , event_type
+        , event_json
         , problem_block_id
-        , max_by(answers, event_timestamp) as answers
+        , answers
         , attempt
-        , max_by(success, event_timestamp) as success
-        , max_by(grade, event_timestamp) as grade
-        , max_by(max_grade, event_timestamp) as max_grade
-        , max(event_timestamp) as event_timestamp
-    from {{ ref('tfact_studentmodule_problems') }}
-    {% if is_incremental() %}
-    where (
-        (platform = 'mitxonline'
-            and event_timestamp > (select max_ts from mitxonline_watermark))
-        or (platform = 'mitxpro'
-            and event_timestamp > (select max_ts from mitxpro_watermark))
-        or (platform = 'residential'
-            and event_timestamp > (select max_ts from residential_watermark))
-    )
-    {% endif %}
-    group by platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
+        , success
+        , grade
+        , max_grade
+        , event_timestamp
+    from combined_studentmodule_ranked
+    where rn = 1
 )
 
 , combined as (

@@ -79,7 +79,7 @@ with
             program_is_live as is_active,
             false as is_external,
             cast(null as varchar) as partner_platform_name,
-            'MITx Online' as platform_readable_id,
+            '{{ var("micromasters") }}' as platform_readable_id,
             'micromasters' as platform_code,
             cast(null as varchar) as first_published_date,
             cast(null as varchar) as enrollment_start_date,

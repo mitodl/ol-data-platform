@@ -191,8 +191,9 @@ models:
         field: date_key
   - name: user_fk
     description: >
-      Foreign key to dim_user. Always null — payment gateway callbacks do not carry
-      user identity. Resolvable via order_id join to tfact_order (tracked as D1).
+      Foreign key to dim_user, resolved via the payment's order_id → tfact_order →
+      dim_user chain. Null when no matching order exists for the payment or when the
+      order cannot be mapped to a user in dim_user.
   - name: platform_fk
     description: Foreign key to dim_platform
     tests:

@@ -36,20 +36,20 @@
       , cast(studentmodule_problem_grade as varchar) as grade
       , cast(studentmodule_problem_max_grade as varchar) as max_grade
       , cast(studentmodule_created_on as timestamp(6) with time zone) as event_timestamp
-      , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
-      , json_query(studentmodule_state_data, 'lax $.seed' omit quotes) as seed
+      , {{ json_query_string('studentmodule_state_data', "'$.attempts'") }} as attempt
+      , {{ json_query_string('studentmodule_state_data', "'$.seed'") }} as seed
       -- correct_map is the per-part correctness for this submission only (~400 bytes).
       -- correct_map_history (the growing accumulation) is intentionally excluded.
-      , cast(json_query(studentmodule_state_data, 'lax $.correct_map') as varchar) as correct_map
+      , cast({{ json_extract_value('studentmodule_state_data', "'$.correct_map'") }} as varchar) as correct_map
       -- student_answers is the per-part answers for this submission. Keys are opaque
       -- problem-part IDs matching those in correct_map; values are strings or arrays
       -- (multiple-choice). Not collapsible to fixed columns due to sparse/variable keys.
-      , cast(json_query(studentmodule_state_data, 'lax $.student_answers') as varchar) as answers
+      , cast({{ json_extract_value('studentmodule_state_data', "'$.student_answers'") }} as varchar) as answers
     from {{ studentmodulehistory_table }}
     where
       -- Records without an attempt number are initial module-creation events, not
       -- student submissions. Exclude them.
-      json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) is not null
+      {{ json_query_string('studentmodule_state_data', "'$.attempts'") }} is not null
       {% if watermark_expr %}
         and (
           {{ watermark_expr }} is null
