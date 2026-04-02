@@ -21,7 +21,7 @@ with mitxonline_orders as (
         , order_total_price_paid
         , order_reference_number
         , order_created_on
-        , order_created_on as order_updated_on  -- mitxonline has no updated_on
+        , order_updated_on
         , 'mitxonline' as platform
         , case
             when discount_amount_text like 'Fixed Price: 0%' then 'free'
