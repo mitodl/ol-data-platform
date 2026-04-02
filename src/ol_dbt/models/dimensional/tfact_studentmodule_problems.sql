@@ -1,6 +1,6 @@
 {{ config(
     materialized='incremental',
-    unique_key=['platform', 'openedx_user_id', 'courserun_readable_id', 'problem_block_id', 'attempt'],
+    unique_key=['platform', 'studentmodulehistoryextended_id'],
     incremental_strategy='delete+insert',
     on_schema_change='append_new_columns',
     properties={
@@ -99,15 +99,16 @@ with mitxonline_studentmodule_problems as (
         , users.user_mitxonline_username as user_username
         , sm.courserun_readable_id
         , sm.studentmodule_id
-        , 'problem_check' as event_type
-        , sm.studentmodule_state_data as event_json
+        , sm.studentmodulehistoryextended_id
         , sm.coursestructure_block_id as problem_block_id
-        , sm.answers
         , sm.attempt
-        , sm.event_timestamp
+        , sm.seed
+        , sm.correct_map
+        , sm.answers
         , sm.grade
         , sm.max_grade
         , sm.success
+        , sm.event_timestamp
     from mitxonline_studentmodule_problems as sm
     left join users on sm.user_id = users.mitxonline_openedx_user_id
 )
@@ -120,15 +121,16 @@ with mitxonline_studentmodule_problems as (
         , users.user_mitxpro_username as user_username
         , sm.courserun_readable_id
         , sm.studentmodule_id
-        , 'problem_check' as event_type
-        , sm.studentmodule_state_data as event_json
+        , sm.studentmodulehistoryextended_id
         , sm.coursestructure_block_id as problem_block_id
-        , sm.answers
         , sm.attempt
-        , sm.event_timestamp
+        , sm.seed
+        , sm.correct_map
+        , sm.answers
         , sm.grade
         , sm.max_grade
         , sm.success
+        , sm.event_timestamp
     from mitxpro_studentmodule_problems as sm
     left join users on sm.user_id = users.mitxpro_openedx_user_id
 )
@@ -141,15 +143,16 @@ with mitxonline_studentmodule_problems as (
         , users.user_residential_username as user_username
         , sm.courserun_readable_id
         , sm.studentmodule_id
-        , 'problem_check' as event_type
-        , sm.studentmodule_state_data as event_json
+        , sm.studentmodulehistoryextended_id
         , sm.coursestructure_block_id as problem_block_id
-        , sm.answers
         , sm.attempt
-        , sm.event_timestamp
+        , sm.seed
+        , sm.correct_map
+        , sm.answers
         , sm.grade
         , sm.max_grade
         , sm.success
+        , sm.event_timestamp
     from mitxresidential_studentmodule_problems as sm
     left join users on sm.user_id = users.residential_openedx_user_id
 )
@@ -169,24 +172,6 @@ with mitxonline_studentmodule_problems as (
     from residential_studentmodule_combined
 )
 
--- Deduplicate on the fact key. The macro already collapses history to one row
--- per (studentmodule_id, attempt), but two different studentmodule records can
--- share the same (user, course, problem, attempt) key. Keep the latest
--- event_timestamp — the final state with the most complete submission history.
-, deduped_combined as (
-    select *
-    from (
-        select
-            *
-            , row_number() over (
-                partition by platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
-                order by event_timestamp desc
-            ) as rn
-        from combined
-    )
-    where rn = 1
-)
-
 select
     user_fk
     , platform
@@ -194,13 +179,14 @@ select
     , user_username
     , courserun_readable_id
     , studentmodule_id
-    , event_type
-    , event_json
+    , studentmodulehistoryextended_id
     , problem_block_id
-    , answers
     , attempt
-    , event_timestamp
+    , seed
+    , correct_map
+    , answers
     , grade
     , max_grade
     , success
-from deduped_combined
+    , event_timestamp
+from combined

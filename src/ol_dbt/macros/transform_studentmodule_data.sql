@@ -1,112 +1,92 @@
 {% macro generate_studentmodule_problem_events(studentmodule_table, studentmodulehistory_table, user_id_field, platform='mitxonline', watermark_expr=none) %}
+  -- Narrow projection from studentmodule: only the fields needed to annotate
+  -- each history record. No watermark filter here — we must include ALL problems
+  -- that have new submissions, not just problems first created after the watermark.
+  -- (Filtering studentmodule by creation time would silently drop re-submissions
+  -- on older problems, since a student can submit attempt N+1 on a problem created
+  -- months ago.)
   with studentmodule as (
     select
       studentmodule_id
       , courserun_readable_id
       , coursestructure_block_id
-      , coursestructure_block_category
       , {{ user_id_field }} as user_id
-      , studentmodule_state_data
-      , cast(studentmodule_problem_grade as varchar) as grade
-      , cast(studentmodule_problem_max_grade as varchar) as max_grade
-      , from_iso8601_timestamp_nanos(studentmodule_created_on) as studentmodule_created_on
-      , from_iso8601_timestamp_nanos(studentmodule_updated_on) as studentmodule_updated_on
-      , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
     from {{ studentmodule_table }}
     where coursestructure_block_category = 'problem'
-    {% if watermark_expr %}
-      and from_iso8601_timestamp_nanos(studentmodule_created_on) > {{ watermark_expr }}
-    {% elif is_incremental() %}
-      and from_iso8601_timestamp_nanos(studentmodule_created_on) > (
-          select max(event_timestamp) from {{ this }}
-          where platform = '{{ platform }}'
-      )
-    {% endif %}
-
   )
 
-  -- Read the raw history table and extract the attempt number per row.
-  , studentmodulehistory_raw as (
+  -- One row per submission event. Each time a student clicks "Check", OpenEdX
+  -- writes a history record with the state at that moment. The state_data JSON
+  -- contains:
+  --   attempts      integer  — which submission number this is (1-based)
+  --   seed          integer  — random seed for this student/problem variant
+  --   correct_map   object   — per-part correctness for THIS submission only
+  --   student_answers object — per-part answers for THIS submission
+  --   correct_map_history array — growing accumulation of all prior submissions;
+  --                               redundant across rows — reconstructible by
+  --                               ordering on event_timestamp, so excluded here
+  --   input_state   object   — UI widget rendering state; not analytically useful
+  --
+  -- studentmodule_created_on is timestamp(6) in the Iceberg staging table;
+  -- cast directly to timestamp with time zone (session TZ = UTC).
+  , studentmodulehistory as (
     select
-      studentmodule_id
-      , studentmodule_state_data
+      studentmodulehistoryextended_id
+      , studentmodule_id
       , cast(studentmodule_problem_grade as varchar) as grade
       , cast(studentmodule_problem_max_grade as varchar) as max_grade
-      -- studentmodule_created_on is already timestamp(6) in the Iceberg staging table.
-      -- The previous from_iso8601_timestamp_nanos(to_iso8601(col)) round-trip was a
-      -- wasteful string serialization for 89M+ residential history rows. Cast directly.
-      , cast(studentmodule_created_on as timestamp(6) with time zone) as studentmodule_created_on
+      , cast(studentmodule_created_on as timestamp(6) with time zone) as event_timestamp
       , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
+      , json_query(studentmodule_state_data, 'lax $.seed' omit quotes) as seed
+      -- correct_map is the per-part correctness for this submission only (~400 bytes).
+      -- correct_map_history (the growing accumulation) is intentionally excluded.
+      , cast(json_query(studentmodule_state_data, 'lax $.correct_map') as varchar) as correct_map
+      -- student_answers is the per-part answers for this submission. Keys are opaque
+      -- problem-part IDs matching those in correct_map; values are strings or arrays
+      -- (multiple-choice). Not collapsible to fixed columns due to sparse/variable keys.
+      , cast(json_query(studentmodule_state_data, 'lax $.student_answers') as varchar) as answers
     from {{ studentmodulehistory_table }}
-    {% if watermark_expr %}
-      where cast(studentmodule_created_on as timestamp(6) with time zone) > {{ watermark_expr }}
-    {% elif is_incremental() %}
-      where cast(studentmodule_created_on as timestamp(6) with time zone) > (
+    where
+      -- Records without an attempt number are initial module-creation events, not
+      -- student submissions. Exclude them.
+      json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) is not null
+      {% if watermark_expr %}
+        and cast(studentmodule_created_on as timestamp(6) with time zone) > {{ watermark_expr }}
+      {% elif is_incremental() %}
+        and cast(studentmodule_created_on as timestamp(6) with time zone) > (
           select max(event_timestamp) from {{ this }}
-            where platform = '{{ platform }}'
-      )
-    {% endif %}
-
+          where platform = '{{ platform }}'
+        )
+      {% endif %}
   )
 
-  -- Pre-aggregate to one row per (studentmodule_id, attempt), keeping the
-  -- LAST (most recent) history entry for each attempt.
-  --
-  -- The history table stores one row per submission event within an attempt.
-  -- The state_data JSON contains a `correct_map_history` array that grows with
-  -- every submission — the LAST record therefore contains the complete view of
-  -- all submissions for that attempt, the final grade, and the final student
-  -- answers. Using max_by here:
-  --   1. Collapses the fan-out before joins (eliminates the expensive global
-  --      shuffle in the downstream TopNRanking dedup).
-  --   2. Produces the semantically correct event_json: the final state with
-  --      the full submission history, not just the first (incomplete) state.
-  -- max(studentmodule_created_on) is stored as the timestamp so the incremental
-  -- watermark in the fact table correctly advances to the latest processed event.
-  , studentmodulehistoryextended as (
-    select
-      studentmodule_id
-      , max_by(studentmodule_state_data, studentmodule_created_on) as studentmodule_state_data
-      , max_by(grade, studentmodule_created_on) as grade
-      , max_by(max_grade, studentmodule_created_on) as max_grade
-      , max(studentmodule_created_on) as studentmodule_created_on
-      , attempt
-    from studentmodulehistory_raw
-    where attempt is not null
-    group by studentmodule_id, attempt
-  )
-
-  -- Pull out arrays from the state data
-  -- Exclude rows without an attempt number, as these are not valid problem events
-  -- Records from historyextended that join to studentmodule with fallback/default logic
+  -- Join history events to studentmodule for course/block/user context.
+  -- Inner join: history records without a matching studentmodule are excluded
+  -- (orphaned rows with no owning problem module).
   , history_joined as (
     select
       sm.user_id
       , sm.courserun_readable_id
       , sm.studentmodule_id
       , sm.coursestructure_block_id
-      , coalesce(smhe.studentmodule_state_data, sm.studentmodule_state_data) as studentmodule_state_data
-      , coalesce(smhe.grade, sm.grade) as grade
-      , coalesce(smhe.max_grade, sm.max_grade) as max_grade
-      , coalesce(smhe.studentmodule_created_on, sm.studentmodule_updated_on) as event_timestamp
-      , smhe.attempt as attempt
+      , h.studentmodulehistoryextended_id
+      , h.grade
+      , h.max_grade
+      , h.event_timestamp
+      , h.attempt
+      , h.seed
+      , h.correct_map
+      , h.answers
       , if(
-            coalesce(smhe.grade, sm.grade) is not null
-            and coalesce(smhe.max_grade, sm.max_grade) is not null
-            and coalesce(smhe.grade, sm.grade) = coalesce(smhe.max_grade, sm.max_grade)
-            , 'correct'
-            , 'incorrect'
+          h.grade is not null
+          and h.max_grade is not null
+          and h.grade = h.max_grade
+          , 'correct'
+          , 'incorrect'
         ) as success
-      , cast(
-            json_query(
-                coalesce(smhe.studentmodule_state_data, sm.studentmodule_state_data),
-                'lax $.student_answers')
-            as varchar
-        ) as answers
-      -- inner join: only rows with a history entry that has an attempt are valid events
-      from studentmodule sm
-      inner join studentmodulehistoryextended smhe
-        on sm.studentmodule_id = smhe.studentmodule_id
+    from studentmodule as sm
+    inner join studentmodulehistory as h
+      on sm.studentmodule_id = h.studentmodule_id
   )
 
   select
@@ -114,12 +94,14 @@
     , courserun_readable_id
     , studentmodule_id
     , coursestructure_block_id
-    , studentmodule_state_data
+    , studentmodulehistoryextended_id
     , grade
     , max_grade
     , event_timestamp
     , attempt
-    , success
+    , seed
+    , correct_map
     , answers
+    , success
   from history_joined
 {% endmacro %}
