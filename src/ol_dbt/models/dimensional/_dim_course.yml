@@ -67,9 +67,9 @@ models:
     - not_null
 
   tests:
-      # Ensure only one current record per (platform, course_readable_id)
+      # Ensure only one current record per (primary_platform, course_readable_id)
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
-      - platform
+      - primary_platform
       - course_readable_id
       where: "is_current = true"
