@@ -102,8 +102,27 @@ with mitxonline_problem_events as (
 )
 
 -- data from studentmodule and studentmodulehistoryextended
+-- Explicitly project to the columns expected by the union below.
+-- event_type is always 'problem_check' for studentmodule rows.
+-- correct_map (per-submission correctness) maps to event_json for consumers
+-- of this model that expect the per-attempt problem state JSON.
 , combined_studentmodule as (
-    select * from {{ ref('tfact_studentmodule_problems') }}
+    select
+        platform
+        , user_fk
+        , openedx_user_id
+        , user_username
+        , courserun_readable_id
+        , 'problem_check' as event_type
+        , correct_map as event_json
+        , problem_block_id
+        , answers
+        , attempt
+        , success
+        , grade
+        , max_grade
+        , event_timestamp
+    from {{ ref('tfact_studentmodule_problems') }}
 )
 
 , combined as (
