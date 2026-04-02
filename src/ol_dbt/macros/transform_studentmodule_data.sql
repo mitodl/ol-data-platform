@@ -50,19 +50,26 @@
   )
 
   -- Pre-aggregate to one row per (studentmodule_id, attempt), keeping the
-  -- earliest history entry for each attempt. The history table often contains
-  -- many state-update rows per attempt (student clicks "check" multiple times
-  -- within a single attempt), which fans out the downstream join and forces
-  -- an expensive global shuffle for the TopNRanking dedup. Collapsing here —
-  -- at the source, before any joins — eliminates that fan-out entirely and is
-  -- semantically equivalent to what the outer deduped_combined CTE would keep.
+  -- LAST (most recent) history entry for each attempt.
+  --
+  -- The history table stores one row per submission event within an attempt.
+  -- The state_data JSON contains a `correct_map_history` array that grows with
+  -- every submission — the LAST record therefore contains the complete view of
+  -- all submissions for that attempt, the final grade, and the final student
+  -- answers. Using max_by here:
+  --   1. Collapses the fan-out before joins (eliminates the expensive global
+  --      shuffle in the downstream TopNRanking dedup).
+  --   2. Produces the semantically correct event_json: the final state with
+  --      the full submission history, not just the first (incomplete) state.
+  -- max(studentmodule_created_on) is stored as the timestamp so the incremental
+  -- watermark in the fact table correctly advances to the latest processed event.
   , studentmodulehistoryextended as (
     select
       studentmodule_id
-      , min_by(studentmodule_state_data, studentmodule_created_on) as studentmodule_state_data
-      , min_by(grade, studentmodule_created_on) as grade
-      , min_by(max_grade, studentmodule_created_on) as max_grade
-      , min(studentmodule_created_on) as studentmodule_created_on
+      , max_by(studentmodule_state_data, studentmodule_created_on) as studentmodule_state_data
+      , max_by(grade, studentmodule_created_on) as grade
+      , max_by(max_grade, studentmodule_created_on) as max_grade
+      , max(studentmodule_created_on) as studentmodule_created_on
       , attempt
     from studentmodulehistory_raw
     where attempt is not null

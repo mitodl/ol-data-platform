@@ -169,8 +169,10 @@ with mitxonline_studentmodule_problems as (
     from residential_studentmodule_combined
 )
 
--- dedupe the tracking log and student module data based on user_id, course_run, problem, and time
--- The dbt model definition has a test against the same composite unique key.
+-- Deduplicate on the fact key. The macro already collapses history to one row
+-- per (studentmodule_id, attempt), but two different studentmodule records can
+-- share the same (user, course, problem, attempt) key. Keep the latest
+-- event_timestamp — the final state with the most complete submission history.
 , deduped_combined as (
     select *
     from (
@@ -178,7 +180,7 @@ with mitxonline_studentmodule_problems as (
             *
             , row_number() over (
                 partition by platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt
-                order by event_timestamp
+                order by event_timestamp desc
             ) as rn
         from combined
     )
