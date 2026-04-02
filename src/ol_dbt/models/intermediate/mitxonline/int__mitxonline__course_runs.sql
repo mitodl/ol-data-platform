@@ -20,6 +20,7 @@ select
     , runs.courserun_url
     , runs.courserun_start_on
     , runs.courserun_end_on
+    , runs.courserun_created_on
     , runs.courserun_enrollment_start_on
     , runs.courserun_enrollment_end_on
     , runs.courserun_upgrade_deadline
