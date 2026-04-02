@@ -483,8 +483,22 @@ models:
           "event_type", "event_json", "event_timestamp"]
 
 - name: tfact_problem_events
-  description: Transactional fact table for learner problem events in a course
+  description: >
+    Transactional fact table for learner problem events in a course, combining
+    tracking log events (problem_check, showanswer) from all four platforms with
+    studentmodule history data. One row per unique event: one problem_check per
+    (platform, user, course, problem, attempt) — the earliest timestamp wins when
+    both tracking log and studentmodule sources have the same attempt — and all
+    showanswer events regardless of count. Incremental; full-refresh required when
+    backfilling or after schema changes.
   columns:
+  - name: event_id
+    description: string, surrogate key uniquely identifying this event row, derived
+      from (platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt,
+      event_type, event_timestamp)
+    tests:
+    - not_null
+    - unique
   - name: platform_fk
     description: string, foreign key to dim_platform
   - name: user_fk
@@ -537,12 +551,6 @@ models:
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event. For less common/event-specific attributes.
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
-          "event_json", "event_timestamp"]
-
 - name: tfact_studentmodule_problems
   description: >
     Transactional fact table for studentmodule problem submissions. Each row represents
