@@ -152,7 +152,7 @@ with mitxonline_orders as (
 -- Without this, Trino fans out to (left rows × target rows per platform) intermediate
 -- rows for the AssignUniqueId + LeftJoin + StreamingAggregate execution pattern.
 , incremental_watermarks as (
-    select platform, max(order_updated_on) as max_updated_on
+    select platform as watermark_platform, max(order_updated_on) as max_updated_on
     from {{ this }}
     group by platform
 )
@@ -185,7 +185,7 @@ with mitxonline_orders as (
     -- Per-platform max prevents xPro updates from advancing the global watermark
     -- past MITx Online order creation times, which would cause silent data loss.
     -- left join preserves orders from platforms not yet in the target table
-    left join incremental_watermarks w on w.platform = owf.platform
+    left join incremental_watermarks w on w.watermark_platform = owf.platform
     where (
         w.max_updated_on is null  -- platform not yet in target, include all
         or owf.order_updated_on >= w.max_updated_on

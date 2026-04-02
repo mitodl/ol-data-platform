@@ -207,7 +207,7 @@ with mitxonline_enrollments as (
 --   AssignUniqueId + LeftJoin(all target rows on platform+type) + StreamingAggregate
 -- which fans out to billions of intermediate rows.
 , incremental_watermarks as (
-    select platform, enrollment_type, max(enrollment_created_on) as max_created_on
+    select platform as watermark_platform, enrollment_type as watermark_enrollment_type, max(enrollment_created_on) as max_created_on
     from {{ this }}
     group by platform, enrollment_type
 )
@@ -227,7 +227,7 @@ with mitxonline_enrollments as (
         , courserun_fk
         , program_fk
         , platform_fk
-        , platform
+        , ewf.platform
         , enrollment_is_active
         , enrollment_mode
         , enrollment_status
@@ -237,8 +237,8 @@ with mitxonline_enrollments as (
     {% if is_incremental() %}
     -- left join preserves enrollments from platforms/types not yet in the target table
     left join incremental_watermarks w
-        on w.platform = ewf.platform
-        and w.enrollment_type = case when ewf.program_id is not null then 'program' else 'course' end
+        on w.watermark_platform = ewf.platform
+        and w.watermark_enrollment_type = case when ewf.program_id is not null then 'program' else 'course' end
     where (
         w.max_created_on is null  -- platform/type not yet in target, include all
         or ewf.enrollment_created_on > w.max_created_on

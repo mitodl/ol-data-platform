@@ -111,7 +111,7 @@ with mitxonline_payments as (
 -- Without this, Trino fans out to (left rows × target rows per platform) intermediate
 -- rows for the AssignUniqueId + LeftJoin + StreamingAggregate execution pattern.
 , incremental_watermarks as (
-    select platform, max(transaction_created_on) as max_created_on
+    select platform as watermark_platform, max(transaction_created_on) as max_created_on
     from {{ this }}
     group by platform
 )
@@ -138,7 +138,7 @@ with mitxonline_payments as (
 
     {% if is_incremental() %}
     -- left join preserves payments from platforms not yet in the target table
-    left join incremental_watermarks w on w.platform = pwf.platform
+    left join incremental_watermarks w on w.watermark_platform = pwf.platform
     where (
         w.max_created_on is null  -- platform not yet in target, include all
         or pwf.transaction_created_on > w.max_created_on

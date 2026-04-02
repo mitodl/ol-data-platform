@@ -159,7 +159,7 @@ with mitxonline_certificates as (
 -- StreamingAggregate, producing a 25B-row intermediate at 7TB.
 -- A pre-computed CTE + regular equijoin eliminates that fan-out entirely.
 , incremental_watermarks as (
-    select platform, max(certificate_created_on) as max_created_on
+    select platform as watermark_platform, max(certificate_created_on) as max_created_on
     from {{ this }}
     group by platform
 )
@@ -185,7 +185,7 @@ with mitxonline_certificates as (
 
     {% if is_incremental() %}
     -- left join preserves certificates from platforms not yet in the target table
-    left join incremental_watermarks w on w.platform = cwf.platform
+    left join incremental_watermarks w on w.watermark_platform = cwf.platform
     where (
         w.max_created_on is null  -- platform not yet in target, include all
         or cwf.certificate_created_on > w.max_created_on
