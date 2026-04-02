@@ -24,11 +24,6 @@ with watermarks as (
     group by platform
 )
 
-, mitxonline_watermark as (select max_ts from watermarks where platform = 'mitxonline')
-, mitxpro_watermark as (select max_ts from watermarks where platform = 'mitxpro')
-, residential_watermark as (select max_ts from watermarks where platform = 'residential')
-, edxorg_watermark as (select max_ts from watermarks where platform = 'edxorg')
-
 -- data from tracking logs
 , mitxonline_problem_events as (
     select
@@ -46,12 +41,15 @@ with watermarks as (
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
+    left join watermarks on watermarks.platform = 'mitxonline'
     where
         courserun_readable_id is not null
         and useractivity_event_type in {{ problem_events }}
         and useractivity_event_source = 'server'
-        and {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }}
-            > (select max_ts from mitxonline_watermark)
+        and (
+            watermarks.max_ts is null
+            or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
+        )
 )
 
 , xpro_problem_events as (
@@ -70,12 +68,15 @@ with watermarks as (
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
+    left join watermarks on watermarks.platform = 'mitxpro'
     where
         courserun_readable_id is not null
         and useractivity_event_type in {{ problem_events }}
         and useractivity_event_source = 'server'
-        and {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }}
-            > (select max_ts from mitxpro_watermark)
+        and (
+            watermarks.max_ts is null
+            or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
+        )
 )
 
 , mitxresidential_problem_events as (
@@ -94,12 +95,15 @@ with watermarks as (
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
+    left join watermarks on watermarks.platform = 'residential'
     where
         courserun_readable_id is not null
         and useractivity_event_type in {{ problem_events }}
         and useractivity_event_source = 'server'
-        and {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }}
-            > (select max_ts from residential_watermark)
+        and (
+            watermarks.max_ts is null
+            or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
+        )
 )
 
 , edxorg_problem_events as (
@@ -118,12 +122,15 @@ with watermarks as (
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
+    left join watermarks on watermarks.platform = 'edxorg'
     where
         courserun_readable_id is not null
         and useractivity_event_type in {{ problem_events }}
         and useractivity_event_source = 'server'
-        and {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }}
-            > (select max_ts from edxorg_watermark)
+        and (
+            watermarks.max_ts is null
+            or {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} > watermarks.max_ts
+        )
 )
 
 {% else %}

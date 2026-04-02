@@ -51,11 +51,17 @@
       -- student submissions. Exclude them.
       json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) is not null
       {% if watermark_expr %}
-        and cast(studentmodule_created_on as timestamp(6) with time zone) > {{ watermark_expr }}
+        and (
+          {{ watermark_expr }} is null
+          or cast(studentmodule_created_on as timestamp(6) with time zone) > {{ watermark_expr }}
+        )
       {% elif is_incremental() %}
-        and cast(studentmodule_created_on as timestamp(6) with time zone) > (
-          select max(event_timestamp) from {{ this }}
-          where platform = '{{ platform }}'
+        and (
+          cast(studentmodule_created_on as timestamp(6) with time zone) > (
+            select max(event_timestamp) from {{ this }}
+            where platform = '{{ platform }}'
+          )
+          or not exists (select 1 from {{ this }} where platform = '{{ platform }}')
         )
       {% endif %}
   )
