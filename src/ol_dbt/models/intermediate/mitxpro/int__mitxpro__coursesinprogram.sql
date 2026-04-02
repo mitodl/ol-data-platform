@@ -20,14 +20,13 @@ with coursesinprogram as (
 
 , unnestedcoursesinprogram as (
     select
-
         coursesinprogram.wagtail_page_id as coursesinprogrampage_wagtail_page_id
-        , coursepage_wagtail_page_id --noqa
-
+        , t.coursepage_wagtail_page_id
+        , t.course_order
     from coursesinprogram
     cross join
         unnest(coursesinprogram.cms_coursesinprogrampage_coursepage_wagtail_page_ids)
-        as t(coursepage_wagtail_page_id) --noqa
+        with ordinality as t(coursepage_wagtail_page_id, course_order) --noqa
 )
 
 , programpageswithpath as (
@@ -43,6 +42,7 @@ with coursesinprogram as (
 select
     coursepages.course_id
     , programpageswithpath.program_id
+    , unnestedcoursesinprogram.course_order
 from unnestedcoursesinprogram
 left join coursepages
     on unnestedcoursesinprogram.coursepage_wagtail_page_id = coursepages.wagtail_page_id

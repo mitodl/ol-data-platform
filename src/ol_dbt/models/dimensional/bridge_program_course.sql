@@ -18,6 +18,7 @@ with micromasters_course_keys as (
         , true as is_required
         , 'mitxonline' as platform
         , 'mitxonline' as platform_code
+        , course_order_in_program as course_order
     from {{ ref('int__mitxonline__program_requirements') }}
 )
 
@@ -29,6 +30,7 @@ with micromasters_course_keys as (
         , true as is_required
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
+        , course_order
     from {{ ref('int__mitxpro__coursesinprogram') }}
 )
 
@@ -44,6 +46,8 @@ with micromasters_course_keys as (
         , true as is_required
         , 'micromasters' as platform
         , 'micromasters' as platform_code
+        -- position_in_program is a stable integer from the MicroMasters course table
+        , r.course_position_in_program as course_order
     from {{ ref('int__micromasters__program_requirements') }} r
     inner join micromasters_course_keys ck on r.course_id = ck.course_id
 )
@@ -73,11 +77,7 @@ with micromasters_course_keys as (
         dim_program.program_pk as program_fk
         , dim_course.course_pk as course_fk
         , combined_requirements.is_required
-        -- course_order is set to 1 as a placeholder. The source systems (MITx Online,
-        -- xPro, MicroMasters) do not expose a canonical ordering of courses within a
-        -- program, so a meaningful sort order cannot be derived without additional
-        -- business logic or manual curation.
-        , 1 as course_order
+        , combined_requirements.course_order
     from combined_requirements
     left join dim_program
         on combined_requirements.program_id = dim_program.source_id

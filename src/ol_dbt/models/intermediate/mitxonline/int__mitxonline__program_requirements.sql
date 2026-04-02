@@ -23,6 +23,10 @@ with program_requirements as (
         , course_nodes.program_id
         , operator_nodes.programrequirement_title
         , operator_nodes.programrequirement_path
+        -- course_node_path is the Treebeard path of the course node itself (e.g. 000100010002).
+        -- Sorting course nodes within a program by this path yields the canonical display order
+        -- defined in the MITx Online CMS, used downstream to populate course_order_in_program.
+        , course_nodes.programrequirement_path as course_node_path
         , operator_nodes.programrequirement_operator_value
             as electiveset_required_number
         , case operator_nodes.programrequirement_operator
@@ -51,6 +55,7 @@ with program_requirements as (
         , programrequirement_title
         , electiveset_required_number
         , programrequirement_path
+        , course_node_path
     from all_requirements
     where all_requirements.requirement_nesting = 1
 )
@@ -76,6 +81,7 @@ with program_requirements as (
         , child_requirements.programrequirement_type
         , child_requirements.programrequirement_title
         , child_requirements.electiveset_required_number
+        , child_requirements.course_node_path
         , parent_requirements.programrequirement_requirement_id as programrequirement_parent_requirement_id
         , parent_requirements.programrequirement_requirement_id is not null
             as programrequirement_is_a_nested_requirement
@@ -127,6 +133,10 @@ select
     , combined_requirements.programrequirement_is_a_nested_requirement
     , coalesce(core_courses_count.program_num_core_courses, 0)
     + coalesce(elective_courses_count.program_num_elective_courses, 0) as program_num_required_courses
+    , row_number() over (
+        partition by combined_requirements.program_id
+        order by combined_requirements.course_node_path
+    ) as course_order_in_program
 from combined_requirements
 left join core_courses_count on combined_requirements.program_id = core_courses_count.program_id
 left join elective_courses_count on combined_requirements.program_id = elective_courses_count.program_id
