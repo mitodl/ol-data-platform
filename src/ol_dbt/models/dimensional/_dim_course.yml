@@ -22,7 +22,8 @@ models:
       alone
       for SCD2; also filter on is_current.
     tests:
-    - unique
+    - unique:
+        where: "is_current = true"
     - not_null
   - name: course_readable_id
     description: Business key - readable course ID (e.g., course-v1:MITx+6.00.1x)

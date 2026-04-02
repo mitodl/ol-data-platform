@@ -91,12 +91,35 @@ with mitxonline_studentmodule_problems as (
     from {{ ref('dim_user') }}
 )
 
+-- Per-platform deduped lookups prevent fan-out when the same openedx_user_id
+-- appears in multiple dim_user rows (merged identities).
+, mitxonline_users as (
+    select min(user_pk) as user_pk, mitxonline_openedx_user_id, arbitrary(user_mitxonline_username) as user_username
+    from users
+    where mitxonline_openedx_user_id is not null
+    group by mitxonline_openedx_user_id
+)
+
+, mitxpro_users as (
+    select min(user_pk) as user_pk, mitxpro_openedx_user_id, arbitrary(user_mitxpro_username) as user_username
+    from users
+    where mitxpro_openedx_user_id is not null
+    group by mitxpro_openedx_user_id
+)
+
+, residential_users as (
+    select min(user_pk) as user_pk, residential_openedx_user_id, arbitrary(user_residential_username) as user_username
+    from users
+    where residential_openedx_user_id is not null
+    group by residential_openedx_user_id
+)
+
 , mitxonline_studentmodule_combined as (
     select
         users.user_pk as user_fk
         , 'mitxonline' as platform
         , sm.user_id as openedx_user_id
-        , users.user_mitxonline_username as user_username
+        , users.user_username as user_username
         , sm.courserun_readable_id
         , sm.studentmodule_id
         , sm.studentmodulehistoryextended_id
@@ -110,7 +133,7 @@ with mitxonline_studentmodule_problems as (
         , sm.success
         , sm.event_timestamp
     from mitxonline_studentmodule_problems as sm
-    left join users on sm.user_id = users.mitxonline_openedx_user_id
+    left join mitxonline_users as users on sm.user_id = users.mitxonline_openedx_user_id
 )
 
 , mitxpro_studentmodule_combined as (
@@ -118,7 +141,7 @@ with mitxonline_studentmodule_problems as (
         users.user_pk as user_fk
         , 'mitxpro' as platform
         , sm.user_id as openedx_user_id
-        , users.user_mitxpro_username as user_username
+        , users.user_username as user_username
         , sm.courserun_readable_id
         , sm.studentmodule_id
         , sm.studentmodulehistoryextended_id
@@ -132,7 +155,7 @@ with mitxonline_studentmodule_problems as (
         , sm.success
         , sm.event_timestamp
     from mitxpro_studentmodule_problems as sm
-    left join users on sm.user_id = users.mitxpro_openedx_user_id
+    left join mitxpro_users as users on sm.user_id = users.mitxpro_openedx_user_id
 )
 
 , residential_studentmodule_combined as (
@@ -140,7 +163,7 @@ with mitxonline_studentmodule_problems as (
         users.user_pk as user_fk
         , 'residential' as platform
         , sm.user_id as openedx_user_id
-        , users.user_residential_username as user_username
+        , users.user_username as user_username
         , sm.courserun_readable_id
         , sm.studentmodule_id
         , sm.studentmodulehistoryextended_id
@@ -154,7 +177,7 @@ with mitxonline_studentmodule_problems as (
         , sm.success
         , sm.event_timestamp
     from mitxresidential_studentmodule_problems as sm
-    left join users on sm.user_id = users.residential_openedx_user_id
+    left join residential_users as users on sm.user_id = users.residential_openedx_user_id
 )
 
 , combined as (
