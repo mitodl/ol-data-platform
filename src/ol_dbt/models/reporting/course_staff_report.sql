@@ -31,6 +31,7 @@ select
     , combined_course_runs.courserun_start_on
     , combined_course_runs.courserun_end_on
     , combined_course_runs.courserun_is_current
+    , combined_course_runs.courserun_created_on
     , combined_course_roles.course_roles
     , course_activities.last_course_activity_date
 from combined_course_roles
