@@ -87,7 +87,12 @@ models:
       code}
     tests:
     - not_null
-    - unique
+  - name: platform
+    description: string, the platform on which this video exists. Possible values
+      are mitxonline, mitxpro, edxorg, residential. NOTE - video_block_pk is NOT globally
+      unique; it must be paired with platform to uniquely identify a video.
+    tests:
+    - not_null
   - name: content_block_fk
     description: string, foreign key to dim_course_content
     tests:
@@ -112,6 +117,10 @@ models:
     description: float, duration of video in seconds
   - name: video_edx_uuid
     description: string, edX UUID of the video
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["platform", "video_block_pk"]
 
 - name: dim_problem
   description: problem metadata across the Open edX platforms
@@ -121,7 +130,12 @@ models:
       code}
     tests:
     - not_null
-    - unique
+  - name: platform
+    description: string, the platform on which this problem exists. Possible values
+      are mitxonline, mitxpro, edxorg, residential. NOTE - problem_block_pk is NOT
+      globally unique; it must be paired with platform to uniquely identify a problem.
+    tests:
+    - not_null
   - name: content_block_fk
     description: string, foreign key to dim_course_content
     tests:
@@ -146,6 +160,10 @@ models:
     description: array, the types of problem in the course. values are a combination
       of numericalresponse, multiplechoiceresponse, customresponse, choiceresponse,
       etc.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["platform", "problem_block_pk"]
 
 - name: dim_discussion_topic
   description: discussion topics across the Open edX platforms
@@ -155,6 +173,11 @@ models:
     tests:
     - not_null
     - unique
+  - name: platform
+    description: string, the platform on which this discussion topic exists. Possible
+      values are mitxonline, mitxpro, edxorg, residential.
+    tests:
+    - not_null
   - name: commentable_id
     description: string, identifier for the specific discussion component or top-level,
       course-wide discussion
@@ -188,6 +211,16 @@ models:
     tests:
     - not_null
     - unique
+  - name: platform
+    description: "string, the platform that owns this course content block. Possible\
+      \ values: mitxonline, mitxpro, edxorg, residential. IMPORTANT: courserun_readable_id\
+      \ is NOT globally unique across platforms - the same readable ID can appear\
+      \ on multiple platforms (e.g. a course migrated from edxorg to mitxonline).\
+      \ Always pair courserun_readable_id with platform when joining to other tables."
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["mitxonline", "mitxpro", "edxorg", "residential"]
   - name: courserun_readable_id
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
       for courses on MITxOnline, xPro and Residential platform, {org}/{course}/{run_tag}
@@ -246,7 +279,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["courserun_readable_id", "block_id"]
+        column_list: ["platform", "courserun_readable_id", "block_id"]
         row_condition: "is_latest = true"
 - name: dim_user
   description: Eventually a dimensional model for users from different platforms.
