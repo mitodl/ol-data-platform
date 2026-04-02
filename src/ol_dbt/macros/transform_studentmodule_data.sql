@@ -32,13 +32,16 @@
       , studentmodule_state_data
       , cast(studentmodule_problem_grade as varchar) as grade
       , cast(studentmodule_problem_max_grade as varchar) as max_grade
-      , from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) as studentmodule_created_on
+      -- studentmodule_created_on is already timestamp(6) in the Iceberg staging table.
+      -- The previous from_iso8601_timestamp_nanos(to_iso8601(col)) round-trip was a
+      -- wasteful string serialization for 89M+ residential history rows. Cast directly.
+      , cast(studentmodule_created_on as timestamp(6) with time zone) as studentmodule_created_on
       , json_query(studentmodule_state_data, 'lax $.attempts' omit quotes) as attempt
     from {{ studentmodulehistory_table }}
     {% if watermark_expr %}
-      where from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) > {{ watermark_expr }}
+      where cast(studentmodule_created_on as timestamp(6) with time zone) > {{ watermark_expr }}
     {% elif is_incremental() %}
-      where from_iso8601_timestamp_nanos(to_iso8601(studentmodule_created_on)) > (
+      where cast(studentmodule_created_on as timestamp(6) with time zone) > (
           select max(event_timestamp) from {{ this }}
             where platform = '{{ platform }}'
       )
