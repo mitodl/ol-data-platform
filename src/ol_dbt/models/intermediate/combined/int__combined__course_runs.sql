@@ -84,6 +84,7 @@ with mitx_courses as (
         , mitxonline_runs.courserun_upgrade_deadline
         , mitxonline_runs.courserun_is_live
         , mitxonline_runs.course_number
+        , mitxonline_runs.courserun_created_on
     from mitxonline_runs
     left join mitx_courses on mitxonline_runs.course_id = mitx_courses.mitxonline_course_id
     where mitxonline_runs.courserun_platform = '{{ var("mitxonline") }}'
@@ -102,6 +103,7 @@ with mitx_courses as (
         , micromasters_runs.courserun_upgrade_deadline
         , null as courserun_is_live
         , edxorg_runs.course_number
+        , null as courserun_created_on
     from edxorg_runs
     left join mitx_courses on edxorg_runs.course_number = mitx_courses.course_number
     left join micromasters_runs on edxorg_runs.courserun_readable_id = micromasters_runs.courserun_edxorg_readable_id
@@ -126,6 +128,7 @@ with mitx_courses as (
             when cardinality(split(mitxpro_runs.courserun_readable_id, '+')) >= 2
                 then split(mitxpro_runs.courserun_readable_id, '+')[2]
         end as course_number
+        , mitxpro_runs.courserun_created_on
     from mitxpro_runs
     left join mitxpro_courses on mitxpro_runs.course_id = mitxpro_courses.course_id
 
@@ -143,6 +146,7 @@ with mitx_courses as (
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
         , emeritus_runs.course_number
+        , null as courserun_created_on
     from emeritus_runs
     left join mitxpro_runs
         on emeritus_runs.courserun_external_readable_id = mitxpro_runs.courserun_external_readable_id
@@ -162,6 +166,7 @@ with mitx_courses as (
         , null as courserun_upgrade_deadline
         , null as courserun_is_live
         , global_alumni_runs.course_number
+        , null as courserun_created_on
     from global_alumni_runs
     left join mitxpro_runs
         on global_alumni_runs.courserun_external_readable_id = mitxpro_runs.courserun_external_readable_id
@@ -184,6 +189,7 @@ with mitx_courses as (
             when cardinality(split(bootcamps_runs.courserun_readable_id, '+')) >= 2
                 then split(bootcamps_runs.courserun_readable_id, '+')[2]
         end as course_number
+        , null as courserun_created_on
     from bootcamps_runs
     left join bootcamps_courses on bootcamps_runs.course_id = bootcamps_courses.course_id
 
@@ -204,6 +210,7 @@ with mitx_courses as (
             when cardinality(split(courserun_readable_id, '+')) >= 2
                 then split(courserun_readable_id, '+')[2]
         end as course_number
+        , courserun_created_on
     from residential_runs
 )
 
@@ -216,6 +223,7 @@ select
     , courserun_url
     , courserun_start_on
     , courserun_end_on
+    , courserun_created_on
     , courserun_upgrade_deadline
     , courserun_is_live
     , course_number

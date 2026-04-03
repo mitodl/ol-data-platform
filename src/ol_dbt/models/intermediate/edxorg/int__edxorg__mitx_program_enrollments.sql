@@ -4,8 +4,7 @@ with program_learners as (
 )
 
 , micromasters_programs as (
-    select * from {{ ref('int__mitx__programs') }}
-    where is_micromasters_program = true
+    select * from {{ ref('int__micromasters__programs') }}
 )
 
 , program_learners_sorted as (
@@ -26,7 +25,7 @@ select
     , program_learners_sorted.user_username
     , program_learners_sorted.user_full_name
     , program_learners_sorted.user_has_completed_program
-    , micromasters_programs.micromasters_program_id
+    , micromasters_programs.program_id as micromasters_program_id
     , program_learners_sorted.program_track
     , coalesce(micromasters_programs.program_title, program_learners_sorted.program_title) as program_name
 from program_learners_sorted

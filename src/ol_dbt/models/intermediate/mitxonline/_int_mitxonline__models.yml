@@ -1087,6 +1087,8 @@ models:
   - name: courserun_is_live
     description: boolean, indicating whether the course run is available to users
       on MITx Online website
+  - name: courserun_created_on
+    description: timestamp, when the course run was created on mitxonline
 
 - name: int__mitxonline__courserun_grades
   description: Intermediate model for MITxOnline course run grades

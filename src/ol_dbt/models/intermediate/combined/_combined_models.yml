@@ -277,6 +277,9 @@ models:
     - not_null
   - name: course_title
     description: string, title of the course
+  - name: courserun_created_on
+    description: timestamp, when the course run was created on the corresponding platform.
+      Populated for MITx Online, xPro, and Residential MITx.
 
 - name: int__combined__course_structure
   description: this table contains the latest course structure of the courses from

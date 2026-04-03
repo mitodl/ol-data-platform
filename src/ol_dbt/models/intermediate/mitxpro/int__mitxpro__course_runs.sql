@@ -26,6 +26,7 @@ select
     , course_runs.courserun_enrollment_start_on
     , course_runs.courserun_enrollment_end_on
     , course_runs.courserun_is_live
+    , course_runs.courserun_created_on
     , platforms.platform_name
     , platforms.platform_id
 from course_runs

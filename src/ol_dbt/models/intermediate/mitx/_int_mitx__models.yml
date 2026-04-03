@@ -6,9 +6,13 @@ models:
   description: Intermediate model for combined MITxOnline and edxorg programs
   columns:
   - name: program_title
-    description: str, title of the program
+    description: str, title of the program.
     tests:
     - not_null
+  - name: program_readable_id
+    description: str, Open edX ID for the program formatted as program-v1:{org}+{program
+      code} for MITx Online.
+    tests:
     - unique
   - name: mitxonline_program_id
     description: int, primary key representing the program in the MITx Online database
@@ -29,6 +33,7 @@ models:
     description: boolean, whether the program is a DEDP program
     tests:
     - not_null
+
 - name: int__mitx__courses
   description: Intermediate model for combined MITxOnline and edxorg courses
   columns:

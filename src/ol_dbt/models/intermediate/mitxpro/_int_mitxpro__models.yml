@@ -1411,6 +1411,8 @@ models:
     description: timestamp, specifying when enrollment starts
   - name: courserun_enrollment_end_on
     description: timestamp, specifying when enrollment ends
+  - name: courserun_created_on
+    description: timestamp, when the course run was created on mitxpro
 
 - name: int__mitxpro__users
   description: Intermediate model of users in MIT xPro.
