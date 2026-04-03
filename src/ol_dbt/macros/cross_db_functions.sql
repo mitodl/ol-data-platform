@@ -284,15 +284,15 @@
 
 {% macro default__unnest_json_map(json_expr, alias, key_col, val_col) -%}
     {#
-        Trino: parse JSON object into map(varchar, json), then cast each value to varchar so
-        downstream json_query / json_query_string calls receive varchar (not the native json type,
-        which Trino refuses to pass to json_query). try_cast returns NULL for non-JSON input so
-        transform_values(NULL, ...) also returns NULL and UNNEST(NULL) = 0 rows.
+        Trino: parse JSON object into map(varchar, json), then serialize each value back to varchar
+        using json_format() (cast(json as varchar) is not supported in Trino; use json_format instead).
+        Downstream json_query_string calls then receive valid JSON text as varchar.
+        try_cast returns NULL for non-JSON input → transform_values(NULL, ...) = NULL → UNNEST = 0 rows.
     #}
     unnest(
         transform_values(
             try_cast({{ json_expr }} as map(varchar, json)),
-            (k, v) -> cast(v as varchar)
+            (k, v) -> json_format(v)
         )
     ) as {{ alias }}({{ key_col }}, {{ val_col }})
 {%- endmacro %}
