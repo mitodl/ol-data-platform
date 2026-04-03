@@ -7,6 +7,7 @@ import cyclopts
 from ol_dbt_cli.commands.generate import generate_app
 from ol_dbt_cli.commands.impact import impact
 from ol_dbt_cli.commands.local_dev import local_app
+from ol_dbt_cli.commands.run import run_app
 from ol_dbt_cli.commands.validate import validate
 
 app = cyclopts.App(
@@ -27,13 +28,19 @@ app = cyclopts.App(
       3. Scaffold sources and staging models for a new data source:
          $ ol-dbt generate all --schema ol_warehouse_production_raw --prefix raw__myapp__
 
-      4. Check what columns break downstream before opening a PR:
+      4. Incrementally run only changed or errored models (fast iteration):
+         $ ol-dbt run
+
+      5. Full rebuild (re-initialises state for next incremental run):
+         $ ol-dbt run --full-refresh
+
+      6. Check what columns break downstream before opening a PR:
          $ ol-dbt impact
 
-      5. Validate model SQL/YAML consistency:
+      7. Validate model SQL/YAML consistency:
          $ ol-dbt validate --model staging
 
-      6. JSON output for CI pipelines:
+      8. JSON output for CI pipelines:
          $ ol-dbt impact --format json
          $ ol-dbt validate --format json
 
@@ -44,6 +51,7 @@ app = cyclopts.App(
 
 app.command(local_app)
 app.command(generate_app)
+app.command(run_app)
 app.command(impact, name="impact")
 app.command(validate, name="validate")
 
