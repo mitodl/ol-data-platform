@@ -1,159 +1,142 @@
 ## dbt
 
-This project is configured to use Trino as the warehouse engine. The profile information
-is defined in the repository with environment variables for the username and
-password. There are separate profiles defined for QA and Production environments.
+This project is configured to use Trino as the warehouse engine (QA and Production)
+and DuckDB for local development. Profile information is defined in `profiles.yml`
+with environment variables for credentials. The default target is `dev_local` (DuckDB).
 
 ### Models Structure
-dbt models (SQL files) are structured into 3 directories under ol_dbt/models, within each directory, we organize the sql files by product
-(e.g. mitxonline, mitxpro, etc.)
 
-- Staging - where we pull in data from sources, clean data and rename field, etc.
+dbt models (SQL files) are structured into layers under `ol_dbt/models/`, organised by
+product within each layer (e.g. `mitxonline`, `mitxpro`).
 
-- Intermediate - where we do more complex joins and aggregations
-
-- Marts - contains customer facing data that is organized to meet specific needs
-
-
+- **Staging** — 1:1 with source tables; clean, rename, cast. Naming: `stg_<source>__<table>.sql`
+- **Intermediate** — complex joins and aggregations. Naming: `int_<domain>__<description>.sql`
+- **Marts** — analytics-ready, customer-facing tables. Naming: `fct_<domain>__<metric>.sql` / `dim_<domain>__<entity>.sql`
 
 ### Local Setup
-- Clone the ol-data-platform repo, and navigate to dbt working directory
-  ```
-  git clone git@github.com:mitodl/ol-data-platform.git
-  cd ol-data-platform/src/ol_dbt
-  ```
-- Install dbt-trino adapter
 
-  See [dbt installation from Starburst](https://docs.starburst.io/data-consumer/clients/dbt.html#installation-overview) for detail
-  ```
-  pip install dbt-trino
-  ```
-- Setup two environment variables that will be referenced in `src/ol_dbt/profiles.yml` config
+```bash
+# Clone the repo and enter the project
+git clone git@github.com:mitodl/ol-data-platform.git
+cd ol-data-platform
 
-  ```
-  export DBT_TRINO_USERNAME=<USERNAME>/accountadmin
-  export DBT_TRINO_PASSWORD=<PASSWORD>
-  ```
-  You need Starburst credentials to complete this step, which can be requested from OL Devops
-- Set your `schema_suffix` variable in at the command line with `--var 'schema_suffix: my_branch'`. This will be used to create a namespaced database schema that will hold the tables that are generated during your development workflow.
-- Test dbt connection
-  ```
-  $ dbt debug
-  21:50:08  Running with dbt=1.2.2
-  dbt version: 1.2.2
-  python version: 3.9.15
-  ---------
+# Install all dependencies (includes dbt, ol-dbt CLI, and adapters)
+uv sync
 
-  Configuration:
-    profiles.yml file [OK found and valid]
-    dbt_project.yml file [OK found and valid]
+# Install dbt packages (run from src/ol_dbt so dbt finds profiles.yml)
+cd src/ol_dbt && dbt deps
+```
 
-  Required dependencies:
-   - git [OK found]
+> **Note:** When running `dbt` commands directly, your working directory must be
+> `src/ol_dbt/` (where `profiles.yml` lives), or set `DBT_PROFILES_DIR=src/ol_dbt`
+> before running from the repo root. The `ol-dbt run` command handles this automatically.
 
-  Connection:
-    host: mitol-ol-xxxxxx.trino.galaxy.starburst.io
-    port: 443
-    user: xxxxx@mit.edu/accountadmin
-    database: ol_data_lake_qa
-    schema: ol_warehouse_qa
-    cert: None
-    prepared_statements_enabled: True
-    Connection test: [OK connection ok]
+For Trino targets (`dev_qa`, `dev_production`) you also need:
+```bash
+export DBT_TRINO_USERNAME=<USERNAME>/accountadmin
+export DBT_TRINO_PASSWORD=<PASSWORD>
+```
+Starburst credentials can be requested from OL DevOps.
 
-  All checks passed!
+#### Available targets
 
-  ```
-  By default, running dbt command from your local machine connects to our QA data lake, but you could specify different environment by passing --target.
-  ```
-  dbt debug --target <dev_qa|dev_production>
-  ```
+| Target | Engine | Use case |
+|--------|--------|----------|
+| `dev_local` *(default)* | DuckDB (local file) | Fast local iteration, no credentials needed |
+| `dev_qa` | Trino — QA cluster (OAuth) | Integration testing against real QA data |
+| `dev_production` | Trino — Production cluster (OAuth) | Read from production data |
+| `qa` | Trino — QA cluster (LDAP) | CI / automated jobs |
+| `production` | Trino — Production cluster (LDAP) | CI / automated jobs |
 
-- Download dependencies
+### Iterative Development with `ol-dbt run` (Recommended)
 
-  The `dbt deps` will pull the most recent version of the dependencies listed in `src/ol_dbt/packages.yml`
-  ```
-  dbt deps
-  ```
+The `ol-dbt run` command wraps `dbt build` with **automatic state-based incremental
+execution** so you only rebuild what has changed or previously errored — not the entire
+project on every iteration.
 
-### Running and testing dbt
-It's recommended that when you make a change to a model, you run both `dbt run` and `dbt test` commands to ensure that model is recreated and tests are passed
+```bash
+# First run: full build, saves state to src/ol_dbt/.dbt-state/
+ol-dbt run
 
-Note that your working directory should be `ol_dbt`, Otherwise you need to specify `--project-dir` when running dbt command.
+# Subsequent runs: only changed models + previously failed nodes
+ol-dbt run
 
-- dbt run
-  - Run all the models in our open_learning project with either one of the following two commands
-     ```
-    dbt run
-    dbt run --select open_learning
-    ```
-  - Run specific models
-    ```
-    # Run a specific model e.g. int__mitxonline__users
-    dbt run --select int__mitxonline__users
+# Force a complete rebuild (and refresh state for the next run)
+ol-dbt run --full-refresh
 
-    # Run all the models in a specific directory
-    # e.g. staging models under mitxonline directory
-    dbt run --select stagings.mitxonline
-    ```
-  - Refresh models
+# Run against the QA Trino cluster instead of local DuckDB
+ol-dbt run --target dev_qa
 
-    If you are making a change to existing model, you want to reprocess and recreate the model by passing
-      --full-refresh flag to the run command
-       ```
-       dbt run --select int__mitxonline__users --full-refresh
-       ```
-- dbt test
+# Explicit model selection (state-based defer still active for upstream refs)
+ol-dbt run --select my_model+
 
-  `dbt test` runs the tests defined in `.yml` file under model directory. It expects that you have already run the command to create the model you are testing
-    ```
-        # e.g. to run the tests defined for int__mitxonline__users in src/ol_dbt/models/intermediate/mitxonline/_int_mitxonline__models.yml
-        dbt test --select int__mitxonline__users
+# Run models only (skip tests)
+ol-dbt run run
 
-        # to run all the tests defined in src/ol_dbt/models/staging/mitxonline/_stg_mitxonline__models.yml
-        dbt test --select staging.mitxonline
-     ```
+# Run tests only
+ol-dbt run test
+```
 
+**How it works:**
+
+1. On the **first run** (no `.dbt-state/` directory) the full project is built and
+   `manifest.json` + `run_results.json` are saved to `src/ol_dbt/.dbt-state/`.
+2. On **subsequent runs** dbt uses `--select "state:modified+ result:error+ result:fail+"`
+   to target only models whose content hash changed since the last run plus any nodes
+   that errored or failed previously.
+3. `--defer` is enabled by default so upstream `ref()` calls for un-built parents
+   resolve against the saved state manifest rather than requiring a full local build.
+
+The `.dbt-state/` directory is gitignored and local to your machine.
+
+### Running dbt Directly
+
+You can still invoke dbt commands directly from `src/ol_dbt/`:
+
+```bash
+# Compile all models to verify SQL (fast, no warehouse needed)
+dbt compile
+
+# Run a specific model
+dbt run --select int__mitxonline__users
+
+# Run a directory of models
+dbt run --select staging.mitxonline
+
+# Run and test a model (equivalent to dbt build for one model)
+dbt build --select int__mitxonline__users
+
+# Force-recreate a model
+dbt run --select int__mitxonline__users --full-refresh
+
+# Run all tests for a model
+dbt test --select int__mitxonline__users
+
+# Run against QA Trino
+dbt run --select my_model --target dev_qa --vars '{"schema_suffix": "myname"}'
+```
+
+> **Note**: `--vars 'schema_suffix: <value>'` namespaces your dev schemas on Trino
+> targets so they don't collide with other developers' schemas.
 
 ### Other dbt Commands
 
-- dbt build
+```bash
+# Build and test all resources (models + tests + snapshots + seeds)
+dbt build
 
-  To run a dbt build you can use the command:
-  ```
-  dbt build --target <qa|production>
-  ```
+# Delete compiled artifacts and installed packages
+dbt clean
 
-  The `dbt build` command will build and test the following resources
-  - run models: `dbt run` builds all the models defined in this project
-  - test tests: `dbt test` test all the models defined in this project
-  - snapshot snapshots: : `dbt snapshot` executes "snapshot" jobs defined in snapshots directory
-  - seed seeds: `dbt seed` loads csv files defined in seeds directory
+# Generate and serve project documentation locally
+dbt docs generate
+dbt docs serve  # default port 8080
+```
 
-- dbt clean
+See the [dbt command reference](https://docs.getdbt.com/reference/dbt-commands) for all available commands.
 
-  `dbt clean` command will delete all folders specified in the `clean-targets` list specified in `dbt_project.yml`
-  ```
-  clean-targets:
-  - "target"
-  - "dbt_packages"
-  ```
-  So you can use this to delete the dbt_packages and target directories.
+### Resources
 
-- dbt docs
-
-  dbt docs allows you to generate the documentation for this project, and serve it up locally
-  ```
-  dbt docs generate
-  dbt doc serve
-  ```
-  The local webserver is rooted in your `target/` directory with default port 8080, you can specify a different port using `--port` flag to serve command
-
-See [dbt Command reference](https://docs.getdbt.com/reference/dbt-commands) for all available commands
-
-### Resources:
-- Learn more about dbt [in the docs](https://docs.getdbt.com/docs/introduction)
-- Check out [Discourse](https://discourse.getdbt.com/) for commonly asked questions and answers
-- Join the [chat](https://community.getdbt.com/) on Slack for live discussions and support
-- Find [dbt events](https://events.getdbt.com) near you
-- Check out [the blog](https://blog.getdbt.com/) for the latest news on dbt's development and best practices
+- [dbt documentation](https://docs.getdbt.com/docs/introduction)
+- [dbt Discourse](https://discourse.getdbt.com/) — commonly asked questions
+- [dbt Community Slack](https://community.getdbt.com/)

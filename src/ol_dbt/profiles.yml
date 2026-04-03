@@ -1,6 +1,6 @@
 ---
 open_learning:
-  target: dev_qa
+  target: dev_local
   outputs:
     qa:
       type: trino

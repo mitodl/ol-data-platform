@@ -68,14 +68,14 @@ dbt deps
 # 2. Format SQL
 sqlfmt models/
 
-# 3. Compile to verify (10-20 sec)
-dbt compile -t dev
+# 3. Incremental build — only changed/errored models (fast iteration)
+ol-dbt run
 
-# 4. Run specific model
-dbt run --select my_model_name -t dev
+# 4. Full rebuild when needed (e.g. schema changes)
+ol-dbt run --full-refresh
 
-# 5. Test
-dbt test --select my_model_name -t dev
+# 5. Explicit model selection
+ol-dbt run --select my_model_name
 ```
 
 ### Pre-Commit Validation
@@ -126,6 +126,21 @@ ol-dbt generate all \
   --schema ol_warehouse_production_raw \
   --prefix raw__mitlearn__app__postgres__user \
   --target production
+```
+
+**Incremental dbt development (preferred over raw dbt commands)**:
+```bash
+# Build only changed + previously errored models (fastest iteration loop)
+ol-dbt run
+
+# Force full rebuild
+ol-dbt run --full-refresh
+
+# Explicit model selection
+ol-dbt run --select my_model+
+
+# Run against QA Trino instead of local DuckDB
+ol-dbt run --target dev_qa
 ```
 
 **Run uv commands across all projects**:
@@ -225,7 +240,55 @@ class MyApiFactory(ConfigurableResource):
 -   Specify `io_manager_key` on assets if non-default needed
 -   Handles serialization/deserialization automatically
 
-## dbt Integration
+## ol-dbt CLI
+
+The `ol-dbt` CLI at `src/ol_dbt_cli/` is the primary interface for dbt development,
+analysis, and validation. It is installed as part of `uv sync`.
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `ol-dbt run` | Incremental dbt execution with automatic state management |
+| `ol-dbt generate all` | Scaffold sources + staging models for a new data source |
+| `ol-dbt impact` | Column-level lineage impact analysis for in-progress changes |
+| `ol-dbt validate` | SQL/YAML consistency checks across model definitions |
+| `ol-dbt local setup` | Set up local DuckDB + Iceberg development environment |
+| `ol-dbt local register` | Register AWS Glue Iceberg tables as DuckDB views |
+
+### `ol-dbt run` — Incremental State-Based Execution
+
+**This is the recommended way to execute dbt models during development.**
+
+The command wraps `dbt build` (models + tests) with automatic state management so
+only changed or previously errored nodes are re-executed on each iteration.
+
+**State artifacts** are stored in `src/ol_dbt/.dbt-state/` (gitignored):
+- `manifest.json` — enables `state:modified+` (content-hash comparison)
+- `run_results.json` — enables `result:error+ result:fail+` (re-run failures)
+
+**Default target is `dev_local`** (DuckDB, no credentials required). Pass
+`--target dev_qa` or `--target dev_production` to run against Trino clusters.
+
+**Key flags:**
+```bash
+ol-dbt run                           # incremental build (dbt build, changed + errored only)
+ol-dbt run --full-refresh            # full rebuild; resets state for next run
+ol-dbt run -s my_model+              # explicit selection + upstream defer
+ol-dbt run run                       # models only (no tests)
+ol-dbt run test                      # tests only
+ol-dbt run --target dev_qa           # run against QA Trino
+ol-dbt run --no-defer                # disable upstream deferral
+ol-dbt run --no-save-state           # skip writing state artifacts after run
+```
+
+**Incremental selection logic (when `.dbt-state/` exists and no `--select` given):**
+```
+dbt build --select "state:modified+ result:error+ result:fail+" --defer --state .dbt-state/
+```
+
+**First run (no state):** full build, saves artifacts. Every subsequent run is
+incremental until `--full-refresh` is used.
 
 
 ### dbt Model Organization
@@ -237,9 +300,8 @@ class MyApiFactory(ConfigurableResource):
 
 **To add a dbt model**:
 1. Place `.sql` in appropriate directory
-2. Run `dbt compile -t dev` (verify no errors)
-3. Run `dbt run --select my_model -t dev`
-4. Model automatically appears in Dagster asset graph (via `@dbt_assets`)
+2. Run `ol-dbt run --select my_model` (incremental, uses state)
+3. Model automatically appears in Dagster asset graph (via `@dbt_assets`)
 
 ### Airbyte Ingestion
 
@@ -270,11 +332,10 @@ class MyApiFactory(ConfigurableResource):
 
 1. **Create**: Add `.sql` in `src/ol_dbt/models/<layer>/`
 2. **Sources**: If new raw data, add to `_<domain>__sources.yml`
-3. **Compile**: `cd src/ol_dbt && dbt compile -t dev`
-4. **Test**: `dbt run --select my_model -t dev`
-5. **Verify**: Check `src/ol_dbt/target/compiled/` for compiled SQL
-6. **Auto-integration**: Dagster `@dbt_assets` auto-discovers (no Python changes needed)
-7. **Superset** (optional): Add parent dir to `dbt_models_for_superset_datasets`
+3. **Build**: `ol-dbt run --select my_model` (incremental from repo root)
+4. **Verify**: Check `src/ol_dbt/target/compiled/` for compiled SQL
+5. **Auto-integration**: Dagster `@dbt_assets` auto-discovers (no Python changes needed)
+6. **Superset** (optional): Add parent dir to `dbt_models_for_superset_datasets`
 
 ## Environment Variables
 
