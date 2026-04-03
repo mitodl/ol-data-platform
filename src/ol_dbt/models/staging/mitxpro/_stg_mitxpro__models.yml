@@ -1406,7 +1406,7 @@ models:
 
       arguments:
         datepart: day
-        field: from_iso8601_timestamp(courserunenrollment_created_on)
+        field: with_timezone(cast(courserunenrollment_created_on as timestamp), 'UTC')
         interval: 3
 - name: stg__mitxpro__app__postgres__courses_programenrollment
   columns:

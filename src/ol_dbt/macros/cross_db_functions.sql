@@ -43,8 +43,14 @@
 {%- endmacro %}
 
 {% macro default__from_iso8601_timestamp(timestamp_str) -%}
-    {# Trino: native support #}
-    from_iso8601_timestamp({{ timestamp_str }})
+    {#
+        Trino: from_iso8601_timestamp() without a timezone offset in the string uses the session
+        timezone, causing "Illegal instant due to time zone offset transition" for timestamps
+        in DST gap hours (e.g. 2:xx AM on spring-forward day in America/New_York).
+        All source timestamps in this project are stored as UTC without a timezone suffix
+        (Django default). Use with_timezone(cast(...), 'UTC') to parse as UTC explicitly.
+    #}
+    with_timezone(cast({{ timestamp_str }} as timestamp), 'UTC')
 {%- endmacro %}
 
 {% macro duckdb__from_iso8601_timestamp(timestamp_str) -%}
