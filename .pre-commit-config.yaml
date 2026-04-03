@@ -35,7 +35,7 @@ repos:
   rev: v1.38.0
   hooks:
   - id: yamllint
-    language_version: "python3.11"
+    language_version: "python3.13"
     exclude: src/ol_superset/assets
     args: [--format, parsable, -d, relaxed]
 - repo: https://github.com/Yelp/detect-secrets

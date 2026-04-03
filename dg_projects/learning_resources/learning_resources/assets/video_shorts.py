@@ -85,13 +85,16 @@ def google_sheets_api(
     sheet_content = json.dumps(videos_to_process, sort_keys=True, default=str)
     data_version = hashlib.sha256(sheet_content.encode("utf-8")).hexdigest()
 
-    # Extract partition keys for metadata
-    partition_keys = [video["partition_key"] for video in videos_to_process]
+    # Keep both key sets: processing window and full sheet membership.
+    processing_partition_keys = [video["partition_key"] for video in videos_to_process]
+    sheet_partition_keys = [video["partition_key"] for video in all_videos]
 
     result = {
         "all_videos": all_videos,
         "videos_to_process": videos_to_process,
-        "partition_keys": partition_keys,
+        "partition_keys": processing_partition_keys,
+        "processing_partition_keys": processing_partition_keys,
+        "sheet_partition_keys": sheet_partition_keys,
     }
 
     yield Output(
@@ -100,7 +103,9 @@ def google_sheets_api(
         metadata={
             "total_video_count": len(all_videos),
             "videos_to_process_count": len(videos_to_process),
-            "partition_keys": MetadataValue.json(partition_keys),
+            "partition_keys": MetadataValue.json(processing_partition_keys),
+            "processing_partition_keys": MetadataValue.json(processing_partition_keys),
+            "sheet_partition_keys": MetadataValue.json(sheet_partition_keys),
             "data_version": data_version,
         },
     )
@@ -507,3 +512,32 @@ def video_short_webhook(  # noqa: PLR0913
             "webhook_status": "success",
             "response_data": response_data,
         }
+
+
+@asset(
+    code_version="video_shorts_delete_webhook_v1",
+    key=AssetKey(["video_shorts", "video_delete_webhook"]),
+    group_name="video_shorts",
+    description="Send delete webhook for stale video partitions.",
+    partitions_def=video_short_ids,
+    retry_policy=RetryPolicy(
+        max_retries=3,
+        delay=2.0,
+        backoff=Backoff.EXPONENTIAL,
+        jitter=Jitter.PLUS_MINUS,
+    ),
+)
+def video_short_delete_webhook(
+    context: AssetExecutionContext,
+    learn_api: ApiClientFactory,
+) -> dict[str, Any]:
+    """Send delete webhook for a stale video partition."""
+    video_id = context.partition_key
+    payload = {
+        "video_id": video_id,
+        "video_metadata": {"video_id": video_id, "delete": True},
+        "source": "video_shorts",
+    }
+    learn_api.client.delete_video_shorts(payload)
+    context.log.info("Delete webhook sent for partition: %s", video_id)
+    return payload
