@@ -34,7 +34,7 @@ with mitxonline_enrollments as (
         , courserunenrollment_updated_on as enrollment_updated_on
         , courserunenrollment_is_active as enrollment_is_active
         , courserunenrollment_enrollment_mode as enrollment_mode
-        , null as enrollment_status
+        , courserunenrollment_enrollment_status as enrollment_status
         , 'mitxpro' as platform
         , 'mitxpro' as platform_code
     from {{ ref('int__mitxpro__courserunenrollments') }}
