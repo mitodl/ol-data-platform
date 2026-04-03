@@ -7,8 +7,7 @@ with completed_program_learners as (
 )
 
 , micromasters_programs as (
-    select * from {{ ref('int__mitx__programs') }}
-    where is_micromasters_program = true
+    select * from {{ ref('int__micromasters__programs') }}
 )
 
 , completed_program_learners_sorted as (
@@ -31,7 +30,7 @@ select
     , completed_program_learners_sorted.user_full_name
     , completed_program_learners_sorted.user_has_completed_program
     , completed_program_learners_sorted.program_certificate_awarded_on
-    , micromasters_programs.micromasters_program_id
+    , micromasters_programs.program_id as micromasters_program_id
 from completed_program_learners_sorted
 left join micromasters_programs
 --- Finance is split into MIT Finance and Finance,
