@@ -67,10 +67,10 @@ with programs as (
     union all
 
     select
-        electiveset_id
-        , program_id
-        , electiveset_required_number
-        , course_id
+        elective_courses.electiveset_id
+        , elective_courses.program_id
+        , elective_courses.electiveset_required_number
+        , elective_courses.course_id
         , 'Elective' as programrequirement_type
         -- elective courses also live on the courses table with position_in_program
         , courses.course_position_in_program

@@ -82,30 +82,30 @@ with mitxonline_course_structure as (
 , combined_with_hierarchy as (
     select
         *
-        , last_value(
-            case when coursestructure_block_category = 'sequential' then coursestructure_block_id end
-        ) ignore nulls over (
+        , {{ last_value_ignore_nulls(
+            "case when coursestructure_block_category = 'sequential' then coursestructure_block_id end"
+          ) }} over (
             partition by platform, courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as sequential_block_id
-        , last_value(
-            case when coursestructure_block_category = 'sequential' then coursestructure_block_title end
-        ) ignore nulls over (
+        , {{ last_value_ignore_nulls(
+            "case when coursestructure_block_category = 'sequential' then coursestructure_block_title end"
+          ) }} over (
             partition by platform, courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as sequential_title
-        , last_value(
-            case when coursestructure_block_category = 'chapter' then coursestructure_block_id end
-        ) ignore nulls over (
+        , {{ last_value_ignore_nulls(
+            "case when coursestructure_block_category = 'chapter' then coursestructure_block_id end"
+          ) }} over (
             partition by platform, courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row
         ) as chapter_block_id
-        , last_value(
-            case when coursestructure_block_category = 'chapter' then coursestructure_block_title end
-        ) ignore nulls over (
+        , {{ last_value_ignore_nulls(
+            "case when coursestructure_block_category = 'chapter' then coursestructure_block_title end"
+          ) }} over (
             partition by platform, courserun_readable_id, coursestructure_retrieved_at
             order by coursestructure_block_index
             rows between unbounded preceding and current row

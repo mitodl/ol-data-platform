@@ -239,6 +239,30 @@
     END
 {%- endmacro %}
 
+
+{#
+    last_value_ignore_nulls: Cross-db wrapper for last_value with IGNORE NULLS.
+    Trino: last_value(expr) IGNORE NULLS OVER (window)
+    DuckDB: last_value(expr IGNORE NULLS) OVER (window)
+
+    Usage (write the OVER clause inline after the macro call):
+      {{ last_value_ignore_nulls('my_expr') }} over (partition by ... order by ...)
+#}
+{% macro last_value_ignore_nulls(expr) -%}
+    {{ adapter.dispatch('last_value_ignore_nulls', 'open_learning')(expr) }}
+{%- endmacro %}
+
+{% macro default__last_value_ignore_nulls(expr) -%}
+    {# Trino: IGNORE NULLS sits after the closing paren, before OVER #}
+    last_value({{ expr }}) ignore nulls
+{%- endmacro %}
+
+{% macro duckdb__last_value_ignore_nulls(expr) -%}
+    {# DuckDB: IGNORE NULLS sits inside the function arguments #}
+    last_value({{ expr }} ignore nulls)
+{%- endmacro %}
+
+
 {% macro is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
     {{ adapter.dispatch('is_courserun_current', 'open_learning')(start_on_timestamp_str, end_on_timestamp_str) }}
 {%- endmacro %}
