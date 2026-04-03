@@ -49,7 +49,6 @@ run_app = cyclopts.App(
 
 DEFAULT_STATE_DIR = ".dbt-state"
 STATE_ARTIFACTS = ("manifest.json", "run_results.json")
-VALID_SUBCOMMANDS = ("build", "run", "test")
 
 
 def _find_dbt_dir(dbt_dir_path: str | None) -> Path:
@@ -89,7 +88,6 @@ def _save_artifacts(target_dir: Path, state_dir: Path) -> list[str]:
 
 def _build_dbt_command(
     subcommand: str,
-    dbt_dir: Path,
     state_dir: Path,
     available: dict[str, bool],
     select: str | None,
@@ -122,7 +120,8 @@ def _build_dbt_command(
         if parts:
             cmd += ["--select", " ".join(parts)]
 
-    if use_state and defer:
+    # Defer requires a manifest — guard against the case where only run_results.json exists
+    if use_state and defer and has_manifest:
         cmd += ["--defer", "--state", str(state_dir)]
 
     if full_refresh:
@@ -188,7 +187,7 @@ def run(  # noqa: PLR0913
         str | None,
         Parameter(
             name="--state-dir",
-            help=f"Directory to read/write state artifacts. Default: <dbt-project>/{DEFAULT_STATE_DIR}/",
+            help=f"Directory to read/write state artifacts. Default: {{dbt-project}}/{DEFAULT_STATE_DIR}/",
         ),
     ] = None,
     vars: Annotated[
@@ -226,7 +225,7 @@ def run(  # noqa: PLR0913
     has_any_state = any(available.values())
 
     # ── Status banner ──────────────────────────────────────────────────────
-    console.print(f"\n[bold]ol-dbt run[/] — dbt project: [cyan]{dbt_dir}[/]")
+    console.print(f"\n[bold]ol-dbt run[/] [dim]{subcommand}[/] — dbt project: [cyan]{dbt_dir}[/]")
     if full_refresh:
         console.print("[yellow]⟳  Full refresh — ignoring saved state[/]")
     elif has_any_state and select is None:
@@ -237,19 +236,26 @@ def run(  # noqa: PLR0913
             parts.append("[yellow]result:error+[/] [yellow]result:fail+[/]")
         console.print(f"[dim]State dir:[/] {resolved_state_dir}")
         console.print(f"Incremental selection: {' '.join(parts)}")
-        if defer:
+        if defer and available.get("manifest.json"):
             console.print("[dim]Upstream refs deferred to state manifest[/]")
+        elif defer and not available.get("manifest.json"):
+            console.print(
+                "[yellow]Note:[/] --defer requested but manifest.json not found in state dir; deferral skipped"
+            )
     elif select is not None:
         console.print(f"Explicit selection: [cyan]{select}[/]")
-        if has_any_state and defer:
+        if has_any_state and defer and available.get("manifest.json"):
             console.print("[dim]Upstream refs deferred to state manifest[/]")
+        elif defer and not available.get("manifest.json"):
+            console.print("[yellow]Note:[/] --defer requested but no manifest.json in state dir; deferral skipped")
     else:
         console.print("[dim]No saved state — running full build and initialising state[/]")
+        if defer:
+            console.print("[dim]--defer has no effect on first run (no state manifest yet)[/]")
 
     # ── Build and run command ──────────────────────────────────────────────
     cmd = _build_dbt_command(
         subcommand=subcommand,
-        dbt_dir=dbt_dir,
         state_dir=resolved_state_dir,
         available=available,
         select=select,
@@ -265,10 +271,15 @@ def run(  # noqa: PLR0913
     result = subprocess.run(cmd, cwd=str(dbt_dir))  # noqa: S603
 
     # ── Save artifacts ─────────────────────────────────────────────────────
+    # Always save when requested — the manifest reflects current code state
+    # (needed for state:modified+ on the next run) and run_results captures
+    # failures (needed for result:error+ on the next run). Saving on non-zero
+    # exit is intentional so the next incremental run can target what failed.
     if save_state:
         saved = _save_artifacts(target_dir, resolved_state_dir)
         if saved:
-            console.print(f"\n[dim]State saved:[/] {', '.join(saved)} → {resolved_state_dir}")
+            status = "[green]✓[/]" if result.returncode == 0 else "[yellow]⚠ (run failed)[/]"
+            console.print(f"\n[dim]State saved {status}:[/] {', '.join(saved)} → {resolved_state_dir}")
         else:
             console.print("\n[yellow]Warning:[/] No artifacts found in target/ to save.")
 
