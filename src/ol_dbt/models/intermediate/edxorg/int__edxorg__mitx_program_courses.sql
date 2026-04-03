@@ -7,8 +7,7 @@ with programs as (
 )
 
 , micromasters_programs as (
-    select * from {{ ref('int__mitx__programs') }}
-    where is_micromasters_program = true
+    select * from {{ ref('int__micromasters__programs') }}
 )
 
 select
