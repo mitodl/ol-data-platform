@@ -206,12 +206,14 @@ models:
     tests:
     - not_null
   - name: payment_method_fk
-    description: Foreign key to dim_payment_method
+    description: >
+      Foreign key to dim_payment_method. NULL for refund transactions and zero-dollar
+      payments where Cybersource does not return a req_payment_method value.
     tests:
-    - not_null
     - relationships:
         to: ref('dim_payment_method')
         field: payment_method_pk
+        where: "payment_method_fk is not null"
   - name: transaction_amount
     description: Transaction amount (additive measure)
   - name: transaction_type
