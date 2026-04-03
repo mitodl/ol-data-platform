@@ -5,27 +5,27 @@ dashboard_title: Learn User Profile
 description: null
 metadata:
   chart_configuration:
-    '123':
-      crossFilters:
-        chartsInScope:
-        - 131
-        - 146
-        scope: global
-      id: 123
-    '131':
+    '152':
       crossFilters:
         chartsInScope:
         - 123
         - 146
         scope: global
-      id: 131
-    '146':
+      id: 152
+    '222':
       crossFilters:
         chartsInScope:
         - 123
         - 131
         scope: global
-      id: 146
+      id: 222
+    '227':
+      crossFilters:
+        chartsInScope:
+        - 131
+        - 146
+        scope: global
+      id: 227
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
@@ -135,7 +135,7 @@ position:
     children: []
     id: CHART-SoNjb0TVbnvYI20pJAbuv
     meta:
-      chartId: 146
+      chartId: 222
       height: 93
       sliceName: Learn New Users
       uuid: 5cba1239-2f4c-472b-82f6-788f18de0fd2
@@ -150,7 +150,7 @@ position:
     children: []
     id: CHART-VpMT1dkQyJDBplwqMUJe9
     meta:
-      chartId: 131
+      chartId: 152
       height: 50
       sliceName: dim_user last updated
       sliceNameOverride: data last updated
@@ -166,7 +166,7 @@ position:
     children: []
     id: CHART-explore-123-1
     meta:
-      chartId: 123
+      chartId: 227
       height: 104
       sliceName: Learn User Profile
       uuid: 2e3e900a-3782-4738-80fe-0d60802d4461

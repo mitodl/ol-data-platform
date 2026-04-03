@@ -5,6 +5,7 @@ dataset_uuid: 811f8301-4bea-461e-8359-d354af75c4b1  # marts__mitxonline_course_e
 description: null
 params:
   adhoc_filters: []
+  annotation_layers: []
   color_by: metric
   color_picker:
     a: 1

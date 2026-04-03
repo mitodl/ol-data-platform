@@ -27,7 +27,7 @@ params:
   order_desc: true
   percent_metrics: []
   query_mode: raw
-  row_limit: 50000
+  row_limit: 1000
   server_page_length: 10
   show_cell_bars: true
   table_timestamp_format: smart_date

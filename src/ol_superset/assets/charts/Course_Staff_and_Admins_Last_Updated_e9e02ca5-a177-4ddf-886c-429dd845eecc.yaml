@@ -9,7 +9,7 @@ params:
     comparator: No filter
     datasourceWarning: false
     expressionType: SIMPLE
-    filterOptionName: filter_fxrzkwqzy8o_4zkjxf3mq9b
+    filterOptionName: filter_iagerv4t83_fi5qrqg2dmn
     isExtra: false
     isNew: false
     operator: TEMPORAL_RANGE
@@ -20,7 +20,7 @@ params:
     - course_staff_report
     datasourceWarning: false
     expressionType: SIMPLE
-    filterOptionName: filter_c567jwencbs_9t61ir5jlkg
+    filterOptionName: filter_2pqge75pbow_fujiv4g7cw9
     isExtra: false
     isNew: false
     operator: IN
@@ -53,6 +53,6 @@ params:
   time_grain_sqla: P1D
   viz_type: table
 slice_name: Course Staff and Admins Last Updated
-uuid: 6f8ec385-961d-4238-96e9-539524960b7c
+uuid: e9e02ca5-a177-4ddf-886c-429dd845eecc
 version: 1.0.0
 viz_type: table

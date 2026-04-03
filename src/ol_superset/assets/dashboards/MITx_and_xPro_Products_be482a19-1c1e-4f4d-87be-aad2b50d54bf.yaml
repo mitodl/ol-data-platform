@@ -5,18 +5,18 @@ dashboard_title: MITx and xPro Products
 description: null
 metadata:
   chart_configuration:
-    '71':
-      crossFilters:
-        chartsInScope:
-        - 82
-        scope: global
-      id: 71
-    '82':
+    '138':
       crossFilters:
         chartsInScope:
         - 71
         scope: global
-      id: 82
+      id: 138
+    '165':
+      crossFilters:
+        chartsInScope:
+        - 82
+        scope: global
+      id: 165
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
@@ -191,7 +191,7 @@ position:
     children: []
     id: CHART-explore-71-1
     meta:
-      chartId: 71
+      chartId: 165
       height: 24
       sliceName: Latest Product Created Date
       uuid: cdba7fac-5019-4d70-9f0c-817fb7f194d8
@@ -207,7 +207,7 @@ position:
     children: []
     id: CHART-explore-82-1
     meta:
-      chartId: 82
+      chartId: 138
       height: 77
       sliceName: Products
       uuid: 36ade680-7ae9-4d35-89b0-a46235139418

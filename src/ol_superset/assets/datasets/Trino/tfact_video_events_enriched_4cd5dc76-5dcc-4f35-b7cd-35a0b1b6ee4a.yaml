@@ -3,6 +3,30 @@ cache_timeout: null
 catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
+  column_name: event_timestamp
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: true
+  python_date_format: null
+  type: TIMESTAMP(6) WITH TIME ZONE
+  verbose_name: null
+- advanced_data_type: null
+  column_name: video_duration
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: DECIMAL(38, 4)
+  verbose_name: null
+- advanced_data_type: null
   column_name: courserun_readable_id
   description: null
   expression: ''
@@ -15,7 +39,7 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
-  column_name: chatsession_created_on
+  column_name: video_block_fk
   description: null
   expression: ''
   extra: null
@@ -27,91 +51,7 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
-  column_name: chatsession_thread_id
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: chatsession_updated_on
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: tutorbot_chat_json
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: user_global_id
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: user_full_name
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: edx_module_id
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: chatsession_agent
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: chatsession_title
+  column_name: video_name
   description: null
   expression: ''
   extra: null
@@ -135,7 +75,7 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
-  column_name: user_email
+  column_name: platform_fk
   description: null
   expression: ''
   extra: null
@@ -147,7 +87,7 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
-  column_name: tutorbotoutput_id
+  column_name: starting_position
   description: null
   expression: ''
   extra: null
@@ -156,10 +96,10 @@ columns:
   is_active: true
   is_dttm: false
   python_date_format: null
-  type: BIGINT
+  type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
-  column_name: user_id
+  column_name: course_title
   description: null
   expression: ''
   extra: null
@@ -168,16 +108,101 @@ columns:
   is_active: true
   is_dttm: false
   python_date_format: null
-  type: BIGINT
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: ending_position
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: video_position
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: event_type
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: event_json
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: user_fk
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: platform
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: openedx_user_id
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: INTEGER
   verbose_name: null
 database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929  # Trino
 default_endpoint: null
-description: null
+description: Video events enriched with video_name from dim_video and course_title
+  from int__combined__course_runs
 extra: null
 fetch_values_predicate: null
 filter_select_enabled: true
 folders: null
-main_dttm_col: null
+main_dttm_col: event_timestamp
 metrics:
 - currency: null
   d3format: null
@@ -191,9 +216,18 @@ metrics:
 normalize_columns: false
 offset: 0
 params: null
-schema: ol_warehouse_production_intermediate
-sql: null
-table_name: int__learn_ai__tutorbot
+schema: ol_warehouse_production_dimensional
+sql: "select\n    e.platform_fk\n    , e.user_fk\n    , e.platform\n    , e.openedx_user_id\n\
+  \    , e.user_username\n    , e.courserun_readable_id\n    , e.event_type\n    ,\
+  \ e.video_block_fk\n    , e.video_duration\n    , e.video_position\n    , e.starting_position\n\
+  \    , e.ending_position\n    , e.event_timestamp\n    , e.event_json\n    , v.video_name\n\
+  \    , cr.course_title\nfrom ol_warehouse_production_dimensional.tfact_video_events\
+  \ as e\nleft join ol_warehouse_production_dimensional.dim_video as v\n    on e.courserun_readable_id\
+  \ = v.courserun_readable_id\n    and e.video_block_fk = substring(\n        v.video_block_pk,\n\
+  \        regexp_position(v.video_block_pk, 'block@') + 6\n    )\nleft join (\n \
+  \   select courserun_readable_id, max(course_title) as course_title\n    from ol_warehouse_production_intermediate.int__combined__course_runs\n\
+  \    group by courserun_readable_id\n) as cr\n    on e.courserun_readable_id = cr.courserun_readable_id\n"
+table_name: tfact_video_events_enriched
 template_params: null
-uuid: 4fe652f8-e672-4e71-89da-fb964985847b
+uuid: 4cd5dc76-5dcc-4f35-b7cd-35a0b1b6ee4a
 version: 1.0.0

@@ -21,6 +21,7 @@ params:
     subject: order_state
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   column_config:
     Latest Fulfilled Order Created On:
