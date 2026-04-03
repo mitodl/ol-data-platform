@@ -14,13 +14,13 @@ with discussion_component_topics as (
     select
         course.*
         , t.key as topic_name -- noqa
-        , json_extract_scalar(t.topic, '$.id') as topic_id -- noqa
+        , {{ json_query_string('t.topic', "'$.id'") }} as topic_id -- noqa
         , row_number() over (
-            partition by course.block_id, json_extract_scalar(t.topic, '$.id') -- noqa
-            order by json_extract_scalar(t.topic, '$.sort_key') asc -- noqa
+            partition by course.block_id, {{ json_query_string('t.topic', "'$.id'") }} -- noqa
+            order by {{ json_query_string('t.topic', "'$.sort_key'") }} asc -- noqa
         ) as row_num
     from {{ ref('dim_course_content') }} as course
-    cross join unnest(cast(json_extract(course.block_metadata, '$.discussion_topics') as map(varchar, json))) AS t(key, topic) -- noqa
+    cross join {{ unnest_json_map("json_extract(course.block_metadata, '$.discussion_topics')", 't', 'key', 'topic') }} -- noqa
     where course.block_category = 'course'
     and course.is_latest = true
 

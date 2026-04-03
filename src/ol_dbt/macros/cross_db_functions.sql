@@ -263,6 +263,74 @@
 {%- endmacro %}
 
 
+
+{#
+    unnest_json_map: Cross-db unnesting of a JSON object into (key, value) rows.
+    Trino: UNNEST(cast(expr as map(varchar, json))) AS alias(key_col, val_col)
+    DuckDB: subquery using map_keys() / map_values() as parallel array unnests
+
+    Usage (in FROM / CROSS JOIN clause):
+      cross join {{ unnest_json_map('json_expr', 't', 'key', 'value') }}
+
+    Parameters:
+      json_expr: expression yielding a JSON object to iterate
+      alias:     table alias for the result
+      key_col:   column name for the map key
+      val_col:   column name for the map value
+#}
+{% macro unnest_json_map(json_expr, alias, key_col, val_col) -%}
+    {{ adapter.dispatch('unnest_json_map', 'open_learning')(json_expr, alias, key_col, val_col) }}
+{%- endmacro %}
+
+{% macro default__unnest_json_map(json_expr, alias, key_col, val_col) -%}
+    {# Trino: native map unnest; try_cast returns NULL for non-JSON input -> UNNEST(NULL) = 0 rows #}
+    unnest(try_cast({{ json_expr }} as map(varchar, json))) as {{ alias }}({{ key_col }}, {{ val_col }})
+{%- endmacro %}
+
+{% macro duckdb__unnest_json_map(json_expr, alias, key_col, val_col) -%}
+    {#
+        DuckDB does not support UNNEST on a MAP type directly in a CROSS JOIN.
+        Use parallel unnests of map_keys() and map_values() in a subquery.
+        Callers are responsible for pre-filtering non-object JSON values (e.g.
+        with json_is_object()) before data reaches this cross join, since
+        DuckDB may reorder WHERE clauses past the cast in its execution plan.
+        DuckDB aligns multiple UNNESTs in the same SELECT positionally.
+    #}
+    (
+        select
+            unnest(map_keys(cast({{ json_expr }} as map(varchar, json)))) as {{ key_col }}
+            , unnest(map_values(cast({{ json_expr }} as map(varchar, json)))) as {{ val_col }}
+    ) as {{ alias }}
+{%- endmacro %}
+
+
+{#
+    json_is_object: Cross-db predicate that returns TRUE when a JSON expression
+    is a JSON object (as opposed to a string, array, number, etc.).
+    Use in WHERE clauses to pre-filter non-object values before passing to
+    unnest_json_map(), which requires a MAP-castable (object) JSON input.
+
+    Parameters:
+      json_expr: expression yielding a JSON value to test
+
+    Usage:
+      WHERE {{ json_is_object("json_extract(col, '$.field')") }}
+#}
+{% macro json_is_object(json_expr) -%}
+    {{ adapter.dispatch('json_is_object', 'open_learning')(json_expr) }}
+{%- endmacro %}
+
+{% macro default__json_is_object(json_expr) -%}
+    {# Trino: json_extract returns varchar; objects start with '{'. Use substr to avoid LEFT JOIN keyword ambiguity. #}
+    substr(cast({{ json_expr }} as varchar), 1, 1) = '{'
+{%- endmacro %}
+
+{% macro duckdb__json_is_object(json_expr) -%}
+    {# DuckDB: json_type() returns 'OBJECT' for JSON objects #}
+    json_type({{ json_expr }}) = 'OBJECT'
+{%- endmacro %}
+
+
 {% macro is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
     {{ adapter.dispatch('is_courserun_current', 'open_learning')(start_on_timestamp_str, end_on_timestamp_str) }}
 {%- endmacro %}
