@@ -14,7 +14,6 @@ params:
   - created_on
   - message_index
   allow_render_html: false
-  annotation_layers: []
   color_pn: false
   column_config:
     message_index:

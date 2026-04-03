@@ -7,6 +7,7 @@ params:
   adhoc_filters: []
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
@@ -41,10 +42,11 @@ params:
   - payment_transaction
   - discount_max_redemptions
   order_by_cols: []
-  percent_metric_calculation: row_limit
+  order_desc: true
   percent_metrics: []
   query_mode: aggregate
   row_limit: 100000
+  server_page_length: 10
   show_cell_bars: true
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}

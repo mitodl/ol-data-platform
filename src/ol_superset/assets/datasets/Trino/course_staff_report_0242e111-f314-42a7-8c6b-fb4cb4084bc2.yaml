@@ -6,19 +6,7 @@ columns:
   column_name: courserun_readable_id
   description: null
   expression: ''
-  extra: {}
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: courserun_created_on
-  description: null
-  expression: ''
-  extra: {}
+  extra: null
   filterable: true
   groupby: true
   is_active: true
@@ -30,7 +18,7 @@ columns:
   column_name: courserun_start_on
   description: null
   expression: ''
-  extra: {}
+  extra: null
   filterable: true
   groupby: true
   is_active: true
@@ -42,7 +30,7 @@ columns:
   column_name: courserun_end_on
   description: null
   expression: ''
-  extra: {}
+  extra: null
   filterable: true
   groupby: true
   is_active: true
@@ -54,7 +42,7 @@ columns:
   column_name: user_username
   description: null
   expression: ''
-  extra: {}
+  extra: null
   filterable: true
   groupby: true
   is_active: true
@@ -66,7 +54,7 @@ columns:
   column_name: user_email
   description: null
   expression: ''
-  extra: {}
+  extra: null
   filterable: true
   groupby: true
   is_active: true
@@ -78,7 +66,7 @@ columns:
   column_name: course_roles
   description: null
   expression: ''
-  extra: {}
+  extra: null
   filterable: true
   groupby: true
   is_active: true
@@ -90,7 +78,7 @@ columns:
   column_name: platform
   description: null
   expression: ''
-  extra: {}
+  extra: null
   filterable: true
   groupby: true
   is_active: true
@@ -102,7 +90,7 @@ columns:
   column_name: courserun_is_current
   description: null
   expression: ''
-  extra: {}
+  extra: null
   filterable: true
   groupby: true
   is_active: true
@@ -114,7 +102,7 @@ columns:
   column_name: last_course_activity_date
   description: null
   expression: ''
-  extra: {}
+  extra: null
   filterable: true
   groupby: true
   is_active: true
@@ -135,8 +123,7 @@ metrics:
   d3format: null
   description: null
   expression: COUNT(*)
-  extra:
-    warning_markdown: ''
+  extra: null
   metric_name: count
   metric_type: count
   verbose_name: COUNT(*)
@@ -145,7 +132,7 @@ normalize_columns: false
 offset: 0
 params: null
 schema: ol_warehouse_production_reporting
-sql: ''
+sql: null
 table_name: course_staff_report
 template_params: null
 uuid: 0242e111-f314-42a7-8c6b-fb4cb4084bc2

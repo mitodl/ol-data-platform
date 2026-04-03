@@ -76,6 +76,7 @@ metadata:
     targets:
     - column:
         name: Any_DEDP_Program_Cert_Ind
+      datasetUuid: 232090f5-bb02-4327-9067-2ae49b64074b
     type: NATIVE_FILTER
   - cascadeParentIds: []
     chartsInScope:
@@ -102,6 +103,7 @@ metadata:
     targets:
     - column:
         name: DEDP_Course_Cert_Count
+      datasetUuid: 232090f5-bb02-4327-9067-2ae49b64074b
     type: NATIVE_FILTER
   - cascadeParentIds: []
     controlValues:
@@ -126,6 +128,7 @@ metadata:
     targets:
     - column:
         name: user_email
+      datasetUuid: 232090f5-bb02-4327-9067-2ae49b64074b
     type: NATIVE_FILTER
   - cascadeParentIds: []
     controlValues:
@@ -150,6 +153,7 @@ metadata:
     targets:
     - column:
         name: user_full_name
+      datasetUuid: 232090f5-bb02-4327-9067-2ae49b64074b
     type: NATIVE_FILTER
   refresh_frequency: 0
   shared_label_colors: []

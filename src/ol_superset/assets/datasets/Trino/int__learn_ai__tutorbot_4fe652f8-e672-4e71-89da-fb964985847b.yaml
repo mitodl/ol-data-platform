@@ -5,7 +5,7 @@ columns:
 - advanced_data_type: null
   column_name: courserun_readable_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -17,7 +17,7 @@ columns:
 - advanced_data_type: null
   column_name: chatsession_created_on
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -29,7 +29,7 @@ columns:
 - advanced_data_type: null
   column_name: chatsession_thread_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -41,7 +41,7 @@ columns:
 - advanced_data_type: null
   column_name: chatsession_updated_on
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -53,7 +53,7 @@ columns:
 - advanced_data_type: null
   column_name: tutorbot_chat_json
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -65,7 +65,7 @@ columns:
 - advanced_data_type: null
   column_name: user_global_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -77,7 +77,7 @@ columns:
 - advanced_data_type: null
   column_name: user_full_name
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -89,7 +89,7 @@ columns:
 - advanced_data_type: null
   column_name: edx_module_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -101,7 +101,7 @@ columns:
 - advanced_data_type: null
   column_name: chatsession_agent
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -113,7 +113,7 @@ columns:
 - advanced_data_type: null
   column_name: chatsession_title
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -125,7 +125,7 @@ columns:
 - advanced_data_type: null
   column_name: user_username
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -137,7 +137,7 @@ columns:
 - advanced_data_type: null
   column_name: user_email
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -149,7 +149,7 @@ columns:
 - advanced_data_type: null
   column_name: tutorbotoutput_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -161,7 +161,7 @@ columns:
 - advanced_data_type: null
   column_name: user_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true

@@ -17,7 +17,6 @@ params:
     sqlExpression: null
     subject: courserun_readable_id
   all_columns: []
-  annotation_layers: []
   color_pn: true
   column_config:
     courserunenrollment_created_on:

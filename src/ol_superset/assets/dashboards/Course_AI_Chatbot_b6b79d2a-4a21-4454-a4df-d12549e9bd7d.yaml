@@ -5,27 +5,26 @@ dashboard_title: Course AI Chatbot
 description: null
 metadata:
   chart_configuration:
-    '123':
+    '128':
       crossFilters:
         chartsInScope:
-        - 195
+        - 130
         scope: global
-      id: 123
-    '195':
+      id: 128
+    '130':
       crossFilters:
         chartsInScope:
-        - 123
+        - 128
         scope: global
-      id: 195
+      id: 130
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
-  default_filters: '{}'
   expanded_slices: {}
   global_chart_configuration:
     chartsInScope:
-    - 123
-    - 195
+    - 128
+    - 130
     scope:
       excluded: []
       rootPath:
@@ -35,8 +34,8 @@ metadata:
   native_filter_configuration:
   - cascadeParentIds: []
     chartsInScope:
-    - 195
-    - 123
+    - 128
+    - 130
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -67,8 +66,8 @@ metadata:
   - cascadeParentIds:
     - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
     chartsInScope:
-    - 195
-    - 123
+    - 128
+    - 130
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -101,8 +100,8 @@ metadata:
     - NATIVE_FILTER-WwAU3J2Myz9oIfU2RgrXg
     - NATIVE_FILTER-2pJ275QI_XYBjBj1zZmxV
     chartsInScope:
-    - 195
-    - 123
+    - 128
+    - 130
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -138,7 +137,7 @@ position:
     children: []
     id: CHART-explore-128-1
     meta:
-      chartId: 195
+      chartId: 128
       height: 105
       sliceName: Course AI Chatbot
       uuid: 92488983-505d-4642-a76d-6d5225275577
@@ -153,7 +152,7 @@ position:
     children: []
     id: CHART-sTqJ0pHCNGMuy7rHtXgQC
     meta:
-      chartId: 123
+      chartId: 130
       height: 55
       sliceName: Course AI Chatbot Table Metadata
       sliceNameOverride: Data Last Updated

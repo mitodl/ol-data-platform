@@ -5,7 +5,7 @@ columns:
 - advanced_data_type: null
   column_name: courserunenrollment_created_on_date
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -17,7 +17,7 @@ columns:
 - advanced_data_type: null
   column_name: combined_orders_hash_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -29,7 +29,7 @@ columns:
 - advanced_data_type: null
   column_name: courserun_readable_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -41,7 +41,7 @@ columns:
 - advanced_data_type: null
   column_name: course_readable_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -53,7 +53,7 @@ columns:
 - advanced_data_type: null
   column_name: courseruncertificate_created_on
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -65,7 +65,7 @@ columns:
 - advanced_data_type: null
   column_name: courserun_upgrade_deadline
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -77,7 +77,7 @@ columns:
 - advanced_data_type: null
   column_name: courserunenrollment_created_on
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -89,7 +89,7 @@ columns:
 - advanced_data_type: null
   column_name: courserunenrollment_upgraded_on
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -101,7 +101,7 @@ columns:
 - advanced_data_type: null
   column_name: user_highest_education
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -113,7 +113,7 @@ columns:
 - advanced_data_type: null
   column_name: courserunenrollment_enrollment_status
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -125,7 +125,7 @@ columns:
 - advanced_data_type: null
   column_name: courserun_start_on
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -137,7 +137,7 @@ columns:
 - advanced_data_type: null
   column_name: user_hashed_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -149,7 +149,7 @@ columns:
 - advanced_data_type: null
   column_name: user_full_name
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -161,7 +161,7 @@ columns:
 - advanced_data_type: null
   column_name: order_reference_number
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -173,7 +173,7 @@ columns:
 - advanced_data_type: null
   column_name: user_job_title
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -185,7 +185,7 @@ columns:
 - advanced_data_type: null
   column_name: user_country_code
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -197,7 +197,7 @@ columns:
 - advanced_data_type: null
   column_name: courserunenrollment_enrollment_mode
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -209,7 +209,7 @@ columns:
 - advanced_data_type: null
   column_name: courserun_end_on
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -221,7 +221,7 @@ columns:
 - advanced_data_type: null
   column_name: courseruncertificate_uuid
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -233,7 +233,7 @@ columns:
 - advanced_data_type: null
   column_name: courseruncertificate_url
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -245,7 +245,7 @@ columns:
 - advanced_data_type: null
   column_name: user_company
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -257,7 +257,7 @@ columns:
 - advanced_data_type: null
   column_name: user_username
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -269,7 +269,7 @@ columns:
 - advanced_data_type: null
   column_name: user_email
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -281,7 +281,7 @@ columns:
 - advanced_data_type: null
   column_name: courserun_title
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -293,7 +293,7 @@ columns:
 - advanced_data_type: null
   column_name: course_title
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -305,7 +305,7 @@ columns:
 - advanced_data_type: null
   column_name: user_gender
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -317,7 +317,7 @@ columns:
 - advanced_data_type: null
   column_name: user_industry
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -329,7 +329,7 @@ columns:
 - advanced_data_type: null
   column_name: user_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -341,7 +341,7 @@ columns:
 - advanced_data_type: null
   column_name: platform
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -353,7 +353,7 @@ columns:
 - advanced_data_type: null
   column_name: courserunenrollment_is_edx_enrolled
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -365,7 +365,7 @@ columns:
 - advanced_data_type: null
   column_name: courseruncertificate_is_earned
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -377,7 +377,7 @@ columns:
 - advanced_data_type: null
   column_name: courserungrade_is_passing
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -389,7 +389,7 @@ columns:
 - advanced_data_type: null
   column_name: courserunenrollment_is_active
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -401,7 +401,7 @@ columns:
 - advanced_data_type: null
   column_name: courserun_is_current
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -413,7 +413,7 @@ columns:
 - advanced_data_type: null
   column_name: courserungrade_grade
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -425,7 +425,7 @@ columns:
 - advanced_data_type: null
   column_name: courserunenrollment_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -437,7 +437,7 @@ columns:
 - advanced_data_type: null
   column_name: courserun_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -449,7 +449,7 @@ columns:
 - advanced_data_type: null
   column_name: order_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -461,7 +461,7 @@ columns:
 - advanced_data_type: null
   column_name: line_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true

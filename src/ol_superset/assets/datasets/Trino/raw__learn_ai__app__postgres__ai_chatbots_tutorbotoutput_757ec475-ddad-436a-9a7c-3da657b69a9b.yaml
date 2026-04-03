@@ -5,7 +5,7 @@ columns:
 - advanced_data_type: null
   column_name: _airbyte_meta
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -16,21 +16,33 @@ columns:
     VARCHAR)))
   verbose_name: null
 - advanced_data_type: null
-  column_name: created_on
+  column_name: _airbyte_meta.changes
   description: null
   expression: null
   extra: null
   filterable: true
   groupby: true
   is_active: true
-  is_dttm: true
+  is_dttm: false
   python_date_format: null
-  type: TIMESTAMP(6) WITH TIME ZONE
+  type: ARRAY(ROW(FIELD VARCHAR, CHANGE VARCHAR, REASON VARCHAR))
+  verbose_name: null
+- advanced_data_type: null
+  column_name: _airbyte_meta.sync_id
+  description: null
+  expression: null
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
   verbose_name: null
 - advanced_data_type: null
   column_name: _airbyte_raw_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -42,7 +54,7 @@ columns:
 - advanced_data_type: null
   column_name: chat_json
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -54,7 +66,7 @@ columns:
 - advanced_data_type: null
   column_name: thread_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -66,7 +78,7 @@ columns:
 - advanced_data_type: null
   column_name: _airbyte_extracted_at
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -78,7 +90,7 @@ columns:
 - advanced_data_type: null
   column_name: _airbyte_generation_id
   description: null
-  expression: ''
+  expression: null
   extra: null
   filterable: true
   groupby: true
@@ -89,30 +101,6 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: id
-  description: null
-  expression: ''
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: BIGINT
-  verbose_name: null
-- advanced_data_type: null
-  column_name: edx_module_id
-  description: null
-  expression: null
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: session_id
   description: null
   expression: null
   extra: null
@@ -130,7 +118,7 @@ extra: null
 fetch_values_predicate: null
 filter_select_enabled: true
 folders: null
-main_dttm_col: created_on
+main_dttm_col: null
 metrics:
 - currency: null
   d3format: null

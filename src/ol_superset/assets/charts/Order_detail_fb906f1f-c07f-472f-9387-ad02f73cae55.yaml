@@ -45,7 +45,6 @@ params:
   - redeemed_email
   allow_rearrange_columns: true
   allow_render_html: true
-  annotation_layers: []
   color_pn: false
   column_config:
     discount:
@@ -92,7 +91,7 @@ params:
   - '["order_tax_amount", false]'
   percent_metrics: []
   query_mode: raw
-  row_limit: 50000
+  row_limit: 100000
   server_pagination: false
   show_cell_bars: false
   table_timestamp_format: smart_date

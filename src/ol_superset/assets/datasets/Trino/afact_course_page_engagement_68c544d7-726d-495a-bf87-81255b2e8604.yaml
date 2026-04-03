@@ -1,21 +1,20 @@
-always_filter_main_dttm: false
 cache_timeout: null
 catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
-  column_name: last_view_timestamp
+  column_name: user_email
   description: null
-  expression: null
+  expression: ''
   extra: null
   filterable: true
   groupby: true
   is_active: true
-  is_dttm: true
+  is_dttm: false
   python_date_format: null
-  type: TIMESTAMP(6) WITH TIME ZONE
+  type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
-  column_name: courserun_readable_id
+  column_name: full_name
   description: null
   expression: ''
   extra: null
@@ -39,6 +38,18 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
+  column_name: courserun_readable_id
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
   column_name: num_of_views
   description: null
   expression: ''
@@ -51,9 +62,9 @@ columns:
   type: BIGINT
   verbose_name: null
 - advanced_data_type: null
-  column_name: chapter_block_fk
+  column_name: unit_title
   description: null
-  expression: null
+  expression: ''
   extra: null
   filterable: true
   groupby: true
@@ -63,9 +74,9 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
-  column_name: sequential_block_fk
+  column_name: subsection_title
   description: null
-  expression: null
+  expression: ''
   extra: null
   filterable: true
   groupby: true
@@ -75,9 +86,21 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
-  column_name: user_username
+  column_name: subsection_block_index
   description: null
-  expression: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: null
+- advanced_data_type: null
+  column_name: section_title
+  description: null
+  expression: ''
   extra: null
   filterable: true
   groupby: true
@@ -87,9 +110,21 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
-  column_name: platform_fk
+  column_name: section_block_index
   description: null
-  expression: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: BIGINT
+  verbose_name: null
+- advanced_data_type: null
+  column_name: course_title
+  description: null
+  expression: ''
   extra: null
   filterable: true
   groupby: true
@@ -97,42 +132,6 @@ columns:
   is_dttm: false
   python_date_format: null
   type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: block_fk
-  description: null
-  expression: null
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: user_fk
-  description: null
-  expression: null
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: VARCHAR
-  verbose_name: null
-- advanced_data_type: null
-  column_name: openedx_user_id
-  description: null
-  expression: null
-  extra: null
-  filterable: true
-  groupby: true
-  is_active: true
-  is_dttm: false
-  python_date_format: null
-  type: INTEGER
   verbose_name: null
 database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929  # Trino
 default_endpoint: null

@@ -6,7 +6,6 @@ description: null
 params:
   adhoc_filters: []
   all_columns: []
-  annotation_layers: []
   color_pn: true
   comparison_type: values
   extra_form_data: {}

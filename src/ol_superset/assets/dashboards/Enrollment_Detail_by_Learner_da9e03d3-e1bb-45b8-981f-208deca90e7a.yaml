@@ -1,31 +1,31 @@
-certification_details: null
-certified_by: null
+certification_details: ''
+certified_by: ''
 css: ''
 dashboard_title: Enrollment Detail by Learner
 description: null
 metadata:
   chart_configuration:
-    '147':
-      crossFilters:
-        chartsInScope:
-        - 64
-        - 108
-        scope: global
-      id: 147
-    '211':
-      crossFilters:
-        chartsInScope:
-        - 108
-        - 111
-        scope: global
-      id: 211
-    '218':
+    '108':
       crossFilters:
         chartsInScope:
         - 64
         - 111
         scope: global
-      id: 218
+      id: 108
+    '111':
+      crossFilters:
+        chartsInScope:
+        - 64
+        - 108
+        scope: global
+      id: 111
+    '64':
+      crossFilters:
+        chartsInScope:
+        - 108
+        - 111
+        scope: global
+      id: 64
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
@@ -93,13 +93,14 @@ metadata:
       ownState: {}
     description: ''
     filterType: filter_select
-    id: NATIVE_FILTER-kN34a21RmHIvZx0lPILHI
+    id: NATIVE_FILTER-Z8Vmr96powN5Uaxwt74tl
     name: User Email
     scope:
-      excluded: []
+      excluded:
+      - 64
+      - 111
       rootPath:
-      - TAB-t1-4mh38qE
-      - TAB-pWPKo4rBS
+      - ROOT_ID
     targets:
     - column:
         name: user_email
@@ -188,13 +189,14 @@ metadata:
       ownState: {}
     description: ''
     filterType: filter_select
-    id: NATIVE_FILTER-UVtY6Gfiky0BXiPZ5w2qr
+    id: NATIVE_FILTER-esvwFSDaYAPHp7CUdBnPC
     name: Course Run Readable ID
     scope:
-      excluded: []
+      excluded:
+      - 64
+      - 111
       rootPath:
-      - TAB-t1-4mh38qE
-      - TAB-pWPKo4rBS
+      - ROOT_ID
     targets:
     - column:
         name: courserun_readable_id
@@ -247,13 +249,14 @@ metadata:
       ownState: {}
     description: ''
     filterType: filter_select
-    id: NATIVE_FILTER-w0Mz1I5XB0fTTArRF7SSN
+    id: NATIVE_FILTER-ZBm9IPcyrCiJ7Lp-yhmqt
     name: Course Run Certificate Is Earned
     scope:
-      excluded: []
+      excluded:
+      - 64
+      - 111
       rootPath:
-      - TAB-t1-4mh38qE
-      - TAB-pWPKo4rBS
+      - ROOT_ID
     targets:
     - column:
         name: courseruncertificate_is_earned
@@ -267,7 +270,7 @@ position:
     children: []
     id: CHART-KkyyS2N5s777Egpf_DTJa
     meta:
-      chartId: 147
+      chartId: 111
       height: 50
       sliceName: Enrollment Detail Dashboard (Last Updated)
       uuid: 1ed19d7a-4f9b-4c13-a6f9-ba348f1c4d3d
@@ -282,7 +285,7 @@ position:
     children: []
     id: CHART-explore-108-1
     meta:
-      chartId: 218
+      chartId: 108
       height: 92
       sliceName: Enrollment Detail
       uuid: 1cf394ec-8561-4b0d-9d9b-f394a6029b33
@@ -297,7 +300,7 @@ position:
     children: []
     id: CHART-rQKV1it9gO
     meta:
-      chartId: 211
+      chartId: 64
       height: 76
       sliceName: Learner Deferred Report
       uuid: 5ce15be9-994b-4377-8c99-21d35267a2dd
