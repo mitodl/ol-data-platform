@@ -95,6 +95,7 @@ with mitxonline_courseruns as (
         and
             -- Extract course ID from course run ID
             -- course-v1 format: course-v1:{org}+{course}+{run} → strip the last +{run} segment
+            -- edxorg slash format: {org}/{course}/{run} → strip the last /{run} segment
             case
                 when combined_courseruns.courserun_readable_id like 'course-v1:%'
                     then substring(
@@ -102,6 +103,13 @@ with mitxonline_courseruns as (
                         1,
                         length(combined_courseruns.courserun_readable_id)
                         - strpos(reverse(combined_courseruns.courserun_readable_id), '+')
+                    )
+                when regexp_like(combined_courseruns.courserun_readable_id, '^[^/]+/[^/]+/[^/]+')
+                    then substring(
+                        combined_courseruns.courserun_readable_id,
+                        1,
+                        length(combined_courseruns.courserun_readable_id)
+                        - strpos(reverse(combined_courseruns.courserun_readable_id), '/')
                     )
                 else combined_courseruns.courserun_readable_id
             end = dim_course.course_readable_id
