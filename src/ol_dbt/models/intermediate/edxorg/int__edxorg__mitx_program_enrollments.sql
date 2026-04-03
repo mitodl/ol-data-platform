@@ -31,8 +31,5 @@ select
     , coalesce(micromasters_programs.program_title, program_learners_sorted.program_title) as program_name
 from program_learners_sorted
 left join micromasters_programs
-    on (
-        program_learners_sorted.program_title like micromasters_programs.program_title || '%'
-        or program_learners_sorted.program_title like '%' || micromasters_programs.program_title
-    )
+    on program_learners_sorted.program_title = micromasters_programs.program_title
 where program_learners_sorted.row_num = 1
