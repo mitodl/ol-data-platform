@@ -34,8 +34,10 @@ dev = [
     "dagster-webserver>=1.12.10",
     "mypy",
     "ol-dbt-cli",
+    "ol-orchestrate-lib",
     "pre-commit>=4.0.0,<5",
     "pytest>=9.0.1,<10",
+    "pytest-cov>=6.0.0,<7",
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
     "sqlfluff[rs]>=4.0.0",
@@ -44,6 +46,7 @@ dev = [
 
 [tool.uv.sources]
 ol-dbt-cli = {workspace = true}
+ol-orchestrate-lib = { workspace = true }
 
 # The ol_orchestrate package has been moved to packages/ol-orchestrate-lib/
 # and is managed as a workspace member package
@@ -205,7 +208,8 @@ inline-quotes = "double"
 builtins-allowed-modules = ["secrets", "platform"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"scripts/**" = ["T201", "ERA001", "B", "BLE001", "PLR", "E501", "G004", "FBT", "C90", "INP001"]
+"**/tests/**" = ["S101", "PLR", "RUF059", "S106", "SLF001", "ERA001"]
 "test_*.py" = ["S101"]
 
 [tool.dg]

@@ -1,5 +1,7 @@
 import hashlib
+import io
 import json
+import tarfile
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -21,6 +23,7 @@ from dagster._core.definitions.partitions.utils.multi import (
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from ol_orchestrate.lib.openedx import (
     process_course_xml,
+    process_course_xml_blocks,
     process_policy_json,
     process_video_xml,
 )
@@ -72,95 +75,206 @@ def dummy_edxorg_course_xml(): ...
             io_manager_key="s3file_io_manager",
             key=AssetKey(("edxorg", "processed_data", "course_policy")),
         ),
+        "course_xml_blocks": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Comprehensive block-level data extracted from course XML archives, "
+                "including chapters, sequentials, verticals, and content components"
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("edxorg", "processed_data", "course_xml_blocks")),
+        ),
+        "course_static_assets": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Non-XML files extracted from the course archive (e.g. SRT subtitles, "
+                "HTML content, PDFs), bundled as a tar archive for downstream use."
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("edxorg", "processed_data", "course_static_assets")),
+        ),
+        "course_static_assets_manifest": AssetOut(
+            automation_condition=upstream_or_code_changes(),
+            description=(
+                "Manifest JSON listing every non-XML static file in the course archive "
+                "(path, MIME type, size). Versioned by a content hash so downstream "
+                "consumers can detect changes without fetching the full archive."
+            ),
+            io_manager_key="s3file_io_manager",
+            key=AssetKey(("edxorg", "processed_data", "course_static_assets_manifest")),
+        ),
     },
 )
-def extract_edxorg_courserun_metadata(
+def extract_edxorg_courserun_metadata(  # noqa: PLR0915
     context: AssetExecutionContext, course_archive: UPath
 ):
-    # Download the remote file to the current working directory
-    course_xml_path = Path(NamedTemporaryFile(delete=False, suffix=".xml.tar.gz").name)
-    context.log.info(
-        "Attempting to download course XML from %s to %s",
-        course_archive,
-        course_xml_path,
-    )
-    course_archive.fs.get_file(str(course_archive), str(course_xml_path))
-    data_version = hashlib.file_digest(course_xml_path.open("rb"), "sha256").hexdigest()
+    temp_files: list[Path] = []
+    try:
+        # Download the remote file to the current working directory
+        course_xml_path = Path(
+            NamedTemporaryFile(delete=False, suffix=".xml.tar.gz").name
+        )
+        temp_files.append(course_xml_path)
+        context.log.info(
+            "Attempting to download course XML from %s to %s",
+            course_archive,
+            course_xml_path,
+        )
+        course_archive.fs.get_file(str(course_archive), str(course_xml_path))
+        data_version = hashlib.file_digest(
+            course_xml_path.open("rb"), "sha256"
+        ).hexdigest()
 
-    # Process the course metadata
-    course_metadata = process_course_xml(course_xml_path)
-    course_metadata_file = Path(
-        NamedTemporaryFile(delete=False, suffix="_metadata.json").name
-    )
-    course_metadata_file.write_text(json.dumps(course_metadata))
+        # Process the course metadata
+        course_metadata = process_course_xml(course_xml_path)
+        course_metadata_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_metadata.json").name
+        )
+        temp_files.append(course_metadata_file)
+        course_metadata_file.write_text(json.dumps(course_metadata))
 
-    # Multipartition Key Logic
-    partition_parts = context.partition_key.split(MULTIPARTITION_KEY_DELIMITER)
-    partition_dict = {}
-    for partition_part in partition_parts:
-        if partition_part in ("prod", "edge"):
-            partition_dict["source_system"] = partition_part
-        else:
-            partition_dict["course_id"] = partition_part
-    course_metadata_object_key = f"{'/'.join(context.asset_key_for_output('course_metadata').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
-    yield Output(
-        (course_metadata_file, course_metadata_object_key),
-        output_name="course_metadata",
-        data_version=DataVersion(data_version),
-        metadata={
-            "course_id": partition_dict["course_id"],
-            "object_key": course_metadata_object_key,
-        },
-    )
+        # Multipartition Key Logic
+        partition_parts = context.partition_key.split(MULTIPARTITION_KEY_DELIMITER)
+        partition_dict = {}
+        for partition_part in partition_parts:
+            if partition_part in ("prod", "edge"):
+                partition_dict["source_system"] = partition_part
+            else:
+                partition_dict["course_id"] = partition_part
+        course_metadata_object_key = f"{'/'.join(context.asset_key_for_output('course_metadata').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
+        yield Output(
+            (course_metadata_file, course_metadata_object_key),
+            output_name="course_metadata",
+            data_version=DataVersion(data_version),
+            metadata={
+                "course_id": partition_dict["course_id"],
+                "object_key": course_metadata_object_key,
+            },
+        )
 
-    # Process the course video details
-    video_details = process_video_xml(course_xml_path)
-    course_video_file = Path(
-        NamedTemporaryFile(delete=False, suffix="_video.jsonl").name
-    )
-    jsonlines.open(course_video_file, "w").write_all(video_details)
-    course_video_object_key = f"{'/'.join(context.asset_key_for_output('course_video').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
-    yield Output(
-        (course_video_file, course_video_object_key),
-        output_name="course_video",
-        data_version=DataVersion(data_version),
-        metadata={
-            "course_id": partition_dict["course_id"],
-            "object_key": course_video_object_key,
-        },
-    )
+        # Process the course video details
+        video_details = process_video_xml(course_xml_path)
+        course_video_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_video.jsonl").name
+        )
+        temp_files.append(course_video_file)
+        jsonlines.open(course_video_file, "w").write_all(video_details)
+        course_video_object_key = f"{'/'.join(context.asset_key_for_output('course_video').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
+        yield Output(
+            (course_video_file, course_video_object_key),
+            output_name="course_video",
+            data_version=DataVersion(data_version),
+            metadata={
+                "course_id": partition_dict["course_id"],
+                "object_key": course_video_object_key,
+            },
+        )
 
-    course_policy_rows, signatory_rows = process_policy_json(course_xml_path)
-    course_policy_file = Path(
-        NamedTemporaryFile(delete=False, suffix="_policy.jsonl").name
-    )
-    jsonlines.open(course_policy_file, "w").write_all(course_policy_rows)
-    course_policy_object_key = f"{'/'.join(context.asset_key_for_output('course_policy').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
-    yield Output(
-        (course_policy_file, course_policy_object_key),
-        output_name="course_policy",
-        data_version=DataVersion(data_version),
-        metadata={
-            "course_id": partition_dict["course_id"],
-            "object_key": course_policy_object_key,
-        },
-    )
+        course_policy_rows, signatory_rows = process_policy_json(course_xml_path)
+        course_policy_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_policy.jsonl").name
+        )
+        temp_files.append(course_policy_file)
+        jsonlines.open(course_policy_file, "w").write_all(course_policy_rows)
+        course_policy_object_key = f"{'/'.join(context.asset_key_for_output('course_policy').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
+        yield Output(
+            (course_policy_file, course_policy_object_key),
+            output_name="course_policy",
+            data_version=DataVersion(data_version),
+            metadata={
+                "course_id": partition_dict["course_id"],
+                "object_key": course_policy_object_key,
+            },
+        )
 
-    course_certificate_signatory_file = Path(
-        NamedTemporaryFile(delete=False, suffix="_certificate_signatory.jsonl").name
-    )
-    jsonlines.open(course_certificate_signatory_file, "w").write_all(signatory_rows)
-    course_certificate_signatory_object_key = f"{'/'.join(context.asset_key_for_output('course_certificate_signatory').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
-    yield Output(
-        (course_certificate_signatory_file, course_certificate_signatory_object_key),
-        output_name="course_certificate_signatory",
-        data_version=DataVersion(data_version),
-        metadata={
-            "course_id": partition_dict["course_id"],
-            "object_key": course_certificate_signatory_object_key,
-        },
-    )
-    course_xml_path.unlink()
+        course_certificate_signatory_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_certificate_signatory.jsonl").name
+        )
+        temp_files.append(course_certificate_signatory_file)
+        jsonlines.open(course_certificate_signatory_file, "w").write_all(signatory_rows)
+        course_certificate_signatory_object_key = f"{'/'.join(context.asset_key_for_output('course_certificate_signatory').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
+        yield Output(
+            (
+                course_certificate_signatory_file,
+                course_certificate_signatory_object_key,
+            ),
+            output_name="course_certificate_signatory",
+            data_version=DataVersion(data_version),
+            metadata={
+                "course_id": partition_dict["course_id"],
+                "object_key": course_certificate_signatory_object_key,
+            },
+        )
+
+        # Process comprehensive XML block data and collect non-XML assets
+        xml_blocks, static_bundle = process_course_xml_blocks(
+            course_xml_path, partition_dict["source_system"]
+        )
+        course_xml_blocks_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_xml_blocks.jsonl").name
+        )
+        temp_files.append(course_xml_blocks_file)
+        with jsonlines.open(course_xml_blocks_file, "w") as writer:
+            writer.write_all(block.model_dump() for block in xml_blocks)
+        course_xml_blocks_object_key = f"{'/'.join(context.asset_key_for_output('course_xml_blocks').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{data_version}.json"  # noqa: E501
+        yield Output(
+            (course_xml_blocks_file, course_xml_blocks_object_key),
+            output_name="course_xml_blocks",
+            data_version=DataVersion(data_version),
+            metadata={
+                "course_id": partition_dict["course_id"],
+                "object_key": course_xml_blocks_object_key,
+                "block_count": len(xml_blocks),
+            },
+        )
+
+        # Materialize non-XML static assets to S3. Files are bundled into a single
+        # tar archive per course. The data_version is a content hash of the static
+        # files themselves, so it only changes when the assets actually change.
+        static_assets_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_static_assets.tar.gz").name
+        )
+        temp_files.append(static_assets_file)
+        with tarfile.open(static_assets_file, "w:gz") as assets_tar:
+            for relative_path, asset_bytes in static_bundle.files:
+                info = tarfile.TarInfo(name=relative_path)
+                info.size = len(asset_bytes)
+                assets_tar.addfile(info, io.BytesIO(asset_bytes))
+        course_static_assets_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/{static_bundle.data_version}.tar.gz"  # noqa: E501
+        yield Output(
+            (static_assets_file, course_static_assets_object_key),
+            output_name="course_static_assets",
+            data_version=DataVersion(static_bundle.data_version),
+            metadata={
+                "course_id": partition_dict["course_id"],
+                "object_key": course_static_assets_object_key,
+                "asset_count": static_bundle.manifest["file_count"],
+            },
+        )
+
+        # Materialize the manifest as a separate lightweight JSON object so downstream
+        # consumers can inspect available files and check the version without fetching
+        # the full archive. The key uses a fixed name (manifest.json) so it is always
+        # overwritten with the latest and cheaply readable without knowing the version.
+        static_manifest_file = Path(
+            NamedTemporaryFile(delete=False, suffix="_static_manifest.json").name
+        )
+        temp_files.append(static_manifest_file)
+        static_manifest_file.write_text(json.dumps(static_bundle.manifest, indent=2))
+        course_static_assets_manifest_object_key = f"{'/'.join(context.asset_key_for_output('course_static_assets_manifest').path)}/{partition_dict['source_system']}/{partition_dict['course_id']}/manifest.json"  # noqa: E501
+        yield Output(
+            (static_manifest_file, course_static_assets_manifest_object_key),
+            output_name="course_static_assets_manifest",
+            data_version=DataVersion(static_bundle.data_version),
+            metadata={
+                "course_id": partition_dict["course_id"],
+                "object_key": course_static_assets_manifest_object_key,
+                "asset_count": static_bundle.manifest["file_count"],
+            },
+        )
+    finally:
+        for temp_file in temp_files:
+            temp_file.unlink(missing_ok=True)
 
 
 @asset(
