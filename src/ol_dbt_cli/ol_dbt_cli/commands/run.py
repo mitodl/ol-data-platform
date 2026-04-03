@@ -120,9 +120,12 @@ def _build_dbt_command(
         if parts:
             cmd += ["--select", " ".join(parts)]
 
-    # Defer requires a manifest — guard against the case where only run_results.json exists
-    if use_state and defer and has_manifest:
-        cmd += ["--defer", "--state", str(state_dir)]
+    # --state is required for ANY state-based selector (state:modified+, result:error+).
+    # --defer is optional and additionally requires manifest.json.
+    if use_state:
+        cmd += ["--state", str(state_dir)]
+        if defer and has_manifest:
+            cmd.append("--defer")
 
     if full_refresh:
         cmd.append("--full-refresh")
@@ -219,7 +222,7 @@ def run(  # noqa: PLR0913
         err_console.print(f"[red]Error:[/] {exc}")
         sys.exit(1)
 
-    resolved_state_dir = Path(state_dir).resolve() if state_dir else dbt_dir / DEFAULT_STATE_DIR
+    resolved_state_dir = Path(state_dir).expanduser().resolve() if state_dir else dbt_dir / DEFAULT_STATE_DIR
     target_dir = dbt_dir / "target"
     available = _state_artifacts_available(resolved_state_dir)
     has_any_state = any(available.values())
