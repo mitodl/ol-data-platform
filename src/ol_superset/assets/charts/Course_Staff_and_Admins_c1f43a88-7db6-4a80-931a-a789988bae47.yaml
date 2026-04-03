@@ -18,6 +18,7 @@ params:
   - course_roles
   - courserun_start_on
   - courserun_end_on
+  - courserun_created_on
   allow_render_html: true
   color_pn: true
   comparison_color_scheme: Green
