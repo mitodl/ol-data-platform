@@ -23,9 +23,13 @@ cd ol-data-platform
 # Install all dependencies (includes dbt, ol-dbt CLI, and adapters)
 uv sync
 
-# Install dbt packages
+# Install dbt packages (run from src/ol_dbt so dbt finds profiles.yml)
 cd src/ol_dbt && dbt deps
 ```
+
+> **Note:** When running `dbt` commands directly, your working directory must be
+> `src/ol_dbt/` (where `profiles.yml` lives), or set `DBT_PROFILES_DIR=src/ol_dbt`
+> before running from the repo root. The `ol-dbt run` command handles this automatically.
 
 For Trino targets (`dev_qa`, `dev_production`) you also need:
 ```bash

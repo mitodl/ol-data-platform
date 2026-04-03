@@ -21,8 +21,8 @@ Usage examples::
     ol-dbt run --select my_model+      # explicit selection + defer
     ol-dbt run test                    # run tests incrementally
     ol-dbt run run                     # dbt run (models only) incrementally
-    ol-dbt run --no-save-state         # skip saving artifacts after run
-    ol-dbt run --target dev_production # override dbt target
+    ol-dbt run --no-save-state         # skip saving artifacts after run (--save-state is the default)
+    ol-dbt run --no-defer              # disable upstream deferral (--defer is the default)
 """
 
 from __future__ import annotations
@@ -88,6 +88,7 @@ def _save_artifacts(target_dir: Path, state_dir: Path) -> list[str]:
 
 def _build_dbt_command(
     subcommand: str,
+    profiles_dir: Path,
     state_dir: Path,
     available: dict[str, bool],
     select: str | None,
@@ -98,7 +99,9 @@ def _build_dbt_command(
     extra_args: list[str],
 ) -> list[str]:
     """Construct the dbt CLI command list."""
-    cmd: list[str] = ["dbt", subcommand]
+    # Always pass --profiles-dir so the command works from any cwd, not just
+    # from within the dbt project directory.
+    cmd: list[str] = ["dbt", subcommand, "--profiles-dir", str(profiles_dir)]
 
     has_manifest = available.get("manifest.json", False)
     has_results = available.get("run_results.json", False)
@@ -259,6 +262,7 @@ def run(  # noqa: PLR0913
     # ── Build and run command ──────────────────────────────────────────────
     cmd = _build_dbt_command(
         subcommand=subcommand,
+        profiles_dir=dbt_dir,
         state_dir=resolved_state_dir,
         available=available,
         select=select,
