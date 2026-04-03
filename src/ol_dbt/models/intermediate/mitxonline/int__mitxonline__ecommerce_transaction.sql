@@ -14,7 +14,10 @@ select
     , cast({{ json_query_string('transaction_data', "'$.req_amount'") }} as decimal(38, 2)) as transaction_payment_amount
     , {{ json_query_string('transaction_data', "'$.req_transaction_uuid'") }} as transaction_uuid
     , {{ json_query_string('transaction_data', "'$.decision'") }} as transaction_status
-    , {{ json_query_string('transaction_data', "'$.req_payment_method'") }} as transaction_payment_method
+    , case {{ json_query_string('transaction_data', "'$.req_payment_method'") }}
+        when 'card' then 'credit_card'
+        else {{ json_query_string('transaction_data', "'$.req_payment_method'") }}
+    end as transaction_payment_method
     , {{ json_query_string('transaction_data', "'$.req_reference_number'") }} as transaction_reference_number
     , {{ json_query_string('transaction_data', "'$.req_bill_to_address_state'") }} as transaction_bill_to_address_state
     , {{ json_query_string('transaction_data', "'$.req_bill_to_address_country'") }}

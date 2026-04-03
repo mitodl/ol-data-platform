@@ -208,6 +208,7 @@ models:
   - name: payment_method_fk
     description: Foreign key to dim_payment_method
     tests:
+    - not_null
     - relationships:
         to: ref('dim_payment_method')
         field: payment_method_pk
