@@ -50,12 +50,29 @@ with mitxonline_courseruns as (
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
 
+, residential_courseruns as (
+    select
+        courserun_readable_id
+        , cast(null as integer) as source_id
+        , cast(null as integer) as course_id
+        , courserun_title
+        , courserun_start_on
+        , courserun_end_on
+        , courserun_enrollment_start_on as enrollment_start
+        , courserun_enrollment_end_on as enrollment_end
+        , cast(null as boolean) as courserun_is_live
+        , 'residential' as platform
+    from {{ ref('int__mitxresidential__courseruns') }}
+)
+
 , combined_courseruns as (
     select * from mitxonline_courseruns
     union all
     select * from mitxpro_courseruns
     union all
     select * from edxorg_courseruns
+    union all
+    select * from residential_courseruns
 )
 
 -- Join to dim_course to get course_fk
