@@ -283,8 +283,18 @@
 {%- endmacro %}
 
 {% macro default__unnest_json_map(json_expr, alias, key_col, val_col) -%}
-    {# Trino: native map unnest; try_cast returns NULL for non-JSON input -> UNNEST(NULL) = 0 rows #}
-    unnest(try_cast({{ json_expr }} as map(varchar, json))) as {{ alias }}({{ key_col }}, {{ val_col }})
+    {#
+        Trino: parse JSON object into map(varchar, json), then cast each value to varchar so
+        downstream json_query / json_query_string calls receive varchar (not the native json type,
+        which Trino refuses to pass to json_query). try_cast returns NULL for non-JSON input so
+        transform_values(NULL, ...) also returns NULL and UNNEST(NULL) = 0 rows.
+    #}
+    unnest(
+        transform_values(
+            try_cast({{ json_expr }} as map(varchar, json)),
+            (k, v) -> cast(v as varchar)
+        )
+    ) as {{ alias }}({{ key_col }}, {{ val_col }})
 {%- endmacro %}
 
 {% macro duckdb__unnest_json_map(json_expr, alias, key_col, val_col) -%}
