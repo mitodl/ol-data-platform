@@ -331,8 +331,9 @@
 {%- endmacro %}
 
 {% macro default__json_is_object(json_expr) -%}
-    {# Trino: json_extract returns varchar; objects start with '{'. Use substr to avoid LEFT JOIN keyword ambiguity. #}
-    substr(cast({{ json_expr }} as varchar), 1, 1) = '{'
+    {# Trino: json_extract returns native json type; use json_format() to serialize to varchar.
+       cast(json as varchar) is NOT supported in Trino; json_format() is the correct function. #}
+    substr(json_format({{ json_expr }}), 1, 1) = '{'
 {%- endmacro %}
 
 {% macro duckdb__json_is_object(json_expr) -%}
