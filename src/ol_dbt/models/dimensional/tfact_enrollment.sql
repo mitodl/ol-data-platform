@@ -14,6 +14,7 @@ with mitxonline_enrollments as (
         , cast(null as varchar) as courserun_readable_id  -- join key for edxorg only
         , null as program_id
         , courserunenrollment_created_on as enrollment_created_on
+        , courserunenrollment_updated_on as enrollment_updated_on
         , courserunenrollment_is_active as enrollment_is_active
         , courserunenrollment_enrollment_mode as enrollment_mode
         , courserunenrollment_enrollment_status as enrollment_status
@@ -30,6 +31,7 @@ with mitxonline_enrollments as (
         , cast(null as varchar) as courserun_readable_id  -- join key for edxorg only
         , null as program_id
         , courserunenrollment_created_on as enrollment_created_on
+        , courserunenrollment_updated_on as enrollment_updated_on
         , courserunenrollment_is_active as enrollment_is_active
         , courserunenrollment_enrollment_mode as enrollment_mode
         , null as enrollment_status
@@ -47,6 +49,7 @@ with mitxonline_enrollments as (
         , courserun_readable_id
         , null as program_id
         , courserunenrollment_created_on as enrollment_created_on
+        , cast(null as varchar) as enrollment_updated_on
         , courserunenrollment_is_active as enrollment_is_active
         , courserunenrollment_enrollment_mode as enrollment_mode
         , null as enrollment_status
@@ -68,9 +71,10 @@ with mitxonline_enrollments as (
         , cast(null as varchar) as courserun_readable_id  -- join key for edxorg only
         , program_id
         , programenrollment_created_on as enrollment_created_on
+        , programenrollment_updated_on as enrollment_updated_on
         , programenrollment_is_active as enrollment_is_active
-        , null as enrollment_mode
-        , null as enrollment_status
+        , programenrollment_enrollment_mode as enrollment_mode
+        , programenrollment_enrollment_status as enrollment_status
         , 'mitxonline' as platform
         , 'mitxonline' as platform_code
     from {{ ref('int__mitxonline__programenrollments') }}
@@ -84,6 +88,7 @@ with mitxonline_enrollments as (
         , courserun_readable_id
         , null as program_id
         , courserunenrollment_created_on as enrollment_created_on
+        , cast(null as varchar) as enrollment_updated_on
         , courserunenrollment_is_active as enrollment_is_active
         , courserunenrollment_enrollment_mode as enrollment_mode
         , null as enrollment_status
@@ -206,8 +211,13 @@ with mitxonline_enrollments as (
 -- subquery anti-pattern. Without this, Trino executes the WHERE as:
 --   AssignUniqueId + LeftJoin(all target rows on platform+type) + StreamingAggregate
 -- which fans out to billions of intermediate rows.
+-- Use max(enrollment_updated_on) where available (program enrollments), falling back
+-- to max(enrollment_created_on), so status/mode changes are captured incrementally.
 , incremental_watermarks as (
-    select platform as watermark_platform, enrollment_type as watermark_enrollment_type, max(enrollment_created_on) as max_created_on
+    select
+        platform as watermark_platform
+        , enrollment_type as watermark_enrollment_type
+        , max(coalesce(enrollment_updated_on, enrollment_created_on)) as max_activity_on
     from {{ this }}
     group by platform, enrollment_type
 )
@@ -232,6 +242,7 @@ with mitxonline_enrollments as (
         , enrollment_mode
         , enrollment_status
         , enrollment_created_on
+        , enrollment_updated_on
     from enrollments_with_fks as ewf
 
     {% if is_incremental() %}
@@ -240,8 +251,9 @@ with mitxonline_enrollments as (
         on w.watermark_platform = ewf.platform
         and w.watermark_enrollment_type = case when ewf.program_id is not null then 'program' else 'course' end
     where (
-        w.max_created_on is null  -- platform/type not yet in target, include all
-        or ewf.enrollment_created_on > w.max_created_on
+        w.max_activity_on is null  -- platform/type not yet in target, include all
+        -- Use >= for updated_on watermark: updated_on can equal max on state changes within same second
+        or coalesce(ewf.enrollment_updated_on, ewf.enrollment_created_on) >= w.max_activity_on
         or ewf.enrollment_created_on is null
     )
     {% endif %}
@@ -266,9 +278,10 @@ with mitxonline_enrollments as (
         , enrollment_mode
         , enrollment_status
         , enrollment_created_on
+        , enrollment_updated_on
         , row_number() over (
             partition by enrollment_key
-            order by enrollment_created_on desc nulls last
+            order by coalesce(enrollment_updated_on, enrollment_created_on) desc nulls last
         ) as _row_num
     from final
 )
@@ -287,5 +300,6 @@ select
     , enrollment_mode
     , enrollment_status
     , enrollment_created_on
+    , enrollment_updated_on
 from final_deduped
 where _row_num = 1
