@@ -64,6 +64,7 @@ with bootcamps__ecommerce_order as (
         , mitxonline__ecommerce_order.line_id
         , mitxonline__ecommerce_order.courserun_id
         , mitxonline__ecommerce_order.courserun_readable_id
+        , mitxonline__ecommerce_order.program_readable_id
         , mitxonline__ecommerce_order.product_id
         , mitxonline__ecommerce_order.product_type
         , mitxonline__ecommerce_order.product_price
@@ -242,7 +243,7 @@ with bootcamps__ecommerce_order as (
         , courserun_id
         , courserun_readable_id
         , product_id
-        , courserun_readable_id as product_readable_id
+        , coalesce(courserun_readable_id, program_readable_id) as product_readable_id
         , product_type
         , product_price as unit_price
         , user_email
