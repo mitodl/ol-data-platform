@@ -171,7 +171,7 @@ with mitxonline_courseruns as (
             and coalesce(existing.courserun_end_on, '') = coalesce(courseruns_with_all_fks.courserun_end_on, '')
             and coalesce(existing.enrollment_start, '') = coalesce(courseruns_with_all_fks.enrollment_start, '')
             and coalesce(existing.enrollment_end, '') = coalesce(courseruns_with_all_fks.enrollment_end, '')
-            and existing.courserun_is_live = courseruns_with_all_fks.courserun_is_live
+            and coalesce(existing.courserun_is_live, false) = coalesce(courseruns_with_all_fks.courserun_is_live, false)
     )
     {% endif %}
 )

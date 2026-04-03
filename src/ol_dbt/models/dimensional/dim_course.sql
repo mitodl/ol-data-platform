@@ -111,7 +111,7 @@ with mitxonline_courses as (
             and existing.course_title = current_courses.course_title
             and coalesce(existing.course_number, '') = coalesce(current_courses.course_number, '')
             and coalesce(existing.course_description, '') = coalesce(current_courses.course_description, '')
-            and existing.course_is_live = current_courses.course_is_live
+            and coalesce(existing.course_is_live, false) = coalesce(current_courses.course_is_live, false)
     )
     {% endif %}
 )
