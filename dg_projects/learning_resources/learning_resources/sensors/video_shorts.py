@@ -156,10 +156,12 @@ def video_shorts_stale_cleanup_sensor(context):
         return SkipReason("Stale partition count exceeds safety threshold")
 
     sorted_stale_partition_keys = sorted(stale_partition_keys)
+    sample = sorted_stale_partition_keys[:5]
     context.log.info(
-        "Launching stale cleanup runs for %d partitions: %s",
+        "Launching stale cleanup runs for %d partitions. First %d keys: %s",
         len(sorted_stale_partition_keys),
-        sorted_stale_partition_keys,
+        len(sample),
+        sample,
     )
 
     run_requests = [
@@ -197,4 +199,4 @@ def video_shorts_delete_partition_cleanup_sensor(context):
         partition_key,
     )
 
-    return SkipReason(f"Removed stale partition: {partition_key}")
+    return SensorResult()

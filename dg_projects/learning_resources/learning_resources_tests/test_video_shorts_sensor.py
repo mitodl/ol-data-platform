@@ -259,7 +259,7 @@ def test_stale_cleanup_sensor_uses_full_sheet_membership(
         (
             "stale_a",
             True,
-            "Removed stale partition: stale_a",
+            None,
             True,
         ),
     ],
@@ -278,11 +278,12 @@ def test_delete_partition_cleanup_sensor(
 
     result = video_shorts_delete_partition_cleanup_sensor(context)
 
-    assert isinstance(result, SkipReason)
-    assert result.skip_message == expected_message
     if should_delete:
+        assert isinstance(result, SensorResult)
         context.instance.delete_dynamic_partition.assert_called_once_with(
             "video_short_ids", partition_tag
         )
     else:
+        assert isinstance(result, SkipReason)
+        assert result.skip_message == expected_message
         context.instance.delete_dynamic_partition.assert_not_called()

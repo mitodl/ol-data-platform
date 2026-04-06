@@ -538,6 +538,7 @@ def video_short_delete_webhook(
         "video_metadata": {"video_id": video_id, "delete": True},
         "source": "video_shorts",
     }
+    context.log.info("Delete webhook payload for %s: %s", video_id, payload)
     try:
         response_data = learn_api.client.notify_video_shorts(payload)
         context.log.info("Delete webhook sent for partition: %s", video_id)
