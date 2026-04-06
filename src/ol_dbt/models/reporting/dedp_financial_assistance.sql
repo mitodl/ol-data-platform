@@ -30,7 +30,7 @@ select
    , course_enrollments.mitxonline_program_id
    , runs.courserun_start_on
    , runs.courserun_end_on
-   , case when  fp.flexiblepriceapplication_income_usd < 10000 then true else false end as income_less_than_10000
+   , try_cast(fp.flexiblepriceapplication_income_usd as decimal(38, 2)) < 10000 as income_less_than_10000
    from fp
 inner join users
     on fp.user_id = users.user_id
