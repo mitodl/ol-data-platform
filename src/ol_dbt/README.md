@@ -11,7 +11,21 @@ product within each layer (e.g. `mitxonline`, `mitxpro`).
 
 - **Staging** — 1:1 with source tables; clean, rename, cast. Naming: `stg_<source>__<table>.sql`
 - **Intermediate** — complex joins and aggregations. Naming: `int_<domain>__<description>.sql`
-- **Marts** — analytics-ready, customer-facing tables. Naming: `fct_<domain>__<metric>.sql` / `dim_<domain>__<entity>.sql`
+- **Dimensional** — star-schema dimensional warehouse (`dim_*`, `tfact_*`, `afact_*`,
+  `bridge_*`). Located in `models/dimensional/`. This layer is the **architectural
+  boundary** between data preparation and data consumption. See
+  [Dimensional Model Conventions](models/dimensional/README.md) for conventions.
+- **Marts** — analytics-ready, customer-facing tables that build exclusively on the
+  dimensional layer. Naming: `marts__<domain>__<description>.sql`.
+- **Reporting** — report-shaped views for BI tools and external consumers, built
+  exclusively on dimensional and/or mart models.
+
+> **Convention:** Marts and reporting models must only reference models in the
+> `dimensional/` layer (or other mart/reporting models that themselves follow this rule).
+> Direct references to `staging/` or `intermediate/` models from marts or reports are
+> architectural violations and should be migrated to use the appropriate dimensional model.
+> If a required dimensional model does not yet exist, it should be added to the dimensional
+> layer before the mart/report is updated.
 
 ### Local Setup
 

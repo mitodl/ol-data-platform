@@ -1,5 +1,29 @@
 # Dimensional Model Conventions
 
+## Architectural Role
+
+The dimensional layer (`models/dimensional/`) is the **architectural boundary** between
+data preparation and data consumption in this project.
+
+```
+staging → intermediate → [ DIMENSIONAL LAYER ] → marts → reporting
+```
+
+- **Below the boundary** (`staging/`, `intermediate/`): raw ingestion, cleaning, reshaping,
+  and platform-specific business logic. Models here are subject to change as sources evolve.
+- **At the boundary** (`dimensional/`): stable star-schema dimensions (`dim_*`), transaction
+  fact tables (`tfact_*`), activity fact tables (`afact_*`), and bridge tables (`bridge_*`).
+  These expose a clean, platform-agnostic contract to consumers.
+- **Above the boundary** (`marts/`, `reporting/`): analytics-ready tables and report views
+  for BI tools and external consumers. These must only reference dimensional models (or
+  other mart/reporting models that themselves follow this rule).
+
+> **Rule:** Marts and reporting models must not reference `staging/` or `intermediate/`
+> models directly. Any required data that is not yet available in the dimensional layer
+> should be added there first, before updating the mart or report.
+
+---
+
 This document covers conventions and constraints that all contributors must understand
 before writing SQL against or extending the dimensional warehouse models.
 
