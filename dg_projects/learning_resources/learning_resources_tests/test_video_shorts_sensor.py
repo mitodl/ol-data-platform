@@ -8,6 +8,7 @@ from dagster import (
     AssetKey,
     AssetMaterialization,
     DagsterInstance,
+    DeleteDynamicPartitionsRequest,
     MetadataValue,
     SensorResult,
     SkipReason,
@@ -95,9 +96,13 @@ def build_run_status_context(instance: DagsterInstance):
     def _noop_job() -> None:
         _noop_op()
 
-    def _builder(partition_tag: str | None):
-        tags = {"dagster/partition": partition_tag} if partition_tag else None
-        result = _noop_job.execute_in_process(instance=instance, tags=tags)
+    def _builder(partition_tag: str | None, *, stale_cleanup: bool = True):
+        tags = {}
+        if partition_tag:
+            tags["dagster/partition"] = partition_tag
+        if stale_cleanup:
+            tags["video_shorts_stale_cleanup"] = "true"
+        result = _noop_job.execute_in_process(instance=instance, tags=tags or None)
         return build_run_status_sensor_context(
             sensor_name="video_shorts_delete_partition_cleanup_sensor",
             dagster_instance=instance,
@@ -242,16 +247,31 @@ def test_stale_cleanup_sensor_uses_full_sheet_membership(
 
 
 @pytest.mark.parametrize(
-    ("partition_tag", "has_partition", "expected_message", "should_delete"),
+    (
+        "partition_tag",
+        "stale_cleanup",
+        "has_partition",
+        "expected_message",
+        "should_delete",
+    ),
     [
         (
+            "stale_a",
+            False,
+            True,
+            "Run was not triggered by stale cleanup sensor",
+            False,
+        ),
+        (
             None,
+            True,
             True,
             "Delete workflow run missing partition tag",
             False,
         ),
         (
             "stale_a",
+            True,
             False,
             "Partition already removed or not found: stale_a",
             False,
@@ -259,20 +279,22 @@ def test_stale_cleanup_sensor_uses_full_sheet_membership(
         (
             "stale_a",
             True,
+            True,
             None,
             True,
         ),
     ],
 )
-def test_delete_partition_cleanup_sensor(
+def test_delete_partition_cleanup_sensor(  # noqa: PLR0913
     build_run_status_context,
     partition_tag,
+    stale_cleanup,
     has_partition,
     expected_message,
     should_delete,
 ):
-    """Run-status cleanup sensor should only delete partitions for successful runs."""
-    context = build_run_status_context(partition_tag)
+    """Cleanup sensor deletes partitions only for sensor-triggered runs."""
+    context = build_run_status_context(partition_tag, stale_cleanup=stale_cleanup)
     context.instance.has_dynamic_partition = MagicMock(return_value=has_partition)
     context.instance.delete_dynamic_partition = MagicMock()
 
@@ -280,10 +302,10 @@ def test_delete_partition_cleanup_sensor(
 
     if should_delete:
         assert isinstance(result, SensorResult)
-        context.instance.delete_dynamic_partition.assert_called_once_with(
-            "video_short_ids", partition_tag
-        )
+        assert len(result.dynamic_partitions_requests) == 1
+        request = result.dynamic_partitions_requests[0]
+        assert isinstance(request, DeleteDynamicPartitionsRequest)
+        assert request.partition_keys == [partition_tag]
     else:
         assert isinstance(result, SkipReason)
         assert result.skip_message == expected_message
-        context.instance.delete_dynamic_partition.assert_not_called()

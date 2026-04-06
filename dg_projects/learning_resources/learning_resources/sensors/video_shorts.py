@@ -1,10 +1,13 @@
 """Sensors for monitoring Google Sheets and triggering video processing."""
 
+import time
+
 from dagster import (
     AddDynamicPartitionsRequest,
     AssetSelection,
     DagsterRunStatus,
     DefaultSensorStatus,
+    DeleteDynamicPartitionsRequest,
     RunRequest,
     SensorResult,
     SkipReason,
@@ -25,8 +28,10 @@ video_shorts_delete_job = define_asset_job(
     ),
 )
 
-# Safety threshold: skip deletions if more than this many partitions would be removed.
-# Protects against mass deletion if the sheet API returns partial/empty data.
+# Safety threshold: halt ALL deletions if stale count exceeds this limit.
+# Guards against accidental mass deletion when the Google Sheet returns
+# partial/empty data (e.g. API error, sheet accidentally cleared).
+# Requires manual investigation when triggered — this is intentional.
 MAX_STALE_DELETIONS = 6
 
 
@@ -41,7 +46,8 @@ MAX_STALE_DELETIONS = 6
 )
 def video_shorts_discovery_sensor(context):
     """
-    Discovery sensor: manages partition creation for new videos.
+    Discovery sensor: creates dynamic partitions for newly discovered videos
+    and triggers runs for those new partitions.
     """
     # Check if we have a recent sheets_api materialization
     api_materialization = context.instance.get_latest_materialization_event(
@@ -164,12 +170,12 @@ def video_shorts_stale_cleanup_sensor(context):
         sample,
     )
 
+    tick_ts = int(time.time())
     run_requests = [
         RunRequest(
             partition_key=partition_key,
-            run_key=(
-                f"video_shorts_delete_{partition_key}_{api_materialization.run_id}"
-            ),
+            run_key=(f"video_shorts_delete_{partition_key}_{tick_ts}"),
+            tags={"video_shorts_stale_cleanup": "true"},
         )
         for partition_key in sorted_stale_partition_keys
     ]
@@ -185,7 +191,10 @@ def video_shorts_stale_cleanup_sensor(context):
     default_status=DefaultSensorStatus.STOPPED,
 )
 def video_shorts_delete_partition_cleanup_sensor(context):
-    """Delete dynamic partitions only after stale-delete runs succeed."""
+    """Remove dynamic partitions after sensor-triggered deletes succeed."""
+    if not context.dagster_run.tags.get("video_shorts_stale_cleanup"):
+        return SkipReason("Run was not triggered by stale cleanup sensor")
+
     partition_key = context.dagster_run.tags.get("dagster/partition")
     if not partition_key:
         return SkipReason("Delete workflow run missing partition tag")
@@ -193,10 +202,16 @@ def video_shorts_delete_partition_cleanup_sensor(context):
     if not context.instance.has_dynamic_partition("video_short_ids", partition_key):
         return SkipReason(f"Partition already removed or not found: {partition_key}")
 
-    context.instance.delete_dynamic_partition("video_short_ids", partition_key)
     context.log.info(
-        "Removed stale video partition after successful delete run: %s",
+        "Removing stale video partition after successful delete run: %s",
         partition_key,
     )
 
-    return SensorResult()
+    return SensorResult(
+        dynamic_partitions_requests=[
+            DeleteDynamicPartitionsRequest(
+                partitions_def_name="video_short_ids",
+                partition_keys=[partition_key],
+            )
+        ],
+    )
