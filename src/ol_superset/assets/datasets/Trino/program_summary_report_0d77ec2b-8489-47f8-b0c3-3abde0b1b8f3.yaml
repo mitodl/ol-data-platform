@@ -15,6 +15,18 @@ columns:
   type: VARCHAR
   verbose_name: null
 - advanced_data_type: null
+  column_name: program_type
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
   column_name: unique_course_certificate_earners
   description: null
   expression: ''
