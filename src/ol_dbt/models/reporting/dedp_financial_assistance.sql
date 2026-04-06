@@ -15,7 +15,7 @@ with fp as (
 )
 
 select
-   distinct 
+   distinct
    users.user_email
    , users.user_full_name
    , users.user_id
@@ -32,7 +32,7 @@ select
    , runs.courserun_end_on
    , case when  fp.flexiblepriceapplication_income_usd < 10000 then true else false end as income_less_than_10000
    from fp
-inner join users 
+inner join users
     on fp.user_id = users.user_id
 inner join course_enrollments
     on course_enrollments.user_id = fp.user_id
