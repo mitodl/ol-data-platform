@@ -128,15 +128,12 @@ def video_shorts_stale_cleanup_sensor(context):
         return SkipReason("Waiting for initial sheets_api materialization")
 
     metadata = api_materialization.asset_materialization.metadata
-    partition_keys = (
-        metadata.get("sheet_partition_keys").value
-        if metadata.get("sheet_partition_keys")
-        else (
-            metadata.get("partition_keys").value
-            if metadata.get("partition_keys")
-            else []
+    sheet_keys_meta = metadata.get("sheet_partition_keys")
+    if not sheet_keys_meta:
+        return SkipReason(
+            "Waiting for materialization with complete sheet_partition_keys metadata"
         )
-    )
+    partition_keys = sheet_keys_meta.value
 
     if not partition_keys:
         return SkipReason("No videos to process found in Google Sheets")
