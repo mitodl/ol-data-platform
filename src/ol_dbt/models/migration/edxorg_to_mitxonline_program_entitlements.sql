@@ -3,20 +3,7 @@ with mitxonline_programs as (
 )
 
 , program_entitlements as (
-    select
-          case
-              ---handle the case like "Statistics and Data Science (General track) - RETIRED "old version""
-              when program_title like 'Statistics and Data Science (General track)%'
-                  then 'Statistics and Data Science (General track)'
-               else program_title
-          end as program_title
-        , user_email
-        , user_id
-        , program_type
-        , purchase_date
-        , expiration_date
-        , number_of_entitlements
-        , number_of_redeemed_entitlements
+    select *
     from {{ ref('stg__edxorg__program_entitlement') }}
 )
 
