@@ -35,7 +35,7 @@ MAX_STALE_DELETIONS = 6
     description=(
         "Manages video partitions and triggers runs for new videos from Google Sheets."
     ),
-    minimum_interval_seconds=60,  # Check every hour
+    minimum_interval_seconds=3600,  # Check every hour
     default_status=DefaultSensorStatus.STOPPED,
     job_name="video_shorts_video_job",
 )
@@ -144,12 +144,14 @@ def video_shorts_stale_cleanup_sensor(context):
         return SkipReason("No stale videos found")
 
     if len(stale_partition_keys) > MAX_STALE_DELETIONS:
+        sample = sorted(stale_partition_keys)[:5]
         context.log.warning(
             "Skipping stale cleanup run launch: %d stale partitions exceeds "
-            "safety threshold of %d. Stale keys: %s",
+            "safety threshold of %d. First %d stale keys: %s",
             len(stale_partition_keys),
             MAX_STALE_DELETIONS,
-            sorted(stale_partition_keys),
+            len(sample),
+            sample,
         )
         return SkipReason("Stale partition count exceeds safety threshold")
 

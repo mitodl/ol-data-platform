@@ -56,23 +56,3 @@ class MITLearnApiClient(BaseApiClient):
         )
         response.raise_for_status()
         return response.json()
-
-    def delete_video_shorts(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Send delete webhook notification for Video Shorts."""
-        payload_string = json.dumps(data, separators=(",", ":"))  # remove extra spaces
-        signature = hmac.new(
-            self.token.encode(), payload_string.encode(), hashlib.sha256
-        ).hexdigest()
-
-        headers = {
-            "X-MITLearn-Signature": signature,
-            "Content-Type": "application/json",
-        }
-
-        response = self.http_client.post(
-            f"{self.base_url}/api/v1/webhooks/video_shorts/",
-            content=payload_string,
-            headers=headers,
-        )
-        response.raise_for_status()
-        return response.json()

@@ -538,6 +538,19 @@ def video_short_delete_webhook(
         "video_metadata": {"video_id": video_id, "delete": True},
         "source": "video_shorts",
     }
-    learn_api.client.delete_video_shorts(payload)
-    context.log.info("Delete webhook sent for partition: %s", video_id)
-    return payload
+    try:
+        response_data = learn_api.client.notify_video_shorts(payload)
+        context.log.info("Delete webhook sent for partition: %s", video_id)
+    except httpx.HTTPStatusError as error:
+        error_message = (
+            f"Delete webhook failed for video_id={video_id} "
+            f"with status code {error.response.status_code}: {error}"
+        )
+        context.log.exception(error_message)
+        raise RuntimeError(error_message) from error
+    else:
+        return {
+            "video_id": video_id,
+            "webhook_status": "success",
+            "response_data": response_data,
+        }
