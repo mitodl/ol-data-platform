@@ -1,0 +1,66 @@
+---
+version: 2
+
+models:
+- name: dim_instructor
+  description: Instructor dimension containing faculty and course instructors from
+    all platforms. Grain is (instructor_name, primary_platform) — same name on different
+    platforms are kept as separate rows.
+  columns:
+  - name: instructor_pk
+    description: Primary key - surrogate key generated from (instructor_name, primary_platform)
+    tests:
+    - unique
+    - not_null
+  - name: instructor_name
+    description: Full name of the instructor
+    tests:
+    - not_null
+  - name: instructor_title
+    description: Academic or professional title (e.g., "Professor", "Lecturer")
+  - name: instructor_bio_short
+    description: Short biographical description
+  - name: instructor_bio_long
+    description: Full biographical description in HTML format
+  - name: primary_platform
+    description: Platform where this instructor record originates
+
+- name: dim_topic
+  description: Topic taxonomy dimension with hierarchical structure. Grain is (topic_name,
+    primary_platform) — same topic name from different platforms are kept as separate
+    rows with platform-scoped parent-child relationships.
+  columns:
+  - name: topic_pk
+    description: Primary key - surrogate key generated from (topic_name, primary_platform)
+    tests:
+    - unique
+    - not_null
+  - name: topic_name
+    description: Topic or subject area name
+    tests:
+    - not_null
+  - name: parent_topic_fk
+    description: Self-referencing FK to parent topic within the same platform
+  - name: parent_topic_name
+    description: string, display name of the parent topic in the hierarchy; null for
+      top-level topics
+  - name: primary_platform
+    description: Platform where this topic record originates
+
+- name: dim_department
+  description: MIT department dimension. Grain is (department_name, primary_platform)
+    — same department name from different platforms are kept as separate rows.
+  columns:
+  - name: department_pk
+    description: Primary key - surrogate key generated from (department_name, primary_platform)
+    tests:
+    - unique
+    - not_null
+  - name: department_name
+    description: Full department name
+    tests:
+    - not_null
+  - name: department_number
+    description: MIT department number (e.g., "6" for EECS, "18" for Math)
+  - name: primary_platform
+    description: Platform where this department record originates

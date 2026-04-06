@@ -26,6 +26,7 @@ with enrollments as (
         , enrollments.user_id
         , enrollments.program_id
         , enrollments.programenrollment_created_on
+        , enrollments.programenrollment_updated_on
         , enrollments.programenrollment_enrollment_mode
         , enrollments.programenrollment_enrollment_status
         , programs.program_title

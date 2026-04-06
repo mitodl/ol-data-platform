@@ -1,3 +1,7 @@
+{{ config(
+    materialized='table'
+) }}
+
 -- MITx users from MITx Online and edX with dedup
 -- For users exist on both MITx Online and edX.org
 with mitx_users as (
@@ -26,6 +30,7 @@ with mitx_users as (
                 then user_mitxonline_email
             else coalesce(user_edxorg_email, user_mitxonline_email, user_micromasters_email)
         end as user_email
+        , user_micromasters_id
     from {{ ref('int__mitx__users') }}
 )
 
@@ -204,6 +209,7 @@ with mitx_users as (
         , mitx_users.user_joined_on_mitxonline
         , mitx_users.user_is_active_on_edxorg
         , mitx_users.user_joined_on_edxorg
+        , mitx_users.user_micromasters_id
     from mitx_users
     left join mitxonline_app_openedxuser_mapping
         on mitx_users.mitxonline_application_user_id = mitxonline_app_openedxuser_mapping.user_id
@@ -285,6 +291,7 @@ with mitx_users as (
             learn_user_view.email,
             mitx_users_view.email
         ) as email
+        , mitx_users_view.user_micromasters_id
     from mitx_users_view
              full outer join learn_user_view on mitx_users_view.user_global_id = learn_user_view.user_global_id
 )
@@ -326,6 +333,7 @@ with mitx_users as (
         , null as user_joined_on_mitxpro
         , null as user_is_active_on_residential
         , null as user_joined_on_residential
+        , user_micromasters_id as micromasters_user_id
     from users_with_global_id
 
     union all
@@ -368,6 +376,7 @@ with mitx_users as (
         , mitxpro_user_view.user_joined_on as user_joined_on_mitxpro
         , null as user_is_active_on_residential
         , null as user_joined_on_residential
+        , null as micromasters_user_id
     from mitxpro_user_view
     left join mitxpro_openedx_users as openedx_users_username
         on mitxpro_user_view.user_username = openedx_users_username.user_username
@@ -412,6 +421,7 @@ with mitx_users as (
         , null as user_joined_on_mitxpro
         , null as user_is_active_on_residential
         , null as user_joined_on_residential
+        , null as micromasters_user_id
     from emeritus_users
     where user_email is not null
 
@@ -453,6 +463,7 @@ with mitx_users as (
         , null as user_joined_on_mitxpro
         , null as user_is_active_on_residential
         , null as user_joined_on_residential
+        , null as micromasters_user_id
     from global_alumni_users
     where user_email is not null
 
@@ -494,6 +505,7 @@ with mitx_users as (
         , null as user_joined_on_mitxpro
         , mitxresidential_user_view.user_is_active as user_is_active_on_residential
         , mitxresidential_user_view.user_joined_on as user_joined_on_residential
+        , null as micromasters_user_id
     from mitxresidential_user_view
 
 )
@@ -538,6 +550,7 @@ with mitx_users as (
         , max(edxorg_openedx_user_id) as edxorg_openedx_user_id
         , max(emeritus_user_id) as emeritus_user_id
         , max(global_alumni_user_id) as global_alumni_user_id
+        , max(micromasters_user_id) as micromasters_user_id
         , max(user_edxorg_username) as user_edxorg_username
         , max(user_is_active_on_mitlearn) as user_is_active_on_mitlearn
         , max(user_joined_on_mitlearn) as user_joined_on_mitlearn
@@ -570,6 +583,7 @@ select
     , agg.user_edxorg_username
     , agg.emeritus_user_id
     , agg.global_alumni_user_id
+    , agg.micromasters_user_id
     , base.email
     , base.full_name
     , base.address_country

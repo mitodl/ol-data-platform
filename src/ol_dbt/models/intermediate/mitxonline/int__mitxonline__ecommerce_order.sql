@@ -65,6 +65,7 @@ select
     orders.order_id
     , orders.order_state
     , orders.order_created_on
+    , orders.order_updated_on
     , orders.order_reference_number
     , orders.order_total_price_paid
     , users.user_id

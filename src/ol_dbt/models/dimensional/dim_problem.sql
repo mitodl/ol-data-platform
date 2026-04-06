@@ -1,6 +1,7 @@
 with problems as (
     select
         content_block_pk
+        , platform
         , block_id
         , block_title
         , courserun_readable_id
@@ -10,7 +11,7 @@ with problems as (
         , nullif({{ json_query_string('block_metadata', "'$.due'") }}, 'null') as due_date
         , nullif({{ json_query_string('block_metadata', "'$.weight'") }}, 'null') as weight
         , row_number() over (
-            partition by block_id
+            partition by platform, block_id
             order by is_latest desc, retrieved_at desc
         ) as row_num
     from {{ ref('dim_course_content') }}
@@ -23,11 +24,19 @@ with problems as (
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , json_extract(useractivity_event_object, '$.submission') as submission
-    from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
+    from (
+        select
+            courserun_readable_id
+            , useractivity_event_type
+            , cast(useractivity_event_object as varchar) as useractivity_event_object
+            , cast(useractivity_context_object as varchar) as useractivity_context_object
+        from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
+    ) as mitxonline_logs
     where
         courserun_readable_id is not null
         and useractivity_event_type = 'problem_check'
         and {{ json_query_string('useractivity_event_object', "'$.submission'") }} is not null
+        and {{ json_is_object("json_extract(useractivity_event_object, '$.submission')") }}
 
     union all
 
@@ -36,11 +45,19 @@ with problems as (
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , json_extract(useractivity_event_object, '$.submission') as submission
-    from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
+    from (
+        select
+            courserun_readable_id
+            , useractivity_event_type
+            , cast(useractivity_event_object as varchar) as useractivity_event_object
+            , cast(useractivity_context_object as varchar) as useractivity_context_object
+        from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
+    ) as mitxpro_logs
     where
         courserun_readable_id is not null
         and useractivity_event_type = 'problem_check'
         and {{ json_query_string('useractivity_event_object', "'$.submission'") }} is not null
+        and {{ json_is_object("json_extract(useractivity_event_object, '$.submission')") }}
 
     union all
 
@@ -49,11 +66,19 @@ with problems as (
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , json_extract(useractivity_event_object, '$.submission') as submission
-    from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
+    from (
+        select
+            courserun_readable_id
+            , useractivity_event_type
+            , cast(useractivity_event_object as varchar) as useractivity_event_object
+            , cast(useractivity_context_object as varchar) as useractivity_context_object
+        from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
+    ) as mitxresidential_logs
     where
         courserun_readable_id is not null
         and useractivity_event_type = 'problem_check'
         and {{ json_query_string('useractivity_event_object', "'$.submission'") }} is not null
+        and {{ json_is_object("json_extract(useractivity_event_object, '$.submission')") }}
 
     union all
 
@@ -62,11 +87,19 @@ with problems as (
         , {{ json_query_string('useractivity_event_object', "'$.problem_id'") }} as problem_block_id
         , {{ json_query_string('useractivity_context_object', "'$.module.display_name'") }} as problem_name
         , json_extract(useractivity_event_object, '$.submission') as submission
-    from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
+    from (
+        select
+            courserun_readable_id
+            , useractivity_event_type
+            , cast(useractivity_event_object as varchar) as useractivity_event_object
+            , cast(useractivity_context_object as varchar) as useractivity_context_object
+        from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
+    ) as edxorg_logs
     where
         courserun_readable_id is not null
         and useractivity_event_type = 'problem_check'
         and {{ json_query_string('useractivity_event_object', "'$.submission'") }} is not null
+        and {{ json_is_object("json_extract(useractivity_event_object, '$.submission')") }}
 )
 
 , problem_type_metadata as (
@@ -76,19 +109,20 @@ with problems as (
         , arbitrary(problem_events.problem_name) as problem_name
         , array_agg(
             distinct
-            json_extract_scalar(t.submission_data, '$.response_type')
+            {{ json_query_string('t.submission_data', "'$.response_type'") }}
         ) as problem_types
     from problem_events
-    , unnest(cast(problem_events.submission as map <varchar, json>)) as t (key, submission_data)
+    cross join {{ unnest_json_map('problem_events.submission', 't', 'key', 'submission_data') }}
     where
-        json_extract_scalar(t.submission_data, '$.response_type') is not null
-        and json_extract_scalar(t.submission_data, '$.response_type') <> ''
+        {{ json_query_string('t.submission_data', "'$.response_type'") }} is not null
+        and {{ json_query_string('t.submission_data', "'$.response_type'") }} <> ''
     group by problem_events.courserun_readable_id, problem_events.problem_block_id
 )
 
 , combined as (
     select
         problems.content_block_pk as content_block_fk
+        , problems.platform
         , problems.markdown
         , problems.max_attempts
         , problems.start_date
@@ -108,6 +142,7 @@ with problems as (
 select
     problem_block_pk
     , content_block_fk
+    , platform
     , courserun_readable_id
     , problem_name
     , markdown

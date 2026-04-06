@@ -87,7 +87,12 @@ models:
       code}
     tests:
     - not_null
-    - unique
+  - name: platform
+    description: string, the platform on which this video exists. Possible values
+      are mitxonline, mitxpro, edxorg, residential. NOTE - video_block_pk is NOT globally
+      unique; it must be paired with platform to uniquely identify a video.
+    tests:
+    - not_null
   - name: content_block_fk
     description: string, foreign key to dim_course_content
     tests:
@@ -112,6 +117,10 @@ models:
     description: float, duration of video in seconds
   - name: video_edx_uuid
     description: string, edX UUID of the video
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["platform", "video_block_pk"]
 
 - name: dim_problem
   description: problem metadata across the Open edX platforms
@@ -121,7 +130,12 @@ models:
       code}
     tests:
     - not_null
-    - unique
+  - name: platform
+    description: string, the platform on which this problem exists. Possible values
+      are mitxonline, mitxpro, edxorg, residential. NOTE - problem_block_pk is NOT
+      globally unique; it must be paired with platform to uniquely identify a problem.
+    tests:
+    - not_null
   - name: content_block_fk
     description: string, foreign key to dim_course_content
     tests:
@@ -146,6 +160,10 @@ models:
     description: array, the types of problem in the course. values are a combination
       of numericalresponse, multiplechoiceresponse, customresponse, choiceresponse,
       etc.
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["platform", "problem_block_pk"]
 
 - name: dim_discussion_topic
   description: discussion topics across the Open edX platforms
@@ -155,6 +173,11 @@ models:
     tests:
     - not_null
     - unique
+  - name: platform
+    description: string, the platform on which this discussion topic exists. Possible
+      values are mitxonline, mitxpro, edxorg, residential.
+    tests:
+    - not_null
   - name: commentable_id
     description: string, identifier for the specific discussion component or top-level,
       course-wide discussion
@@ -188,6 +211,16 @@ models:
     tests:
     - not_null
     - unique
+  - name: platform
+    description: "string, the platform that owns this course content block. Possible\
+      \ values: mitxonline, mitxpro, edxorg, residential. IMPORTANT: courserun_readable_id\
+      \ is NOT globally unique across platforms - the same readable ID can appear\
+      \ on multiple platforms (e.g. a course migrated from edxorg to mitxonline).\
+      \ Always pair courserun_readable_id with platform when joining to other tables."
+    tests:
+    - not_null
+    - accepted_values:
+        values: ["mitxonline", "mitxpro", "edxorg", "residential"]
   - name: courserun_readable_id
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
       for courses on MITxOnline, xPro and Residential platform, {org}/{course}/{run_tag}
@@ -246,7 +279,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["courserun_readable_id", "block_id"]
+        column_list: ["platform", "courserun_readable_id", "block_id"]
         row_condition: "is_latest = true"
 - name: dim_user
   description: Eventually a dimensional model for users from different platforms.
@@ -348,6 +381,8 @@ models:
     description: str, when the user joined on MITx Pro.
   - name: user_joined_on_residential
     description: str, when the user joined on Residential MITx.
+  - name: micromasters_user_id
+    description: int, user ID on the MicroMasters platform
 
 - name: tfact_course_navigation_events
   description: Transactional fact table for learner navigation events in a course
@@ -483,8 +518,22 @@ models:
           "event_type", "event_json", "event_timestamp"]
 
 - name: tfact_problem_events
-  description: Transactional fact table for learner problem events in a course
+  description: >
+    Transactional fact table for learner problem events in a course, combining
+    tracking log events (problem_check, showanswer) from all four platforms with
+    studentmodule history data. One row per unique event: one problem_check per
+    (platform, user, course, problem, attempt) — the earliest timestamp wins when
+    both tracking log and studentmodule sources have the same attempt — and all
+    showanswer events regardless of count. Incremental; full-refresh required when
+    backfilling or after schema changes.
   columns:
+  - name: event_id
+    description: string, surrogate key uniquely identifying this event row, derived
+      from (platform, openedx_user_id, courserun_readable_id, problem_block_id, attempt,
+      event_type, event_timestamp)
+    tests:
+    - not_null
+    - unique
   - name: platform_fk
     description: string, foreign key to dim_platform
   - name: user_fk
@@ -537,20 +586,26 @@ models:
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event. For less common/event-specific attributes.
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["openedx_user_id", "courserun_readable_id", "event_type", "problem_block_fk",
-          "event_json", "event_timestamp"]
-
 - name: tfact_studentmodule_problems
-  description: Transactional fact table for studentmodule problem events flattened
-    out into individual submissions
+  description: >
+    Transactional fact table for studentmodule problem submissions. Each row represents
+    one submission event — a single "Check" click by a student on a problem. Ordering
+    rows by event_timestamp for a given studentmodule_id shows the full progression
+    through a problem across all attempts.
+
+    The correct_map column contains the per-part correctness for that specific
+    submission only. The growing correct_map_history (all prior submissions) is
+    intentionally excluded — it is redundant when all submission rows are present
+    and
+    can be reconstructed by grouping on studentmodule_id ordered by event_timestamp.
+
+    The seed column identifies which randomized variant of the problem the student
+    received, enabling analysis of whether specific variants are harder than others.
   columns:
   - name: user_fk
     description: string, foreign key to dim_user
   - name: platform
-    description: string, platform name
+    description: string, platform name (mitxonline, mitxpro, residential)
   - name: openedx_user_id
     description: int, user ID on the corresponding open edX platform
   - name: user_username
@@ -558,39 +613,46 @@ models:
   - name: courserun_readable_id
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
   - name: studentmodule_id
-    description: int, primary key in courseware_studentmodule
-  - name: event_type
-    description: string, type of the problem event.
-  - name: event_json
-    description: json, JSON object indicating the user’s last known state in the course.
-      It may contain any attributes for different module types - course, chapter,
-      sequential, etc.
+    description: int, primary key in courseware_studentmodule; groups all submission
+      rows for a given student/problem/course combination
+  - name: studentmodulehistoryextended_id
+    description: int, primary key in courseware_studentmodulehistoryextended; natural
+      unique key for this fact table — one row per submission event
   - name: problem_block_id
-    description: str, Unique ID for a distinct piece of content in a course, formatted
+    description: str, unique ID for a distinct piece of content in a course, formatted
       as block-v1:{org}+{course}+{run}type@{block type}+block@{hash code}
-  - name: answers
-    description: str, the answers submitted by the learner for this attempt
   - name: attempt
-    description: int, incremental attempt number generated when parsing answer submissions
-  - name: success
-    description: str, indicating whether an answer is correct or incorrect
+    description: int, submission number for this student/problem pair (1-based, incremented
+      by OpenEdX on each "Check" click)
+  - name: seed
+    description: int, random seed that determines which variant of a randomized problem
+      this student received. Null for non-randomized problems.
+  - name: correct_map
+    description: >
+      json, per-part correctness map for this submission only. Keys are opaque
+      problem-part IDs; values contain correctness (correct/incorrect/partially-correct/submitted),
+      npoints, msg, and hint. Reflects the state at the time of this specific check
+      only.
+  - name: answers
+    description: >
+      json, per-part answers submitted by the learner for this check. Keys match
+      those in correct_map. Values are strings (text/formula answers) or arrays
+      (multiple-choice). May include *_dynamath keys with MathML representations
+      of formula inputs alongside the plain-text answer key.
   - name: grade
-    description: number, current value indicating the total unweighted grade for this
-      problem that the learner has scored. e.g. how many responses they got right
-      within the problem. This data is also available in courseactivity_problemcheck
+    description: number, unweighted grade earned on this problem as of this submission
+      (how many parts correct)
   - name: max_grade
-    description: number, maximum possible number indicating the total possible unweighted
-      grade for this problem, or basically the number of responses that are in this
-      problem. This data is also available in courseactivity_problemcheck
+    description: number, maximum possible unweighted grade for this problem (total
+      number of parts)
+  - name: success
+    description: str, "correct" if grade equals max_grade, "incorrect" otherwise
   - name: event_timestamp
-    description: timestamp, datetime when this row was last updated. A change in this
-      field implies that there was a state change.
+    description: timestamp with time zone, when this submission event was recorded
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["openedx_user_id", "courserun_readable_id", "problem_block_id",
-          "attempt"]
-
+        column_list: ["platform", "studentmodulehistoryextended_id"]
 - name: tfact_discussion_events
   description: Transactional fact table for learner discussion events in a course
   columns:
@@ -666,6 +728,9 @@ models:
     description: string, URL of the page where the discussion event occurred
   - name: user_forums_roles
     description: string, roles of the user in the forums
+  - name: courserun_fk
+    description: string, foreign key to dim_course_run, referencing the course run
+      where the discussion event occurred
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -890,3 +955,6 @@ models:
     description: string, unique identifier for the chat thread in the Learn AI database.
   - name: learn_ai_checkpoint_pk
     description: int, foreign key to chatbots_djangocheckpoint in Learn AI database
+  - name: platform_fk
+    description: string, foreign key to dim_platform, referencing the platform where
+      the chatbot event occurred

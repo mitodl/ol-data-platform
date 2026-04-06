@@ -45,6 +45,7 @@ with programs as (
     select
         courses.course_id
         , courses.program_id
+        , courses.course_position_in_program
     from courses
     left join elective_courses
         on
@@ -60,17 +61,23 @@ with programs as (
         , null as electiveset_required_number
         , course_id
         , 'Core' as programrequirement_type
+        , course_position_in_program
     from core_courses
 
     union all
 
     select
-        electiveset_id
-        , program_id
-        , electiveset_required_number
-        , course_id
+        elective_courses.electiveset_id
+        , elective_courses.program_id
+        , elective_courses.electiveset_required_number
+        , elective_courses.course_id
         , 'Elective' as programrequirement_type
+        -- elective courses also live on the courses table with position_in_program
+        , courses.course_position_in_program
     from elective_courses
+    inner join courses
+        on elective_courses.course_id = courses.course_id
+        and elective_courses.program_id = courses.program_id
 )
 
 select
@@ -80,5 +87,6 @@ select
     , combined_courses.programrequirement_type
     , combined_courses.electiveset_required_number
     , programs.program_num_required_courses
+    , combined_courses.course_position_in_program
 from combined_courses
 inner join programs on combined_courses.program_id = programs.program_id

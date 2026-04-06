@@ -27,7 +27,7 @@ with mitxonline_navigation_events as (
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
         , {{ json_query_string('useractivity_event_object', "'$.tab_count'") }} as tab_count
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -52,7 +52,7 @@ with mitxonline_navigation_events as (
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
         , {{ json_query_string('useractivity_event_object', "'$.tab_count'") }} as tab_count
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -77,7 +77,7 @@ with mitxonline_navigation_events as (
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
         , {{ json_query_string('useractivity_event_object', "'$.tab_count'") }} as tab_count
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -102,7 +102,7 @@ with mitxonline_navigation_events as (
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
         , {{ json_query_string('useractivity_event_object', "'$.tab_count'") }} as tab_count
-        , from_iso8601_timestamp_nanos(useractivity_timestamp) as event_timestamp
+        , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null

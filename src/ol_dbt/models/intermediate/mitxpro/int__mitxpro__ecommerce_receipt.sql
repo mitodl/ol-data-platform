@@ -14,7 +14,10 @@ select
     , {{ json_query_string('receipt_data', "'$.decision'") }} as receipt_transaction_status
     , {{ json_query_string('receipt_data', "'$.transaction_id'") }} as receipt_transaction_id
     , {{ json_query_string('receipt_data', "'$.auth_code'") }} as receipt_authorization_code
-    , {{ json_query_string('receipt_data', "'$.req_payment_method'") }} as receipt_payment_method
+    , case {{ json_query_string('receipt_data', "'$.req_payment_method'") }}
+        when 'card' then 'credit_card'
+        else {{ json_query_string('receipt_data', "'$.req_payment_method'") }}
+    end as receipt_payment_method
     , {{ json_query_string('receipt_data', "'$.req_reference_number'") }} as receipt_reference_number
     , {{ json_query_string('receipt_data', "'$.req_bill_to_address_state'") }} as receipt_bill_to_address_state
     , {{ json_query_string('receipt_data', "'$.req_bill_to_address_country'") }} as receipt_bill_to_address_country
