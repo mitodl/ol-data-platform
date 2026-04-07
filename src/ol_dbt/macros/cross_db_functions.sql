@@ -48,14 +48,20 @@
         session timezone, causing "Illegal instant due to time zone offset transition" for
         timestamps in DST gap hours (e.g. 2:xx AM on spring-forward day in America/New_York).
 
-        Fix: append 'Z' to strings that carry no timezone marker so Trino parses them as UTC.
-        Strings that already carry a zone (ending in 'Z', '+HH:MM', or '-HH:MM' from
-        to_iso8601()) are passed through unchanged — from_iso8601_timestamp handles those fine.
+      Behavior of this wrapper:
+      * Strings that already carry a timezone marker at the end
+        (ending in 'Z', 'z', '+HH:MM', or '-HH:MM') are passed through unchanged.
+      * Plain dates in 'YYYY-MM-DD' format are treated as midnight UTC by
+        appending 'T00:00:00Z'.
+      * All other strings (naive datetimes with no explicit zone) have 'Z'
+        appended so Trino parses them as UTC, avoiding DST-gap issues.
     #}
     from_iso8601_timestamp(
         case
             when regexp_like({{ timestamp_str }}, '.*([Zz]|[+-][0-9]{2}:[0-9]{2})$')
-            then {{ timestamp_str }}
+              then {{ timestamp_str }}
+            when regexp_like({{ timestamp_str }}, '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') then
+                {{ timestamp_str }} || 'T00:00:00Z'
             else {{ timestamp_str }} || 'Z'
         end
     )
