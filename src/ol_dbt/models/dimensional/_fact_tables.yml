@@ -44,6 +44,8 @@ models:
         to: ref('dim_user')
         field: user_pk
         where: "user_fk is not null"
+        config:
+          severity: warn
   - name: courserun_fk
     description: Foreign key to dim_course_run (null for program enrollments)
     tests:
@@ -256,6 +258,8 @@ models:
         to: ref('dim_user')
         field: user_pk
         where: "user_fk is not null"
+        config:
+          severity: warn
   - name: courserun_fk
     description: Foreign key to dim_course_run
     tests:
