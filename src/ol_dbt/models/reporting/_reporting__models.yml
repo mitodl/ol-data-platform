@@ -1266,6 +1266,11 @@ models:
     description: string, weight of this problem in the overall grade
   - name: markdown
     description: string, markdown content of the problem
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["platform", "courserun_readable_id", "problem_name", "event_type",
+          "attempt", "event_timestamp"]
 
 - name: data_detail_video
   description: Report of video events enriched with video metadata and course title
@@ -1291,6 +1296,11 @@ models:
     description: timestamp, date and time when the video event was recorded
   - name: video_name
     description: string, display name of the video
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["platform", "courserun_readable_id", "event_type", "video_position",
+          "event_timestamp", "video_name"]
 
 - name: dedp_financial_assistance
   description: Report of users and their financial assistance status for DEDP programs
