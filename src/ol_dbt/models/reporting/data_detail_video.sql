@@ -17,4 +17,5 @@ inner join
     videos
     on video_events.courserun_readable_id = videos.courserun_readable_id
     and video_events.video_block_fk = substring(videos.video_block_pk, strpos(videos.video_block_pk, 'block@') + 6)
+    and video_events.platform = videos.platform
 inner join combined__course_runs on video_events.courserun_readable_id = combined__course_runs.courserun_readable_id
