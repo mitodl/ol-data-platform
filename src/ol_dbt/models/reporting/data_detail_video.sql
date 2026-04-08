@@ -7,6 +7,7 @@ select
     video_events.platform,
     combined__course_runs.course_title,
     video_events.courserun_readable_id,
+    video_events.user_username,
     video_events.event_type,
     video_events.video_duration,
     video_events.video_position,
@@ -18,4 +19,17 @@ inner join
     on video_events.courserun_readable_id = videos.courserun_readable_id
     and video_events.video_block_fk = substring(videos.video_block_pk, strpos(videos.video_block_pk, 'block@') + 6)
     and video_events.platform = videos.platform
-inner join combined__course_runs on video_events.courserun_readable_id = combined__course_runs.courserun_readable_id
+inner join
+    combined__course_runs
+    on video_events.courserun_readable_id = combined__course_runs.courserun_readable_id
+    and video_events.platform = combined__course_runs.platform
+group by
+    video_events.platform,
+    combined__course_runs.course_title,
+    video_events.courserun_readable_id,
+    video_events.user_username,
+    video_events.event_type,
+    video_events.video_duration,
+    video_events.video_position,
+    video_events.event_timestamp,
+    videos.video_name

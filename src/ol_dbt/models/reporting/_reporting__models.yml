@@ -1244,6 +1244,8 @@ models:
       code}+{run_tag}
     tests:
     - not_null
+  - name: user_username
+    description: string, username of the learner who triggered the event
   - name: problem_name
     description: string, display name of the problem
   - name: event_type
@@ -1269,8 +1271,8 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["platform", "courserun_readable_id", "problem_name", "event_type",
-          "attempt", "event_timestamp"]
+        column_list: ["platform", "courserun_readable_id", "user_username", "problem_name",
+          "event_type", "attempt", "event_timestamp"]
 
 - name: data_detail_video
   description: Report of video events enriched with video metadata and course title
@@ -1286,6 +1288,8 @@ models:
       code}+{run_tag}
     tests:
     - not_null
+  - name: user_username
+    description: string, username of the learner who triggered the event
   - name: event_type
     description: string, type of the video event (e.g. play_video, pause_video, seek_video)
   - name: video_duration
@@ -1299,8 +1303,8 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["platform", "courserun_readable_id", "event_type", "video_position",
-          "event_timestamp", "video_name"]
+        column_list: ["platform", "courserun_readable_id", "user_username", "event_type",
+          "video_position", "event_timestamp", "video_name"]
 
 - name: dedp_financial_assistance
   description: Report of users and their financial assistance status for DEDP programs
