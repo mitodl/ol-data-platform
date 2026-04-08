@@ -1228,3 +1228,66 @@ models:
       arguments:
         column_list: ["platform", "course_title", "courserun_readable_id", "user_username",
           "event_type", "starting_position", "ending_position", "event_timestamp"]
+
+- name: data_detail_problems
+  description: Report of problem events enriched with problem metadata and course
+    title
+  columns:
+  - name: platform
+    description: string, name of the platform (e.g. mitxonline, edxorg, mitxpro, residential)
+    tests:
+    - not_null
+  - name: course_title
+    description: string, title of the course
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: problem_name
+    description: string, display name of the problem
+  - name: event_type
+    description: string, type of the problem event (e.g. problem_check, showanswer)
+  - name: answers
+    description: string, JSON representation of the learner's answers
+  - name: attempt
+    description: string, attempt number for this problem submission
+  - name: success
+    description: string, whether the attempt was successful
+  - name: grade
+    description: string, grade received for this attempt
+  - name: max_grade
+    description: string, maximum possible grade for this problem
+  - name: event_timestamp
+    description: timestamp, date and time when the problem event was recorded
+  - name: max_attempts
+    description: string, maximum number of attempts allowed for this problem
+  - name: weight
+    description: string, weight of this problem in the overall grade
+  - name: markdown
+    description: string, markdown content of the problem
+
+- name: data_detail_video
+  description: Report of video events enriched with video metadata and course title
+  columns:
+  - name: platform
+    description: string, name of the platform (e.g. mitxonline, edxorg, mitxpro, residential)
+    tests:
+    - not_null
+  - name: course_title
+    description: string, title of the course
+  - name: courserun_readable_id
+    description: string, unique identifier for the course run formatted as course-v1:{org}+{course
+      code}+{run_tag}
+    tests:
+    - not_null
+  - name: event_type
+    description: string, type of the video event (e.g. play_video, pause_video, seek_video)
+  - name: video_duration
+    description: decimal, duration of the video in seconds
+  - name: video_position
+    description: string, current playback position in the video
+  - name: event_timestamp
+    description: timestamp, date and time when the video event was recorded
+  - name: video_name
+    description: string, display name of the video

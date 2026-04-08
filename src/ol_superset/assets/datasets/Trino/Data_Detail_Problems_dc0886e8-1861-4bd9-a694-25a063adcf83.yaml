@@ -192,14 +192,9 @@ metrics:
 normalize_columns: false
 offset: 0
 params: null
-schema: ol_warehouse_production_dimensional
-sql: "select \na.platform\n, h.course_title\n,a.courserun_readable_id\n,b.problem_name\n\
-  ,a.event_type\n,a.answers\n,a.attempt\n,a.success\n,a.grade\n,a.max_grade\n,a.event_timestamp\n\
-  ,b.max_attempts\n,b.weight\n,b.markdown\nfrom  ol_warehouse_production_dimensional.tfact_problem_events\
-  \ a\ninner join ol_warehouse_production_dimensional.dim_problem b\non a.problem_block_fk=b.problem_block_pk\n\
-  inner join ol_warehouse_production_intermediate.int__combined__course_runs as h\n\
-  \          on a.courserun_readable_id = h.courserun_readable_id\n\n"
-table_name: Data_Detail_Problems
+schema: ol_warehouse_production_reporting
+sql: null
+table_name: data_detail_problems
 template_params: null
 uuid: dc0886e8-1861-4bd9-a694-25a063adcf83
 version: 1.0.0

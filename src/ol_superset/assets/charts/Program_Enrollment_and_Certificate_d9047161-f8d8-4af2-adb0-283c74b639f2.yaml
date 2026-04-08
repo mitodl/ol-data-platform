@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: cc496da8-03f6-43ea-9b6c-900ba695e4b6  # Program_Enrollment_with_user
+dataset_uuid: 378cfe46-2614-42e3-82f3-f161aa37e66d  # program_enrollment_with_user_report
 description: null
 params:
   adhoc_filters: []
