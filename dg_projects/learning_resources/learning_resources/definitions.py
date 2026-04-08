@@ -31,13 +31,17 @@ from learning_resources.assets.sloan_api import sloan_course_metadata
 from learning_resources.assets.video_shorts import (
     google_sheets_api,
     video_short_content,
+    video_short_delete_webhook,
     video_short_metadata,
     video_short_thumbnail_large,
     video_short_thumbnail_small,
     video_short_webhook,
 )
 from learning_resources.sensors.video_shorts import (
+    video_shorts_delete_job,
+    video_shorts_delete_partition_cleanup_sensor,
     video_shorts_discovery_sensor,
+    video_shorts_stale_cleanup_sensor,
 )
 
 MIT_LEARN_BUCKET_SUFFIXES = {
@@ -115,7 +119,6 @@ video_shorts_video_job = define_asset_job(
     ),
 )
 
-
 # Video Shorts schedule for periodic discovery
 video_shorts_api_schedule = ScheduleDefinition(
     name="video_shorts_api_schedule",
@@ -163,13 +166,17 @@ defs = Definitions(
         video_short_thumbnail_small,
         video_short_thumbnail_large,
         video_short_webhook,
+        video_short_delete_webhook,
     ],
     schedules=[extract_api_daily_schedule, video_shorts_api_schedule],
     sensors=[
         video_shorts_discovery_sensor,
+        video_shorts_stale_cleanup_sensor,
+        video_shorts_delete_partition_cleanup_sensor,
     ],
     jobs=[
         video_shorts_api_job,
         video_shorts_video_job,
+        video_shorts_delete_job,
     ],
 )
