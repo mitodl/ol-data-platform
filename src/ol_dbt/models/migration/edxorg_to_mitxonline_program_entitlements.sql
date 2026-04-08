@@ -80,21 +80,30 @@ select
     , program_entitlements.expiration_date
     , program_entitlements.number_of_entitlements
     , program_entitlements.number_of_redeemed_entitlements
-    , mitxonline_fulfilled_orders.order_id
+    , coalesce(
+        mitxonline_fulfilled_orders_by_email.order_id
+        , mitxonline_fulfilled_orders_by_user_id.order_id
+    ) as order_id
     , program_entitlements.user_email as user_edxorg_email
     , program_product_versions.product_object_id
     , program_product_versions.product_version_id
     , program_product_versions.contenttype_id
-    , coalesce(mitx_user.user_mitxonline_id, mitx_user2.user_mitxonline_id) as user_mitxonline_id
+    , coalesce(
+        mitx_user.user_mitxonline_id
+        , mitx_user_by_edxorg_id.user_mitxonline_id
+    ) as user_mitxonline_id
 from program_entitlements
 left join mitxonline_programs
-      on mitxonline_programs.program_title = program_entitlements.program_title
+    on mitxonline_programs.program_title = program_entitlements.program_title
 left join program_product_versions
-      on mitxonline_programs.program_id = program_product_versions.product_object_id
-left join mitxonline_fulfilled_orders
-    on lower(program_entitlements.user_email) = lower(mitxonline_fulfilled_orders.user_email)
-    and mitxonline_programs.program_readable_id = mitxonline_fulfilled_orders.program_readable_id
+    on mitxonline_programs.program_id = program_product_versions.product_object_id
 left join mitx_user
     on lower(program_entitlements.user_email) = lower(mitx_user.user_mitxonline_email)
-left join mitx_user as mitx_user2
-    on program_entitlements.user_id = mitx_user2.user_edxorg_id
+left join mitx_user as mitx_user_by_edxorg_id
+    on program_entitlements.user_id = mitx_user_by_edxorg_id.user_edxorg_id
+left join mitxonline_fulfilled_orders as mitxonline_fulfilled_orders_by_email
+    on lower(program_entitlements.user_email) = lower(mitxonline_fulfilled_orders_by_email.user_email)
+    and mitxonline_programs.program_readable_id = mitxonline_fulfilled_orders_by_email.program_readable_id
+left join mitxonline_fulfilled_orders as mitxonline_fulfilled_orders_by_user_id
+    on mitx_user_by_edxorg_id.user_mitxonline_id = mitxonline_fulfilled_orders_by_user_id.user_id
+    and mitxonline_programs.program_readable_id = mitxonline_fulfilled_orders_by_user_id.program_readable_id

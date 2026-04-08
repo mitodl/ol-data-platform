@@ -1291,3 +1291,37 @@ models:
     description: timestamp, date and time when the video event was recorded
   - name: video_name
     description: string, display name of the video
+
+- name: dedp_financial_assistance
+  description: Report of users and their financial assistance status for DEDP programs
+  columns:
+  - name: user_email
+    description: string, email address of the user
+  - name: user_full_name
+    description: string, full name of the user
+  - name: user_id
+    description: string, unique identifier for the user
+  - name: flexiblepriceapplication_income_usd
+    description: decimal, income of the user in USD
+  - name: flexiblepriceapplication_original_currency
+    description: string, original currency of the user's income
+  - name: flexiblepriceapplication_original_income
+    description: decimal, original income of the user in their local currency
+  - name: flexiblepriceapplication_status
+    description: string, status of the user's financial assistance application
+  - name: flexiblepriceapplication_exchange_rate_timestamp
+    description: timestamp, when the exchange rate was last updated
+  - name: flexiblepriceapplication_created_on
+    description: timestamp, when the financial assistance application was created
+  - name: flexiblepriceapplication_updated_on
+    description: timestamp, when the financial assistance application was last updated
+  - name: courserunenrollment_is_active
+    description: boolean, indicating if the user is actively enrolled in the course
+  - name: mitxonline_program_id
+    description: string, unique identifier for the MITx Online program
+  - name: courserun_start_on
+    description: timestamp, when the course run starts
+  - name: courserun_end_on
+    description: timestamp, when the course run ends
+  - name: income_less_than_10000
+    description: boolean, indicating if the user's income is less than $10,000
