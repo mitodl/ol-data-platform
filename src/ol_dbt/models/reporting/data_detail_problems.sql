@@ -23,7 +23,7 @@ from problem_events
 inner join
     problems
     on problem_events.problem_block_fk = problems.problem_block_pk
-    and problem_events.platform = problems.platform
+    and problem_events.courserun_readable_id = problems.courserun_readable_id
 inner join
     combined__course_runs
     on problem_events.courserun_readable_id = combined__course_runs.courserun_readable_id
