@@ -1,0 +1,119 @@
+slice_name: DEDP Financial Assistance - Income < $10000
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 211__table
+  viz_type: table
+  slice_id: 177
+  query_mode: raw
+  groupby: []
+  time_grain_sqla: P1D
+  temporal_columns_lookup: {}
+  all_columns:
+  - user_email
+  - user_full_name
+  - user_id
+  - flexiblepriceapplication_income_usd
+  - flexiblepriceapplication_original_currency
+  - flexiblepriceapplication_original_income
+  - flexiblepriceapplication_status
+  - flexiblepriceapplication_exchange_rate_timestamp
+  - flexiblepriceapplication_created_on
+  - flexiblepriceapplication_updated_on
+  percent_metrics: []
+  adhoc_filters:
+  - clause: WHERE
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_njl872f37oo_04t3n9ipx359
+    isExtra: false
+    isNew: false
+    operator: IS TRUE
+    operatorId: IS_TRUE
+    sqlExpression: null
+    subject: courserunenrollment_is_active
+  - clause: WHERE
+    comparator:
+    - 2
+    - 1
+    - 3
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_x0vpi9g4pcg_kxu1zx8q6j
+    isExtra: false
+    isNew: false
+    operator: IN
+    operatorId: IN
+    sqlExpression: null
+    subject: mitxonline_program_id
+  - clause: WHERE
+    comparator:
+    - approved
+    - auto-approved
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_qxq3m5tz37_nykaxn4qv4d
+    isExtra: false
+    isNew: false
+    operator: IN
+    operatorId: IN
+    sqlExpression: null
+    subject: flexiblepriceapplication_status
+  - clause: WHERE
+    comparator: 10000
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_ckga8a1qqdl_lg989eu83ae
+    isExtra: false
+    isNew: false
+    operator: <
+    operatorId: LESS_THAN
+    sqlExpression: null
+    subject: flexiblepriceapplication_income_usd
+  - clause: WHERE
+    comparator: null
+    datasourceWarning: false
+    expressionType: SQL
+    filterOptionName: filter_jmqrmca0mf_brwsyv7oa87
+    isExtra: false
+    isNew: false
+    operator: null
+    sqlExpression: cast(substring(courserun_start_on, 1, 10) as date) <= current_date
+    subject: null
+  - clause: WHERE
+    comparator: null
+    datasourceWarning: false
+    expressionType: SQL
+    filterOptionName: filter_0jclpvkjr3no_dxguh3dbmdm
+    isExtra: false
+    isNew: false
+    operator: null
+    sqlExpression: cast(substring(courserun_end_on, 1, 10) as date) > current_date
+    subject: null
+  order_by_cols: []
+  order_desc: true
+  server_page_length: 10
+  row_limit: 10000
+  percent_metric_calculation: row_limit
+  table_timestamp_format: smart_date
+  allow_render_html: true
+  show_cell_bars: false
+  color_pn: true
+  comparison_color_scheme: Green
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards: []
+query_context: '{"datasource":{"id":211,"type":"table"},"force":false,"queries":[{"filters":[{"col":"courserunenrollment_is_active","op":"IS
+  TRUE"},{"col":"mitxonline_program_id","op":"IN","val":[2,1,3]},{"col":"flexiblepriceapplication_status","op":"IN","val":["approved","auto-approved"]},{"col":"flexiblepriceapplication_income_usd","op":"<","val":10000}],"extras":{"time_grain_sqla":"P1D","having":"","where":"(cast(substring(courserun_start_on,
+  1, 10) as date) <= current_date) AND (cast(substring(courserun_end_on, 1, 10) as
+  date) > current_date)"},"applied_time_extras":{},"columns":["user_email","user_full_name","user_id","flexiblepriceapplication_income_usd","flexiblepriceapplication_original_currency","flexiblepriceapplication_original_income","flexiblepriceapplication_status","flexiblepriceapplication_exchange_rate_timestamp","flexiblepriceapplication_created_on","flexiblepriceapplication_updated_on"],"orderby":[],"annotation_layers":[],"row_limit":10000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"211__table","viz_type":"table","slice_id":177,"query_mode":"raw","groupby":[],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"all_columns":["user_email","user_full_name","user_id","flexiblepriceapplication_income_usd","flexiblepriceapplication_original_currency","flexiblepriceapplication_original_income","flexiblepriceapplication_status","flexiblepriceapplication_exchange_rate_timestamp","flexiblepriceapplication_created_on","flexiblepriceapplication_updated_on"],"percent_metrics":[],"adhoc_filters":[{"clause":"WHERE","datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_njl872f37oo_04t3n9ipx359","isExtra":false,"isNew":false,"operator":"IS
+  TRUE","operatorId":"IS_TRUE","sqlExpression":null,"subject":"courserunenrollment_is_active"},{"clause":"WHERE","comparator":[2,1,3],"datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_x0vpi9g4pcg_kxu1zx8q6j","isExtra":false,"isNew":false,"operator":"IN","operatorId":"IN","sqlExpression":null,"subject":"mitxonline_program_id"},{"clause":"WHERE","comparator":["approved","auto-approved"],"datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_qxq3m5tz37_nykaxn4qv4d","isExtra":false,"isNew":false,"operator":"IN","operatorId":"IN","sqlExpression":null,"subject":"flexiblepriceapplication_status"},{"clause":"WHERE","comparator":10000,"datasourceWarning":false,"expressionType":"SIMPLE","filterOptionName":"filter_ckga8a1qqdl_lg989eu83ae","isExtra":false,"isNew":false,"operator":"<","operatorId":"LESS_THAN","sqlExpression":null,"subject":"flexiblepriceapplication_income_usd"},{"clause":"WHERE","comparator":null,"datasourceWarning":false,"expressionType":"SQL","filterOptionName":"filter_jmqrmca0mf_brwsyv7oa87","isExtra":false,"isNew":false,"operator":null,"sqlExpression":"cast(substring(courserun_start_on,
+  1, 10) as date) <= current_date","subject":null},{"clause":"WHERE","comparator":null,"datasourceWarning":false,"expressionType":"SQL","filterOptionName":"filter_0jclpvkjr3no_dxguh3dbmdm","isExtra":false,"isNew":false,"operator":null,"sqlExpression":"cast(substring(courserun_end_on,
+  1, 10) as date) > current_date","subject":null}],"order_by_cols":[],"order_desc":true,"server_page_length":10,"row_limit":10000,"percent_metric_calculation":"row_limit","table_timestamp_format":"smart_date","allow_render_html":true,"show_cell_bars":false,"color_pn":true,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
+cache_timeout: null
+uuid: 9d893168-08b9-4afd-8ed6-0a82dd87a17c
+version: 1.0.0
+dataset_uuid: 29720b2d-fac5-44a0-88dd-b2cbed0482ba
