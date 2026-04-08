@@ -1,0 +1,109 @@
+cache_timeout: null
+certification_details: null
+certified_by: null
+dataset_uuid: 29720b2d-fac5-44a0-88dd-b2cbed0482ba  # dedp_financial_assistance
+description: null
+params:
+  adhoc_filters:
+  - clause: WHERE
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_njl872f37oo_04t3n9ipx359
+    isExtra: false
+    isNew: false
+    operator: IS TRUE
+    operatorId: IS_TRUE
+    sqlExpression: null
+    subject: courserunenrollment_is_active
+  - clause: WHERE
+    comparator:
+    - 2
+    - 1
+    - 3
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_x0vpi9g4pcg_kxu1zx8q6j
+    isExtra: false
+    isNew: false
+    operator: IN
+    operatorId: IN
+    sqlExpression: null
+    subject: mitxonline_program_id
+  - clause: WHERE
+    comparator:
+    - approved
+    - auto-approved
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_qxq3m5tz37_nykaxn4qv4d
+    isExtra: false
+    isNew: false
+    operator: IN
+    operatorId: IN
+    sqlExpression: null
+    subject: flexiblepriceapplication_status
+  - clause: WHERE
+    comparator: 10000
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_ckga8a1qqdl_lg989eu83ae
+    isExtra: false
+    isNew: false
+    operator: <
+    operatorId: LESS_THAN
+    sqlExpression: null
+    subject: flexiblepriceapplication_income_usd
+  - clause: WHERE
+    comparator: null
+    datasourceWarning: false
+    expressionType: SQL
+    filterOptionName: filter_jmqrmca0mf_brwsyv7oa87
+    isExtra: false
+    isNew: false
+    operator: null
+    sqlExpression: cast(substring(courserun_start_on, 1, 10) as date) <= current_date
+    subject: null
+  - clause: WHERE
+    comparator: null
+    datasourceWarning: false
+    expressionType: SQL
+    filterOptionName: filter_0jclpvkjr3no_dxguh3dbmdm
+    isExtra: false
+    isNew: false
+    operator: null
+    sqlExpression: cast(substring(courserun_end_on, 1, 10) as date) > current_date
+    subject: null
+  all_columns:
+  - user_email
+  - user_full_name
+  - user_id
+  - flexiblepriceapplication_income_usd
+  - flexiblepriceapplication_original_currency
+  - flexiblepriceapplication_original_income
+  - flexiblepriceapplication_status
+  - flexiblepriceapplication_exchange_rate_timestamp
+  - flexiblepriceapplication_created_on
+  - flexiblepriceapplication_updated_on
+  allow_render_html: true
+  color_pn: true
+  comparison_color_scheme: Green
+  comparison_type: values
+  conditional_formatting: []
+  extra_form_data: {}
+  groupby: []
+  order_by_cols: []
+  order_desc: true
+  percent_metric_calculation: row_limit
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 10000
+  server_page_length: 10
+  show_cell_bars: false
+  table_timestamp_format: smart_date
+  temporal_columns_lookup: {}
+  time_grain_sqla: P1D
+  viz_type: table
+slice_name: DEDP Financial Assistance - Income < $10000
+uuid: 9d893168-08b9-4afd-8ed6-0a82dd87a17c
+version: 1.0.0
+viz_type: table
