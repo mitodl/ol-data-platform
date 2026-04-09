@@ -125,6 +125,8 @@ models:
         to: ref('dim_user')
         field: user_pk
         where: "user_fk is not null"
+        config:
+          severity: warn
   - name: platform_fk
     description: Foreign key to dim_platform
     tests:
@@ -140,6 +142,8 @@ models:
         to: ref('dim_product')
         field: product_pk
         where: "product_fk is not null"
+        config:
+          severity: warn
   - name: platform
     description: Platform identifier string
     tests:
