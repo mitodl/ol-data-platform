@@ -585,6 +585,9 @@ models:
       this is calculated as product price * percentage off
   - name: discount_redemption_type
     description: str, one of  "one-time",  "one-time-per-user" and "unlimited"
+  - name: discount_id
+    description: int, foreign key for ecommerce_discount for the most recent coupon
+      redemption for the order
   - name: discount_code
     description: str, discount code from the most recent coupon redemption for the
       order

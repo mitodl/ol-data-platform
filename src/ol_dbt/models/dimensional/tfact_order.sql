@@ -23,6 +23,8 @@ with mitxonline_orders as (
         , order_created_on
         , order_updated_on
         , 'mitxonline' as platform
+        , discount_id
+        , discount_code
         , case
             when discount_amount_text like 'Fixed Price: 0%' then 'free'
             when substr(discount_amount_text, length(discount_amount_text), 1) = '%' then 'percentage'
@@ -47,6 +49,8 @@ with mitxonline_orders as (
         , orders.order_created_on
         , orders.order_updated_on
         , 'mitxpro' as platform
+        , coupon_id as discount_id
+        , coupon_code as discount_code
         , case
             when orders.couponpaymentversion_discount_type = 'percent-off' then 'percentage'
             when orders.couponpaymentversion_discount_type = 'dollars-off' then 'fixed_amount'
@@ -71,6 +75,8 @@ with mitxonline_orders as (
         , order_created_on
         , order_created_on as order_updated_on  -- micromasters has no updated_on
         , 'micromasters' as platform
+        , coupon_id as discount_id
+        , coupon_code as discount_code
         , null as discount_type_code
     from {{ ref('int__micromasters__orders') }}
 )
@@ -109,6 +115,11 @@ with mitxonline_orders as (
     from {{ ref('dim_platform') }}
 )
 
+, dim_discount as (
+    select discount_pk, source_discount_id, platform_code
+    from {{ ref('dim_discount') }}
+)
+
 , orders_with_fks as (
     select
         combined_orders.*
@@ -126,6 +137,7 @@ with mitxonline_orders as (
         , dim_platform_lookup.platform_pk as platform_fk
         , dim_discount_type.discount_type_pk as discount_type_fk
         , dim_product.product_pk as product_fk
+        , dim_discount.discount_pk as discount_fk
         , {{ iso8601_to_date_key('order_created_on') }} as order_date_key
         , {{ iso8601_to_date_key('order_updated_on') }} as order_updated_date_key
     from combined_orders
@@ -145,6 +157,9 @@ with mitxonline_orders as (
     left join dim_product
         on cast(combined_orders.product_id as varchar) = cast(dim_product.source_product_id as varchar)
         and combined_orders.platform = dim_product.platform
+    left join dim_discount
+        on combined_orders.discount_id = dim_discount.source_discount_id
+        and combined_orders.platform = dim_discount.platform_code
 )
 
 {% if is_incremental() %}
@@ -171,6 +186,7 @@ with mitxonline_orders as (
         , order_updated_date_key
         , user_fk
         , platform_fk
+        , discount_fk
         , discount_type_fk
         , product_fk
         , owf.platform

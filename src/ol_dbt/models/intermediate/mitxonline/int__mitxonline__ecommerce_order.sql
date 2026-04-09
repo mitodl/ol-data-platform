@@ -83,6 +83,7 @@ select
     , intermediate_products_view.program_readable_id
     , discounts.discount_source
     , discounts.discount_redemption_type
+    , discounts.discount_id
     , discounts.discount_code
     , discounts.discount_amount_text
     , payments.transaction_id

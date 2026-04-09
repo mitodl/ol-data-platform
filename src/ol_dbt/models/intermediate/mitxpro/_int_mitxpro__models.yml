@@ -117,6 +117,10 @@ models:
     description: timestamp, specifying when the coupon was initially created
     tests:
     - not_null
+  - name: coupon_updated_on
+    description: timestamp, specifying when the coupon was most recently updated
+    tests:
+    - not_null
   - name: payment_transaction
     description: string, string that identifies the payment invoice for coupon purchases
       by companies. This will be null for records sourced from b2b.
@@ -125,9 +129,22 @@ models:
       is coming from b2b it is always a percentage.
     tests:
     - not_null
+  - name: discount_amount_numeric
+    description: number, either dollar amount or percentage (between 0 and 1) discount.
+      This is used for calculations. If the data is coming from b2b it is always a
+      percentage.
+    tests:
+    - not_null
   - name: coupon_type
     description: string, one of 'single-use' or 'promo'. Promo coupon codes can be
       used multiple times. This will be null for records sourced from b2b.
+  - name: discount_type
+    description: string, one of percent-off or dollars-off
+  - name: num_coupon_codes
+    description: int, number of coupon objects associated with the payment version.
+      This will be null for records sourced from b2b.
+  - name: max_redemptions
+    description: int, maximum number of redemptions for the coupon payment version.
   - name: discount_source
     description: string, one of "staff", "marketing", "credit_card", "purchase_order",
       "sales". "staff" coupons are used to allow staff to enroll in courses. "marketing"
