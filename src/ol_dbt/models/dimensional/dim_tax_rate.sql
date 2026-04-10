@@ -6,7 +6,6 @@ with xpro_tax_rates as (
     select * from {{ ref('stg__mitxpro__app__postgres__ecommerce_taxrate') }}
 )
 
---- Grain: one row per unique tax rate.
 select
     {{ dbt_utils.generate_surrogate_key(['taxrate_country_code']) }} as tax_rate_pk
     , taxrate_country_code as country_code

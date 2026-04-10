@@ -1009,7 +1009,7 @@ models:
     code.
   columns:
   - name: tax_rate_pk
-    description: string, surrogate primary key generated from tax_rate_country_code
+    description: string, surrogate primary key generated from country_code
     tests:
     - not_null
     - unique

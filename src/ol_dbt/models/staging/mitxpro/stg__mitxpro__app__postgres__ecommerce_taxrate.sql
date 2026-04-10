@@ -9,7 +9,7 @@ with source as (
     select
         id as taxrate_id
         , country_code as taxrate_country_code
-        , tax_rate as taxrate_tax_rate
+        , cast(tax_rate as decimal(38, 2)) as taxrate_tax_rate
         , tax_rate_name as taxrate_tax_rate_name
         , active as taxrate_is_active
         ,{{ cast_timestamp_to_iso8601('created_on') }} as taxrate_created_on

@@ -179,6 +179,11 @@ models:
   - name: tax_rate_fk
     description: Foreign key to dim_tax_rate (null if tax rate cannot be determined
       or order is not taxable)
+    tests:
+    - relationships:
+        to: ref('dim_tax_rate')
+        field: tax_rate_pk
+        where: "tax_rate_fk is not null"
   - name: order_reference_number
     description: Order reference/confirmation number
   - name: order_updated_on
