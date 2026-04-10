@@ -19,6 +19,11 @@ with mitxonline_orders as (
         , product_price as line_price
         , order_state
         , order_total_price_paid
+          --- placeholder for tax information on MITx Online orders, which is not currently implemented.
+        , order_total_price_paid as order_total_price_paid_plus_tax
+        , null as order_tax_amount
+        , null as order_tax_rate
+        , null as order_tax_country_code
         , order_reference_number
         , order_created_on
         , order_updated_on
@@ -45,6 +50,10 @@ with mitxonline_orders as (
         , lines.product_price as line_price
         , orders.order_state
         , orders.order_total_price_paid
+        , orders.order_total_price_paid_plus_tax
+        , orders.order_tax_amount
+        , orders.order_tax_rate
+        , orders.order_tax_country_code
         , cast(null as varchar) as order_reference_number
         , orders.order_created_on
         , orders.order_updated_on
@@ -71,6 +80,10 @@ with mitxonline_orders as (
         , line_price
         , order_state
         , order_total_price_paid
+        , order_total_price_paid as order_total_price_paid_plus_tax
+        , null as order_tax_amount
+        , null as order_tax_rate
+        , null as order_tax_country_code
         , cast(null as varchar) as order_reference_number
         , order_created_on
         , order_created_on as order_updated_on  -- micromasters has no updated_on
@@ -120,6 +133,11 @@ with mitxonline_orders as (
     from {{ ref('dim_discount') }}
 )
 
+, dim_tax_rate as (
+    select tax_rate_pk, country_code
+    from {{ ref('dim_tax_rate') }}
+)
+
 , orders_with_fks as (
     select
         combined_orders.*
@@ -138,6 +156,7 @@ with mitxonline_orders as (
         , dim_discount_type.discount_type_pk as discount_type_fk
         , dim_product.product_pk as product_fk
         , dim_discount.discount_pk as discount_fk
+        , dim_tax_rate.tax_rate_pk as tax_rate_fk
         , {{ iso8601_to_date_key('order_created_on') }} as order_date_key
         , {{ iso8601_to_date_key('order_updated_on') }} as order_updated_date_key
     from combined_orders
@@ -160,6 +179,8 @@ with mitxonline_orders as (
     left join dim_discount
         on combined_orders.discount_id = dim_discount.source_discount_id
         and combined_orders.platform = dim_discount.platform_code
+    left join dim_tax_rate
+        on combined_orders.order_tax_country_code = dim_tax_rate.country_code
 )
 
 {% if is_incremental() %}
@@ -193,6 +214,10 @@ with mitxonline_orders as (
         , order_state
         , line_price
         , order_total_price_paid
+        , tax_rate_fk
+        , order_total_price_paid_plus_tax
+        , order_tax_amount
+        , order_tax_rate
         , order_reference_number
         , order_updated_on
     from orders_with_fks as owf
