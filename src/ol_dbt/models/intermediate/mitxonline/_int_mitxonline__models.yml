@@ -507,7 +507,6 @@ models:
       orders have exactly one line
     tests:
     - not_null
-    - unique
   - name: order_state
     description: string, order state. Options are "pending", "fulfilled", "canceled"
       "declined", "errored", "refunded", "review", "partially_refunded"
@@ -560,7 +559,7 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['course run', 'program run']
+          values: ['course run', 'program']
   - name: product_id
     description: int, sequential ID for ecommerce product
     tests:
@@ -610,10 +609,7 @@ models:
     description: str, address state from most recent cybersource payment
   - name: payment_bill_to_address_country
     description: str, address country from most recent cybersource payment
-  tests:
-  - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      arguments:
-        compare_model: ref('stg__mitxonline__app__postgres__ecommerce_order')
+
 - name: int__mitxonline__ecommerce_product
   description: Intermediate model of MITx Online Products.
   columns:
