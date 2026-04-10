@@ -167,6 +167,18 @@ models:
       Total amount paid for the entire order. Repeated across all lines of the same
       order —
       NOT additive across lines. Use line_price for revenue aggregations.
+  - name: order_total_price_paid_plus_tax
+    description: >
+      Total amount paid for the entire order plus tax. Repeated across all lines of
+      the
+      same order — NOT additive across lines.
+  - name: order_tax_amount
+    description: Total tax amount for the order
+  - name: order_tax_rate
+    description: Tax rate applied to the order.
+  - name: tax_rate_fk
+    description: Foreign key to dim_tax_rate (null if tax rate cannot be determined
+      or order is not taxable)
   - name: order_reference_number
     description: Order reference/confirmation number
   - name: order_updated_on

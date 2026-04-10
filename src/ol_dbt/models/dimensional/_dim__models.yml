@@ -1002,3 +1002,32 @@ models:
   - name: updated_on
     description: string, ISO-8601 timestamp indicating when the discount record was
       last updated
+
+- name: dim_tax_rate
+  description: Dimension table of tax rates by country. Each row represents the tax
+    rate for a single country, identified by a surrogate key derived from the country
+    code.
+  columns:
+  - name: tax_rate_pk
+    description: string, surrogate primary key generated from tax_rate_country_code
+    tests:
+    - not_null
+    - unique
+  - name: country_code
+    description: string, ISO 3166-1 alpha-2 country code this tax rate applies to.
+      Unique per country
+    tests:
+    - not_null
+    - unique
+  - name: tax_rate
+    description: numeric, the tax rate as a percentage (e.g. 15 means 15%)
+    tests:
+    - not_null
+  - name: tax_rate_name
+    description: string, name of the tax assessed (e.g. GST)
+    tests:
+    - not_null
+  - name: is_active
+    description: boolean, indicates whether this tax rate is currently active
+    tests:
+    - not_null

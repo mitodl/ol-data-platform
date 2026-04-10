@@ -861,6 +861,42 @@ models:
     tests:
     - not_null
 
+- name: stg__mitxpro__app__postgres__ecommerce_taxrate
+  description: Staging model for MITx Pro ecommerce tax rates by country, used to
+    calculate tax on course orders
+  columns:
+  - name: taxrate_id
+    description: int, primary key representing a tax rate record
+    tests:
+    - not_null
+    - unique
+  - name: taxrate_country_code
+    description: string, ISO 3166-1 alpha-2 country code this tax rate applies to.
+      Unique per country
+    tests:
+    - not_null
+    - unique
+  - name: taxrate_tax_rate
+    description: numeric, the tax rate as a percentage (e.g. 15 means 15%)
+    tests:
+    - not_null
+  - name: taxrate_tax_rate_name
+    description: string, name of the tax assessed (e.g. GST)
+  - name: taxrate_is_active
+    description: boolean, whether this tax rate is currently active and used to calculate
+      tax on new course orders
+    tests:
+    - not_null
+  - name: taxrate_created_on
+    description: timestamp, specifying when the tax rate record was initially created
+    tests:
+    - not_null
+  - name: taxrate_updated_on
+    description: timestamp, specifying when the tax rate record was most recently
+      updated
+    tests:
+    - not_null
+
 - name: stg__mitxpro__app__postgres__ecommerce_order
   columns:
   - name: order_id
