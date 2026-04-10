@@ -496,15 +496,12 @@ models:
       arguments:
         compare_model: ref('stg__mitxonline__app__postgres__ecommerce_transaction')
 - name: int__mitxonline__ecommerce_order
-  description: Since mitxonline orders always have exactly one line, we can combine
-    the ecommerce_line and ecommnerce_order tables into one intermediate table. This
-    may change at some point in the future (xpro orders have multiple lines). If it
-    does, the unique test on order_id in this model will fail and we will know to
-    change this query and the queries that depend on it
+  description: MITx Online ecommerce order table at the grain of an order line. An
+    order line is a single product within an order.
   columns:
   - name: order_id
-    description: int, primary key representing a single MITx Online order.  Currently
-      orders have exactly one line
+    description: int, the primary key representing an order. An order can have multiple
+      lines
     tests:
     - not_null
   - name: order_state
