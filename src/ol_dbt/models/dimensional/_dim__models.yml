@@ -958,3 +958,47 @@ models:
   - name: platform_fk
     description: string, foreign key to dim_platform, referencing the platform where
       the chatbot event occurred
+
+- name: dim_discount
+  description: Dimension table combining discount/coupon records across MITxOnline
+    and MITxPro platforms. Each row represents a unique discount or coupon identified
+    by a surrogate key derived from the source platform and source discount ID.
+  columns:
+  - name: discount_pk
+    description: string, surrogate primary key for this table, generated from source_discount_id
+      and platform_code
+    tests:
+    - not_null
+    - unique
+  - name: platform_code
+    description: string, code identifying the source platform. e.g. mitxonline, mitxpro
+    tests:
+    - not_null
+  - name: source_discount_id
+    description: integer, original discount or coupon ID from the source platform
+  - name: discount_code
+    description: string, the discount or coupon code used at checkout
+  - name: discount_type
+    description: string, type of discount. e.g. percent-off, dollars-off, fixed-price
+  - name: discount_amount
+    description: decimal, numeric amount of the discount (percentage or dollar value
+      depending on discount_type). For percent-off discounts, this is a number between
+      0 and 100 representing the percentage
+  - name: discount_source
+    description: string, source or payment type of the discount. e.g. marketing, b2b,
+      financial-assistance
+  - name: max_redemptions
+    description: integer, maximum number of times this discount may be redeemed. 0
+      if unlimited.
+  - name: redemption_type
+    description: string, redemption constraint type. e.g. one-time, unlimited
+  - name: activated_on
+    description: string, ISO-8601 timestamp indicating when the discount becomes active
+  - name: expires_on
+    description: string, ISO-8601 timestamp indicating when the discount expires
+  - name: created_on
+    description: string, ISO-8601 timestamp indicating when the discount record was
+      created
+  - name: updated_on
+    description: string, ISO-8601 timestamp indicating when the discount record was
+      last updated

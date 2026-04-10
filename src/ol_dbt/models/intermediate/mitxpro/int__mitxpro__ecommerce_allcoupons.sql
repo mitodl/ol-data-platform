@@ -31,14 +31,19 @@ with coupon as (
         coupon.coupon_code
         , coupon.couponpayment_name as coupon_name
         , coupon.coupon_created_on
+        , coupon.coupon_updated_on
         , ecommerce_couponpaymentversion.couponpaymentversion_payment_transaction as payment_transaction
         , ecommerce_couponpaymentversion.couponpaymentversion_coupon_type as coupon_type
         , ecommerce_couponpaymentversion.couponpaymentversion_discount_source as discount_source
         , ecommerce_couponpaymentversion.couponpaymentversion_activated_on as activated_on
         , ecommerce_couponpaymentversion.couponpaymentversion_expires_on as expires_on
+        , ecommerce_couponpaymentversion.couponpaymentversion_num_coupon_codes as num_coupon_codes
+        , ecommerce_couponpaymentversion.couponpaymentversion_max_redemptions as max_redemptions
+        , ecommerce_couponpaymentversion.couponpaymentversion_discount_type as discount_type
         , 'ecommerce_coupon' as coupon_source_table
         , null as b2bcoupon_id
         , coupon.coupon_id
+        , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount as discount_amount_numeric
         , ecommerce_couponpaymentversion.couponpaymentversion_discount_amount_text as discount_amount
     from coupon
     inner join latest_couponversion
@@ -56,14 +61,19 @@ with coupon as (
         b2bcoupon_coupon_code as coupon_code
         , b2bcoupon_name as coupon_name
         , b2bcoupon_created_on as coupon_created_on
+        , b2bcoupon_updated_on as coupon_updated_on
         , null as payment_transaction
         , null as coupon_type
         , null as discount_source
         , b2bcoupon_activated_on as activated_on
         , b2bcoupon_expires_on as expires_on
+        , null as num_coupon_codes
+        , if(b2bcoupon_is_reusable, 0, 1) as max_redemptions
         , 'b2bcoupon' as coupon_source_table
         , b2bcoupon_id
         , null as coupon_id
+        , 'percent-off' as discount_type
+        , b2bcoupon_discount_percent as discount_amount_numeric
         , cast(cast((b2bcoupon_discount_percent * 100) as integer) as varchar) || '% off' as discount_amount
     from b2becommerce_b2bcoupon
 )
@@ -72,10 +82,15 @@ select
     coupon_code
     , coupon_name
     , coupon_created_on
+    , coupon_updated_on
     , payment_transaction
     , discount_amount
+    , discount_amount_numeric
     , coupon_type
     , discount_source
+    , discount_type
+    , num_coupon_codes
+    , max_redemptions
     , activated_on
     , expires_on
     , coupon_source_table
@@ -89,10 +104,15 @@ select
     coupon_code
     , coupon_name
     , coupon_created_on
+    , coupon_updated_on
     , payment_transaction
     , discount_amount
+    , discount_amount_numeric
     , coupon_type
     , discount_source
+    , discount_type
+    , num_coupon_codes
+    , max_redemptions
     , activated_on
     , expires_on
     , coupon_source_table
