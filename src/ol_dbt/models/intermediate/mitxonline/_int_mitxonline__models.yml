@@ -496,18 +496,14 @@ models:
       arguments:
         compare_model: ref('stg__mitxonline__app__postgres__ecommerce_transaction')
 - name: int__mitxonline__ecommerce_order
-  description: Since mitxonline orders always have exactly one line, we can combine
-    the ecommerce_line and ecommnerce_order tables into one intermediate table. This
-    may change at some point in the future (xpro orders have multiple lines). If it
-    does, the unique test on order_id in this model will fail and we will know to
-    change this query and the queries that depend on it
+  description: MITx Online ecommerce order table at the grain of an order line. An
+    order line is a single product within an order.
   columns:
   - name: order_id
-    description: int, primary key representing a single MITx Online order.  Currently
-      orders have exactly one line
+    description: int, the primary key representing an order. An order can have multiple
+      lines
     tests:
     - not_null
-    - unique
   - name: order_state
     description: string, order state. Options are "pending", "fulfilled", "canceled"
       "declined", "errored", "refunded", "review", "partially_refunded"
@@ -560,7 +556,7 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['course run', 'program run']
+          values: ['course run', 'program']
   - name: product_id
     description: int, sequential ID for ecommerce product
     tests:
@@ -610,10 +606,7 @@ models:
     description: str, address state from most recent cybersource payment
   - name: payment_bill_to_address_country
     description: str, address country from most recent cybersource payment
-  tests:
-  - dbt_expectations.expect_table_row_count_to_equal_other_table:
-      arguments:
-        compare_model: ref('stg__mitxonline__app__postgres__ecommerce_order')
+
 - name: int__mitxonline__ecommerce_product
   description: Intermediate model of MITx Online Products.
   columns:

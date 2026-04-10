@@ -84,7 +84,9 @@ select
     ) as receipt_url
 from enrollments
 left join orders
-    on enrollments.order_id = orders.order_id and enrollments.platform = orders.platform
+    on enrollments.order_id = orders.order_id
+    and enrollments.line_id = orders.line_id
+    and enrollments.platform = orders.platform
 left join course_passed_counts
     on enrollments.user_email = course_passed_counts.user_email
 left join programs
