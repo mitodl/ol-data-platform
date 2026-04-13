@@ -43,6 +43,9 @@ with openedx_events as (
               )
          ) AS checkpoint_pk
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
+        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
+        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -63,7 +66,10 @@ with openedx_events as (
         , {{ json_query_string('useractivity_event_object', "'$.xblock_state'") }} as chatbot_type
         , {{ json_query_string('useractivity_event_object', "'$.problem_set'") }} as problem_set
         , nullif({{ json_query_string('useractivity_event_object', "'$.canvas_course_id'") }},'') as canvas_course_id
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
+        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
         , case when useractivity_event_type like '%response'
              then regexp_replace(
                  {{ json_query_string('useractivity_event_object', "'$.value'") }}
@@ -139,7 +145,10 @@ with openedx_events as (
             , block_name
             , 'Tutor' as chatbot_type
             , event_value
+            , event_timestamp_iso8601
             , event_timestamp
+            , time_fk
+            , date_fk
             , event_json
             , thread_id as learn_ai_thread_id
             , checkpoint_pk as learn_ai_checkpoint_pk
@@ -159,7 +168,10 @@ with openedx_events as (
         , block_name
         , chatbot_type
         , event_value
+        , event_timestamp_iso8601
         , event_timestamp
+        , time_fk
+        , date_fk
         , event_json
         , thread_id as learn_ai_thread_id
         , checkpoint_pk as learn_ai_checkpoint_pk
@@ -183,7 +195,10 @@ select
     , combined.block_name
     , combined.chatbot_type
     , combined.event_value
+    , combined.event_timestamp_iso8601
     , combined.event_timestamp
+    , combined.time_fk
+    , combined.date_fk
     , combined.event_json
     , combined.learn_ai_thread_id
     , combined.learn_ai_checkpoint_pk

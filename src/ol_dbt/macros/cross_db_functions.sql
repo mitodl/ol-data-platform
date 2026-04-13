@@ -261,6 +261,66 @@
 
 
 {#
+    timestamp_to_time_key: Convert a native timestamp expression to an integer HHMM time key.
+    Use this (rather than iso8601_to_time_key) when you already have a proper timestamp value
+    (e.g. the result of from_iso8601_timestamp / from_iso8601_timestamp_nanos) so that the
+    time key reflects the UTC wall-clock time of the timestamp, not a raw string offset.
+
+#}
+{% macro timestamp_to_time_key(timestamp) -%}
+    {{ return(adapter.dispatch('timestamp_to_time_key', 'open_learning')(timestamp)) }}
+{%- endmacro %}
+
+{% macro default__timestamp_to_time_key(timestamp) -%}
+    {#
+        Trino: hour()/minute() on TIMESTAMP WITH TIME ZONE return the hour in the
+        timestamp's own timezone (which is the session timezone for naive inputs).
+        Normalize to UTC first with at_timezone() so we always get the UTC hour.
+    #}
+    cast(hour(at_timezone({{ ts_expr }}, 'UTC')) as integer) * 100
+    + cast(minute(at_timezone({{ ts_expr }}, 'UTC')) as integer)
+{%- endmacro %}
+
+{% macro duckdb__timestamp_to_time_key(ts_expr) -%}
+    {# DuckDB: hour()/minute() on TIMESTAMPTZ return UTC hour/minute #}
+    cast(hour({{ ts_expr }}) as integer) * 100 + cast(minute({{ ts_expr }}) as integer)
+{%- endmacro %}
+
+
+{#
+    iso8601_to_time_key: Convert an ISO8601 varchar datetime field to an integer HHMM time key.
+    Matches the dim_time.time_key format (hour * 100 + minute).
+    Handles strings of the form 'YYYY-MM-DDTHH:MM:SS...' (>=16 chars).
+    Returns NULL if input is NULL or shorter than 16 characters.
+#}
+{% macro iso8601_to_time_key(varchar_field) -%}
+    {{ return(adapter.dispatch('iso8601_to_time_key', 'open_learning')(varchar_field)) }}
+{%- endmacro %}
+
+{% macro default__iso8601_to_time_key(varchar_field) -%}
+    {# Trino: substr on ISO 8601 string positions 12-13 (HH) and 15-16 (MM) #}
+    CASE
+        WHEN {{ varchar_field }} IS NULL THEN NULL
+        WHEN LENGTH({{ varchar_field }}) >= 16 THEN
+            CAST(SUBSTR({{ varchar_field }}, 12, 2) AS INTEGER) * 100
+            + CAST(SUBSTR({{ varchar_field }}, 15, 2) AS INTEGER)
+        ELSE NULL
+    END
+{%- endmacro %}
+
+{% macro duckdb__iso8601_to_time_key(varchar_field) -%}
+    {# DuckDB: identical string-based extraction #}
+    CASE
+        WHEN {{ varchar_field }} IS NULL THEN NULL
+        WHEN LENGTH({{ varchar_field }}) >= 16 THEN
+            CAST(SUBSTR({{ varchar_field }}, 12, 2) AS INTEGER) * 100
+            + CAST(SUBSTR({{ varchar_field }}, 15, 2) AS INTEGER)
+        ELSE NULL
+    END
+{%- endmacro %}
+
+
+{#
     last_value_ignore_nulls: Cross-db wrapper for last_value with IGNORE NULLS.
     Trino: last_value(expr) IGNORE NULLS OVER (window)
     DuckDB: last_value(expr IGNORE NULLS) OVER (window)

@@ -27,7 +27,10 @@ with mitxonline_navigation_events as (
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
         , {{ json_query_string('useractivity_event_object', "'$.tab_count'") }} as tab_count
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
+        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -52,7 +55,10 @@ with mitxonline_navigation_events as (
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
         , {{ json_query_string('useractivity_event_object', "'$.tab_count'") }} as tab_count
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
+        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -77,7 +83,10 @@ with mitxonline_navigation_events as (
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
         , {{ json_query_string('useractivity_event_object', "'$.tab_count'") }} as tab_count
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
+        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -102,7 +111,10 @@ with mitxonline_navigation_events as (
         end as block_id
         , {{ json_query_string('useractivity_event_object', "'$.current_tab'") }} as current_tab
         , {{ json_query_string('useractivity_event_object', "'$.tab_count'") }} as tab_count
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
+        , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
     where
         courserun_readable_id is not null
@@ -136,7 +148,10 @@ with mitxonline_navigation_events as (
             as ending_position
         , mitxonline_navigation_events.current_tab
         , mitxonline_navigation_events.tab_count
+        , mitxonline_navigation_events.event_timestamp_iso8601
         , mitxonline_navigation_events.event_timestamp
+        , mitxonline_navigation_events.time_fk
+        , mitxonline_navigation_events.date_fk
     from mitxonline_navigation_events
     left join users
         on
@@ -162,7 +177,10 @@ with mitxonline_navigation_events as (
         , coalesce(xpro_navigation_events.ending_tab, xpro_navigation_events.ending_url) as ending_position
         , xpro_navigation_events.current_tab
         , xpro_navigation_events.tab_count
+        , xpro_navigation_events.event_timestamp_iso8601
         , xpro_navigation_events.event_timestamp
+        , xpro_navigation_events.time_fk
+        , xpro_navigation_events.date_fk
     from xpro_navigation_events
     left join users
         on
@@ -191,7 +209,10 @@ with mitxonline_navigation_events as (
         ) as ending_position
         , mitxresidential_navigation_events.current_tab
         , mitxresidential_navigation_events.tab_count
+        , mitxresidential_navigation_events.event_timestamp_iso8601
         , mitxresidential_navigation_events.event_timestamp
+        , mitxresidential_navigation_events.time_fk
+        , mitxresidential_navigation_events.date_fk
     from mitxresidential_navigation_events
     left join users
         on
@@ -220,7 +241,10 @@ with mitxonline_navigation_events as (
         ) as ending_position
         , edxorg_navigation_events.current_tab
         , edxorg_navigation_events.tab_count
+        , edxorg_navigation_events.event_timestamp_iso8601
         , edxorg_navigation_events.event_timestamp
+        , edxorg_navigation_events.time_fk
+        , edxorg_navigation_events.date_fk
     from edxorg_navigation_events
     left join users
         on
@@ -239,7 +263,10 @@ select
     , combined.block_id as block_fk
     , combined.starting_position
     , combined.ending_position
+    , combined.event_timestamp_iso8601
     , combined.event_timestamp
+    , combined.time_fk
+    , combined.date_fk
     , combined.event_json
 
 from combined
