@@ -417,6 +417,8 @@ models:
   columns:
   - name: courserun_readable_id
     description: string, unique string to identify a course run
+  - name: courserun_title
+    description: string, title of the course run
   - name: user_email
     description: string, user email that user registered
   - name: enrolled_count

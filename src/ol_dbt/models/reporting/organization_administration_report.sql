@@ -61,10 +61,12 @@ with enrollment_detail as (
 , enroll_data as (
     select
         courserun_readable_id
+        , courserun_title
         , user_email
     from enrollment_detail
     group by
         courserun_readable_id
+        , courserun_title
         , user_email
 )
 
@@ -286,6 +288,7 @@ with enrollment_detail as (
 
 select
     enroll_data.courserun_readable_id
+    , enroll_data.courserun_title
     , enroll_data.user_email
     , activity_day_data.enrolled_count
     , coalesce(b2b_contract_to_courseruns.organization_key, org_field.organization) as organization_key
