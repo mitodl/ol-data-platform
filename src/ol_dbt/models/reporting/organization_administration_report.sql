@@ -294,6 +294,7 @@ select
     , coalesce(b2b_contract_to_courseruns.organization_key, org_field.organization) as organization_key
     , b2b_contract_to_courseruns.organization_name
     , activity_day_data.activity_date
+    , substring(activity_day_data.activity_date, 1, 7) as activity_year_and_month
     , activity_day_data.chatbot_used_count
     , activity_day_data.certificate_count
     , activity_day_data.videos_watched
