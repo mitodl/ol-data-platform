@@ -1,0 +1,14 @@
+database_name: StarRocks - Lakehouse
+sqlalchemy_uri: starrocks://${STARROCKS_USER}:XXXXXXXXXX@lakehouse-starrocks-fe-service.starrocks.svc.cluster.local:9030/ol_data_lake_iceberg.ol_warehouse_qa_mart
+cache_timeout: null
+expose_in_sqllab: true
+allow_run_async: false
+allow_ctas: false
+allow_cvas: false
+allow_dml: false
+allow_file_upload: false
+extra:
+  allows_virtual_table_explore: true
+impersonate_user: false
+uuid: da98a974-deb5-4d44-8302-d97927fde706
+version: 1.0.0
