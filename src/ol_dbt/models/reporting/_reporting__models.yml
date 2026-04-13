@@ -543,9 +543,6 @@ models:
       for edX.org courses.
   - name: activity_date
     description: date, date that user engaged in an activity realted to the course
-  - name: activity_year_and_month
-    description: date, year and month that user engaged in an activity related to
-      the course
   - name: certificate_count
     description: int, count of certificates granted on that particular activity date
       for a user and courserun
