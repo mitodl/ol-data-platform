@@ -185,6 +185,7 @@ lint.ignore = [
     "D205",
     "D301",
     "D400",
+    "EXE001",  # shebang line on non-executable file
     "N803",
     "N806",
     "N999",
