@@ -14,12 +14,24 @@ from lakehouse.assets.lakehouse.dbt import full_dbt_project
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 
 
-def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
+def create_superset_asset(
+    dbt_asset_group_name: str,
+    dbt_model_name: str,
+    database_id: int = 1,
+    database_name: str = "trino",
+):
+    if database_name == "trino":
+        asset_key = AssetKey(("superset", "dataset", dbt_model_name))
+        group_name = "superset_dataset"
+    else:
+        asset_key = AssetKey(("superset", database_name, "dataset", dbt_model_name))
+        group_name = f"superset_{database_name}_dataset"
+
     @asset(
-        key=AssetKey(("superset", "dataset", dbt_model_name)),
+        key=asset_key,
         deps=[get_asset_key_for_model([full_dbt_project], dbt_model_name)],
         automation_condition=upstream_or_code_changes(),
-        group_name="superset_dataset",
+        group_name=group_name,
     )
     def _superset_dataset(
         context: AssetExecutionContext,
@@ -28,6 +40,7 @@ def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
         dataset_id = superset_api.client.get_or_create_dataset(
             schema_suffix=dbt_asset_group_name,
             table_name=dbt_model_name,
+            database_id=database_id,
         )
 
         if dataset_id is None:

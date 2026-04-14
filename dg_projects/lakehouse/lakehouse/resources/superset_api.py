@@ -83,18 +83,20 @@ class SupersetApiClient(OAuthApiClient):
             response_data = self.fetch_with_auth(
                 request_url, extra_params={"q": query_string}
             )
-            dataset_result = response_data["result"]  # type: ignore[call-overload]
-            total_fetched += len(dataset_result)  # type: ignore[arg-type]
+            dataset_result = response_data["result"]
+            total_fetched += len(dataset_result)
 
-            yield dataset_result  # type: ignore[misc]
+            yield dataset_result
 
-            count = response_data.get("count", 0)  # type: ignore[union-attr]
+            count = response_data.get("count", 0)
             if total_fetched >= count:
                 break
 
             page += 1
 
-    def get_or_create_dataset(self, schema_suffix: str, table_name: str) -> str:
+    def get_or_create_dataset(
+        self, schema_suffix: str, table_name: str, database_id: int = 1
+    ) -> str:
         """Retrieve a dataset by name, or create it if it doesn't exist
 
         Args:
@@ -105,7 +107,7 @@ class SupersetApiClient(OAuthApiClient):
         """
         request_url = f"{self.base_url}/api/v1/dataset/get_or_create/"
         payload = {
-            "database_id": 1,  # Trino database ID
+            "database_id": database_id,  # Trino database ID
             "schema": f"ol_warehouse_production_{schema_suffix}",
             "table_name": table_name,
         }
