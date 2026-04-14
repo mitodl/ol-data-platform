@@ -8,13 +8,13 @@ metadata:
     '128':
       crossFilters:
         chartsInScope:
-        - 113
+        - 224
         scope: global
       id: 128
     '224':
       crossFilters:
         chartsInScope:
-        - 120
+        - 128
         scope: global
       id: 224
   color_scheme: ''
@@ -23,8 +23,8 @@ metadata:
   expanded_slices: {}
   global_chart_configuration:
     chartsInScope:
-    - 113
-    - 120
+    - 128
+    - 224
     scope:
       excluded: []
       rootPath:
@@ -34,7 +34,7 @@ metadata:
   native_filter_configuration:
   - cascadeParentIds: []
     chartsInScope:
-    - 120
+    - 128
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -63,8 +63,8 @@ metadata:
     type: NATIVE_FILTER
   - cascadeParentIds: []
     chartsInScope:
-    - 113
-    - 120
+    - 128
+    - 224
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -93,8 +93,8 @@ metadata:
     type: NATIVE_FILTER
   - cascadeParentIds: []
     chartsInScope:
-    - 113
-    - 120
+    - 128
+    - 224
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -122,6 +122,8 @@ metadata:
       datasetUuid: a5df905c-0480-4227-b234-1a1064672b32
     type: NATIVE_FILTER
   - cascadeParentIds: []
+    chartsInScope:
+    - 128
     controlValues:
       creatable: true
       defaultToFirstItem: false
