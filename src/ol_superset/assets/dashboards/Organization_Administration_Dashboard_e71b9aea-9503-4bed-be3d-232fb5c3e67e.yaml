@@ -118,12 +118,13 @@ metadata:
   - cascadeParentIds:
     - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
     chartsInScope:
-    - 133
-    - 134
-    - 136
-    - 137
-    - 138
-    - 139
+    - 143
+    - 175
+    - 181
+    - 198
+    - 202
+    - 221
+    - 252
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -152,12 +153,13 @@ metadata:
     - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
     - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
     chartsInScope:
-    - 133
-    - 134
-    - 136
-    - 137
-    - 138
-    - 139
+    - 143
+    - 175
+    - 181
+    - 198
+    - 202
+    - 221
+    - 252
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -186,12 +188,13 @@ metadata:
     - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
     - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
     chartsInScope:
-    - 133
-    - 134
-    - 136
-    - 137
-    - 138
-    - 139
+    - 143
+    - 175
+    - 181
+    - 198
+    - 202
+    - 221
+    - 252
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
