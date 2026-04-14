@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: 3967f60c-2d80-41ad-8245-67dbf555bd82  # Data_Detail_Video
+dataset_uuid: 3967f60c-2d80-41ad-8245-67dbf555bd82  # data_detail_video
 description: null
 params:
   adhoc_filters:
