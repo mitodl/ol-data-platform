@@ -29,8 +29,8 @@ with mitxonline_video_events as (
         , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
         , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
         , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
@@ -80,8 +80,8 @@ with mitxonline_video_events as (
         , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
         , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
         , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
@@ -105,8 +105,8 @@ with mitxonline_video_events as (
         , {{ json_query_string('useractivity_event_object', "'$.currentTime'") }} as video_position
         , {{ json_query_string('useractivity_event_object', "'$.old_time'") }} as starting_position
         , {{ json_query_string('useractivity_event_object', "'$.new_time'") }} as ending_position
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
@@ -137,8 +137,8 @@ with mitxonline_video_events as (
         , mitxonline_video_events.video_position
         , mitxonline_video_events.starting_position
         , mitxonline_video_events.ending_position
-        , mitxonline_video_events.event_timestamp_iso8601
         , mitxonline_video_events.event_timestamp
+        , mitxonline_video_events.event_timestamp_iso8601
         , mitxonline_video_events.time_fk
         , mitxonline_video_events.date_fk
     from mitxonline_video_events
@@ -162,8 +162,8 @@ with mitxonline_video_events as (
         , xpro_video_events.video_position
         , xpro_video_events.starting_position
         , xpro_video_events.ending_position
-        , xpro_video_events.event_timestamp_iso8601
         , xpro_video_events.event_timestamp
+        , xpro_video_events.event_timestamp_iso8601
         , xpro_video_events.time_fk
         , xpro_video_events.date_fk
     from xpro_video_events
@@ -187,8 +187,8 @@ with mitxonline_video_events as (
         , mitxresidential_video_events.video_position
         , mitxresidential_video_events.starting_position
         , mitxresidential_video_events.ending_position
-        , mitxresidential_video_events.event_timestamp_iso8601
         , mitxresidential_video_events.event_timestamp
+        , mitxresidential_video_events.event_timestamp_iso8601
         , mitxresidential_video_events.time_fk
         , mitxresidential_video_events.date_fk
     from mitxresidential_video_events
@@ -212,8 +212,8 @@ with mitxonline_video_events as (
         , edxorg_video_events.video_position
         , edxorg_video_events.starting_position
         , edxorg_video_events.ending_position
-        , edxorg_video_events.event_timestamp_iso8601
         , edxorg_video_events.event_timestamp
+        , edxorg_video_events.event_timestamp_iso8601
         , edxorg_video_events.time_fk
         , edxorg_video_events.date_fk
     from edxorg_video_events
@@ -236,8 +236,8 @@ select distinct
     , combined.video_position
     , combined.starting_position
     , combined.ending_position
-    , combined.event_timestamp_iso8601
     , combined.event_timestamp
+    , combined.event_timestamp_iso8601
     , combined.time_fk
     , combined.date_fk
     , combined.event_json

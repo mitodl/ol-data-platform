@@ -69,8 +69,8 @@ with watermarks as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
@@ -99,8 +99,8 @@ with watermarks as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
@@ -129,8 +129,8 @@ with watermarks as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
@@ -161,8 +161,8 @@ with mitxonline_problem_events as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxonline__openedx__tracking_logs__user_activity') }}
@@ -186,8 +186,8 @@ with mitxonline_problem_events as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
@@ -211,8 +211,8 @@ with mitxonline_problem_events as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
@@ -236,8 +236,8 @@ with mitxonline_problem_events as (
         , {{ json_query_string('useractivity_event_object', "'$.success'") }} as success
         , {{ json_query_string('useractivity_event_object', "'$.grade'") }} as grade
         , {{ json_query_string('useractivity_event_object', "'$.max_grade'") }} as max_grade
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
@@ -280,8 +280,8 @@ with mitxonline_problem_events as (
         , sp.success
         , sp.grade
         , sp.max_grade
-        , sp.event_timestamp_iso8601
         , sp.event_timestamp
+        , sp.event_timestamp_iso8601
         , sp.time_fk
         , sp.date_fk
         , row_number() over (
@@ -310,8 +310,8 @@ with mitxonline_problem_events as (
         , success
         , grade
         , max_grade
-        , event_timestamp_iso8601
         , event_timestamp
+        , event_timestamp_iso8601
         , time_fk
         , date_fk
     from combined_studentmodule_ranked
@@ -333,8 +333,8 @@ with mitxonline_problem_events as (
         , mitxonline_problem_events.success
         , mitxonline_problem_events.grade
         , mitxonline_problem_events.max_grade
-        , mitxonline_problem_events.event_timestamp_iso8601
         , mitxonline_problem_events.event_timestamp
+        , mitxonline_problem_events.event_timestamp_iso8601
         , mitxonline_problem_events.time_fk
         , mitxonline_problem_events.date_fk
     from mitxonline_problem_events
@@ -359,8 +359,8 @@ with mitxonline_problem_events as (
         , xpro_problem_events.success
         , xpro_problem_events.grade
         , xpro_problem_events.max_grade
-        , xpro_problem_events.event_timestamp_iso8601
         , xpro_problem_events.event_timestamp
+        , xpro_problem_events.event_timestamp_iso8601
         , xpro_problem_events.time_fk
         , xpro_problem_events.date_fk
     from xpro_problem_events
@@ -385,8 +385,8 @@ with mitxonline_problem_events as (
         , mitxresidential_problem_events.success
         , mitxresidential_problem_events.grade
         , mitxresidential_problem_events.max_grade
-        , mitxresidential_problem_events.event_timestamp_iso8601
         , mitxresidential_problem_events.event_timestamp
+        , mitxresidential_problem_events.event_timestamp_iso8601
         , mitxresidential_problem_events.time_fk
         , mitxresidential_problem_events.date_fk
     from mitxresidential_problem_events
@@ -411,8 +411,8 @@ with mitxonline_problem_events as (
         , edxorg_problem_events.success
         , edxorg_problem_events.grade
         , edxorg_problem_events.max_grade
-        , edxorg_problem_events.event_timestamp_iso8601
         , edxorg_problem_events.event_timestamp
+        , edxorg_problem_events.event_timestamp_iso8601
         , edxorg_problem_events.time_fk
         , edxorg_problem_events.date_fk
     from edxorg_problem_events
@@ -437,8 +437,8 @@ with mitxonline_problem_events as (
         , success
         , grade
         , max_grade
-        , event_timestamp_iso8601
         , event_timestamp
+        , event_timestamp_iso8601
         , time_fk
         , date_fk
     from combined_studentmodule
@@ -488,8 +488,8 @@ select
     , deduped_combined.success
     , deduped_combined.grade
     , deduped_combined.max_grade
-    , deduped_combined.event_timestamp_iso8601
     , deduped_combined.event_timestamp
+    , deduped_combined.event_timestamp_iso8601
     , deduped_combined.time_fk
     , deduped_combined.date_fk
     , deduped_combined.event_json

@@ -148,8 +148,8 @@ with mitxonline_navigation_events as (
             as ending_position
         , mitxonline_navigation_events.current_tab
         , mitxonline_navigation_events.tab_count
-        , mitxonline_navigation_events.event_timestamp_iso8601
         , mitxonline_navigation_events.event_timestamp
+        , mitxonline_navigation_events.event_timestamp_iso8601
         , mitxonline_navigation_events.time_fk
         , mitxonline_navigation_events.date_fk
     from mitxonline_navigation_events
@@ -177,8 +177,8 @@ with mitxonline_navigation_events as (
         , coalesce(xpro_navigation_events.ending_tab, xpro_navigation_events.ending_url) as ending_position
         , xpro_navigation_events.current_tab
         , xpro_navigation_events.tab_count
-        , xpro_navigation_events.event_timestamp_iso8601
         , xpro_navigation_events.event_timestamp
+        , xpro_navigation_events.event_timestamp_iso8601
         , xpro_navigation_events.time_fk
         , xpro_navigation_events.date_fk
     from xpro_navigation_events
@@ -209,8 +209,8 @@ with mitxonline_navigation_events as (
         ) as ending_position
         , mitxresidential_navigation_events.current_tab
         , mitxresidential_navigation_events.tab_count
-        , mitxresidential_navigation_events.event_timestamp_iso8601
         , mitxresidential_navigation_events.event_timestamp
+        , mitxresidential_navigation_events.event_timestamp_iso8601
         , mitxresidential_navigation_events.time_fk
         , mitxresidential_navigation_events.date_fk
     from mitxresidential_navigation_events
@@ -241,8 +241,8 @@ with mitxonline_navigation_events as (
         ) as ending_position
         , edxorg_navigation_events.current_tab
         , edxorg_navigation_events.tab_count
-        , edxorg_navigation_events.event_timestamp_iso8601
         , edxorg_navigation_events.event_timestamp
+        , edxorg_navigation_events.event_timestamp_iso8601
         , edxorg_navigation_events.time_fk
         , edxorg_navigation_events.date_fk
     from edxorg_navigation_events
@@ -263,8 +263,8 @@ select
     , combined.block_id as block_fk
     , combined.starting_position
     , combined.ending_position
-    , combined.event_timestamp_iso8601
     , combined.event_timestamp
+    , combined.event_timestamp_iso8601
     , combined.time_fk
     , combined.date_fk
     , combined.event_json

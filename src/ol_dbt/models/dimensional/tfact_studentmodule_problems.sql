@@ -131,9 +131,9 @@ with mitxonline_studentmodule_problems as (
         , sm.grade
         , sm.max_grade
         , sm.success
-        , {{ cast_timestamp_to_iso8601('sm.event_timestamp') }} as event_timestamp_iso8601
         , sm.event_timestamp
-        , {{ timestamp_to_time_key('sm.event_timestamp') }} as time_fk
+        , {{ cast_timestamp_to_iso8601('sm.event_timestamp') }} as event_timestamp_iso8601
+        , {{ iso8601_to_time_key(cast_timestamp_to_iso8601('sm.event_timestamp')) }} as time_fk
         , {{ iso8601_to_date_key(cast_timestamp_to_iso8601('sm.event_timestamp')) }} as date_fk
     from mitxonline_studentmodule_problems as sm
     left join mitxonline_users as users on sm.user_id = users.mitxonline_openedx_user_id
@@ -156,9 +156,9 @@ with mitxonline_studentmodule_problems as (
         , sm.grade
         , sm.max_grade
         , sm.success
-        , {{ cast_timestamp_to_iso8601('sm.event_timestamp') }} as event_timestamp_iso8601
         , sm.event_timestamp
-        , {{ timestamp_to_time_key('sm.event_timestamp') }} as time_fk
+        , {{ cast_timestamp_to_iso8601('sm.event_timestamp') }} as event_timestamp_iso8601
+        , {{ iso8601_to_time_key(cast_timestamp_to_iso8601('sm.event_timestamp')) }} as time_fk
         , {{ iso8601_to_date_key(cast_timestamp_to_iso8601('sm.event_timestamp')) }} as date_fk
     from mitxpro_studentmodule_problems as sm
     left join mitxpro_users as users on sm.user_id = users.mitxpro_openedx_user_id
@@ -181,9 +181,9 @@ with mitxonline_studentmodule_problems as (
         , sm.grade
         , sm.max_grade
         , sm.success
-        , {{ cast_timestamp_to_iso8601('sm.event_timestamp') }} as event_timestamp_iso8601
         , sm.event_timestamp
-        , {{ timestamp_to_time_key('sm.event_timestamp') }} as time_fk
+        , {{ cast_timestamp_to_iso8601('sm.event_timestamp') }} as event_timestamp_iso8601
+        , {{ iso8601_to_time_key(cast_timestamp_to_iso8601('sm.event_timestamp')) }} as time_fk
         , {{ iso8601_to_date_key(cast_timestamp_to_iso8601('sm.event_timestamp')) }} as date_fk
     from mitxresidential_studentmodule_problems as sm
     left join residential_users as users on sm.user_id = users.residential_openedx_user_id
@@ -220,8 +220,8 @@ select
     , grade
     , max_grade
     , success
-    , event_timestamp_iso8601
     , event_timestamp
+    , event_timestamp_iso8601
     , time_fk
     , date_fk
 from combined

@@ -259,34 +259,6 @@
     END
 {%- endmacro %}
 
-
-{#
-    timestamp_to_time_key: Convert a native timestamp expression to an integer HHMM time key.
-    Use this (rather than iso8601_to_time_key) when you already have a proper timestamp value
-    (e.g. the result of from_iso8601_timestamp / from_iso8601_timestamp_nanos) so that the
-    time key reflects the UTC wall-clock time of the timestamp, not a raw string offset.
-
-#}
-{% macro timestamp_to_time_key(timestamp) -%}
-    {{ return(adapter.dispatch('timestamp_to_time_key', 'open_learning')(timestamp)) }}
-{%- endmacro %}
-
-{% macro default__timestamp_to_time_key(timestamp) -%}
-    {#
-        Trino: hour()/minute() on TIMESTAMP WITH TIME ZONE return the hour in the
-        timestamp's own timezone (which is the session timezone for naive inputs).
-        Normalize to UTC first with at_timezone() so we always get the UTC hour.
-    #}
-    cast(hour(at_timezone({{ ts_expr }}, 'UTC')) as integer) * 100
-    + cast(minute(at_timezone({{ ts_expr }}, 'UTC')) as integer)
-{%- endmacro %}
-
-{% macro duckdb__timestamp_to_time_key(ts_expr) -%}
-    {# DuckDB: hour()/minute() on TIMESTAMPTZ return UTC hour/minute #}
-    cast(hour({{ ts_expr }}) as integer) * 100 + cast(minute({{ ts_expr }}) as integer)
-{%- endmacro %}
-
-
 {#
     iso8601_to_time_key: Convert an ISO8601 varchar datetime field to an integer HHMM time key.
     Matches the dim_time.time_key format (hour * 100 + minute).

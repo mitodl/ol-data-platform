@@ -41,8 +41,8 @@ with mitxonline_discussion_events as (
         , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
         , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
         , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxpro__openedx__tracking_logs__user_activity') }}
@@ -67,8 +67,8 @@ with mitxonline_discussion_events as (
         , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
         , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
         , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__mitxresidential__openedx__tracking_logs__user_activity') }}
@@ -92,8 +92,8 @@ with mitxonline_discussion_events as (
         , {{ json_query_string('useractivity_event_object', "'$.category_name'") }} as discussion_component_name
         , {{ json_query_string('useractivity_event_object', "'$.url'") }} as page_url
         , {{ json_query_string('useractivity_event_object', "'$.user_forums_roles'") }} as user_forums_roles
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
     from {{ ref('stg__edxorg__s3__tracking_logs__user_activity') }}
@@ -134,8 +134,8 @@ with mitxonline_discussion_events as (
         , mitxonline_discussion_events.discussion_component_name
         , mitxonline_discussion_events.page_url
         , mitxonline_discussion_events.user_forums_roles
-        , mitxonline_discussion_events.event_timestamp_iso8601
         , mitxonline_discussion_events.event_timestamp
+        , mitxonline_discussion_events.event_timestamp_iso8601
         , mitxonline_discussion_events.time_fk
         , mitxonline_discussion_events.date_fk
     from mitxonline_discussion_events
@@ -162,8 +162,8 @@ with mitxonline_discussion_events as (
         , xpro_discussion_events.discussion_component_name
         , xpro_discussion_events.page_url
         , xpro_discussion_events.user_forums_roles
-        , xpro_discussion_events.event_timestamp_iso8601
         , xpro_discussion_events.event_timestamp
+        , xpro_discussion_events.event_timestamp_iso8601
         , xpro_discussion_events.time_fk
         , xpro_discussion_events.date_fk
     from xpro_discussion_events
@@ -190,8 +190,8 @@ with mitxonline_discussion_events as (
         , mitxresidential_discussion_events.discussion_component_name
         , mitxresidential_discussion_events.page_url
         , mitxresidential_discussion_events.user_forums_roles
-        , mitxresidential_discussion_events.event_timestamp_iso8601
         , mitxresidential_discussion_events.event_timestamp
+        , mitxresidential_discussion_events.event_timestamp_iso8601
         , mitxresidential_discussion_events.time_fk
         , mitxresidential_discussion_events.date_fk
     from mitxresidential_discussion_events
@@ -218,8 +218,8 @@ with mitxonline_discussion_events as (
         , edxorg_discussion_events.discussion_component_name
         , edxorg_discussion_events.page_url
         , edxorg_discussion_events.user_forums_roles
-        , edxorg_discussion_events.event_timestamp_iso8601
         , edxorg_discussion_events.event_timestamp
+        , edxorg_discussion_events.event_timestamp_iso8601
         , edxorg_discussion_events.time_fk
         , edxorg_discussion_events.date_fk
     from edxorg_discussion_events
@@ -247,8 +247,8 @@ select
     , discussion_component_name
     , page_url
     , user_forums_roles
-    , event_timestamp_iso8601
     , event_timestamp
+    , event_timestamp_iso8601
     , time_fk
     , date_fk
 from combined

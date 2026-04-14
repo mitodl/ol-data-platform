@@ -66,8 +66,8 @@ with openedx_events as (
         , {{ json_query_string('useractivity_event_object', "'$.xblock_state'") }} as chatbot_type
         , {{ json_query_string('useractivity_event_object', "'$.problem_set'") }} as problem_set
         , nullif({{ json_query_string('useractivity_event_object', "'$.canvas_course_id'") }},'') as canvas_course_id
-        , useractivity_timestamp as event_timestamp_iso8601
         , {{ from_iso8601_timestamp_nanos('useractivity_timestamp') }} as event_timestamp
+        , useractivity_timestamp as event_timestamp_iso8601
         , {{ iso8601_to_time_key('useractivity_timestamp') }} as time_fk
         , {{ iso8601_to_date_key('useractivity_timestamp') }} as date_fk
         , case when useractivity_event_type like '%response'
@@ -145,8 +145,8 @@ with openedx_events as (
             , block_name
             , 'Tutor' as chatbot_type
             , event_value
-            , event_timestamp_iso8601
             , event_timestamp
+            , event_timestamp_iso8601
             , time_fk
             , date_fk
             , event_json
@@ -168,8 +168,8 @@ with openedx_events as (
         , block_name
         , chatbot_type
         , event_value
-        , event_timestamp_iso8601
         , event_timestamp
+        , event_timestamp_iso8601
         , time_fk
         , date_fk
         , event_json
@@ -195,8 +195,8 @@ select
     , combined.block_name
     , combined.chatbot_type
     , combined.event_value
-    , combined.event_timestamp_iso8601
     , combined.event_timestamp
+    , combined.event_timestamp_iso8601
     , combined.time_fk
     , combined.date_fk
     , combined.event_json
