@@ -513,8 +513,9 @@ models:
         arguments:
           row_condition: "event_type = 'seek_video'"
   - name: event_timestamp_iso8601
-    description: string, the raw ISO 8601 timestamp string from the source tracking
-      log, in the platform's local timezone. Used as the basis for time_fk and date_fk.
+    description: string, the canonicalized ISO 8601 timestamp string from the source
+      tracking log, in the platform's local timezone. Used as the basis for time_fk
+      and date_fk.
   - name: event_timestamp
     description: timestamp, timestamp (with time zone) indicating the time at which
       the event occurred, formatted as timestamp(9)
@@ -681,10 +682,10 @@ models:
       log, in the platform's local timezone. Used as the basis for time_fk and date_fk.
   - name: time_fk
     description: integer, foreign key to dim_time in HHMM format (e.g. 1430 = 14:30).
-      Derived from the UTC timestamp.
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
   - name: date_fk
     description: integer, foreign key to dim_date in YYYYMMDD format (e.g. 20230617).
-      Derived from the UTC timestamp.
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
