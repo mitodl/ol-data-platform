@@ -482,18 +482,6 @@ position:
     - TABS-j_3atbXvo8mMG1-t-Arcp
     - TAB-Q-PVJx2Rv0XPqCvUa5V5X
     type: ROW
-  TAB-8UTXcz2OId6YMe0_ngSKS:
-    children: []
-    id: TAB-8UTXcz2OId6YMe0_ngSKS
-    meta:
-      defaultText: Tab title
-      placeholder: Tab title
-      text: Org Data by Module
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - TABS-j_3atbXvo8mMG1-t-Arcp
-    type: TAB
   TAB-DvcdFW2UO9vdxAcRE_hWk:
     children:
     - ROW-H517Q-_sBOMbSNu5Sos-u
