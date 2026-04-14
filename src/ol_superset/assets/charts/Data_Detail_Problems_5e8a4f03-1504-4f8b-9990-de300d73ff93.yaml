@@ -1,7 +1,7 @@
 cache_timeout: null
 certification_details: null
 certified_by: null
-dataset_uuid: dc0886e8-1861-4bd9-a694-25a063adcf83  # Data_Detail_Problems
+dataset_uuid: dc0886e8-1861-4bd9-a694-25a063adcf83  # data_detail_problems
 description: null
 params:
   adhoc_filters:
