@@ -188,7 +188,7 @@ params:
       is_certified: false
       is_dttm: false
       python_date_format: null
-      type: column
+      type: INTEGER
       type_generic: 0
       uuid: 197e5aeb-4735-4e60-b60c-17bf1af11d44
       verbose_name: null
