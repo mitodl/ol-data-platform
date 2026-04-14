@@ -434,11 +434,20 @@ models:
       unit in one subsection to the last unit in the previous subsection using the
       "previous" control, or from the last unit in one subsection to the first unit
       in the next subsection using the "next" control.
+  - name: event_timestamp_iso8601
+    description: string, the raw ISO 8601 timestamp string from the source tracking
+      log, in the platform's local timezone. Used as the basis for time_fk and date_fk.
   - name: event_timestamp
     description: timestamp, timestamp (with time zone) indicating the time at which
       the event occurred, formatted as timestamp(9)
     tests:
     - not_null
+  - name: time_fk
+    description: integer, foreign key to dim_time in HHMM format (e.g. 1430 = 14:30).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
+  - name: date_fk
+    description: integer, foreign key to dim_date in YYYYMMDD format (e.g. 20230617).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event. For less common/event-specific attributes.
@@ -503,11 +512,21 @@ models:
     - dbt_expectations.expect_column_values_to_not_be_null:
         arguments:
           row_condition: "event_type = 'seek_video'"
+  - name: event_timestamp_iso8601
+    description: string, the canonicalized ISO 8601 timestamp string from the source
+      tracking log, in the platform's local timezone. Used as the basis for time_fk
+      and date_fk.
   - name: event_timestamp
     description: timestamp, timestamp (with time zone) indicating the time at which
       the event occurred, formatted as timestamp(9)
     tests:
     - not_null
+  - name: time_fk
+    description: integer, foreign key to dim_time in HHMM format (e.g. 1430 = 14:30).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
+  - name: date_fk
+    description: integer, foreign key to dim_date in YYYYMMDD format (e.g. 20230617).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event. For less common/event-specific attributes.
@@ -578,11 +597,20 @@ models:
     description: number, grade value
   - name: max_grade
     description: number, maximum possible grade value for the problem
+  - name: event_timestamp_iso8601
+    description: string, the raw ISO 8601 timestamp string from the source tracking
+      log, in the platform's local timezone. Used as the basis for time_fk and date_fk.
   - name: event_timestamp
     description: timestamp, timestamp (with time zone) indicating the time at which
       the event occurred, formatted as timestamp(9)
     tests:
     - not_null
+  - name: time_fk
+    description: integer, foreign key to dim_time in HHMM format (e.g. 1430 = 14:30).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
+  - name: date_fk
+    description: integer, foreign key to dim_date in YYYYMMDD format (e.g. 20230617).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event. For less common/event-specific attributes.
@@ -649,6 +677,15 @@ models:
     description: str, "correct" if grade equals max_grade, "incorrect" otherwise
   - name: event_timestamp
     description: timestamp with time zone, when this submission event was recorded
+  - name: event_timestamp_iso8601
+    description: string, the raw ISO 8601 timestamp string from the source tracking
+      log, in the platform's local timezone. Used as the basis for time_fk and date_fk.
+  - name: time_fk
+    description: integer, foreign key to dim_time in HHMM format (e.g. 1430 = 14:30).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
+  - name: date_fk
+    description: integer, foreign key to dim_date in YYYYMMDD format (e.g. 20230617).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -716,11 +753,20 @@ models:
       course-wide discussion. Present for edx.forum.response.created, edx.forum.comment.created,
       edx.forum.response.voted, edx.forum.thread.created, edx.forum.thread.viewed,
       and edx.forum.thread.voted
+  - name: event_timestamp_iso8601
+    description: string, the raw ISO 8601 timestamp string from the source tracking
+      log, in the platform's local timezone. Used as the basis for time_fk and date_fk.
   - name: event_timestamp
     description: timestamp, timestamp (with time zone) indicating the time at which
       the event occurred, formatted as timestamp(9)
     tests:
     - not_null
+  - name: time_fk
+    description: integer, foreign key to dim_time in HHMM format (e.g. 1430 = 14:30).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
+  - name: date_fk
+    description: integer, foreign key to dim_date in YYYYMMDD format (e.g. 20230617).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event.
@@ -946,11 +992,20 @@ models:
   - name: event_json
     description: json, it includes member fields that identify specifics of each triggered
       event.
+  - name: event_timestamp_iso8601
+    description: string, the raw ISO 8601 timestamp string from the source tracking
+      log, in the platform's local timezone. Used as the basis for time_fk and date_fk.
   - name: event_timestamp
     description: timestamp, timestamp (with time zone) indicating the time at which
       the event occurred
     tests:
     - not_null
+  - name: time_fk
+    description: integer, foreign key to dim_time in HHMM format (e.g. 1430 = 14:30).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
+  - name: date_fk
+    description: integer, foreign key to dim_date in YYYYMMDD format (e.g. 20230617).
+      Derived from event_timestamp_iso8601 (local timezone of the source data).
   - name: learn_ai_thread_id
     description: string, unique identifier for the chat thread in the Learn AI database.
   - name: learn_ai_checkpoint_pk
@@ -1031,3 +1086,53 @@ models:
     description: boolean, indicates whether this tax rate is currently active
     tests:
     - not_null
+
+- name: dim_time
+  description: >
+    Minute-grain time dimension (1,440 rows) for sub-daily analysis. Each row
+    represents one minute of the day. Join fact table timestamp columns to
+    time_key using the HHMM integer (hour * 100 + minute).
+  columns:
+  - name: time_key
+    description: >
+      Integer primary key in HHMM format (e.g. 1430 = 14:30 / 2:30 PM).
+      Range 0–2359. Join target for fact tables.
+    tests:
+    - unique
+    - not_null
+  - name: hour
+    description: Hour of the day in 24-hour format (0–23)
+    tests:
+    - not_null
+  - name: minute
+    description: Minute of the hour (0–59)
+    tests:
+    - not_null
+  - name: minute_of_day
+    description: >
+      Minutes elapsed since midnight (0–1439). Useful for arithmetic such as
+      computing the difference between two intra-day times.
+    tests:
+    - not_null
+  - name: am_pm
+    description: Meridiem indicator — 'AM' (hours 0–11) or 'PM' (hours 12–23)
+    tests:
+    - not_null
+  - name: hour_12
+    description: Hour in 12-hour clock format (1–12)
+    tests:
+    - not_null
+  - name: hour_of_day_label
+    description: >
+      Human-readable time label in 12-hour format (e.g. '02:30 PM').
+      Suitable for display in dashboards.
+    tests:
+    - not_null
+  - name: time_of_day_bucket
+    description: >
+      Broad time-of-day category based on the 24-hour hour value.
+      Night: 0–5, Morning: 6–11, Afternoon: 12–17, Evening: 18–23.
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['Night', 'Morning', 'Afternoon', 'Evening']
