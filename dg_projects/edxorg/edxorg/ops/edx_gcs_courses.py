@@ -4,6 +4,7 @@ from pathlib import Path
 from dagster import (
     AssetMaterialization,
     Config,
+    In,
     MetadataValue,
     OpExecutionContext,
     Out,
@@ -11,7 +12,6 @@ from dagster import (
     String,
     op,
 )
-from dagster.core.definitions.input import In
 from pydantic import Field
 
 

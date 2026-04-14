@@ -14,6 +14,7 @@ from dagster import (
     DynamicOutput,
     ExpectationResult,
     Failure,
+    In,
     List,
     MetadataValue,
     OpExecutionContext,
@@ -22,7 +23,6 @@ from dagster import (
     String,
     op,
 )
-from dagster.core.definitions.input import In
 from flatten_dict import flatten
 from flatten_dict.reducers import make_reducer
 from ol_orchestrate.lib.file_rendering import write_csv

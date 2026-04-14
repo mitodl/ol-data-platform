@@ -3,6 +3,7 @@ from pathlib import Path
 
 from dagster import (
     Config,
+    In,
     List,
     Nothing,
     OpExecutionContext,
@@ -11,7 +12,6 @@ from dagster import (
     String,
     op,
 )
-from dagster.core.definitions.input import In
 from pydantic import Field
 
 
