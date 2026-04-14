@@ -28,6 +28,7 @@ from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
 
+from lakehouse.assets.dbt_artifacts import dbt_artifacts_upload
 from lakehouse.assets.instructor_onboarding import (
     generate_instructor_onboarding_user_list,
     update_access_forge_repo,
@@ -282,6 +283,7 @@ defs = Definitions(
         *with_source_code_references([full_dbt_project]),
         *airbyte_assets,
         *superset_assets,
+        dbt_artifacts_upload,
         generate_instructor_onboarding_user_list,
         update_access_forge_repo,
     ],
