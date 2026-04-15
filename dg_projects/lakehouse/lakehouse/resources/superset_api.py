@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any, Self
+from typing import Any, Self, cast
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from ol_orchestrate.resources.oauth import OAuthApiClient
@@ -80,8 +80,9 @@ class SupersetApiClient(OAuthApiClient):
                 f"(order_column:changed_on_delta_humanized,order_direction:desc,"
                 f"page:{page},page_size:{page_size})"
             )
-            response_data = self.fetch_with_auth(
-                request_url, extra_params={"q": query_string}
+            response_data = cast(
+                dict[str, Any],
+                self.fetch_with_auth(request_url, extra_params={"q": query_string}),
             )
             dataset_result = response_data["result"]
             total_fetched += len(dataset_result)
