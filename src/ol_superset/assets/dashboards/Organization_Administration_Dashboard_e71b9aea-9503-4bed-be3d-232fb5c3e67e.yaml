@@ -115,52 +115,9 @@ metadata:
     SUM(problems_count): '#1FA8C9'
     SUM(videos_watched): '#1FA8C9'
   native_filter_configuration:
-  - cascadeParentIds:
-    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    chartsInScope:
-    - 143
-    - 175
-    - 181
-    - 198
-    - 202
-    - 221
-    - 252
+  - cascadeParentIds: []
     controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
-    name: Organization Key
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope: []
-    targets:
-    - column:
-        name: organization_key
-      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
-    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
-    chartsInScope:
-    - 143
-    - 175
-    - 181
-    - 198
-    - 202
-    - 221
-    - 252
-    controlValues:
+      creatable: true
       defaultToFirstItem: false
       enableEmptyFilter: false
       inverseSelection: false
@@ -178,24 +135,15 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
-    tabsInScope: []
     targets:
     - column:
         name: organization_name
       datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
     type: NATIVE_FILTER
   - cascadeParentIds:
-    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
     - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    chartsInScope:
-    - 143
-    - 175
-    - 181
-    - 198
-    - 202
-    - 221
-    - 252
     controlValues:
+      creatable: true
       defaultToFirstItem: false
       enableEmptyFilter: false
       inverseSelection: false
@@ -213,14 +161,13 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
-    tabsInScope: []
     targets:
     - column:
         name: courserun_readable_id
       datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
     type: NATIVE_FILTER
   - cascadeParentIds:
-    - NATIVE_FILTER-2bJAnu8wbQv76oDBmc_hm
+    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
     - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
     controlValues:
       creatable: true
@@ -246,7 +193,10 @@ metadata:
         name: user_email
       datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
     type: NATIVE_FILTER
-  - cascadeParentIds: []
+  - cascadeParentIds:
+    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
+    - NATIVE_FILTER-uGue2ukMjdDcK-mto-NSw
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -485,6 +435,18 @@ position:
     - TABS-j_3atbXvo8mMG1-t-Arcp
     - TAB-Q-PVJx2Rv0XPqCvUa5V5X
     type: ROW
+  TAB-8UTXcz2OId6YMe0_ngSKS:
+    children: []
+    id: TAB-8UTXcz2OId6YMe0_ngSKS
+    meta:
+      defaultText: Tab title
+      placeholder: Tab title
+      text: Org Data by Module
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - TABS-j_3atbXvo8mMG1-t-Arcp
+    type: TAB
   TAB-DvcdFW2UO9vdxAcRE_hWk:
     children:
     - ROW-H517Q-_sBOMbSNu5Sos-u
