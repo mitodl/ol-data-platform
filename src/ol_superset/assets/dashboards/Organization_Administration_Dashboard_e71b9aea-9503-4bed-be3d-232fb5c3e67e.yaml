@@ -1,11 +1,273 @@
+certification_details: ''
+certified_by: ''
+css: ''
 dashboard_title: Organization Administration Dashboard
 description: null
-css: ''
-slug: null
-certified_by: ''
-certification_details: ''
-published: true
-uuid: e71b9aea-9503-4bed-be3d-232fb5c3e67e
+metadata:
+  chart_configuration:
+    '143':
+      crossFilters:
+        chartsInScope:
+        - 175
+        - 181
+        - 198
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 143
+    '175':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 181
+        - 198
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 175
+    '181':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 198
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 181
+    '198':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 181
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 198
+    '202':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 181
+        - 198
+        - 221
+        - 252
+        scope: global
+      id: 202
+    '221':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 181
+        - 198
+        - 202
+        - 252
+        scope: global
+      id: 221
+    '252':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 181
+        - 198
+        - 202
+        - 221
+        scope: global
+      id: 252
+  color_scheme: ''
+  color_scheme_domain: []
+  cross_filters_enabled: true
+  default_filters: '{}'
+  expanded_slices:
+    '143': true
+    '175': true
+    '181': true
+    '198': true
+    '202': true
+    '221': true
+  global_chart_configuration:
+    chartsInScope:
+    - 143
+    - 175
+    - 181
+    - 198
+    - 202
+    - 221
+    - 252
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+  label_colors: {}
+  map_label_colors:
+    COUNT_DISTINCT(user_email): '#1FA8C9'
+    SUM(certificate_count): '#1FA8C9'
+    SUM(chatbot_used_count): '#1FA8C9'
+    SUM(enrolled_count): '#1FA8C9'
+    SUM(problems_count): '#1FA8C9'
+    SUM(videos_watched): '#1FA8C9'
+  native_filter_configuration:
+  - cascadeParentIds: []
+    chartsInScope:
+    - 143
+    - 198
+    - 175
+    - 221
+    - 181
+    - 202
+    - 252
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    name: Organization Name
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
+    - TAB-ZlwBC514aDm27paPV6SXF
+    targets:
+    - column:
+        name: organization_name
+      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    chartsInScope:
+    - 143
+    - 198
+    - 175
+    - 221
+    - 181
+    - 202
+    - 252
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: true
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
+    name: Course Run Readable ID
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
+    - TAB-ZlwBC514aDm27paPV6SXF
+    targets:
+    - column:
+        name: courserun_readable_id
+      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
+    chartsInScope:
+    - 143
+    - 198
+    - 175
+    - 221
+    - 181
+    - 202
+    - 252
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-uGue2ukMjdDcK-mto-NSw
+    name: User Email
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
+    - TAB-ZlwBC514aDm27paPV6SXF
+    targets:
+    - column:
+        name: user_email
+      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
+    - NATIVE_FILTER-uGue2ukMjdDcK-mto-NSw
+    chartsInScope:
+    - 143
+    - 198
+    - 175
+    - 221
+    - 181
+    - 202
+    - 252
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-KhD9BhcvBTV0XKtZucEgh
+    name: Activity Year and Month
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    tabsInScope:
+    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
+    - TAB-ZlwBC514aDm27paPV6SXF
+    targets:
+    - column:
+        name: activity_year_and_month
+      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
+    type: NATIVE_FILTER
+  refresh_frequency: 0
+  shared_label_colors: []
+  timed_refresh_immune_slices: []
 position:
   CHART-explore-136-1:
     children: []
@@ -269,270 +531,8 @@ position:
     - ROOT_ID
     - GRID_ID
     type: TABS
-metadata:
-  chart_configuration:
-    '143':
-      crossFilters:
-        chartsInScope:
-        - 175
-        - 181
-        - 198
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 143
-    '175':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 181
-        - 198
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 175
-    '181':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 198
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 181
-    '198':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 181
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 198
-    '202':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 181
-        - 198
-        - 221
-        - 252
-        scope: global
-      id: 202
-    '221':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 181
-        - 198
-        - 202
-        - 252
-        scope: global
-      id: 221
-    '252':
-      id: 252
-      crossFilters:
-        scope: global
-        chartsInScope:
-        - 143
-        - 175
-        - 181
-        - 198
-        - 202
-        - 221
-  color_scheme: ''
-  color_scheme_domain: []
-  cross_filters_enabled: true
-  expanded_slices:
-    '143': true
-    '175': true
-    '181': true
-    '198': true
-    '202': true
-    '221': true
-  global_chart_configuration:
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    chartsInScope:
-    - 143
-    - 175
-    - 181
-    - 198
-    - 202
-    - 221
-    - 252
-  label_colors: {}
-  map_label_colors:
-    SUM(problems_count): '#1FA8C9'
-    COUNT_DISTINCT(user_email): '#1FA8C9'
-    SUM(certificate_count): '#1FA8C9'
-    SUM(videos_watched): '#1FA8C9'
-    SUM(chatbot_used_count): '#1FA8C9'
-    SUM(enrolled_count): '#1FA8C9'
-  native_filter_configuration:
-  - id: NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    name: Organization Name
-    filterType: filter_select
-    targets:
-    - column:
-        name: organization_name
-      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds: []
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    type: NATIVE_FILTER
-    description: ''
-    chartsInScope:
-    - 143
-    - 198
-    - 175
-    - 221
-    - 181
-    - 202
-    - 252
-    tabsInScope:
-    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
-    - TAB-ZlwBC514aDm27paPV6SXF
-  - id: NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: true
-      inverseSelection: false
-    name: Course Run Readable ID
-    filterType: filter_select
-    targets:
-    - column:
-        name: courserun_readable_id
-      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    type: NATIVE_FILTER
-    description: ''
-    chartsInScope:
-    - 143
-    - 198
-    - 175
-    - 221
-    - 181
-    - 202
-    - 252
-    tabsInScope:
-    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
-    - TAB-ZlwBC514aDm27paPV6SXF
-  - id: NATIVE_FILTER-uGue2ukMjdDcK-mto-NSw
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    name: User Email
-    filterType: filter_select
-    targets:
-    - column:
-        name: user_email
-      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    type: NATIVE_FILTER
-    description: ''
-    chartsInScope:
-    - 143
-    - 198
-    - 175
-    - 221
-    - 181
-    - 202
-    - 252
-    tabsInScope:
-    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
-    - TAB-ZlwBC514aDm27paPV6SXF
-  - id: NATIVE_FILTER-KhD9BhcvBTV0XKtZucEgh
-    controlValues:
-      enableEmptyFilter: false
-      defaultToFirstItem: false
-      creatable: true
-      multiSelect: true
-      searchAllOptions: false
-      inverseSelection: false
-    name: Activity Year and Month
-    filterType: filter_select
-    targets:
-    - column:
-        name: activity_year_and_month
-      datasetUuid: 4a71d2a9-c1b2-44e7-8c8d-a4a336779ab8
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    cascadeParentIds:
-    - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
-    - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
-    - NATIVE_FILTER-uGue2ukMjdDcK-mto-NSw
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    type: NATIVE_FILTER
-    description: ''
-    chartsInScope:
-    - 143
-    - 198
-    - 175
-    - 221
-    - 181
-    - 202
-    - 252
-    tabsInScope:
-    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
-    - TAB-ZlwBC514aDm27paPV6SXF
-  refresh_frequency: 0
-  shared_label_colors: []
-  timed_refresh_immune_slices: []
-  default_filters: '{}'
+published: true
+slug: null
 theme_uuid: null
+uuid: e71b9aea-9503-4bed-be3d-232fb5c3e67e
 version: 1.0.0
