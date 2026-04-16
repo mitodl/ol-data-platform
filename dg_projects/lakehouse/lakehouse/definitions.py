@@ -248,7 +248,10 @@ dbt_model_keys = full_dbt_project.keys
 
 TRINO_SUPERSET_DATABASE_ID = int(os.environ.get("TRINO_SUPERSET_DATABASE_ID", "1"))
 STARROCKS_SUPERSET_DATABASE_ID = int(
-    os.environ.get("STARROCKS_SUPERSET_DATABASE_ID", "3")
+    os.environ.get(
+        "STARROCKS_SUPERSET_DATABASE_ID",
+        "3" if DAGSTER_ENV == "production" else "4",
+    )
 )
 _schema_base = (
     "ol_warehouse_production" if DAGSTER_ENV == "production" else "ol_warehouse_qa"
