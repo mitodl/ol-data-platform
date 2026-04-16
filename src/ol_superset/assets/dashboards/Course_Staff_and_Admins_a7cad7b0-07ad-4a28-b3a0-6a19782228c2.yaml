@@ -5,22 +5,21 @@ dashboard_title: Course Staff and Admins
 description: null
 metadata:
   chart_configuration:
-    '253':
+    '173':
       crossFilters:
         chartsInScope:
         - 254
         scope: global
-      id: 253
-    '254':
+      id: 173
+    '174':
       crossFilters:
         chartsInScope:
         - 253
         scope: global
-      id: 254
+      id: 174
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
-  default_filters: '{}'
   expanded_slices: {}
   global_chart_configuration:
     chartsInScope:
@@ -126,7 +125,7 @@ position:
     children: []
     id: CHART-e97ieVHwpCFifFDSsjOIN
     meta:
-      chartId: 254
+      chartId: 174
       height: 50
       sliceName: Course Staff and Admins Last Updated
       uuid: 6f8ec385-961d-4238-96e9-539524960b7c
@@ -141,7 +140,7 @@ position:
     children: []
     id: CHART-explore-253-1
     meta:
-      chartId: 253
+      chartId: 173
       height: 89
       sliceName: Course Staff and Admins
       uuid: c1f43a88-7db6-4a80-931a-a789988bae47

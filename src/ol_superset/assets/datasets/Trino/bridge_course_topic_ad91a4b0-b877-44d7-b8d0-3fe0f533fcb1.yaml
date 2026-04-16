@@ -1,0 +1,55 @@
+always_filter_main_dttm: false
+cache_timeout: null
+catalog: ol_data_lake_production
+columns:
+- advanced_data_type: null
+  column_name: course_fk
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: topic_fk
+  description: null
+  expression: ''
+  extra: null
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
+default_endpoint: null
+description: Auto refreshed at 2026-04-16T10:43:59.320620+00:00
+extra: null
+fetch_values_predicate: null
+filter_select_enabled: true
+folders: null
+main_dttm_col: null
+metrics:
+- currency: null
+  d3format: null
+  description: null
+  expression: COUNT(*)
+  extra: null
+  metric_name: count
+  metric_type: count
+  verbose_name: COUNT(*)
+  warning_text: null
+normalize_columns: false
+offset: 0
+params: null
+schema: ol_warehouse_production_dimensional
+sql: null
+table_name: bridge_course_topic
+template_params: null
+uuid: ad91a4b0-b877-44d7-b8d0-3fe0f533fcb1
+version: 1.0.0

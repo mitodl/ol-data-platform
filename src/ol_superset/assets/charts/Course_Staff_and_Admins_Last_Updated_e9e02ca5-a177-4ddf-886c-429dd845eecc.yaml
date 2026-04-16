@@ -1,0 +1,57 @@
+cache_timeout: null
+certification_details: null
+certified_by: null
+dataset_uuid: 3b10e411-e497-4e8c-8132-08f673e8d72d  # tables
+description: null
+params:
+  adhoc_filters:
+  - clause: WHERE
+    comparator: No filter
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_iagerv4t83_fi5qrqg2dmn
+    isExtra: false
+    isNew: false
+    operator: TEMPORAL_RANGE
+    sqlExpression: null
+    subject: created_on
+  - clause: WHERE
+    comparator:
+    - course_staff_report
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_2pqge75pbow_fujiv4g7cw9
+    isExtra: false
+    isNew: false
+    operator: IN
+    operatorId: IN
+    sqlExpression: null
+    subject: table_name
+  all_columns:
+  - expressionType: SQL
+    label: last_updated_on (in UTC)
+    sqlExpression: changed_on
+  allow_render_html: true
+  color_pn: true
+  comparison_color_scheme: Green
+  comparison_type: values
+  extra_form_data: {}
+  groupby: []
+  order_by_cols: []
+  order_desc: true
+  percent_metric_calculation: row_limit
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 10000
+  server_page_length: 10
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup:
+    changed_on: true
+    created_on: true
+  time_grain_sqla: P1D
+  viz_type: table
+slice_name: Course Staff and Admins Last Updated
+uuid: e9e02ca5-a177-4ddf-886c-429dd845eecc
+version: 1.0.0
+viz_type: table

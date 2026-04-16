@@ -19,6 +19,7 @@ params:
   - proctoredexamgrade_created_on
   - semester
   allow_render_html: true
+  annotation_layers: []
   color_pn: false
   comparison_color_scheme: Green
   comparison_type: values

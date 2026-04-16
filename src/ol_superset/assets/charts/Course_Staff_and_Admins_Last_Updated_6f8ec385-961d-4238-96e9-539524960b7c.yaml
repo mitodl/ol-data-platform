@@ -32,6 +32,7 @@ params:
     label: last_updated_on (in UTC)
     sqlExpression: changed_on
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values

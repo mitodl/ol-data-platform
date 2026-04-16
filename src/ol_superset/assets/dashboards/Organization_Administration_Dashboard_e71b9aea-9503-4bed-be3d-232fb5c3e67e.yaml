@@ -5,51 +5,7 @@ dashboard_title: Organization Administration Dashboard
 description: null
 metadata:
   chart_configuration:
-    '143':
-      crossFilters:
-        chartsInScope:
-        - 175
-        - 181
-        - 198
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 143
-    '175':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 181
-        - 198
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 175
-    '181':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 198
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 181
-    '198':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 181
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 198
-    '202':
+    '133':
       crossFilters:
         chartsInScope:
         - 143
@@ -59,8 +15,19 @@ metadata:
         - 221
         - 252
         scope: global
-      id: 202
-    '221':
+      id: 133
+    '134':
+      crossFilters:
+        chartsInScope:
+        - 175
+        - 181
+        - 198
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 134
+    '136':
       crossFilters:
         chartsInScope:
         - 143
@@ -70,8 +37,41 @@ metadata:
         - 202
         - 252
         scope: global
-      id: 221
-    '252':
+      id: 136
+    '137':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 198
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 137
+    '138':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 181
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 138
+    '139':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 181
+        - 198
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 139
+    '163':
       crossFilters:
         chartsInScope:
         - 143
@@ -81,18 +81,17 @@ metadata:
         - 202
         - 221
         scope: global
-      id: 252
+      id: 163
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
-  default_filters: '{}'
   expanded_slices:
-    '143': true
-    '175': true
-    '181': true
-    '198': true
-    '202': true
-    '221': true
+    '133': true
+    '134': true
+    '136': true
+    '137': true
+    '138': true
+    '139': true
   global_chart_configuration:
     chartsInScope:
     - 143
@@ -229,7 +228,7 @@ position:
     children: []
     id: CHART-explore-136-1
     meta:
-      chartId: 221
+      chartId: 136
       height: 50
       sliceName: Organization Administration Enrollment Count (cumulative)
       uuid: 01f7089f-1355-4a0f-8a51-277c79f26e2b
@@ -245,7 +244,7 @@ position:
     children: []
     id: CHART-explore-137-1
     meta:
-      chartId: 181
+      chartId: 137
       height: 50
       sliceName: Organization Administration Unique Active Learners
       uuid: 33b8ff2e-ddd7-4fa6-a438-d422da92fb27
@@ -261,7 +260,7 @@ position:
     children: []
     id: CHART-explore-138-1
     meta:
-      chartId: 198
+      chartId: 138
       height: 50
       sliceName: Organization Administration Videos Watched
       uuid: 5d97d317-30ee-46df-882b-0451efe2ac1d
@@ -277,7 +276,7 @@ position:
     children: []
     id: CHART-explore-139-1
     meta:
-      chartId: 175
+      chartId: 139
       height: 50
       sliceName: Organization Administration Problems Tried
       uuid: fe95c76a-352c-41a4-8e41-9252b68421ea
@@ -293,7 +292,7 @@ position:
     children: []
     id: CHART-gJwUdaMdAAf4XgU7JCbMg
     meta:
-      chartId: 252
+      chartId: 163
       height: 50
       sliceName: Organization Administration Details
       uuid: 25373a70-93aa-4685-88c7-afdc137cd660
@@ -309,7 +308,7 @@ position:
     children: []
     id: CHART-xsEQniyLuqCEDFlkkK1RU
     meta:
-      chartId: 202
+      chartId: 133
       height: 50
       sliceName: Organization Administration Certificates
       uuid: f1674827-3018-4ff5-bafc-8d4e0fbea7a6
@@ -325,7 +324,7 @@ position:
     children: []
     id: CHART-ydrWe39HGXiLC6CAx2nNb
     meta:
-      chartId: 143
+      chartId: 134
       height: 50
       sliceName: Organization Administration Chatbot Use
       uuid: a8eba8e2-dff3-4975-8b54-9f6f4dd39478

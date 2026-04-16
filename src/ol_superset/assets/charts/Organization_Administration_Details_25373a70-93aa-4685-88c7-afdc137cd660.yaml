@@ -38,6 +38,7 @@ params:
   - organization_key
   - organization_name
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
   column_config: {}
   comparison_color_scheme: Green
