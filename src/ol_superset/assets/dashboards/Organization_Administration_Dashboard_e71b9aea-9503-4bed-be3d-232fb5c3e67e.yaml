@@ -5,18 +5,7 @@ dashboard_title: Organization Administration Dashboard
 description: null
 metadata:
   chart_configuration:
-    '133':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 181
-        - 198
-        - 221
-        - 252
-        scope: global
-      id: 133
-    '134':
+    '143':
       crossFilters:
         chartsInScope:
         - 175
@@ -26,41 +15,8 @@ metadata:
         - 221
         - 252
         scope: global
-      id: 134
-    '136':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 181
-        - 198
-        - 202
-        - 252
-        scope: global
-      id: 136
-    '137':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 198
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 137
-    '138':
-      crossFilters:
-        chartsInScope:
-        - 143
-        - 175
-        - 181
-        - 202
-        - 221
-        - 252
-        scope: global
-      id: 138
-    '139':
+      id: 143
+    '175':
       crossFilters:
         chartsInScope:
         - 143
@@ -70,8 +26,52 @@ metadata:
         - 221
         - 252
         scope: global
-      id: 139
-    '163':
+      id: 175
+    '181':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 198
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 181
+    '198':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 181
+        - 202
+        - 221
+        - 252
+        scope: global
+      id: 198
+    '202':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 181
+        - 198
+        - 221
+        - 252
+        scope: global
+      id: 202
+    '221':
+      crossFilters:
+        chartsInScope:
+        - 143
+        - 175
+        - 181
+        - 198
+        - 202
+        - 252
+        scope: global
+      id: 221
+    '252':
       crossFilters:
         chartsInScope:
         - 143
@@ -81,17 +81,18 @@ metadata:
         - 202
         - 221
         scope: global
-      id: 163
+      id: 252
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
+  default_filters: '{}'
   expanded_slices:
-    '133': true
-    '134': true
-    '136': true
-    '137': true
-    '138': true
-    '139': true
+    '143': true
+    '175': true
+    '181': true
+    '198': true
+    '202': true
+    '221': true
   global_chart_configuration:
     chartsInScope:
     - 143
@@ -115,6 +116,14 @@ metadata:
     SUM(videos_watched): '#1FA8C9'
   native_filter_configuration:
   - cascadeParentIds: []
+    chartsInScope:
+    - 143
+    - 198
+    - 175
+    - 221
+    - 181
+    - 202
+    - 252
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -134,6 +143,9 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
+    tabsInScope:
+    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
+    - TAB-ZlwBC514aDm27paPV6SXF
     targets:
     - column:
         name: organization_name
@@ -141,6 +153,14 @@ metadata:
     type: NATIVE_FILTER
   - cascadeParentIds:
     - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
+    chartsInScope:
+    - 143
+    - 198
+    - 175
+    - 221
+    - 181
+    - 202
+    - 252
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -160,6 +180,9 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
+    tabsInScope:
+    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
+    - TAB-ZlwBC514aDm27paPV6SXF
     targets:
     - column:
         name: courserun_readable_id
@@ -168,6 +191,14 @@ metadata:
   - cascadeParentIds:
     - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
     - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
+    chartsInScope:
+    - 143
+    - 198
+    - 175
+    - 221
+    - 181
+    - 202
+    - 252
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -187,6 +218,9 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
+    tabsInScope:
+    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
+    - TAB-ZlwBC514aDm27paPV6SXF
     targets:
     - column:
         name: user_email
@@ -196,6 +230,14 @@ metadata:
     - NATIVE_FILTER-x5jIB_la9Gf2BZpY-fTZs
     - NATIVE_FILTER-8bGjYjeKHdhIZkjtPIUnD
     - NATIVE_FILTER-uGue2ukMjdDcK-mto-NSw
+    chartsInScope:
+    - 143
+    - 198
+    - 175
+    - 221
+    - 181
+    - 202
+    - 252
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -215,6 +257,9 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
+    tabsInScope:
+    - TAB-Q-PVJx2Rv0XPqCvUa5V5X
+    - TAB-ZlwBC514aDm27paPV6SXF
     targets:
     - column:
         name: activity_year_and_month
@@ -228,7 +273,7 @@ position:
     children: []
     id: CHART-explore-136-1
     meta:
-      chartId: 136
+      chartId: 221
       height: 50
       sliceName: Organization Administration Enrollment Count (cumulative)
       uuid: 01f7089f-1355-4a0f-8a51-277c79f26e2b
@@ -244,7 +289,7 @@ position:
     children: []
     id: CHART-explore-137-1
     meta:
-      chartId: 137
+      chartId: 181
       height: 50
       sliceName: Organization Administration Unique Active Learners
       uuid: 33b8ff2e-ddd7-4fa6-a438-d422da92fb27
@@ -260,7 +305,7 @@ position:
     children: []
     id: CHART-explore-138-1
     meta:
-      chartId: 138
+      chartId: 198
       height: 50
       sliceName: Organization Administration Videos Watched
       uuid: 5d97d317-30ee-46df-882b-0451efe2ac1d
@@ -276,7 +321,7 @@ position:
     children: []
     id: CHART-explore-139-1
     meta:
-      chartId: 139
+      chartId: 175
       height: 50
       sliceName: Organization Administration Problems Tried
       uuid: fe95c76a-352c-41a4-8e41-9252b68421ea
@@ -292,7 +337,7 @@ position:
     children: []
     id: CHART-gJwUdaMdAAf4XgU7JCbMg
     meta:
-      chartId: 163
+      chartId: 252
       height: 50
       sliceName: Organization Administration Details
       uuid: 25373a70-93aa-4685-88c7-afdc137cd660
@@ -308,7 +353,7 @@ position:
     children: []
     id: CHART-xsEQniyLuqCEDFlkkK1RU
     meta:
-      chartId: 133
+      chartId: 202
       height: 50
       sliceName: Organization Administration Certificates
       uuid: f1674827-3018-4ff5-bafc-8d4e0fbea7a6
@@ -324,7 +369,7 @@ position:
     children: []
     id: CHART-ydrWe39HGXiLC6CAx2nNb
     meta:
-      chartId: 134
+      chartId: 143
       height: 50
       sliceName: Organization Administration Chatbot Use
       uuid: a8eba8e2-dff3-4975-8b54-9f6f4dd39478
@@ -434,18 +479,6 @@ position:
     - TABS-j_3atbXvo8mMG1-t-Arcp
     - TAB-Q-PVJx2Rv0XPqCvUa5V5X
     type: ROW
-  TAB-8UTXcz2OId6YMe0_ngSKS:
-    children: []
-    id: TAB-8UTXcz2OId6YMe0_ngSKS
-    meta:
-      defaultText: Tab title
-      placeholder: Tab title
-      text: Org Data by Module
-    parents:
-    - ROOT_ID
-    - GRID_ID
-    - TABS-j_3atbXvo8mMG1-t-Arcp
-    type: TAB
   TAB-DvcdFW2UO9vdxAcRE_hWk:
     children:
     - ROW-H517Q-_sBOMbSNu5Sos-u
@@ -491,7 +524,6 @@ position:
     children:
     - TAB-Q-PVJx2Rv0XPqCvUa5V5X
     - TAB-ZlwBC514aDm27paPV6SXF
-    - TAB-8UTXcz2OId6YMe0_ngSKS
     - TAB-DvcdFW2UO9vdxAcRE_hWk
     id: TABS-j_3atbXvo8mMG1-t-Arcp
     meta: {}
