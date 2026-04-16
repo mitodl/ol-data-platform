@@ -9,14 +9,11 @@ from dagster import (
 )
 from dagster_dbt import get_asset_key_for_model
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
-from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from lakehouse.assets.lakehouse.dbt import full_dbt_project
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 
-_DEFAULT_SCHEMA_BASE = (
-    "ol_warehouse_production" if DAGSTER_ENV == "production" else "ol_warehouse_qa"
-)
+_DEFAULT_SCHEMA_BASE = "ol_warehouse_production"
 
 
 def _validate_superset_database_config(database_id: int, database_name: str) -> None:
