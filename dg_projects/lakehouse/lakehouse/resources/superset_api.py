@@ -38,13 +38,17 @@ class SupersetApiClient(OAuthApiClient):
                 "grant_type": "password",
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
-                "token_type": self.token_type,
                 "username": self.username,
                 "password": self.password,
                 "scope": self.scope,
             }
             response = self.http_client.post(self.token_url, data=payload)
-            response.raise_for_status()
+            if not response.is_success:
+                msg = (
+                    f"Failed to fetch access token from {self.token_url}: "
+                    f"HTTP {response.status_code} — {response.text}"
+                )
+                raise RuntimeError(msg)
             self._access_token = response.json()["access_token"]
             self._access_token_expires = now + timedelta(
                 seconds=response.json()["expires_in"]
