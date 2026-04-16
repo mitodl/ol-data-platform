@@ -14,12 +14,6 @@ class SupersetApiClient(OAuthApiClient):
         default="Bearer",
         description="Token type to generate for use with authenticated requests",
     )
-    username: str = Field(
-        description="service account username for Superset API access. "
-    )
-    password: str = Field(
-        description="service account password for Superset API access. "
-    )
     scope: str = Field(
         default="openid profile email roles",
         description="scope to request from the token endpoint",
@@ -35,11 +29,9 @@ class SupersetApiClient(OAuthApiClient):
         now = datetime.now(tz=UTC)
         if self._access_token is None or (self._access_token_expires or now) <= now:
             payload = {
-                "grant_type": "password",
+                "grant_type": "client_credentials",
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
-                "username": self.username,
-                "password": self.password,
                 "scope": self.scope,
             }
             response = self.http_client.post(self.token_url, data=payload)
@@ -193,8 +185,6 @@ class SupersetApiClientFactory(ConfigurableResource):
             client_secret=client_secrets["client_secret"],
             base_url=client_secrets["superset_url"],
             token_url=client_secrets["token_url"],
-            username=client_secrets["service_account_username"],
-            password=client_secrets["service_account_password"],
             scope=client_secrets.get("scope", "openid profile email roles"),
         )
 
