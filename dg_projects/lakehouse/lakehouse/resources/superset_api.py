@@ -126,7 +126,12 @@ class SupersetApiClient(OAuthApiClient):
             timeout=300,
         )
 
-        response.raise_for_status()
+        if not response.is_success:
+            msg = (
+                f"Failed to get_or_create dataset {payload!r}: "
+                f"HTTP {response.status_code} — {response.text}"
+            )
+            raise RuntimeError(msg)
         response_data = response.json()
 
         return response_data.get("result", {}).get("table_id")
