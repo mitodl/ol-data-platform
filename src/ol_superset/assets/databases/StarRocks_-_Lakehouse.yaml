@@ -1,8 +1,8 @@
 database_name: StarRocks - Lakehouse
-sqlalchemy_uri: starrocks://${STARROCKS_USER}:XXXXXXXXXX@lakehouse-starrocks-fe-service.starrocks.svc.cluster.local:9030/ol_data_lake_iceberg.ol_warehouse_qa_mart
+sqlalchemy_uri: starrocks://${STARROCKS_USER}:${STARROCKS_PASS}@lakehouse-starrocks-fe-service.starrocks.svc.cluster.local:9030/ol_data_lake_iceberg.ol_warehouse_qa_mart
 cache_timeout: null
 expose_in_sqllab: true
-allow_run_async: false
+allow_run_async: true
 allow_ctas: false
 allow_cvas: false
 allow_dml: false
