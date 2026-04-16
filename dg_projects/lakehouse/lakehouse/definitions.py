@@ -253,6 +253,13 @@ STARROCKS_SUPERSET_DATABASE_ID = int(
         "3" if DAGSTER_ENV == "production" else "4",
     )
 )
+if TRINO_SUPERSET_DATABASE_ID == STARROCKS_SUPERSET_DATABASE_ID:
+    msg = (
+        f"TRINO_SUPERSET_DATABASE_ID ({TRINO_SUPERSET_DATABASE_ID}) and "
+        f"STARROCKS_SUPERSET_DATABASE_ID ({STARROCKS_SUPERSET_DATABASE_ID}) "
+        "must be different values. Check your environment configuration."
+    )
+    raise ValueError(msg)
 _schema_base = "ol_warehouse_production"
 
 superset_assets = [

@@ -22,6 +22,10 @@ def _validate_superset_database_config(database_id: int, database_name: str) -> 
     Raises ValueError if a non-trino database_name is paired with the default
     Trino database_id (1), which would silently register the dataset under the
     wrong database.
+
+    Cross-database ID collision (e.g. TRINO_SUPERSET_DATABASE_ID accidentally
+    set to a StarRocks ID) is guarded at the call site in definitions.py where
+    both IDs are available for comparison.
     """
     if database_name != "trino" and database_id == 1:
         msg = (
