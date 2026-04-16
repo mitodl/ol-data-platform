@@ -9,9 +9,29 @@ from dagster import (
 )
 from dagster_dbt import get_asset_key_for_model
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 
 from lakehouse.assets.lakehouse.dbt import full_dbt_project
 from lakehouse.resources.superset_api import SupersetApiClientFactory
+
+_DEFAULT_SCHEMA_BASE = (
+    "ol_warehouse_production" if DAGSTER_ENV == "production" else "ol_warehouse_qa"
+)
+
+
+def _validate_superset_database_config(database_id: int, database_name: str) -> None:
+    """Validate that database_id and database_name are consistent.
+
+    Raises ValueError if a non-trino database_name is paired with the default
+    Trino database_id (1), which would silently register the dataset under the
+    wrong database.
+    """
+    if database_name != "trino" and database_id == 1:
+        msg = (
+            f"database_name={database_name!r} requires an explicit database_id. "
+            "Received database_id=1, which is the default reserved for Trino."
+        )
+        raise ValueError(msg)
 
 
 def create_superset_asset(
@@ -19,7 +39,10 @@ def create_superset_asset(
     dbt_model_name: str,
     database_id: int = 1,
     database_name: str = "trino",
+    schema_base: str = _DEFAULT_SCHEMA_BASE,
 ):
+    _validate_superset_database_config(database_id, database_name)
+
     if database_name == "trino":
         asset_key = AssetKey(("superset", "dataset", dbt_model_name))
         group_name = "superset_dataset"
@@ -41,6 +64,7 @@ def create_superset_asset(
             schema_suffix=dbt_asset_group_name,
             table_name=dbt_model_name,
             database_id=database_id,
+            schema_base=schema_base,
         )
 
         if dataset_id is None:

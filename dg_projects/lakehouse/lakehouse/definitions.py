@@ -246,11 +246,22 @@ dbt_models_for_superset_datasets = {
 }  # relevant dbt models to sync with superset
 dbt_model_keys = full_dbt_project.keys
 
-TRINO_SUPERSET_DATABASE_ID = 1
-STARROCKS_SUPERSET_DATABASE_ID = 3
+TRINO_SUPERSET_DATABASE_ID = int(os.environ.get("TRINO_SUPERSET_DATABASE_ID", "1"))
+STARROCKS_SUPERSET_DATABASE_ID = int(
+    os.environ.get("STARROCKS_SUPERSET_DATABASE_ID", "3")
+)
+_schema_base = (
+    "ol_warehouse_production" if DAGSTER_ENV == "production" else "ol_warehouse_qa"
+)
 
 superset_assets = [
-    create_superset_asset(dbt_asset_group_name=key.path[0], dbt_model_name=key.path[1])
+    create_superset_asset(
+        dbt_asset_group_name=key.path[0],
+        dbt_model_name=key.path[1],
+        database_id=TRINO_SUPERSET_DATABASE_ID,
+        database_name="trino",
+        schema_base=_schema_base,
+    )
     for key in dbt_model_keys
     if key.path[0] in dbt_models_for_superset_datasets
 ]
@@ -260,6 +271,7 @@ superset_starrocks_assets = [
         dbt_model_name=key.path[1],
         database_id=STARROCKS_SUPERSET_DATABASE_ID,
         database_name="starrocks",
+        schema_base=_schema_base,
     )
     for key in dbt_model_keys
     if key.path[0] in dbt_models_for_superset_datasets

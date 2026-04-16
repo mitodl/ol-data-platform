@@ -96,20 +96,27 @@ class SupersetApiClient(OAuthApiClient):
             page += 1
 
     def get_or_create_dataset(
-        self, schema_suffix: str, table_name: str, database_id: int = 1
-    ) -> str:
+        self,
+        schema_suffix: str,
+        table_name: str,
+        database_id: int = 1,
+        schema_base: str = "ol_warehouse_production",
+    ) -> int | None:
         """Retrieve a dataset by name, or create it if it doesn't exist
 
         Args:
             schema_suffix (str): The schema suffix. e.g. mart, reporting
             table_name (str): The name of the table to create a dataset for.
+            database_id (int): The Superset database ID to use.
+            schema_base (str): The schema base prefix (without trailing underscore),
+                e.g. "ol_warehouse_production" or "ol_warehouse_qa".
         Returns:
-            Dict[str, Any]: The response from the Superset API.
+            int | None: The Superset table ID, or None if not found.
         """
         request_url = f"{self.base_url}/api/v1/dataset/get_or_create/"
         payload = {
-            "database_id": database_id,  # Trino database ID
-            "schema": f"ol_warehouse_production_{schema_suffix}",
+            "database_id": database_id,
+            "schema": f"{schema_base}_{schema_suffix}",
             "table_name": table_name,
         }
         response = self.http_client.post(
