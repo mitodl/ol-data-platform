@@ -253,9 +253,7 @@ STARROCKS_SUPERSET_DATABASE_ID = int(
         "3" if DAGSTER_ENV == "production" else "4",
     )
 )
-_schema_base = (
-    "ol_warehouse_production" if DAGSTER_ENV == "production" else "ol_warehouse_qa"
-)
+_schema_base = "ol_warehouse_production"
 
 superset_assets = [
     create_superset_asset(
