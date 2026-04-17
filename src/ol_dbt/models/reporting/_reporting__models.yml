@@ -186,9 +186,12 @@ models:
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline or xPro
   - name: organization_key
-    description: str, unique identifier for the organization
+    description: str, organization identifier sourced from the MITxOnline B2B
+      organization_key when available, otherwise from the Open edX organization
+      (org code) in user_course_roles
   - name: organization_name
-    description: str, name of the organization
+    description: str, organization name from the MITxOnline B2B organization mapping.
+      Null for non-B2B enrollments/platforms.
   - name: user_country_code
     description: str, country code on the platform user enrolled. May be blank.
   - name: user_highest_education
