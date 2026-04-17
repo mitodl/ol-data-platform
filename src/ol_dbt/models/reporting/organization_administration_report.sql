@@ -61,12 +61,11 @@ with enrollment_detail as (
 , enroll_data as (
     select
         courserun_readable_id
-        , courserun_title
+        , max(courserun_title) as courserun_title
         , user_email
     from enrollment_detail
     group by
         courserun_readable_id
-        , courserun_title
         , user_email
 )
 
