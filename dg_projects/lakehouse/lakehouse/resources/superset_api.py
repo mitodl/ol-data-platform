@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
-from typing import Any, Self
+from typing import Any, Self, cast
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from ol_orchestrate.resources.oauth import OAuthApiClient
@@ -13,12 +13,6 @@ class SupersetApiClient(OAuthApiClient):
     token_type: str = Field(
         default="Bearer",
         description="Token type to generate for use with authenticated requests",
-    )
-    username: str = Field(
-        description="service account username for Superset API access. "
-    )
-    password: str = Field(
-        description="service account password for Superset API access. "
     )
     scope: str = Field(
         default="openid profile email roles",
@@ -35,16 +29,18 @@ class SupersetApiClient(OAuthApiClient):
         now = datetime.now(tz=UTC)
         if self._access_token is None or (self._access_token_expires or now) <= now:
             payload = {
-                "grant_type": "password",
+                "grant_type": "client_credentials",
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
-                "token_type": self.token_type,
-                "username": self.username,
-                "password": self.password,
                 "scope": self.scope,
             }
             response = self.http_client.post(self.token_url, data=payload)
-            response.raise_for_status()
+            if not response.is_success:
+                msg = (
+                    f"Failed to fetch access token from {self.token_url}: "
+                    f"HTTP {response.status_code} — {response.text}"
+                )
+                raise RuntimeError(msg)
             self._access_token = response.json()["access_token"]
             self._access_token_expires = now + timedelta(
                 seconds=response.json()["expires_in"]
@@ -80,33 +76,43 @@ class SupersetApiClient(OAuthApiClient):
                 f"(order_column:changed_on_delta_humanized,order_direction:desc,"
                 f"page:{page},page_size:{page_size})"
             )
-            response_data = self.fetch_with_auth(
-                request_url, extra_params={"q": query_string}
+            response_data = cast(
+                dict[str, Any],
+                self.fetch_with_auth(request_url, extra_params={"q": query_string}),
             )
-            dataset_result = response_data["result"]  # type: ignore[call-overload]
-            total_fetched += len(dataset_result)  # type: ignore[arg-type]
+            dataset_result = response_data["result"]
+            total_fetched += len(dataset_result)
 
-            yield dataset_result  # type: ignore[misc]
+            yield dataset_result
 
-            count = response_data.get("count", 0)  # type: ignore[union-attr]
+            count = response_data.get("count", 0)
             if total_fetched >= count:
                 break
 
             page += 1
 
-    def get_or_create_dataset(self, schema_suffix: str, table_name: str) -> str:
+    def get_or_create_dataset(
+        self,
+        schema_suffix: str,
+        table_name: str,
+        database_id: int = 1,
+        schema_base: str = "ol_warehouse_production",
+    ) -> int | None:
         """Retrieve a dataset by name, or create it if it doesn't exist
 
         Args:
             schema_suffix (str): The schema suffix. e.g. mart, reporting
             table_name (str): The name of the table to create a dataset for.
+            database_id (int): The Superset database ID to use.
+            schema_base (str): The schema base prefix (without trailing underscore),
+                e.g. "ol_warehouse_production" or "ol_warehouse_qa".
         Returns:
-            Dict[str, Any]: The response from the Superset API.
+            int | None: The Superset table ID, or None if not found.
         """
         request_url = f"{self.base_url}/api/v1/dataset/get_or_create/"
         payload = {
-            "database_id": 1,  # Trino database ID
-            "schema": f"ol_warehouse_production_{schema_suffix}",
+            "database_id": database_id,
+            "schema": f"{schema_base}_{schema_suffix}",
             "table_name": table_name,
         }
         response = self.http_client.post(
@@ -120,7 +126,12 @@ class SupersetApiClient(OAuthApiClient):
             timeout=300,
         )
 
-        response.raise_for_status()
+        if not response.is_success:
+            msg = (
+                f"Failed to get_or_create dataset {payload!r}: "
+                f"HTTP {response.status_code} — {response.text}"
+            )
+            raise RuntimeError(msg)
         response_data = response.json()
 
         return response_data.get("result", {}).get("table_id")
@@ -179,8 +190,6 @@ class SupersetApiClientFactory(ConfigurableResource):
             client_secret=client_secrets["client_secret"],
             base_url=client_secrets["superset_url"],
             token_url=client_secrets["token_url"],
-            username=client_secrets["service_account_username"],
-            password=client_secrets["service_account_password"],
             scope=client_secrets.get("scope", "openid profile email roles"),
         )
 

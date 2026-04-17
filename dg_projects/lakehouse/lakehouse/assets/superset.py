@@ -13,13 +13,49 @@ from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
 from lakehouse.assets.lakehouse.dbt import full_dbt_project
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 
+_DEFAULT_SCHEMA_BASE = "ol_warehouse_production"
 
-def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
+
+def _validate_superset_database_config(database_id: int, database_name: str) -> None:
+    """Validate that database_id and database_name are consistent.
+
+    Raises ValueError if a non-trino database_name is paired with the default
+    Trino database_id (1), which would silently register the dataset under the
+    wrong database.
+
+    Cross-database ID collision (e.g. TRINO_SUPERSET_DATABASE_ID accidentally
+    set to a StarRocks ID) is guarded at the call site in definitions.py where
+    both IDs are available for comparison.
+    """
+    if database_name != "trino" and database_id == 1:
+        msg = (
+            f"database_name={database_name!r} requires an explicit database_id. "
+            "Received database_id=1, which is the default reserved for Trino."
+        )
+        raise ValueError(msg)
+
+
+def create_superset_asset(
+    dbt_asset_group_name: str,
+    dbt_model_name: str,
+    database_id: int = 1,
+    database_name: str = "trino",
+    schema_base: str = _DEFAULT_SCHEMA_BASE,
+):
+    _validate_superset_database_config(database_id, database_name)
+
+    if database_name == "trino":
+        asset_key = AssetKey(("superset", "dataset", dbt_model_name))
+        group_name = "superset_dataset"
+    else:
+        asset_key = AssetKey(("superset", database_name, "dataset", dbt_model_name))
+        group_name = f"superset_{database_name}_dataset"
+
     @asset(
-        key=AssetKey(("superset", "dataset", dbt_model_name)),
+        key=asset_key,
         deps=[get_asset_key_for_model([full_dbt_project], dbt_model_name)],
         automation_condition=upstream_or_code_changes(),
-        group_name="superset_dataset",
+        group_name=group_name,
     )
     def _superset_dataset(
         context: AssetExecutionContext,
@@ -28,6 +64,8 @@ def create_superset_asset(dbt_asset_group_name: str, dbt_model_name: str):
         dataset_id = superset_api.client.get_or_create_dataset(
             schema_suffix=dbt_asset_group_name,
             table_name=dbt_model_name,
+            database_id=database_id,
+            schema_base=schema_base,
         )
 
         if dataset_id is None:

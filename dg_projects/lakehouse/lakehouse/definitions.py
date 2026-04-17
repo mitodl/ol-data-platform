@@ -246,8 +246,41 @@ dbt_models_for_superset_datasets = {
 }  # relevant dbt models to sync with superset
 dbt_model_keys = full_dbt_project.keys
 
+TRINO_SUPERSET_DATABASE_ID = int(os.environ.get("TRINO_SUPERSET_DATABASE_ID", "1"))
+STARROCKS_SUPERSET_DATABASE_ID = int(
+    os.environ.get(
+        "STARROCKS_SUPERSET_DATABASE_ID",
+        "3" if DAGSTER_ENV == "production" else "4",
+    )
+)
+if TRINO_SUPERSET_DATABASE_ID == STARROCKS_SUPERSET_DATABASE_ID:
+    msg = (
+        f"TRINO_SUPERSET_DATABASE_ID ({TRINO_SUPERSET_DATABASE_ID}) and "
+        f"STARROCKS_SUPERSET_DATABASE_ID ({STARROCKS_SUPERSET_DATABASE_ID}) "
+        "must be different values. Check your environment configuration."
+    )
+    raise ValueError(msg)
+_schema_base = "ol_warehouse_production"
+
 superset_assets = [
-    create_superset_asset(dbt_asset_group_name=key.path[0], dbt_model_name=key.path[1])
+    create_superset_asset(
+        dbt_asset_group_name=key.path[0],
+        dbt_model_name=key.path[1],
+        database_id=TRINO_SUPERSET_DATABASE_ID,
+        database_name="trino",
+        schema_base=_schema_base,
+    )
+    for key in dbt_model_keys
+    if key.path[0] in dbt_models_for_superset_datasets
+]
+superset_starrocks_assets = [
+    create_superset_asset(
+        dbt_asset_group_name=key.path[0],
+        dbt_model_name=key.path[1],
+        database_id=STARROCKS_SUPERSET_DATABASE_ID,
+        database_name="starrocks",
+        schema_base=_schema_base,
+    )
     for key in dbt_model_keys
     if key.path[0] in dbt_models_for_superset_datasets
 ]
@@ -282,6 +315,7 @@ defs = Definitions(
         *with_source_code_references([full_dbt_project]),
         *airbyte_assets,
         *superset_assets,
+        *superset_starrocks_assets,
         generate_instructor_onboarding_user_list,
         update_access_forge_repo,
     ],
@@ -295,7 +329,8 @@ defs = Definitions(
                 AssetSelection.assets(full_dbt_project)
                 - AssetSelection.groups("staging")
             )
-            | AssetSelection.groups("superset_dataset"),
+            | AssetSelection.groups("superset_dataset")
+            | AssetSelection.groups("superset_starrocks_dataset"),
         ),
     ],
     jobs=[*airbyte_asset_jobs],
