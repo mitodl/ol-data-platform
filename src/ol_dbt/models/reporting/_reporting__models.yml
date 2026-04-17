@@ -185,6 +185,10 @@ models:
   - name: courserungrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
       set for this course on edX.org or MITxOnline or xPro
+  - name: organization_key
+    description: str, unique identifier for the organization
+  - name: organization_name
+    description: str, name of the organization
   - name: user_country_code
     description: str, country code on the platform user enrolled. May be blank.
   - name: user_highest_education
