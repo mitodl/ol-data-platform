@@ -14,6 +14,21 @@ with enrollments as (
     select * from {{ ref('marts__combined_coursesinprogram') }}
 )
 
+, user_course_roles as (
+    select * from {{ ref('int__combined__user_course_roles') }}
+)
+
+, b2b_contract_to_courseruns as (
+    select * from {{ ref('int__mitxonline__b2b_contract_to_courseruns') }}
+)
+
+, org_field as (
+    select
+        distinct courserun_readable_id
+        , organization
+    from user_course_roles
+)
+
 , programs as (
     select distinct
         program_enrollments.platform_name
@@ -58,6 +73,8 @@ select
     , enrollments.courseruncertificate_url
     , enrollments.courserungrade_grade
     , enrollments.courserungrade_is_passing
+    , coalesce(b2b_contract_to_courseruns.organization_key, org_field.organization) as organization_key
+    , b2b_contract_to_courseruns.organization_name
     , enrollments.user_country_code
     , enrollments.user_highest_education
     , enrollments.user_full_name
@@ -94,3 +111,7 @@ left join programs
         enrollments.platform = programs.platform_name
         and enrollments.course_readable_id = programs.course_readable_id
         and enrollments.user_email = programs.user_email
+left join org_field
+    on enrollments.courserun_readable_id = org_field.courserun_readable_id
+left join b2b_contract_to_courseruns
+    on enrollments.courserun_readable_id = b2b_contract_to_courseruns.courserun_readable_id
