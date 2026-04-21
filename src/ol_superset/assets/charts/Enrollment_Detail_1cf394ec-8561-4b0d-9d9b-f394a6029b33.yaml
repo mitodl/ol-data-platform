@@ -1,15 +1,10 @@
-slice_name: Enrollment Detail
-description: null
-certified_by: null
+cache_timeout: null
 certification_details: null
-viz_type: table
+certified_by: null
+dataset_uuid: 01f179b6-cb75-465f-8ceb-0525c24fa223  # enrollment_detail_report
+description: null
 params:
-  datasource: 148__table
-  viz_type: table
-  slice_id: 218
-  query_mode: raw
-  groupby: []
-  temporal_columns_lookup: {}
+  adhoc_filters: []
   all_columns:
   - platform
   - user_email
@@ -45,14 +40,8 @@ params:
   - user_username
   - user_country_code
   - organization_name
-  percent_metrics: []
-  adhoc_filters: []
-  order_by_cols: []
-  row_limit: 50000
-  percent_metric_calculation: row_limit
-  table_timestamp_format: smart_date
-  include_search: true
   allow_render_html: true
+  color_pn: false
   column_config:
     courserunenrollment_id:
       showCellBars: false
@@ -64,16 +53,22 @@ params:
       showCellBars: false
     unit_price:
       showCellBars: false
-  show_cell_bars: true
-  color_pn: false
   comparison_color_scheme: Green
-  conditional_formatting: []
   comparison_type: values
+  conditional_formatting: []
   extra_form_data: {}
-  dashboards:
-  - 50
-query_context: '{"datasource":{"id":148,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"having":"","where":""},"applied_time_extras":{},"columns":["platform","user_email","user_full_name","courserun_readable_id","courserun_title","courserun_start_on","courserun_end_on","order_id","courserunenrollment_id","program_name","courserunenrollment_enrollment_mode","courserunenrollment_created_on","courserunenrollment_enrollment_status","courserunenrollment_is_active","courserunenrollment_upgraded_on","courserungrade_grade","courserungrade_is_passing","courseruncertificate_is_earned","courseruncertificate_created_on","courseruncertificate_url","order_reference_number","receipt_payment_timestamp","receipt_payer_email","receipt_payment_method","receipt_payment_amount","coupon_code","coupon_name","unit_price","discount","order_state","receipt_url","user_username","user_country_code","organization_name"],"orderby":[],"annotation_layers":[],"row_limit":50000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"148__table","viz_type":"table","slice_id":218,"query_mode":"raw","groupby":[],"temporal_columns_lookup":{},"all_columns":["platform","user_email","user_full_name","courserun_readable_id","courserun_title","courserun_start_on","courserun_end_on","order_id","courserunenrollment_id","program_name","courserunenrollment_enrollment_mode","courserunenrollment_created_on","courserunenrollment_enrollment_status","courserunenrollment_is_active","courserunenrollment_upgraded_on","courserungrade_grade","courserungrade_is_passing","courseruncertificate_is_earned","courseruncertificate_created_on","courseruncertificate_url","order_reference_number","receipt_payment_timestamp","receipt_payer_email","receipt_payment_method","receipt_payment_amount","coupon_code","coupon_name","unit_price","discount","order_state","receipt_url","user_username","user_country_code","organization_name"],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":50000,"percent_metric_calculation":"row_limit","table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"column_config":{"courserunenrollment_id":{"showCellBars":false},"courserungrade_grade":{"showCellBars":false},"order_id":{"showCellBars":false},"receipt_payment_amount":{"showCellBars":false},"unit_price":{"showCellBars":false}},"show_cell_bars":true,"color_pn":false,"comparison_color_scheme":"Green","conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[50],"force":false,"result_format":"json","result_type":"full","include_time":false},"result_format":"json","result_type":"full"}'
-cache_timeout: null
+  groupby: []
+  include_search: true
+  order_by_cols: []
+  percent_metric_calculation: row_limit
+  percent_metrics: []
+  query_mode: raw
+  row_limit: 50000
+  show_cell_bars: true
+  table_timestamp_format: smart_date
+  temporal_columns_lookup: {}
+  viz_type: table
+slice_name: Enrollment Detail
 uuid: 1cf394ec-8561-4b0d-9d9b-f394a6029b33
 version: 1.0.0
-dataset_uuid: 01f179b6-cb75-465f-8ceb-0525c24fa223
+viz_type: table
