@@ -254,14 +254,16 @@ def create_authenticated_session(instance_name: str) -> requests.Session | None:
     """
     Create an authenticated requests session for Superset API.
 
-    Dispatches on the ``auth_method`` field in ``~/.sup/config.yml``:
+    Dispatches on the ``auth_method`` and available credentials in
+    ``~/.sup/config.yml``:
 
-    * ``client_credentials`` — non-interactive OAuth2 client-credentials grant.
-      Requires ``oauth_token_url``, ``oauth_client_id``, and ``oauth_client_secret``.
-      Optionally reads ``oauth_scope`` (default: ``"openid profile email roles"``).
-    * ``oauth`` (default) — interactive PKCE/authorization-code flow via
-      ``InteractiveOAuthAuth``.  Requires ``oauth_authorization_url`` in addition to
-      the token URL and client ID.
+    * ``oauth`` with ``oauth_client_id`` + ``oauth_client_secret`` but no
+      ``oauth_username``/``oauth_password`` — non-interactive OAuth2
+      client-credentials grant via ``ClientCredentialsAuth``.  This matches the
+      behaviour of the ``sup`` CLI's own auth factory under the same conditions.
+    * ``oauth`` with ``oauth_username`` + ``oauth_password`` — interactive
+      PKCE/authorization-code flow via ``InteractiveOAuthAuth``.  Requires
+      ``oauth_authorization_url`` in addition to the token URL and client ID.
 
     Args:
         instance_name: Name of the instance (e.g., 'superset-qa')
@@ -273,19 +275,17 @@ def create_authenticated_session(instance_name: str) -> requests.Session | None:
     if not config:
         return None
 
-    auth_method = config.get("auth_method", "oauth")
+    token_url = config.get("oauth_token_url")
+    client_id = config.get("oauth_client_id")
+    client_secret = config.get("oauth_client_secret")
+    scope = config.get("oauth_scope", "openid profile email roles")
 
-    if auth_method == "client_credentials":
-        token_url = config.get("oauth_token_url")
-        client_id = config.get("oauth_client_id")
-        client_secret = config.get("oauth_client_secret")
-        scope = config.get("oauth_scope", "openid profile email roles")
-
-        if not token_url or not client_id or not client_secret:
+    # Use client_credentials grant when client_id/secret are present but no
+    # username/password — mirrors the sup CLI auth factory logic exactly.
+    if client_id and client_secret and not config.get("oauth_username"):
+        if not token_url:
             print(
-                f"Error: Missing client_credentials configuration for instance "
-                f"'{instance_name}'. Ensure oauth_token_url, oauth_client_id, and "
-                "oauth_client_secret are set in ~/.sup/config.yml.",
+                f"Error: Missing oauth_token_url for instance '{instance_name}'.",
                 file=sys.stderr,
             )
             return None
@@ -311,7 +311,7 @@ def create_authenticated_session(instance_name: str) -> requests.Session | None:
         session.headers.update({"Content-Type": "application/json"})
         return session
 
-    # Default: interactive PKCE / authorization-code flow.
+    # Fall back to interactive PKCE / authorization-code flow.
     oauth_auth = _create_oauth_auth(instance_name)
     if not oauth_auth:
         return None
