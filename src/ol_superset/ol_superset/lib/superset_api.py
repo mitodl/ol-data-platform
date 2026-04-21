@@ -2,6 +2,7 @@
 
 import json
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +70,76 @@ class SupersetTokenAuth(requests.auth.AuthBase):
         prep = response.request.copy()
         prep.headers["Authorization"] = f"Bearer {new_token}"
         # Remove this hook from the retry to prevent infinite recursion.
+        prep.deregister_hook("response", self._handle_401)
+
+        new_response = response.connection.send(prep, **kwargs)
+        new_response.history.append(response)
+        new_response.request = prep
+        return new_response
+
+
+class ClientCredentialsAuth(requests.auth.AuthBase):
+    """
+    requests.AuthBase that authenticates via the OAuth2 client_credentials grant.
+
+    Tokens are fetched non-interactively using client_id and client_secret, and
+    are cached in memory until expiry. On a 401 response from Superset the token is
+    invalidated and re-fetched once, matching the retry behaviour of SupersetTokenAuth.
+    """
+
+    def __init__(
+        self,
+        token_url: str,
+        client_id: str,
+        client_secret: str,
+        scope: str = "openid profile email roles",
+    ) -> None:
+        self._token_url = token_url
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._scope = scope
+        self._access_token: str | None = None
+        self._token_expires: datetime | None = None
+
+    def _fetch_token(self) -> str:
+        now = datetime.now(tz=UTC)
+        if self._access_token is None or (self._token_expires or now) <= now:
+            payload: dict[str, str] = {
+                "grant_type": "client_credentials",
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+            }
+            if self._scope:
+                payload["scope"] = self._scope
+            response = requests.post(self._token_url, data=payload, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            self._access_token = data["access_token"]
+            self._token_expires = now + timedelta(seconds=data.get("expires_in", 300))
+        return self._access_token  # noqa: RET504
+
+    def __call__(self, r: requests.PreparedRequest) -> requests.PreparedRequest:
+        r.headers["Authorization"] = f"Bearer {self._fetch_token()}"
+        r.register_hook("response", self._handle_401)
+        return r
+
+    def _handle_401(
+        self, response: requests.Response, **kwargs: Any
+    ) -> requests.Response:
+        if response.status_code != 401:
+            return response
+
+        # Invalidate the cached token so the next call re-fetches it.
+        self._access_token = None
+        self._token_expires = None
+
+        _ = response.content
+        response.raw.release_conn()
+
+        new_token = self._fetch_token()
+
+        prep = response.request.copy()
+        prep.headers["Authorization"] = f"Bearer {new_token}"
         prep.deregister_hook("response", self._handle_401)
 
         new_response = response.connection.send(prep, **kwargs)
@@ -183,11 +254,14 @@ def create_authenticated_session(instance_name: str) -> requests.Session | None:
     """
     Create an authenticated requests session for Superset API.
 
-    The session uses SupersetTokenAuth which calls InteractiveOAuthAuth.get_token()
-    on every request. This means token refresh (via the OAuth refresh-token grant)
-    happens automatically when the local cache detects expiry, and a forced refresh
-    is triggered on any 401 "Token has expired" response from the server — without
-    requiring browser interaction as long as the refresh token remains valid.
+    Dispatches on the ``auth_method`` field in ``~/.sup/config.yml``:
+
+    * ``client_credentials`` — non-interactive OAuth2 client-credentials grant.
+      Requires ``oauth_token_url``, ``oauth_client_id``, and ``oauth_client_secret``.
+      Optionally reads ``oauth_scope`` (default: ``"openid profile email roles"``).
+    * ``oauth`` (default) — interactive PKCE/authorization-code flow via
+      ``InteractiveOAuthAuth``.  Requires ``oauth_authorization_url`` in addition to
+      the token URL and client ID.
 
     Args:
         instance_name: Name of the instance (e.g., 'superset-qa')
@@ -195,6 +269,49 @@ def create_authenticated_session(instance_name: str) -> requests.Session | None:
     Returns:
         Authenticated requests Session or None if failed
     """
+    config = get_instance_config(instance_name)
+    if not config:
+        return None
+
+    auth_method = config.get("auth_method", "oauth")
+
+    if auth_method == "client_credentials":
+        token_url = config.get("oauth_token_url")
+        client_id = config.get("oauth_client_id")
+        client_secret = config.get("oauth_client_secret")
+        scope = config.get("oauth_scope", "openid profile email roles")
+
+        if not token_url or not client_id or not client_secret:
+            print(
+                f"Error: Missing client_credentials configuration for instance "
+                f"'{instance_name}'. Ensure oauth_token_url, oauth_client_id, and "
+                "oauth_client_secret are set in ~/.sup/config.yml.",
+                file=sys.stderr,
+            )
+            return None
+
+        try:
+            auth = ClientCredentialsAuth(
+                token_url=token_url,
+                client_id=client_id,
+                client_secret=client_secret,
+                scope=scope,
+            )
+            # Eagerly validate credentials so callers get an immediate failure.
+            auth._fetch_token()  # noqa: SLF001
+        except Exception as e:
+            print(  # noqa: T201
+                f"  ❌ Error obtaining client-credentials token: {e}",
+                file=sys.stderr,
+            )
+            return None
+
+        session = requests.Session()
+        session.auth = auth
+        session.headers.update({"Content-Type": "application/json"})
+        return session
+
+    # Default: interactive PKCE / authorization-code flow.
     oauth_auth = _create_oauth_auth(instance_name)
     if not oauth_auth:
         return None
