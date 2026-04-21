@@ -8,22 +8,22 @@ metadata:
     '147':
       crossFilters:
         chartsInScope:
-        - 64
-        - 108
+        - 211
+        - 218
         scope: global
       id: 147
     '211':
       crossFilters:
         chartsInScope:
-        - 108
-        - 111
+        - 147
+        - 218
         scope: global
       id: 211
     '218':
       crossFilters:
         chartsInScope:
-        - 64
-        - 111
+        - 147
+        - 211
         scope: global
       id: 218
   color_scheme: ''
@@ -32,9 +32,9 @@ metadata:
   expanded_slices: {}
   global_chart_configuration:
     chartsInScope:
-    - 64
-    - 108
-    - 111
+    - 147
+    - 211
+    - 218
     scope:
       excluded: []
       rootPath:
@@ -47,10 +47,9 @@ metadata:
   native_filter_configuration:
   - cascadeParentIds: []
     chartsInScope:
-    - 64
-    - 67
-    - 70
-    - 108
+    - 147
+    - 211
+    - 218
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -107,10 +106,9 @@ metadata:
     type: NATIVE_FILTER
   - cascadeParentIds: []
     chartsInScope:
-    - 64
-    - 67
-    - 70
-    - 108
+    - 147
+    - 211
+    - 218
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -142,10 +140,9 @@ metadata:
   - cascadeParentIds:
     - NATIVE_FILTER-zp-lAphrX
     chartsInScope:
-    - 64
-    - 67
-    - 70
-    - 108
+    - 147
+    - 211
+    - 218
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -205,8 +202,8 @@ metadata:
     - NATIVE_FILTER-rtf0SLxia
     - NATIVE_FILTER-8eiua81W1
     chartsInScope:
-    - 64
-    - 108
+    - 211
+    - 218
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
