@@ -6,8 +6,7 @@ columns:
   column_name: receipt_payment_amount
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -19,8 +18,7 @@ columns:
   column_name: unit_price
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -32,8 +30,7 @@ columns:
   column_name: courserun_readable_id
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -45,8 +42,7 @@ columns:
   column_name: course_readable_id
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -58,8 +54,7 @@ columns:
   column_name: courseruncertificate_created_on
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -71,8 +66,7 @@ columns:
   column_name: receipt_payer_email
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -84,8 +78,7 @@ columns:
   column_name: receipt_payment_timestamp
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -97,8 +90,7 @@ columns:
   column_name: courserunenrollment_created_on
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -110,8 +102,7 @@ columns:
   column_name: courserunenrollment_upgraded_on
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -123,8 +114,7 @@ columns:
   column_name: order_created_on
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -136,8 +126,19 @@ columns:
   column_name: receipt_payment_method
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: user_highest_education
+  description: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -149,8 +150,7 @@ columns:
   column_name: courserunenrollment_enrollment_status
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -162,8 +162,7 @@ columns:
   column_name: courserun_start_on
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -175,8 +174,7 @@ columns:
   column_name: user_full_name
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -188,8 +186,7 @@ columns:
   column_name: order_reference_number
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -201,8 +198,7 @@ columns:
   column_name: user_country_code
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -214,8 +210,7 @@ columns:
   column_name: courserunenrollment_enrollment_mode
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -227,8 +222,7 @@ columns:
   column_name: courserun_end_on
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -240,8 +234,7 @@ columns:
   column_name: program_name
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -253,8 +246,7 @@ columns:
   column_name: courseruncertificate_url
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -266,8 +258,7 @@ columns:
   column_name: coupon_name
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -279,8 +270,7 @@ columns:
   column_name: order_state
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -292,8 +282,7 @@ columns:
   column_name: user_username
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -305,8 +294,7 @@ columns:
   column_name: user_email
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -318,8 +306,7 @@ columns:
   column_name: coupon_code
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -331,8 +318,7 @@ columns:
   column_name: courserun_title
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -344,8 +330,7 @@ columns:
   column_name: course_title
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -357,8 +342,7 @@ columns:
   column_name: receipt_url
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -370,8 +354,7 @@ columns:
   column_name: platform
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -383,8 +366,7 @@ columns:
   column_name: discount
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -396,8 +378,7 @@ columns:
   column_name: courseruncertificate_is_earned
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -409,8 +390,7 @@ columns:
   column_name: courserungrade_is_passing
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -422,8 +402,7 @@ columns:
   column_name: courserunenrollment_is_active
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -435,8 +414,7 @@ columns:
   column_name: courserun_is_current
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -448,8 +426,7 @@ columns:
   column_name: courserungrade_grade
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -461,8 +438,7 @@ columns:
   column_name: num_of_course_passed
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -474,8 +450,7 @@ columns:
   column_name: courserunenrollment_id
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -487,8 +462,7 @@ columns:
   column_name: order_id
   description: null
   expression: ''
-  extra:
-    warning_markdown: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -497,10 +471,22 @@ columns:
   type: BIGINT
   verbose_name: null
 - advanced_data_type: null
-  column_name: user_highest_education
+  column_name: organization_name
   description: null
-  expression: ''
-  extra: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: organization_key
+  description: null
+  expression: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
