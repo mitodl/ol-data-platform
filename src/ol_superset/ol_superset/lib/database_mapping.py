@@ -67,132 +67,96 @@ def get_target_databases(instance_name: str) -> dict[str, str]:
         sys.exit(1)
 
 
-def load_source_databases(assets_dir: Path) -> dict[str, str]:
+def rewrite_all_assets(assets_dir: Path, target_dbs: dict[str, str]) -> None:
     """
-    Load source database configurations from exported assets.
+    Rewrite database UUIDs in all asset files using name-based lookup.
+
+    Database YAML files are updated by matching their ``database_name`` field
+    against the target instance.  Dataset files are updated by matching the
+    subdirectory they live in (``datasets/<DatabaseName>/``) against the target
+    instance.  This handles datasets that were exported from a different
+    environment or when a database connection was recreated and received a new
+    UUID, both of which would cause the old UUID-to-UUID mapping approach to
+    silently miss affected files.
 
     Args:
         assets_dir: Path to assets directory
-
-    Returns:
-        Dict mapping database_name to uuid
-    """
-    db_dir = assets_dir / "databases"
-    if not db_dir.exists():
-        print(
-            f"Error: No databases directory found in {assets_dir}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    databases = {}
-    for db_file in db_dir.glob("*.yaml"):
-        with db_file.open() as f:
-            config = yaml.safe_load(f)
-            databases[config["database_name"]] = config["uuid"]
-
-    return databases
-
-
-def build_uuid_mapping(
-    source_dbs: dict[str, str], target_dbs: dict[str, str]
-) -> dict[str, str]:
-    """
-    Build mapping from source UUIDs to target UUIDs based on database names.
-
-    Args:
-        source_dbs: Source database name -> UUID mapping
-        target_dbs: Target database name -> UUID mapping
-
-    Returns:
-        Dict mapping source_uuid to target_uuid
-    """
-    mapping = {}
-
-    for db_name, source_uuid in source_dbs.items():
-        if db_name not in target_dbs:
-            print(
-                f"Warning: Database '{db_name}' not found in target instance",
-                file=sys.stderr,
-            )
-            continue
-
-        target_uuid = target_dbs[db_name]
-        if source_uuid != target_uuid:
-            mapping[source_uuid] = target_uuid
-
-    return mapping
-
-
-def rewrite_uuids_in_file(file_path: Path, uuid_mapping: dict[str, str]) -> int:
-    """
-    Rewrite database UUIDs in a YAML file.
-
-    Args:
-        file_path: Path to YAML file
-        uuid_mapping: Source UUID -> target UUID mapping
-
-    Returns:
-        Number of replacements made
-    """
-    with file_path.open() as f:
-        content = f.read()
-
-    replacements = 0
-    for source_uuid, target_uuid in uuid_mapping.items():
-        if source_uuid in content:
-            content = content.replace(source_uuid, target_uuid)
-            replacements += 1
-
-    if replacements > 0:
-        with file_path.open("w") as f:
-            f.write(content)
-
-    return replacements
-
-
-def rewrite_all_assets(assets_dir: Path, uuid_mapping: dict[str, str]) -> None:
-    """
-    Rewrite database UUIDs in all asset files.
-
-    Args:
-        assets_dir: Path to assets directory
-        uuid_mapping: Source UUID -> target UUID mapping
+        target_dbs: Database name -> UUID mapping fetched from the target instance
     """
     total_files = 0
-    total_replacements = 0
 
-    # Update database configs first
+    # Update database config files: force uuid to match target by name.
     db_dir = assets_dir / "databases"
     if db_dir.exists():
         for yaml_file in db_dir.glob("*.yaml"):
-            replacements = rewrite_uuids_in_file(yaml_file, uuid_mapping)
-            if replacements > 0:
+            with yaml_file.open() as f:
+                content = f.read()
+            config = yaml.safe_load(content)
+            db_name = config.get("database_name")
+            if db_name not in target_dbs:
+                print(
+                    f"  Warning: database '{db_name}' not found in target instance",
+                    file=sys.stderr,
+                )
+                continue
+            target_uuid = target_dbs[db_name]
+            new_content = re.sub(
+                r"^(uuid:\s*)[0-9a-f-]{36}",
+                rf"\g<1>{target_uuid}",
+                content,
+                flags=re.MULTILINE,
+            )
+            if new_content != content:
+                with yaml_file.open("w") as f:
+                    f.write(new_content)
                 total_files += 1
-                total_replacements += replacements
 
-    # Update datasets, charts, dashboards
-    for asset_type in ["datasets", "charts", "dashboards"]:
-        asset_dir = assets_dir / asset_type
-        if not asset_dir.exists():
-            continue
+    # Update dataset files: the immediate subdirectory name under datasets/ is
+    # always the database name (e.g. datasets/Trino/<dataset>.yaml).  Use that
+    # name to look up the correct target UUID and overwrite whatever
+    # database_uuid the file currently contains — this covers stale UUIDs from
+    # old connections, cross-environment exports, etc.
+    datasets_dir = assets_dir / "datasets"
+    if datasets_dir.exists():
+        for db_subdir in datasets_dir.iterdir():
+            if not db_subdir.is_dir():
+                continue
+            db_name = db_subdir.name
+            if db_name not in target_dbs:
+                print(
+                    f"  Warning: datasets/{db_name}/ has no matching database "
+                    "in target instance",
+                    file=sys.stderr,
+                )
+                continue
+            target_uuid = target_dbs[db_name]
+            for yaml_file in db_subdir.rglob("*.yaml"):
+                with yaml_file.open() as f:
+                    content = f.read()
+                new_content = re.sub(
+                    r"^(database_uuid:\s*)[0-9a-f-]{36}",
+                    rf"\g<1>{target_uuid}",
+                    content,
+                    flags=re.MULTILINE,
+                )
+                if new_content != content:
+                    with yaml_file.open("w") as f:
+                        f.write(new_content)
+                    total_files += 1
 
-        for yaml_file in asset_dir.rglob("*.yaml"):
-            replacements = rewrite_uuids_in_file(yaml_file, uuid_mapping)
-            if replacements > 0:
-                total_files += 1
-                total_replacements += replacements
-
-    if total_replacements > 0:
-        print(
-            f"  Remapped {total_replacements} database references "
-            f"across {total_files} files"
-        )
+    if total_files > 0:
+        print(f"  Remapped database UUIDs across {total_files} files")
+    else:
+        print("  All database UUIDs already match target — no changes needed")
 
 
 def map_database_uuids(target_instance: str, assets_dir: Path) -> None:
     """
     Map database UUIDs from source assets to target instance.
+
+    Fetches the authoritative UUID for each database from the target Superset
+    instance by name, then rewrites every database config and dataset file so
+    that all UUID references point at the correct target-instance values.
 
     Args:
         target_instance: Target instance name
@@ -200,12 +164,5 @@ def map_database_uuids(target_instance: str, assets_dir: Path) -> None:
     """
     print(f"  Mapping database UUIDs for {target_instance}...")
 
-    source_dbs = load_source_databases(assets_dir)
     target_dbs = get_target_databases(target_instance)
-    uuid_mapping = build_uuid_mapping(source_dbs, target_dbs)
-
-    if not uuid_mapping:
-        print("  No database UUID mapping needed (UUIDs already match)")
-        return
-
-    rewrite_all_assets(assets_dir, uuid_mapping)
+    rewrite_all_assets(assets_dir, target_dbs)
