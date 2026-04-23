@@ -2,7 +2,6 @@
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -11,60 +10,72 @@ import yaml
 
 def get_target_databases(instance_name: str) -> dict[str, str]:
     """
-    Fetch databases from target Superset instance using sup CLI.
+    Fetch databases from the target Superset instance via its REST API.
+
+    Uses the same OAuth credentials as the rest of the promote workflow
+    (via ``create_authenticated_session``) rather than the ``sup`` CLI, so
+    this works in non-interactive environments (e.g. Concourse CI) where
+    the ``sup`` CLI session may not be pre-authenticated.
 
     Args:
-        instance_name: Target instance name
+        instance_name: Target instance name (must be in ~/.sup/config.yml)
 
     Returns:
         Dict mapping database_name to uuid
     """
-    result = subprocess.run(
-        ["sup", "database", "list", "--instance", instance_name, "--json"],
-        capture_output=True,
-        text=True,
-        check=False,
+    # Import here to avoid a circular dependency between the two lib modules.
+    from ol_superset.lib.superset_api import (  # noqa: PLC0415
+        create_authenticated_session,
+        get_instance_config,
     )
 
-    if result.returncode != 0:
-        print(f"Error: Failed to fetch databases from {instance_name}", file=sys.stderr)
-        sys.exit(1)
-
-    # Find the start of JSON array (skip spinner output)
-    start_idx = result.stdout.find("[")
-    if start_idx == -1:
-        print("Error: Could not extract database list from sup output", file=sys.stderr)
-        sys.exit(1)
-
-    # Find the end of JSON array
-    end_idx = result.stdout.rfind("]")
-    if end_idx == -1:
-        end_idx = len(result.stdout)
-    else:
-        end_idx += 1
-
-    json_text = result.stdout[start_idx:end_idx]
-
-    # Try to parse JSON, fall back to regex if needed
-    try:
-        db_list = json.loads(json_text)
-        return {db["database_name"]: db["uuid"] for db in db_list}
-    except json.JSONDecodeError:
-        # Fall back: extract UUID/name pairs using regex
-        name_pattern = r'"database_name":\s*"([^"]+)"'
-        uuid_pattern = r'"uuid":\s*"([0-9a-f-]{36})"'
-
-        names = re.findall(name_pattern, json_text)
-        uuids = re.findall(uuid_pattern, json_text)
-
-        if len(names) == len(uuids):
-            return dict(zip(names, uuids, strict=False))
-
+    config = get_instance_config(instance_name)
+    base_url = config.get("url", "").rstrip("/")
+    if not base_url:
         print(
-            "Error: Could not parse database information from sup CLI",
+            f"Error: No URL configured for instance '{instance_name}'",
             file=sys.stderr,
         )
         sys.exit(1)
+
+    session = create_authenticated_session(instance_name)
+    if session is None:
+        print(
+            f"Error: Failed to authenticate with '{instance_name}'",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    endpoint = f"{base_url}/api/v1/database/"
+    databases: dict[str, str] = {}
+    page = 0
+    page_size = 100
+
+    try:
+        while True:
+            params = {"q": json.dumps({"page": page, "page_size": page_size})}
+            response = session.get(endpoint, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("result", [])
+            if not results:
+                break
+            for db in results:
+                name = db.get("database_name")
+                uuid = db.get("uuid")
+                if name and uuid:
+                    databases[name] = uuid
+            page += 1
+            if len(results) < page_size:
+                break
+    except Exception as e:  # noqa: BLE001
+        print(
+            f"Error: Failed to fetch databases from {instance_name}: {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return databases
 
 
 def rewrite_all_assets(assets_dir: Path, target_dbs: dict[str, str]) -> None:
