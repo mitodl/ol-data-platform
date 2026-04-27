@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
-
-import pytest
-
 from ol_superset.lib.role_management import compute_desired_dataset_ids
 
 # ---------------------------------------------------------------------------
@@ -13,9 +9,21 @@ from ol_superset.lib.role_management import compute_desired_dataset_ids
 # ---------------------------------------------------------------------------
 
 API_DATASETS = [
-    {"id": 1, "table_name": "marts__micromasters_dedp_exam_grades", "schema": "ol_warehouse_production_mart"},
-    {"id": 2, "table_name": "marts__other_table", "schema": "ol_warehouse_production_mart"},
-    {"id": 3, "table_name": "dim__courses", "schema": "ol_warehouse_production_dimensional"},
+    {
+        "id": 1,
+        "table_name": "marts__micromasters_dedp_exam_grades",
+        "schema": "ol_warehouse_production_mart",
+    },
+    {
+        "id": 2,
+        "table_name": "marts__other_table",
+        "schema": "ol_warehouse_production_mart",
+    },
+    {
+        "id": 3,
+        "table_name": "dim__courses",
+        "schema": "ol_warehouse_production_dimensional",
+    },
     {"id": 4, "table_name": "raw__events", "schema": "ol_warehouse_production_raw"},
     {"id": 5, "table_name": "some_public_table", "schema": "public"},
 ]
@@ -58,8 +66,14 @@ def test_compute_desired_dataset_ids_empty_schemas():
 DATA_ENGINEER_ROLE = {
     "name": "ol_data_engineer",
     "permissions": [
-        {"permission": {"name": "all_datasource_access"}, "view_menu": {"name": "all_datasource_access"}},
-        {"permission": {"name": "all_database_access"}, "view_menu": {"name": "all_database_access"}},
+        {
+            "permission": {"name": "all_datasource_access"},
+            "view_menu": {"name": "all_datasource_access"},
+        },
+        {
+            "permission": {"name": "all_database_access"},
+            "view_menu": {"name": "all_database_access"},
+        },
         {"permission": {"name": "can_read"}, "view_menu": {"name": "Dashboard"}},
     ],
     "allowed_schemas": [
@@ -81,7 +95,10 @@ REGULAR_ROLE = {
 NO_SCHEMAS_ALL_ACCESS_ROLE = {
     "name": "ol_admin",
     "permissions": [
-        {"permission": {"name": "all_datasource_access"}, "view_menu": {"name": "all_datasource_access"}},
+        {
+            "permission": {"name": "all_datasource_access"},
+            "view_menu": {"name": "all_datasource_access"},
+        },
     ],
     "allowed_schemas": [],
 }
@@ -116,14 +133,35 @@ class TestRoleSyncSkipLogic:
     def _make_sync_inputs(self):
         """Return mock API state for a minimal sync run."""
         api_datasets = [
-            {"id": 1, "table_name": "marts__micromasters_dedp_exam_grades", "schema": "ol_warehouse_production_mart", "uuid": "aaa"},
-            {"id": 2, "table_name": "dim__courses", "schema": "ol_warehouse_production_dimensional", "uuid": "bbb"},
+            {
+                "id": 1,
+                "table_name": "marts__micromasters_dedp_exam_grades",
+                "schema": "ol_warehouse_production_mart",
+                "uuid": "aaa",
+            },
+            {
+                "id": 2,
+                "table_name": "dim__courses",
+                "schema": "ol_warehouse_production_dimensional",
+                "uuid": "bbb",
+            },
         ]
-        api_roles = [{"id": 10, "name": "ol_data_engineer"}, {"id": 11, "name": "ol_data_analyst"}]
+        api_roles = [
+            {"id": 10, "name": "ol_data_engineer"},
+            {"id": 11, "name": "ol_data_analyst"},
+        ]
         # Datasource PVMs: view_menu_name has format "[table](id:N)"
         all_ds_perms = [
-            {"id": 100, "permission_name": "datasource_access", "view_menu_name": "[marts__micromasters_dedp_exam_grades](id:1)"},
-            {"id": 200, "permission_name": "datasource_access", "view_menu_name": "[dim__courses](id:2)"},
+            {
+                "id": 100,
+                "permission_name": "datasource_access",
+                "view_menu_name": "[marts__micromasters_dedp_exam_grades](id:1)",
+            },
+            {
+                "id": 200,
+                "permission_name": "datasource_access",
+                "view_menu_name": "[dim__courses](id:2)",
+            },
         ]
         return api_datasets, api_roles, all_ds_perms
 

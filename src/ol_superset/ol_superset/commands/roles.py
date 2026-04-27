@@ -432,7 +432,9 @@ def roles_sync(
             to_revoke_ds_ids = set()
 
         if has_all_access:
-            print("    ℹ️  Role has all_datasource_access — adding missing per-dataset permissions (no revoke)")
+            print(
+                "    ℹ️  Role has all_datasource_access — adding missing per-dataset permissions (no revoke)"
+            )
 
         print(f"    Allowed schemas: {allowed_schemas}")
         print(f"    Desired datasets: {len(desired_ds_ids)}")
