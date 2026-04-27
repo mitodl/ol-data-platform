@@ -196,6 +196,10 @@ left join mitx__users
        on edxorg_enrollment.user_id = cast(mitx__users.user_edxorg_id as varchar)
 left join mitx__users as mitx_users_by_email
        on lower(edxorg_enrollment.user_email) = lower(mitx_users_by_email.user_mitxonline_email)
+left join mitxonline_enrollment as mitxonline_enrollment_by_userid
+    on coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id)
+        = mitxonline_enrollment_by_userid.user_id
+    and edxorg_enrollment.courserun_readable_id = mitxonline_enrollment_by_userid.courserun_readable_id
 left join edx_to_mitxonline_certificate_revision
     on edxorg_enrollment.courserun_readable_id = edx_to_mitxonline_certificate_revision.courserun_readable_id
 left join edx_signatories
@@ -205,5 +209,5 @@ left join retired_users
 where
     edxorg_enrollment.courseruncertificate_created_on is not null
     and mitxonline_enrollment.user_email is null
-    and mitx__users.user_mitxonline_email is null
+    and mitxonline_enrollment_by_userid.user_id is null
     and retired_users.user_id is null
