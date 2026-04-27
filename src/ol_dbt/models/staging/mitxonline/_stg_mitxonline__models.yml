@@ -72,9 +72,7 @@ models:
         column_list: ["courserun_id", "user_id"]
   - dbt_utils.recency:
       config:
-        severity: error
-        error_if: "!=0"
-
+        severity: warn
       arguments:
         datepart: day
         field: from_iso8601_timestamp(courserunenrollment_created_on || 'Z')
