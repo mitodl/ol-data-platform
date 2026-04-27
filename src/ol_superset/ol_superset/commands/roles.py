@@ -264,8 +264,10 @@ def roles_sync(
     datasets from the target instance, then adds or removes datasource-level
     permissions so each role matches its governance policy.
 
-    Roles with 'all_datasource_access' (e.g. ol_data_engineer) are skipped
-    since they already have unrestricted access.
+    Roles with 'all_datasource_access' (e.g. ol_data_engineer) still have
+    their allowed_schemas processed to add individual datasource_access
+    permissions as belt-and-suspenders coverage — permissions are only added,
+    never revoked, for those roles.
 
     Examples:
         Dry-run to preview changes:
@@ -383,17 +385,17 @@ def roles_sync(
 
         print(f"  Role: {role_name}")
 
-        # Check if role has all_datasource_access (skip - already has everything)
+        # Check if role has all_datasource_access.
+        # Even if it does, still apply individual datasource_access permissions
+        # for its allowed_schemas as belt-and-suspenders — all_datasource_access
+        # alone can be insufficient if the FAB PermissionView isn't properly
+        # seeded or the Superset version doesn't honour it for all code paths.
+        # For such roles, only add missing permissions; never revoke.
         has_all_access = any(
             p.get("view_menu", {}).get("name") == "all_datasource_access"
             or p.get("view_menu", {}).get("name") == "all_database_access"
             for p in gov_role.get("permissions", [])
         )
-        if has_all_access:
-            print("    ⏭️  Skipping: role has all_datasource_access")
-            total_skipped += 1
-            print()
-            continue
 
         if not allowed_schemas:
             print("    ⏭️  Skipping: no allowed_schemas defined")
@@ -424,8 +426,13 @@ def roles_sync(
         to_add_ds_ids = desired_ds_ids - current_ds_ids
         to_revoke_ds_ids = current_ds_ids - desired_ds_ids
 
-        if skip_revoke:
+        # Roles with all_datasource_access keep any extra permissions they already
+        # hold — only add what's missing, never revoke.
+        if skip_revoke or has_all_access:
             to_revoke_ds_ids = set()
+
+        if has_all_access:
+            print("    ℹ️  Role has all_datasource_access — adding missing per-dataset permissions (no revoke)")
 
         print(f"    Allowed schemas: {allowed_schemas}")
         print(f"    Desired datasets: {len(desired_ds_ids)}")
