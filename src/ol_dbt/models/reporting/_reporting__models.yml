@@ -245,6 +245,10 @@ models:
     description: numeric, price for the order line item before discount
   - name: program_name
     description: string, name of the program the course belongs to
+  - name: order_type
+    description: string, type of the order
+  - name: redeemed_email
+    description: string, email address of the person who placed the B2B order
   - name: receipt_url
     description: string, URL to the receipt for the order on the MITx Online application
 

@@ -94,6 +94,8 @@ select
     , orders.receipt_payment_timestamp
     , orders.unit_price
     , programs.program_name
+    , orders.order_type
+    , orders.redeemed_email
     , if(
         enrollments.platform = '{{ var("mitxonline") }}'
         , concat('https://mitxonline.mit.edu/orders/receipt/', cast(orders.order_id as varchar))
