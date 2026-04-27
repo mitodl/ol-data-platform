@@ -250,8 +250,8 @@ models:
       and may be null for others.
   - name: redeemed_email
     description: string, email address associated with the redeemed order/seat. For
-      some platforms this may differ from the purchaser email, while for others
-      (for example MITx Online) it may be the same as user_email.
+      some platforms this may differ from the purchaser email, while for others (for
+      example MITx Online) it may be the same as user_email.
   - name: receipt_url
     description: string, URL to the receipt for the order on the MITx Online application
 
