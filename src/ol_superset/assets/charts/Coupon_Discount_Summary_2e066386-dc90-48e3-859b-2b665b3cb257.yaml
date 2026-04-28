@@ -7,7 +7,9 @@ params:
   adhoc_filters: []
   all_columns: []
   allow_render_html: true
+  annotation_layers: []
   color_pn: true
+  comparison_color_scheme: Green
   comparison_type: values
   conditional_formatting: []
   extra_form_data: {}
@@ -43,10 +45,12 @@ params:
   - platform
   include_search: true
   order_by_cols: []
+  order_desc: true
   percent_metric_calculation: row_limit
   percent_metrics: []
   query_mode: aggregate
   row_limit: 250000
+  server_page_length: 10
   show_cell_bars: true
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}
