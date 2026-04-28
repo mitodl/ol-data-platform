@@ -433,7 +433,8 @@ def roles_sync(
 
         if has_all_access:
             print(
-                "    ℹ️  Role has all_datasource_access — adding missing per-dataset permissions (no revoke)"
+                "    ℹ️  Role has all_datasource_access"
+                " — adding missing per-dataset permissions (no revoke)"
             )
 
         print(f"    Allowed schemas: {allowed_schemas}")

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any, cast
+
 from ol_superset.lib.role_management import compute_desired_dataset_ids
 
 # ---------------------------------------------------------------------------
@@ -104,7 +107,7 @@ NO_SCHEMAS_ALL_ACCESS_ROLE = {
 }
 
 
-def _has_all_access(gov_role: dict) -> bool:
+def _has_all_access(gov_role: Mapping[str, Any]) -> bool:
     """Mirror of the has_all_access check in roles.py."""
     return any(
         p.get("view_menu", {}).get("name") == "all_datasource_access"
@@ -166,26 +169,33 @@ class TestRoleSyncSkipLogic:
         return api_datasets, api_roles, all_ds_perms
 
     def test_all_access_role_with_schemas_is_processed(self):
-        """Role with all_datasource_access + allowed_schemas should get missing perms added."""
+        """
+        Role with all_datasource_access + allowed_schemas should get missing
+        perms added.
+        """
         api_datasets, api_roles, all_ds_perms = self._make_sync_inputs()
 
         gov_role = DATA_ENGINEER_ROLE
-        allowed_schemas = gov_role["allowed_schemas"]  # includes mart and dimensional
+        # includes mart and dimensional schemas
+        allowed_schemas = cast(list[str], gov_role["allowed_schemas"])
 
         desired = compute_desired_dataset_ids(allowed_schemas, api_datasets)
         assert 1 in desired, "Dataset in allowed schema must be in desired set"
         assert 2 in desired, "Dataset in allowed schema must be in desired set"
 
     def test_all_access_role_revoke_is_suppressed(self):
-        """Even if current_ds_ids > desired_ds_ids, revokes must not happen for all_access roles."""
-        # Simulate role already having permission for dataset 99 (outside allowed_schemas)
+        """
+        Even if current_ds_ids > desired_ds_ids, revokes must not happen for
+        all_access roles.
+        """
+        # Simulate role already having permission for dataset 99
+        # (outside allowed_schemas)
         current_ds_ids = {1, 2, 99}
         desired_ds_ids = {1, 2}
 
         to_revoke = current_ds_ids - desired_ds_ids  # {99}
 
         # For a role with has_all_access, to_revoke must be cleared
-        has_all_access = True
         effective_skip_revoke = True  # skip_revoke or has_all_access
         if effective_skip_revoke:
             to_revoke = set()
@@ -193,10 +203,13 @@ class TestRoleSyncSkipLogic:
         assert to_revoke == set(), "Revoke set must be empty for all_access roles"
 
     def test_no_schemas_all_access_role_is_skipped(self):
-        """Role with all_datasource_access but no allowed_schemas should still be skipped."""
+        """
+        Role with all_datasource_access but no allowed_schemas should still
+        be skipped.
+        """
         role = NO_SCHEMAS_ALL_ACCESS_ROLE
         allowed_schemas = role.get("allowed_schemas", [])
-        has_all_access = _has_all_access(role)
+        _has_all_access(role)
 
         # Mirrors the new skip condition: skip only when no allowed_schemas
         should_skip = not allowed_schemas
