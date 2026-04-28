@@ -40,6 +40,8 @@ params:
   - user_username
   - user_country_code
   - organization_name
+  - order_type
+  - redeemed_email
   allow_render_html: true
   color_pn: false
   column_config:
@@ -60,10 +62,11 @@ params:
   groupby: []
   include_search: true
   order_by_cols: []
-  percent_metric_calculation: row_limit
+  order_desc: true
   percent_metrics: []
   query_mode: raw
   row_limit: 50000
+  server_page_length: 10
   show_cell_bars: true
   table_timestamp_format: smart_date
   temporal_columns_lookup: {}

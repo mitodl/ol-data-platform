@@ -494,6 +494,30 @@ columns:
   python_date_format: null
   type: VARCHAR
   verbose_name: null
+- advanced_data_type: null
+  column_name: redeemed_email
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: order_type
+  description: null
+  expression: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
 description: Auto refreshed at 2026-02-05T13:51:23.850823+00:00
