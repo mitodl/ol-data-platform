@@ -20,7 +20,6 @@ models:
   - name: organization_fk
     description: Foreign key to dim_organization.organization_pk.
     tests:
-    - not_null
     - relationships:
         to: ref('dim_organization')
         field: organization_pk

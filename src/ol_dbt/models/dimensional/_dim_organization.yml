@@ -44,6 +44,12 @@ models:
     Bridge between B2B organizations and course runs via contracts.
     Currently covers MITx Online organizations linked via B2B contracts.
     Grain: one row per (organization, contract, course_run).
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - organization_fk
+      - contract_fk
+      - courserun_fk
   columns:
   - name: organization_fk
     description: Foreign key to dim_organization.organization_pk.
