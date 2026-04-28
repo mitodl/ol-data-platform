@@ -41,9 +41,9 @@ models:
 
 - name: bridge_organization_courserun
   description: >
-    Many-to-many bridge between B2B organizations and course runs.
+    Bridge between B2B organizations and course runs via contracts.
     Currently covers MITx Online organizations linked via B2B contracts.
-    Grain: one row per (organization, course_run, contract).
+    Grain: one row per (organization, contract, course_run).
   columns:
   - name: organization_fk
     description: Foreign key to dim_organization.organization_pk.
@@ -52,6 +52,13 @@ models:
     - relationships:
         to: ref('dim_organization')
         field: organization_pk
+  - name: contract_fk
+    description: Foreign key to dim_contract.contract_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_contract')
+        field: contract_pk
   - name: courserun_fk
     description: Foreign key to dim_course_run.courserun_pk.
     tests:
@@ -59,12 +66,3 @@ models:
     - relationships:
         to: ref('dim_course_run')
         field: courserun_pk
-  - name: b2b_contract_name
-    description: Human-readable name of the B2B contract linking this organization
-      to the course run.
-  - name: b2b_contract_is_active
-    description: Whether the B2B contract is currently active.
-  - name: b2b_contract_start_date
-    description: Start date of the B2B contract.
-  - name: b2b_contract_end_date
-    description: End date of the B2B contract (null if open-ended).

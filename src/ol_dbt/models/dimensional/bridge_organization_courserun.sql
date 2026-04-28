@@ -2,25 +2,20 @@
     materialized='table'
 ) }}
 
--- Maps MITx Online B2B organizations to course runs via B2B contracts.
--- Grain: one row per (organization, course_run, contract).
+-- Maps MITx Online B2B organizations to course runs via contracts.
+-- Grain: one row per (organization, contract, course_run).
 -- Note: xPro B2B purchases are tracked via orders (see int__mitxpro__b2becommerce_b2border).
-with b2b_mappings as (
+with contracts_to_courseruns as (
     select
-        courserun_readable_id
-        , organization_key
-        , organization_name
-        , b2b_contract_name
-        , b2b_contract_is_active
-        , b2b_contract_start_date
-        , b2b_contract_end_date
-    from {{ ref('int__mitxonline__b2b_contract_to_courseruns') }}
+        b2b_contract_id as contract_id
+        , courserun_readable_id
+    from {{ ref('stg__mitxonline__app__postgres__courses_courserun') }}
+    where b2b_contract_id is not null
 )
 
-, dim_organization as (
-    select organization_pk, organization_key, platform
-    from {{ ref('dim_organization') }}
-    where platform = 'mitxonline'
+, dim_contract as (
+    select contract_pk, contract_id, organization_fk
+    from {{ ref('dim_contract') }}
 )
 
 , dim_course_run as (
@@ -31,16 +26,9 @@ with b2b_mappings as (
 )
 
 select
-    org.organization_pk as organization_fk
+    dc.organization_fk
+    , dc.contract_pk as contract_fk
     , cr.courserun_pk as courserun_fk
-    , b2b_mappings.b2b_contract_name
-    , b2b_mappings.b2b_contract_is_active
-    , b2b_mappings.b2b_contract_start_date
-    , b2b_mappings.b2b_contract_end_date
-from b2b_mappings
-left join dim_organization as org
-    on b2b_mappings.organization_key = org.organization_key
-left join dim_course_run as cr
-    on b2b_mappings.courserun_readable_id = cr.courserun_readable_id
-where org.organization_pk is not null
-    and cr.courserun_pk is not null
+from contracts_to_courseruns as ctc
+inner join dim_contract as dc on ctc.contract_id = dc.contract_id
+inner join dim_course_run as cr on ctc.courserun_readable_id = cr.courserun_readable_id
