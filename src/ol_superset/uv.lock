@@ -706,7 +706,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.31.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "sqlglot", specifier = ">=20.0" },
-    { name = "superset-sup", git = "https://github.com/mitodl/superset-sup?rev=self_hosted_superset_oidc" },
+    { name = "superset-sup", git = "https://github.com/mitodl/superset-sup?rev=e35d2bda5ebef23810192bfe2d7077440bfbf646" },
 ]
 
 [package.metadata.requires-dev]
@@ -1145,8 +1145,8 @@ wheels = [
 
 [[package]]
 name = "superset-sup"
-version = "0.1.0.post1.dev31+g0c1e005aa"
-source = { git = "https://github.com/mitodl/superset-sup?rev=self_hosted_superset_oidc#0c1e005aa1306526d2d5b5135a3c458167755481" }
+version = "0.1.0.post1.dev8+ge35d2bda5"
+source = { git = "https://github.com/mitodl/superset-sup?rev=e35d2bda5ebef23810192bfe2d7077440bfbf646#e35d2bda5ebef23810192bfe2d7077440bfbf646" }
 dependencies = [
     { name = "aiohttp" },
     { name = "appdirs" },
