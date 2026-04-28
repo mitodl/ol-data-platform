@@ -37,7 +37,7 @@ dev = [
     "ol-orchestrate-lib",
     "pre-commit>=4.0.0,<5",
     "pytest>=9.0.1,<10",
-    "pytest-cov>=6.0.0,<7",
+    "pytest-cov>=7.1,<8",
     "ruff",
     "shandy-sqlfmt[jinjafmt]>=0.27.0",
     "sqlfluff[rs]>=4.0.0",
