@@ -1,0 +1,71 @@
+slice_name: Coupon/Discount Summary
+description: null
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  datasource: 118__table
+  viz_type: table
+  slice_id: 128
+  query_mode: aggregate
+  groupby:
+  - couponpaymentversion_id
+  - discount_code
+  - discount_name
+  - b2b_contract_number
+  - discount_type
+  - discount_source
+  - discount_amount_text
+  - company_name
+  - discount_activated_on
+  - discount_expires_on
+  - couponpayment_name
+  - redeemed
+  - expressionType: SQL
+    label: valid_now
+    sqlExpression: "case when cast(now() as date)>=cast(substring(discount_activated_on,\
+      \ 1, 10) as date) \nand cast(now() as date)<=cast(substring(discount_expires_on,\
+      \ 1, 10) as date) \nthen TRUE else FALSE end"
+  - expressionType: SQL
+    label: total_nr_coupons
+    sqlExpression: num_discount_codes*discount_max_redemptions
+  - expressionType: SQL
+    label: Coupons_left
+    sqlExpression: (num_discount_codes*discount_max_redemptions) - discounts_used_count
+  - discounts_used_count
+  - b2breceipt_reference_number
+  - product_readable_id
+  - payment_transaction
+  - discount_max_redemptions
+  - platform
+  time_grain_sqla: P1D
+  temporal_columns_lookup: {}
+  all_columns: []
+  percent_metrics: []
+  adhoc_filters: []
+  order_by_cols: []
+  row_limit: 250000
+  percent_metric_calculation: row_limit
+  table_timestamp_format: smart_date
+  include_search: true
+  allow_render_html: true
+  show_cell_bars: true
+  color_pn: true
+  conditional_formatting: []
+  comparison_type: values
+  extra_form_data: {}
+  dashboards:
+  - 45
+query_context: '{"datasource":{"id":118,"type":"table"},"force":false,"queries":[{"filters":[],"extras":{"time_grain_sqla":"P1D","having":"","where":""},"applied_time_extras":{},"columns":["couponpaymentversion_id","discount_code","discount_name","b2b_contract_number","discount_type","discount_source","discount_amount_text","company_name","discount_activated_on","discount_expires_on","couponpayment_name","redeemed",{"expressionType":"SQL","label":"valid_now","sqlExpression":"case
+  when cast(now() as date)>=cast(substring(discount_activated_on, 1, 10) as date)
+  \nand cast(now() as date)<=cast(substring(discount_expires_on, 1, 10) as date) \nthen
+  TRUE else FALSE end"},{"expressionType":"SQL","label":"total_nr_coupons","sqlExpression":"num_discount_codes*discount_max_redemptions"},{"expressionType":"SQL","label":"Coupons_left","sqlExpression":"(num_discount_codes*discount_max_redemptions)
+  - discounts_used_count"},"discounts_used_count","b2breceipt_reference_number","product_readable_id","payment_transaction","discount_max_redemptions","platform"],"metrics":[],"orderby":[],"annotation_layers":[],"row_limit":250000,"series_limit":0,"group_others_when_limit_reached":false,"order_desc":true,"url_params":{},"custom_params":{},"custom_form_data":{},"post_processing":[],"time_offsets":[]}],"form_data":{"datasource":"118__table","viz_type":"table","slice_id":128,"query_mode":"aggregate","groupby":["couponpaymentversion_id","discount_code","discount_name","b2b_contract_number","discount_type","discount_source","discount_amount_text","company_name","discount_activated_on","discount_expires_on","couponpayment_name","redeemed",{"expressionType":"SQL","label":"valid_now","sqlExpression":"case
+  when cast(now() as date)>=cast(substring(discount_activated_on, 1, 10) as date)
+  \nand cast(now() as date)<=cast(substring(discount_expires_on, 1, 10) as date) \nthen
+  TRUE else FALSE end"},{"expressionType":"SQL","label":"total_nr_coupons","sqlExpression":"num_discount_codes*discount_max_redemptions"},{"expressionType":"SQL","label":"Coupons_left","sqlExpression":"(num_discount_codes*discount_max_redemptions)
+  - discounts_used_count"},"discounts_used_count","b2breceipt_reference_number","product_readable_id","payment_transaction","discount_max_redemptions","platform"],"time_grain_sqla":"P1D","temporal_columns_lookup":{},"all_columns":[],"percent_metrics":[],"adhoc_filters":[],"order_by_cols":[],"row_limit":250000,"percent_metric_calculation":"row_limit","table_timestamp_format":"smart_date","include_search":true,"allow_render_html":true,"show_cell_bars":true,"color_pn":true,"conditional_formatting":[],"comparison_type":"values","extra_form_data":{},"dashboards":[45],"force":false,"result_format":"json","result_type":"full"},"result_format":"json","result_type":"full"}'
+cache_timeout: null
+uuid: 2e066386-dc90-48e3-859b-2b665b3cb257
+version: 1.0.0
+dataset_uuid: a5df905c-0480-4227-b234-1a1064672b32
