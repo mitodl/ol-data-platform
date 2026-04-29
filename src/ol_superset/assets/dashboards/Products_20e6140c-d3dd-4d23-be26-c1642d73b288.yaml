@@ -217,8 +217,10 @@ metadata:
     scope:
       excluded: []
       rootPath:
-      - TAB-I63TmRRqPi
-      - TAB-jr--fztxCuKd33gIvl4eC
+      - ROOT_ID
+    tabsInScope:
+    - TAB-I63TmRRqPi
+    - TAB-jr--fztxCuKd33gIvl4eC
     targets:
     - column:
         name: product_name
