@@ -16,11 +16,9 @@ with mitxonline_courseruns as (
         , courserun_enrollment_start_on as enrollment_start
         , courserun_enrollment_end_on as enrollment_end
         , courserun_is_live
+        , courserun_created_on
         , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_runs') }}
-    --- Filter to just course runs on MITx Online platform since int__mitxonline__course_runs includes
-    -- the migrated edX runs as well, these migrated runs are captured in the edxorg_courseruns CTE below
-    where courserun_platform = '{{ var("mitxonline") }}'
 )
 
 , mitxpro_courseruns as (
@@ -34,6 +32,7 @@ with mitxonline_courseruns as (
         , courserun_enrollment_start_on as enrollment_start
         , courserun_enrollment_end_on as enrollment_end
         , courserun_is_live
+        , courserun_created_on
         , 'mitxpro' as platform
     from {{ ref('int__mitxpro__course_runs') }}
 )
@@ -49,6 +48,7 @@ with mitxonline_courseruns as (
         , courserun_enrollment_start_date as enrollment_start
         , courserun_enrollment_end_date as enrollment_end
         , courserun_is_published as courserun_is_live
+        , cast(null as varchar) as courserun_created_on
         , 'edxorg' as platform
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
@@ -64,6 +64,7 @@ with mitxonline_courseruns as (
         , courserun_enrollment_start_on as enrollment_start
         , courserun_enrollment_end_on as enrollment_end
         , cast(null as boolean) as courserun_is_live
+        , courserun_created_on
         , 'residential' as platform
     from {{ ref('int__mitxresidential__courseruns') }}
 )
@@ -156,6 +157,7 @@ with mitxonline_courseruns as (
         , enrollment_start
         , enrollment_end
         , courserun_is_live
+        , courserun_created_on
         , current_timestamp as effective_date
         , cast(null as timestamp) as end_date
         , true as is_current
@@ -199,6 +201,7 @@ with mitxonline_courseruns as (
         , existing.enrollment_start
         , existing.enrollment_end
         , existing.courserun_is_live
+        , existing.courserun_created_on
         , existing.effective_date
         , current_timestamp as end_date
         , false as is_current
