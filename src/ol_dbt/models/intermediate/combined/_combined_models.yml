@@ -202,6 +202,11 @@ models:
     description: str, the open edX platform where the data is from
     tests:
     - not_null
+  - name: platform_code
+    description: str, the platform identifier code (e.g. mitxonline, edxorg, mitxpro,
+      residential) used to join with dimensional models like dim_course_run
+    tests:
+    - not_null
   - name: courserun_readable_id
     description: str, the open edX Course ID formatted as course-v1:{org}+{course
       number}+{run_tag} for MITx Online, xPro and Residential MITx. For edx.org platform,
