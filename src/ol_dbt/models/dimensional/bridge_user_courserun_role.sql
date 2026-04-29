@@ -30,6 +30,7 @@ select
     -- Some course runs have no courserun_pk (due to missing course run metadata in source), so retaining readable_id allows
      -- those course runs to still be identifiable in downstream reporting tables
     , ucr.courserun_readable_id
+    , ucr.platform_code
     , ucr.courseaccess_role
 from user_course_roles as ucr
 inner join dim_user as du on lower(ucr.user_email) = lower(du.email)

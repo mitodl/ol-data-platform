@@ -33,6 +33,11 @@ models:
       for rows where courserun_fk is null.
     tests:
     - not_null
+  - name: platform_code
+    description: Platform identifier code (e.g. mitxonline, edxorg, mitxpro, residential)
+      for the course run.
+    tests:
+    - not_null
   - name: courseaccess_role
     description: The role assigned to the user for this course run (e.g. instructor,
       staff, beta_tester, finance_admin, sales_admin).
