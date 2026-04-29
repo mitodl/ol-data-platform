@@ -37,6 +37,7 @@ params:
   - user_joined_on_mitxonline
   allow_rearrange_columns: true
   allow_render_html: false
+  annotation_layers: []
   color_pn: false
   column_config:
     goals:
