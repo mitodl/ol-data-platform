@@ -10,13 +10,7 @@ with user_roles as (
 
 , combined_course_roles as (
     select
-        case ucr.platform_code
-            when 'mitxonline' then '{{ var("mitxonline") }}'
-            when 'edxorg' then '{{ var("edxorg") }}'
-            when 'mitxpro' then '{{ var("mitxpro") }}'
-            when 'residential' then '{{ var("residential") }}'
-        end as platform
-        , ucr.platform_code
+        ucr.platform_code as platform
         , case ucr.platform_code
             when 'mitxonline' then du.user_mitxonline_username
             when 'edxorg' then du.user_edxorg_username
@@ -66,9 +60,8 @@ select
     , course_activities.last_course_activity_date
 from combined_course_roles
 left join combined_course_runs
-    on combined_course_runs.platform = combined_course_roles.platform_code
+    on combined_course_runs.platform = combined_course_roles.platform
     and combined_course_runs.courserun_readable_id = combined_course_roles.courserun_readable_id
 left join course_activities
-    on course_activities.platform = combined_course_roles.platform
-    and course_activities.user_username = combined_course_roles.user_username
+    on course_activities.user_username = combined_course_roles.user_username
     and course_activities.courserun_readable_id = combined_course_roles.courserun_readable_id
