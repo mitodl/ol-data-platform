@@ -250,7 +250,10 @@ with mitx_users as (
         learn_user.user_global_id
         , learn_user.user_id as mitlearn_user_id
         , learn_user.user_email as email
-        , concat(learn_user.user_first_name, ' ', learn_user.user_last_name) as full_name
+        , case when learn_user.user_first_name is not null or learn_user.user_last_name is not null
+            then concat(learn_user.user_first_name, ' ', learn_user.user_last_name)
+            else learn_profile.user_name 
+            end as full_name
         , learn_profile.user_current_education as highest_education
         , learn_user.user_is_active as user_is_active_on_mitlearn
         , learn_user.user_joined_on as user_joined_on_mitlearn
