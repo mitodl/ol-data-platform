@@ -18,6 +18,9 @@ with mitxonline_courseruns as (
         , courserun_is_live
         , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_runs') }}
+    --- Filter to just course runs on MITx Online platform since int__mitxonline__course_runs includes
+    -- the migrated edX runs as well, these migrated runs are captured in the edxorg_courseruns CTE below
+    where courserun_platform = '{{ var("mitxonline") }}'
 )
 
 , mitxpro_courseruns as (
