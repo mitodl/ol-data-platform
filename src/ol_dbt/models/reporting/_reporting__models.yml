@@ -1178,8 +1178,8 @@ models:
     platforms and their last course activity date
   columns:
   - name: platform
-    description: string, name of the platform (e.g. MITx Online, xPro, edX.org, Residential
-      MITx)
+    description: string, platform code identifying the source platform (e.g. mitxonline,
+      mitxpro, edxorg, residential)
     tests:
     - not_null
   - name: user_username

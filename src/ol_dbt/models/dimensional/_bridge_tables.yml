@@ -2,6 +2,48 @@
 version: 2
 
 models:
+- name: bridge_user_courserun_role
+  description: >
+    User to course run roles bridge across all platforms. Links users to course runs
+    via their course access roles (e.g. instructor, staff, beta_tester).
+    Grain: one row per (user, course_run, role).
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - user_fk
+      - courserun_readable_id
+      - courseaccess_role
+  columns:
+  - name: user_fk
+    description: Foreign key to dim_user.user_pk.
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+  - name: courserun_fk
+    description: Foreign key to dim_course_run.courserun_pk. Null when the course
+      run does not exist in dim_course_run.
+    tests:
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+  - name: courserun_readable_id
+    description: Human-readable course run identifier from the source system. Preserved
+      for rows where courserun_fk is null.
+    tests:
+    - not_null
+  - name: platform_code
+    description: Platform identifier code (e.g. mitxonline, edxorg, mitxpro, residential)
+      for the course run.
+    tests:
+    - not_null
+  - name: courseaccess_role
+    description: The role assigned to the user for this course run (e.g. instructor,
+      staff, beta_tester, finance_admin, sales_admin).
+    tests:
+    - not_null
+
 - name: bridge_program_course
   description: >
     Many-to-many bridge table connecting programs to their required courses.
