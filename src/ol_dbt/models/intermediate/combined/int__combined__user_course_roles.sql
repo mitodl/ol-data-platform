@@ -53,6 +53,7 @@ with mitxonline_courseroles as (
 , combined_courseroles as (
     select
         '{{ var("mitxonline") }}' as platform
+        , 'mitxonline' as platform_code
         , mitxonline_openedx_users.user_username
         , mitxonline_openedx_users.user_email
         , mitxonline_app_users.user_full_name
@@ -72,6 +73,7 @@ with mitxonline_courseroles as (
 
     select
         '{{ var("edxorg") }}' as platform
+        , 'edxorg' as platform_code
         , edxorg_users.user_username
         , edxorg_users.user_email
         , edxorg_profiles.user_full_name
@@ -89,6 +91,7 @@ with mitxonline_courseroles as (
 
     select
         '{{ var("mitxpro") }}' as platform
+        , 'mitxpro' as platform_code
         , mitxpro_openedx_users.user_username
         , mitxpro_openedx_users.user_email
         , mitxpro_app_users.user_full_name
@@ -108,6 +111,7 @@ with mitxonline_courseroles as (
 
     select
         '{{ var("residential") }}' as platform
+        , 'residential' as platform_code
         , residential_openedx_users.user_username
         , residential_openedx_users.user_email
         , residential_openedx_users.user_full_name
@@ -140,6 +144,7 @@ with mitxonline_courseroles as (
 
 select
     platform
+    , platform_code
     , combined_courseroles.user_username
     , combined_courseroles.user_email
     , combined_courseroles.user_full_name
@@ -153,6 +158,12 @@ union all
 
 select
     user_course_role_seed_file.platform
+    , case user_course_role_seed_file.platform
+        when '{{ var("mitxonline") }}' then 'mitxonline'
+        when '{{ var("edxorg") }}' then 'edxorg'
+        when '{{ var("mitxpro") }}' then 'mitxpro'
+        when '{{ var("residential") }}' then 'residential'
+    end as platform_code
     , seed_file_users.user_username
     , seed_file_users.user_email
     , seed_file_users.user_full_name
