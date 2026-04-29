@@ -1,16 +1,46 @@
-with combined_course_roles as (
+with user_roles as (
     select
-        platform
-        , user_username
-        , user_email
+        user_fk
+        , platform_code
         , courserun_readable_id
-        ,  {{ array_join('array_agg(courseaccess_role order by courseaccess_role)', ", ") }} as course_roles
-    from {{ ref('int__combined__user_course_roles') }}
-    group by platform, user_username, user_email, courserun_readable_id
+        , {{ array_join('array_agg(courseaccess_role order by courseaccess_role)', ", ") }} as course_roles
+    from {{ ref('bridge_user_courserun_role') }}
+    group by user_fk, platform_code, courserun_readable_id
+)
+
+, combined_course_roles as (
+    select
+        case ucr.platform_code
+            when 'mitxonline' then '{{ var("mitxonline") }}'
+            when 'edxorg' then '{{ var("edxorg") }}'
+            when 'mitxpro' then '{{ var("mitxpro") }}'
+            when 'residential' then '{{ var("residential") }}'
+        end as platform
+        , ucr.platform_code
+        , case ucr.platform_code
+            when 'mitxonline' then du.user_mitxonline_username
+            when 'edxorg' then du.user_edxorg_username
+            when 'mitxpro' then du.user_mitxpro_username
+            when 'residential' then du.user_residential_username
+        end as user_username
+        , du.email as user_email
+        , ucr.courserun_readable_id
+        , ucr.course_roles
+    from user_roles as ucr
+    inner join {{ ref('dim_user') }} as du on ucr.user_fk = du.user_pk
 )
 
 , combined_course_runs as (
-    select * from {{ ref('int__combined__course_runs') }}
+    select
+        platform
+        , courserun_readable_id
+        , courserun_start_on
+        , courserun_end_on
+        , {{ is_courserun_current('courserun_start_on', 'courserun_end_on') }} as courserun_is_current
+        -- courserun_created_on is not available in dim_course_run
+        , null as courserun_created_on
+    from {{ ref('dim_course_run') }}
+    where is_current = true
 )
 
 , course_activities as (
@@ -36,7 +66,7 @@ select
     , course_activities.last_course_activity_date
 from combined_course_roles
 left join combined_course_runs
-    on combined_course_runs.platform = combined_course_roles.platform
+    on combined_course_runs.platform = combined_course_roles.platform_code
     and combined_course_runs.courserun_readable_id = combined_course_roles.courserun_readable_id
 left join course_activities
     on course_activities.platform = combined_course_roles.platform
