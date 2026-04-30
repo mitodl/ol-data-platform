@@ -28,12 +28,13 @@ def export_b2b_organization_data(context: AssetExecutionContext):
     organization_key = context.partition_key
     dbt_report_name = "organization_administration_report"
 
-    data_df = get_dbt_model_as_dataframe(
-        database_name="ol_warehouse_production_reporting",
-        table_name=dbt_report_name,
-    ).collect()
-    organizational_data_df = data_df.filter(
-        pl.col("organization_key").eq(organization_key)
+    organizational_data_df = (
+        get_dbt_model_as_dataframe(
+            database_name="ol_warehouse_production_reporting",
+            table_name=dbt_report_name,
+        )
+        .filter(pl.col("organization_key").eq(organization_key))
+        .collect()
     )
     num_rows = len(organizational_data_df)
     context.log.info(
