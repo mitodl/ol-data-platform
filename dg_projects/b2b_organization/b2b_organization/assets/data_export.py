@@ -28,14 +28,15 @@ def export_b2b_organization_data(context: AssetExecutionContext):
     organization_key = context.partition_key
     dbt_report_name = "organization_administration_report"
 
-    data_df = get_dbt_model_as_dataframe(
-        database_name="ol_warehouse_production_reporting",
-        table_name=dbt_report_name,
+    organizational_data_df = (
+        get_dbt_model_as_dataframe(
+            database_name="ol_warehouse_production_reporting",
+            table_name=dbt_report_name,
+        )
+        .filter(pl.col("organization_key").eq(organization_key))
+        .collect()
     )
-    organizational_data_df = data_df.filter(
-        pl.col("organization_key").eq(organization_key)
-    )
-    num_rows = organizational_data_df.select(pl.len()).collect().item()
+    num_rows = len(organizational_data_df)
     context.log.info(
         "%d rows in organization_administration_report for %s",
         num_rows,
@@ -47,7 +48,7 @@ def export_b2b_organization_data(context: AssetExecutionContext):
     organizational_data_file = Path(
         f"{organization_key}_{dbt_report_name}_{export_date}.csv"
     )
-    organizational_data_df.sink_csv(str(organizational_data_file))
+    organizational_data_df.write_csv(str(organizational_data_file))
 
     with organizational_data_file.open("rb") as f:
         organizational_data_version = hashlib.file_digest(f, "sha256").hexdigest()
