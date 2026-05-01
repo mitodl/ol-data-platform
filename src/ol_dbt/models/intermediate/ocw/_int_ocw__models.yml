@@ -57,11 +57,11 @@ models:
       updated on OCW production. The publish date is updated by the webhook to Concourse
       pipeline (it rebuilds every site) whenever we do a release in ocw repos.
   - name: course_created_on
-    description: timestamp, date and time when the course record was created
+    description: timestamp, date and time when the course was created
     tests:
     - not_null
   - name: course_updated_on
-    description: timestamp, date and time when the course record was last updated
+    description: timestamp, date and time when the course was last updated
     tests:
     - not_null
   - name: course_description
@@ -168,11 +168,88 @@ models:
       arguments:
         column_list: ["course_uuid", "course_department_number"]
 
+- name: int__ocw__pages
+  description: OCW course pages (navigable content pages) for ocw-course sites
+  columns:
+  - name: course_uuid
+    description: str, UUID of the course containing the page
+    tests:
+    - not_null
+  - name: course_name
+    description: str, unique name of the OCW course
+    tests:
+    - not_null
+  - name: course_live_url
+    description: str, URL of the OCW course on production
+  - name: course_number
+    description: str, primary course number of the course
+  - name: course_term
+    description: str, term the course was taught
+  - name: course_title
+    description: str, title of the course
+  - name: course_year
+    description: str, year the course was taught
+  - name: website_title
+    description: str, title of the course website
+    tests:
+    - not_null
+  - name: content_type
+    description: str, WebsiteContent type of the page (always 'page')
+    tests:
+    - not_null
+  - name: page_uuid
+    description: str, UUID of the page (WebsiteContent text_id)
+    tests:
+    - not_null
+  - name: page_title
+    description: str, title of the page
+  - name: page_filename
+    description: str, filename of the page
+    tests:
+    - not_null
+  - name: page_dirpath
+    description: str, directory path of the page within the site
+  - name: page_parent_id
+    description: int, ID of the parent WebsiteContent
+  - name: page_is_page_content
+    description: boolean, whether the page is page content
+  - name: page_draft
+    description: boolean, whether the page is in draft state
+  - name: page_body
+    description: str, the markdown body content of the page (from the markdown column,
+      not metadata)
+  - name: page_description
+    description: str, description of the page
+  - name: page_legacy_type
+    description: str, legacy OCW type from Plone import (ocw_type field)
+  - name: learning_resource_types
+    description: str, learning resource types associated with the page
+  - name: metadata
+    description: json, raw metadata of the page
+    tests:
+    - not_null
+  - name: page_live_url
+    description: str, live URL of the page on production
+  - name: studio_url
+    description: str, OCW Studio URL for the page
+  - name: page_created_on
+    description: timestamp, date and time when the page was created
+    tests:
+    - not_null
+  - name: page_updated_on
+    description: timestamp, date and time when the page was last updated
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["course_uuid", "page_uuid"]
+
 - name: int__ocw__resources
   description: supporting table for resources in OCW
   columns:
   - name: content_type
-    description: str, websitecontent type of the resource (e.g., resource, external-resource)
+    description: str, WebsiteContent type of the resource (e.g., resource, external-resource)
     tests:
     - not_null
   - name: course_live_url
