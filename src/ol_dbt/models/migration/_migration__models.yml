@@ -136,9 +136,13 @@ models:
   - name: program_readable_id
     data_type: varchar
     description: readable ID of the program on MITx Online.
-  - name: program_certificate_awarded_on
+  - name: program_certificate_issued_on
     data_type: timestamp
     description: date and time when the program certificate was awarded on edX.org.
+  - name: certificate_page_revision_id
+    data_type: integer
+    description: the live wagtail page revision ID for the program certificate page
+      on MITx Online, used when creating the migrated certificate.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
