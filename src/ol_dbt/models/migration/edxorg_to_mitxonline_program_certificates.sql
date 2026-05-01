@@ -32,15 +32,41 @@ with edxorg_program_certificates as (
     from {{ ref('int__mitxonline__program_certificates') }}
 )
 
+, program_pages as (
+    select * from {{ ref('stg__mitxonline__app__postgres__cms_programpage') }}
+)
+
+, wagtail_page as (
+    select * from {{ ref('stg__mitxonline__app__postgres__cms_wagtail_page') }}
+)
+
+, mitxonline_program_certificate_page as (
+    select
+        program_pages.program_id
+        , certificate_page.wagtail_page_live_pagerevision_id as certificate_page_revision_id
+    from program_pages
+    join wagtail_page
+        on program_pages.wagtail_page_id = wagtail_page.wagtail_page_id
+    join wagtail_page as certificate_page
+        on certificate_page.wagtail_page_path like wagtail_page.wagtail_page_path || '%'
+        and certificate_page.wagtail_page_path <> wagtail_page.wagtail_page_path
+        and certificate_page.wagtail_page_slug like 'certificate%'
+)
+
 select
     edxorg_program_certificates.user_id as user_edxorg_id
     , coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id) as user_mitxonline_id
-    , coalesce(mitx__users.user_mitxonline_email, mitx__users.user_edxorg_email) as user_email
+    , coalesce(
+        mitx_users_by_email.user_mitxonline_email
+        , mitx__users.user_mitxonline_email
+        , mitx__users.user_edxorg_email
+    ) as user_email
     , edxorg_program_certificates.program_title
     , edxorg_program_certificates.program_type
     , mitxonline_programs.program_id
     , mitxonline_programs.program_readable_id
     , edxorg_program_certificates.program_certificate_awarded_on as program_certificate_issued_on
+    , mitxonline_program_certificate_page.certificate_page_revision_id
 from edxorg_program_certificates
 left join mitxonline_programs
     on lower(mitxonline_programs.program_title) = lower(edxorg_program_certificates.program_title)
@@ -53,8 +79,12 @@ left join mitxonline_program_certificates
         = mitxonline_program_certificates.user_id
     and mitxonline_programs.program_id = mitxonline_program_certificates.program_id
 left join mitxonline_program_certificates as mitxonline_program_certificates_by_email
-    on lower(mitx__users.user_mitxonline_email) = lower(mitxonline_program_certificates_by_email.user_email)
+    on lower(
+        coalesce(mitx_users_by_email.user_mitxonline_email, mitx__users.user_mitxonline_email)
+    ) = lower(mitxonline_program_certificates_by_email.user_email)
     and mitxonline_programs.program_id = mitxonline_program_certificates_by_email.program_id
+left join mitxonline_program_certificate_page
+    on mitxonline_programs.program_id = mitxonline_program_certificate_page.program_id
 where
     --- Exclude certificates already present on MITx Online (matched by user ID or email)
     mitxonline_program_certificates.user_id is null
