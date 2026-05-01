@@ -31,8 +31,7 @@ with user_roles as (
         , courserun_start_on
         , courserun_end_on
         , {{ is_courserun_current('courserun_start_on', 'courserun_end_on') }} as courserun_is_current
-        -- courserun_created_on is not available in dim_course_run
-        , null as courserun_created_on
+        , courserun_created_on
     from {{ ref('dim_course_run') }}
     where is_current = true
 )
