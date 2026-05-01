@@ -22,6 +22,8 @@ class MITLearnApiClient(BaseApiClient):
         # without rewriting Vault.
         if override := os.environ.get("MIT_LEARN_BASE_URL"):
             learn["base_url"] = override
+        if token_override := os.environ.get("MIT_LEARN_WEBHOOK_SECRET"):
+            learn["token"] = token_override
         return cls(**learn)
 
     def _post_signed_webhook(self, path: str, data: dict[str, Any]) -> dict[str, Any]:
