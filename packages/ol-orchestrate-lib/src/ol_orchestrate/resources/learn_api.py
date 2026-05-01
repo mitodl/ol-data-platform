@@ -19,60 +19,30 @@ class MITLearnApiClient(BaseApiClient):
         learn["base_url"] = learn.get("base_url") or learn.pop("url", None)
         return cls(**learn)
 
-    def notify_course_export(self, data: dict[str, Any]) -> dict[str, Any]:
+    def _post_signed_webhook(self, path: str, data: dict[str, Any]) -> dict[str, Any]:
         payload_string = json.dumps(data, separators=(",", ":"))  # remove extra spaces
         signature = hmac.new(
             self.token.encode(), payload_string.encode(), hashlib.sha256
         ).hexdigest()
-
         headers = {
             "X-MITLearn-Signature": signature,
+            "Content-Type": "application/json",
         }
-
         response = self.http_client.post(
-            f"{self.base_url}/api/v1/webhooks/content_files/",
+            f"{self.base_url}{path}",
             content=payload_string,
             headers=headers,
         )
         response.raise_for_status()
         return response.json()
+
+    def notify_course_export(self, data: dict[str, Any]) -> dict[str, Any]:
+        return self._post_signed_webhook("/api/v1/webhooks/content_files/", data)
 
     def notify_video_shorts(self, data: dict[str, Any]) -> dict[str, Any]:
         """Send webhook notification for Video Shorts processing."""
-        payload_string = json.dumps(data, separators=(",", ":"))  # remove extra spaces
-        signature = hmac.new(
-            self.token.encode(), payload_string.encode(), hashlib.sha256
-        ).hexdigest()
-
-        headers = {
-            "X-MITLearn-Signature": signature,
-            "Content-Type": "application/json",
-        }
-
-        response = self.http_client.post(
-            f"{self.base_url}/api/v1/webhooks/video_shorts/",
-            content=payload_string,
-            headers=headers,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._post_signed_webhook("/api/v1/webhooks/video_shorts/", data)
 
     def notify_ovs_video(self, data: dict[str, Any]) -> dict[str, Any]:
         """Send webhook notification for an OVS include_in_learn video."""
-        payload_string = json.dumps(data, separators=(",", ":"))  # remove extra spaces
-        signature = hmac.new(
-            self.token.encode(), payload_string.encode(), hashlib.sha256
-        ).hexdigest()
-
-        headers = {
-            "X-MITLearn-Signature": signature,
-            "Content-Type": "application/json",
-        }
-
-        response = self.http_client.post(
-            f"{self.base_url}/api/v1/webhooks/ovs_videos/",
-            content=payload_string,
-            headers=headers,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._post_signed_webhook("/api/v1/webhooks/ovs_videos/", data)
