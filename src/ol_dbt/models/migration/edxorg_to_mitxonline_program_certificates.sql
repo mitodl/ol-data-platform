@@ -34,7 +34,7 @@ with edxorg_program_certificates as (
 
 select
     edxorg_program_certificates.user_id as user_edxorg_id
-    , mitx__users.user_mitxonline_id
+    , coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id) as user_mitxonline_id
     , coalesce(mitx__users.user_mitxonline_email, mitx__users.user_edxorg_email) as user_email
     , edxorg_program_certificates.program_title
     , edxorg_program_certificates.program_type
@@ -46,8 +46,11 @@ left join mitxonline_programs
     on lower(mitxonline_programs.program_title) = lower(edxorg_program_certificates.program_title)
 left join mitx__users
     on edxorg_program_certificates.user_id = mitx__users.user_edxorg_id
+left join mitx__users as mitx_users_by_email
+    on lower(mitx__users.user_edxorg_email) = lower(mitx_users_by_email.user_mitxonline_email)
 left join mitxonline_program_certificates
-    on mitx__users.user_mitxonline_id = mitxonline_program_certificates.user_id
+    on coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id)
+        = mitxonline_program_certificates.user_id
     and mitxonline_programs.program_id = mitxonline_program_certificates.program_id
 left join mitxonline_program_certificates as mitxonline_program_certificates_by_email
     on lower(mitx__users.user_mitxonline_email) = lower(mitxonline_program_certificates_by_email.user_email)
