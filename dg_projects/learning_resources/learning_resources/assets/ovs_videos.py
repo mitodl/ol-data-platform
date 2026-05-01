@@ -22,12 +22,12 @@ from dagster import (
     asset,
 )
 from ol_orchestrate.lib.automation_policies import upstream_or_code_changes
+from ol_orchestrate.lib.utils import fetch_all_drf_pages
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 
 OVS_PUBLIC_VIDEOS_URL_DEFAULT = (
     "https://video.odl.mit.edu/api/v0/public/videos/?include_in_learn=true"
 )
-OVS_REQUEST_TIMEOUT_SECONDS = 30.0
 
 ovs_video_ids = DynamicPartitionsDefinition(name="ovs_video_ids")
 
@@ -43,24 +43,6 @@ def _partition_key_for(video: dict[str, Any]) -> str:
 def _video_content_hash(video: dict[str, Any]) -> str:
     content = json.dumps(video, sort_keys=True, default=str)
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def _fetch_all_pages(
-    context: AssetExecutionContext, start_url: str
-) -> list[dict[str, Any]]:
-    videos: list[dict[str, Any]] = []
-    url: str | None = start_url
-    with httpx.Client(
-        follow_redirects=True, timeout=OVS_REQUEST_TIMEOUT_SECONDS
-    ) as client:
-        while url:
-            context.log.info("Fetching OVS page: %s", url)
-            response = client.get(url)
-            response.raise_for_status()
-            payload = response.json()
-            videos.extend(payload.get("results", []))
-            url = payload.get("next")
-    return videos
 
 
 @asset(
@@ -83,7 +65,7 @@ def video_api(
 ) -> Generator[Output[dict[str, Any]], None, None]:
     """Fetch include_in_learn videos from OVS and surface partition keys."""
     url = os.environ.get("OVS_PUBLIC_VIDEOS_URL") or OVS_PUBLIC_VIDEOS_URL_DEFAULT
-    all_videos = _fetch_all_pages(context, url)
+    all_videos = fetch_all_drf_pages(url, logger=context.log)
     context.log.info("Fetched %d videos from OVS", len(all_videos))
 
     if not all_videos:
