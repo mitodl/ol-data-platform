@@ -40,6 +40,11 @@ def _partition_key_for(video: dict[str, Any]) -> str:
     return video["key"]
 
 
+def _video_content_hash(video: dict[str, Any]) -> str:
+    content = json.dumps(video, sort_keys=True, default=str)
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 def _fetch_all_pages(
     context: AssetExecutionContext, start_url: str
 ) -> list[dict[str, Any]]:
@@ -90,6 +95,9 @@ def video_api(
 
     videos_by_key = {_partition_key_for(v): v for v in all_videos}
     partition_keys = list(videos_by_key)
+    video_content_hashes = {
+        key: _video_content_hash(v) for key, v in videos_by_key.items()
+    }
 
     api_content = json.dumps(all_videos, sort_keys=True, default=str)
     data_version = hashlib.sha256(api_content.encode("utf-8")).hexdigest()
@@ -107,6 +115,7 @@ def video_api(
             "partition_keys": MetadataValue.json(partition_keys),
             "processing_partition_keys": MetadataValue.json(partition_keys),
             "api_partition_keys": MetadataValue.json(partition_keys),
+            "video_content_hashes": MetadataValue.json(video_content_hashes),
             "data_version": data_version,
             "source_url": url,
         },
@@ -138,9 +147,7 @@ def video_metadata(
     if video is None:
         msg = f"Partition {video_id} not present in upstream OVS data."
         raise ValueError(msg)
-    video_content = json.dumps(video, sort_keys=True, default=str)
-    data_version = hashlib.sha256(video_content.encode("utf-8")).hexdigest()
-    yield Output(value=video, data_version=DataVersion(data_version))
+    yield Output(value=video, data_version=DataVersion(_video_content_hash(video)))
 
 
 @asset(

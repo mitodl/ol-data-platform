@@ -30,15 +30,15 @@ ovs_videos_delete_job = define_asset_job(
 @sensor(
     name="ovs_videos_discovery_sensor",
     description=(
-        "Manages OVS video partitions and triggers runs for newly discovered "
-        "include_in_learn videos."
+        "Adds new OVS video partitions and triggers webhook runs for new or "
+        "content-changed include_in_learn videos."
     ),
     minimum_interval_seconds=600,
     default_status=DefaultSensorStatus.STOPPED,
     job_name="ovs_videos_webhook_job",
 )
 def ovs_videos_discovery_sensor(context):
-    """Create dynamic partitions for newly discovered OVS videos and trigger runs."""
+    """Trigger webhook runs for new or content-changed OVS videos."""
     api_materialization = context.instance.get_latest_materialization_event(
         video_api_key
     )
@@ -47,51 +47,51 @@ def ovs_videos_discovery_sensor(context):
         return SkipReason("Waiting for initial OVS video_api materialization")
 
     metadata = api_materialization.asset_materialization.metadata
-
-    partition_keys = (
-        metadata.get("processing_partition_keys").value
-        if metadata.get("processing_partition_keys")
-        else (
-            metadata.get("partition_keys").value
-            if metadata.get("partition_keys")
-            else []
+    hashes_meta = metadata.get("video_content_hashes")
+    if not hashes_meta:
+        return SkipReason(
+            "Waiting for materialization with video_content_hashes metadata"
         )
-    )
+    video_content_hashes: dict[str, str] = hashes_meta.value or {}
 
-    if not partition_keys:
+    if not video_content_hashes:
         return SkipReason("No videos returned by OVS API")
 
     existing_video_partitions = set(
         context.instance.get_dynamic_partitions("ovs_video_ids")
     )
-    current_partition_keys = set(partition_keys)
+    current_partition_keys = set(video_content_hashes)
+    new_partition_keys = sorted(current_partition_keys - existing_video_partitions)
 
-    new_partition_keys = current_partition_keys - existing_video_partitions
+    if new_partition_keys:
+        context.log.info(
+            "Adding %d new OVS video partitions",
+            len(new_partition_keys),
+        )
 
-    if not new_partition_keys:
-        return SkipReason("No new OVS videos found")
-
-    sorted_new_partition_keys = sorted(new_partition_keys)
-    context.log.info(
-        "Adding %d new OVS video partitions",
-        len(sorted_new_partition_keys),
-    )
-
+    # One run request per current partition, keyed by content hash. Dagster's
+    # run_key dedup means only new or content-changed videos actually launch.
     run_requests = [
         RunRequest(
             partition_key=partition_key,
-            run_key=f"ovs_videos_{partition_key}_{api_materialization.run_id}",
+            run_key=f"ovs_videos_{partition_key}_{content_hash}",
         )
-        for partition_key in sorted_new_partition_keys
+        for partition_key, content_hash in sorted(video_content_hashes.items())
     ]
 
-    return SensorResult(
-        dynamic_partitions_requests=[
+    dynamic_partitions_requests = (
+        [
             AddDynamicPartitionsRequest(
                 partitions_def_name="ovs_video_ids",
-                partition_keys=sorted_new_partition_keys,
+                partition_keys=new_partition_keys,
             )
-        ],
+        ]
+        if new_partition_keys
+        else []
+    )
+
+    return SensorResult(
+        dynamic_partitions_requests=dynamic_partitions_requests,
         run_requests=run_requests,
     )
 

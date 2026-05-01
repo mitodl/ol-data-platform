@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import os
 from typing import Any
 
 from pydantic import Field
@@ -17,6 +18,10 @@ class MITLearnApiClient(BaseApiClient):
     def from_secret(cls, raw_secret: dict[str, Any]) -> "MITLearnApiClient":
         learn = raw_secret.get("learn") or {}
         learn["base_url"] = learn.get("base_url") or learn.pop("url", None)
+        # Allow local development to point the client at a non-prod MIT Learn
+        # without rewriting Vault.
+        if override := os.environ.get("MIT_LEARN_BASE_URL"):
+            learn["base_url"] = override
         return cls(**learn)
 
     def _post_signed_webhook(self, path: str, data: dict[str, Any]) -> dict[str, Any]:
