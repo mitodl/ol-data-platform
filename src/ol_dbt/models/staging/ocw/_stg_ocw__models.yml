@@ -138,6 +138,9 @@ models:
     - not_null
   - name: websitecontent_file
     description: str, url path for the page content.
+  - name: websitecontent_markdown
+    description: str, the markdown body content of the page (stored separately from
+      metadata; populated for page and other markdown-based content types)
   - name: websitecontent_parent_id
     description: int, foreign key to websites_websitecontent, indicating the parent
       of this content

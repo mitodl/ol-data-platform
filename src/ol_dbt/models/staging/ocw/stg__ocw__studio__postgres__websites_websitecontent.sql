@@ -16,6 +16,7 @@ with source as (
         , filename as websitecontent_filename
         , dirpath as websitecontent_dirpath
         , file as websitecontent_file
+        , markdown as websitecontent_markdown
         , parent_id as websitecontent_parent_id
         , owner_id as websitecontent_owner_user_id
         , updated_by_id as websitecontent_updated_by_user_id
