@@ -73,6 +73,10 @@ models:
     description: Foreign key to dim_date for enrollment period end
   - name: courserun_is_live
     description: Boolean indicating if course run is live
+  - name: courserun_created_on
+    description: >
+      Timestamp when the course run was created in the source system. Populated for
+      mitxonline, mitxpro, and residential platforms. Null for edxorg.
   - name: effective_date
     description: >
       Timestamp (UTC) when this SCD Type 2 version became effective. Always set for
