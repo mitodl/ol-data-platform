@@ -39,11 +39,11 @@ with user_roles as (
 , course_activities as (
     select
         platform
-        , user_username
+        , user_email
         , courserun_readable_id
         , max(courseactivity_date) as last_course_activity_date
     from {{ ref('marts__combined_course_engagements') }}
-    group by platform, user_username, courserun_readable_id
+    group by platform, user_email, courserun_readable_id
 )
 
 select
@@ -62,5 +62,5 @@ left join combined_course_runs
     on combined_course_runs.platform = combined_course_roles.platform
     and combined_course_runs.courserun_readable_id = combined_course_roles.courserun_readable_id
 left join course_activities
-    on course_activities.user_username = combined_course_roles.user_username
+    on course_activities.user_email = combined_course_roles.user_email
     and course_activities.courserun_readable_id = combined_course_roles.courserun_readable_id
