@@ -2,7 +2,7 @@ from pathlib import Path
 
 import boto3
 from dagster import AssetExecutionContext, ConfigurableResource
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class DbtS3ArtifactsResource(ConfigurableResource):
@@ -11,8 +11,17 @@ class DbtS3ArtifactsResource(ConfigurableResource):
     s3_bucket: str = Field(description="S3 bucket to upload dbt artifacts into.")
     s3_prefix: str = Field(
         default="openmetadata/dbt-artifacts",
-        description="Key prefix under which artifacts are stored in the bucket.",
+        description=(
+            "Key prefix under which artifacts are stored in the bucket. "
+            "Trailing slashes are stripped automatically."
+        ),
     )
+
+    @field_validator("s3_prefix")
+    @classmethod
+    def strip_trailing_slash(cls, v: str) -> str:
+        """Normalize prefix so keys are always constructed as prefix/filename."""
+        return v.rstrip("/")
 
     def upload_artifacts(
         self,
