@@ -35,6 +35,7 @@ from lakehouse.assets.instructor_onboarding import (
 from lakehouse.assets.lakehouse.dbt import DBT_REPO_DIR, full_dbt_project
 from lakehouse.assets.superset import create_superset_asset
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
+from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.superset_api import SupersetApiClientFactory
 
 airbyte_host_map = {
@@ -302,6 +303,12 @@ instructor_onboarding_schedule = ScheduleDefinition(
 # Build resources dict, conditionally including airbyte
 resources_dict = {
     "dbt": dbt_cli,
+    "dbt_s3_artifacts": DbtS3ArtifactsResource(
+        s3_bucket=os.environ.get("DBT_ARTIFACTS_S3_BUCKET", ""),
+        s3_prefix=os.environ.get(
+            "DBT_ARTIFACTS_S3_PREFIX", "openmetadata/dbt-artifacts"
+        ),
+    ),
     "vault": vault,
     "superset_api": SupersetApiClientFactory(deployment="superset", vault=vault),
     "github_api": GithubApiClientFactory(vault=vault),
