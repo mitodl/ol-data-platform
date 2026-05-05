@@ -63,26 +63,36 @@ def full_dbt_project(
     build_invocation = dbt.cli(dbt_build_args, context=context)
     yield from (build_invocation.stream().fetch_column_metadata().fetch_row_counts())
 
-    if DAGSTER_ENV != "dev" and dbt_s3_artifacts.s3_bucket:
-        # Run docs generate without context so it covers the full project (not just
-        # the subset being materialized) and doesn't emit redundant Dagster events.
-        # Re-use the build's target_path so all three artifacts land together.
-        docs_invocation = dbt.cli(
-            ["docs", "generate"],
-            target_path=build_invocation.target_path,
-            raise_on_error=False,
-        )
-        docs_invocation.wait()
-
-        artifacts = ["manifest.json", "run_results.json"]
-        if (build_invocation.target_path / "catalog.json").exists():
-            artifacts.append("catalog.json")
-        else:
+    if DAGSTER_ENV != "dev":
+        if not dbt_s3_artifacts.s3_bucket:
             context.log.warning(
-                "dbt docs generate did not produce catalog.json; "
-                "it will be omitted from the OpenMetadata artifact upload"
+                "DBT_ARTIFACTS_S3_BUCKET is not configured; dbt artifacts will not "
+                "be uploaded to S3 for OpenMetadata ingestion."
             )
+        else:
+            # Run docs generate without context so it covers the full project and
+            # doesn't emit redundant Dagster events. Re-use the build's target_path
+            # so all artifacts land in the same directory.
+            # run_results.json is uploaded to a per-run versioned key so results
+            # from every incremental and full run are captured. manifest.json and
+            # catalog.json are deduplicated by content hash and only uploaded when
+            # their content has changed.
+            docs_invocation = dbt.cli(
+                ["docs", "generate"],
+                target_path=build_invocation.target_path,
+                raise_on_error=False,
+            )
+            docs_invocation.wait()
 
-        dbt_s3_artifacts.upload_artifacts(
-            build_invocation.target_path, artifacts, context
-        )
+            artifacts = ["manifest.json", "run_results.json"]
+            if (build_invocation.target_path / "catalog.json").exists():
+                artifacts.append("catalog.json")
+            else:
+                context.log.warning(
+                    "dbt docs generate did not produce catalog.json; "
+                    "it will be omitted from the OpenMetadata artifact upload"
+                )
+
+            dbt_s3_artifacts.upload_artifacts(
+                build_invocation.target_path, artifacts, context
+            )
