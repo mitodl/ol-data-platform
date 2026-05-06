@@ -42,6 +42,7 @@ with enrollments as (
             and program_enrollments.program_name = coursesinprogram.program_name
             and program_enrollments.program_id = coursesinprogram.program_id
     where coursesinprogram.program_name <> 'Computer Science'
+        and (programenrollment_enrollment_status is null or trim(programenrollment_enrollment_status)= '')
 )
 
 , course_passed_counts as (
