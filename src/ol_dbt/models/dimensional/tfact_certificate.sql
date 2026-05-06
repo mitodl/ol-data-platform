@@ -15,6 +15,7 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid as certificate_uuid
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
+        , courseruncertificate_updated_on as certificate_updated_on
         , 'verified' as certificate_type_code
         , 'mitxonline' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
@@ -31,6 +32,7 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid as certificate_uuid
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
+        , courseruncertificate_updated_on as certificate_updated_on
         , 'professional' as certificate_type_code
         , 'mitxpro' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
@@ -47,6 +49,7 @@ with mitxonline_certificates as (
         , cast(null as varchar) as certificate_uuid
         , false as certificate_is_revoked  -- edxorg doesn't track revocations
         , courseruncertificate_created_on as certificate_created_on
+        , courseruncertificate_updated_on as certificate_updated_on
         , courseruncertificate_mode as certificate_type_code
         , 'edxorg' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
@@ -63,6 +66,7 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid as certificate_uuid
         , false as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
+        , courseruncertificate_created_on as certificate_updated_on   --- micromasters only has created_on timestamp
         , 'verified' as certificate_type_code
         , 'micromasters' as platform
         , user_email
@@ -79,6 +83,7 @@ with mitxonline_certificates as (
         , programcertificate_uuid as certificate_uuid
         , programcertificate_is_revoked as certificate_is_revoked
         , programcertificate_created_on as certificate_created_on
+        , programcertificate_updated_on as certificate_updated_on
         , 'verified' as certificate_type_code
         , 'mitxonline' as platform
         , user_email
@@ -95,6 +100,7 @@ with mitxonline_certificates as (
         , programcertificate_uuid as certificate_uuid
         , programcertificate_is_revoked as certificate_is_revoked
         , programcertificate_created_on as certificate_created_on
+        , programcertificate_updated_on as certificate_updated_on
         , 'professional' as certificate_type_code
         , 'mitxpro' as platform
         , user_email
@@ -111,9 +117,10 @@ with mitxonline_certificates as (
         , program_certificate_hashed_id as certificate_uuid
         , false as certificate_is_revoked
         , program_certificate_awarded_on as certificate_created_on
+        , program_certificate_awarded_on as certificate_updated_on  -- edxorg only has awarded_on timestamp
         , 'verified' as certificate_type_code
         , 'edxorg' as platform
-        , user_email
+        , cast(null as varchar) as user_email  -- micromasters join key only
         , micromasters_program_id as program_id
     from {{ ref('int__edxorg__mitx_program_certificates') }}
 )
@@ -265,7 +272,7 @@ with mitxonline_certificates as (
         and w.watermark_certificate_type = cwf.certificate_type
     where (
         w.max_created_on is null  -- platform/type not yet in target, include all
-        or cwf.certificate_created_on > w.max_created_on
+        or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_created_on
         or cwf.certificate_created_on is null
     )
     {% endif %}
@@ -290,9 +297,10 @@ with mitxonline_certificates as (
         , certificate_uuid
         , certificate_is_revoked
         , certificate_created_on
+        , certificate_updated_on
         , row_number() over (
             partition by certificate_key
-            order by certificate_created_on desc nulls last
+            order by coalesce(certificate_updated_on, certificate_created_on) desc nulls last
         ) as _row_num
     from final
 )
@@ -311,5 +319,6 @@ select
     , certificate_uuid
     , certificate_is_revoked
     , certificate_created_on
+    , certificate_updated_on
 from final_deduped
 where _row_num = 1

@@ -339,3 +339,5 @@ models:
     - not_null
   - name: certificate_created_on
     description: Certificate creation timestamp (for incremental processing)
+  - name: certificate_updated_on
+    description: Certificate last update timestamp (for incremental processing)
