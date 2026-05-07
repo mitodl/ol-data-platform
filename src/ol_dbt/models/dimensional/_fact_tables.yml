@@ -263,7 +263,7 @@ models:
       combination_of_columns:
       - certificate_id
       - platform
-      - certificate_type
+      - certificate_scope
   columns:
   - name: certificate_key
     description: Surrogate key for certificate
@@ -325,8 +325,9 @@ models:
     description: Platform identifier string
     tests:
     - not_null
-  - name: certificate_type
-    description: Type of certificate - 'course' or 'program'
+  - name: certificate_scope
+    description: Scope of certificate - 'course' for course run certificates, 'program'
+      for program certificates
     tests:
     - not_null
     - accepted_values:
