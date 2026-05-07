@@ -22,7 +22,8 @@ models:
     description: >
       Program ID from the source system. This is used as a join key when linking
       platform-specific fact tables (e.g., tfact_enrollment) to this dimension.
-      May be an integer (MITx Online, xPro, MicroMasters) or a UUID string (edX.org).
+      May be a stringified integer(MITx Online, xPro, MicroMasters) or a UUID string
+      (edX.org).
       Not the same as program_readable_id which is the business-facing identifier.
     tests:
     - not_null
