@@ -49,7 +49,7 @@ with mitxonline_discount as (
 )
 
 select
-    'MITx Online' as platform
+    '{{ var("mitxonline") }}' as platform
     , mitxonline_discount.discount_code
     , null as discount_name
     , mitxonline_discount.discount_created_on
@@ -86,12 +86,12 @@ left join mitxonline_order_sum
     on mitxonline_discount.discount_code = mitxonline_order_sum.discount_code
 left join combined_products
     on mitxonline_product_joins.product_readable_id = combined_products.product_readable_id
-    and combined_products.platform = 'MITx Online'
+    and combined_products.platform = '{{ var("mitxonline") }}'
 
 union all
 
 select
-    'xPro' as platform
+    '{{ var("mitxpro") }}' as platform
     , mitxpro_all_coupons.coupon_code as discount_code
     , mitxpro_all_coupons.coupon_name as discount_name
     , mitxpro_all_coupons.coupon_created_on as discount_created_on
@@ -118,4 +118,4 @@ select
 from mitxpro_all_coupons
 left join combined_products
     on mitxpro_all_coupons.product_readable_id = combined_products.product_readable_id
-    and combined_products.platform = 'xPro'
+    and combined_products.platform = '{{ var("mitxpro") }}'
