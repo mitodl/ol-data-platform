@@ -15,9 +15,11 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid as certificate_uuid
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
+        , courseruncertificate_updated_on as certificate_updated_on
         , 'verified' as certificate_type_code
         , 'mitxonline' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
+        , cast(null as varchar) as program_id
     from {{ ref('int__mitxonline__courserun_certificates') }}
 )
 
@@ -30,9 +32,11 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid as certificate_uuid
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
+        , courseruncertificate_updated_on as certificate_updated_on
         , 'professional' as certificate_type_code
         , 'mitxpro' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
+        , cast(null as varchar) as program_id
     from {{ ref('int__mitxpro__courserun_certificates') }}
 )
 
@@ -45,9 +49,11 @@ with mitxonline_certificates as (
         , cast(null as varchar) as certificate_uuid
         , false as certificate_is_revoked  -- edxorg doesn't track revocations
         , courseruncertificate_created_on as certificate_created_on
+        , courseruncertificate_updated_on as certificate_updated_on
         , courseruncertificate_mode as certificate_type_code
         , 'edxorg' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
+        , cast(null as varchar) as program_id
     from {{ ref('int__edxorg__mitx_courserun_certificates') }}
 )
 
@@ -60,10 +66,63 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid as certificate_uuid
         , false as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
-        , 'honor' as certificate_type_code  -- MicroMasters edxorg certs are honor mode
+        , courseruncertificate_created_on as certificate_updated_on   --- micromasters only has created_on timestamp
+        , 'verified' as certificate_type_code
         , 'micromasters' as platform
         , user_email
+        , cast(null as varchar) as program_id
     from {{ ref('int__micromasters__course_certificates') }}
+)
+
+, mitxonline_program_certificates as (
+    select
+        cast(programcertificate_id as varchar) as certificate_id
+        , user_id
+        , cast(null as integer) as courserun_id
+        , cast(null as varchar) as courserun_readable_id
+        , programcertificate_uuid as certificate_uuid
+        , programcertificate_is_revoked as certificate_is_revoked
+        , programcertificate_created_on as certificate_created_on
+        , programcertificate_updated_on as certificate_updated_on
+        , 'verified' as certificate_type_code
+        , 'mitxonline' as platform
+        , user_email
+        , cast(program_id as varchar) as program_id
+    from {{ ref('int__mitxonline__program_certificates') }}
+)
+
+, mitxpro_program_certificates as (
+    select
+        cast(programcertificate_id as varchar) as certificate_id
+        , user_id
+        , cast(null as integer) as courserun_id
+        , cast(null as varchar) as courserun_readable_id
+        , programcertificate_uuid as certificate_uuid
+        , programcertificate_is_revoked as certificate_is_revoked
+        , programcertificate_created_on as certificate_created_on
+        , programcertificate_updated_on as certificate_updated_on
+        , 'professional' as certificate_type_code
+        , 'mitxpro' as platform
+        , user_email
+        , cast(program_id as varchar) as program_id
+    from {{ ref('int__mitxpro__program_certificates') }}
+)
+
+, edxorg_program_certificates as (
+    select
+        program_certificate_hashed_id as certificate_id
+        , user_id
+        , cast(null as integer) as courserun_id
+        , cast(null as varchar) as courserun_readable_id
+        , program_certificate_hashed_id as certificate_uuid
+        , false as certificate_is_revoked
+        , program_certificate_awarded_on as certificate_created_on
+        , program_certificate_awarded_on as certificate_updated_on  -- edxorg only has awarded_on timestamp
+        , 'verified' as certificate_type_code
+        , 'edxorg' as platform
+        , cast(null as varchar) as user_email  -- micromasters join key only
+        , program_uuid as program_id -- matches dim_program.source_id as edxorg doesn't have integer program IDs
+    from {{ ref('int__edxorg__mitx_program_certificates') }}
 )
 
 , combined_certificates as (
@@ -74,6 +133,12 @@ with mitxonline_certificates as (
     select * from edxorg_certificates
     union all
     select * from micromasters_certificates
+    union all
+    select * from mitxonline_program_certificates
+    union all
+    select * from mitxpro_program_certificates
+    union all
+    select * from edxorg_program_certificates
 )
 
 , user_lookup as (
@@ -104,6 +169,11 @@ with mitxonline_certificates as (
     from {{ ref('dim_certificate_type') }}
 )
 
+, dim_program as (
+    select program_pk, source_id, platform_code
+    from {{ ref('dim_program') }}
+)
+
 , certificates_with_fks as (
     select
         combined_certificates.*
@@ -124,6 +194,8 @@ with mitxonline_certificates as (
         , dim_course_run.courserun_pk as courserun_fk
         , dim_platform_lookup.platform_pk as platform_fk
         , dim_certificate_type.certificate_type_pk as certificate_type_fk
+        , dim_program.program_pk as program_fk
+        , case when combined_certificates.program_id is not null then 'program' else 'course' end as certificate_scope
         , {{ iso8601_to_date_key('certificate_created_on') }} as certificate_issued_date_key
     from combined_certificates
     left join user_lookup as ul_mitxonline
@@ -151,6 +223,9 @@ with mitxonline_certificates as (
         on combined_certificates.platform = dim_platform_lookup.platform_readable_id
     left join dim_certificate_type
         on dim_certificate_type.certificate_type_code = combined_certificates.certificate_type_code
+    left join dim_program
+        on combined_certificates.program_id = dim_program.source_id
+        and combined_certificates.platform = dim_program.platform_code
 )
 
 {% if is_incremental() %}
@@ -160,36 +235,44 @@ with mitxonline_certificates as (
 -- StreamingAggregate, producing a 25B-row intermediate at 7TB.
 -- A pre-computed CTE + regular equijoin eliminates that fan-out entirely.
 , incremental_watermarks as (
-    select platform as watermark_platform, max(certificate_created_on) as max_created_on
+    select
+        platform as watermark_platform
+         , certificate_scope as watermark_certificate_type
+         , max(coalesce(certificate_updated_on, certificate_created_on)) as max_activity_on
     from {{ this }}
-    group by platform
-)
+    group by platform, certificate_scope)
 {% endif %}
 
 , final as (
     select
         {{ dbt_utils.generate_surrogate_key([
             'cast(certificate_id as varchar)',
-            'platform'
+            'platform',
+            'certificate_scope'
         ]) }} as certificate_key
         , certificate_id
         , certificate_issued_date_key
         , user_fk
         , courserun_fk
+        , program_fk
         , platform_fk
         , certificate_type_fk
         , cwf.platform
+        , cwf.certificate_scope
         , certificate_uuid
         , certificate_is_revoked
         , certificate_created_on
+        , certificate_updated_on
     from certificates_with_fks as cwf
 
     {% if is_incremental() %}
     -- left join preserves certificates from platforms not yet in the target table
-    left join incremental_watermarks w on w.watermark_platform = cwf.platform
+    left join incremental_watermarks w
+        on w.watermark_platform = cwf.platform
+        and w.watermark_certificate_type = cwf.certificate_scope
     where (
-        w.max_created_on is null  -- platform not yet in target, include all
-        or cwf.certificate_created_on > w.max_created_on
+        w.max_created_on is null  -- platform/type not yet in target, include all
+        or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_activity_on
         or cwf.certificate_created_on is null
     )
     {% endif %}
@@ -206,15 +289,18 @@ with mitxonline_certificates as (
         , certificate_issued_date_key
         , user_fk
         , courserun_fk
+        , program_fk
         , platform_fk
         , certificate_type_fk
         , platform
+        , certificate_scope
         , certificate_uuid
         , certificate_is_revoked
         , certificate_created_on
+        , certificate_updated_on
         , row_number() over (
             partition by certificate_key
-            order by certificate_created_on desc nulls last
+            order by coalesce(certificate_updated_on, certificate_created_on) desc nulls last
         ) as _row_num
     from final
 )
@@ -225,11 +311,14 @@ select
     , certificate_issued_date_key
     , user_fk
     , courserun_fk
+    , program_fk
     , platform_fk
     , certificate_type_fk
     , platform
+    , certificate_scope
     , certificate_uuid
     , certificate_is_revoked
     , certificate_created_on
+    , certificate_updated_on
 from final_deduped
 where _row_num = 1
