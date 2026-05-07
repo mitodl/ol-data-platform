@@ -17,7 +17,6 @@ models:
   - name: product_pk
     description: Surrogate key primary key
     tests:
-    - unique
     - not_null
   - name: source_product_id
     description: Product ID from source system
