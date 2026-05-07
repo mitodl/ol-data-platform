@@ -19,7 +19,7 @@ with mitxonline_certificates as (
         , 'verified' as certificate_type_code
         , 'mitxonline' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
-        , null as program_id
+        , cast(null as varchar) as program_id
     from {{ ref('int__mitxonline__courserun_certificates') }}
 )
 
@@ -36,7 +36,7 @@ with mitxonline_certificates as (
         , 'professional' as certificate_type_code
         , 'mitxpro' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
-        , null as program_id
+        , cast(null as varchar) as program_id
     from {{ ref('int__mitxpro__courserun_certificates') }}
 )
 
@@ -53,7 +53,7 @@ with mitxonline_certificates as (
         , courseruncertificate_mode as certificate_type_code
         , 'edxorg' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
-        , null as program_id
+        , cast(null as varchar) as program_id
     from {{ ref('int__edxorg__mitx_courserun_certificates') }}
 )
 
@@ -70,7 +70,7 @@ with mitxonline_certificates as (
         , 'verified' as certificate_type_code
         , 'micromasters' as platform
         , user_email
-        , coalesce(mitxonline_program_id, micromasters_program_id) as program_id
+        , cast(null as varchar) as program_id
     from {{ ref('int__micromasters__course_certificates') }}
 )
 
@@ -87,7 +87,7 @@ with mitxonline_certificates as (
         , 'verified' as certificate_type_code
         , 'mitxonline' as platform
         , user_email
-        , program_id
+        , cast(program_id as varchar) as program_id
     from {{ ref('int__mitxonline__program_certificates') }}
 )
 
@@ -104,7 +104,7 @@ with mitxonline_certificates as (
         , 'professional' as certificate_type_code
         , 'mitxpro' as platform
         , user_email
-        , program_id
+        , cast(program_id as varchar) as program_id
     from {{ ref('int__mitxpro__program_certificates') }}
 )
 
@@ -121,7 +121,7 @@ with mitxonline_certificates as (
         , 'verified' as certificate_type_code
         , 'edxorg' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
-        , micromasters_program_id as program_id
+        , program_uuid as program_id -- matches dim_program.source_id as edxorg doesn't have integer program IDs
     from {{ ref('int__edxorg__mitx_program_certificates') }}
 )
 
@@ -225,10 +225,7 @@ with mitxonline_certificates as (
         on dim_certificate_type.certificate_type_code = combined_certificates.certificate_type_code
     left join dim_program
         on combined_certificates.program_id = dim_program.source_id
-        and (
-            combined_certificates.platform = dim_program.platform_code
-             or combined_certificates.platform in ('edxorg', 'micromasters')
-        )
+        and combined_certificates.platform = dim_program.platform_code
 )
 
 {% if is_incremental() %}
@@ -263,6 +260,7 @@ with mitxonline_certificates as (
         , certificate_uuid
         , certificate_is_revoked
         , certificate_created_on
+        , certificate_updated_on
     from certificates_with_fks as cwf
 
     {% if is_incremental() %}

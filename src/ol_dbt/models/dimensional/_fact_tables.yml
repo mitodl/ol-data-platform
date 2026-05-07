@@ -275,9 +275,9 @@ models:
     tests:
     - not_null
   - name: certificate_issued_date_key
-    description: Foreign key to dim_date for certificate issuance date
+    description: Foreign key to dim_date for certificate issuance date. Very small
+      number of program certificates have null issued dates in edx.org source data
     tests:
-    - not_null
     - relationships:
         to: ref('dim_date')
         field: date_key
