@@ -22,6 +22,10 @@ with mitxonline_discount as (
     select * from {{ ref('marts__combined__products') }}
 )
 
+, mitxpro_programs as (
+    select * from {{ ref('int__mitxpro__programs') }}
+)
+
 , mitxonline_order_sum as (
     select
         discount_code
@@ -108,7 +112,7 @@ select
     , mitxpro_all_coupons.redeemed
     , mitxpro_all_coupons.coupons_used_count as discounts_used_count
     , mitxpro_all_coupons.product_readable_id
-    , combined_products.product_name
+    , coalesce(combined_products.product_name, mitxpro_programs.program_title) as product_name
     , mitxpro_all_coupons.discount_amount as discount_amount_text
     , mitxpro_all_coupons.company_name
     , mitxpro_all_coupons.coupon_type as discount_type
@@ -119,3 +123,5 @@ from mitxpro_all_coupons
 left join combined_products
     on mitxpro_all_coupons.product_readable_id = combined_products.product_readable_id
     and combined_products.platform = '{{ var("mitxpro") }}'
+left join mitxpro_programs
+    on mitxpro_all_coupons.product_readable_id = mitxpro_programs.program_readable_id
