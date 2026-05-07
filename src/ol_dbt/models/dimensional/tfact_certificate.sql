@@ -195,7 +195,7 @@ with mitxonline_certificates as (
         , dim_platform_lookup.platform_pk as platform_fk
         , dim_certificate_type.certificate_type_pk as certificate_type_fk
         , dim_program.program_pk as program_fk
-        , case when combined_certificates.program_id is not null then 'program' else 'course' end as certificate_type
+        , case when combined_certificates.program_id is not null then 'program' else 'course' end as certificate_scope
         , {{ iso8601_to_date_key('certificate_created_on') }} as certificate_issued_date_key
     from combined_certificates
     left join user_lookup as ul_mitxonline
@@ -235,10 +235,12 @@ with mitxonline_certificates as (
 -- StreamingAggregate, producing a 25B-row intermediate at 7TB.
 -- A pre-computed CTE + regular equijoin eliminates that fan-out entirely.
 , incremental_watermarks as (
-    select platform as watermark_platform, certificate_type as watermark_certificate_type, max(certificate_created_on) as max_created_on
+    select
+        platform as watermark_platform
+         , certificate_scope as watermark_certificate_type
+         , max(coalesce(certificate_updated_on, certificate_created_on)) as max_activity_on
     from {{ this }}
-    group by platform, certificate_type
-)
+    group by platform, certificate_scope)
 {% endif %}
 
 , final as (
@@ -246,7 +248,7 @@ with mitxonline_certificates as (
         {{ dbt_utils.generate_surrogate_key([
             'cast(certificate_id as varchar)',
             'platform',
-            'certificate_type'
+            'certificate_scope'
         ]) }} as certificate_key
         , certificate_id
         , certificate_issued_date_key
@@ -256,7 +258,7 @@ with mitxonline_certificates as (
         , platform_fk
         , certificate_type_fk
         , cwf.platform
-        , cwf.certificate_type
+        , cwf.certificate_scope
         , certificate_uuid
         , certificate_is_revoked
         , certificate_created_on
@@ -267,10 +269,10 @@ with mitxonline_certificates as (
     -- left join preserves certificates from platforms not yet in the target table
     left join incremental_watermarks w
         on w.watermark_platform = cwf.platform
-        and w.watermark_certificate_type = cwf.certificate_type
+        and w.watermark_certificate_type = cwf.certificate_scope
     where (
         w.max_created_on is null  -- platform/type not yet in target, include all
-        or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_created_on
+        or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_activity_on
         or cwf.certificate_created_on is null
     )
     {% endif %}
@@ -291,7 +293,7 @@ with mitxonline_certificates as (
         , platform_fk
         , certificate_type_fk
         , platform
-        , certificate_type
+        , certificate_scope
         , certificate_uuid
         , certificate_is_revoked
         , certificate_created_on
@@ -313,7 +315,7 @@ select
     , platform_fk
     , certificate_type_fk
     , platform
-    , certificate_type
+    , certificate_scope
     , certificate_uuid
     , certificate_is_revoked
     , certificate_created_on
