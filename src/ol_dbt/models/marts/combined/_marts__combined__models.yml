@@ -984,6 +984,8 @@ models:
     description: string, the product identifier either referring to courserun_readable_id,
       programrun_readable_id, or program_readable_id. Examples include course-v1:MITxPRO+TPMx_Mondelez+SPOC_R1
       and program-v1:xPRO+SysEngx.
+  - name: product_name
+    description: string, the product name either referring to courserun_title or program_title
   - name: discount_amount_text
     description: string, either dollar amount off, fixed price, or percentage discount.
   - name: company_name
