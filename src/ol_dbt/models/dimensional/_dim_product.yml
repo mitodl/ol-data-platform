@@ -15,7 +15,11 @@ models:
       where: "is_current = true"
   columns:
   - name: product_pk
-    description: Surrogate key primary key
+    description: >
+      Surrogate key for the product, stable across SCD Type 2 history rows for the
+      same source product and platform. This value is not unique across historical
+      versions; filter on is_current = true or include effective_date when looking
+      up a single row.
     tests:
     - not_null
   - name: source_product_id
