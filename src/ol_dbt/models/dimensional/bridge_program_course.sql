@@ -80,7 +80,7 @@ with micromasters_course_keys as (
         , combined_requirements.course_order
     from combined_requirements
     left join dim_program
-        on combined_requirements.program_id = dim_program.source_id
+        on cast(combined_requirements.program_id as varchar) = dim_program.source_id
         and combined_requirements.platform_code = dim_program.platform_code
     left join dim_course
         on (
