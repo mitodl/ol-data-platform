@@ -83,7 +83,7 @@ with mitxonline_products as (
         on combined_products.courserun_id = dim_course_run.source_id
         and combined_products.platform = dim_course_run.platform
     left join dim_program
-        on combined_products.program_id = dim_program.source_id
+        on cast(combined_products.program_id as varchar) = dim_program.source_id
         and combined_products.platform_code = dim_program.platform_code
     left join dim_platform_lookup
         on combined_products.platform = dim_platform_lookup.platform_readable_id

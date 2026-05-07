@@ -20,15 +20,16 @@ models:
     - not_null
   - name: source_id
     description: >
-      Program ID from the source system (integer). This is used as a join key when
-      linking platform-specific fact tables (e.g., tfact_enrollment) to this dimension.
+      Program ID from the source system. This is used as a join key when linking
+      platform-specific fact tables (e.g., tfact_enrollment) to this dimension.
+      May be a stringified integer(MITx Online, xPro, MicroMasters) or a UUID string
+      (edX.org).
       Not the same as program_readable_id which is the business-facing identifier.
     tests:
     - not_null
   - name: program_readable_id
-    description: Business key - readable program identifier
-    tests:
-    - not_null
+    description: Business key - readable program identifier. Null for edX.org programs
+      which do not have a consistent program identifier across sources.
   - name: program_name
     description: Program name
   - name: program_title
@@ -36,10 +37,8 @@ models:
     tests:
     - not_null
   - name: program_type
-    description: Type of program (MicroMasters, Professional, etc.)
-    tests:
-    - accepted_values:
-        values: ['MicroMasters', 'Series', 'Professional', 'Certificate']
+    description: Type of program (MicroMasters, Professional, Series, Universal AI,
+      etc.)
   - name: program_track
     description: Specific track within program
   - name: program_certification_type

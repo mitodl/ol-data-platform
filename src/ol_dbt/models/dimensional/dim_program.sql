@@ -3,7 +3,7 @@
 with
     mitxonline_programs as (
         select
-            program_id as source_id,
+            cast(program_id as varchar) as source_id,
             program_readable_id,
             program_name,
             program_title,
@@ -32,7 +32,7 @@ with
     ),
     mitxpro_programs as (
         select
-            program_id as source_id,
+            cast(program_id as varchar) as source_id,
             program_readable_id,
             program_title as program_name,
             program_title,
@@ -58,9 +58,38 @@ with
             cast(null as varchar) as enrollment_end_date
         from {{ ref("int__mitxpro__programs") }}
     ),
+    edxorg_programs as (
+        select
+            program_uuid as source_id,
+            cast(null as varchar) as program_readable_id, -- edX.org doesn't have a readable ID
+            program_title as program_name,
+            program_title,
+            program_type,
+            cast(null as varchar) as program_track,
+            cast(null as varchar) as program_certification_type,
+            false as program_is_dedp,
+            false as program_is_micromasters,
+            cast(null as varchar) as program_availability,
+            cast(null as varchar) as program_price,
+            cast(null as varchar) as program_length,
+            cast(null as varchar) as program_effort,
+            program_subtitle as program_description,
+            cast(null as varchar) as program_what_you_learn,
+            cast(null as varchar) as program_prerequisites,
+            program_status = 'active' as is_active,
+            true as is_external,
+            cast(null as varchar) as partner_platform_name,
+            '{{ var("edxorg") }}' as platform_readable_id,
+            'edxorg' as platform_code,
+            cast(null as varchar) as first_published_date,
+            cast(null as varchar) as enrollment_start_date,
+            cast(null as varchar) as enrollment_end_date
+        from {{ ref("stg__edxorg__s3__programs") }}
+        where program_organization = 'MITx'
+    ),
     micromasters_programs as (
         select
-            program_id as source_id,
+            cast(program_id as varchar) as source_id,
             {{ generate_micromasters_program_readable_id('program_id', 'program_title') }} as program_readable_id,
             program_title as program_name,
             program_title,
@@ -92,6 +121,9 @@ with
         union all
         select *
         from mitxpro_programs
+        union all
+        select *
+        from edxorg_programs
         union all
         select *
         from micromasters_programs

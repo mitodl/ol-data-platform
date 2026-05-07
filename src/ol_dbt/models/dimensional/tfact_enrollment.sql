@@ -198,7 +198,7 @@ with mitxonline_enrollments as (
             or (combined_enrollments.platform in ('edxorg', 'residential') and combined_enrollments.courserun_readable_id = dim_course_run.courserun_readable_id and combined_enrollments.platform = dim_course_run.platform)
         )
     left join dim_program
-        on combined_enrollments.program_id = dim_program.source_id
+        on cast(combined_enrollments.program_id as varchar) = dim_program.source_id
         and combined_enrollments.platform_code = dim_program.platform_code
     left join micromasters_program_lookup
         on combined_enrollments.courserun_readable_id = micromasters_program_lookup.courserun_readable_id
