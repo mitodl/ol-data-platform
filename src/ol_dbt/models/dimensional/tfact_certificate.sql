@@ -271,7 +271,7 @@ with mitxonline_certificates as (
         on w.watermark_platform = cwf.platform
         and w.watermark_certificate_type = cwf.certificate_scope
     where (
-        w.max_created_on is null  -- platform/type not yet in target, include all
+        w.max_activity_on is null  -- platform/type not yet in target, include all
         or coalesce(cwf.certificate_updated_on, cwf.certificate_created_on) >= w.max_activity_on
         or cwf.certificate_created_on is null
     )
