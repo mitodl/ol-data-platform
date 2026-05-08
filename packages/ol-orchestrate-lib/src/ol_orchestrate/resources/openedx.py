@@ -64,6 +64,13 @@ class OpenEdxApiClient(OAuthApiClient):
 
         :returns: A dictionary of course IDs and the S3 URL where it will be exported
                   to.
+
+        .. note::
+            The ol_openedx_course_export plugin returns HTTP 400 when some (but
+            not all) courses fail to queue. We intentionally allow 400 through so
+            that callers can still process the successfully-queued tasks from the
+            ``upload_task_ids`` field and inspect ``failed_uploads`` themselves.
+            Any other non-2xx status is still raised as an error.
         """
         request_url = f"{self.studio_url}/api/courses/v0/export/"
         response = self.http_client.post(
@@ -72,7 +79,10 @@ class OpenEdxApiClient(OAuthApiClient):
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
             timeout=60,
         )
-        response.raise_for_status()
+        # HTTP 400 is returned on partial failure (some courses failed to queue);
+        # allow the caller to handle failed_uploads gracefully.
+        if response.status_code != 400:  # noqa: PLR2004
+            response.raise_for_status()
         return response.json()
 
     def check_course_export_status(

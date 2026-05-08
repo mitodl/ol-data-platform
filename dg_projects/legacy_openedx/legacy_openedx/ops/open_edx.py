@@ -31,6 +31,8 @@ from pydantic import Field
 from pypika import MySQLQuery as Query
 from pypika import Table, Tables
 
+COURSE_EXPORT_TIMEOUT = timedelta(minutes=60)
+
 
 class ListCoursesConfig(Config):
     edx_course_api_page_size: int = Field(
@@ -577,22 +579,47 @@ def export_edx_courses(
     exported_courses = context.resources.openedx.export_courses(
         course_ids=edx_course_ids,
     )
+    failed_initial = exported_courses.get("failed_uploads", {})
+    if failed_initial:
+        context.log.warning(
+            "The following courses failed to queue for export and will be skipped: %s",
+            list(failed_initial.keys()),
+        )
     successful_exports: set[str] = set()
     failed_exports: set[str] = set()
     tasks = exported_courses["upload_task_ids"]
     context.log.info("Exporting %s tasks from Open edX", len(tasks))
     # Possible status values found here:
     # https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
+    start_time = datetime.now(tz=UTC)
     while len(successful_exports.union(failed_exports)) < len(tasks):
+        if datetime.now(tz=UTC) - start_time > COURSE_EXPORT_TIMEOUT:
+            timed_out = set(tasks.keys()) - successful_exports - failed_exports
+            context.log.error(
+                "Timed out waiting for course exports after %s. Unresolved courses: %s",
+                COURSE_EXPORT_TIMEOUT,
+                timed_out,
+            )
+            break
         time.sleep(timedelta(seconds=60).seconds)
         for course_id, task_id in tasks.items():
+            if course_id in successful_exports or course_id in failed_exports:
+                continue
             try:
                 task_status = context.resources.openedx.check_course_export_status(
                     course_id,
                     task_id,
                 )
-            except httpx.HTTPStatusError:
-                # Don't fail the whole job if one task status yields an error
+            except httpx.HTTPStatusError as e:
+                context.log.warning(
+                    "HTTP %s error checking export status for course %s "
+                    "(task %s), marking as failed: %s",
+                    e.response.status_code,
+                    course_id,
+                    task_id,
+                    e,
+                )
+                failed_exports.add(course_id)
                 continue
             if task_status["state"] == "Succeeded":
                 successful_exports.add(course_id)
