@@ -27,6 +27,18 @@ params:
     operatorId: IN
     sqlExpression: null
     subject: table_name
+  - clause: WHERE
+    comparator:
+    - 1
+    datasourceWarning: false
+    expressionType: SIMPLE
+    filterOptionName: filter_database_id_trino
+    isExtra: false
+    isNew: false
+    operator: IN
+    operatorId: IN
+    sqlExpression: null
+    subject: database_id
   all_columns:
   - expressionType: SQL
     label: last_updated_on (in UTC)
