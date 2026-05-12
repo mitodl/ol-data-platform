@@ -90,34 +90,23 @@ def create_or_update_table(
 
 
 def get_dbt_model_as_dataframe(database_name: str, table_name: str) -> pl.LazyFrame:
-    """Retrieve a dbt model from AWS Glue as a Polars LazyFrame.
+    """Retrieve a dbt model from AWS Glue as a Polars DataFrame.
 
     This function fetches table metadata from AWS Glue and loads the Iceberg
-    table data into a Polars LazyFrame.
-
-    ``PyArrowFileIO`` is used so that PyIceberg reads S3 data via PyArrow's
-    native C++ S3 client instead of the default ``FsspecFileIO`` (which relies
-    on aiobotocore / aiohttp).  After the aiobotocore 3.4.0 → 3.5.0 bump
-    deployed around 2026-04-27, botocore's lazy loader cache was populated
-    inside aiobotocore's async event loop thread, blocking all pending S3
-    coroutines and causing Dagster runs to hang indefinitely.
-    ``PyArrowFileIO`` bypasses aiobotocore entirely and is not affected.
+    table data into a Polars DataFrame.
 
     Args:
         database_name: The Glue database name containing the table
         table_name: The name of the table to retrieve
 
     Returns:
-        A Polars LazyFrame containing the table data
+        A Polars DataFrame containing the table data
 
     Raises:
-        Exception: If loading the Iceberg table from Glue or converting it to
-            a Polars LazyFrame fails.
+        KeyError: If the table metadata doesn't contain the expected fields
+        boto3 exceptions: If the AWS Glue API call fails
     """
-    glue = GlueCatalog(
-        "default",
-        client=boto3.client("glue", region_name="us-east-1"),
-        **{"py-io-impl": "pyiceberg.io.pyarrow.PyArrowFileIO"},
-    )
+    glue = GlueCatalog("default", client=boto3.client("glue", region_name="us-east-1"))
     table = glue.load_table(f"{database_name}.{table_name}")
+
     return table.to_polars()
