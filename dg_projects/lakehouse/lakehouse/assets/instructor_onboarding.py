@@ -10,6 +10,7 @@ from io import StringIO
 from typing import Any
 
 import polars as pl
+import pyarrow.fs as pa_fs
 from dagster import (
     AssetExecutionContext,
     AssetIn,
@@ -77,8 +78,19 @@ def generate_instructor_onboarding_user_list(
     # Reorder columns: email, role, sent_invite
     user_data = user_data.select(["email", "role", "sent_invite"])
 
-    # Collect the LazyFrame before operations that need materialization
+    # Collect the LazyFrame to materialize the Iceberg scan.
+    # After collect() returns, this asset performs no further PyArrow S3 reads;
+    # the subsequent CSV generation uses StringIO and the IO manager output is a
+    # plain string (not Iceberg-backed). finalize_s3() shuts down the C++ S3
+    # thread pool so the step subprocess can exit cleanly — PyArrow non-daemon
+    # threads otherwise block Python's shutdown sequence.
+    # NOTE: finalize_s3() is irreversible in PyArrow 24+; no PyArrow S3 usage
+    # must follow this call in the same subprocess.
     user_data_collected = user_data.collect()
+    try:
+        pa_fs.finalize_s3()
+    except Exception:  # noqa: BLE001
+        context.log.warning("Failed to finalize PyArrow S3", exc_info=True)
 
     # Convert to CSV string using StringIO (no file I/O)
     csv_buffer = StringIO()
