@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlparse
 
 import pygsheets
 from dagster import OpExecutionContext
-from dateutil import parser  # type: ignore[import-untyped]
+from dateutil import parser
 from google.oauth2 import service_account
 
 

@@ -15,11 +15,16 @@ params:
     operatorId: IS_NOT_NULL
     sqlExpression: null
     subject: mitlearn_user_id
+  - clause: WHERE
+    comparator: No filter
+    expressionType: SIMPLE
+    operator: TEMPORAL_RANGE
+    subject: date_joined_on_mitlearn
   all_columns:
-  - user_global_id
-  - mitlearn_user_id
   - email
   - full_name
+  - user_global_id
+  - mitlearn_user_id
   - highest_education
   - topic_interests
   - goals
@@ -28,6 +33,8 @@ params:
   - completed_onboarding
   - user_joined_on_mitlearn
   - user_is_active_on_mitlearn
+  - user_mitxonline_username
+  - user_joined_on_mitxonline
   allow_rearrange_columns: true
   allow_render_html: false
   annotation_layers: []
@@ -43,6 +50,8 @@ params:
       columnWidth: null
       horizontalAlign: left
       truncateLongCells: false
+  comparison_color_scheme: Green
+  comparison_type: values
   conditional_formatting: []
   extra_form_data: {}
   groupby: []
@@ -54,7 +63,8 @@ params:
   row_limit: 50000
   show_cell_bars: true
   table_timestamp_format: smart_date
-  temporal_columns_lookup: {}
+  temporal_columns_lookup:
+    date_joined_on_mitlearn: true
   viz_type: table
 slice_name: Learn User Profile
 uuid: 2e3e900a-3782-4738-80fe-0d60802d4461

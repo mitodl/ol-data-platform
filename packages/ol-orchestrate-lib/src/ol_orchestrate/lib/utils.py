@@ -1,10 +1,15 @@
 import hashlib
+import logging
 import os
 import zipfile
 from pathlib import Path
 from typing import Any, Literal
 
+import httpx
+
 from ol_orchestrate.resources.secrets.vault import Vault
+
+DEFAULT_DRF_PAGE_TIMEOUT_SECONDS = 30.0
 
 
 def authenticate_vault(dagster_env: str, vault_address: str) -> Vault:
@@ -92,3 +97,36 @@ def compute_zip_content_hash(zip_path: Path, skip_filename: str) -> str:
                         hasher.update(chunk)
 
     return hasher.hexdigest()
+
+
+def fetch_all_drf_pages(
+    start_url: str,
+    *,
+    timeout: float = DEFAULT_DRF_PAGE_TIMEOUT_SECONDS,
+    logger: logging.Logger | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch all results from an unauthenticated DRF-style paginated endpoint.
+
+    Follows the `next` link until exhausted. Page payloads are expected in the
+    standard Django REST Framework shape: `{"results": [...], "next": <url>|null}`.
+
+    Args:
+        start_url: The first page URL to fetch.
+        timeout: Per-request timeout in seconds.
+        logger: Optional logger (e.g., a Dagster `context.log`) for per-page info.
+
+    Returns:
+        The concatenated `results` list from every page.
+    """
+    results: list[dict[str, Any]] = []
+    url: str | None = start_url
+    with httpx.Client(follow_redirects=True, timeout=timeout) as client:
+        while url:
+            if logger is not None:
+                logger.info("Fetching page: %s", url)
+            response = client.get(url)
+            response.raise_for_status()
+            payload = response.json()
+            results.extend(payload.get("results", []))
+            url = payload.get("next")
+    return results

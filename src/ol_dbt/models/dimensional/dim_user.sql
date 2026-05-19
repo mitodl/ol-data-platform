@@ -192,7 +192,9 @@ with mitx_users as (
         , mitlearn_openedx_users.openedx_user_id as mitxonline_openedx_user_id
         , mitx_users.mitxonline_application_user_id
         , coalesce(
-            mitxonline_app_openedxuser_mapping.openedxuser_username, mitx_users.user_mitxonline_username
+            mitxonline_app_openedxuser_mapping.openedxuser_username
+            , mitx_users.user_mitxonline_username
+            , mitlearn_openedx_users.user_username
         ) as user_mitxonline_username
         , mitx_users.edxorg_openedx_user_id
         , mitx_users.user_edxorg_username
@@ -250,7 +252,10 @@ with mitx_users as (
         learn_user.user_global_id
         , learn_user.user_id as mitlearn_user_id
         , learn_user.user_email as email
-        , concat(learn_user.user_first_name, ' ', learn_user.user_last_name) as full_name
+        , case when learn_profile.user_name is not null and trim(learn_profile.user_name) <> ''
+            then learn_profile.user_name
+            else concat(learn_user.user_first_name, ' ', learn_user.user_last_name)
+        end as full_name
         , learn_profile.user_current_education as highest_education
         , learn_user.user_is_active as user_is_active_on_mitlearn
         , learn_user.user_joined_on as user_joined_on_mitlearn
@@ -298,7 +303,7 @@ with mitx_users as (
 
 , combined_users as (
     select
-        {{ dbt_utils.generate_surrogate_key(['email']) }} as user_pk
+        {{ dbt_utils.generate_surrogate_key(['lower(email)']) }} as user_pk
         , user_global_id
         , mitlearn_user_id
         , mitlearn_openedx_user_id
@@ -314,7 +319,7 @@ with mitx_users as (
         , user_edxorg_username
         , null as emeritus_user_id
         , null as global_alumni_user_id
-        , email
+        , lower(email) as email
         , full_name
         , address_country
         , highest_education
@@ -339,7 +344,7 @@ with mitx_users as (
     union all
 
     select
-        {{ dbt_utils.generate_surrogate_key(['mitxpro_user_view.user_email']) }} as user_pk
+        {{ dbt_utils.generate_surrogate_key(['lower(mitxpro_user_view.user_email)']) }} as user_pk
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -357,7 +362,7 @@ with mitx_users as (
         , null as user_edxorg_username
         , null as emeritus_user_id
         , null as global_alumni_user_id
-        , mitxpro_user_view.user_email as email
+        , lower(mitxpro_user_view.user_email) as email
         , mitxpro_user_view.user_full_name as full_name
         , mitxpro_user_view.user_address_country as address_country
         , mitxpro_user_view.user_highest_education as highest_education
@@ -381,12 +386,12 @@ with mitx_users as (
     left join mitxpro_openedx_users as openedx_users_username
         on mitxpro_user_view.user_username = openedx_users_username.user_username
     left join mitxpro_openedx_users as openedx_users_email
-        on mitxpro_user_view.user_email = openedx_users_email.user_email
+        on lower(mitxpro_user_view.user_email) = lower(openedx_users_email.user_email)
 
     union all
 
     select
-        {{ dbt_utils.generate_surrogate_key(['user_email']) }} as user_pk
+        {{ dbt_utils.generate_surrogate_key(['lower(user_email)']) }} as user_pk
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -402,7 +407,7 @@ with mitx_users as (
         , null as user_edxorg_username
         , user_id as emeritus_user_id
         , null as global_alumni_user_id
-        , user_email as email
+        , lower(user_email) as email
         , user_full_name as full_name
         , user_address_country as address_country
         , null as highest_education
@@ -428,7 +433,7 @@ with mitx_users as (
     union all
 
     select
-        {{ dbt_utils.generate_surrogate_key(['user_email']) }} as user_pk
+        {{ dbt_utils.generate_surrogate_key(['lower(user_email)']) }} as user_pk
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -444,7 +449,7 @@ with mitx_users as (
         , null as user_edxorg_username
         , null as emeritus_user_id
         , user_id as global_alumni_user_id
-        , user_email as email
+        , lower(user_email) as email
         , user_full_name as full_name
         , user_address_country as address_country
         , null as highest_education
@@ -470,7 +475,7 @@ with mitx_users as (
     union all
 
     select
-        {{ dbt_utils.generate_surrogate_key(['mitxresidential_user_view.user_email']) }} as user_pk
+        {{ dbt_utils.generate_surrogate_key(['lower(mitxresidential_user_view.user_email)']) }} as user_pk
         , null as user_global_id
         , null as mitlearn_user_id
         , null as mitlearn_openedx_user_id
@@ -486,7 +491,7 @@ with mitx_users as (
         , null as user_edxorg_username
         , null as emeritus_user_id
         , null as global_alumni_user_id
-        , mitxresidential_user_view.user_email as email
+        , lower(mitxresidential_user_view.user_email) as email
         , mitxresidential_user_view.user_full_name as full_name
         , mitxresidential_user_view.user_address_country as address_country
         , mitxresidential_user_view.user_highest_education as highest_education

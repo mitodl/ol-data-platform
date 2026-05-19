@@ -257,12 +257,13 @@ models:
 - name: tfact_certificate
   description: >
     Transaction fact table for certificate issuance events.
-    Grain: One row per certificate issued.
+    Grain: One row per certificate issued (course or program).
   tests:
   - dbt_utils.unique_combination_of_columns:
       combination_of_columns:
       - certificate_id
       - platform
+      - certificate_scope
   columns:
   - name: certificate_key
     description: Surrogate key for certificate
@@ -274,9 +275,9 @@ models:
     tests:
     - not_null
   - name: certificate_issued_date_key
-    description: Foreign key to dim_date for certificate issuance date
+    description: Foreign key to dim_date for certificate issuance date. Very small
+      number of program certificates have null issued dates in edx.org source data
     tests:
-    - not_null
     - relationships:
         to: ref('dim_date')
         field: date_key
@@ -290,11 +291,23 @@ models:
         config:
           severity: warn
   - name: courserun_fk
-    description: Foreign key to dim_course_run
+    description: Foreign key to dim_course_run (null for program certificates)
     tests:
     - relationships:
         to: ref('dim_course_run')
         field: courserun_pk
+        where: "courserun_fk is not null"
+        config:
+          severity: warn
+  - name: program_fk
+    description: Foreign key to dim_program (null for course certificates)
+    tests:
+    - relationships:
+        to: ref('dim_program')
+        field: program_pk
+        where: "program_fk is not null"
+        config:
+          severity: warn
   - name: platform_fk
     description: Foreign key to dim_platform
     tests:
@@ -312,6 +325,13 @@ models:
     description: Platform identifier string
     tests:
     - not_null
+  - name: certificate_scope
+    description: Scope of certificate - 'course' for course run certificates, 'program'
+      for program certificates
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['course', 'program']
   - name: certificate_uuid
     description: Universally unique identifier for certificate
   - name: certificate_is_revoked
@@ -320,3 +340,5 @@ models:
     - not_null
   - name: certificate_created_on
     description: Certificate creation timestamp (for incremental processing)
+  - name: certificate_updated_on
+    description: Certificate last update timestamp (for incremental processing)

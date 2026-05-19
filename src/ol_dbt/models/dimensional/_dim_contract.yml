@@ -1,0 +1,47 @@
+---
+version: 2
+
+models:
+- name: dim_contract
+  description: >
+    MITx Online B2B contracts dimension. Each contract defines the terms under which
+    an organization gains access to one or more course runs. Grain: one row per contract.
+  columns:
+  - name: contract_pk
+    description: Surrogate primary key derived from b2b_contract_id.
+    tests:
+    - unique
+    - not_null
+  - name: contract_id
+    description: Source system contract ID (bigint).
+    tests:
+    - unique
+    - not_null
+  - name: organization_fk
+    description: Foreign key to dim_organization.organization_pk.
+    tests:
+    - relationships:
+        to: ref('dim_organization')
+        field: organization_pk
+  - name: b2b_contract_name
+    description: Human-readable name of the contract.
+    tests:
+    - not_null
+  - name: b2b_contract_is_active
+    description: Whether the contract is marked active. Date rules still apply.
+  - name: b2b_contract_description
+    description: Long-form description of the contract terms.
+  - name: b2b_contract_start_date
+    description: Start date of the contract.
+  - name: b2b_contract_end_date
+    description: End date of the contract (null if open-ended).
+  - name: b2b_contract_max_learners
+    description: Maximum number of seats allowed under this contract. Zero or null
+      means unlimited.
+  - name: b2b_contract_integration_type
+    description: Integration type for the contract (e.g. SSO, Non-SSO).
+  - name: b2b_contract_enrollment_fixed_price
+    description: Fixed price per enrollment under this contract. Zero or null for
+      no fixed price.
+  - name: b2b_contract_membership_type
+    description: Membership management method for the contract (e.g. SSO, Non-SSO).

@@ -27,6 +27,12 @@ from ol_orchestrate.lib.utils import authenticate_vault, s3_uploads_bucket
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.oauth import OAuthApiClientFactory
 
+from learning_resources.assets.ovs_videos import (
+    video_api,
+    video_delete_webhook,
+    video_metadata,
+    video_webhook,
+)
 from learning_resources.assets.sloan_api import sloan_course_metadata
 from learning_resources.assets.video_shorts import (
     google_sheets_api,
@@ -36,6 +42,12 @@ from learning_resources.assets.video_shorts import (
     video_short_thumbnail_large,
     video_short_thumbnail_small,
     video_short_webhook,
+)
+from learning_resources.sensors.ovs_videos import (
+    ovs_videos_delete_job,
+    ovs_videos_delete_partition_cleanup_sensor,
+    ovs_videos_discovery_sensor,
+    ovs_videos_stale_cleanup_sensor,
 )
 from learning_resources.sensors.video_shorts import (
     video_shorts_delete_job,
@@ -127,6 +139,32 @@ video_shorts_api_schedule = ScheduleDefinition(
     execution_timezone="Etc/UTC",
 )
 
+# OVS videos jobs for manual triggering
+ovs_videos_api_job = define_asset_job(
+    name="ovs_videos_api_job",
+    description="Materialize OVS public videos API data to discover new videos",
+    selection=AssetSelection.keys(
+        ["ovs_videos", "video_api"],
+    ),
+)
+
+ovs_videos_webhook_job = define_asset_job(
+    name="ovs_videos_webhook_job",
+    description="Materialize OVS video metadata + webhook for one partition",
+    selection=AssetSelection.keys(
+        ["ovs_videos", "video_metadata"],
+        ["ovs_videos", "video_webhook"],
+    ),
+)
+
+# OVS videos schedule for periodic discovery
+ovs_videos_api_schedule = ScheduleDefinition(
+    name="ovs_videos_api_schedule",
+    target=ovs_videos_api_job,
+    cron_schedule="*/10 * * * *",  # Every 10 minutes
+    execution_timezone="Etc/UTC",
+)
+
 # Create unified definitions
 defs = Definitions(
     resources={
@@ -167,16 +205,30 @@ defs = Definitions(
         video_short_thumbnail_large,
         video_short_webhook,
         video_short_delete_webhook,
+        video_api,
+        video_metadata,
+        video_webhook,
+        video_delete_webhook,
     ],
-    schedules=[extract_api_daily_schedule, video_shorts_api_schedule],
+    schedules=[
+        extract_api_daily_schedule,
+        video_shorts_api_schedule,
+        ovs_videos_api_schedule,
+    ],
     sensors=[
         video_shorts_discovery_sensor,
         video_shorts_stale_cleanup_sensor,
         video_shorts_delete_partition_cleanup_sensor,
+        ovs_videos_discovery_sensor,
+        ovs_videos_stale_cleanup_sensor,
+        ovs_videos_delete_partition_cleanup_sensor,
     ],
     jobs=[
         video_shorts_api_job,
         video_shorts_video_job,
         video_shorts_delete_job,
+        ovs_videos_api_job,
+        ovs_videos_webhook_job,
+        ovs_videos_delete_job,
     ],
 )

@@ -5,26 +5,26 @@ dashboard_title: Coupons
 description: null
 metadata:
   chart_configuration:
-    '113':
+    '128':
       crossFilters:
         chartsInScope:
-        - 128
+        - 113
         scope: global
-      id: 113
-    '120':
+      id: 128
+    '224':
       crossFilters:
         chartsInScope:
-        - 224
+        - 120
         scope: global
-      id: 120
+      id: 224
   color_scheme: ''
   color_scheme_domain: []
   cross_filters_enabled: true
   expanded_slices: {}
   global_chart_configuration:
     chartsInScope:
-    - 128
-    - 224
+    - 113
+    - 120
     scope:
       excluded: []
       rootPath:
@@ -34,7 +34,7 @@ metadata:
   native_filter_configuration:
   - cascadeParentIds: []
     chartsInScope:
-    - 128
+    - 120
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -51,7 +51,7 @@ metadata:
     name: Platform
     scope:
       excluded:
-      - 113
+      - 224
       rootPath:
       - ROOT_ID
     tabsInScope:
@@ -63,8 +63,8 @@ metadata:
     type: NATIVE_FILTER
   - cascadeParentIds: []
     chartsInScope:
-    - 128
-    - 224
+    - 113
+    - 120
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -93,8 +93,8 @@ metadata:
     type: NATIVE_FILTER
   - cascadeParentIds: []
     chartsInScope:
-    - 128
-    - 224
+    - 113
+    - 120
     controlValues:
       defaultToFirstItem: false
       enableEmptyFilter: false
@@ -122,8 +122,6 @@ metadata:
       datasetUuid: a5df905c-0480-4227-b234-1a1064672b32
     type: NATIVE_FILTER
   - cascadeParentIds: []
-    chartsInScope:
-    - 128
     controlValues:
       creatable: true
       defaultToFirstItem: false
@@ -141,12 +139,41 @@ metadata:
     name: Product Readable ID
     scope:
       excluded:
-      - 113
+      - 224
       rootPath:
       - ROOT_ID
     targets:
     - column:
         name: product_readable_id
+      datasetUuid: a5df905c-0480-4227-b234-1a1064672b32
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-UxurmeTHiVs0aju3EQxNT
+    - NATIVE_FILTER-R5Skmo4dKv5X_BPVfSPSh
+    - NATIVE_FILTER-pwsdvRHhFpdpL6Jc-OjQR
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-2hYP_Pfh0KZiVD0yV0g9K
+    name: Product Name
+    scope:
+      excluded:
+      - 224
+      rootPath:
+      - ROOT_ID
+    targets:
+    - column:
+        name: product_name
       datasetUuid: a5df905c-0480-4227-b234-1a1064672b32
     type: NATIVE_FILTER
   refresh_frequency: 0
@@ -157,7 +184,7 @@ position:
     children: []
     id: CHART-GIoELOquos60t9gabSJgV
     meta:
-      chartId: 120
+      chartId: 128
       height: 64
       sliceName: Coupon/Discount Summary
       uuid: 2e066386-dc90-48e3-859b-2b665b3cb257
@@ -173,7 +200,7 @@ position:
     children: []
     id: CHART-hiM8gxP0MAGBAp83LUSII
     meta:
-      chartId: 113
+      chartId: 224
       height: 81
       sliceName: Coupon Dashboard (Last Updated)
       uuid: a468ef05-11af-4a02-b61c-f928f36f17fb

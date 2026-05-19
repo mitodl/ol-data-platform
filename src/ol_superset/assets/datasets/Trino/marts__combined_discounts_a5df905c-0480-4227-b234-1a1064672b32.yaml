@@ -6,7 +6,7 @@ columns:
   column_name: b2b_contract_number
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -18,7 +18,7 @@ columns:
   column_name: b2breceipt_reference_number
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -30,7 +30,7 @@ columns:
   column_name: b2bcoupon_id
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -42,7 +42,7 @@ columns:
   column_name: product_readable_id
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -54,7 +54,7 @@ columns:
   column_name: discount_activated_on
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -66,7 +66,7 @@ columns:
   column_name: discount_created_on
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -78,7 +78,7 @@ columns:
   column_name: discount_amount_text
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -90,7 +90,7 @@ columns:
   column_name: discount_expires_on
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -102,7 +102,7 @@ columns:
   column_name: payment_transaction
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -114,7 +114,7 @@ columns:
   column_name: couponpayment_name
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -126,7 +126,7 @@ columns:
   column_name: company_name
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -138,7 +138,19 @@ columns:
   column_name: discount_name
   description: null
   expression: ''
-  extra: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: product_name
+  description: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -150,7 +162,7 @@ columns:
   column_name: discount_code
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -162,7 +174,7 @@ columns:
   column_name: discount_source
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -174,7 +186,7 @@ columns:
   column_name: discount_type
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -186,7 +198,7 @@ columns:
   column_name: platform
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -198,7 +210,7 @@ columns:
   column_name: redeemed
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -210,7 +222,7 @@ columns:
   column_name: discount_max_redemptions
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -222,7 +234,7 @@ columns:
   column_name: num_discount_codes
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -234,7 +246,7 @@ columns:
   column_name: discounts_used_count
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -246,7 +258,7 @@ columns:
   column_name: couponpaymentversion_id
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -258,7 +270,7 @@ columns:
   column_name: discount_id
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -266,7 +278,7 @@ columns:
   python_date_format: null
   type: BIGINT
   verbose_name: null
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929
 default_endpoint: null
 description: Auto refreshed at 2026-02-05T13:51:51.059148+00:00
 extra: null
@@ -279,7 +291,8 @@ metrics:
   d3format: null
   description: null
   expression: COUNT(*)
-  extra: null
+  extra:
+    warning_markdown: ''
   metric_name: count
   metric_type: count
   verbose_name: COUNT(*)
@@ -288,7 +301,7 @@ normalize_columns: false
 offset: 0
 params: null
 schema: ol_warehouse_production_mart
-sql: null
+sql: ''
 table_name: marts__combined_discounts
 template_params: null
 uuid: a5df905c-0480-4227-b234-1a1064672b32

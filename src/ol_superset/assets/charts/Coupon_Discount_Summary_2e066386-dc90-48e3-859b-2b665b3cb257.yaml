@@ -11,6 +11,7 @@ params:
   color_pn: true
   comparison_color_scheme: Green
   comparison_type: values
+  conditional_formatting: []
   extra_form_data: {}
   groupby:
   - couponpaymentversion_id
@@ -41,6 +42,8 @@ params:
   - product_readable_id
   - payment_transaction
   - discount_max_redemptions
+  - platform
+  include_search: true
   order_by_cols: []
   order_desc: true
   percent_metric_calculation: row_limit

@@ -1178,16 +1178,16 @@ models:
     platforms and their last course activity date
   columns:
   - name: platform
-    description: string, name of the platform (e.g. MITx Online, xPro, edX.org, Residential
-      MITx)
+    description: string, platform code identifying the source platform (e.g. mitxonline,
+      mitxpro, edxorg, residential)
     tests:
     - not_null
   - name: user_username
-    description: string, username of the course staff member on the platform
-    tests:
-    - not_null
+    description: string, username of the course staff member on the platform.
   - name: user_email
     description: string, email address of the course staff member
+    tests:
+    - not_null
   - name: courserun_readable_id
     description: string, unique identifier for the course run formatted as course-v1:{org}+{course
       code}+{run_tag}
@@ -1213,7 +1213,7 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["platform", "user_username", "courserun_readable_id"]
+        column_list: ["platform", "user_email", "courserun_readable_id"]
 
 - name: data_detail_nav
   description: Report of navigatation events
