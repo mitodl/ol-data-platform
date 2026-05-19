@@ -41,7 +41,7 @@ with fp as (
         on course_enrollments.courserun_readable_id = runs.courserun_readable_id
 )
 
-select 
+select
     final_report.*
     ,  row_number() over (partition by final_report.user_email order by final_report.flexiblepriceapplication_created_on desc
     , final_report.flexiblepriceapplication_updated_on desc, final_report.courserun_start_on desc) as user_latest_row_desc
