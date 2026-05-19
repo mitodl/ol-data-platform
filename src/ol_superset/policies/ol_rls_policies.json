@@ -22,10 +22,10 @@
     },
     {
       "name": "instructor_enrollment_scope_with_term_expiry",
-      "description": "Restricts enrollment-detail datasets to the instructor's own courses and enforces a 30-day post-term access window. Course ownership uses int__combined__user_course_roles; the term expiry applies to tables that expose courserun_end_on.",
+      "description": "Restricts enrollment-detail datasets to the instructor's own courses. Course ownership uses int__combined__user_course_roles.",
       "filter_type": "Regular",
       "group_key": "course_scope",
-      "clause": "courserun_readable_id IN (SELECT courserun_readable_id FROM ol_data_lake_production.ol_warehouse_production_intermediate.int__combined__user_course_roles WHERE courseaccess_role IN ('staff', 'instructor') AND user_email = '{{ current_user_email() }}') AND courserun_end_on >= CURRENT_DATE - INTERVAL '30' DAY",
+      "clause": "courserun_readable_id IN (SELECT courserun_readable_id FROM ol_data_lake_production.ol_warehouse_production_intermediate.int__combined__user_course_roles WHERE courseaccess_role IN ('staff', 'instructor') AND user_email = '{{ current_user_email() }}')",
       "tables": [
         "marts__combined_course_enrollment_detail",
         "enrollment_detail_report",
