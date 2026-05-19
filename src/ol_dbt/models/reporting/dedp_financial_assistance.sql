@@ -14,27 +14,35 @@ with fp as (
     select * from {{ ref('int__mitxonline__course_runs') }}
 )
 
+, final_report as (
+    select
+        distinct
+        users.user_email
+        , users.user_full_name
+        , users.user_id
+        , cast(fp.flexiblepriceapplication_income_usd as decimal(38,2)) as flexiblepriceapplication_income_usd
+        , fp.flexiblepriceapplication_original_currency
+        , cast(fp.flexiblepriceapplication_original_income as decimal(38,2)) as flexiblepriceapplication_original_income
+        , fp.flexiblepriceapplication_status
+        , fp.flexiblepriceapplication_exchange_rate_timestamp
+        , fp.flexiblepriceapplication_created_on
+        , fp.flexiblepriceapplication_updated_on
+        , course_enrollments.courserunenrollment_is_active
+        , course_enrollments.mitxonline_program_id
+        , runs.courserun_start_on
+        , runs.courserun_end_on
+        , try_cast(fp.flexiblepriceapplication_income_usd as decimal(38, 2)) < 10000 as income_less_than_10000
+        from fp
+    inner join users
+        on fp.user_id = users.user_id
+    inner join course_enrollments
+        on course_enrollments.user_id = fp.user_id
+    inner join runs
+        on course_enrollments.courserun_readable_id = runs.courserun_readable_id
+)
+
 select
-   distinct
-   users.user_email
-   , users.user_full_name
-   , users.user_id
-   , cast(fp.flexiblepriceapplication_income_usd as decimal(38,2)) as flexiblepriceapplication_income_usd
-   , fp.flexiblepriceapplication_original_currency
-   , cast(fp.flexiblepriceapplication_original_income as decimal(38,2)) as flexiblepriceapplication_original_income
-   , fp.flexiblepriceapplication_status
-   , fp.flexiblepriceapplication_exchange_rate_timestamp
-   , fp.flexiblepriceapplication_created_on
-   , fp.flexiblepriceapplication_updated_on
-   , course_enrollments.courserunenrollment_is_active
-   , course_enrollments.mitxonline_program_id
-   , runs.courserun_start_on
-   , runs.courserun_end_on
-   , try_cast(fp.flexiblepriceapplication_income_usd as decimal(38, 2)) < 10000 as income_less_than_10000
-   from fp
-inner join users
-    on fp.user_id = users.user_id
-inner join course_enrollments
-    on course_enrollments.user_id = fp.user_id
-inner join runs
-    on course_enrollments.courserun_readable_id = runs.courserun_readable_id
+    final_report.*
+    ,  row_number() over (partition by final_report.user_email order by final_report.flexiblepriceapplication_created_on desc
+    , final_report.flexiblepriceapplication_updated_on desc, final_report.courserun_start_on desc) as user_latest_row_desc
+from final_report
