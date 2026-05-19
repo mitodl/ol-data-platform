@@ -31,6 +31,8 @@ select
    , runs.courserun_start_on
    , runs.courserun_end_on
    , try_cast(fp.flexiblepriceapplication_income_usd as decimal(38, 2)) < 10000 as income_less_than_10000
+   , row_number() over (partition by users.user_email order by fp.flexiblepriceapplication_created_on desc
+    , fp.flexiblepriceapplication_updated_on desc, runs.courserun_start_on desc) as user_latest_row_desc
    from fp
 inner join users
     on fp.user_id = users.user_id

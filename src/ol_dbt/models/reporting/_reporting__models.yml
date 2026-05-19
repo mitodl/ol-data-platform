@@ -1356,3 +1356,5 @@ models:
     description: timestamp, when the course run ends
   - name: income_less_than_10000
     description: boolean, indicating if the user's income is less than $10,000
+  - name: user_latest_row_desc
+    description: integer, row number indicating the latest row for each user based on application and course run dates
