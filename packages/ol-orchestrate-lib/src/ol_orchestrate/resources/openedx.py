@@ -64,6 +64,15 @@ class OpenEdxApiClient(OAuthApiClient):
 
         :returns: A dictionary of course IDs and the S3 URL where it will be exported
                   to.
+
+        .. note::
+            The ol_openedx_course_export plugin returns HTTP 400 when some (but
+            not all) courses fail to queue. We allow 400 through only when the
+            response body contains the expected partial-failure schema
+            (``upload_task_ids`` key present), so callers can still process
+            successfully-queued tasks. A 400 with an unrecognised body (e.g. a
+            bad-request error from a malformed payload) still raises so the
+            caller gets a clear error instead of a later ``KeyError``.
         """
         request_url = f"{self.studio_url}/api/courses/v0/export/"
         response = self.http_client.post(
@@ -72,6 +81,16 @@ class OpenEdxApiClient(OAuthApiClient):
             headers={"Authorization": f"JWT {self._fetch_access_token()}"},
             timeout=60,
         )
+        if response.status_code == 400:  # noqa: PLR2004
+            # Partial-failure: some courses failed to queue but others succeeded.
+            # Only suppress the error when the body matches the expected schema.
+            try:
+                body = response.json()
+            except ValueError:
+                response.raise_for_status()
+            if "upload_task_ids" not in body:
+                response.raise_for_status()
+            return body
         response.raise_for_status()
         return response.json()
 
