@@ -1033,19 +1033,19 @@ def list_roles(session: requests.Session, base_url: str) -> dict[str, int]:
 
 def list_datasets_name_to_id(
     session: requests.Session, base_url: str
-) -> dict[str, int]:
-    """Return dataset name→id mapping with bare-name collision detection.
+) -> dict[str, list[int]]:
+    """Return dataset name→ids mapping.
 
     Each dataset is indexed under:
     - bare ``table_name``  (e.g. ``"instructor_module_report"``)
     - qualified ``schema.table_name``
 
-    If two datasets share the same bare ``table_name`` across different schemas
-    the bare key is removed and a warning is printed.  Policies must then use
-    the fully-qualified ``schema.table_name`` form.
+    When the same logical table is registered under multiple database connections
+    (e.g. the same Iceberg table accessible via both Trino and StarRocks), all
+    dataset IDs are collected.  RLS filters are applied to every matching dataset
+    so access control is enforced regardless of which engine a user queries.
     """
-    result: dict[str, int] = {}
-    bare_collision: set[str] = set()
+    result: dict[str, list[int]] = {}
     page = 0
     page_size = 100
     while True:
@@ -1068,19 +1068,9 @@ def list_datasets_name_to_id(
             schema = item.get("schema") or ""
             table = item.get("table_name", "")
             dataset_id = int(item["id"])
-            if table in bare_collision:
-                pass  # already marked ambiguous
-            elif table in result:
-                bare_collision.add(table)
-                del result[table]
-                print(
-                    f"  ⚠️  Multiple datasets share table_name '{table}'; "
-                    "use schema-qualified name in RLS policies.",
-                )
-            else:
-                result[table] = dataset_id
+            result.setdefault(table, []).append(dataset_id)
             if schema:
-                result[f"{schema}.{table}"] = dataset_id
+                result.setdefault(f"{schema}.{table}", []).append(dataset_id)
         if len(data.get("result", [])) < page_size:
             break
         page += 1
@@ -1113,7 +1103,7 @@ def apply_rls_filter(
     base_url: str,
     policy: dict[str, object],
     role_map: dict[str, int],
-    dataset_map: dict[str, int],
+    dataset_map: dict[str, list[int]],
     existing: dict[str, int],
     *,
     dry_run: bool = False,
@@ -1123,6 +1113,10 @@ def apply_rls_filter(
     Returns ``True`` on success (or in dry-run mode), ``False`` on any error.
     Raises ``ValueError`` if required roles or datasets are missing so that
     partially-configured filters are never silently accepted.
+
+    When a table name resolves to multiple dataset IDs (e.g. the same Iceberg
+    table registered under both Trino and StarRocks), all IDs are included in
+    the filter so RLS is enforced across every engine.
     """
     name = str(policy["name"])
     roles: list[str] = list(policy["roles"])  # type: ignore[call-overload]
@@ -1144,6 +1138,8 @@ def apply_rls_filter(
         )
         raise ValueError(msg)
 
+    all_dataset_ids = [ds_id for t in tables for ds_id in dataset_map[t]]
+
     payload = {
         "name": name,
         "description": str(policy.get("description", "")),
@@ -1151,7 +1147,7 @@ def apply_rls_filter(
         "clause": str(policy["clause"]),
         "group_key": str(policy.get("group_key", "")),
         "roles": [role_map[r] for r in roles],
-        "tables": [dataset_map[t] for t in tables],
+        "tables": all_dataset_ids,
     }
 
     if dry_run:
