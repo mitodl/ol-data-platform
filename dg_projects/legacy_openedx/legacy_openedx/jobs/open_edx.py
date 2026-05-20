@@ -5,11 +5,13 @@ from ol_orchestrate.lib.hooks import (
 )
 
 from legacy_openedx.ops.open_edx import (
+    collect_edx_course_exports,
     course_enrollments,
     course_roles,
     enrolled_users,
-    export_edx_courses,
     export_edx_forum_database,
+    export_single_edx_course,
+    fan_out_edx_course_exports,
     list_courses,
     student_submissions,
     upload_extracted_data,
@@ -45,9 +47,14 @@ def edx_course_pipeline():
             export_edx_forum_database(),
         ]
     )
-    export_edx_courses.with_hooks(
+    dynamic_courses = fan_out_edx_course_exports(course_list)
+    results = dynamic_courses.map(export_single_edx_course)
+    collect_edx_course_exports.with_hooks(
         {
             notify_healthchecks_io_on_success,
             notify_healthchecks_io_on_failure,
         }
-    )(course_list, extracts_upload)
+    )(
+        exported_course_ids=results.collect(),
+        daily_extracts_dir=extracts_upload,
+    )

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import subprocess
 import time
 from collections.abc import Generator
@@ -556,13 +557,151 @@ def export_edx_forum_database(
 
 
 @op(
-    name="edx_export_courses",
-    description="Export the contents of all active courses to S3",
-    required_resource_keys={"s3", "openedx"},
+    name="fan_out_edx_course_exports",
+    description=(
+        "Fan out course exports by yielding one dynamic output per course ID, "
+        "enabling each course to be exported as an independent sub-operation."
+    ),
     ins={
         "edx_course_ids": In(
             dagster_type=List[String],
             description="List of course IDs active on Open edX installation",
+        )
+    },
+    out=DynamicOut(),
+)
+def fan_out_edx_course_exports(
+    context: OpExecutionContext,
+    edx_course_ids: list[str],
+) -> Generator[DynamicOutput, None, None]:
+    """Yield one DynamicOutput per course ID to fan out individual export sub-ops.
+
+    :param context: Dagster execution context
+    :param edx_course_ids: All active course IDs to be exported
+    """
+    for course_id in edx_course_ids:
+        safe_id = re.sub(r"[^A-Za-z0-9_]", "_", course_id)
+        digest = hashlib.sha256(course_id.encode()).hexdigest()[:8]
+        mapping_key = f"{safe_id}_{digest}"
+        context.log.debug("Fanning out export for course %s", course_id)
+        yield DynamicOutput(course_id, mapping_key=mapping_key)
+
+
+@op(
+    name="export_single_edx_course",
+    description=(
+        "Submit an export request for a single edX course and poll until it "
+        "completes or times out. Returns the course ID on success, or None on "
+        "any failure so the downstream collect step is never blocked."
+    ),
+    required_resource_keys={"openedx"},
+)
+def export_single_edx_course(  # noqa: C901, PLR0911
+    context: OpExecutionContext,
+    course_id: str,
+) -> str | None:
+    """Trigger and await an export for one course.
+
+    All errors are caught and logged rather than raised so that a single
+    course failure does not prevent the collect step from running.
+
+    :param context: Dagster execution context
+    :param course_id: The edX course identifier to export
+    :returns: course_id on success, None on any failure or timeout
+    """
+    try:
+        result = context.resources.openedx.export_courses(course_ids=[course_id])
+    except Exception:
+        context.log.exception(
+            "Failed to submit export request for course %s", course_id
+        )
+        return None
+
+    failed_initial = result.get("failed_uploads", {})
+    if course_id in failed_initial:
+        context.log.warning(
+            "Course %s failed to queue for export: %s",
+            course_id,
+            failed_initial[course_id],
+        )
+        return None
+
+    tasks = result.get("upload_task_ids", {})
+    task_id = tasks.get(course_id)
+    if not task_id:
+        context.log.warning(
+            "No task ID in export response for course %s; response was: %s",
+            course_id,
+            result,
+        )
+        return None
+
+    # Possible status values: https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
+    start_time = datetime.now(tz=UTC)
+    while True:
+        if datetime.now(tz=UTC) - start_time > COURSE_EXPORT_TIMEOUT:
+            context.log.warning(
+                "Timed out waiting for export of course %s after %s",
+                course_id,
+                COURSE_EXPORT_TIMEOUT,
+            )
+            return None
+        time.sleep(timedelta(seconds=60).seconds)
+        try:
+            status = context.resources.openedx.check_course_export_status(
+                course_id, task_id
+            )
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:  # noqa: PLR2004
+                context.log.warning(
+                    "Export task not found (HTTP 404) for course %s (task %s)",
+                    course_id,
+                    task_id,
+                )
+            else:
+                context.log.exception(
+                    "HTTP %d error checking export status for course %s",
+                    e.response.status_code,
+                    course_id,
+                )
+            return None
+        except Exception:
+            context.log.exception(
+                "Unexpected error checking export status for course %s", course_id
+            )
+            return None
+        if status["state"] == "Succeeded":
+            context.log.info("Export succeeded for course %s", course_id)
+            return course_id
+        if status["state"] in {"Failed", "Canceled", "Retrying"}:
+            context.log.warning(
+                "Export reached terminal failure state '%s' for course %s",
+                status["state"],
+                course_id,
+            )
+            return None
+        context.log.debug(
+            "Export for course %s is in state '%s', continuing to poll",
+            course_id,
+            status.get("state"),
+        )
+
+
+@op(
+    name="collect_edx_course_exports",
+    description=(
+        "Collect results from per-course export sub-operations and copy "
+        "successfully exported archives to the S3 daily extracts location. "
+        "Failed or timed-out exports (represented as None) are skipped so the "
+        "step always completes even when some exports fail."
+    ),
+    required_resource_keys={"s3"},
+    ins={
+        "exported_course_ids": In(
+            description=(
+                "List of course IDs returned by per-course export sub-operations. "
+                "None entries represent failed or timed-out exports and are skipped."
+            ),
         ),
         "daily_extracts_dir": In(
             dagster_type=String,
@@ -570,75 +709,66 @@ def export_edx_forum_database(
         ),
     },
 )
-def export_edx_courses(  # noqa: C901
+def collect_edx_course_exports(
     context: OpExecutionContext,
-    edx_course_ids: list[str],
-    daily_extracts_dir: str,
     config: ExportEdxCoursesConfig,
+    exported_course_ids: list[str | None],
+    daily_extracts_dir: str,
 ) -> None:
-    exported_courses = context.resources.openedx.export_courses(
-        course_ids=edx_course_ids,
+    """Copy successfully exported course archives to the final S3 destination.
+
+    :param context: Dagster execution context
+    :param config: Config containing the source edX S3 export bucket name
+    :param exported_course_ids: Results from per-course sub-operations; None
+        entries represent failures and are silently skipped.
+    :param daily_extracts_dir: The S3 path prefix for daily extracts
+    """
+    successful = [cid for cid in exported_course_ids if cid is not None]
+    failed_count = len(exported_course_ids) - len(successful)
+
+    context.log.info(
+        "%d course exports succeeded, %d failed or timed out",
+        len(successful),
+        failed_count,
     )
-    failed_initial = exported_courses.get("failed_uploads", {})
-    if failed_initial:
+
+    if not successful:
         context.log.warning(
-            "The following courses failed to queue for export and will be skipped: %s",
-            list(failed_initial.keys()),
+            "No course exports succeeded; nothing will be copied to %s",
+            daily_extracts_dir,
         )
-    successful_exports: set[str] = set()
-    failed_exports: set[str] = set()
-    tasks = exported_courses["upload_task_ids"]
-    context.log.info("Exporting %s tasks from Open edX", len(tasks))
-    # Possible status values found here:
-    # https://github.com/openedx/django-user-tasks/blob/master/user_tasks/models.py
-    start_time = datetime.now(tz=UTC)
-    while len(successful_exports.union(failed_exports)) < len(tasks):
-        if datetime.now(tz=UTC) - start_time > COURSE_EXPORT_TIMEOUT:
-            timed_out = set(tasks.keys()) - successful_exports - failed_exports
-            err_msg = (
-                f"Timed out waiting for course exports after {COURSE_EXPORT_TIMEOUT}. "
-                f"Unresolved courses: {timed_out}"
-            )
-            raise TimeoutError(err_msg)
-        time.sleep(timedelta(seconds=60).seconds)
-        for course_id, task_id in tasks.items():
-            if course_id in successful_exports or course_id in failed_exports:
-                continue
-            try:
-                task_status = context.resources.openedx.check_course_export_status(
-                    course_id,
-                    task_id,
-                )
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404:  # noqa: PLR2004
-                    context.log.warning(
-                        "Export task not found (HTTP 404) for course %s "
-                        "(task %s), marking as failed",
-                        course_id,
-                        task_id,
-                    )
-                    failed_exports.add(course_id)
-                    continue
-                else:
-                    raise
-            if task_status["state"] == "Succeeded":
-                successful_exports.add(course_id)
-            if task_status["state"] in {"Failed", "Canceled", "Retrying"}:
-                failed_exports.add(course_id)
-    for course_id in successful_exports:
-        context.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
+        return
+
+    dest_bucket, dest_prefix = daily_extracts_dir.split("/", maxsplit=1)
+    copy_failures: list[str] = []
+    for course_id in successful:
         course_file = f"{course_id}.tar.gz"
         source_object = {
             "Bucket": config.edx_course_bucket,
             "Key": course_file,
         }
-        dest_bucket, dest_prefix = daily_extracts_dir.split("/", maxsplit=1)
         dest_object = {
             "Bucket": dest_bucket,
             "Key": f"{dest_prefix}/courses/{course_file}",
         }
-        context.resources.s3.copy(CopySource=source_object, **dest_object)
-        context.resources.s3.delete_object(**source_object)
+        try:
+            context.log.info("Moving course %s to %s", course_id, daily_extracts_dir)
+            context.resources.s3.copy(CopySource=source_object, **dest_object)
+            context.resources.s3.delete_object(**source_object)
+        except Exception:
+            context.log.exception(
+                "Failed to copy export for course %s to %s",
+                course_id,
+                daily_extracts_dir,
+            )
+            copy_failures.append(course_id)
+
+    if copy_failures:
+        context.log.warning(
+            "S3 copy failed for %d course(s): %s",
+            len(copy_failures),
+            copy_failures,
+        )
 
 
 @op(
