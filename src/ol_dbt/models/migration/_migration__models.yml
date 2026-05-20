@@ -139,6 +139,8 @@ models:
   - name: program_certificate_issued_on
     data_type: timestamp
     description: date and time when the program certificate was awarded on edX.org.
+    tests:
+    - not_null
   - name: certificate_page_revision_id
     data_type: integer
     description: the live wagtail page revision ID for the program certificate page

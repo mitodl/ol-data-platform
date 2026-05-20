@@ -8,6 +8,9 @@ with edxorg_program_certificates_raw as (
         end as normalized_program_title
     from {{ ref('int__edxorg__mitx_program_certificates') }}
     where user_username not like 'retired__user%'
+     --- Exclude certificates without an awarded date, as this likely indicates a certificate that
+     -- should not be migrated
+    and program_certificate_awarded_on is not null
 )
 
 , edxorg_program_certificates as (
