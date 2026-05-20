@@ -9,9 +9,8 @@ models:
     Tracks historical changes to course metadata.
     Note: edxorg has no native course-level table. edxorg courses are derived from
     courserun records, with one row per course_readable_id using the most-recent course
-    run to supply attributes (title, course_number, is_live). source_id is always
-    null
-    for edxorg courses.
+    run to supply attributes (title, course_number, is_live). source_id is null
+    for edxorg and OCW courses.
   meta:
     owner: data_team
   columns:
@@ -33,7 +32,8 @@ models:
     description: >
       Integer source system ID for this course. Null for edxorg courses — edxorg
       exposes no native integer course ID; course records are synthesized from the
-      most-recent course run sharing the same course_readable_id.
+      most-recent course run sharing the same course_readable_id. Null for OCW
+      courses because OCW exposes a string UUID, not an integer source ID.
   - name: course_number
     description: Course number (e.g., 6.00.1x)
   - name: course_title
