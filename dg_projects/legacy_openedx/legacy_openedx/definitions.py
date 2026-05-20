@@ -151,7 +151,7 @@ def open_edx_export_irx_job_config(
 
     return {
         "ops": {
-            "edx_export_courses": {
+            "collect_edx_course_exports": {
                 "config": {
                     "edx_course_bucket": f"{deployment}-{dagster_env}-edxapp-courses",
                 }
