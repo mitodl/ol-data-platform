@@ -670,20 +670,29 @@ def export_single_edx_course(  # noqa: C901, PLR0911
                 "Unexpected error checking export status for course %s", course_id
             )
             return None
-        if status["state"] == "Succeeded":
+        state = status.get("state")
+        if state is None:
+            context.log.warning(
+                "Unexpected response from export status endpoint for course %s "
+                "(missing 'state' key); response was: %s",
+                course_id,
+                status,
+            )
+            return None
+        if state == "Succeeded":
             context.log.info("Export succeeded for course %s", course_id)
             return course_id
-        if status["state"] in {"Failed", "Canceled", "Retrying"}:
+        if state in {"Failed", "Canceled", "Retrying"}:
             context.log.warning(
                 "Export reached terminal failure state '%s' for course %s",
-                status["state"],
+                state,
                 course_id,
             )
             return None
         context.log.debug(
             "Export for course %s is in state '%s', continuing to poll",
             course_id,
-            status.get("state"),
+            state,
         )
 
 
