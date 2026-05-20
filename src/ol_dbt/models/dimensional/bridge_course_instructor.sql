@@ -3,7 +3,6 @@
 ) }}
 
 -- Map courses to instructors (many-to-many)
--- Note: OCW courses not yet in dim_course (Phase 1-2), so omitted here
 with mitxonline_course_instructors as (
     select
         course_id
@@ -20,35 +19,72 @@ with mitxonline_course_instructors as (
     from {{ ref('int__mitxpro__coursesfaculty') }}
 )
 
-, combined_course_instructors as (
+, source_id_course_instructors as (
     select * from mitxonline_course_instructors
     union all
     select * from mitxpro_course_instructors
 )
 
+-- OCW source_id is null in dim_course; join on course_readable_id
+, ocw_course_instructors as (
+    select
+        ocw_courses.course_readable_id
+        , ocw_instructors.course_instructor_title as instructor_name
+        , 'ocw' as platform
+    from {{ ref('int__ocw__course_instructors') }} as ocw_instructors
+    inner join {{ ref('int__ocw__courses') }} as ocw_courses
+        on ocw_instructors.course_uuid = ocw_courses.course_uuid
+)
+
 -- Join to dimensions to get FKs
 , dim_course as (
-    select course_pk, source_id, primary_platform
+    select
+        course_pk
+        , course_readable_id
+        , source_id
+        , primary_platform
     from {{ ref('dim_course') }}
     where is_current = true
 )
 
 , dim_instructor as (
-    select instructor_pk, instructor_name, primary_platform
+    select
+        instructor_pk
+        , instructor_name
+        , primary_platform
     from {{ ref('dim_instructor') }}
 )
 
-, bridge as (
+, source_id_bridge as (
     select
         dim_course.course_pk as course_fk
         , dim_instructor.instructor_pk as instructor_fk
-    from combined_course_instructors
+    from source_id_course_instructors
     left join dim_course
-        on combined_course_instructors.course_id = dim_course.source_id
-        and combined_course_instructors.platform = dim_course.primary_platform
+        on source_id_course_instructors.course_id = dim_course.source_id
+        and source_id_course_instructors.platform = dim_course.primary_platform
     left join dim_instructor
-        on combined_course_instructors.instructor_name = dim_instructor.instructor_name
-        and combined_course_instructors.platform = dim_instructor.primary_platform
+        on source_id_course_instructors.instructor_name = dim_instructor.instructor_name
+        and source_id_course_instructors.platform = dim_instructor.primary_platform
+)
+
+, ocw_bridge as (
+    select
+        dim_course.course_pk as course_fk
+        , dim_instructor.instructor_pk as instructor_fk
+    from ocw_course_instructors
+    left join dim_course
+        on ocw_course_instructors.course_readable_id = dim_course.course_readable_id
+        and ocw_course_instructors.platform = dim_course.primary_platform
+    left join dim_instructor
+        on ocw_course_instructors.instructor_name = dim_instructor.instructor_name
+        and ocw_course_instructors.platform = dim_instructor.primary_platform
+)
+
+, bridge as (
+    select * from source_id_bridge
+    union all
+    select * from ocw_bridge
 )
 
 -- Include only fully-resolved rows; unresolved FKs indicate dim coverage gaps

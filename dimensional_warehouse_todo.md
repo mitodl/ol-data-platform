@@ -487,6 +487,19 @@ WHERE is_current = true GROUP BY primary_platform;
 
 ---
 
+### B2b · Add `dim_ocw_course` ✅
+
+**File:** `src/ol_dbt/models/dimensional/dim_ocw_course.sql`
+
+**Depends on:** B2
+
+OCW-specific course attributes not in conformed `dim_course` (term, year, level, publish
+state, learning resource types, etc.). Lets `marts__ocw_courses` reference only the
+dimensional layer, dropping its `int__ocw__courses` ref
+(epic: [#2072](https://github.com/mitodl/ol-data-platform/issues/2072)).
+
+---
+
 ### B3 · Fix `tfact_enrollment` Incremental Watermark ⏳
 
 **File:** `src/ol_dbt/models/dimensional/tfact_enrollment.sql`
