@@ -579,7 +579,15 @@ def fan_out_edx_course_exports(
     :param context: Dagster execution context
     :param edx_course_ids: All active course IDs to be exported
     """
-    for course_id in edx_course_ids:
+    # dict.fromkeys preserves insertion order while deduplicating; the API can
+    # return the same course ID on multiple pages.
+    unique_course_ids = list(dict.fromkeys(edx_course_ids))
+    if len(unique_course_ids) < len(edx_course_ids):
+        context.log.warning(
+            "Deduplicated %d duplicate course ID(s) from the course list",
+            len(edx_course_ids) - len(unique_course_ids),
+        )
+    for course_id in unique_course_ids:
         safe_id = re.sub(r"[^A-Za-z0-9_]", "_", course_id)
         digest = hashlib.sha256(course_id.encode()).hexdigest()[:8]
         mapping_key = f"{safe_id}_{digest}"
