@@ -1,0 +1,55 @@
+---
+version: 2
+
+models:
+- name: dim_ocw_course
+  description: >
+    OCW-specific course attributes that are not part of the conformed dim_course
+    (term, year, level, publish state, learning resource types, etc.). One row per
+    OCW course, keyed by course_readable_id; extends dim_course for OCW.
+  meta:
+    owner: data_team
+  columns:
+  - name: course_readable_id
+    description: >
+      Business key - OCW course readable id (URL slug). Joins to
+      dim_course.course_readable_id for OCW courses.
+    tests:
+    - not_null
+    - unique
+  - name: course_name
+    description: str, unique name of the OCW course. It appears as part of OCW Studio
+      URLs
+  - name: course_term
+    description: str, course term. Possible values are Spring, Summer, Fall, January
+      IAP, or blank
+  - name: course_year
+    description: int, course year
+  - name: course_level
+    description: str, course level in comma-separated list. Possible values are Undergraduate,
+      Graduate, Non-Credit, High School, or blank
+  - name: course_extra_course_numbers
+    description: str, the extra course number e.g., STS.484J
+  - name: course_is_unpublished
+    description: boolean, indicating if the course website is currently unpublished
+      on OCW production.
+  - name: course_has_never_published
+    description: boolean, indicating if the course website has never been published
+      on OCW production.
+  - name: course_live_url
+    description: str, URL of the OCW course in production.
+  - name: course_first_published_on
+    description: timestamp, date and time when the course website was first published
+      to OCW production
+  - name: course_publish_date_updated_on
+    description: timestamp, date and time when the publish date was most recently
+      updated on OCW production.
+  - name: course_topics
+    description: json, hierarchical course topics (topic, subtopic, speciality) in
+      json format
+  - name: course_learning_resource_types
+    description: str, course learning resource types or features in comma-separated
+      list. e.g., Lecture Notes, Problem Sets with Solutions
+  - name: course_department_numbers
+    description: str, course department numbers in comma-separated list. e.g., STS,
+      8
