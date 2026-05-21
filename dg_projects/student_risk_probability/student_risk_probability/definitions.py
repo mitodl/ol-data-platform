@@ -51,6 +51,8 @@ defs = Definitions(
                 properties={
                     "type": "glue",
                     "glue.region": "us-east-1",
+                    "s3.connect-timeout": "10",
+                    "s3.request-timeout": "120",
                 }
             ),
             namespace=database_name,
