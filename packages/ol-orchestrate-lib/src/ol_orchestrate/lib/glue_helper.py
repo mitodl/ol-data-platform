@@ -106,22 +106,26 @@ def get_dbt_model_as_dataframe(database_name: str, table_name: str) -> pl.LazyFr
         KeyError: If the table metadata doesn't contain the expected fields
         boto3 exceptions: If the AWS Glue API call fails
     """
-    # s3.connect-timeout and s3.request-timeout apply to pyiceberg's PyArrowFileIO
-    # (used for manifest reads). They are also mapped by Polars 1.40+ to
-    # object_store's `connect_timeout` and `timeout` for its native Rust S3 reader,
-    # but only when passed explicitly as storage_options to pl.scan_iceberg().
-    # Without them, Polars' Tokio runtime accumulates CLOSE_WAIT S3 connections
-    # that block process exit indefinitely.
-    s3_storage_options = {
+    # pyiceberg's PyArrowFileIO expects timeout values as plain numeric seconds strings.
+    pyiceberg_s3_properties = {
         "s3.region": "us-east-1",
         "s3.connect-timeout": "10",
         "s3.request-timeout": "120",
     }
+    # Polars 1.40+ maps s3.connect-timeout / s3.request-timeout to object_store's
+    # `connect_timeout` / `timeout` for its native Rust S3 reader, preventing
+    # CLOSE_WAIT connections from blocking Tokio runtime shutdown at process exit.
+    # object_store requires Duration strings (e.g. "10s"), not bare integers.
+    polars_s3_storage_options = {
+        "s3.region": "us-east-1",
+        "s3.connect-timeout": "10s",
+        "s3.request-timeout": "120s",
+    }
     glue = GlueCatalog(
         "default",
         client=boto3.client("glue", region_name="us-east-1"),
-        **s3_storage_options,
+        **pyiceberg_s3_properties,
     )
     table = glue.load_table(f"{database_name}.{table_name}")
 
-    return pl.scan_iceberg(table, storage_options=s3_storage_options)
+    return pl.scan_iceberg(table, storage_options=polars_s3_storage_options)
