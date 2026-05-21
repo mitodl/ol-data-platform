@@ -29,4 +29,7 @@ COPY dg_deployments/reconcile_edxorg_partitions.py /opt/dagster/app/reconcile_ed
 
 # Install ol-orchestrate-lib and its dependencies
 # This makes the pooled Postgres storage classes available
-RUN uv pip install --system /opt/dagster/packages/ol-orchestrate-lib dagster==${DAGSTER_VERSION} dagster-azure dagster-postgres dagster-k8s dagster-aws dagster-gcp dagster-graphql dagster-webserver
+# kubernetes>=36 changed dict type annotations in a way that dagster-k8s 0.29.x does
+# not handle, raising AttributeError at launch time. Pin until dagster-k8s upstream
+# resolves the incompatibility.
+RUN uv pip install --system /opt/dagster/packages/ol-orchestrate-lib dagster==${DAGSTER_VERSION} dagster-azure dagster-postgres dagster-k8s "kubernetes<36" dagster-aws dagster-gcp dagster-graphql dagster-webserver
