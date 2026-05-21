@@ -26,8 +26,8 @@ models:
   - name: course_year
     description: int, course year
   - name: course_level
-    description: str, course level in comma-separated list. Possible values are Undergraduate
-      , Graduate, Non-Credit, High School, or blank
+    description: str, course level in comma-separated list. Possible values are Undergraduate,
+      Graduate, Non-Credit, High School, or blank
   - name: course_extra_course_numbers
     description: str, the extra course number e.g., STS.484J
   - name: course_is_unpublished
