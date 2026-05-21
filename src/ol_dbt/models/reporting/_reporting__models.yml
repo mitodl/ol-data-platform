@@ -582,6 +582,8 @@ models:
   columns:
   - name: user_hashed_id
     description: str, user primary key
+  - name: platforms
+    description: str, platforms the user uses.
   - name: user_full_name
     description: str, user full name on the platform user enrolled.
   - name: user_birth_year
