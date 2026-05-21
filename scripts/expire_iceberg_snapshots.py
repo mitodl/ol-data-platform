@@ -1,87 +1,117 @@
-#!/usr/bin/env python3
 """Expire old Iceberg snapshots to reduce metadata bloat.
 
-Snapshot accumulation causes metadata.json to grow very large (100s of KB),
-which slows down Iceberg table operations (load_table, plan_files, etc.)
-by requiring S3 round trips to read oversized metadata files.
+Tables that are written to frequently accumulate snapshot history indefinitely
+unless expire_snapshots() is run. Each uncompacted snapshot adds ~1.6 KB to the
+metadata.json file, which must be read from S3 on every table operation.
 
 Usage:
-    uv run scripts/expire_iceberg_snapshots.py --help
-    uv run scripts/expire_iceberg_snapshots.py --dry-run
-    uv run scripts/expire_iceberg_snapshots.py --older-than-days 7
+    uv run python scripts/expire_iceberg_snapshots.py
+    uv run python scripts/expire_iceberg_snapshots.py --dry-run
+    uv run python scripts/expire_iceberg_snapshots.py --older-than-days 14
 """
 
-from __future__ import annotations
-
 import argparse
-import os
-from datetime import UTC, datetime, timedelta
+import datetime
 
+import boto3
 from pyiceberg.catalog.glue import GlueCatalog
 
+TABLES_TO_EXPIRE = [
+    # Non-dbt singleton tables
+    ("ol_warehouse_production_reporting", "student_risk_probability"),
+    # Raw layer worst offenders (by snapshot count — Phase 0 remediation)
+    # These have never had maintenance run and have bloated metadata.json files
+    # that are re-downloaded on every Airbyte sync and dbt source read.
+    ("ol_warehouse_production_raw", "raw__edxorg__program_learner_report"),
+    ("ol_warehouse_production_raw", "raw__irx__edxorg__bigquery__email_opt_in"),
+    (
+        "ol_warehouse_production_raw",
+        "raw__thirdparty__mailgun__destination_v2__domains",
+    ),
+    ("ol_warehouse_production_raw", "raw__emeritus__bigquery__api_enrollments"),
+    ("ol_warehouse_production_raw", "raw__mitxonline__openedx__api__course_blocks"),
+]
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Expire old Iceberg snapshots")
-    parser.add_argument(
-        "--table",
-        default="ol_warehouse_production.student_risk.reporting__student_risk_probability",
-        help="Fully-qualified Iceberg table identifier",
-    )
-    parser.add_argument(
-        "--older-than-days",
-        type=int,
-        default=3,
-        help="Expire snapshots older than this many days (default: 3)",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print what would be expired without actually expiring",
-    )
-    args = parser.parse_args()
+DEFAULT_OLDER_THAN_DAYS = 7
 
-    region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
-    catalog = GlueCatalog(
-        "glue",
+
+def expire_snapshots(
+    dry_run: bool = False, older_than_days: int = DEFAULT_OLDER_THAN_DAYS
+) -> None:
+    """Expire old Iceberg snapshots for tables in TABLES_TO_EXPIRE."""
+    glue = GlueCatalog(
+        "default",
+        client=boto3.client("glue", region_name="us-east-1"),
         **{
-            "glue.region": region,
             "s3.connect-timeout": "10",
             "s3.request-timeout": "120",
         },
     )
 
-    table = catalog.load_table(args.table)
-    snapshots = table.snapshots()
-    print(f"Table: {args.table}")
-    print(f"Current snapshot count: {len(snapshots)}")
-
-    if snapshots:
-        oldest = min(s.timestamp_ms for s in snapshots)
-        newest = max(s.timestamp_ms for s in snapshots)
-        print(f"Oldest snapshot: {datetime.fromtimestamp(oldest / 1000, tz=UTC)}")
-        print(f"Newest snapshot: {datetime.fromtimestamp(newest / 1000, tz=UTC)}")
-
-    cutoff = datetime.now(tz=UTC) - timedelta(days=args.older_than_days)
-    cutoff_ms = int(cutoff.timestamp() * 1000)
-    to_expire = [s for s in snapshots if s.timestamp_ms < cutoff_ms]
-    print(
-        f"\nSnapshots older than {args.older_than_days} days ({cutoff.isoformat()}): {len(to_expire)}"
+    cutoff_dt = datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(
+        days=older_than_days
     )
+    cutoff_ms = int(cutoff_dt.timestamp() * 1000)
 
-    if args.dry_run:
-        print("DRY RUN — no changes made")
-        return
+    for database, table_name in TABLES_TO_EXPIRE:
+        print(f"\n{'[DRY RUN] ' if dry_run else ''}Processing {database}.{table_name}")
+        table = glue.load_table(f"{database}.{table_name}")
 
-    if not to_expire:
-        print("Nothing to expire")
-        return
+        snapshots = table.metadata.snapshots
+        current_id = table.metadata.current_snapshot_id
+        old_snapshots = [
+            s
+            for s in snapshots
+            if s.snapshot_id != current_id and s.timestamp_ms < cutoff_ms
+        ]
 
-    print(f"Expiring {len(to_expire)} snapshot(s)...")
-    table.manage_snapshots().expire_snapshots(older_than_ms=cutoff_ms).commit()
+        print(f"  Total snapshots:       {len(snapshots)}")
+        print(f"  Snapshots to expire:   {len(old_snapshots)}")
+        print(f"  Snapshots to keep:     {len(snapshots) - len(old_snapshots)}")
 
-    table = catalog.load_table(args.table)
-    print(f"Done. Remaining snapshots: {len(table.snapshots())}")
+        import boto3 as _boto3  # noqa: PLC0415
+
+        s3 = _boto3.client("s3", region_name="us-east-1")
+        bucket = "ol-data-lake-staging-production"
+        prefix = f"processed/{database}/{table_name}/metadata/"
+        paginator = s3.get_paginator("list_objects_v2")
+        meta_size = 0
+        meta_count = 0
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                meta_size += obj["Size"]
+                meta_count += 1
+        print(
+            f"  Metadata directory:    ~{meta_size // 1024} KB across {meta_count} files"
+        )
+
+        if dry_run:
+            print("  [DRY RUN] Skipping expiration.")
+            continue
+
+        if not old_snapshots:
+            print("  No eligible snapshots to expire.")
+            continue
+
+        # pyiceberg >= 0.10.0 API: table.maintenance.expire_snapshots().older_than(dt).commit()
+        table.maintenance.expire_snapshots().older_than(cutoff_dt).commit()
+        print(f"  Expired {len(old_snapshots)} snapshots.")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report what would be expired without modifying anything",
+    )
+    parser.add_argument(
+        "--older-than-days",
+        type=int,
+        default=DEFAULT_OLDER_THAN_DAYS,
+        help=f"Expire snapshots older than this many days (default: {DEFAULT_OLDER_THAN_DAYS})",
+    )
+    args = parser.parse_args()
+    expire_snapshots(dry_run=args.dry_run, older_than_days=args.older_than_days)

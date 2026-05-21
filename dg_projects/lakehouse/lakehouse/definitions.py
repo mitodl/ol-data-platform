@@ -27,7 +27,12 @@ from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
 from ol_orchestrate.lib.utils import authenticate_vault
 from ol_orchestrate.resources.github import GithubApiClientFactory
 from ol_orchestrate.resources.secrets.vault import Vault
+from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
 
+from lakehouse.assets.iceberg_maintenance import (
+    iceberg_dbt_layer_maintenance,
+    iceberg_raw_layer_maintenance,
+)
 from lakehouse.assets.instructor_onboarding import (
     generate_instructor_onboarding_user_list,
     update_access_forge_repo,
@@ -37,6 +42,20 @@ from lakehouse.assets.superset import create_superset_asset
 from lakehouse.resources.airbyte import AirbyteOSSWorkspace
 from lakehouse.resources.dbt_s3_artifacts import DbtS3ArtifactsResource
 from lakehouse.resources.superset_api import SupersetApiClientFactory
+
+trino_host_map = {
+    "dev": "mitol-ol-data-lake-production.trino.galaxy.starburst.io",
+    "ci": "mitol-ol-data-lake-qa-0.trino.galaxy.starburst.io",
+    "qa": "mitol-ol-data-lake-qa-0.trino.galaxy.starburst.io",
+    "production": "mitol-ol-data-lake-production.trino.galaxy.starburst.io",
+}
+
+trino_catalog_map = {
+    "dev": "ol_data_lake_production",
+    "ci": "ol_data_lake_qa",
+    "qa": "ol_data_lake_qa",
+    "production": "ol_data_lake_production",
+}
 
 airbyte_host_map = {
     "dev": "https://api-airbyte-qa.odl.mit.edu",
@@ -286,6 +305,33 @@ superset_starrocks_assets = [
     if key.path[0] in dbt_models_for_superset_datasets
 ]
 
+# Iceberg maintenance schedules — both default STOPPED; enable in production via
+# the Dagster UI or Terraform after verifying the first manual run succeeds.
+#
+# 02:00 UTC: dbt layer (after nightly Airbyte syncs complete, before business hours)
+# 03:00 UTC: raw layer (staggered to avoid concurrent Glue/S3 load with dbt layer)
+iceberg_dbt_maintenance_schedule = ScheduleDefinition(
+    name="iceberg_dbt_maintenance_nightly",
+    job=define_asset_job(
+        name="iceberg_dbt_maintenance_job",
+        selection=AssetSelection.assets(iceberg_dbt_layer_maintenance),
+    ),
+    cron_schedule="0 2 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.STOPPED,
+)
+
+iceberg_raw_maintenance_schedule = ScheduleDefinition(
+    name="iceberg_raw_maintenance_nightly",
+    job=define_asset_job(
+        name="iceberg_raw_maintenance_job",
+        selection=AssetSelection.assets(iceberg_raw_layer_maintenance),
+    ),
+    cron_schedule="0 3 * * *",
+    execution_timezone="UTC",
+    default_status=DefaultScheduleStatus.STOPPED,
+)
+
 # Instructor onboarding schedule
 instructor_onboarding_schedule = ScheduleDefinition(
     name="instructor_onboarding_daily_schedule",
@@ -303,6 +349,15 @@ instructor_onboarding_schedule = ScheduleDefinition(
 # Build resources dict, conditionally including airbyte
 resources_dict = {
     "dbt": dbt_cli,
+    "trino_maintenance": TrinoMaintenanceResource(
+        host=os.environ.get("DAGSTER_TRINO_HOST", trino_host_map[DAGSTER_ENV]),
+        catalog=os.environ.get("DAGSTER_TRINO_CATALOG", trino_catalog_map[DAGSTER_ENV]),
+        vault=vault,
+        # Vault KV-v1 path whose secret contains "username" and "password" keys
+        # for the Trino service account.  Falls back to DBT_TRINO_USERNAME /
+        # DBT_TRINO_PASSWORD env vars when vault_path is empty (local dev).
+        vault_path=os.environ.get("DAGSTER_TRINO_VAULT_PATH", ""),
+    ),
     "dbt_s3_artifacts": DbtS3ArtifactsResource(
         s3_bucket=os.environ.get("DBT_ARTIFACTS_S3_BUCKET", ""),
         s3_prefix=os.environ.get(
@@ -325,6 +380,8 @@ defs = Definitions(
         *superset_starrocks_assets,
         generate_instructor_onboarding_user_list,
         update_access_forge_repo,
+        iceberg_dbt_layer_maintenance,
+        iceberg_raw_layer_maintenance,
     ],
     resources=resources_dict,
     sensors=[
@@ -341,5 +398,10 @@ defs = Definitions(
         ),
     ],
     jobs=[*airbyte_asset_jobs],
-    schedules=[*airbyte_update_schedules, instructor_onboarding_schedule],
+    schedules=[
+        *airbyte_update_schedules,
+        instructor_onboarding_schedule,
+        iceberg_dbt_maintenance_schedule,
+        iceberg_raw_maintenance_schedule,
+    ],
 )

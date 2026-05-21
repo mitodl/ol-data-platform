@@ -94,6 +94,13 @@ models:
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
           'ol_business_analyst', 'reverse_etl']
+      # Incremental dims use delete+insert and accumulate one small file per run.
+      # 14-day snapshot retention provides a time-travel window for point-in-time
+      # queries and safe re-runs across two weekly optimize cycles.
+      +meta:
+        iceberg_maintenance:
+          snapshot_retention_days: 14
+          orphan_retention_days: 14
     intermediate:
       +materialized: table
       +schema: intermediate
@@ -106,6 +113,10 @@ models:
       +grants:
         select: ['read_only_production', 'ol_data_analyst', 'business_intelligence',
           'ol_business_analyst', 'reverse_etl', 'finance']
+      # 14-day retention so mart snapshots survive a missed nightly run.
+      +meta:
+        iceberg_maintenance:
+          snapshot_retention_days: 14
     reporting:
       +materialized: table
       +schema: reporting
@@ -122,6 +133,25 @@ models:
       format: "'PARQUET'"
     +meta:
       required_docs: true
+      # Iceberg maintenance config -- inherited by all models, overrideable per
+      # folder (see dimensional/marts above) or per-model in schema YAML files.
+      #
+      # dbt meta merging is a shallow dict merge: a per-model override of
+      # iceberg_maintenance replaces the entire dict, not individual keys.
+      # load_maintenance_configs_from_manifest() re-applies these values as the
+      # base before overlaying node-level meta so partial overrides work.
+      #
+      # optimize_after_every_n_runs: materializations since last maintenance run
+      #   before OPTIMIZE fires. Use 1 for incremental (delete+insert) models;
+      #   use 5+ for full-refresh table models.
+      # analyze_after_every_n_runs: same threshold for ANALYZE. 7 = weekly for
+      #   models that materialize daily.
+      iceberg_maintenance:
+        enabled: true
+        snapshot_retention_days: 7
+        orphan_retention_days: 7
+        optimize_after_every_n_runs: 1
+        analyze_after_every_n_runs: 7
 
 
 # Test severity config
