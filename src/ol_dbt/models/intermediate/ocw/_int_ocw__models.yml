@@ -72,8 +72,8 @@ models:
   - name: course_year
     description: int, course year
   - name: course_level
-    description: str, course level in comma-separated list. Possible values are Undergraduate
-      , Graduate, Non-Credit, High School, or blank
+    description: str, course level in comma-separated list. Possible values are Undergraduate,
+      Graduate, Non-Credit, High School, or blank
   - name: course_primary_course_number
     description: str, the primary course number e.g. 21A.850J
     tests:
@@ -310,6 +310,25 @@ models:
     description: str, UUID of the resource
     tests:
     - not_null
+  - name: resource_license
+    description: str, license URL of the resource (e.g., Creative Commons)
+  - name: resource_description
+    description: str, description of the resource
+  - name: resource_file_type
+    description: str, file type of the resource file
+  - name: resource_file_size
+    description: str, file size of the resource file
+  - name: resource_ocw_type
+    description: str, OCW content type classification of the resource
+  - name: external_resource_status
+    description: str, link status of the external resource (e.g., valid, unchecked,
+      broken, check_failed)
+  - name: external_resource_wayback_url
+    description: str, Wayback Machine archive URL of the external resource
+  - name: resource_audience
+    description: str, intended audience of the resource as a JSON array
+  - name: resource_level
+    description: str, level of the resource as a JSON array
   - name: video_archive_url
     description: str, archive URL of the video
   - name: video_captions_file

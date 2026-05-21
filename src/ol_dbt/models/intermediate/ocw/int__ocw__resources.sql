@@ -123,6 +123,34 @@ select
     , nullif(nullif(json_query(
         websitecontents.websitecontent_metadata, 'lax $.video_files.video_transcript_file' omit quotes
     ), ''), 'null') as video_transcript_file
+    -- resource metadata
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.license'") }}, ''
+    ), 'null') as resource_license
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.description'") }}, ''
+    ), 'null') as resource_description
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.file_type'") }}, ''
+    ), 'null') as resource_file_type
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.file_size'") }}, ''
+    ), 'null') as resource_file_size
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.ocw_type'") }}, ''
+    ), 'null') as resource_ocw_type
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.status'") }}, ''
+    ), 'null') as external_resource_status
+    , nullif(nullif(
+        {{ json_query_string('websitecontents.websitecontent_metadata', "'$.wayback_url'") }}, ''
+    ), 'null') as external_resource_wayback_url
+    , nullif(nullif(nullif(json_query(
+        websitecontents.websitecontent_metadata, 'lax $.audience' omit quotes
+    ), ''), 'null'), '[]') as resource_audience
+    , nullif(nullif(nullif(json_query(
+        websitecontents.websitecontent_metadata, 'lax $.level' omit quotes
+    ), ''), 'null'), '[]') as resource_level
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
