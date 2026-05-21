@@ -48,8 +48,7 @@ models:
     description: json, hierarchical course topics (topic, subtopic, speciality) in
       json format
   - name: course_learning_resource_types
-    description: |
-      str, course learning resource types or features in comma-separated
+    description: str, course learning resource types or features in comma-separated
       list. e.g. Lecture Notes, Problem Sets with Solutions...
   - name: course_department_numbers
     description: str, course department numbers in comma-separated list. e.g., STS,
