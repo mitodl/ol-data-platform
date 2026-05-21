@@ -65,11 +65,15 @@ with combined_enrollments as (
 , edx_signatories as (
     select
         courserun_readable_id
-        , array_agg(signatory_normalized_name order by signatory_normalized_name)
-            filter (where signatory_normalized_name <> '') as signatory_names
+        , array_distinct(
+            array_agg(signatory_normalized_name order by signatory_normalized_name)
+            filter (where signatory_normalized_name <> '')
+          ) as signatory_names
         , array_sort(
-            array_agg(mitxonline_signatory.wagtail_page_id)
-            filter (where mitxonline_signatory.wagtail_page_id is not null)
+            array_distinct(
+                array_agg(mitxonline_signatory.wagtail_page_id)
+                filter (where mitxonline_signatory.wagtail_page_id is not null)
+            )
           ) AS signatory_ids
     from {{ ref('stg__edxorg__s3__course_certificate_signatory') }} edx_signatory
     left join {{ ref('stg__mitxonline__app__postgres__cms_signatorypage') }} as mitxonline_signatory
