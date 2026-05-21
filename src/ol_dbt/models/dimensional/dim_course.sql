@@ -65,12 +65,26 @@ with mitxonline_courses as (
     where _row_num = 1
 )
 
+, ocw_courses as (
+    select
+        course_readable_id
+        , cast(null as integer) as source_id
+        , course_title
+        , course_primary_course_number as course_number
+        , course_description
+        , course_is_live
+        , 'ocw' as platform
+    from {{ ref('int__ocw__courses') }}
+)
+
 , combined_courses as (
     select * from mitxonline_courses
     union all
     select * from mitxpro_courses
     union all
     select * from edxorg_courses
+    union all
+    select * from ocw_courses
 )
 
 -- All (platform, course_readable_id) combinations are kept as distinct rows.
