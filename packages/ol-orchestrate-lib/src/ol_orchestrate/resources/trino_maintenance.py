@@ -80,10 +80,19 @@ class TrinoMaintenanceResource(ConfigurableResource):
         # Fall back to env vars used by dbt for local development
         username = os.environ.get("DBT_TRINO_USERNAME", "")
         password = os.environ.get("DBT_TRINO_PASSWORD", "")
-        if not username:
+        missing = [
+            name
+            for name, val in (
+                ("DBT_TRINO_USERNAME", username),
+                ("DBT_TRINO_PASSWORD", password),
+            )
+            if not val
+        ]
+        if missing:
+            noun = "is" if len(missing) == 1 else "are"
             msg = (
                 "TrinoMaintenanceResource: no vault_path configured and "
-                "DBT_TRINO_USERNAME is not set"
+                f"{', '.join(missing)} {noun} not set"
             )
             raise ValueError(msg)
         return username, password

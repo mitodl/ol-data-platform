@@ -38,20 +38,6 @@ log = logging.getLogger(__name__)
 
 AWS_REGION = "us-east-1"
 
-# ── Default config applied to every dbt model (overridden by dbt_project.yml
-#    meta and per-model meta).  dbt's meta merging is a *shallow* dict merge:
-#    if a model YAML sets meta: {iceberg_maintenance: {snapshot_retention_days: 14}}
-#    it replaces the entire iceberg_maintenance dict from the folder-level config.
-#    load_maintenance_configs_from_manifest() re-applies this dict as the base
-#    before overlaying so callers always receive a fully-specified config.
-DEFAULT_MAINTENANCE_CONFIG: dict[str, Any] = {
-    "enabled": True,
-    "snapshot_retention_days": 7,
-    "orphan_retention_days": 7,
-    "optimize_after_every_n_runs": 1,
-    "analyze_after_every_n_runs": 7,
-}
-
 
 # ── Configuration Dataclasses ─────────────────────────────────────────────────
 
@@ -277,8 +263,8 @@ def remove_orphan_files(
         "skipped": True,
         "reason": "not_implemented",
         "note": (
-            "pyiceberg does not yet expose a remove_orphan_files() API. "
-            "Re-enable once https://github.com/apache/iceberg-python/issues/XXX ships."
+            "pyiceberg does not yet expose a remove_orphan_files() API on Table. "
+            "See https://github.com/apache/iceberg-python for upstream status."
         ),
     }
 
@@ -297,29 +283,24 @@ def _pyiceberg_version() -> str:
 
 def load_maintenance_configs_from_manifest(
     manifest_path: str | Path,
-    env_schema_prefix: str = "ol_warehouse_production",
 ) -> list[TableMaintenanceConfig]:
     """Parse dbt ``manifest.json`` and return a ``TableMaintenanceConfig`` per model.
 
-    Only ``table`` and ``incremental`` materializations are included; views and
-    ephemeral models are skipped.
+    Only models whose ``iceberg_maintenance`` config has been compiled into
+    ``config.meta`` are included.  This makes ``dbt_project.yml`` the single
+    source of truth for maintenance defaults: models without the key are
+    skipped rather than having Python-side defaults applied silently, which
+    would diverge from the dbt config over time.
 
-    The full Glue/Trino schema name is reconstructed as::
+    The Glue/Trino schema name is read directly from ``node['schema']``, which
+    dbt fully resolves at compile time (e.g. ``ol_warehouse_production_mart``).
+    Using the resolved value is safer than reconstructing it from
+    ``config.schema`` + an env prefix, because it reflects the actual target
+    the manifest was compiled against.
 
-        {env_schema_prefix}_{config.schema}
-        e.g. "ol_warehouse_production" + "_" + "mart" = "ol_warehouse_production_mart"
-
-    Per-model ``iceberg_maintenance`` meta is a shallow overlay on top of
-    ``DEFAULT_MAINTENANCE_CONFIG``.  A model YAML that sets::
-
-        meta:
-          iceberg_maintenance:
-            snapshot_retention_days: 14
-
-    replaces the *entire* ``iceberg_maintenance`` dict from the folder-level config
-    (dbt shallow-merge semantics).  ``load_maintenance_configs_from_manifest``
-    re-applies ``DEFAULT_MAINTENANCE_CONFIG`` as the base before overlaying so that
-    callers always get a fully-specified config.
+    The Dagster AssetKey path is ``[config.schema, model_name]`` to match
+    ``DbtAutomationTranslator.get_group_name``, which returns ``config.schema``
+    (the bare schema suffix, e.g. ``mart``).
     """
     import json  # noqa: PLC0415
 
@@ -335,24 +316,30 @@ def load_maintenance_configs_from_manifest(
         if materialized not in ("table", "incremental"):
             continue  # skip view, ephemeral, seed-backed models
 
-        schema_suffix = node.get("config", {}).get("schema", "")
-        if not schema_suffix:
-            log.debug("Skipping %s — no schema configured", unique_id)
+        # Use the fully-resolved schema from the manifest node (e.g.
+        # "ol_warehouse_production_mart"), not config.schema (bare suffix).
+        schema_name = node.get("schema", "")
+        if not schema_name:
+            log.debug("Skipping %s — no schema on manifest node", unique_id)
             continue
 
+        # config.schema is the bare suffix (e.g. "mart") used as the Dagster
+        # asset group name by DbtAutomationTranslator.get_group_name.
+        schema_suffix = node.get("config", {}).get("schema", "")
         model_name = unique_id.split(".")[-1]
-        schema_name = f"{env_schema_prefix}_{schema_suffix}"
 
-        # Merge: start from global defaults, then overlay node-level meta.
-        # The dbt meta shallow-merge means the node's iceberg_maintenance dict
-        # (if present) completely replaces the folder-level one; we re-apply
-        # DEFAULT_MAINTENANCE_CONFIG as a base here to fill in any missing keys.
-        base: dict[str, Any] = dict(DEFAULT_MAINTENANCE_CONFIG)
+        # dbt_project.yml is the source of truth.  Only include models whose
+        # iceberg_maintenance meta was compiled into the manifest.  Skip models
+        # without it so Python never silently falls back to stale defaults.
         node_meta = node.get("config", {}).get("meta", {})
-        node_iceberg = node_meta.get("iceberg_maintenance", {})
-        base.update(node_iceberg)
+        iceberg_cfg = node_meta.get("iceberg_maintenance")
+        if iceberg_cfg is None:
+            log.debug(
+                "Skipping %s — no iceberg_maintenance in compiled meta", model_name
+            )
+            continue
 
-        if not base.get("enabled", True):
+        if not iceberg_cfg.get("enabled", True):
             log.debug("Skipping %s — iceberg_maintenance.enabled=false", model_name)
             continue
 
@@ -363,11 +350,11 @@ def load_maintenance_configs_from_manifest(
                 materialized=materialized,
                 # AssetKey: [schema_suffix, model_name] per DbtAutomationTranslator
                 asset_key=[schema_suffix, model_name],
-                enabled=base["enabled"],
-                snapshot_retention_days=base["snapshot_retention_days"],
-                orphan_retention_days=base["orphan_retention_days"],
-                optimize_after_every_n_runs=base["optimize_after_every_n_runs"],
-                analyze_after_every_n_runs=base["analyze_after_every_n_runs"],
+                enabled=iceberg_cfg.get("enabled", True),
+                snapshot_retention_days=iceberg_cfg["snapshot_retention_days"],
+                orphan_retention_days=iceberg_cfg["orphan_retention_days"],
+                optimize_after_every_n_runs=iceberg_cfg["optimize_after_every_n_runs"],
+                analyze_after_every_n_runs=iceberg_cfg["analyze_after_every_n_runs"],
             )
         )
 

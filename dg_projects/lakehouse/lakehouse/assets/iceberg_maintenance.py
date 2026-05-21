@@ -47,6 +47,7 @@ from dagster import (
     Output,
     asset,
 )
+from ol_orchestrate.lib.constants import DAGSTER_ENV
 from ol_orchestrate.lib.iceberg_maintenance import (
     NON_DBT_SINGLETON_TABLES,
     TableMaintenanceConfig,
@@ -63,8 +64,19 @@ from lakehouse.assets.lakehouse.dbt import dbt_project
 
 log = logging.getLogger(__name__)
 
-RAW_GLUE_DATABASE = "ol_warehouse_production_raw"
-ENV_SCHEMA_PREFIX = "ol_warehouse_production"
+# Each environment runs maintenance only against its own catalog and schema set.
+# dev uses production because DAGSTER_ENV="dev" targets the production dbt profile
+# (dev_production), meaning developers run against real production Iceberg tables.
+_RAW_GLUE_DATABASE_MAP: dict[str, str] = {
+    "production": "ol_warehouse_production_raw",
+    "qa": "ol_warehouse_qa_raw",
+    "dev": "ol_warehouse_production_raw",
+    "ci": "ol_warehouse_qa_raw",
+}
+
+RAW_GLUE_DATABASE = _RAW_GLUE_DATABASE_MAP.get(
+    DAGSTER_ENV, "ol_warehouse_production_raw"
+)
 # Parallelism for raw layer: enough to be fast across 1,300+ tables without
 # hitting Glue API rate limits (default per-account limit is ~200 req/s).
 RAW_LAYER_WORKERS = 8
@@ -230,7 +242,6 @@ def iceberg_dbt_layer_maintenance(
     """Run Iceberg maintenance for all dbt-managed tables and non-dbt singletons."""
     configs = load_maintenance_configs_from_manifest(
         manifest_path=dbt_project.manifest_path,
-        env_schema_prefix=ENV_SCHEMA_PREFIX,
     )
     all_configs = [*configs, *NON_DBT_SINGLETON_TABLES]
     context.log.info(
