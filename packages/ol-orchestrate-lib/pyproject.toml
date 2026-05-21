@@ -24,11 +24,18 @@ dependencies = [
     "pyarrow ~=24.0.0",
     "pydantic ~=2.13.2",
     "pygsheets ~= 2.0.6",
-    "pyiceberg[polars]>=0.10.0",
+    "pyiceberg[polars]>=0.11.1",
     "s3fs (>=2026.0.0,<2027.0.0)",
     "universal-pathlib ~= 0.3.1",
 ]
 repository = "https://github.com/mitodl/ol-data-platform"
+
+[tool.uv]
+# Override dagster-iceberg's <0.11 upper bound until upstream loosens it.
+# See https://github.com/dagster-io/community-integrations/pull/289
+override-dependencies = [
+    "pyiceberg>=0.11.1",
+]
 
 [build-system]
 requires = ["hatchling"]
