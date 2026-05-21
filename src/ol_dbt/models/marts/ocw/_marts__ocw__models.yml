@@ -169,7 +169,6 @@ models:
   - name: video_transcript_file
     description: str, transcript file of the video resource
   tests:
-  - dbt_utils.unique_combination_of_columns:
-      combination_of_columns:
-      - course_uuid
-      - resource_uuid
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list: ["course_uuid", "resource_uuid"]
