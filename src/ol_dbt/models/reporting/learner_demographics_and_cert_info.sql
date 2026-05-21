@@ -53,6 +53,7 @@ with combined__users as (
 
 select
     combined__users.user_hashed_id
+    , combined__users.platforms
     , combined__users.user_full_name
     , combined__users.user_birth_year
     , combined__users.user_gender
