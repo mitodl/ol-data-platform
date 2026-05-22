@@ -25,9 +25,8 @@ metadata:
   map_label_colors: {}
   native_filter_configuration:
   - cascadeParentIds: []
-    chartsInScope:
-    - 68
     controlValues:
+      creatable: true
       defaultToFirstItem: false
       enableEmptyFilter: false
       inverseSelection: false
@@ -45,64 +44,10 @@ metadata:
       excluded: []
       rootPath:
       - ROOT_ID
-    tabsInScope: []
+    sortMetric: null
     targets:
     - column:
         name: platforms
-      datasetUuid: 5f006731-f052-4586-88f2-ad1b3c904ca9
-    type: NATIVE_FILTER
-  - cascadeParentIds: []
-    chartsInScope:
-    - 68
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-fmY39vbUW
-    name: DEDP_Program_Cert_Indicator
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope: []
-    targets:
-    - column:
-        name: Any_DEDP_Program_Cert_Ind
-      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
-    type: NATIVE_FILTER
-  - cascadeParentIds: []
-    chartsInScope:
-    - 68
-    controlValues:
-      defaultToFirstItem: false
-      enableEmptyFilter: false
-      inverseSelection: false
-      multiSelect: true
-      searchAllOptions: false
-    defaultDataMask:
-      extraFormData: {}
-      filterState: {}
-      ownState: {}
-    description: ''
-    filterType: filter_select
-    id: NATIVE_FILTER-9bhoXBhyR7aJcZvlf8dkE
-    name: DEDP_Course_Cert_Count
-    scope:
-      excluded: []
-      rootPath:
-      - ROOT_ID
-    tabsInScope: []
-    targets:
-    - column:
-        name: DEDP_Course_Cert_Count
       datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
     type: NATIVE_FILTER
   - cascadeParentIds: []
@@ -112,19 +57,73 @@ metadata:
       enableEmptyFilter: false
       inverseSelection: false
       multiSelect: true
-      searchAllOptions: true
+      searchAllOptions: false
     defaultDataMask:
       extraFormData: {}
       filterState: {}
       ownState: {}
     description: ''
     filterType: filter_select
-    id: NATIVE_FILTER-seugILSr1SV5spyT0UEO3
+    id: NATIVE_FILTER-RV4K3jCG00isIH5GM8vi8
+    name: DEDP_Program_Cert_Indicator
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    targets:
+    - column:
+        name: any_dedp_program_cert_ind
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds: []
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-qPMfIWPCHb2lhenCJVuMT
+    name: DEDP_Course_Cert_Count
+    scope:
+      excluded: []
+      rootPath:
+      - ROOT_ID
+    sortMetric: null
+    targets:
+    - column:
+        name: dedp_course_cert_count
+      datasetUuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
+    type: NATIVE_FILTER
+  - cascadeParentIds:
+    - NATIVE_FILTER-cKjlGY1Lq
+    controlValues:
+      creatable: true
+      defaultToFirstItem: false
+      enableEmptyFilter: false
+      inverseSelection: false
+      multiSelect: true
+      searchAllOptions: false
+    defaultDataMask:
+      extraFormData: {}
+      filterState: {}
+      ownState: {}
+    description: ''
+    filterType: filter_select
+    id: NATIVE_FILTER-Flg9Ij2JfzTpGQYx-Nl68
     name: User Email
     scope:
       excluded: []
       rootPath:
       - ROOT_ID
+    sortMetric: null
     targets:
     - column:
         name: user_email
@@ -137,19 +136,20 @@ metadata:
       enableEmptyFilter: false
       inverseSelection: false
       multiSelect: true
-      searchAllOptions: true
+      searchAllOptions: false
     defaultDataMask:
       extraFormData: {}
       filterState: {}
       ownState: {}
     description: ''
     filterType: filter_select
-    id: NATIVE_FILTER-MEtUyM1j1fI4_NO5dVF4N
+    id: NATIVE_FILTER-igp0eBtvxw0dj0oBoRZd7
     name: User Full Name
     scope:
       excluded: []
       rootPath:
       - ROOT_ID
+    sortMetric: null
     targets:
     - column:
         name: user_full_name

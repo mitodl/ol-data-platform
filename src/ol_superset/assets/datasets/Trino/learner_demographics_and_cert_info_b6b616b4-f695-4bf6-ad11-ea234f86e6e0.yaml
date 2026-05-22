@@ -4,9 +4,10 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: dedp_public_policy_program_cert_ind
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -16,9 +17,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: dedp_international_program_cert_ind
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -28,9 +30,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: any_dedp_program_cert_ind
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -40,9 +43,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: last_course_start_datetime
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -52,9 +56,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: first_course_start_datetime
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -64,9 +69,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_address_country
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -76,9 +82,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_highest_education
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -88,9 +95,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_hashed_id
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -100,9 +108,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_edxorg_username
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -112,9 +121,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_mitxonline_username
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -124,9 +134,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_full_name
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -136,9 +147,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_job_title
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -148,9 +160,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_company
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -160,9 +173,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_email
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -172,9 +186,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_gender
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -184,9 +199,23 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_industry
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: platforms
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -196,9 +225,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: latest_income_usd
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -208,9 +238,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: dedp_course_cert_count
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -220,9 +251,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: num_of_course_enrolled
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -232,9 +264,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_birth_year
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -242,7 +275,8 @@ columns:
   python_date_format: null
   type: BIGINT
   verbose_name: null
-database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
+currency_code_column: null
+database_uuid: 9a22a54c-8b2f-4c66-a866-3f23812ec929
 default_endpoint: null
 description: Auto refreshed at 2026-03-16T07:03:11.930072+00:00
 extra: null
@@ -255,7 +289,8 @@ metrics:
   d3format: null
   description: null
   expression: COUNT(*)
-  extra: null
+  extra:
+    warning_markdown: ''
   metric_name: count
   metric_type: count
   verbose_name: COUNT(*)
@@ -264,7 +299,7 @@ normalize_columns: false
 offset: 0
 params: null
 schema: ol_warehouse_production_reporting
-sql: null
+sql: ''
 table_name: learner_demographics_and_cert_info
 template_params: null
 uuid: b6b616b4-f695-4bf6-ad11-ea234f86e6e0
