@@ -128,4 +128,6 @@ def get_dbt_model_as_dataframe(database_name: str, table_name: str) -> pl.LazyFr
     )
     table = glue.load_table(f"{database_name}.{table_name}")
 
-    return pl.scan_iceberg(table, storage_options=polars_s3_storage_options)
+    return pl.scan_iceberg(
+        table, reader_override="pyiceberg", storage_options=polars_s3_storage_options
+    )
