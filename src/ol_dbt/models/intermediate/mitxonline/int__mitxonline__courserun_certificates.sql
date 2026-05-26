@@ -27,6 +27,7 @@ with certificates as (
         , certificates.courseruncertificate_is_revoked
         , certificates.courseruncertificate_created_on
         , certificates.courseruncertificate_updated_on
+        , certificates.courseruncertificate_issued_on
         , certificates.user_id
         , users.user_username
         , users.user_edxorg_username

@@ -16,6 +16,7 @@ with source as (
             as courseruncertificate_url
         ,{{ cast_timestamp_to_iso8601('created_on') }} as courseruncertificate_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as courseruncertificate_updated_on
+        ,{{ cast_timestamp_to_iso8601('issue_date') }} as courseruncertificate_issued_on
     from source
 )
 
