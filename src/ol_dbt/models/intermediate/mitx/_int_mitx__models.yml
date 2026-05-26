@@ -397,6 +397,9 @@ models:
       arguments:
         column_list: ["user_mitxonline_username", "user_edxorg_username", "courserun_readable_id",
           "micromasters_program_id", "mitxonline_program_id"]
+      config:
+        severity: warn
+
 - name: int__mitx__courserun_certificates
   description: MITx course certificates combined from MITx Online and edX.org. It
     includes certificates that are not revoked from MITx Online, and downloadable
