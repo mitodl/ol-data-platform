@@ -34,13 +34,6 @@ from learning_resources.sensors.ovs_videos import (
     ovs_videos_stale_cleanup_sensor,
 )
 
-MIT_LEARN_BUCKET_SUFFIXES = {
-    "dev": "ci",
-    "ci": "ci",
-    "qa": "rc",
-    "production": "production",
-}
-
 # Initialize vault with resilient loading
 try:
     vault = authenticate_vault(DAGSTER_ENV, VAULT_ADDRESS)
@@ -62,32 +55,6 @@ extract_api_daily_schedule = ScheduleDefinition(
     name="learning_resource_api_schedule",
     target=AssetSelection.assets(sloan_course_metadata),
     cron_schedule="@daily",
-    execution_timezone="Etc/UTC",
-)
-
-# OVS videos jobs for manual triggering
-ovs_videos_api_job = define_asset_job(
-    name="ovs_videos_api_job",
-    description="Materialize OVS public videos API data to discover new videos",
-    selection=AssetSelection.keys(
-        ["ovs_videos", "video_api"],
-    ),
-)
-
-ovs_videos_webhook_job = define_asset_job(
-    name="ovs_videos_webhook_job",
-    description="Materialize OVS video metadata + webhook for one partition",
-    selection=AssetSelection.keys(
-        ["ovs_videos", "video_metadata"],
-        ["ovs_videos", "video_webhook"],
-    ),
-)
-
-# OVS videos schedule for periodic discovery
-ovs_videos_api_schedule = ScheduleDefinition(
-    name="ovs_videos_api_schedule",
-    target=ovs_videos_api_job,
-    cron_schedule="*/10 * * * *",  # Every 10 minutes
     execution_timezone="Etc/UTC",
 )
 
