@@ -33,12 +33,6 @@ from learning_resources.sensors.ovs_videos import (
     ovs_videos_discovery_sensor,
     ovs_videos_stale_cleanup_sensor,
 )
-from learning_resources.sensors.ovs_videos import (
-    ovs_videos_delete_job,
-    ovs_videos_delete_partition_cleanup_sensor,
-    ovs_videos_discovery_sensor,
-    ovs_videos_stale_cleanup_sensor,
-)
 
 MIT_LEARN_BUCKET_SUFFIXES = {
     "dev": "ci",
