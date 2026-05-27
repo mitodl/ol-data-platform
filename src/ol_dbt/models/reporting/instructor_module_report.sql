@@ -6,6 +6,18 @@ with chatbot_events as (
     select * from {{ ref('dim_course_content') }}
 )
 
+, organization as (
+    select * from {{ ref('dim_organization') }}
+)
+
+, organization_courserun as (
+    select * from {{ ref('bridge_organization_courserun') }}
+)
+
+, course_run as (
+    select * from {{ ref('dim_course_run') }}
+)
+
 , user as (
     select * from {{ ref('dim_user') }}
 )
@@ -211,6 +223,7 @@ select
     combined_data.user_email
     , combined_data.activity_date
     , combined_data.courserun_readable_id
+    , organization.organization_name
     , combined_data.chatbot_used_count
     , combined_data.block_category
     , combined_data.block_title
@@ -232,3 +245,9 @@ left join any_activity
     on
         combined_data.user_email = any_activity.user_email
         and combined_data.courserun_readable_id = any_activity.courserun_readable_id
+left join course_run
+    on combined_data.courserun_readable_id = course_run.courserun_readable_id
+left join organization_courserun
+    on course_run.courserun_pk = organization_courserun.courserun_fk
+left join organization
+    on organization_courserun.organization_fk = organization.organization_pk
