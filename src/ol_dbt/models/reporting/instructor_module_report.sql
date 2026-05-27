@@ -246,7 +246,9 @@ left join any_activity
         combined_data.user_email = any_activity.user_email
         and combined_data.courserun_readable_id = any_activity.courserun_readable_id
 left join course_run
-    on combined_data.courserun_readable_id = course_run.courserun_readable_id
+    on
+        combined_data.courserun_readable_id = course_run.courserun_readable_id
+        and course_run.is_current = true
 left join organization_courserun
     on course_run.courserun_pk = organization_courserun.courserun_fk
 left join organization
