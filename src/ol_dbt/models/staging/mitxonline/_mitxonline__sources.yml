@@ -685,9 +685,9 @@ sources:
       description: timestamp, specifying when a certificate was most recently updated
     - name: is_revoked
       description: boolean, indicating whether the certificate is revoked and invalid
-   - name: issue_date
-     description: date, specifying when the certificate was issued (may differ from
-       created_on if backfilled)
+    - name: issue_date
+      description: timestamp, specifying when the certificate was issued (may differ
+        from created_on if backfilled)
 
 
   - name: raw__mitxonline__app__postgres__courses_programcertificate
