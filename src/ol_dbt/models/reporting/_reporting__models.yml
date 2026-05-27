@@ -470,6 +470,8 @@ models:
     description: date, date the user engaged in an activity
   - name: courserun_readable_id
     description: string, unique string to identify a course run
+  - name: organization_name
+    description: string, name of the organization
   - name: chatbot_used_count
     description: int, a count of how many times the user engaged with a chatbot
   - name: block_category
