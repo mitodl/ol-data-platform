@@ -56,6 +56,7 @@ defs = Definitions(
                 }
             ),
             namespace=database_name,
+            reader_override="pyiceberg",
         ),
         "s3file_io_manager": default_file_object_io_manager(
             dagster_env=DAGSTER_ENV,
