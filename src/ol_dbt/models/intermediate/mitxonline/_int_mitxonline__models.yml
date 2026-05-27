@@ -1220,6 +1220,9 @@ models:
     - not_null
   - name: courseruncertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
+  - name: courseruncertificate_issued_on
+    description: timestamp, specifying when the certificate was issued (may differ
+      from created_on if backfilled)
   - name: courseruncertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: courseruncertificate_updated_on
@@ -1409,6 +1412,9 @@ models:
     - not_null
   - name: programcertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
+  - name: programcertificate_issued_on
+    description: timestamp, specifying when the certificate was issued (may differ
+      from created_on if backfilled)
   - name: programcertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: programcertificate_updated_on

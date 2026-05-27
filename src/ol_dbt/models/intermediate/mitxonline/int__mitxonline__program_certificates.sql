@@ -25,6 +25,7 @@ with certificates as (
         , certificates.programcertificate_is_revoked
         , certificates.programcertificate_created_on
         , certificates.programcertificate_updated_on
+        , certificates.programcertificate_issued_on
         , certificates.user_id
         , users.user_username
         , users.user_edxorg_username

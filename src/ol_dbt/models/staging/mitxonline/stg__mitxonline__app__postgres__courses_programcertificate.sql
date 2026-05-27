@@ -12,6 +12,7 @@ with source as (
         , is_revoked as programcertificate_is_revoked
         ,{{ cast_timestamp_to_iso8601('created_on') }} as programcertificate_created_on
         ,{{ cast_timestamp_to_iso8601('updated_on') }} as programcertificate_updated_on
+        ,{{ cast_timestamp_to_iso8601('issue_date') }} as programcertificate_issued_on
     from source
 )
 

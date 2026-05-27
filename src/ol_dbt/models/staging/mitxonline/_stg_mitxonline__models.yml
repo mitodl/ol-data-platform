@@ -1117,6 +1117,9 @@ models:
     - not_null
   - name: wagtailcore_revision_id
     description: int, foreign key to wagtailcore_revision
+  - name: courseruncertificate_issued_on
+    description: timestamp, specifying when the certificate was issued (may differ
+      from created_on if backfilled)
   - name: courseruncertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: courseruncertificate_updated_on
@@ -1155,6 +1158,9 @@ models:
     - not_null
   - name: certificate_page_revision_id
     description: int, foreign key to wagtailcore_pagerevision (could be blank)
+  - name: programcertificate_issued_on
+    description: timestamp, specifying when the certificate was issued (may differ
+      from created_on if backfilled)
   - name: programcertificate_created_on
     description: timestamp, specifying when a certificate was initially created
   - name: programcertificate_updated_on
