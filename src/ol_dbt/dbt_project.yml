@@ -135,11 +135,12 @@ models:
       required_docs: true
       # Iceberg maintenance config -- inherited by all models, overrideable per
       # folder (see dimensional/marts above) or per-model in schema YAML files.
+      # dbt compiles these defaults into each model's manifest node at build
+      # time, so load_maintenance_configs_from_manifest() reads the fully-
+      # resolved values directly from the manifest -- no Python-side merging.
       #
-      # dbt meta merging is a shallow dict merge: a per-model override of
-      # iceberg_maintenance replaces the entire dict, not individual keys.
-      # load_maintenance_configs_from_manifest() re-applies these values as the
-      # base before overlaying node-level meta so partial overrides work.
+      # Note: dbt meta merging is a shallow dict merge, so a per-model or
+      # per-folder iceberg_maintenance override must supply all keys.
       #
       # optimize_after_every_n_runs: materializations since last maintenance run
       #   before OPTIMIZE fires. Use 1 for incremental (delete+insert) models;
