@@ -7,6 +7,7 @@ with mitx_certificates as (
         , courseruncertificate_uuid
         , courseruncertificate_url
         , courseruncertificate_created_on
+        , courseruncertificate_issued_on
         , courserun_title
         , user_mitxonline_username
         , user_edxorg_username
@@ -35,6 +36,7 @@ select
     , courseruncertificate_uuid
     , courseruncertificate_url
     , courseruncertificate_created_on
+    , courseruncertificate_issued_on
     , courserun_title
     , courserun_readable_id
     , if(platform = '{{ var("mitxonline") }}', user_mitxonline_username, user_edxorg_username) as user_username
@@ -49,6 +51,7 @@ select
     , courseruncertificate_uuid
     , courseruncertificate_url
     , courseruncertificate_created_on
+    , courseruncertificate_created_on as courseruncertificate_issued_on
     , courserun_title
     , courserun_readable_id
     , user_username
@@ -63,6 +66,7 @@ select
     , courseruncertificate_uuid
     , courseruncertificate_url
     , courseruncertificate_created_on
+    , courseruncertificate_created_on as courseruncertificate_issued_on
     , courserun_title
     , courserun_readable_id
     , user_username

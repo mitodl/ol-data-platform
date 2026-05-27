@@ -54,6 +54,7 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid
         , courseruncertificate_url
         , courseruncertificate_created_on
+        , courseruncertificate_issued_on
         , user_username as user_mitxonline_username
         , user_edxorg_username
         , user_email
@@ -70,6 +71,7 @@ with mitxonline_certificates as (
         , courseruncertificate_download_uuid as courseruncertificate_uuid
         , courseruncertificate_download_url as courseruncertificate_url
         , courseruncertificate_created_on
+        , courseruncertificate_created_on as courseruncertificate_issued_on
         , user_mitxonline_username
         , user_username as user_edxorg_username
         , user_email
@@ -86,6 +88,7 @@ with mitxonline_certificates as (
         , courseruncertificate_uuid
         , courseruncertificate_url
         , courseruncertificate_created_on
+        , courseruncertificate_created_on as courseruncertificate_issued_on
         , user_mitxonline_username
         , user_edxorg_username
         , user_email
