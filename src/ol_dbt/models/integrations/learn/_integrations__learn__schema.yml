@@ -1,0 +1,138 @@
+# MIT Learn integration layer
+# Sits above marts, exposes stable application-level contracts for Trino-pull consumption.
+# Naming: integrations__learn__<source>_<entity>
+# See: docs/learn_marts_contract.md for the full schema contract.
+
+version: 2
+
+models:
+  - name: integrations__learn__ocw_courses
+    description: >
+      OCW courses exposed for MIT Learn's Trino-pull ETL. One row per live OCW course.
+      Sourced from int__ocw__courses, int__ocw__course_topics,
+      int__ocw__course_instructors, and int__ocw__course_departments.
+    columns:
+      - name: readable_id
+        description: OCW course short ID (website_short_id). Used for upsert matching.
+        tests: [not_null, unique]
+      - name: title
+        description: Course title.
+        tests: [not_null]
+      - name: last_modified
+        description: Last publish date from OCW Studio.
+        tests: [not_null]
+      - name: etl_source
+        description: Always 'ocw'.
+        tests: [not_null]
+      - name: published
+        description: Whether the course is live on ocw.mit.edu.
+
+  - name: integrations__learn__mitxonline_courses
+    description: >
+      MITx Online courses exposed for MIT Learn's Trino-pull ETL. One row per live course.
+      Sourced from int__mitxonline__courses and int__mitxonline__course_runs.
+    columns:
+      - name: readable_id
+        description: MITxOnline course readable ID. Used for upsert matching.
+        tests: [not_null, unique]
+      - name: title
+        description: Course title.
+        tests: [not_null]
+      - name: last_modified
+        description: Last CMS page publish date.
+        tests: [not_null]
+      - name: etl_source
+        description: Always 'mitxonline'.
+        tests: [not_null]
+      - name: runs
+        description: >
+          Pipe-delimited run metadata strings joined with semicolons.
+          Format per run: readable_id|start_on|end_on|is_live
+
+  - name: integrations__learn__mitxonline_programs
+    description: >
+      MITx Online programs exposed for MIT Learn's Trino-pull ETL. One row per live program.
+      Sourced from int__mitxonline__programs and int__mitxonline__program_requirements.
+    columns:
+      - name: readable_id
+        description: MITxOnline program readable ID. Used for upsert matching.
+        tests: [not_null, unique]
+      - name: title
+        description: Program title.
+        tests: [not_null]
+      - name: last_modified
+        description: Last CMS page publish date.
+        tests: [not_null]
+      - name: etl_source
+        description: Always 'mitxonline'.
+        tests: [not_null]
+      - name: courses
+        description: Comma-separated list of course readable_ids belonging to this program.
+
+  - name: integrations__learn__xpro_courses
+    description: >
+      xPRO courses exposed for MIT Learn's Trino-pull ETL. One row per live course.
+      Sourced from int__mitxpro__courses and int__mitxpro__course_runs.
+    columns:
+      - name: readable_id
+        description: xPRO course readable ID. Used for upsert matching.
+        tests: [not_null, unique]
+      - name: title
+        description: Course title.
+        tests: [not_null]
+      - name: last_modified
+        description: Last CMS page publish date.
+        tests: [not_null]
+      - name: etl_source
+        description: Always 'xpro'.
+        tests: [not_null]
+      - name: runs
+        description: >
+          Pipe-delimited run metadata strings joined with semicolons.
+          Format per run: readable_id|start_on|end_on|is_live
+
+  - name: integrations__learn__xpro_programs
+    description: >
+      xPRO programs exposed for MIT Learn's Trino-pull ETL. One row per live program.
+      Sourced from int__mitxpro__programs and int__mitxpro__coursesinprogram.
+    columns:
+      - name: readable_id
+        description: xPRO program readable ID. Used for upsert matching.
+        tests: [not_null, unique]
+      - name: title
+        description: Program title.
+        tests: [not_null]
+      - name: last_modified
+        description: Last CMS page publish date.
+        tests: [not_null]
+      - name: etl_source
+        description: Always 'xpro'.
+        tests: [not_null]
+      - name: courses
+        description: Comma-separated list of course readable_ids belonging to this program.
+
+  - name: integrations__learn__micromasters_programs
+    description: >
+      MicroMasters programs exposed for MIT Learn's Trino-pull ETL.
+      One row per live program. Sourced from int__micromasters__programs
+      and int__micromasters__program_requirements.
+      NOTE: MicroMasters has no last_modified timestamp in source data;
+      last_modified is set to current_timestamp as a conservative fallback.
+    columns:
+      - name: readable_id
+        description: >
+          String-cast program_id (MicroMasters has no slug). Used for upsert matching.
+        tests: [not_null, unique]
+      - name: title
+        description: Program title.
+        tests: [not_null]
+      - name: last_modified
+        description: >
+          current_timestamp fallback — MicroMasters source has no last_modified column.
+        tests: [not_null]
+      - name: etl_source
+        description: Always 'micromasters'.
+        tests: [not_null]
+      - name: courses
+        description: >
+          Comma-separated list of course readable_ids ordered by position_in_program.
