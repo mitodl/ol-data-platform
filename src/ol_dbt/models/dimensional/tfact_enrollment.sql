@@ -259,7 +259,7 @@ with mitxonline_enrollments as (
         or (
             ewf.enrollment_updated_on is null
             and ewf.enrollment_created_on is not null
-            and {{ from_iso8601_timestamp('ewf.enrollment_created_on') }} >= current_timestamp - interval '7' day
+            and ewf.enrollment_created_on >= {{ cast_timestamp_to_iso8601("current_timestamp - interval '7' day") }}
         )
         or ewf.enrollment_created_on is null
     )
