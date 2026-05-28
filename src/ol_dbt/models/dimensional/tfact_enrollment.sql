@@ -254,6 +254,9 @@ with mitxonline_enrollments as (
         w.max_activity_on is null  -- platform/type not yet in target, include all
         -- Use >= for updated_on watermark: updated_on can equal max on state changes within same second
         or coalesce(ewf.enrollment_updated_on, ewf.enrollment_created_on) >= w.max_activity_on
+        -- For platforms without updated_on (edxorg, residential), apply a 7-day lookback to catch
+        -- status changes (deactivations, mode upgrades) that don't bump enrollment_created_on
+        or (ewf.enrollment_updated_on is null and ewf.enrollment_created_on >= current_timestamp - interval '7' day)
         or ewf.enrollment_created_on is null
     )
     {% endif %}
