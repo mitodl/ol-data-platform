@@ -21,6 +21,13 @@ with mitx_courses as (
         , {{ element_at_array('split(course_number, \'.\')', 1) }} as extracted_department_number
         , {{ format_course_id('courserun_readable_id', false) }} as courseware_id
     from {{ ref('int__edxorg__mitx_courseruns') }}
+    -- Exclude MITx/15.390.1x_SPA/1T1015. In edX it uses the legacy course ID
+    --   source (edx.org) courserun_readable_id: MITx/15.390.1x_SPA/1T1015
+    --   normalized (MITx Online) course-v1 ID: course-v1:MITx+15.390.1x_SPA+1T2015
+    -- This run has already been migrated under the normalized ID, so we exclude
+    -- the legacy ID here to avoid attempting a duplicate migration with the
+    -- outdated courserun_readable_id.
+    where courserun_readable_id != 'MITx/15.390.1x_SPA/1T1015'
 )
 
 , edx_signatories as (
@@ -90,7 +97,10 @@ left join mitxonline_courseruns
     on
         edx_courseruns.course_number = mitxonline_courseruns.course_number
         and edx_courseruns.run_tag = mitxonline_courseruns.courserun_tag
+left join mitxonline_courseruns as mitxonline_courserun_by_id
+    on edx_courseruns.courseware_id = mitxonline_courserun_by_id.courserun_readable_id
 left join edx_signatories
     on edx_courseruns.courseware_id = edx_signatories.courserun_readable_id
 where
     mitxonline_courseruns.course_number is null
+    and mitxonline_courserun_by_id.courserun_readable_id is null
