@@ -8,7 +8,10 @@ with mitxonline_programs as (
           --- Handle titles such as Statistics and Data Science (General track) - RETIRED "old version"
           when program_title like 'Statistics and Data Science (General track)%'
               then 'Statistics and Data Science (General Track)'
-           else program_title
+          -- Supply Chain Management: edX.org uses short title, MITx Online uses full branding
+          when program_title like 'Supply Chain Management'
+              then 'MITx MicroMasters® Program in Supply Chain Management'
+          else program_title
         end as program_title
         , user_email
         , user_id
