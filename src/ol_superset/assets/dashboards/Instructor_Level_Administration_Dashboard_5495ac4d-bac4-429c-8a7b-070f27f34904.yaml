@@ -220,11 +220,7 @@ metadata:
         name: user_email
       datasetUuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91
     type: NATIVE_FILTER
-  - cascadeParentIds:
-    - NATIVE_FILTER-hWWV-Sv3ZF93m5ZI9ZryO
-    - NATIVE_FILTER-8oumTP2yOnwCPqE8K6RBP
-    - NATIVE_FILTER-0NRCdSA35E-Y1AdqZuRsq
-    - NATIVE_FILTER-agnQHRl2qGODt2NHyda-5
+  - cascadeParentIds: []
     controlValues:
       creatable: true
       defaultToFirstItem: false
