@@ -4,9 +4,10 @@ catalog: ol_data_lake_production
 columns:
 - advanced_data_type: null
   column_name: estimated_time_played
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -16,9 +17,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: video_duration
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -28,9 +30,23 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: courserun_readable_id
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
+  filterable: true
+  groupby: true
+  is_active: true
+  is_dttm: false
+  python_date_format: null
+  type: VARCHAR
+  verbose_name: null
+- advanced_data_type: null
+  column_name: organization_name
+  datetime_format: null
+  description: null
+  expression: ''
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -40,9 +56,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: block_category
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -52,9 +69,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: chatbot_type
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -64,9 +82,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: user_email
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -76,9 +95,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: subsection_title
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -88,9 +108,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: block_title
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -100,9 +121,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: section_title
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -112,9 +134,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: ever_active_ind
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -124,9 +147,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: rewatch_indicator
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -136,9 +160,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: enrolled_ind
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -148,9 +173,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: activity_date
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -160,9 +186,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: chatbot_used_count
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -172,9 +199,10 @@ columns:
   verbose_name: null
 - advanced_data_type: null
   column_name: video_watched_count
+  datetime_format: null
   description: null
   expression: ''
-  extra: null
+  extra: {}
   filterable: true
   groupby: true
   is_active: true
@@ -182,6 +210,7 @@ columns:
   python_date_format: null
   type: INTEGER
   verbose_name: null
+currency_code_column: null
 database_uuid: 8702691f-d666-4dac-943b-9382c02233e3  # Trino
 default_endpoint: null
 description: Auto refreshed at 2026-02-05T13:51:22.867951+00:00
@@ -195,7 +224,8 @@ metrics:
   d3format: null
   description: null
   expression: COUNT(*)
-  extra: null
+  extra:
+    warning_markdown: ''
   metric_name: count
   metric_type: count
   verbose_name: COUNT(*)
@@ -204,7 +234,7 @@ normalize_columns: false
 offset: 0
 params: null
 schema: ol_warehouse_production_reporting
-sql: null
+sql: ''
 table_name: instructor_module_report
 template_params: null
 uuid: 8c2b6f11-28f8-4353-8e43-6c53ea6b1d91
