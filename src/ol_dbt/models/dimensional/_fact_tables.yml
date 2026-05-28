@@ -346,3 +346,87 @@ models:
     description: Certificate issuance timestamp. For MITx Online, this is the actual
       issued_on date from the source system. For other platforms, this falls back
       to created_on as they don't track a separate issued date.
+
+- name: tfact_grade
+  description: >
+    Transaction fact table for course run grade records.
+    Grain: One row per (user × course run) grade, across MITx Online, MITx Pro, and
+    edX.org.
+    edX.org rows include MicroMasters-linked grades (micromasters_program_id IS NOT
+    NULL);
+    a separate MicroMasters platform source may be added in a future phase.
+    Note: edX.org grade timestamps are unavailable in source data; grade_date_key
+    and
+    grade_created_on are null for edX.org rows.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - grade_id
+      - platform
+  columns:
+  - name: grade_key
+    description: Surrogate key for grade record
+    tests:
+    - unique
+    - not_null
+  - name: grade_id
+    description: >
+      Source system grade ID. Integer-cast courserungrade_id for MITx Online and MITx
+      Pro;
+      surrogate key from (user_id, courserun_readable_id) for edX.org.
+    tests:
+    - not_null
+  - name: grade_date_key
+    description: >
+      Foreign key to dim_date for grade creation date (YYYYMMDD integer).
+      Null for edX.org rows where grade timestamps are unavailable.
+    tests:
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+        where: "grade_date_key is not null"
+  - name: user_fk
+    description: Foreign key to dim_user
+    tests:
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
+        config:
+          severity: warn
+  - name: courserun_fk
+    description: Foreign key to dim_course_run
+    tests:
+    - relationships:
+        to: ref('dim_course_run')
+        field: courserun_pk
+        where: "courserun_fk is not null"
+        config:
+          severity: warn
+  - name: platform_fk
+    description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
+  - name: platform
+    description: Platform identifier string (mitxonline, mitxpro, edxorg)
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['mitxonline', 'mitxpro', 'edxorg']
+  - name: grade_value
+    description: Numeric grade value between 0.0 and 1.0
+  - name: is_passing
+    description: Boolean indicating whether the learner passed the course run
+  - name: letter_grade
+    description: >
+      Letter grade string (e.g. 'Pass', 'Fail'). Available for MITx Online and MITx
+      Pro only;
+      null for edX.org.
+  - name: grade_created_on
+    description: Grade creation timestamp (for incremental processing). Null for edX.org.
+  - name: grade_updated_on
+    description: Grade last update timestamp (for incremental processing). Null for
+      edX.org.
