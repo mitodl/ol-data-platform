@@ -361,8 +361,8 @@ models:
   - name: courseruncertificate_issued_on
     description: timestamp, date and time when the course certificate was issued to
       the learner. For MITx Online, this is the actual issued_on date from the source
-      system. For other platforms, this falls back to courseruncertificate_created_on
-      as they don't track a separate issued date.
+      system. For other platforms, this falls back to created_on as they don't track
+      a separate issued date.
   - name: courseruncertificate_is_earned
     description: boolean, indicating if learner has earned the certificate on mitxonline.mit.edu,
       edX.org or xpro.mit.edu.
@@ -538,8 +538,8 @@ models:
   - name: programcertificate_issued_on
     description: timestamp, date and time when the program certificate was issued
       to the learner. For MITx Online, this is the actual issued_on date from the
-      source system. For other platforms, this falls back to created_on as they don't
-      track a separate issued date.
+      source system. For other platforms (edX.org, MITx PRO), this falls back to programcertificate_created_on
+      as they don't track a separate issued date.
   - name: programcertificate_is_revoked
     description: boolean, indicating whether the certificate is revoked and invalid
   - name: programcertificate_uuid

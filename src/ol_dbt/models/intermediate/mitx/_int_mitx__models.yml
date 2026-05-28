@@ -447,8 +447,8 @@ models:
   - name: courseruncertificate_issued_on
     description: timestamp, date and time when the course certificate was issued to
       the learner. For MITx Online, this is the actual issued_on date from the source
-      system. For other platforms, this falls back to courseruncertificate_created_on
-      as they don't track a separate issued date.
+      system. For other platforms, this falls back to created_on as they don't track
+      a separate issued date.
     tests:
     - not_null
   - name: user_full_name
