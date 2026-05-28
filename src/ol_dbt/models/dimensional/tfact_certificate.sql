@@ -204,7 +204,6 @@ with mitxonline_certificates as (
         , dim_program.program_pk as program_fk
         , case when combined_certificates.program_id is not null then 'program' else 'course' end as certificate_scope
         , {{ iso8601_to_date_key('certificate_created_on') }} as certificate_issued_date_key
-        , combined_certificates.certificate_issued_on
     from combined_certificates
     left join user_lookup as ul_mitxonline
         on combined_certificates.platform = 'mitxonline'
