@@ -10,7 +10,7 @@ profile: "open_learning"
 
 # Load AWS credentials for DuckDB Iceberg access
 on-run-start:
-  - "{% if target.type == 'duckdb' %}{{ duckdb_init() }}{% endif %}"
+- "{% if target.type == 'duckdb' %}{{ duckdb_init() }}{% endif %}"
 
 # These configurations specify where dbt should look for different types of files.
 # The `model-paths` config, for example, states that models in this project can be
@@ -22,32 +22,23 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 clean-targets: # directories to be removed by `dbt clean`
-  - "target"
-  - "dbt_packages"
+- "target"
+- "dbt_packages"
 
 dispatch:
-  - macro_namespace: dbt_utils
-    search_order: ["trino_utils", "dbt_utils"]
-  - macro_namespace: dbt_date
-    search_order: ["trino_utils", "dbt_date"]
-  - macro_namespace: metrics
-    search_order: ["trino_utils", "metrics"]
+- macro_namespace: dbt_utils
+  search_order: ["trino_utils", "dbt_utils"]
+- macro_namespace: dbt_date
+  search_order: ["trino_utils", "dbt_date"]
+- macro_namespace: metrics
+  search_order: ["trino_utils", "metrics"]
 
 vars:
   schema_suffix: dev
 
   open_learning:
-    platforms: [
-        "Bootcamps",
-        "xPro",
-        "xPRO Emeritus",
-        "xPRO Global Alumni",
-        "MITx
-        Online",
-        "MicroMasters",
-        "edX.org",
-        "Residential MITx",
-      ]
+    platforms: ["Bootcamps", "xPro", "xPRO Emeritus", "xPRO Global Alumni", "MITx\
+        \ Online", "MicroMasters", "edX.org", "Residential MITx"]
     bootcamps: "Bootcamps"
     edxorg: "edX.org"
     mitxpro: "xPro"
@@ -65,33 +56,13 @@ vars:
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
 
-    highest_education_values: [
-        "Doctorate",
-        "Master''s or professional degree",
-        "Bachelor''s\
-        \ degree",
-        "Associate degree",
-        "Secondary/high school",
-        "Junior secondary/junior
-        high/middle school",
-        "Elementary/primary school",
-        "No formal education",
-        "Other
-        education",
-        "Doctorate in science or engineering",
-        "Doctorate in another field",
-        "",
-      ]
-    gender_values:
-      [
-        "Male",
-        "Female",
-        "Transgender",
-        "Non-binary/non-conforming",
-        "Binary",
-        "Other/Prefer Not to Say",
-        "",
-      ]
+    highest_education_values: ["Doctorate", "Master''s or professional degree", "Bachelor''s\
+        \ degree", "Associate degree", "Secondary/high school", "Junior secondary/junior\
+        \ high/middle school", "Elementary/primary school", "No formal education",
+      "Other education", "Doctorate in science or engineering", "Doctorate in another\
+        \ field", ""]
+    gender_values: ["Male", "Female", "Transgender", "Non-binary/non-conforming",
+      "Binary", "Other/Prefer Not to Say", ""]
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
@@ -102,13 +73,7 @@ vars:
 models:
   open_learning:
     +grants:
-      select:
-        [
-          "read_only_production",
-          "ol_data_analyst",
-          "production_analyst",
-          "ol_data_engineer",
-        ]
+      select: ["read_only_production", "ol_data_analyst", "production_analyst", "ol_data_engineer"]
       insert: ["production_analyst", "ol_data_engineer"]
       update: ["production_analyst", "ol_data_engineer"]
       delete: ["production_analyst", "ol_data_engineer"]
@@ -142,14 +107,8 @@ models:
       +materialized: table
       +schema: intermediate
       +grants:
-        select:
-          [
-            "read_only_production",
-            "ol_data_analyst",
-            "business_intelligence",
-            "ol_business_analyst",
-            "reverse_etl",
-          ]
+        select: ["read_only_production", "ol_data_analyst", "business_intelligence",
+          "ol_business_analyst", "reverse_etl"]
     marts:
       +materialized: table
       +schema: mart
@@ -167,38 +126,19 @@ models:
       +materialized: table
       +schema: reporting
       +grants:
-        select:
-          [
-            "read_only_production",
-            "ol_data_analyst",
-            "business_intelligence",
-            "ol_business_analyst",
-            "reverse_etl",
-          ]
+        select: ["read_only_production", "ol_data_analyst", "business_intelligence",
+          "ol_business_analyst", "reverse_etl"]
     integrations:
       +materialized: table
       +schema: integrations
       +grants:
-        select:
-          [
-            "read_only_production",
-            "ol_data_analyst",
-            "reverse_etl",
-            "mit_learn_etl",
-          ]
+        select: ["read_only_production", "ol_data_analyst", "reverse_etl", "mit_learn_etl"]
     external:
       +materialized: table
       +schema: external
       +grants:
-        select:
-          [
-            "read_only_production",
-            "ol_data_analyst",
-            "business_intelligence",
-            "ol_business_analyst",
-            "reverse_etl",
-            "mit_irx",
-          ]
+        select: ["read_only_production", "ol_data_analyst", "business_intelligence",
+          "ol_business_analyst", "reverse_etl", "mit_irx"]
     +properties:
       format: "'PARQUET'"
     +meta:
