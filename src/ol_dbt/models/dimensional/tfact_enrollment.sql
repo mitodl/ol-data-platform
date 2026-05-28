@@ -256,7 +256,11 @@ with mitxonline_enrollments as (
         or coalesce(ewf.enrollment_updated_on, ewf.enrollment_created_on) >= w.max_activity_on
         -- For platforms without updated_on (edxorg, residential), apply a 7-day lookback to catch
         -- status changes (deactivations, mode upgrades) that don't bump enrollment_created_on
-        or (ewf.enrollment_updated_on is null and ewf.enrollment_created_on >= current_timestamp - interval '7' day)
+        or (
+            ewf.enrollment_updated_on is null
+            and ewf.enrollment_created_on is not null
+            and {{ from_iso8601_timestamp('ewf.enrollment_created_on') }} >= current_timestamp - interval '7' day
+        )
         or ewf.enrollment_created_on is null
     )
     {% endif %}
