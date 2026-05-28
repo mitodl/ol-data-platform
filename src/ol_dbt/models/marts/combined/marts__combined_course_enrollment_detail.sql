@@ -109,6 +109,7 @@ with combined_enrollments as (
         , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_issued_on
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , mitxonline_completed_orders.order_id
@@ -175,6 +176,10 @@ with combined_enrollments as (
             mitxonline_certificates.courseruncertificate_created_on
             , combined_enrollments.courseruncertificate_created_on
         ) as courseruncertificate_created_on
+        , coalesce(
+            mitxonline_certificates.courseruncertificate_issued_on
+            , combined_enrollments.courseruncertificate_issued_on
+        ) as courseruncertificate_issued_on
         , coalesce(
             mitxonline_certificates.courseruncertificate_url
             , combined_enrollments.courseruncertificate_url
@@ -246,6 +251,7 @@ with combined_enrollments as (
         , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_issued_on
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , mitxpro_completed_orders.order_id
@@ -304,6 +310,7 @@ with combined_enrollments as (
         , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_issued_on
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , null as order_id
@@ -352,6 +359,7 @@ with combined_enrollments as (
         , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_issued_on
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , bootcamps_completed_orders.order_id
@@ -411,6 +419,7 @@ with combined_enrollments as (
         , combined_users.user_gender
         , combined_enrollments.courseruncertificate_is_earned
         , combined_enrollments.courseruncertificate_created_on
+        , combined_enrollments.courseruncertificate_issued_on
         , combined_enrollments.courseruncertificate_url
         , combined_enrollments.courseruncertificate_uuid
         , null as order_id
@@ -451,6 +460,7 @@ select
     , courserun_title
     , courserun_upgrade_deadline
     , courseruncertificate_created_on
+    , courseruncertificate_issued_on
     , courseruncertificate_is_earned
     , courseruncertificate_url
     , courseruncertificate_uuid

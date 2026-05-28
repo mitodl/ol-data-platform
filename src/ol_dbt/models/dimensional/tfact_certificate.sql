@@ -16,6 +16,7 @@ with mitxonline_certificates as (
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
         , courseruncertificate_updated_on as certificate_updated_on
+        , courseruncertificate_issued_on as certificate_issued_on
         , 'verified' as certificate_type_code
         , 'mitxonline' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
@@ -33,6 +34,7 @@ with mitxonline_certificates as (
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
         , courseruncertificate_updated_on as certificate_updated_on
+        , courseruncertificate_created_on as certificate_issued_on
         , 'professional' as certificate_type_code
         , 'mitxpro' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
@@ -50,6 +52,7 @@ with mitxonline_certificates as (
         , false as certificate_is_revoked  -- edxorg doesn't track revocations
         , courseruncertificate_created_on as certificate_created_on
         , courseruncertificate_updated_on as certificate_updated_on
+        , courseruncertificate_created_on as certificate_issued_on
         , courseruncertificate_mode as certificate_type_code
         , 'edxorg' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
@@ -67,6 +70,7 @@ with mitxonline_certificates as (
         , false as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
         , courseruncertificate_created_on as certificate_updated_on   --- micromasters only has created_on timestamp
+        , courseruncertificate_created_on as certificate_issued_on
         , 'verified' as certificate_type_code
         , 'micromasters' as platform
         , user_email
@@ -84,6 +88,7 @@ with mitxonline_certificates as (
         , programcertificate_is_revoked as certificate_is_revoked
         , programcertificate_created_on as certificate_created_on
         , programcertificate_updated_on as certificate_updated_on
+        , programcertificate_issued_on as certificate_issued_on
         , 'verified' as certificate_type_code
         , 'mitxonline' as platform
         , user_email
@@ -101,6 +106,7 @@ with mitxonline_certificates as (
         , programcertificate_is_revoked as certificate_is_revoked
         , programcertificate_created_on as certificate_created_on
         , programcertificate_updated_on as certificate_updated_on
+        , programcertificate_created_on as certificate_issued_on
         , 'professional' as certificate_type_code
         , 'mitxpro' as platform
         , user_email
@@ -118,6 +124,7 @@ with mitxonline_certificates as (
         , false as certificate_is_revoked
         , program_certificate_awarded_on as certificate_created_on
         , program_certificate_awarded_on as certificate_updated_on  -- edxorg only has awarded_on timestamp
+        , program_certificate_awarded_on as certificate_issued_on
         , 'verified' as certificate_type_code
         , 'edxorg' as platform
         , cast(null as varchar) as user_email  -- micromasters join key only
@@ -196,7 +203,7 @@ with mitxonline_certificates as (
         , dim_certificate_type.certificate_type_pk as certificate_type_fk
         , dim_program.program_pk as program_fk
         , case when combined_certificates.program_id is not null then 'program' else 'course' end as certificate_scope
-        , {{ iso8601_to_date_key('certificate_created_on') }} as certificate_issued_date_key
+        , {{ iso8601_to_date_key('certificate_issued_on') }} as certificate_issued_date_key
     from combined_certificates
     left join user_lookup as ul_mitxonline
         on combined_certificates.platform = 'mitxonline'
@@ -263,6 +270,7 @@ with mitxonline_certificates as (
         , certificate_is_revoked
         , certificate_created_on
         , certificate_updated_on
+        , certificate_issued_on
     from certificates_with_fks as cwf
 
     {% if is_incremental() %}
@@ -298,6 +306,7 @@ with mitxonline_certificates as (
         , certificate_is_revoked
         , certificate_created_on
         , certificate_updated_on
+        , certificate_issued_on
         , row_number() over (
             partition by certificate_key
             order by coalesce(certificate_updated_on, certificate_created_on) desc nulls last
@@ -320,5 +329,6 @@ select
     , certificate_is_revoked
     , certificate_created_on
     , certificate_updated_on
+    , certificate_issued_on
 from final_deduped
 where _row_num = 1

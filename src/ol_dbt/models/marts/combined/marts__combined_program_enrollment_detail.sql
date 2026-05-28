@@ -92,6 +92,7 @@ with mitxpro__programenrollments as (
         , mitxpro__programenrollments.programenrollment_created_on
         , mitxpro__programenrollments.programenrollment_enrollment_status
         , mitxpro__program_certificates.programcertificate_created_on
+        , mitxpro__program_certificates.programcertificate_created_on as programcertificate_issued_on
         , mitxpro__program_certificates.programcertificate_is_revoked
         , mitxpro__program_certificates.programcertificate_uuid
         , mitxpro__program_certificates.programcertificate_url
@@ -126,6 +127,7 @@ with mitxpro__programenrollments as (
         , mitxonline__programenrollments.programenrollment_created_on
         , mitxonline__programenrollments.programenrollment_enrollment_status
         , mitxonline__program_certificates.programcertificate_created_on
+        , mitxonline__program_certificates.programcertificate_issued_on
         , mitxonline__program_certificates.programcertificate_is_revoked
         , mitxonline__program_certificates.programcertificate_uuid
         , mitxonline__program_certificates.programcertificate_url
@@ -163,6 +165,7 @@ with mitxpro__programenrollments as (
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
         , edx_program_certificates.program_certificate_awarded_on as programcertificate_created_on
+        , edx_program_certificates.program_certificate_awarded_on as programcertificate_issued_on
         , null as programcertificate_is_revoked
         , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
         , null as programcertificate_url
@@ -194,6 +197,7 @@ with mitxpro__programenrollments as (
         , null as programenrollment_created_on
         , null as programenrollment_enrollment_status
         , edx_program_certificates.program_certificate_awarded_on as programcertificate_created_on
+        , edx_program_certificates.program_certificate_awarded_on as programcertificate_issued_on
         , null as programcertificate_is_revoked
         , edx_program_certificates.program_certificate_hashed_id as programcertificate_uuid
         , null as programcertificate_url
@@ -283,6 +287,7 @@ with mitxpro__programenrollments as (
         , combined_programs.programenrollment_created_on
         , combined_programs.programenrollment_enrollment_status
         , combined_programs.programcertificate_created_on
+        , combined_programs.programcertificate_issued_on
         , combined_programs.programcertificate_is_revoked
         , combined_programs.programcertificate_uuid
         , combined_programs.programcertificate_url
@@ -321,6 +326,7 @@ with mitxpro__programenrollments as (
         , combined_programs.programenrollment_created_on
         , combined_programs.programenrollment_enrollment_status
         , combined_programs.programcertificate_created_on
+        , combined_programs.programcertificate_issued_on
         , combined_programs.programcertificate_is_revoked
         , combined_programs.programcertificate_uuid
         , combined_programs.programcertificate_url
@@ -346,6 +352,7 @@ select
     , final_combined_programs.programenrollment_created_on
     , final_combined_programs.programenrollment_enrollment_status
     , final_combined_programs.programcertificate_created_on
+    , final_combined_programs.programcertificate_issued_on
     , final_combined_programs.programcertificate_is_revoked
     , final_combined_programs.programcertificate_uuid
     , final_combined_programs.programcertificate_url

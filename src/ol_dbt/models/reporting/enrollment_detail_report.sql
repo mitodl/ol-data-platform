@@ -70,6 +70,7 @@ select
     , enrollments.courserunenrollment_is_active
     , enrollments.courserunenrollment_upgraded_on
     , enrollments.courseruncertificate_created_on
+    , enrollments.courseruncertificate_issued_on
     , enrollments.courseruncertificate_is_earned
     , enrollments.courseruncertificate_url
     , enrollments.courserungrade_grade

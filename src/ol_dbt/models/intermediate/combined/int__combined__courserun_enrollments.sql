@@ -250,6 +250,7 @@ select
         , {{ extract_course_readable_id('combined_enrollments.courserun_readable_id') }}
     ) as course_readable_id
     , combined_certificates.courseruncertificate_created_on
+    , combined_certificates.courseruncertificate_issued_on
     , combined_certificates.courseruncertificate_url
     , combined_certificates.courseruncertificate_uuid
     , if(combined_certificates.courseruncertificate_url is not null, true, false) as courseruncertificate_is_earned

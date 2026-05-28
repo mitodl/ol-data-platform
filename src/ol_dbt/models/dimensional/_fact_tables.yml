@@ -342,3 +342,7 @@ models:
     description: Certificate creation timestamp (for incremental processing)
   - name: certificate_updated_on
     description: Certificate last update timestamp (for incremental processing)
+  - name: certificate_issued_on
+    description: Certificate issuance timestamp. For MITx Online, this is the actual
+      issued_on date from the source system. For other platforms, this falls back
+      to created_on as they don't track a separate issued date.
