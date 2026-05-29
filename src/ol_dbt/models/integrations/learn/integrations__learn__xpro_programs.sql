@@ -2,6 +2,10 @@
   integrations__learn__xpro_programs
   Exposes xPRO programs for MIT Learn's Trino-pull ETL.
   Contract: docs/learn_marts_contract.md
+
+  Program-course membership is sourced from int__mitxpro__courses, which
+  carries program_id directly, avoiding a multi-hop join through Wagtail
+  CMS page tables.
 #}
 
 with programs as (
@@ -10,18 +14,11 @@ with programs as (
 
 , program_courses as (
     select
-        programs.program_id
-        , array_join(array_agg(courses.course_readable_id), ', ') as program_course_ids
-    from {{ ref('int__mitxpro__coursesinprogram') }} cip
-    inner join {{ ref('stg__mitxpro__app__postgres__cms_coursepage') }} cp
-        on cip.coursepage_wagtail_page_id = cp.wagtail_page_id
-    inner join {{ ref('stg__mitxpro__app__postgres__courses_course') }} courses
-        on cp.course_id = courses.course_id
-    inner join {{ ref('stg__mitxpro__app__postgres__cms_programpage') }} pp
-        on cip.programpage_wagtail_page_id = pp.wagtail_page_id
-    inner join {{ ref('stg__mitxpro__app__postgres__courses_program') }} programs
-        on pp.program_id = programs.program_id
-    group by programs.program_id
+        program_id
+        , {{ array_join('array_agg(course_readable_id)', ', ') }} as program_course_ids
+    from {{ ref('int__mitxpro__courses') }}
+    where program_id is not null
+    group by program_id
 )
 
 select

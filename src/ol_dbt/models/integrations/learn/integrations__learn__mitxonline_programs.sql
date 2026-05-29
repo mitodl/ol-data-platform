@@ -10,12 +10,12 @@ with programs as (
 
 , program_courses as (
     select
-        program_id
-        , array_join(array_agg(course_readable_id), ', ') as program_course_ids
+        reqs.program_id
+        , {{ array_join('array_agg(courses.course_readable_id)', ', ') }} as program_course_ids
     from {{ ref('int__mitxonline__program_requirements') }} reqs
     inner join {{ ref('stg__mitxonline__app__postgres__courses_course') }} courses
         on reqs.course_id = courses.course_id
-    group by program_id
+    group by reqs.program_id
 )
 
 select

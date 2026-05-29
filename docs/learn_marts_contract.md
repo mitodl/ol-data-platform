@@ -52,18 +52,18 @@ Each source may add additional columns following its needs. Common patterns incl
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `platform` | string | Platform name (e.g., "ocw-edge", "edx") |
-| `topics` | JSON | Array of topic objects |
-| `instructors` | JSON | Array of instructor objects |
-| `runs` | JSON | Array of run/course run metadata |
+| `platform` | string | Platform name (e.g., "ocw", "xpro") |
+| `topics` | string | Comma-separated topic labels (e.g., `"Engineering, Computer Science"`) |
+| `instructors` | string | Comma-separated instructor names |
+| `runs` | string | Semicolon-separated run records; each record is pipe-delimited: `readable_id\|start_on\|end_on\|is_live` |
 | `published` | boolean | Whether the resource is published/live |
 
 ### Program Sources (MITxOnline, xPRO, MicroMasters)
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `courses` | JSON | Array of course readable_ids in the program |
-| `departments` | JSON | Array of department names |
+| `courses` | string | Comma-separated list of course `readable_id` values belonging to this program |
+| `departments` | string | Comma-separated department names |
 
 ### Content File Sources
 
@@ -82,7 +82,7 @@ Each source may add additional columns following its needs. Common patterns incl
 ## Nullability Rules
 
 1. All required columns must be `NOT NULL`
-2. JSON array columns (`topics`, `instructors`, `runs`, `courses`) may be `NULL` when no data exists, but should be empty arrays `[]` when possible
+2. String-aggregated columns (`topics`, `instructors`, `runs`, `courses`) may be `NULL` when no data exists; consumers should treat `NULL` as empty
 3. Text columns (`description`, `url`, `image_url`) may be `NULL` when no data exists
 
 ## ETL Source Values

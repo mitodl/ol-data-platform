@@ -6,6 +6,7 @@ delivers it to MIT Learn. Currently it serves three delivery patterns:
 | Pattern | Used by |
 |---|---|
 | Webhook push (REST API) | Sloan Executive Education, OVS Videos, Video Shorts |
+| Sensor-driven partitioned | OVS Videos, Video Shorts (one asset execution per item ID) |
 | Trino-pull (Iceberg mart) | OCW, MITxOnline, xPRO, MIT edX _(migration in progress)_ |
 
 ## Prerequisites
@@ -18,8 +19,8 @@ delivers it to MIT Learn. Currently it serves three delivery patterns:
 ## Local Development Setup
 
 ```bash
-# From the repo root
-cd ol-data-platform/dg_projects/learning_resources
+# From the ol-data-platform repo root
+cd dg_projects/learning_resources
 
 # Create the virtual environment and install dependencies
 uv sync

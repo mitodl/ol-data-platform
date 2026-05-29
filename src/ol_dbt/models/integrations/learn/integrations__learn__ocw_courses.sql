@@ -8,44 +8,48 @@ with courses as (
     select * from {{ ref('int__ocw__courses') }}
 )
 
+, raw_course_topics as (
+    select
+        course_uuid
+        , coalesce(
+            course_speciality,
+            coalesce(course_subtopic, course_topic)
+        ) as topic_label
+    from {{ ref('int__ocw__course_topics') }}
+)
+
 , course_topics as (
     select
         course_uuid
-        , array_join(
-            array_agg(
-                coalesce(
-                    course_speciality,
-                    coalesce(course_subtopic, course_topic)
-                )
-            ),
-            ', '
-        ) as course_topics_flat
-    from {{ ref('int__ocw__course_topics') }}
+        , {{ array_join('array_agg(topic_label)', ', ') }} as course_topics_flat
+    from raw_course_topics
     group by course_uuid
+)
+
+, raw_course_instructors as (
+    select
+        course_uuid
+        , concat(
+            coalesce(concat(course_instructor_salutation, ' '), ''),
+            coalesce(concat(course_instructor_first_name, ' '), ''),
+            coalesce(concat(course_instructor_middle_initial, ' '), ''),
+            coalesce(course_instructor_last_name, '')
+        ) as instructor_name
+    from {{ ref('int__ocw__course_instructors') }}
 )
 
 , course_instructors as (
     select
         course_uuid
-        , array_join(
-            array_agg(
-                concat(
-                    coalesce(concat(course_instructor_salutation, ' '), ''),
-                    coalesce(concat(course_instructor_first_name, ' '), ''),
-                    coalesce(concat(course_instructor_middle_initial, ' '), ''),
-                    coalesce(course_instructor_last_name, '')
-                )
-            ),
-            ', '
-        ) as course_instructors
-    from {{ ref('int__ocw__course_instructors') }}
+        , {{ array_join('array_agg(instructor_name)', ', ') }} as course_instructors
+    from raw_course_instructors
     group by course_uuid
 )
 
 , departments as (
     select
         course_uuid
-        , array_join(array_agg(course_department_name), ', ') as course_departments
+        , {{ array_join('array_agg(course_department_name)', ', ') }} as course_departments
     from {{ ref('int__ocw__course_departments') }}
     group by course_uuid
 )

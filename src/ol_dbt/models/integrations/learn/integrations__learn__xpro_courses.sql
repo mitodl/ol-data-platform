@@ -8,21 +8,23 @@ with courses as (
     select * from {{ ref('int__mitxpro__courses') }}
 )
 
+, raw_course_runs as (
+    select
+        course_id
+        , concat(
+            courserun_readable_id,
+            '|', coalesce(cast(courserun_start_on as varchar), ''),
+            '|', coalesce(cast(courserun_end_on as varchar), ''),
+            '|', coalesce(cast(courserun_is_live as varchar), 'false')
+        ) as run_string
+    from {{ ref('int__mitxpro__course_runs') }}
+)
+
 , course_runs as (
     select
         course_id
-        , array_join(
-            array_agg(
-                concat(
-                    courserun_readable_id,
-                    '|', coalesce(cast(courserun_start_on as varchar), ''),
-                    '|', coalesce(cast(courserun_end_on as varchar), ''),
-                    '|', coalesce(cast(courserun_is_live as varchar), 'false')
-                )
-            ),
-            ';'
-        ) as course_runs
-    from {{ ref('int__mitxpro__course_runs') }}
+        , {{ array_join('array_agg(run_string)', ';') }} as course_runs
+    from raw_course_runs
     group by course_id
 )
 
