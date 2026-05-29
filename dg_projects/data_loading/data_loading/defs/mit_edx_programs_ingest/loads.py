@@ -87,6 +87,7 @@ def mit_edx_programs_source(
         programs_api_url: Full base URL of the Programs API. Resolved from secrets
             if not provided.
     """
+
     @dlt.resource(
         name="raw__mit_edx__programs",
         primary_key="uuid",

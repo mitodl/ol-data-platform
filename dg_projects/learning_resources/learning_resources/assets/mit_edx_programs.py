@@ -45,9 +45,7 @@ _MIT_OWNER_KEYS = frozenset(
 )
 
 
-def _get_oauth_token(
-    token_url: str, client_id: str, client_secret: str
-) -> str:
+def _get_oauth_token(token_url: str, client_id: str, client_secret: str) -> str:
     """Obtain an OAuth2 client credentials access token from edX."""
     resp = requests.post(
         token_url,
@@ -63,9 +61,7 @@ def _get_oauth_token(
     return resp.json()["access_token"]
 
 
-def _fetch_all_programs(
-    api_url: str, token: str
-) -> list[dict[str, Any]]:
+def _fetch_all_programs(api_url: str, token: str) -> list[dict[str, Any]]:
     """Fetch all programs from the edX Programs API, following next-page links."""
     headers = {"Authorization": f"JWT {token}"}
     programs: list[dict[str, Any]] = []
@@ -156,9 +152,7 @@ def mit_edx_programs_webhook(
     )
 
     resources = [
-        r
-        for p in mit_programs
-        if (r := _transform_program(p)).get("readable_id")
+        r for p in mit_programs if (r := _transform_program(p)).get("readable_id")
     ]
 
     context.log.info(

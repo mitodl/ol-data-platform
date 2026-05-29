@@ -58,9 +58,7 @@ def mitpe_source(
         page = 0
         while True:
             logger.info("Fetching MIT PE courses page %d from %s", page, feed_url)
-            resp = requests.get(
-                feed_url, params={"page": page}, timeout=30
-            )
+            resp = requests.get(feed_url, params={"page": page}, timeout=30)
             resp.raise_for_status()
             records = resp.json()
             if not records:

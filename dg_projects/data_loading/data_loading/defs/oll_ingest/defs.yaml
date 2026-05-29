@@ -1,11 +1,13 @@
+---
 type: dagster_dlt.DltLoadCollectionComponent
 
 attributes:
   loads:
-    - source: .loads.oll_load_source
-      pipeline: .loads.oll_pipeline
-      translation:
-        group_name: ingestion
-        key: "{{ resource.name }}"
-        key_prefix: "ol_warehouse_raw_data"
-        description: "Raw Open Learning Library course metadata ingested from the OLL Google Sheets CSV export."
+  - source: .loads.oll_load_source
+    pipeline: .loads.oll_pipeline
+    translation:
+      group_name: ingestion
+      key: "{{ resource.name }}"
+      key_prefix: "ol_warehouse_raw_data"
+      description: "Raw Open Learning Library course metadata ingested from the OLL\
+        \ Google Sheets CSV export."

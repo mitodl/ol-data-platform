@@ -49,9 +49,7 @@ def _fetch_articles(url: str) -> list[dict[str, Any]]:
     return resp.json()
 
 
-def _transform_article(
-    article: dict[str, Any], base_url: str
-) -> dict[str, Any]:
+def _transform_article(article: dict[str, Any], base_url: str) -> dict[str, Any]:
     """
     Transform a raw MIT Climate article dict into MIT Learn's resource shape.
 
@@ -77,9 +75,7 @@ def _transform_article(
 
     raw_topics = article.get("topics", "") or ""
     topics = [
-        {"name": html.unescape(t.strip())}
-        for t in raw_topics.split("|")
-        if t.strip()
+        {"name": html.unescape(t.strip())} for t in raw_topics.split("|") if t.strip()
     ]
 
     created_on = None

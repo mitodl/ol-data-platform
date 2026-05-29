@@ -23,7 +23,7 @@ import base64
 import logging
 import os
 from pathlib import Path
-from xml.etree import ElementTree as ET  # noqa: N817
+from xml.etree import ElementTree as ET
 
 import dlt
 import requests
@@ -69,7 +69,7 @@ def _fetch_podcast_configs(
     """
     headers = _github_headers(token)
     listing_url = f"{GITHUB_API_BASE}/repos/{repo}/contents/{folder}?ref={branch}"
-    resp = requests.get(listing_url, headers=headers, timeout=30)  # noqa: S113
+    resp = requests.get(listing_url, headers=headers, timeout=30)
     resp.raise_for_status()
 
     configs = []
@@ -77,7 +77,7 @@ def _fetch_podcast_configs(
         if not file_meta["name"].endswith(".yaml"):
             continue
 
-        file_resp = requests.get(file_meta["url"], headers=headers, timeout=30)  # noqa: S113
+        file_resp = requests.get(file_meta["url"], headers=headers, timeout=30)
         file_resp.raise_for_status()
         raw_content = base64.b64decode(file_resp.json()["content"]).decode("utf-8")
 
@@ -229,7 +229,7 @@ def podcast_rss_source(
         for config in configs:
             rss_url = config["rss_url"]
             try:
-                resp = requests.get(rss_url, headers=_RSS_HEADERS, timeout=30)  # noqa: S113
+                resp = requests.get(rss_url, headers=_RSS_HEADERS, timeout=30)
                 resp.raise_for_status()
                 root = ET.fromstring(resp.content)  # noqa: S314
             except requests.RequestException:
@@ -262,7 +262,7 @@ def podcast_rss_source(
         for config in configs:
             rss_url = config["rss_url"]
             try:
-                resp = requests.get(rss_url, headers=_RSS_HEADERS, timeout=30)  # noqa: S113
+                resp = requests.get(rss_url, headers=_RSS_HEADERS, timeout=30)
                 resp.raise_for_status()
                 root = ET.fromstring(resp.content)  # noqa: S314
             except requests.RequestException:

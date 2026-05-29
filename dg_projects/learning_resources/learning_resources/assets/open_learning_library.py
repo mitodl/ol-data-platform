@@ -44,6 +44,7 @@ def _slugify(text: str) -> str:
     text = text.lower().strip()
     return re.sub(r"[^\w]+", "-", text).strip("-")
 
+
 log = logging.getLogger(__name__)
 
 _OLL_SHEET_ID_DEFAULT = "1RJrZHCGNFT17prJnVKKpBqS5ZBZP3tIbRQR-rfn5A9E"

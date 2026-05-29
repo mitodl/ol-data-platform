@@ -1,11 +1,13 @@
+---
 type: dagster_dlt.DltLoadCollectionComponent
 
 attributes:
   loads:
-    - source: .loads.mitpe_load_source
-      pipeline: .loads.mitpe_pipeline
-      translation:
-        group_name: ingestion
-        key: "{{ resource.name }}"
-        key_prefix: "ol_warehouse_raw_data"
-        description: "Raw MIT Professional Education courses ingested from the MIT PE feeds API."
+  - source: .loads.mitpe_load_source
+    pipeline: .loads.mitpe_pipeline
+    translation:
+      group_name: ingestion
+      key: "{{ resource.name }}"
+      key_prefix: "ol_warehouse_raw_data"
+      description: "Raw MIT Professional Education courses ingested from the MIT PE\
+        \ feeds API."
