@@ -182,9 +182,11 @@ def test_yield_for_execution_closes_client_on_exception(tika: TikaResource) -> N
     """yield_for_execution closes the HTTP client even when an exception is raised."""
     mock_http = MagicMock(spec=httpx.Client)
     mock_context = MagicMock()
-    with pytest.raises(RuntimeError), patch(
-        "ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http
-    ), tika.yield_for_execution(mock_context):
+    with (
+        pytest.raises(RuntimeError),
+        patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http),
+        tika.yield_for_execution(mock_context),
+    ):
         _ = tika._client
         msg = "asset failed"
         raise RuntimeError(msg)

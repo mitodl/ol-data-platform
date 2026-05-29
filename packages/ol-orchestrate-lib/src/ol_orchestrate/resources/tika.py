@@ -111,7 +111,8 @@ class TikaResource(ConfigurableResource):
 
     @contextmanager
     def yield_for_execution(
-        self, context: InitResourceContext  # noqa: ARG002
+        self,
+        context: InitResourceContext,  # noqa: ARG002
     ) -> Generator["TikaResource", None, None]:
         """Yield the resource and close the HTTP client on teardown."""
         try:
