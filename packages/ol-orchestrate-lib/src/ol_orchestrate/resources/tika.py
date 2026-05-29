@@ -16,11 +16,9 @@ Infrastructure source:
 """
 
 import logging
-from collections.abc import Generator
-from contextlib import contextmanager
 
 import httpx2 as httpx
-from dagster import ConfigurableResource, InitResourceContext
+from dagster import ConfigurableResource
 from pydantic import Field, PrivateAttr
 
 log = logging.getLogger(__name__)
@@ -47,7 +45,23 @@ SUPPORTED_CONTENT_TYPES: frozenset[str] = frozenset(
 )
 
 
-class TikaResource(ConfigurableResource):
+def _base_content_type(content_type: str) -> str:
+    """Strip parameters and normalise case from a MIME type string.
+
+    Real-world ``Content-Type`` headers often carry parameters or mixed
+    casing, e.g. ``text/html; charset=utf-8`` or ``Application/PDF``.
+    This helper reduces them to the bare type so membership checks against
+    :data:`SUPPORTED_CONTENT_TYPES` work correctly.
+
+    Examples::
+
+        _base_content_type("text/html; charset=utf-8") == "text/html"
+        _base_content_type("Application/PDF")          == "application/pdf"
+    """
+    return content_type.split(";", maxsplit=1)[0].strip().lower()
+
+
+class TikaResource(ConfigurableResource[None]):
     """Dagster resource for extracting text and metadata from documents via Tika.
 
     Calls the OL-deployed Apache Tika REST API.  Each method is stateless —
@@ -109,18 +123,10 @@ class TikaResource(ConfigurableResource):
             )
         return self._http_client
 
-    @contextmanager
-    def yield_for_execution(
-        self,
-        context: InitResourceContext,  # noqa: ARG002
-    ) -> Generator["TikaResource", None, None]:
-        """Yield the resource and close the HTTP client on teardown."""
-        try:
-            yield self
-        finally:
-            if self._http_client is not None:
-                self._http_client.close()
-                self._http_client = None
+    def __del__(self) -> None:
+        """Close the underlying HTTP client when the resource is garbage collected."""
+        if self._http_client is not None:
+            self._http_client.close()
 
     # ------------------------------------------------------------------
     # Public API
@@ -155,7 +161,7 @@ class TikaResource(ConfigurableResource):
             httpx.HTTPStatusError: If Tika responds with a non-2xx status.
             httpx.TimeoutException: If the request exceeds :attr:`timeout` seconds.
         """
-        if content_type not in SUPPORTED_CONTENT_TYPES:
+        if _base_content_type(content_type) not in SUPPORTED_CONTENT_TYPES:
             log.debug(
                 "Skipping Tika extraction for unsupported content type: %s",
                 content_type,
@@ -224,5 +230,9 @@ class TikaResource(ConfigurableResource):
             return {}
 
     def is_supported(self, content_type: str) -> bool:
-        """Return True if *content_type* is in the supported extraction set."""
-        return content_type in SUPPORTED_CONTENT_TYPES
+        """Return True if *content_type* is in the supported extraction set.
+
+        Handles parameters and mixed casing, e.g. ``text/html; charset=utf-8``
+        and ``Application/PDF`` are both considered supported.
+        """
+        return _base_content_type(content_type) in SUPPORTED_CONTENT_TYPES

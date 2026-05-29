@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 
 import httpx2 as httpx
 import pytest
-from ol_orchestrate.resources.tika import SUPPORTED_CONTENT_TYPES, TikaResource
+from ol_orchestrate.resources.tika import (
+    SUPPORTED_CONTENT_TYPES,
+    TikaResource,
+    _base_content_type,
+)
 
 
 @pytest.fixture
@@ -100,9 +104,11 @@ def test_extract_text_propagates_http_error(tika: TikaResource) -> None:
         "Unauthorized", request=MagicMock(), response=mock_resp
     )
     mock_http = _make_mock_http_client(mock_resp)
-    with patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http):
-        with pytest.raises(httpx.HTTPStatusError):
-            tika.extract_text(b"%PDF...", "application/pdf")
+    with (
+        patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http),
+        pytest.raises(httpx.HTTPStatusError),
+    ):
+        tika.extract_text(b"%PDF...", "application/pdf")
 
 
 # ---------------------------------------------------------------------------
@@ -162,34 +168,67 @@ def test_supported_content_types_includes_common_formats() -> None:
 
 
 # ---------------------------------------------------------------------------
-# yield_for_execution (client lifecycle)
+# Client lifecycle (__del__)
 # ---------------------------------------------------------------------------
 
 
-def test_yield_for_execution_closes_client_on_exit(tika: TikaResource) -> None:
-    """yield_for_execution closes the HTTP client when the context exits."""
+def test_del_closes_client_when_initialised(tika: TikaResource) -> None:
+    """__del__ closes the HTTP client if one was created."""
     mock_http = MagicMock(spec=httpx.Client)
-    mock_context = MagicMock()
     with patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http):
-        with tika.yield_for_execution(mock_context):
-            _ = tika._client
+        _ = tika._client  # force client creation
+
+    tika.__del__()
 
     mock_http.close.assert_called_once()
+
+
+def test_del_is_safe_when_no_client_created(tika: TikaResource) -> None:
+    """__del__ does not raise when no client was ever created."""
     assert tika._http_client is None
+    tika.__del__()  # must not raise
 
 
-def test_yield_for_execution_closes_client_on_exception(tika: TikaResource) -> None:
-    """yield_for_execution closes the HTTP client even when an exception is raised."""
-    mock_http = MagicMock(spec=httpx.Client)
-    mock_context = MagicMock()
-    with (
-        pytest.raises(RuntimeError),
-        patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http),
-        tika.yield_for_execution(mock_context),
-    ):
-        _ = tika._client
-        msg = "asset failed"
-        raise RuntimeError(msg)
+# ---------------------------------------------------------------------------
+# _base_content_type normalisation
+# ---------------------------------------------------------------------------
 
-    mock_http.close.assert_called_once()
-    assert tika._http_client is None
+
+def test_base_content_type_strips_parameters() -> None:
+    """Strip charset and other parameters from a MIME type."""
+    assert _base_content_type("text/html; charset=utf-8") == "text/html"
+
+
+def test_base_content_type_lowercases() -> None:
+    """Normalise mixed-case MIME types to lowercase."""
+    assert _base_content_type("Application/PDF") == "application/pdf"
+
+
+def test_base_content_type_strips_and_lowercases() -> None:
+    """Handle both parameters and mixed casing together."""
+    assert _base_content_type("Text/HTML; Charset=UTF-8") == "text/html"
+
+
+def test_base_content_type_leaves_simple_type_unchanged() -> None:
+    """Plain lowercase MIME type passes through unchanged."""
+    assert _base_content_type("application/pdf") == "application/pdf"
+
+
+def test_is_supported_accepts_mime_with_parameters(tika: TikaResource) -> None:
+    """is_supported returns True for supported types carrying charset parameters."""
+    assert tika.is_supported("text/html; charset=utf-8") is True
+
+
+def test_is_supported_accepts_mixed_case(tika: TikaResource) -> None:
+    """is_supported returns True for supported types with mixed casing."""
+    assert tika.is_supported("Application/PDF") is True
+
+
+def test_extract_text_accepts_mime_with_parameters(tika: TikaResource) -> None:
+    """extract_text processes supported types that carry charset parameters."""
+    mock_http = _make_mock_http_client(_mock_response("hello"))
+    with patch("ol_orchestrate.resources.tika.httpx.Client", return_value=mock_http):
+        result = tika.extract_text(b"<html>hello</html>", "text/html; charset=utf-8")
+
+    assert result == "hello"
+    mock_http.put.assert_called_once()
