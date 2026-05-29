@@ -328,10 +328,17 @@ incremental until `--full-refresh` is used.
 5. **Register**: Import in `dg_projects/<project>/<project>/definitions.py`
 6. **Validate**: Run `dagster dev` locally to verify asset appears
 
+**For dlt-based sources** (REST APIs, feeds, file exports): add the pipeline to
+`dg_projects/data_loading/`. See `dg_projects/data_loading/AGENTS.md` for the
+step-by-step workflow and raw table naming rules.
+
 ### Add New dbt Model
 
 1. **Create**: Add `.sql` in `src/ol_dbt/models/<layer>/`
-2. **Sources**: If new raw data, add to `_<domain>__sources.yml`
+2. **Sources**: If new raw data, add to `_<domain>__sources.yml`. Raw table names
+   **must** follow `raw__{source_system}__{subsystem}__{storage_technology}__{entity_name}` —
+   see [`docs/raw_table_naming_conventions.md`](docs/raw_table_naming_conventions.md)
+   before choosing a name.
 3. **Build**: `ol-dbt run --select my_model` (incremental from repo root)
 4. **Verify**: Check `src/ol_dbt/target/compiled/` for compiled SQL
 5. **Auto-integration**: Dagster `@dbt_assets` auto-discovers (no Python changes needed)
