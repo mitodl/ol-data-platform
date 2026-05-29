@@ -6,7 +6,7 @@ incrementing ``page`` from 0 until an empty array is returned.
 Records are upserted by a composite key so repeated runs are idempotent.
 
 Data flow:
-    MITPE_BASE_URL/feeds/courses/  ─► raw__mitpe__courses (Iceberg)
+    MITPE_BASE_URL/feeds/courses/  ─► raw__mitpe__api__courses (Iceberg)
 
 Usage (standalone):
     python -m data_loading.defs.mitpe_ingest.loads
@@ -46,7 +46,7 @@ def mitpe_source(
     """
 
     @dlt.resource(
-        name="raw__mitpe__courses",
+        name="raw__mitpe__api__courses",
         # MIT PE courses have no stable UUID; use title+url as a composite key
         # to deduplicate across pages and runs.
         primary_key=["title", "url"],

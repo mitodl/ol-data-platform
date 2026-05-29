@@ -7,7 +7,7 @@ contains a known MIT owner key) that are active and not MicroMasters are
 included. MicroMasters programs are handled separately via Airbyte.
 
 Data flow:
-    edX Programs API (OAuth2)  ─► raw__mit_edx__programs (Iceberg)
+    edX Programs API (OAuth2)  ─► raw__edxorg__discovery__api__programs (Iceberg)
 
 Secrets required (via dlt secrets / environment):
   EDX_API_CLIENT_ID
@@ -89,7 +89,7 @@ def mit_edx_programs_source(
     """
 
     @dlt.resource(
-        name="raw__mit_edx__programs",
+        name="raw__edxorg__discovery__api__programs",
         primary_key="uuid",
         write_disposition="replace",
     )

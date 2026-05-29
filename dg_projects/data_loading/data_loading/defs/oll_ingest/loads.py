@@ -6,7 +6,7 @@ Sheets spreadsheet that is exported as CSV. This pipeline fetches that CSV
 and loads it into the raw warehouse layer.
 
 Data flow:
-    Google Sheets CSV export  ─► raw__oll__courses (Iceberg)
+    Google Sheets CSV export  ─► raw__oll__google_sheets__courses (Iceberg)
 
 The sheet ID is read from the ``OLL_GOOGLE_SHEETS_ID`` environment variable
 (same setting used by MIT Learn). If unset, the pipeline falls back to a
@@ -53,7 +53,7 @@ def oll_source(
     """
 
     @dlt.resource(
-        name="raw__oll__courses",
+        name="raw__oll__google_sheets__courses",
         # OLL courses use a composite readable_id derived from the OLL course
         # code and semester/year. Use the row as-is; dlt will hash if no pk.
         primary_key=["OLL Course", "Semester", "Year"],

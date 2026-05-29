@@ -8,8 +8,8 @@ into Iceberg tables for the raw data layer.
 Data flow:
     GitHub (mitodl/open-podcast-data/podcasts/*.yaml)
         → RSS feed URLs
-        → raw__podcast__channels  (one row per podcast)
-        → raw__podcast__episodes  (one row per episode across all podcasts)
+        → raw__podcast__rss__channels  (one row per podcast)
+        → raw__podcast__rss__episodes  (one row per episode across all podcasts)
 
 Usage (standalone):
     # Local development (default - writes to /tmp/.dlt/data/)
@@ -201,8 +201,8 @@ def podcast_rss_source(
     Reads YAML config files from the mitodl/open-podcast-data GitHub repository,
     fetches each configured RSS feed, and yields normalized records into two tables:
 
-      raw__podcast__channels - one record per configured podcast channel
-      raw__podcast__episodes - one record per episode across all channels
+      raw__podcast__rss__channels - one record per configured podcast channel
+      raw__podcast__rss__episodes - one record per episode across all channels
 
     Args:
         github_access_token: Optional GitHub personal access token. The public
@@ -214,7 +214,7 @@ def podcast_rss_source(
     """
 
     @dlt.resource(
-        name="raw__podcast__channels",
+        name="raw__podcast__rss__channels",
         write_disposition="merge",
         primary_key="readable_id",
     )
@@ -247,7 +247,7 @@ def podcast_rss_source(
             yield _parse_channel_record(channel_elem, config)
 
     @dlt.resource(
-        name="raw__podcast__episodes",
+        name="raw__podcast__rss__episodes",
         write_disposition="merge",
         primary_key="readable_id",
     )

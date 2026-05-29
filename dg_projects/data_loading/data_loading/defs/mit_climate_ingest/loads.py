@@ -7,12 +7,12 @@ Fetches articles from two MIT Climate JSON feeds:
 
 Both feeds return a flat JSON array with no pagination. Records are
 upserted by UUID so re-runs are safe and idempotent. Both feeds land in
-a single ``raw__mit_climate__articles`` table; the ``feed_type`` column
+a single ``raw__mit_climate__api__articles`` table; the ``feed_type`` column
 distinguishes them.
 
 Data flow:
     MIT_CLIMATE_EXPLAINERS_API_URL  ─┐
-                                     ├─► raw__mit_climate__articles (Iceberg)
+                                     ├─► raw__mit_climate__api__articles (Iceberg)
     ASK_MIT_CLIMATE_API_URL         ─┘
 
 Usage (standalone):
@@ -57,7 +57,7 @@ def mit_climate_source(
     """
 
     @dlt.resource(
-        name="raw__mit_climate__articles",
+        name="raw__mit_climate__api__articles",
         primary_key="uuid",
         write_disposition="merge",
     )

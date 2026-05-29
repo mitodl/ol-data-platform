@@ -16,15 +16,15 @@ This is a Phase 3 data source migration from the MIT Learn Celery-based
 ```
 GitHub repo (mitodl/open-podcast-data/podcasts/*.yaml)
     → rss_url per podcast
-        → raw__podcast__channels   (one row per podcast channel)
-        → raw__podcast__episodes   (one row per episode)
+        → raw__podcast__rss__channels   (one row per podcast channel)
+        → raw__podcast__rss__episodes   (one row per episode)
 ```
 
 **Dagster assets:**
 | Asset Key | Description |
 |-----------|-------------|
-| `ol_warehouse_raw_data/raw__podcast__channels` | One row per configured podcast |
-| `ol_warehouse_raw_data/raw__podcast__episodes` | One row per episode across all podcasts |
+| `ol_warehouse_raw_data/raw__podcast__rss__channels` | One row per configured podcast |
+| `ol_warehouse_raw_data/raw__podcast__rss__episodes` | One row per episode across all podcasts |
 
 **Write disposition:** `merge` on `readable_id` — updates existing records and
 adds new episodes without dropping the full table on each run.
@@ -45,7 +45,7 @@ google_podcasts_url: https://podcasts.google.com/… # optional
 
 ## Output Tables
 
-### `raw__podcast__channels`
+### `raw__podcast__rss__channels`
 
 | Column | Source |
 |--------|--------|
@@ -63,12 +63,12 @@ google_podcasts_url: https://podcasts.google.com/… # optional
 | `google_podcasts_url` | YAML `google_podcasts_url` |
 | `etl_source` | `"podcast"` (static) |
 
-### `raw__podcast__episodes`
+### `raw__podcast__rss__episodes`
 
 | Column | Source |
 |--------|--------|
 | `readable_id` | RSS `<guid>` or fallback to URL path |
-| `channel_readable_id` | FK to `raw__podcast__channels.readable_id` |
+| `channel_readable_id` | FK to `raw__podcast__rss__channels.readable_id` |
 | `channel_rss_url` | Parent channel RSS URL |
 | `title` | RSS `<title>` |
 | `description` | RSS `<description>` |
@@ -128,7 +128,7 @@ cd /path/to/ol-data-platform/dg_projects/data_loading
 
 # Load all podcasts to local Parquet files
 uv run python -m data_loading.defs.podcast_rss_ingest.loads
-# Output: /tmp/.dlt/data/raw__podcast__channels/ and raw__podcast__episodes/
+# Output: /tmp/.dlt/data/raw__podcast__rss__channels/ and raw__podcast__rss__episodes/
 ```
 
 ### Query local results with DuckDB
@@ -136,13 +136,13 @@ uv run python -m data_loading.defs.podcast_rss_ingest.loads
 ```bash
 duckdb -c "
 SELECT readable_id, title, offered_by, topics
-FROM read_parquet('/tmp/.dlt/data/raw__podcast__channels/**/*.parquet');
+FROM read_parquet('/tmp/.dlt/data/raw__podcast__rss__channels/**/*.parquet');
 "
 
 duckdb -c "
 SELECT c.title as podcast, COUNT(e.readable_id) as episode_count
-FROM read_parquet('/tmp/.dlt/data/raw__podcast__channels/**/*.parquet') c
-JOIN read_parquet('/tmp/.dlt/data/raw__podcast__episodes/**/*.parquet') e
+FROM read_parquet('/tmp/.dlt/data/raw__podcast__rss__channels/**/*.parquet') c
+JOIN read_parquet('/tmp/.dlt/data/raw__podcast__rss__episodes/**/*.parquet') e
   ON e.channel_readable_id = c.readable_id
 GROUP BY c.title
 ORDER BY episode_count DESC;
@@ -162,13 +162,13 @@ To validate the output matches the current Learn database:
 
 ```sql
 -- Expected: ~34 channels
-SELECT COUNT(*) FROM raw__podcast__channels;
+SELECT COUNT(*) FROM raw__podcast__rss__channels;
 
 -- Expected: varies; check against Learn's PodcastEpisode count
-SELECT COUNT(*) FROM raw__podcast__episodes;
+SELECT COUNT(*) FROM raw__podcast__rss__episodes;
 
 -- Spot-check a known podcast
-SELECT * FROM raw__podcast__channels
+SELECT * FROM raw__podcast__rss__channels
 WHERE readable_id LIKE '%chalk-radio%';
 ```
 
