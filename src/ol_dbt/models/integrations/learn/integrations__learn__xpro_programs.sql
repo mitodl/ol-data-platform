@@ -26,7 +26,8 @@ select
     , programs.program_title                                as title
     , coalesce(
         programs.cms_programpage_last_published_on,
-        programs.cms_programpage_first_published_on
+        programs.cms_programpage_first_published_on,
+        {{ cast_timestamp_to_iso8601('current_timestamp') }}
     )                                                       as last_modified
     , 'xpro'                                                as etl_source
     , programs.cms_programpage_description                  as description

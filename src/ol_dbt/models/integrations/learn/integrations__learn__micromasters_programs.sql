@@ -20,7 +20,7 @@ with programs as (
 , program_courses as (
     select
         reqs.program_id
-        , {{ array_join('array_agg(courses.course_readable_id order by reqs.course_position_in_program)', ', ') }}
+        , {{ array_join('array_agg(courses.course_edx_key order by reqs.course_position_in_program)', ', ') }}
             as program_course_ids
     from {{ ref('int__micromasters__program_requirements') }} reqs
     inner join {{ ref('stg__micromasters__app__postgres__courses_course') }} courses

@@ -33,7 +33,8 @@ select
     , courses.course_title                                  as title
     , coalesce(
         courses.course_page_last_published_on,
-        courses.course_page_first_published_on
+        courses.course_page_first_published_on,
+        {{ cast_timestamp_to_iso8601('current_timestamp') }}
     )                                                       as last_modified
     , 'mitxonline'                                          as etl_source
     , courses.course_description                            as description

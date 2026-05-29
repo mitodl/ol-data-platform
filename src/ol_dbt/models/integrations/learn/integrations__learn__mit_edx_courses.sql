@@ -40,12 +40,12 @@ with courses as (
     select
         runs.course_readable_id
         , concat(
-            coalesce(json_extract_scalar(t.instructor, '$.first_name'), ''),
+            coalesce({{ json_extract_scalar('t.instructor', "'$.first_name'") }}, ''),
             ' ',
-            coalesce(json_extract_scalar(t.instructor, '$.last_name'), '')
+            coalesce({{ json_extract_scalar('t.instructor', "'$.last_name'") }}, '')
         ) as instructor_name
     from {{ ref('stg__edxorg__api__courserun') }} as runs
-    cross join unnest(try_cast(json_parse(runs.courserun_instructors) as array(json))) as t (instructor)  -- noqa
+    cross join {{ unnest_json_array('runs.courserun_instructors', 't', 'instructor') }}  -- noqa
     where runs.courserun_instructors is not null and runs.courserun_instructors != '[]'
 )
 

@@ -394,6 +394,40 @@
 {%- endmacro %}
 
 
+{#
+    unnest_json_array: Cross-db unnesting of a JSON array into individual (json) rows.
+    Trino: UNNEST(try_cast(json_parse(expr) as array(json))) AS alias(col)
+    DuckDB: UNNEST(try_cast(expr as json[])) AS alias(col)
+
+    Usage (in FROM / CROSS JOIN clause):
+      cross join {{ unnest_json_array('col_expr', 't', 'element') }}
+
+    Parameters:
+      json_expr: expression (varchar) containing a JSON array string
+      alias:     table alias for the result
+      col_name:  column name for each array element
+#}
+{% macro unnest_json_array(json_expr, alias, col_name) -%}
+    {{ adapter.dispatch('unnest_json_array', 'open_learning')(json_expr, alias, col_name) }}
+{%- endmacro %}
+
+{% macro default__unnest_json_array(json_expr, alias, col_name) -%}
+    {#
+        Trino: json_parse() converts varchar to JSON, then try_cast to array(json) handles
+        malformed input by returning NULL (UNNEST skips NULLs), then unnest expands elements.
+    #}
+    unnest(try_cast(json_parse({{ json_expr }}) as array(json))) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+{% macro duckdb__unnest_json_array(json_expr, alias, col_name) -%}
+    {#
+        DuckDB: cast the varchar JSON array string directly to json[] (list of json values).
+        try_cast returns NULL for malformed input → unnest of NULL produces 0 rows.
+    #}
+    unnest(try_cast({{ json_expr }} as json[])) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+
 {% macro is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
     {{ adapter.dispatch('is_courserun_current', 'open_learning')(start_on_timestamp_str, end_on_timestamp_str) }}
 {%- endmacro %}

@@ -7,9 +7,8 @@
 {% endmacro %}
 
 {% macro duckdb__json_extract_scalar(json_col, json_path) %}
-  {# DuckDB uses json_extract or -> operator #}
-  {# Convert $.field to .field for DuckDB #}
-  json_extract({{ json_col }}, replace({{ json_path }}, '$', ''))
+  {# DuckDB: json_extract_string returns plain VARCHAR (no JSON quoting), equivalent to Trino json_extract_scalar #}
+  json_extract_string({{ json_col }}, {{ json_path }})
 {% endmacro %}
 
 {% macro default__json_extract_scalar(json_col, json_path) %}

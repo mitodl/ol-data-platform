@@ -40,7 +40,9 @@ models:
     description: Course title.
     tests: [not_null]
   - name: last_modified
-    description: Last CMS page publish date.
+    description: >
+      Last CMS page publish date. Falls back to current_timestamp for courses
+      without a Wagtail CMS page.
     tests: [not_null]
   - name: etl_source
     description: Always 'mitxonline'.
@@ -63,7 +65,9 @@ models:
     description: Program title.
     tests: [not_null]
   - name: last_modified
-    description: Last CMS page publish date.
+    description: >
+      Last CMS page publish date. Falls back to current_timestamp for programs
+      without a Wagtail CMS page.
     tests: [not_null]
   - name: etl_source
     description: Always 'mitxonline'.
@@ -83,7 +87,9 @@ models:
     description: Course title.
     tests: [not_null]
   - name: last_modified
-    description: Last CMS page publish date.
+    description: >
+      Last CMS page publish date. Falls back to current_timestamp for courses
+      without a Wagtail CMS page.
     tests: [not_null]
   - name: etl_source
     description: Always 'xpro'.
@@ -105,7 +111,9 @@ models:
     description: Program title.
     tests: [not_null]
   - name: last_modified
-    description: Last CMS page publish date.
+    description: >
+      Last CMS page publish date. Falls back to current_timestamp for programs
+      without a Wagtail CMS page.
     tests: [not_null]
   - name: etl_source
     description: Always 'xpro'.
