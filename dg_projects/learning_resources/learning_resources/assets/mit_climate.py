@@ -147,7 +147,7 @@ def mit_climate_webhook(
         "Delivering %d MIT Climate articles to MIT Learn webhook", len(resources)
     )
     try:
-        response = learn_api.client.notify_mit_climate(resources)
+        response = learn_api.client.notify_learning_resources(resources)
     except httpx.HTTPStatusError as exc:
         msg = (
             f"MIT Climate webhook failed with status {exc.response.status_code}: {exc}"

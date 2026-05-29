@@ -147,7 +147,7 @@ def mitpe_webhook(
         len(program_resources),
     )
     try:
-        response = learn_api.client.notify_mitpe(all_resources)
+        response = learn_api.client.notify_learning_resources(all_resources)
     except httpx.HTTPStatusError as exc:
         msg = f"MIT PE webhook failed with status {exc.response.status_code}: {exc}"
         context.log.exception(msg)

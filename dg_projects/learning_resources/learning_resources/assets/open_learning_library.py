@@ -163,7 +163,7 @@ def oll_webhook(
         skipped,
     )
     try:
-        response = learn_api.client.notify_oll(resources)
+        response = learn_api.client.notify_learning_resources(resources)
     except httpx.HTTPStatusError as exc:
         msg = f"OLL webhook failed with status {exc.response.status_code}: {exc}"
         context.log.exception(msg)

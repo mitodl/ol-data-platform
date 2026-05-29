@@ -159,7 +159,7 @@ def mit_edx_programs_webhook(
         "Delivering %d MIT edX programs to MIT Learn webhook", len(resources)
     )
     try:
-        response = learn_api.client.notify_mit_edx_programs(resources)
+        response = learn_api.client.notify_learning_resources(resources)
     except httpx.HTTPStatusError as exc:
         msg = (
             f"MIT edX programs webhook failed with status "

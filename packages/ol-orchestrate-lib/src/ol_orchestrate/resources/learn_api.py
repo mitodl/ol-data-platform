@@ -60,35 +60,22 @@ class MITLearnApiClient(BaseApiClient):
         """Send webhook notification for an OVS include_in_learn video."""
         return self._post_signed_webhook("/api/v1/webhooks/ovs_videos/", data)
 
-    # ------------------------------------------------------------------
-    # REST API / dlt webhook delivery
-    # Each method sends a batch of pre-computed LearningResource dicts.
-    # MIT Learn handlers call load_courses() / load_programs() directly;
-    # no transformation logic lives in the handler.
-    # ------------------------------------------------------------------
-
-    def notify_mit_climate(self, resources: list[dict[str, Any]]) -> dict[str, Any]:
-        """Send pre-computed MIT Climate article resources to MIT Learn."""
-        return self._post_signed_webhook(
-            "/api/v1/webhooks/mit_climate/", {"resources": resources}
-        )
-
-    def notify_mitpe(self, resources: list[dict[str, Any]]) -> dict[str, Any]:
-        """Send pre-computed MIT Professional Education resources to MIT Learn."""
-        return self._post_signed_webhook(
-            "/api/v1/webhooks/mitpe/", {"resources": resources}
-        )
-
-    def notify_oll(self, resources: list[dict[str, Any]]) -> dict[str, Any]:
-        """Send pre-computed Open Learning Library resources to MIT Learn."""
-        return self._post_signed_webhook(
-            "/api/v1/webhooks/oll/", {"resources": resources}
-        )
-
-    def notify_mit_edx_programs(
+    def notify_learning_resources(
         self, resources: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        """Send pre-computed MIT edX program resources to MIT Learn."""
+        """Send a batch of pre-computed LearningResource dicts to MIT Learn.
+
+        All catalog sources that deliver pre-transformed records use this
+        single endpoint. The handler routes each resource to the appropriate
+        loader (``load_courses`` or ``load_programs``) based on the
+        ``resource_type`` and ``etl_source`` fields already present in each
+        resource dict. No source-specific endpoint is needed.
+
+        Args:
+            resources: List of LearningResource-shaped dicts, each containing
+                at minimum ``readable_id``, ``etl_source``, and
+                ``resource_type``.
+        """
         return self._post_signed_webhook(
-            "/api/v1/webhooks/mit_edx_programs/", {"resources": resources}
+            "/api/v1/webhooks/learning_resources/", {"resources": resources}
         )
