@@ -58,6 +58,7 @@ def oll_source(
         # code and semester/year. Use the row as-is; dlt will hash if no pk.
         primary_key=["OLL Course", "Semester", "Year"],
         write_disposition="replace",
+        table_format=_table_format,
     )
     def courses() -> Generator[dict[str, Any], None, None]:
         """Fetch and yield all OLL course rows from the Google Sheets CSV."""
@@ -76,6 +77,7 @@ def oll_source(
 # ---------------------------------------------------------------------------
 
 _dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
+_table_format = "iceberg"
 
 if _dagster_env in ("qa", "production"):
     _destination_name = f"oll_{_dagster_env}"

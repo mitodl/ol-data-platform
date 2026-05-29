@@ -60,6 +60,7 @@ def mit_climate_source(
         name="raw__mit_climate__api__articles",
         primary_key="uuid",
         write_disposition="merge",
+        table_format=_table_format,
     )
     def articles() -> Generator[dict[str, Any], None, None]:
         """Yield articles from both MIT Climate feeds, tagged by feed_type."""
@@ -82,6 +83,7 @@ def mit_climate_source(
 # ---------------------------------------------------------------------------
 
 _dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
+_table_format = "iceberg"
 
 if _dagster_env in ("qa", "production"):
     _destination_name = f"mit_climate_{_dagster_env}"

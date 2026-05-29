@@ -22,7 +22,9 @@ Usage (standalone):
 import base64
 import logging
 import os
+from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 from xml.etree import ElementTree as ET
 
 import dlt
@@ -60,7 +62,7 @@ def _fetch_podcast_configs(
     folder: str,
     branch: str,
     token: str | None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Fetch and parse all podcast YAML config files from a GitHub repository.
 
@@ -110,10 +112,12 @@ def _elem_text(parent: ET.Element, tag: str) -> str | None:
     return elem.text if elem is not None else None
 
 
-def _parse_channel_record(channel_elem: ET.Element, config: dict) -> dict:
+def _parse_channel_record(
+    channel_elem: ET.Element, config: dict[str, Any]
+) -> dict[str, Any]:
     """Extract channel-level fields from an RSS <channel> element."""
     rss_url = config["rss_url"]
-    # Derive a stable readable_id from the URL path, matching Learn's existing convention
+    # Derive a stable readable_id from the URL path, matching Learn's convention
     readable_id = rss_url.split("//")[-1].rstrip("/")
 
     # Prefer iTunes namespace image; fall back to standard <image><url>
@@ -148,7 +152,7 @@ def _parse_episode_record(
     channel_readable_id: str,
     channel_rss_url: str,
     channel_image_url: str | None,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """
     Extract episode fields from an RSS <item> element.
 
@@ -189,7 +193,7 @@ def _parse_episode_record(
 
 
 @dlt.source
-def podcast_rss_source(
+def podcast_rss_source(  # noqa: C901
     github_access_token: str | None = None,
     github_repo: str = "mitodl/open-podcast-data",
     github_folder: str = "podcasts",
@@ -217,8 +221,9 @@ def podcast_rss_source(
         name="raw__podcast__rss__channels",
         write_disposition="merge",
         primary_key="readable_id",
+        table_format=_table_format,
     )
-    def podcast_channels() -> None:
+    def podcast_channels() -> Generator[dict[str, Any], None, None]:
         """Yield one record per configured podcast channel."""
         configs = _fetch_podcast_configs(
             repo=github_repo,
@@ -250,8 +255,9 @@ def podcast_rss_source(
         name="raw__podcast__rss__episodes",
         write_disposition="merge",
         primary_key="readable_id",
+        table_format=_table_format,
     )
-    def podcast_episodes() -> None:
+    def podcast_episodes() -> Generator[dict[str, Any], None, None]:
         """Yield one record per episode across all configured podcasts."""
         configs = _fetch_podcast_configs(
             repo=github_repo,
@@ -296,6 +302,7 @@ def podcast_rss_source(
 # ---------------------------------------------------------------------------
 
 _dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
+_table_format = "iceberg"
 
 if _dagster_env in ("qa", "production"):
     _destination_name = f"podcast_{_dagster_env}"

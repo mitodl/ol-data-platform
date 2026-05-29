@@ -216,3 +216,19 @@ iceberg_catalog_type = "glue"
 [iceberg_catalog.mit_edx_programs_production.iceberg_catalog_config]
 type = "glue"
 warehouse = "s3://ol-data-lake-raw-production/mit_edx_programs"
+
+[iceberg_catalog.podcast_qa]
+iceberg_catalog_name = "ol_warehouse_qa_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.podcast_qa.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-qa/podcast"
+
+[iceberg_catalog.podcast_production]
+iceberg_catalog_name = "ol_warehouse_production_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.podcast_production.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-production/podcast"

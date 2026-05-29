@@ -25,7 +25,7 @@ import os
 import re
 from csv import DictReader
 from io import StringIO
-from typing import Any
+from typing import Any, cast
 
 import httpx2 as httpx
 import requests
@@ -37,10 +37,11 @@ from dagster import (
     asset,
 )
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
 
 def _slugify(text: str) -> str:
-    """Simple slugify: lowercase, replace non-alphanumeric runs with hyphens."""
+    """Slugify text: lowercase and replace non-alphanumeric runs with hyphens."""
     text = text.lower().strip()
     return re.sub(r"[^\w]+", "-", text).strip("-")
 
@@ -53,7 +54,8 @@ _SHEETS_EXPORT_URL = (
 )
 
 # OLL course IDs that duplicate OCW courses — skip to avoid collisions.
-_SKIP_OCW_COURSES = {"OCW+18.031+2019_Spring"}
+# This list is no longer used: all OCW-origin rows are filtered by the
+# ``Offered by = OCW`` check in ``_transform_course`` below.
 
 
 def _fetch_oll_csv(sheet_id: str) -> list[dict[str, Any]]:
@@ -79,9 +81,10 @@ def _parse_duration(row: dict[str, Any]) -> str | None:
         return None
     try:
         weeks = math.ceil(float(raw))
-        return f"{weeks} weeks"
     except (ValueError, TypeError):
         return raw
+    else:
+        return f"{weeks} weeks"
 
 
 def _parse_topics(row: dict[str, Any]) -> list[dict[str, str]]:
@@ -98,10 +101,13 @@ def _transform_course(row: dict[str, Any]) -> dict[str, Any] | None:
     """
     semester = row.get("Semester", "")
     year = row.get("Year", "")
-    readable_id = _parse_readable_id(row, semester, year)
 
-    if readable_id in _SKIP_OCW_COURSES:
+    # Skip all OCW-origin rows to avoid duplicating records already ingested
+    # via the OCW Trino-pull path (any row where Offered by = OCW).
+    if row.get("Offered by") == "OCW":
         return None
+
+    readable_id = _parse_readable_id(row, semester, year)
 
     image_url = row.get("Course Image URL Flat")
     run_id = row.get("Run ID") or readable_id
@@ -163,7 +169,9 @@ def oll_webhook(
         skipped,
     )
     try:
-        response = learn_api.client.notify_learning_resources(resources)
+        response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
+            resources
+        )
     except httpx.HTTPStatusError as exc:
         msg = f"OLL webhook failed with status {exc.response.status_code}: {exc}"
         context.log.exception(msg)

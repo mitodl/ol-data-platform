@@ -14,7 +14,7 @@ Scheduling: daily at 06:30 UTC. Configured in definitions.py.
 
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 import httpx2 as httpx
 import requests
@@ -26,6 +26,7 @@ from dagster import (
     asset,
 )
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
 log = logging.getLogger(__name__)
 
@@ -159,7 +160,9 @@ def mit_edx_programs_webhook(
         "Delivering %d MIT edX programs to MIT Learn webhook", len(resources)
     )
     try:
-        response = learn_api.client.notify_learning_resources(resources)
+        response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
+            resources
+        )
     except httpx.HTTPStatusError as exc:
         msg = (
             f"MIT edX programs webhook failed with status "

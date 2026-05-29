@@ -14,7 +14,7 @@ Scheduling: daily at 06:15 UTC. Configured in definitions.py.
 import html
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urljoin
 
 import httpx2 as httpx
@@ -27,6 +27,7 @@ from dagster import (
     asset,
 )
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
+from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
 log = logging.getLogger(__name__)
 
@@ -147,7 +148,9 @@ def mitpe_webhook(
         len(program_resources),
     )
     try:
-        response = learn_api.client.notify_learning_resources(all_resources)
+        response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
+            all_resources
+        )
     except httpx.HTTPStatusError as exc:
         msg = f"MIT PE webhook failed with status {exc.response.status_code}: {exc}"
         context.log.exception(msg)

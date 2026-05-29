@@ -51,6 +51,7 @@ def mitpe_source(
         # to deduplicate across pages and runs.
         primary_key=["title", "url"],
         write_disposition="replace",
+        table_format=_table_format,
     )
     def courses() -> Generator[dict[str, Any], None, None]:
         """Yield all MIT PE courses, fetching pages until the API returns empty."""
@@ -64,8 +65,7 @@ def mitpe_source(
             if not records:
                 logger.info("MIT PE courses: reached empty page at page=%d", page)
                 break
-            for record in records:
-                yield record
+            yield from records
             page += 1
 
     yield courses
@@ -76,6 +76,7 @@ def mitpe_source(
 # ---------------------------------------------------------------------------
 
 _dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
+_table_format = "iceberg"
 
 if _dagster_env in ("qa", "production"):
     _destination_name = f"mitpe_{_dagster_env}"

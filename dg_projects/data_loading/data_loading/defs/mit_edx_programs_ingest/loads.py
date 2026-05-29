@@ -92,6 +92,7 @@ def mit_edx_programs_source(
         name="raw__edxorg__discovery__api__programs",
         primary_key="uuid",
         write_disposition="replace",
+        table_format=_table_format,
     )
     def programs() -> Generator[dict[str, Any], None, None]:
         """Fetch and yield MIT-authored programs from the edX Programs API."""
@@ -122,12 +123,12 @@ def mit_edx_programs_source(
             raise ValueError(msg)
 
         auth = OAuth2ClientCredentials(
-            access_token_url=resolved_token_url,  # type: ignore[arg-type]
-            client_id=resolved_client_id,  # type: ignore[arg-type]
-            client_secret=resolved_client_secret,  # type: ignore[arg-type]
+            access_token_url=resolved_token_url,
+            client_id=resolved_client_id,
+            client_secret=resolved_client_secret,
         )
         rest_client = RESTClient(
-            base_url=resolved_programs_url,  # type: ignore[arg-type]
+            base_url=resolved_programs_url,
             auth=auth,
             paginator=JSONLinkPaginator(next_url_path="next"),
         )
@@ -156,6 +157,7 @@ def mit_edx_programs_source(
 # or environment variables when the source is actually executed.
 
 _dagster_env = os.getenv("DAGSTER_ENVIRONMENT", "dev")
+_table_format = "iceberg"
 
 if _dagster_env in ("qa", "production"):
     _destination_name = f"mit_edx_programs_{_dagster_env}"
