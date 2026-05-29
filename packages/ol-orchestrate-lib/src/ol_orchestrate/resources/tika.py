@@ -19,7 +19,7 @@ import logging
 from collections.abc import Generator
 from contextlib import contextmanager
 
-import httpx
+import httpx2 as httpx
 from dagster import ConfigurableResource, InitResourceContext
 from pydantic import Field, PrivateAttr
 

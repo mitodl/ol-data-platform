@@ -5,7 +5,7 @@ from typing import Self
 from urllib.parse import parse_qs
 
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
-from httpx import HTTPStatusError
+from httpx2 import HTTPStatusError
 from pydantic import Field, PrivateAttr
 
 from ol_orchestrate.resources.oauth import OAuthApiClient

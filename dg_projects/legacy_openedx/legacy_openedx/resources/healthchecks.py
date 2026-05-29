@@ -1,7 +1,7 @@
 import urllib.parse
 from typing import Literal
 
-import httpx
+import httpx2 as httpx
 from dagster import (
     ConfigurableResource,
     InitResourceContext,

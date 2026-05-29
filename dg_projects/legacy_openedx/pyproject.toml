@@ -8,7 +8,7 @@ dependencies = [
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
     "flatten-dict ~=0.5.0",
-    "httpx ~= 0.28.0",
+    "httpx2 >= 2.2.0",
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
     "pymysql ~= 1.1",
