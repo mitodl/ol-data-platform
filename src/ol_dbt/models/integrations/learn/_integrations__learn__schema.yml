@@ -138,3 +138,32 @@ models:
   - name: courses
     description: >
       Comma-separated list of course readable_ids ordered by position_in_program.
+
+- name: integrations__learn__mit_edx_courses
+  description: >
+    MIT edX (MITx on edX.org) courses exposed for MIT Learn's Trino-pull ETL.
+    One row per course with at least one published run.
+    Sourced from stg__edxorg__api__course and stg__edxorg__api__courserun
+    (edx.org S3 exports via IRx). Source decision: edxorg dg_project, not
+    mitxresidential (which covers MIT's internal OpenEdX deployment).
+  columns:
+  - name: readable_id
+    description: edX.org course key (e.g. MITx/6.00.1x). Used for upsert matching.
+    tests: [not_null, unique]
+  - name: title
+    description: Course title.
+    tests: [not_null]
+  - name: last_modified
+    description: Last modified timestamp from the edX.org course catalog API export.
+    tests: [not_null]
+  - name: etl_source
+    description: Always 'mit_edx'.
+    tests: [not_null]
+  - name: runs
+    description: >
+      Pipe-delimited run metadata strings joined with semicolons.
+      Format per run: courserun_key|start_on|end_on|is_published
+  - name: topics
+    description: Comma-separated subject names from the edX.org course record.
+  - name: instructors
+    description: Comma-separated instructor names aggregated across all course runs.
