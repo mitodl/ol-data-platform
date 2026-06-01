@@ -14,10 +14,13 @@ from dagster import (
 )
 from dagster_dlt import DagsterDltResource, DagsterDltTranslator, dlt_assets
 from dagster_dlt.translator import DltResourceTranslatorData
+from ol_orchestrate.lib.constants import EDXORG_DB_TABLES
 
 from .loads import (
     edxorg_s3_pipeline,
+    edxorg_s3_source,
     edxorg_s3_source_instance,
+    table_format,
 )
 
 
@@ -50,7 +53,15 @@ class EdxorgDltTranslator(DagsterDltTranslator):
         )
 
 
-# Create dlt assets with upstream dependencies
+def _asset_key_for_table(table_name: str) -> AssetKey:
+    """Return the Dagster AssetKey used for a given edxorg table."""
+    return AssetKey(["ol_warehouse_raw_data", f"raw__edxorg__s3__tables__{table_name}"])
+
+
+# Create dlt assets with upstream dependencies.
+# edxorg_s3_source_instance (with all tables) is used here only so that the
+# @dlt_assets decorator can discover the full set of asset specs at import
+# time.  The execution function below overrides the source per-table.
 @dlt_assets(
     dlt_source=edxorg_s3_source_instance,
     dlt_pipeline=edxorg_s3_pipeline,
@@ -69,10 +80,33 @@ def edxorg_s3_consolidated_tables(
     partitioned asset. Filters to only 'prod' source data and consolidates across
     all courses into non-partitioned Iceberg/Parquet tables.
 
-    The dlt source automatically uses incremental loading based on file modification
-    dates, so only new/modified files are processed on each run.
+    The dlt source uses incremental loading based on file modification dates,
+    so only new or modified files are processed on each run.
+
+    Tables are processed sequentially, one per dlt.run() call, so that:
+    * The AWS boto3 credential chain refreshes STS tokens between tables.
+    * Large tables (e.g. auth_user) do not exhaust a single token's TTL.
+    * dlt's non-thread-safe injectable-context dict is never accessed
+      concurrently (see also [extract] workers=1 in .dlt/config.toml).
     """
-    yield from dlt.run(context=context)
+    # Determine which tables to process, honouring any asset-key sub-selection
+    # that Dagster may have applied (e.g. "re-materialise auth_user only").
+    if context.is_subset:
+        selected_tables = [
+            t
+            for t in EDXORG_DB_TABLES
+            if _asset_key_for_table(t) in context.selected_asset_keys
+        ]
+    else:
+        selected_tables = list(EDXORG_DB_TABLES)
+
+    # Run the dlt pipeline once per table.  This keeps each run short enough
+    # that STS credentials issued at the start of the run do not expire before
+    # it finishes, and gives the boto3 credential chain a chance to refresh
+    # between tables via AssumeRoleWithWebIdentity (IRSA).
+    for table_name in selected_tables:
+        table_source = edxorg_s3_source(tables=[table_name], table_format=table_format)
+        yield from dlt.run(context=context, dlt_source=table_source)
 
 
 __all__ = ["edxorg_s3_consolidated_tables"]

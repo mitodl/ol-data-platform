@@ -94,15 +94,22 @@ def edxorg_s3_source(
             # Excludes: db_table/{table_name}/edge/*/*.tsv (edge staging files)
             file_glob = f"db_table/{table}/prod/**/*.tsv"
 
-            # Use dlt's filesystem source to discover files
-            # AWS credentials will be automatically discovered from:
+            # Use dlt's filesystem source to discover files.
+            # AWS credentials are automatically discovered from:
             # 1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
             # 2. ~/.aws/credentials (local development)
             # 3. IAM role (IRSA in Kubernetes)
+            #
+            # Do NOT pass extract_content=True.  That flag reads the entire file
+            # into Python bytes in a single blocking s3fs request before passing
+            # it to read_csv_duckdb.  For large tables (e.g. auth_user) this can
+            # exceed the AWS STS session-token TTL and raise ExpiredToken.  By
+            # leaving it False (the default), read_csv_duckdb streams the file
+            # content chunk-by-chunk via PyArrow's own S3 reader, which is both
+            # more memory-efficient and more resilient to long-running transfers.
             files = filesystem(
                 bucket_url=bucket_url,
                 file_glob=file_glob,
-                extract_content=True,
             )
 
             # Enable incremental loading based on file modification date
