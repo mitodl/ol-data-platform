@@ -27,6 +27,7 @@ import os
 from pathlib import Path
 
 import dlt
+import s3fs
 from dlt.extract import DltResource
 from dlt.sources import incremental
 from dlt.sources.filesystem import filesystem, read_csv_duckdb
@@ -94,22 +95,38 @@ def edxorg_s3_source(
             # Excludes: db_table/{table_name}/edge/*/*.tsv (edge staging files)
             file_glob = f"db_table/{table}/prod/**/*.tsv"
 
-            # Use dlt's filesystem source to discover files.
-            # AWS credentials are automatically discovered from:
-            # 1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
-            # 2. ~/.aws/credentials (local development)
-            # 3. IAM role (IRSA in Kubernetes)
+            # Create an s3fs filesystem WITHOUT explicit credentials.
             #
-            # Do NOT pass extract_content=True.  That flag reads the entire file
-            # into Python bytes in a single blocking s3fs request before passing
-            # it to read_csv_duckdb.  For large tables (e.g. auth_user) this can
-            # exceed the AWS STS session-token TTL and raise ExpiredToken.  By
-            # leaving it False (the default), read_csv_duckdb streams the file
-            # content chunk-by-chunk via PyArrow's own S3 reader, which is both
-            # more memory-efficient and more resilient to long-running transfers.
+            # dlt's AwsCredentials.to_session_credentials() calls
+            # get_frozen_credentials(), which snapshots the live IRSA
+            # RefreshableCredentials object as static strings and passes
+            # them to s3fs.S3FileSystem(key=..., secret=..., token=...).
+            # Once s3fs holds explicit static strings there is no refresh
+            # path: when the STS session token expires (~1 hour by default)
+            # every subsequent GetObject call fails with ExpiredToken.
+            #
+            # By constructing S3FileSystem with no explicit key/secret/token
+            # we bypass dlt's credential snapshotting entirely.  aiobotocore
+            # then uses its own credential chain which, for IRSA pods, invokes
+            # AioAssumeRoleWithWebIdentityFetcher and wraps the result in
+            # AioRefreshableCredentials.  Those credentials automatically call
+            # AssumeRoleWithWebIdentity again whenever the token expires, so
+            # the pipeline can run indefinitely without hitting ExpiredToken.
+            #
+            # dlt's filesystem() source accepts an AbstractFileSystem instance
+            # as its `credentials` parameter and uses it directly, skipping
+            # its own credential-dispatch logic.
+            #
+            # Do NOT pass extract_content=True.  That flag reads the entire
+            # file into Python bytes in a single blocking request before
+            # passing it to read_csv_duckdb, which can itself exceed a token
+            # lifetime for very large tables.  Leaving it False lets
+            # read_csv_duckdb stream the content chunk-by-chunk via PyArrow.
+            fs = s3fs.S3FileSystem()
             files = filesystem(
                 bucket_url=bucket_url,
                 file_glob=file_glob,
+                credentials=fs,
             )
 
             # Enable incremental loading based on file modification date
