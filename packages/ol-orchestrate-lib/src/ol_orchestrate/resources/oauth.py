@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any, Self
 
-import httpx
+import httpx2 as httpx
 from dagster import ConfigurableResource, InitResourceContext, ResourceDependency
 from pydantic import Field, PrivateAttr, ValidationError, validator
 

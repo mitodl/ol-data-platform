@@ -1,6 +1,6 @@
 from typing import Any
 
-import httpx
+import httpx2 as httpx
 from dagster import ConfigurableResource
 from pydantic import Field, PrivateAttr
 

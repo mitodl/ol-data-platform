@@ -5,7 +5,7 @@ import tarfile
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-import httpx
+import httpx2 as httpx
 import jsonlines
 from dagster import (
     AssetExecutionContext,

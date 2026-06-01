@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-import httpx
+import httpx2 as httpx
 from dagster import (
     AssetExecutionContext,
     AssetKey,

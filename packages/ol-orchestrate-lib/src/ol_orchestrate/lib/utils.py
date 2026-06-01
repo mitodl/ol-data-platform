@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Literal
 
-import httpx
+import httpx2 as httpx
 
 from ol_orchestrate.resources.secrets.vault import Vault
 
