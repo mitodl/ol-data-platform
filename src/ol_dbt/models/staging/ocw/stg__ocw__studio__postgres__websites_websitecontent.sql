@@ -45,6 +45,7 @@ with source as (
         , json_query(metadata, 'lax $.instructors.content') as course_instructor_uuids
         , json_query(metadata, 'lax $.topics') as course_topics
         , json_query(metadata, 'lax $.department_numbers') as course_department_numbers_json
+        , nullif({{ json_query_string('metadata', "'$.image_src'") }}, '') as course_image_src
         , {{ cast_timestamp_to_iso8601('deleted') }} as websitecontent_deleted_on
         , {{ cast_timestamp_to_iso8601('created_on') }} as websitecontent_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as websitecontent_updated_on

@@ -34,6 +34,11 @@ select
     , websitecontents.course_topics
     , websitecontents.course_department_numbers
     , websitecontents.learning_resource_types as course_learning_resource_types
+    , if(
+        websitecontents.course_image_src is not null
+        , concat('{{ var("ocw_production_url") }}', ltrim(websitecontents.course_image_src, '/'))
+        , null
+    ) as course_image_url
 from websites
 inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
