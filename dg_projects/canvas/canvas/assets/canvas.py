@@ -2,7 +2,7 @@ import json
 import time
 from pathlib import Path
 
-import httpx
+import httpx2 as httpx
 from dagster import (
     AssetExecutionContext,
     AssetIn,

@@ -9,7 +9,7 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2 as httpx
 from dagster import (
     AssetExecutionContext,
     AssetIn,

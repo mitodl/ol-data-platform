@@ -11,7 +11,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 
-import httpx
+import httpx2 as httpx
 import jsonlines
 from dagster import (
     AssetExecutionContext,

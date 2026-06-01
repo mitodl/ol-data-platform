@@ -7,6 +7,7 @@ dependencies = [
     "dagster-aws ~=0.29.0",
     "dagster-k8s>=0.27.15",
     "dagster-postgres>=0.27.13",
+    "httpx2 >= 2.2.0",
     "jsonlines ~= 4.0.0",
     "ol-orchestrate-lib",
     "pygsheets>=2.0.6",
