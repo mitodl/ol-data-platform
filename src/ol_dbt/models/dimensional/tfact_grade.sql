@@ -13,8 +13,7 @@ with mitxonline_grades as (
     select
         cast(courserungrade_id as varchar) as grade_id
         , user_id
-        , courserun_id
-        , cast(null as varchar) as courserun_readable_id  -- edxorg join key only
+        , courserun_readable_id
         , courserungrade_grade as grade_value
         , courserungrade_letter_grade as letter_grade
         , courserungrade_is_passing as is_passing
@@ -30,8 +29,7 @@ with mitxonline_grades as (
     select
         cast(courserungrade_id as varchar) as grade_id
         , user_id
-        , courserun_id
-        , cast(null as varchar) as courserun_readable_id  -- edxorg join key only
+        , courserun_readable_id
         , courserungrade_grade as grade_value
         , courserungrade_letter_grade as letter_grade
         , courserungrade_is_passing as is_passing
@@ -46,7 +44,6 @@ with mitxonline_grades as (
         -- edxorg has no native grade PK; construct stable surrogate from natural key
         {{ dbt_utils.generate_surrogate_key(['cast(user_id as varchar)', 'courserun_readable_id']) }} as grade_id
         , user_id
-        , cast(null as integer) as courserun_id  -- edxorg has no integer source_id
         , courserun_readable_id
         , courserungrade_user_grade as grade_value  -- column name differs from other platforms
         , cast(null as varchar) as letter_grade      -- edxorg does not expose letter grades
@@ -76,7 +73,7 @@ with mitxonline_grades as (
 )
 
 , dim_course_run as (
-    select courserun_pk, source_id, courserun_readable_id, platform
+    select courserun_pk, courserun_readable_id, platform
     from {{ ref('dim_course_run') }}
     where is_current = true
 )
@@ -114,16 +111,8 @@ with mitxonline_grades as (
         on combined_grades.platform = 'edxorg'
         and combined_grades.user_id = ul_edxorg.edxorg_openedx_user_id
     left join dim_course_run
-        on (
-            -- mitxonline/mitxpro: join on integer source_id + platform
-            (combined_grades.platform in ('mitxonline', 'mitxpro')
-                and combined_grades.courserun_id = dim_course_run.source_id
-                and combined_grades.platform = dim_course_run.platform)
-            -- edxorg: join on readable_id + platform to prevent fan-out across platforms
-            or (combined_grades.platform = 'edxorg'
-                and combined_grades.courserun_readable_id = dim_course_run.courserun_readable_id
-                and dim_course_run.platform = 'edxorg')
-        )
+        on combined_grades.courserun_readable_id = dim_course_run.courserun_readable_id
+        and combined_grades.platform = dim_course_run.platform
     left join dim_platform_lookup
         on combined_grades.platform = dim_platform_lookup.platform_readable_id
 )
