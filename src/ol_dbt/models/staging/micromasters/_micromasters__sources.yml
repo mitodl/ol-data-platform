@@ -1,100 +1,234 @@
 ---
 version: 2
-
 sources:
 - name: ol_warehouse_raw_data
   loader: airbyte
   database: '{{ target.database }}'
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
-  - name: raw__micromasters__app__postgres__ecommerce_redeemedcoupon
+  - name: raw__micromasters__app__postgres__auth_user
     columns:
     - name: id
-      description: int, primary key representing a discount redemption
-    - name: created_on
-      description: timestamp, specifying when the coupon was redeemed
-    - name: updated_on
-      description: timestamp, specifying when the coupon redemption was last updated
-    - name: coupon_id
-      description: int, foreign key for ecommerce_coupon
-    - name: order_id
-      description: int, foreign key for ecommerce_orders
-
-  - name: raw__micromasters__app__postgres__ecommerce_receipt
-    description: Data returned from cybersource when a user pays for an order
+      description: int, sequential ID representing a user in MicroMasters
+    - name: password
+      description: str, hashed password
+    - name: username
+      description: str, unique string to identify user
+    - name: email
+      description: str, user email associated with their account
+    - name: first_name
+      description: str, user's first name (blank for the majority of users on production)
+    - name: last_name
+      description: str, user's last name (blank for the majority of users on production)
+    - name: is_active
+      description: boolean, indicate whether this user is active (use it to soft delete
+        account)
+    - name: last_login
+      description: timestamp, user's last login
+    - name: date_joined
+      description: timestamp, specifying when a user account was initially created
+    - name: is_staff
+      description: boolean, indicate whether the user can log into admin site (internally
+        used)
+    - name: is_superuser
+      description: boolean, indicate whether this user has all permissions (internally
+        used)
+  - name: raw__micromasters__app__postgres__cms_programpage
+    description: ''
     columns:
-    - name: id
-      description: int, primary key representing a receipt
-    - name: created_at
-      description: timestamp, specifying when the receipt was initially created
-    - name: modified_at
-      description: timestamp, specifying when the receipt was most recently updated
-    - name: data
-      description: json, cybersource data for a payment
-    - name: order_id
-      description: int, primary key in ecommerce_order
-  - name: raw__micromasters__app__postgres__ecommerce_line
-    columns:
-    - name: id
-      description: int, primary key representing an ecommerce line
-    - name: created_at
-      description: timestamp, specifying when the line was initially created
-    - name: modified_at
-      description: timestamp, specifying when the line was most recently updated
-    - name: course_key
-      description: string, edx_course_key from courses_courserun
-    - name: price
-      description: numeric, price paid for the course run
-    - name: order_id
-      description: int, foreign key in the orders_order table for the order that contains
-        the line.  Orders have exactly one line
+    - name: _airbyte_raw_id
+      data_type: VARCHAR
+      description: ''
+    - name: _airbyte_extracted_at
+      data_type: BIGINT
+      description: ''
+    - name: _airbyte_meta
+      data_type: STRUCT(sync_id BIGINT, changes STRUCT(field VARCHAR, change VARCHAR,
+        reason VARCHAR)[])
+      description: ''
+    - name: _airbyte_generation_id
+      data_type: BIGINT
+      description: ''
+    - name: program_id
+      data_type: BIGINT
+      description: ''
     - name: description
-      description: string, description of the course run being purchased
-
-  - name: raw__micromasters__app__postgres__ecommerce_order
+      data_type: VARCHAR
+      description: ''
+    - name: page_ptr_id
+      data_type: BIGINT
+      description: ''
+    - name: title_over_image
+      data_type: VARCHAR
+      description: ''
+    - name: thumbnail_image_id
+      data_type: BIGINT
+      description: ''
+    - name: background_image_id
+      data_type: BIGINT
+      description: ''
+    - name: faculty_description
+      data_type: VARCHAR
+      description: ''
+    - name: program_letter_text
+      data_type: VARCHAR
+      description: ''
+    - name: program_contact_email
+      data_type: VARCHAR
+      description: ''
+    - name: program_home_page_url
+      data_type: VARCHAR
+      description: ''
+    - name: program_letter_logo_id
+      data_type: BIGINT
+      description: ''
+    - name: program_subscribe_link
+      data_type: VARCHAR
+      description: ''
+    - name: program_letter_footer_id
+      data_type: BIGINT
+      description: ''
+    - name: program_letter_footer_text
+      data_type: VARCHAR
+      description: ''
+    - name: program_letter_header_text
+      data_type: VARCHAR
+      description: ''
+    - name: title_program_home_page_url
+      data_type: VARCHAR
+      description: ''
+  - name: raw__micromasters__app__postgres__courses_course
     columns:
     - name: id
-      description: int, primary key representing a single  order
-    - name: created_on
-      description: timestamp, specifying when the order was initially created
-    - name: modified_at
-      description: timestamp, specifying when the order was most recently updated
-    - name: status
-      description: string, order state. Options are "fulfilled", "failed", "created"
-        "refunded", "partially_refunded"
-    - name: total_price_paid
-      description: number, total order amount
-    - name: user_id
-      description: int, primary key in users_user for the purchaser
-    - name: reference_number
-      description: string, readable id for the order
-
-  - name: raw__micromasters__app__postgres__ecommerce_usercoupon
+      description: int, sequential ID representing a course in MicroMasters
+    - name: title
+      description: str, title of the course
+    - name: edx_key
+      description: str, edX key formatted as {org}+{course number}
+    - name: course_number
+      description: str, edX course number
+    - name: program_id
+      description: int, foreign key to courses_program
+    - name: position_in_program
+      description: int, sequential number indicating the course position in a program
+    - name: thumbnail
+      description: str, thumbnail path (not used on production)
+    - name: description
+      description: str, description of the course
+    - name: prerequisites
+      description: str, required courses as a prior condition before taking this course
+    - name: contact_email
+      description: str, email used to contact course team
+    - name: should_display_progress
+      description: boolean, indicating if "in progress" grades should be displayed
+        for the course
+  - name: raw__micromasters__app__postgres__courses_courserun
     columns:
     - name: id
-      description: int, primary key representing a coupon user combo
+      description: int, primary key representing a course run
+    - name: title
+      description: str, title of the course run
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: edx_course_key
+      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
+    - name: enrollment_url
+      description: str, url to enroll in the course run
+    - name: is_discontinued
+      description: boolean, setting this to true discontinues the course run
+    - name: prerequisites
+      description: str, prerequisites for the course
+    - name: courseware_backend
+      description: str, indicating the platform where this course runs on. It's either
+        mitxonline or edxorg.
+    - name: fuzzy_start_date
+      description: str, fuzzy start date e.g. Fall 2019
+    - name: fuzzy_enrollment_start_date
+      description: str, str, fuzzy enrollment start date e.g. Fall 2019
+    - name: end_date
+      description: timestamp, date and time when the run ends
+    - name: start_date
+      description: timestamp, date and time when the run begins
+    - name: enrollment_start
+      description: timestamp, date and time when enrollment starts
+    - name: enrollment_end
+      description: timestamp, date and time when enrollment ends
+    - name: freeze_grade_date
+      description: timestamp, date and time when the run freeze for grade
+    - name: upgrade_deadline
+      description: timestamp, date and time beyond which users can not enroll in paid
+        course mode
+  - name: raw__micromasters__app__postgres__courses_electivecourse
+    description: this links a course to a elective set for programs
+    columns:
+    - name: id
+      description: int, sequential ID representing a course in a  set for a program
+        in MicroMasters
+    - name: electives_set_id
+      description: int, foreign key to courses_electivesset
+    - name: course_id
+      description: int, foreign key to courses_course
+  - name: raw__micromasters__app__postgres__courses_electivesset
+    description: This represents the elective requirements for programs
+    columns:
+    - name: id
+      description: int, sequential ID representing a elective requirement set for
+        a program in MicroMasters
+    - name: required_number
+      description: int, indicating the number of required courses from this elective
+        requirement set
+    - name: program_id
+      description: int, foreign key to courses_program
+    - name: title
+      description: str, title of the elective requirement set
+  - name: raw__micromasters__app__postgres__courses_program
+    columns:
+    - name: id
+      description: int, sequential ID representing a program in MicroMasters
+    - name: title
+      description: str, title of the program
+    - name: description
+      description: str, description of the program
+    - name: num_required_courses
+      description: int, indicating the number of required courses to earn certificate
+    - name: price
+      description: numeric, price of the program
+    - name: ga_tracking_id
+      description: str, a unique tracking ID provided by Google Analytics used to
+        track the number of views to certain pages of MicroMasters
+    - name: live
+      description: boolean, indicating whether program is available to users on MicroMasters
+        website
+    - name: exam_attempts_first_date
+      description: timestamp, specify the date when users get one attempt if payment
+        made after this date
+    - name: exam_attempts_second_date
+      description: timestamp, specify the date when users completely switched to one
+        attempt after this date
+    - name: financial_aid_availability
+      description: boolean, indicating if financial aid is available for the program
     - name: created_on
-      description: timestamp, specifying when the coupon user association was initially
-        created
+      description: timestamp, specifying when a program was initially created
     - name: updated_on
-      description: timestamp, specifying when the coupon user association was most
-        recently updated
-    - name: coupon_id
-      description: int, foreign key for ecommerce_coupon
+      description: timestamp, specifying when a program was most recently updated
+  - name: raw__micromasters__app__postgres__dashboard_programenrollment
+    columns:
+    - name: id
+      description: int, primary key representing a users program enrollment
     - name: user_id
       description: int, foreign key for users_user
-
-  - name: raw__micromasters__app__postgres__ecommerce_couponinvoice
-    description: the ecommerce_couponinvoice table is used to identify batches of
-      coupons that a created togather for the same purpose
+    - name: program_id
+      description: int, foreign key to courses_program
+    - name: share_hash
+      description: str, share hash for the program enrollment example:72ff85f6-b88d-4636-830a-69cf59f896f5
+  - name: raw__micromasters__app__postgres__django_content_type
     columns:
     - name: id
-      description: int, primary key representing a coupon invoice
-    - name: invoice_number
-      description: string, short string used to identify a batch of coupons
-    - name: description
-      description: string, description for a batch of coupons
-
+      description: int, sequential ID for the django model
+    - name: model
+      description: string, the name of the django model
+    - name: app_label
+      description: string, the  functional group the model belongs to
   - name: raw__micromasters__app__postgres__ecommerce_coupon
     columns:
     - name: id
@@ -128,51 +262,128 @@ sources:
     - name: invoice_id
       description: int, foreign key in ecommerce_couponinvoice, which contains information
         about why the a batch of coupons was created
-
-  - name: raw__micromasters__app__postgres__django_content_type
+  - name: raw__micromasters__app__postgres__ecommerce_couponinvoice
+    description: the ecommerce_couponinvoice table is used to identify batches of
+      coupons that a created togather for the same purpose
     columns:
     - name: id
-      description: int, sequential ID for the django model
-    - name: model
-      description: string, the name of the django model
-    - name: app_label
-      description: string, the  functional group the model belongs to
-  - name: raw__micromasters__app__postgres__grades_micromastersprogramcertificate
+      description: int, primary key representing a coupon invoice
+    - name: invoice_number
+      description: string, short string used to identify a batch of coupons
+    - name: description
+      description: string, description for a batch of coupons
+  - name: raw__micromasters__app__postgres__ecommerce_line
     columns:
     - name: id
-      description: int, sequential ID representing a program certificate. Only has
-        records for DEDP
+      description: int, primary key representing an ecommerce line
+    - name: created_at
+      description: timestamp, specifying when the line was initially created
+    - name: modified_at
+      description: timestamp, specifying when the line was most recently updated
+    - name: course_key
+      description: string, edx_course_key from courses_courserun
+    - name: price
+      description: numeric, price paid for the course run
+    - name: order_id
+      description: int, foreign key in the orders_order table for the order that contains
+        the line.  Orders have exactly one line
+    - name: description
+      description: string, description of the course run being purchased
+  - name: raw__micromasters__app__postgres__ecommerce_order
+    columns:
+    - name: id
+      description: int, primary key representing a single  order
     - name: created_on
-      description: timestamp, specifying when a program certificate was initially
+      description: timestamp, specifying when the order was initially created
+    - name: modified_at
+      description: timestamp, specifying when the order was most recently updated
+    - name: status
+      description: string, order state. Options are "fulfilled", "failed", "created"
+        "refunded", "partially_refunded"
+    - name: total_price_paid
+      description: number, total order amount
+    - name: user_id
+      description: int, primary key in users_user for the purchaser
+    - name: reference_number
+      description: string, readable id for the order
+  - name: raw__micromasters__app__postgres__ecommerce_receipt
+    description: Data returned from cybersource when a user pays for an order
+    columns:
+    - name: id
+      description: int, primary key representing a receipt
+    - name: created_at
+      description: timestamp, specifying when the receipt was initially created
+    - name: modified_at
+      description: timestamp, specifying when the receipt was most recently updated
+    - name: data
+      description: json, cybersource data for a payment
+    - name: order_id
+      description: int, primary key in ecommerce_order
+  - name: raw__micromasters__app__postgres__ecommerce_redeemedcoupon
+    columns:
+    - name: id
+      description: int, primary key representing a discount redemption
+    - name: created_on
+      description: timestamp, specifying when the coupon was redeemed
+    - name: updated_on
+      description: timestamp, specifying when the coupon redemption was last updated
+    - name: coupon_id
+      description: int, foreign key for ecommerce_coupon
+    - name: order_id
+      description: int, foreign key for ecommerce_orders
+  - name: raw__micromasters__app__postgres__ecommerce_usercoupon
+    columns:
+    - name: id
+      description: int, primary key representing a coupon user combo
+    - name: created_on
+      description: timestamp, specifying when the coupon user association was initially
         created
     - name: updated_on
-      description: timestamp, specifying when a program certificate was most recently
-        updated
-    - name: hash
-      description: str, unique hash used to identify the program certificate
-    - name: program_id
-      description: id, int foreign key referece to courses_program
+      description: timestamp, specifying when the coupon user association was most
+        recently updated
+    - name: coupon_id
+      description: int, foreign key for ecommerce_coupon
     - name: user_id
-      description: int, foreign key referece to auth_user
-
-  - name: raw__micromasters__app__postgres__grades_micromasterscoursecertificate
-    description: source table for DEDP course certificates in MicroMasters database
+      description: int, foreign key for users_user
+  - name: raw__micromasters__app__postgres__exams_examrun
+    description: DEDP proctored exam runs from MicroMasters application database
     columns:
     - name: id
-      description: int, sequential ID representing a DEDP course certificate
-    - name: hash
-      description: str, unique hash used to identify this DEDP course certificate
+      description: int, primary key in exams_examrun
     - name: course_id
       description: int, foreign key to courses_course
-    - name: user_id
-      description: int, foreign key to auth_user
+    - name: exam_series_code
+      description: str, unique series code for the exam. e.g., MIT_14.100x
+    - name: edx_exam_course_key
+      description: str, edX exam run ID formatted as course-v1:{org}+{exam code}+{semester},
+        e.g., course-v1:MITxT+14.100PEx+2T2022. May be null for exam runs before 2022.
+    - name: semester
+      description: str, semester for the exam run, e.g., 2T2022
+    - name: description
+      description: str, description for the exam run
+    - name: authorized
+      description: boolean, indicating if the exam run has authorizations from Pearson
+    - name: passing_score
+      description: float, passing score for the exam run, range between 0 to 1.
+    - name: date_first_schedulable
+      description: timestamp, the first date and time a learner can start scheduling
+        the exam with Pearson.
+    - name: date_last_schedulable
+      description: timestamp, the last date and time a learner can start scheduling
+        the exam with Pearson.
+    - name: date_first_eligible
+      description: timestamp, the first date and time at which this exam run becomes
+        available
+    - name: date_last_eligible
+      description: timestamp, the last date and time at which this exam run becomes
+        available
+    - name: date_grades_available
+      description: timestamp, date and time when the grade becomes available to learners
+        on their dashboard
     - name: created_on
-      description: timestamp, date and time when DEDP course certificate was initially
-        created
+      description: timestamp, date and time when the exam run was initially created
     - name: updated_on
-      description: timestamp, date and time when DEDP course certificate was most
-        recently updated
-
+      description: timestamp, date and time when the exam run was most recently updated
   - name: raw__micromasters__app__postgres__grades_combinedfinalgrade
     description: source table for DEDP course final grades combined from course run
       and proctored exam in MicroMasters database
@@ -192,7 +403,6 @@ sources:
       description: timestamp, date and time when this grade was initially calculated
     - name: updated_on
       description: timestamp, date and time when this grade was most recently updated
-
   - name: raw__micromasters__app__postgres__grades_finalgrade
     description: source table for edx course run final grades stored in MicroMasters
       database
@@ -216,7 +426,40 @@ sources:
       description: timestamp, date and time when this grade was initially created
     - name: updated_on
       description: timestamp, date and time when this grade was most recently updated
-
+  - name: raw__micromasters__app__postgres__grades_micromasterscoursecertificate
+    description: source table for DEDP course certificates in MicroMasters database
+    columns:
+    - name: id
+      description: int, sequential ID representing a DEDP course certificate
+    - name: hash
+      description: str, unique hash used to identify this DEDP course certificate
+    - name: course_id
+      description: int, foreign key to courses_course
+    - name: user_id
+      description: int, foreign key to auth_user
+    - name: created_on
+      description: timestamp, date and time when DEDP course certificate was initially
+        created
+    - name: updated_on
+      description: timestamp, date and time when DEDP course certificate was most
+        recently updated
+  - name: raw__micromasters__app__postgres__grades_micromastersprogramcertificate
+    columns:
+    - name: id
+      description: int, sequential ID representing a program certificate. Only has
+        records for DEDP
+    - name: created_on
+      description: timestamp, specifying when a program certificate was initially
+        created
+    - name: updated_on
+      description: timestamp, specifying when a program certificate was most recently
+        updated
+    - name: hash
+      description: str, unique hash used to identify the program certificate
+    - name: program_id
+      description: id, int foreign key referece to courses_program
+    - name: user_id
+      description: int, foreign key referece to auth_user
   - name: raw__micromasters__app__postgres__grades_proctoredexamgrade
     description: source table for DEDP proctor exam grades stored in MicroMasters
       database
@@ -247,36 +490,54 @@ sources:
       description: timestamp, date and time when this grade was initially created
     - name: updated_on
       description: timestamp, date and time when this grade was most recently updated
-
-
-  - name: raw__micromasters__app__postgres__auth_user
+  - name: raw__micromasters__app__postgres__profiles_education
     columns:
     - name: id
-      description: int, sequential ID representing a user in MicroMasters
-    - name: password
-      description: str, hashed password
-    - name: username
-      description: str, unique string to identify user
-    - name: email
-      description: str, user email associated with their account
-    - name: first_name
-      description: str, user's first name (blank for the majority of users on production)
-    - name: last_name
-      description: str, user's last name (blank for the majority of users on production)
-    - name: is_active
-      description: boolean, indicate whether this user is active (use it to soft delete
-        account)
-    - name: last_login
-      description: timestamp, user's last login
-    - name: date_joined
-      description: timestamp, specifying when a user account was initially created
-    - name: is_staff
-      description: boolean, indicate whether the user can log into admin site (internally
-        used)
-    - name: is_superuser
-      description: boolean, indicate whether this user has all permissions (internally
-        used)
+      description: int, primary key representing a user education record
+    - name: profile_id
+      description: int, foreign key to profiles_profile
+    - name: degree_name
+      description: 'str, user degree choice are: "p" - "Doctorate" "m" - "Master''s
+        or professional degree" "b" - "Bachelor''s degree" "a" - "Associate degree"
+        "hs" - "Secondary/high school" "other" - "Other education"
 
+        '
+    - name: field_of_study
+      description: str, field of study for this education degree
+    - name: online_degree
+      description: boolean, indicating if it's online education degree
+    - name: school_name
+      description: str, name of school for this education
+    - name: school_city
+      description: str, city where school is located
+    - name: school_state_or_territory
+      description: str, state or territory where school is located
+    - name: school_country
+      description: str, country code where school is located
+    - name: graduation_date
+      description: date, graduation date for this education
+  - name: raw__micromasters__app__postgres__profiles_employment
+    columns:
+    - name: id
+      description: int, primary key representing a user employment record
+    - name: profile_id
+      description: int, foreign key to profiles_profile
+    - name: company_name
+      description: str, name of the company for this employment
+    - name: position
+      description: str, user's position in this company
+    - name: industry
+      description: str, industry of this company
+    - name: city
+      description: str, city where this company is located
+    - name: state_or_territory
+      description: str, state or territory where this company is located
+    - name: country
+      description: str, country code where this company is located
+    - name: start_date
+      description: date, start date for this employment
+    - name: end_date
+      description: date, end date for this employment
   - name: raw__micromasters__app__postgres__profiles_profile
     columns:
     - name: id
@@ -352,17 +613,12 @@ sources:
     - name: edx_mailing_address
       description: str, user's mailing address on edx.org
     - name: edx_level_of_education
-      description: >
-        str, user education level choices are:
-        "p" - "Doctorate"
-        "m" - "Master's or professional degree"
-        "b" - "Bachelor's degree"
-        "a" - "Associate degree"
-        "hs" - "High school"
-        "jhs" - "Junior high school"
-        "el" - "Elementary school"
-        "none" - "No formal education"
-        "other" - "Other education"
+      description: 'str, user education level choices are: "p" - "Doctorate" "m" -
+        "Master''s or professional degree" "b" - "Bachelor''s degree" "a" - "Associate
+        degree" "hs" - "High school" "jhs" - "Junior high school" "el" - "Elementary
+        school" "none" - "No formal education" "other" - "Other education"
+
+        '
     - name: date_joined_micromasters
       description: timestamp, specifying when user profile was initially created
     - name: verified_micromaster_user
@@ -374,7 +630,6 @@ sources:
       description: str, JSON string of user's language proficiencies on edx.org
     - name: edx_requires_parental_consent
       description: boolean, user profile requires parental consent on edx.org
-
   - name: raw__micromasters__app__postgres__social_auth_usersocialauth
     columns:
     - name: id
@@ -387,227 +642,167 @@ sources:
       description: str, user name string to identify a user within a social auth provider
     - name: extra_data
       description: str, extra data for this user social auth in JSON string
-
-  - name: raw__micromasters__app__postgres__courses_courserun
+  - name: raw__micromasters__app__postgres__wagtailcore_page
+    description: ''
     columns:
+    - name: _airbyte_raw_id
+      data_type: VARCHAR
+      description: ''
+    - name: _airbyte_extracted_at
+      data_type: BIGINT
+      description: ''
+    - name: _airbyte_meta
+      data_type: STRUCT(sync_id BIGINT, changes STRUCT(field VARCHAR, change VARCHAR,
+        reason VARCHAR)[])
+      description: ''
+    - name: _airbyte_generation_id
+      data_type: BIGINT
+      description: ''
     - name: id
-      description: int, primary key representing a course run
-    - name: title
-      description: str, title of the course run
-    - name: course_id
-      description: int, foreign key to courses_course
-    - name: edx_course_key
-      description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag}
-    - name: enrollment_url
-      description: str, url to enroll in the course run
-    - name: is_discontinued
-      description: boolean, setting this to true discontinues the course run
-    - name: prerequisites
-      description: str, prerequisites for the course
-    - name: courseware_backend
-      description: str, indicating the platform where this course runs on. It's either
-        mitxonline or edxorg.
-    - name: fuzzy_start_date
-      description: str, fuzzy start date e.g. Fall 2019
-    - name: fuzzy_enrollment_start_date
-      description: str, str, fuzzy enrollment start date e.g. Fall 2019
-    - name: end_date
-      description: timestamp, date and time when the run ends
-    - name: start_date
-      description: timestamp, date and time when the run begins
-    - name: enrollment_start
-      description: timestamp, date and time when enrollment starts
-    - name: enrollment_end
-      description: timestamp, date and time when enrollment ends
-    - name: freeze_grade_date
-      description: timestamp, date and time when the run freeze for grade
-    - name: upgrade_deadline
-      description: timestamp, date and time beyond which users can not enroll in paid
-        course mode
-
-  - name: raw__micromasters__app__postgres__courses_course
-    columns:
-    - name: id
-      description: int, sequential ID representing a course in MicroMasters
-    - name: title
-      description: str, title of the course
-    - name: edx_key
-      description: str, edX key formatted as {org}+{course number}
-    - name: course_number
-      description: str, edX course number
-    - name: program_id
-      description: int, foreign key to courses_program
-    - name: position_in_program
-      description: int, sequential number indicating the course position in a program
-    - name: thumbnail
-      description: str, thumbnail path (not used on production)
-    - name: description
-      description: str, description of the course
-    - name: prerequisites
-      description: str, required courses as a prior condition before taking this course
-    - name: contact_email
-      description: str, email used to contact course team
-    - name: should_display_progress
-      description: boolean, indicating if "in progress" grades should be displayed
-        for the course
-
-  - name: raw__micromasters__app__postgres__courses_program
-    columns:
-    - name: id
-      description: int, sequential ID representing a program in MicroMasters
-    - name: title
-      description: str, title of the program
-    - name: description
-      description: str, description of the program
-    - name: num_required_courses
-      description: int, indicating the number of required courses to earn certificate
-    - name: price
-      description: numeric, price of the program
-    - name: ga_tracking_id
-      description: str, a unique tracking ID provided by Google Analytics used to
-        track the number of views to certain pages of MicroMasters
+      data_type: BIGINT
+      description: ''
     - name: live
-      description: boolean, indicating whether program is available to users on MicroMasters
-        website
-    - name: exam_attempts_first_date
-      description: timestamp, specify the date when users get one attempt if payment
-        made after this date
-    - name: exam_attempts_second_date
-      description: timestamp, specify the date when users completely switched to one
-        attempt after this date
-    - name: financial_aid_availability
-      description: boolean, indicating if financial aid is available for the program
-    - name: created_on
-      description: timestamp, specifying when a program was initially created
-    - name: updated_on
-      description: timestamp, specifying when a program was most recently updated
-
-  - name: raw__micromasters__app__postgres__courses_electivesset
-    description: This represents the elective requirements for programs
-    columns:
-    - name: id
-      description: int, sequential ID representing a elective requirement set for
-        a program in MicroMasters
-    - name: required_number
-      description: int, indicating the number of required courses from this elective
-        requirement set
-    - name: program_id
-      description: int, foreign key to courses_program
+      data_type: BOOLEAN
+      description: ''
+    - name: path
+      data_type: VARCHAR
+      description: ''
+    - name: slug
+      data_type: VARCHAR
+      description: ''
+    - name: depth
+      data_type: BIGINT
+      description: ''
     - name: title
-      description: str, title of the elective requirement set
-
-  - name: raw__micromasters__app__postgres__courses_electivecourse
-    description: this links a course to a elective set for programs
+      data_type: VARCHAR
+      description: ''
+    - name: locked
+      data_type: BOOLEAN
+      description: ''
+    - name: expired
+      data_type: BOOLEAN
+      description: ''
+    - name: numchild
+      data_type: BIGINT
+      description: ''
+    - name: owner_id
+      data_type: BIGINT
+      description: ''
+    - name: url_path
+      data_type: VARCHAR
+      description: ''
+    - name: expire_at
+      data_type: TIMESTAMP WITH TIME ZONE
+      description: ''
+    - name: locale_id
+      data_type: BIGINT
+      description: ''
+    - name: locked_at
+      data_type: TIMESTAMP WITH TIME ZONE
+      description: ''
+    - name: seo_title
+      data_type: VARCHAR
+      description: ''
+    - name: go_live_at
+      data_type: TIMESTAMP WITH TIME ZONE
+      description: ''
+    - name: alias_of_id
+      data_type: BIGINT
+      description: ''
+    - name: draft_title
+      data_type: VARCHAR
+      description: ''
+    - name: locked_by_id
+      data_type: BIGINT
+      description: ''
+    - name: show_in_menus
+      data_type: BOOLEAN
+      description: ''
+    - name: content_type_id
+      data_type: BIGINT
+      description: ''
+    - name: translation_key
+      data_type: VARCHAR
+      description: ''
+    - name: live_revision_id
+      data_type: BIGINT
+      description: ''
+    - name: last_published_at
+      data_type: TIMESTAMP WITH TIME ZONE
+      description: ''
+    - name: first_published_at
+      data_type: TIMESTAMP WITH TIME ZONE
+      description: ''
+    - name: latest_revision_id
+      data_type: BIGINT
+      description: ''
+    - name: search_description
+      data_type: VARCHAR
+      description: ''
+    - name: has_unpublished_changes
+      data_type: BOOLEAN
+      description: ''
+    - name: latest_revision_created_at
+      data_type: TIMESTAMP WITH TIME ZONE
+      description: ''
+  - name: raw__micromasters__app__postgres__wagtailimages_image
+    description: ''
     columns:
+    - name: _airbyte_raw_id
+      data_type: VARCHAR
+      description: ''
+    - name: _airbyte_extracted_at
+      data_type: BIGINT
+      description: ''
+    - name: _airbyte_meta
+      data_type: STRUCT(sync_id BIGINT, changes STRUCT(field VARCHAR, change VARCHAR,
+        reason VARCHAR)[])
+      description: ''
+    - name: _airbyte_generation_id
+      data_type: BIGINT
+      description: ''
     - name: id
-      description: int, sequential ID representing a course in a  set for a program
-        in MicroMasters
-    - name: electives_set_id
-      description: int, foreign key to courses_electivesset
-    - name: course_id
-      description: int, foreign key to courses_course
-
-  - name: raw__micromasters__app__postgres__profiles_education
-    columns:
-    - name: id
-      description: int, primary key representing a user education record
-    - name: profile_id
-      description: int, foreign key to profiles_profile
-    - name: degree_name
-      description: >
-        str, user degree choice are:
-        "p" - "Doctorate"
-        "m" - "Master's or professional degree"
-        "b" - "Bachelor's degree"
-        "a" - "Associate degree"
-        "hs" - "Secondary/high school"
-        "other" - "Other education"
-    - name: field_of_study
-      description: str, field of study for this education degree
-    - name: online_degree
-      description: boolean, indicating if it's online education degree
-    - name: school_name
-      description: str, name of school for this education
-    - name: school_city
-      description: str, city where school is located
-    - name: school_state_or_territory
-      description: str, state or territory where school is located
-    - name: school_country
-      description: str, country code where school is located
-    - name: graduation_date
-      description: date, graduation date for this education
-
-  - name: raw__micromasters__app__postgres__profiles_employment
-    columns:
-    - name: id
-      description: int, primary key representing a user employment record
-    - name: profile_id
-      description: int, foreign key to profiles_profile
-    - name: company_name
-      description: str, name of the company for this employment
-    - name: position
-      description: str, user's position in this company
-    - name: industry
-      description: str, industry of this company
-    - name: city
-      description: str, city where this company is located
-    - name: state_or_territory
-      description: str, state or territory where this company is located
-    - name: country
-      description: str, country code where this company is located
-    - name: start_date
-      description: date, start date for this employment
-    - name: end_date
-      description: date, end date for this employment
-
-  - name: raw__micromasters__app__postgres__dashboard_programenrollment
-    columns:
-    - name: id
-      description: int, primary key representing a users program enrollment
-    - name: user_id
-      description: int, foreign key for users_user
-    - name: program_id
-      description: int, foreign key to courses_program
-    - name: share_hash
-      description: str, share hash for the program enrollment example:72ff85f6-b88d-4636-830a-69cf59f896f5
-
-
-  - name: raw__micromasters__app__postgres__exams_examrun
-    description: DEDP proctored exam runs from MicroMasters application database
-    columns:
-    - name: id
-      description: int, primary key in exams_examrun
-    - name: course_id
-      description: int, foreign key to courses_course
-    - name: exam_series_code
-      description: str, unique series code for the exam. e.g., MIT_14.100x
-    - name: edx_exam_course_key
-      description: str, edX exam run ID formatted as course-v1:{org}+{exam code}+{semester},
-        e.g., course-v1:MITxT+14.100PEx+2T2022. May be null for exam runs before 2022.
-    - name: semester
-      description: str, semester for the exam run, e.g., 2T2022
+      data_type: BIGINT
+      description: ''
+    - name: file
+      data_type: VARCHAR
+      description: ''
+    - name: title
+      data_type: VARCHAR
+      description: ''
+    - name: width
+      data_type: BIGINT
+      description: ''
+    - name: height
+      data_type: BIGINT
+      description: ''
+    - name: file_hash
+      data_type: VARCHAR
+      description: ''
+    - name: file_size
+      data_type: BIGINT
+      description: ''
+    - name: created_at
+      data_type: TIMESTAMP WITH TIME ZONE
+      description: ''
     - name: description
-      description: str, description for the exam run
-    - name: authorized
-      description: boolean, indicating if the exam run has authorizations from Pearson
-    - name: passing_score
-      description: float, passing score for the exam run, range between 0 to 1.
-    - name: date_first_schedulable
-      description: timestamp, the first date and time a learner can start scheduling
-        the exam with Pearson.
-    - name: date_last_schedulable
-      description: timestamp, the last date and time a learner can start scheduling
-        the exam with Pearson.
-    - name: date_first_eligible
-      description: timestamp, the first date and time at which this exam run becomes
-        available
-    - name: date_last_eligible
-      description: timestamp, the last date and time at which this exam run becomes
-        available
-    - name: date_grades_available
-      description: timestamp, date and time when the grade becomes available to learners
-        on their dashboard
-    - name: created_on
-      description: timestamp, date and time when the exam run was initially created
-    - name: updated_on
-      description: timestamp, date and time when the exam run was most recently updated
+      data_type: VARCHAR
+      description: ''
+    - name: collection_id
+      data_type: BIGINT
+      description: ''
+    - name: focal_point_x
+      data_type: BIGINT
+      description: ''
+    - name: focal_point_y
+      data_type: BIGINT
+      description: ''
+    - name: focal_point_width
+      data_type: BIGINT
+      description: ''
+    - name: focal_point_height
+      data_type: BIGINT
+      description: ''
+    - name: uploaded_by_user_id
+      data_type: BIGINT
+      description: ''

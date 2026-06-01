@@ -46,6 +46,10 @@ with courses as (
     group by course_id
 )
 
+, course_images as (
+    select * from {{ ref('stg__mitxpro__app__postgres__wagtailimages_image') }}
+)
+
 select
     courses.course_id
     , courses.program_id
@@ -69,6 +73,7 @@ select
     , wagtail_page.wagtail_page_is_live as cms_coursepage_is_live
     , wagtail_page.wagtail_page_first_published_on as cms_coursepage_first_published_on
     , wagtail_page.wagtail_page_last_published_on as cms_coursepage_last_published_on
+    , course_images.image_url as cms_coursepage_image_url
 from courses
 left join cms_courses
     on courses.course_id = cms_courses.course_id
@@ -80,3 +85,4 @@ left join certificate_page_path
     on wagtail_page.wagtail_page_path like certificate_page_path.wagtail_page_path || '%'
 left join course_topics on courses.course_id = course_topics.course_id
 left join course_instructors on courses.course_id = course_instructors.course_id
+left join course_images on cms_courses.cms_coursepage_search_image_id = course_images.image_id

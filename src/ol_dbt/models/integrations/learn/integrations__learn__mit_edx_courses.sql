@@ -58,6 +58,16 @@ with courses as (
     group by course_readable_id
 )
 
+, course_run_attrs as (
+    select
+        course_readable_id
+        , max(courserun_duration)        as course_length
+        , max(courserun_time_commitment) as course_effort
+    from {{ ref('stg__edxorg__api__courserun') }}
+    where courserun_is_published = true
+    group by course_readable_id
+)
+
 select
     courses.course_readable_id                              as readable_id
     , courses.course_title                                  as title
@@ -68,15 +78,16 @@ select
     , courses.course_image_url                              as image_url
     , coalesce(course_runs.any_run_published, false)        as published
     , 'edxorg'                                              as platform
-    , null                                                  as page_slug
+    , cast(null as varchar)                                 as page_slug
     , {{ array_join('courses.course_topics', ', ') }}       as topics
     , course_instructors.instructors                        as instructors
-    , null                                                  as certification_type
-    , null                                                  as price
-    , null                                                  as length
-    , null                                                  as effort
+    , courses.course_type                                   as certification_type
+    , cast(null as varchar)                                 as price
+    , course_run_attrs.course_length                        as length
+    , course_run_attrs.course_effort                        as effort
     , course_runs.course_runs                               as runs
 from courses
 left join course_runs on courses.course_readable_id = course_runs.course_readable_id
 left join course_instructors on courses.course_readable_id = course_instructors.course_readable_id
+left join course_run_attrs on courses.course_readable_id = course_run_attrs.course_readable_id
 where coalesce(course_runs.any_run_published, false) = true

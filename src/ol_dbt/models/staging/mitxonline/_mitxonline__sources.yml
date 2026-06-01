@@ -4,7 +4,7 @@ version: 2
 sources:
 - name: ol_warehouse_raw_data
   loader: airbyte
-  database: '{{ target.database }}'
+  database: "{{ target.database }}"
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
   - name: raw__mitxonline__openedx__mysql__bulk_email_optout
@@ -689,7 +689,6 @@ sources:
       description: timestamp, specifying when the certificate was issued (may differ
         from created_on if backfilled)
 
-
   - name: raw__mitxonline__app__postgres__courses_programcertificate
     columns:
     - name: id
@@ -821,7 +820,6 @@ sources:
     - name: environment
       description: str, internal used field to indicate environment for the event.
         e.g. mitxonline-production
-
 
   - name: raw__mitxonline__openedx__api__course_structure
     description: It contains MITx Online course content at any point in time - json
@@ -2102,3 +2100,40 @@ sources:
       data_type: varchar
       description: the method to use to manage membership in the contract. e.g. SSO,
         Non-SSO
+
+  - name: raw__mitxonline__app__postgres__wagtailimages_image
+    description: Images uploaded to MITx Online Wagtail CMS image library. NOTE -
+      this table must be added to the MITx Online Airbyte ingest before this source
+      becomes available in the raw layer.
+    columns:
+    - name: id
+      description: int, primary key for the Wagtail image record
+    - name: file
+      description: str, path to the image file in storage (S3 key or CDN-relative
+        path)
+    - name: title
+      description: str, title/label for the image as entered in the CMS
+    - name: width
+      description: int, image width in pixels
+    - name: height
+      description: int, image height in pixels
+    - name: file_hash
+      description: str, hash of the image file used for deduplication
+    - name: file_size
+      description: int, size of the image file in bytes
+    - name: created_at
+      description: timestamp, when the image was uploaded to the CMS
+    - name: collection_id
+      description: int, foreign key to the Wagtail collection this image belongs to
+    - name: focal_point_x
+      description: int, x coordinate of the focal point used for smart cropping
+    - name: focal_point_y
+      description: int, y coordinate of the focal point used for smart cropping
+    - name: focal_point_width
+      description: int, width of the focal point region used for smart cropping
+    - name: focal_point_height
+      description: int, height of the focal point region used for smart cropping
+    - name: uploaded_by_user_id
+      description: int, foreign key to users_user for the user who uploaded the image
+    - name: description
+      description: str, optional description of the image

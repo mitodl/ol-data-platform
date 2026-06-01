@@ -34,8 +34,8 @@ select
     , stg_programs.program_updated_on                       as last_modified
     , 'micromasters'                                        as etl_source
     , programs.program_description                          as description
-    , null                                                  as url
-    , null                                                  as image_url
+    , programs.program_page_url                             as url
+    , programs.program_image_url                            as image_url
     , programs.program_is_live                              as published
     , 'micromasters'                                        as platform
     , program_courses.program_course_ids                    as courses

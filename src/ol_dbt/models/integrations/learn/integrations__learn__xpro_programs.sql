@@ -32,7 +32,7 @@ select
     , 'xpro'                                                as etl_source
     , programs.cms_programpage_description                  as description
     , programs.cms_programpage_url_path                     as url
-    , null                                                  as image_url
+    , programs.cms_programpage_image_url                    as image_url
     , programs.program_is_live                              as published
     , programs.platform_name                                as platform
     , programs.cms_programpage_slug                         as page_slug

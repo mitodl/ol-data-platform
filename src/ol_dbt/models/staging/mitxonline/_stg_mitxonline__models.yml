@@ -43,7 +43,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['deferred', 'transferred', 'refunded', 'unenrolled']
+          values: ["deferred", "transferred", "refunded", "unenrolled"]
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the run
     tests:
@@ -766,17 +766,17 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Small/Start-up (1+ employees)', 'Small/Home office (1-9 employees)',
-            'Small (10-99 employees)', 'Small to medium-sized (100-999 employees)',
-            'Medium-sized (1000-9999 employees)', 'Large Enterprise (10,000+ employees)',
+          values: ["Small/Start-up (1+ employees)", "Small/Home office (1-9 employees)",
+            "Small (10-99 employees)", "Small to medium-sized (100-999 employees)",
+            "Medium-sized (1000-9999 employees)", "Large Enterprise (10,000+ employees)",
             "Other (N/A or Don''t know)"]
   - name: user_years_experience
     description: str, years experience
     tests:
     - accepted_values:
         arguments:
-          values: ['Less than 2 years', '2-5 years', '6 - 10 years', '11 - 15 years',
-            '16 - 20 years', 'More than 20 years', 'Prefer not to say']
+          values: ["Less than 2 years", "2-5 years", "6 - 10 years", "11 - 15 years",
+            "16 - 20 years", "More than 20 years", "Prefer not to say"]
   - name: user_highest_education
     description: str, user highest education
     tests:
@@ -1605,9 +1605,9 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
-            'sales_admin', 'beta_testers', 'library_user', 'org_course_creator_group',
-            'course_creator_group', 'support']
+          values: ["staff", "limited_staff", "data_researcher", "instructor", "finance_admin",
+            "sales_admin", "beta_testers", "library_user", "org_course_creator_group",
+            "course_creator_group", "support"]
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -2099,3 +2099,43 @@ models:
     data_type: varchar
     description: the method to use to manage membership in the contract. e.g. SSO,
       Non-SSO
+
+- name: stg__mitxonline__app__postgres__wagtailimages_image
+  description: Images uploaded to MITx Online's Wagtail CMS image library. Used to
+    resolve image_id foreign keys on CMS page tables to their file paths. Requires
+    raw__mitxonline__app__postgres__wagtailimages_image to be added to Airbyte ingest.
+  columns:
+  - name: image_id
+    description: int, primary key for the Wagtail image record
+    tests:
+    - not_null
+    - unique
+  - name: image_file
+    description: str, path to the image file in storage. May be an S3 key or a CDN-relative
+      path - prepend the MITx Online media base URL to form a full image URL.
+  - name: image_title
+    description: str, title/label for the image as entered in the CMS
+  - name: image_width
+    description: int, image width in pixels
+  - name: image_height
+    description: int, image height in pixels
+  - name: image_file_hash
+    description: str, hash of the image file used for deduplication
+  - name: image_file_size
+    description: int, size of the image file in bytes
+  - name: image_created_on
+    description: timestamp, when the image was uploaded to the CMS
+  - name: collection_id
+    description: int, foreign key to the Wagtail collection this image belongs to
+  - name: image_focal_point_x
+    description: int, x coordinate of the focal point used for smart cropping
+  - name: image_focal_point_y
+    description: int, y coordinate of the focal point used for smart cropping
+  - name: image_focal_point_width
+    description: int, width of the focal point region used for smart cropping
+  - name: image_focal_point_height
+    description: int, height of the focal point region used for smart cropping
+  - name: uploaded_by_user_id
+    description: int, foreign key to users_user for the user who uploaded the image
+  - name: image_description
+    description: str, optional description of the image as entered in the CMS

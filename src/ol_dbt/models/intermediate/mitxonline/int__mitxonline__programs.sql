@@ -40,6 +40,10 @@ with programs as (
     group by program_id
 )
 
+, program_images as (
+    select * from {{ ref('stg__mitxonline__app__postgres__wagtailimages_image') }}
+)
+
 select
     programs.program_id
     , programs.program_title
@@ -66,8 +70,10 @@ select
     , wagtail_page.wagtail_page_is_live as program_page_is_live
     , wagtail_page.wagtail_page_first_published_on as program_page_first_published_on
     , wagtail_page.wagtail_page_last_published_on as program_page_last_published_on
+    , program_images.image_url as program_image_url
 from programs
 left join program_pages on programs.program_id = program_pages.program_id
 left join wagtail_page on program_pages.wagtail_page_id = wagtail_page.wagtail_page_id
 left join program_topics on programs.program_id = program_topics.program_id
 left join program_instructors on programs.program_id = program_instructors.program_id
+left join program_images on program_pages.program_feature_image_id = program_images.image_id

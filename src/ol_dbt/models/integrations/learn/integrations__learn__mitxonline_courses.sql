@@ -39,7 +39,7 @@ select
     , 'mitxonline'                                          as etl_source
     , courses.course_description                            as description
     , courses.course_page_url_path                          as url
-    , null                                                  as image_url
+    , courses.course_image_url                              as image_url
     , courses.course_is_live                                as published
     , 'mitxonline'                                          as platform
     , courses.course_page_slug                              as page_slug

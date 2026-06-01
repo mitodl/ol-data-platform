@@ -39,7 +39,7 @@ select
     , 'xpro'                                                as etl_source
     , courses.cms_coursepage_description                    as description
     , courses.cms_coursepage_url_path                       as url
-    , null                                                  as image_url
+    , courses.cms_coursepage_image_url                      as image_url
     , courses.course_is_live                                as published
     , courses.platform_name                                 as platform
     , courses.cms_coursepage_slug                           as page_slug

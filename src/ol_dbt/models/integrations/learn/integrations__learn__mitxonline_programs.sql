@@ -29,7 +29,7 @@ select
     , 'mitxonline'                                          as etl_source
     , programs.program_description                          as description
     , programs.program_page_url_path                        as url
-    , null                                                  as image_url
+    , programs.program_image_url                            as image_url
     , programs.program_is_live                              as published
     , 'mitxonline'                                          as platform
     , programs.program_type                                 as program_type

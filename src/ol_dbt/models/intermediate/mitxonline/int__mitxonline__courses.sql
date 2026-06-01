@@ -53,6 +53,10 @@ with courses as (
     group by course_id
 )
 
+, course_images as (
+    select * from {{ ref('stg__mitxonline__app__postgres__wagtailimages_image') }}
+)
+
 select
     courses.course_id
     , courses.course_title
@@ -76,9 +80,11 @@ select
     , coalesce(
         course_certification_type.program_certification_type, 'Certificate of Completion'
     ) as course_certification_type
+    , course_images.image_url as course_image_url
 from courses
 left join course_pages on courses.course_id = course_pages.course_id
 left join wagtail_page on course_pages.wagtail_page_id = wagtail_page.wagtail_page_id
 left join course_certification_type on courses.course_id = course_certification_type.course_id
 left join course_topics on courses.course_id = course_topics.course_id
 left join course_instructors on courses.course_id = course_instructors.course_id
+left join course_images on course_pages.course_feature_image_id = course_images.image_id

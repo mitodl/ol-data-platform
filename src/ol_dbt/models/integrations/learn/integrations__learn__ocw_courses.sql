@@ -64,7 +64,7 @@ select
     , 'ocw'                                                 as etl_source
     , courses.course_description                            as description
     , courses.course_live_url                               as url
-    , null                                                  as image_url
+    , cast(null as varchar)                                 as image_url
     , courses.course_is_live                                as published
     , 'ocw'                                                 as platform
     , courses.course_level                                  as level

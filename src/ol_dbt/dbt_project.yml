@@ -55,6 +55,14 @@ vars:
     ocw_production_url: "https://ocw.mit.edu/"
     mitxonline_openedx_url: "https://courses.learn.mit.edu"
     mitxpro_openedx_url: "https://courses.xpro.mit.edu"
+    # Base URLs for Wagtail-uploaded media files (prepended to wagtailimages_image.file paths).
+    # The image file column contains paths like 'original_images/course.jpg' — these vars
+    # supply the scheme+host prefix to form a complete URL. Verify against the Django
+    # MEDIA_URL setting for each app in production.
+    xpro_media_url: "https://ol-xpro-app-production.s3.amazonaws.com/"
+    mitxonline_media_url: "https://mitxonline.mit.edu/media/"
+    micromasters_media_url: "https://ol-micromasters-app-production.s3.amazonaws.com/"
+    micromasters_production_url: "https://micromasters.mit.edu/"
 
     highest_education_values: ["Doctorate", "Master''s or professional degree", "Bachelor''s\
         \ degree", "Associate degree", "Secondary/high school", "Junior secondary/junior\

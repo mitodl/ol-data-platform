@@ -17,6 +17,7 @@ select
     , catalog_details as cms_programpage_catalog_details
     , external_marketing_url as cms_programpage_external_marketing_url
     , featured as cms_programpage_is_featured
+    , search_image_id as cms_programpage_search_image_id
     , 'cms_programpage' as cms_programpage_model
 
 from programpage
@@ -32,6 +33,7 @@ select
     , externalprogrampage.catalog_details as cms_programpage_catalog_details
     , externalprogrampage.external_marketing_url as cms_programpage_external_marketing_url
     , externalprogrampage.featured as cms_programpage_is_featured
+    , externalprogrampage.search_image_id as cms_programpage_search_image_id
     , 'cms_externalprogrampage' as cms_programpage_model
 from externalprogrampage
 -- There is one program that has both a program page and an external program page. The external program page is not live
