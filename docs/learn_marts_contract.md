@@ -4,7 +4,7 @@ This document defines the stable interface that MIT Learn's Trino-pull ETL tasks
 
 ## Model Location
 
-Integration models are located in `ol_dbt/models/integrations/learn/`. These models expose application-level contracts for data consumption, sitting above the marts layer and below the consuming application.
+Integration models are located in `src/ol_dbt/models/integrations/learn/`. These models expose application-level contracts for data consumption, sitting above the marts layer and below the consuming application.
 
 ## Naming Convention
 
@@ -31,7 +31,7 @@ Every Learn mart must expose the following columns:
 |--------|------|-------------|-------------|
 | `readable_id` | string | Unique identifier for the resource, used for upsert matching | NOT NULL |
 | `title` | string | Human-readable title | NOT NULL |
-| `last_modified` | timestamp | Last modification time from source system | NOT NULL |
+| `last_modified` | varchar (ISO-8601) | Last modification time from source system, formatted as an ISO-8601 timestamp string | NOT NULL |
 | `etl_source` | string | Source system name (must match `ETLSource` enum values) | NOT NULL |
 
 ## Optional Core Columns

@@ -138,7 +138,8 @@ models:
     tests: [not_null]
   - name: last_modified
     description: >
-      current_timestamp fallback — MicroMasters source has no last_modified column.
+      Last update timestamp for the program sourced from program_updated_on
+      in stg__micromasters__app__postgres__courses_program.
     tests: [not_null]
   - name: etl_source
     description: Always 'micromasters'.

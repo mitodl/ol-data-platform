@@ -58,8 +58,26 @@ models:
         - user_username
         - user_auth_provider
 - name: stg__micromasters__app__postgres__cms_programpage
-  description: ''
-  columns: []
+  description: Wagtail CMS ProgramPage records for the MicroMasters application. Links
+    each program to its Wagtail page (for slug/URL) and stores thumbnail and background
+    image foreign keys.
+  columns:
+  - name: wagtail_page_id
+    description: int, FK to wagtailcore_page — the Wagtail page record for this program
+    tests:
+    - not_null
+    - unique
+  - name: program_id
+    description: int, FK to courses_program — the MicroMasters program
+    tests:
+    - not_null
+    - unique
+  - name: cms_programpage_thumbnail_image_id
+    description: int, FK to wagtailimages_image for the program thumbnail
+  - name: cms_programpage_background_image_id
+    description: int, FK to wagtailimages_image for the program hero background
+  - name: cms_programpage_description
+    description: str, program description rendered in the CMS
 - name: stg__micromasters__app__postgres__courses_course
   columns:
   - name: course_id
@@ -1023,13 +1041,49 @@ models:
   - name: user_last_name
     description: str, last name on user profile
 - name: stg__micromasters__app__postgres__wagtailcore_page
-  description: ''
-  columns: []
+  description: Wagtail CMS page records for the MicroMasters application. Used to
+    resolve program page slugs and construct public-facing URLs for programs.
+  columns:
+  - name: wagtail_page_id
+    description: int, primary key for the Wagtail page record
+    tests:
+    - not_null
+    - unique
+  - name: wagtail_page_slug
+    description: str, URL slug for the page (e.g. 'scm' → https://micromasters.mit.edu/scm/)
+  - name: wagtail_page_live_url
+    description: str, fully-qualified live URL constructed from micromasters_production_url
+      and the page slug. NULL for unpublished pages.
+  - name: wagtail_page_url_path
+    description: str, internal Wagtail tree path (e.g. /home/scm/)
+  - name: wagtail_page_is_live
+    description: boolean, whether the page is currently published
+  - name: wagtail_page_first_published_on
+    description: timestamp, when the page was first published
+  - name: wagtail_page_last_published_on
+    description: timestamp, when the page was most recently published
 - name: stg__micromasters__app__postgres__wagtailimages_image
-  description: ''
-  columns: []
+  description: Images uploaded to the MicroMasters Wagtail CMS image library. Used
+    to resolve thumbnail_image_id foreign keys on cms_programpage to full image URLs.
+  columns:
+  - name: image_id
+    description: int, primary key for the Wagtail image record
+    tests:
+    - not_null
+    - unique
+  - name: image_file
+    description: str, S3 key path for the image (e.g. original_images/scm_thumb.jpg)
+  - name: image_url
+    description: str, fully-qualified image URL constructed by prepending micromasters_media_url
+      to image_file
+  - name: image_title
+    description: str, title/label for the image as entered in the CMS
+  - name: image_width
+    description: int, image width in pixels
+  - name: image_height
+    description: int, image height in pixels
 - name: stg__micromasters__app__user_program_certificate_override_list
-  description: Certain users should recieve a certificate even though they do not
+  description: Certain users should receive a certificate even though they do not
     meet all the program certificate requirements. This list has the user_id on user_edxorg
     and the program_id on micromasters production for those users
   columns:
@@ -1041,6 +1095,6 @@ models:
     - not_null
   - name: micromasters_program_id
     description: int, foreign key in courses_program for the program the user should
-      recieve a certificate
+      receive a certificate
     tests:
     - not_null

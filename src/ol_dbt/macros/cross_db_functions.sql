@@ -413,10 +413,12 @@
 
 {% macro default__unnest_json_array(json_expr, alias, col_name) -%}
     {#
-        Trino: json_parse() converts varchar to JSON, then try_cast to array(json) handles
-        malformed input by returning NULL (UNNEST skips NULLs), then unnest expands elements.
+        Trino: try() wraps json_parse() so malformed JSON returns NULL before try_cast
+        sees it (json_parse raises before try_cast can catch). try_cast then converts
+        the JSON value to array(json), returning NULL for non-array JSON.
+        UNNEST skips NULL inputs, yielding 0 rows for malformed/non-array input.
     #}
-    unnest(try_cast(json_parse({{ json_expr }}) as array(json))) as {{ alias }} ({{ col_name }})
+    unnest(try_cast(try(json_parse({{ json_expr }})) as array(json))) as {{ alias }} ({{ col_name }})
 {%- endmacro %}
 
 {% macro duckdb__unnest_json_array(json_expr, alias, col_name) -%}
