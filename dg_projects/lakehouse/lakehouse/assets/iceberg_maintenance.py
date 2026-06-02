@@ -300,6 +300,27 @@ def iceberg_dbt_layer_maintenance(
         len(failures),
     )
 
+    # Fail the asset if maintenance failures exceed 5% of tables processed.
+    # This surfaces systemic failures (broken Trino credentials, Glue outage)
+    # that would otherwise accumulate silently in metadata while Dagster marks
+    # the run SUCCESS, advancing the cursor and blocking retries.
+    if failures:
+        failure_threshold = max(1, int(tables_processed * 0.05))
+        if len(failures) >= failure_threshold:
+            context.log.error(
+                "Maintenance failed for %d/%d tables (threshold: %d). Failing asset.",
+                len(failures),
+                tables_processed,
+                failure_threshold,
+            )
+            msg = (
+                f"Iceberg maintenance failed for "
+                f"{len(failures)}/{tables_processed} "
+                f"tables (threshold {failure_threshold}). "
+                f"First failures: {failures[:5]}"
+            )
+            raise RuntimeError(msg)
+
     return Output(
         value=None,
         metadata={
@@ -395,6 +416,27 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
         len(tables),
         len(failures),
     )
+
+    # Fail the asset if maintenance failures exceed 5% of tables scanned.
+    # Prevents silent SUCCESS when Glue/S3 is unavailable for a large fraction
+    # of tables, which would advance the snapshot timestamp cursor.
+    tables_processed = len(tables)
+    if failures:
+        failure_threshold = max(1, int(tables_processed * 0.05))
+        if len(failures) >= failure_threshold:
+            context.log.error(
+                "Maintenance failed for %d/%d tables (threshold: %d). Failing asset.",
+                len(failures),
+                tables_processed,
+                failure_threshold,
+            )
+            msg = (
+                f"Iceberg raw layer maintenance failed for "
+                f"{len(failures)}/{tables_processed} tables "
+                f"(threshold {failure_threshold}). "
+                f"First failures: {failures[:5]}"
+            )
+            raise RuntimeError(msg)
 
     return Output(
         value=None,

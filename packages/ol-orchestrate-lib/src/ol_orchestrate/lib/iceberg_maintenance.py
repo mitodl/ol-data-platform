@@ -343,6 +343,13 @@ def load_maintenance_configs_from_manifest(
             log.debug("Skipping %s — iceberg_maintenance.enabled=false", model_name)
             continue
 
+        # Use .get() with dataclass defaults for every key so that partial
+        # per-folder or per-model overrides in schema YAML files work without
+        # raising KeyError.  dbt shallow-merges meta dicts, so a single-key
+        # override replaces the entire iceberg_maintenance dict and omits the
+        # remaining keys.  Falling back to the TableMaintenanceConfig field
+        # defaults keeps Python consistent with the project-root +meta defaults.
+        _d = TableMaintenanceConfig.__dataclass_fields__
         configs.append(
             TableMaintenanceConfig(
                 model_name=model_name,
@@ -350,11 +357,23 @@ def load_maintenance_configs_from_manifest(
                 materialized=materialized,
                 # AssetKey: [schema_suffix, model_name] per DbtAutomationTranslator
                 asset_key=[schema_suffix, model_name],
-                enabled=iceberg_cfg.get("enabled", True),
-                snapshot_retention_days=iceberg_cfg["snapshot_retention_days"],
-                orphan_retention_days=iceberg_cfg["orphan_retention_days"],
-                optimize_after_every_n_runs=iceberg_cfg["optimize_after_every_n_runs"],
-                analyze_after_every_n_runs=iceberg_cfg["analyze_after_every_n_runs"],
+                enabled=iceberg_cfg.get("enabled", _d["enabled"].default),
+                snapshot_retention_days=iceberg_cfg.get(
+                    "snapshot_retention_days",
+                    _d["snapshot_retention_days"].default,
+                ),
+                orphan_retention_days=iceberg_cfg.get(
+                    "orphan_retention_days",
+                    _d["orphan_retention_days"].default,
+                ),
+                optimize_after_every_n_runs=iceberg_cfg.get(
+                    "optimize_after_every_n_runs",
+                    _d["optimize_after_every_n_runs"].default,
+                ),
+                analyze_after_every_n_runs=iceberg_cfg.get(
+                    "analyze_after_every_n_runs",
+                    _d["analyze_after_every_n_runs"].default,
+                ),
             )
         )
 
