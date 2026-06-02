@@ -9,5 +9,5 @@ attributes:
       group_name: ingestion
       key: "{{ resource.name }}"
       key_prefix: "ol_warehouse_raw_data"
-      description: "Raw MIT Professional Education courses ingested from the MIT PE\
-        \ feeds API."
+      description: "Raw MIT Professional Education courses and programs ingested from\
+        \ the MIT PE feeds API."

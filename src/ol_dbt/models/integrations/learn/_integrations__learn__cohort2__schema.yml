@@ -1,0 +1,155 @@
+---
+# MIT Learn integration layer — Cohort 2 REST API sources
+# Sits above marts, exposes stable application-level contracts for ETL consumption.
+# Naming: integrations__learn__<source>_<entity>
+# See: docs/learn_marts_contract.md for the full schema contract.
+
+version: 2
+
+models:
+- name: integrations__learn__mit_climate_articles
+  description: >
+    MIT Climate Portal articles (Explainers + Ask MIT Climate) exposed for
+    MIT Learn's ETL. One row per article, identified by uuid.
+    Sourced from stg__mit_climate__api__articles via the mit_climate dlt pipeline.
+  columns:
+  - name: readable_id
+    description: Article UUID from the MIT Climate API. Used for upsert matching.
+    tests: [not_null, unique]
+  - name: title
+    description: Article title.
+    tests: [not_null]
+  - name: last_modified
+    description: >
+      ISO-8601 timestamp derived from the article's created date.
+      Falls back to current_timestamp when the created field is absent.
+    tests: [not_null]
+  - name: etl_source
+    description: Always 'mit_climate'.
+    tests: [not_null]
+  - name: url
+    description: Absolute URL for the article (base URL prepended to the relative
+      path).
+  - name: image_url
+    description: Absolute URL for the article cover image, or NULL if absent.
+  - name: topics
+    description: Comma-separated topic labels (normalized from pipe-separated raw
+      field).
+  - name: feed_type
+    description: Source feed — 'explainer' or 'ask_mit_climate'.
+
+- name: integrations__learn__mitpe_courses
+  description: >
+    MIT Professional Education courses exposed for MIT Learn's ETL.
+    One row per course. Sourced from stg__mitpe__api__courses via the mitpe
+    dlt pipeline.
+    NOTE: MIT PE has no last_modified timestamp in source data; last_modified
+    is set to current_timestamp as a conservative fallback.
+  columns:
+  - name: readable_id
+    description: >
+      MIT PE course URL path (used as stable identifier; MIT PE has no UUID).
+      Used for upsert matching.
+    tests: [not_null, unique]
+  - name: title
+    description: Course title.
+    tests: [not_null]
+  - name: last_modified
+    description: >
+      current_timestamp — MIT PE feeds API does not expose a modification
+      timestamp.
+    tests: [not_null]
+  - name: etl_source
+    description: Always 'mitpe'.
+    tests: [not_null]
+  - name: resource_type
+    description: Always 'course'.
+
+- name: integrations__learn__mitpe_programs
+  description: >
+    MIT Professional Education programs exposed for MIT Learn's ETL.
+    One row per program. Sourced from stg__mitpe__api__programs via the mitpe
+    dlt pipeline.
+    NOTE: MIT PE has no last_modified timestamp in source data; last_modified
+    is set to current_timestamp as a conservative fallback.
+  columns:
+  - name: readable_id
+    description: >
+      MIT PE program URL path (used as stable identifier; MIT PE has no UUID).
+      Used for upsert matching.
+    tests: [not_null, unique]
+  - name: title
+    description: Program title.
+    tests: [not_null]
+  - name: last_modified
+    description: current_timestamp — MIT PE feeds API does not expose a modification
+      timestamp.
+    tests: [not_null]
+  - name: etl_source
+    description: Always 'mitpe'.
+    tests: [not_null]
+  - name: resource_type
+    description: Always 'program'.
+
+- name: integrations__learn__oll_courses
+  description: >
+    Open Learning Library courses exposed for MIT Learn's ETL. OCW-origin
+    rows are excluded (handled by integrations__learn__ocw_courses).
+    One row per non-OCW course. Sourced from stg__oll__google_sheets__courses
+    via the oll dlt pipeline.
+    NOTE: OLL has no last_modified timestamp; current_timestamp is used.
+  columns:
+  - name: readable_id
+    description: >
+      Derived as MITx+{course_code}, matching the convention in
+      learning_resources/etl/oll.py. Used for upsert matching.
+    tests: [not_null, unique]
+  - name: title
+    description: Course title.
+    tests: [not_null]
+  - name: last_modified
+    description: current_timestamp — OLL spreadsheet has no modification timestamp.
+    tests: [not_null]
+  - name: etl_source
+    description: Always 'oll'.
+    tests: [not_null]
+  - name: runs
+    description: >
+      Single run record in pipe-delimited format: run_id|||true
+      (no start/end dates available in the OLL spreadsheet).
+
+- name: integrations__learn__mit_edx_programs
+  description: >
+    MIT-authored edX.org programs exposed for MIT Learn's ETL. Pre-filtered
+    to active, non-MicroMasters, MIT-org programs by the dlt pipeline.
+    One row per program. Sourced from stg__edxorg__discovery__api__programs
+    via the mit_edx_programs dlt pipeline.
+    NOTE: The edX Programs API does not expose a program-level last_modified
+    timestamp; current_timestamp is used as a conservative fallback.
+    NOTE: topics_json and courses_json are JSON array strings that consumers
+    must parse to extract individual values.
+  columns:
+  - name: readable_id
+    description: edX.org program UUID. Used for upsert matching.
+    tests: [not_null, unique]
+  - name: title
+    description: Program title.
+    tests: [not_null]
+  - name: last_modified
+    description: >
+      current_timestamp — the edX Programs API does not expose a
+      program-level modification timestamp.
+    tests: [not_null]
+  - name: etl_source
+    description: Always 'mit_edx'.
+    tests: [not_null]
+  - name: topics_json
+    description: >
+      JSON array string of subject objects: [{"name": "Engineering"}, ...].
+      Consumers must parse this JSON to extract topic names.
+  - name: courses_json
+    description: >
+      JSON array string of course objects: [{"key": "MITx/6.00.1x"}, ...].
+      Consumers must parse this JSON to extract course readable_ids.
+  - name: resource_type
+    description: Always 'program'.

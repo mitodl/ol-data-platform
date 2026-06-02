@@ -1,23 +1,29 @@
 """
 MIT edX (MITx on edX.org) programs webhook delivery asset.
 
-Fetches active MIT-authored programs from the edX.org Programs API using
-OAuth2 client credentials, transforms them into MIT Learn's
-LearningResource payload shape, and delivers them as a single signed
-webhook POST batch.
+Reads pre-transformed program records from the
+``integrations__learn__mit_edx_programs`` Iceberg table (produced by dbt from
+the mit_edx_programs dlt pipeline) and delivers them to MIT Learn via a single
+signed webhook POST.
 
-MicroMasters programs are excluded — they are handled by Cohort 1's
-Trino-pull path via the integrations__learn__micromasters_programs dbt model.
+MicroMasters programs are excluded — the dlt pipeline filters them at ingest
+time and they are handled separately by the Cohort 1 Trino-pull path via
+integrations__learn__micromasters_programs.
 
-Scheduling: daily at 06:30 UTC. Configured in definitions.py.
+Data flow:
+    raw__edxorg__discovery__api__programs (Iceberg, via dlt)
+        → integrations__learn__mit_edx_programs (dbt)
+            → MIT Learn webhook (this asset)
+
+Scheduling: daily at 06:45 UTC. Configured in definitions.py.
 """
 
+import json
 import logging
-import os
 from typing import Any, cast
 
 import httpx2 as httpx
-import requests
+import polars as pl
 from dagster import (
     AssetExecutionContext,
     AssetKey,
@@ -25,97 +31,62 @@ from dagster import (
     RetryPolicy,
     asset,
 )
+from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
 log = logging.getLogger(__name__)
 
-# MIT owner keys — kept in sync with learning_resources/etl/openedx.py
-_MIT_OWNER_KEYS = frozenset(
-    [
-        "MITx",
-        "MITx_PRO",
-        "mitx",
-        "mitxpro",
-        "MITProfessionalX",
-        "MITgcfx",
-        "MITOCWx",
-        "MITLinkedInDataScienceProf",
-        "MITx_CMS",
-    ]
+_GLUE_DB = (
+    f"ol_warehouse_{DAGSTER_ENV}_integrations"
+    if DAGSTER_ENV in ("qa", "production")
+    else "ol_warehouse_production_integrations"
 )
+_TABLE = "integrations__learn__mit_edx_programs"
 
 
-def _get_oauth_token(token_url: str, client_id: str, client_secret: str) -> str:
-    """Obtain an OAuth2 client credentials access token from edX."""
-    resp = requests.post(
-        token_url,
-        data={
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "token_type": "jwt",
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json()["access_token"]
+def _parse_topics(topics_json: str | None) -> list[dict[str, str]]:
+    """Parse the subjects JSON array into MIT Learn topic dicts."""
+    if not topics_json:
+        return []
+    try:
+        subjects = json.loads(topics_json)
+        return [{"name": s["name"]} for s in subjects if s.get("name")]
+    except (json.JSONDecodeError, TypeError):
+        log.warning("Could not parse topics_json: %r", topics_json)
+        return []
 
 
-def _fetch_all_programs(api_url: str, token: str) -> list[dict[str, Any]]:
-    """Fetch all programs from the edX Programs API, following next-page links."""
-    headers = {"Authorization": f"JWT {token}"}
-    programs: list[dict[str, Any]] = []
-    url: str | None = api_url
-    while url:
-        resp = requests.get(url, headers=headers, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        programs.extend(data.get("results", []))
-        url = data.get("next")
-    return programs
+def _parse_courses(courses_json: str | None) -> list[dict[str, str]]:
+    """Parse the courses JSON array into MIT Learn course readable_id dicts."""
+    if not courses_json:
+        return []
+    try:
+        courses = json.loads(courses_json)
+        return [{"readable_id": c["key"]} for c in courses if c.get("key")]
+    except (json.JSONDecodeError, TypeError):
+        log.warning("Could not parse courses_json: %r", courses_json)
+        return []
 
 
-def _is_mit_program(program: dict[str, Any]) -> bool:
-    """Return True if the program is a live, non-MicroMasters MIT program."""
-    orgs = program.get("authoring_organizations") or []
-    return (
-        any(org.get("key") in _MIT_OWNER_KEYS for org in orgs)
-        and "micromasters" not in (program.get("type") or "").lower()
-        and program.get("status") == "active"
-    )
+def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
+    """Map an integrations table row to the MIT Learn LearningResource shape."""
+    image_url = row.get("image_url")
 
-
-def _transform_program(program: dict[str, Any]) -> dict[str, Any]:
-    """Transform a raw edX program dict into MIT Learn's resource shape."""
-    courses = [
-        {"readable_id": c["key"]}
-        for c in (program.get("courses") or [])
-        if c.get("key")
-    ]
-    banner_image = program.get("banner_image")
-    image_url = program.get("card_image_url") or (
-        banner_image.get("large") if isinstance(banner_image, dict) else None
-    )
     return {
-        "readable_id": program.get("uuid"),
-        "title": program.get("title", ""),
-        "url": program.get("marketing_url"),
-        "description": program.get("subtitle") or program.get("overview"),
-        "image": {"url": image_url, "alt": program.get("title", "")}
-        if image_url
-        else None,
-        "topics": [
-            {"name": s["name"]}
-            for s in (program.get("subjects") or [])
-            if s.get("name")
-        ],
-        "published": program.get("status") == "active",
+        "readable_id": row["readable_id"],
+        "title": row["title"],
+        "url": row.get("url"),
+        "description": row.get("description"),
+        "image": {"url": image_url, "alt": row.get("title", "")} if image_url else None,
+        "topics": _parse_topics(row.get("topics_json")),
+        "published": True,
         "etl_source": "mit_edx",
         "offered_by": {"code": "mitx"},
         "platform": "edxorg",
         "resource_type": "program",
-        "courses": courses,
+        "courses": _parse_courses(row.get("courses_json")),
     }
 
 
@@ -123,10 +94,12 @@ def _transform_program(program: dict[str, Any]) -> dict[str, Any]:
     key=AssetKey(["mit_learn_delivery", "mit_edx_programs_webhook"]),
     group_name="mit_learn_delivery",
     description=(
-        "Fetch active MIT-authored programs from the edX.org Programs API, "
-        "transform to MIT Learn resource shape, and POST as a signed webhook batch. "
-        "Excludes MicroMasters (handled via Trino-pull in Cohort 1)."
+        "Read active MIT-authored edX.org programs from the "
+        "integrations__learn__mit_edx_programs Iceberg table and POST as a "
+        "signed webhook batch to MIT Learn. Excludes MicroMasters (handled via "
+        "the Cohort 1 Trino-pull path)."
     ),
+    deps=[AssetKey(["integrations", "learn", "integrations__learn__mit_edx_programs"])],
     retry_policy=RetryPolicy(max_retries=3, delay=10.0),
 )
 def mit_edx_programs_webhook(
@@ -134,27 +107,14 @@ def mit_edx_programs_webhook(
     learn_api: ApiClientFactory,
 ) -> dict[str, Any]:
     """Deliver MIT edX programs to MIT Learn via signed webhook."""
-    client_id = os.environ["EDX_API_CLIENT_ID"]
-    client_secret = os.environ["EDX_API_CLIENT_SECRET"]
-    token_url = os.environ["EDX_API_ACCESS_TOKEN_URL"]
-    programs_api_url = os.environ["EDX_PROGRAMS_API_URL"]
+    context.log.info("Reading %s from Glue database %s", _TABLE, _GLUE_DB)
+    df: pl.DataFrame = get_dbt_model_as_dataframe(
+        database_name=_GLUE_DB,
+        table_name=_TABLE,
+    ).collect()
+    context.log.info("Loaded %d MIT edX programs from Iceberg", len(df))
 
-    context.log.info("Obtaining edX OAuth2 token from %s", token_url)
-    token = _get_oauth_token(token_url, client_id, client_secret)
-
-    context.log.info("Fetching programs from %s", programs_api_url)
-    all_programs = _fetch_all_programs(programs_api_url, token)
-    context.log.info("Fetched %d total programs from edX", len(all_programs))
-
-    mit_programs = [p for p in all_programs if _is_mit_program(p)]
-    context.log.info(
-        "Filtered to %d MIT-authored active non-MicroMasters programs",
-        len(mit_programs),
-    )
-
-    resources = [
-        r for p in mit_programs if (r := _transform_program(p)).get("readable_id")
-    ]
+    resources = [_row_to_resource(row) for row in df.iter_rows(named=True)]
 
     context.log.info(
         "Delivering %d MIT edX programs to MIT Learn webhook", len(resources)
@@ -173,14 +133,9 @@ def mit_edx_programs_webhook(
 
     context.add_output_metadata(
         {
-            "total_fetched": len(all_programs),
-            "mit_programs_count": len(mit_programs),
             "delivered_count": len(resources),
             "webhook_status": "success",
             "response": MetadataValue.json(response),
         }
     )
-    return {
-        "delivered_count": len(resources),
-        "webhook_status": "success",
-    }
+    return {"delivered_count": len(resources), "webhook_status": "success"}

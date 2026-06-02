@@ -1,0 +1,39 @@
+---
+version: 2
+
+sources:
+- name: ol_warehouse_raw_data
+  loader: dlt
+  database: '{{ target.database }}'
+  schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
+  tables:
+  - name: raw__oll__google_sheets__courses
+    description: >
+      Open Learning Library course metadata ingested from a public Google Sheets
+      CSV export via the oll dlt pipeline. Full replace on every run; primary
+      key is the composite (oll_course, semester, year).
+    columns:
+    - name: oll_course
+      description: str, OLL course code (e.g. "6.00.1x") — from "OLL Course" CSV header
+    - name: title
+      description: str, course title — from "Title" CSV header
+    - name: semester
+      description: str, semester label (e.g. "Fall") — from "Semester" CSV header
+    - name: year
+      description: str, year (e.g. "2020") — from "Year" CSV header
+    - name: url
+      description: str, public URL for the OLL course — from "URL" CSV header
+    - name: description
+      description: str, course description — from "Description" CSV header
+    - name: course_image_url_flat
+      description: str, flat image URL — from "Course Image URL Flat" CSV header
+    - name: run_id
+      description: str, optional run identifier — from "Run ID" CSV header
+    - name: duration
+      description: str, duration in weeks (decimal, e.g. "14") — from "Duration" CSV
+        header
+    - name: subjects
+      description: str, pipe-separated subject labels — from "Subjects" CSV header
+    - name: offered_by
+      description: str, offering institution (e.g. "MITx", "OCW") — from "Offered
+        by" CSV header

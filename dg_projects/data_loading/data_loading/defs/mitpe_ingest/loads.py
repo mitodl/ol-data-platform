@@ -1,12 +1,13 @@
 """
-MIT Professional Education (MIT PE) course ingestion via dlt.
+MIT Professional Education (MIT PE) course and program ingestion via dlt.
 
-Fetches courses from the MIT PE feeds API. The API is page-based:
-incrementing ``page`` from 0 until an empty array is returned.
+Fetches courses and programs from the MIT PE feeds API. Both feeds are
+page-based: incrementing ``page`` from 0 until an empty array is returned.
 Records are upserted by a composite key so repeated runs are idempotent.
 
 Data flow:
-    MITPE_BASE_URL/feeds/courses/  ─► raw__mitpe__api__courses (Iceberg)
+    MITPE_BASE_URL/feeds/courses/   ─► raw__mitpe__api__courses  (Iceberg)
+    MITPE_BASE_URL/feeds/programs/  ─► raw__mitpe__api__programs (Iceberg)
 
 Usage (standalone):
     python -m data_loading.defs.mitpe_ingest.loads
@@ -36,9 +37,9 @@ def mitpe_source(
     base_url: str = _MITPE_BASE_URL_DEFAULT,
 ) -> Generator[Any, None, None]:
     """
-    Load MIT Professional Education courses from the feeds API.
+    Load MIT Professional Education courses and programs from the feeds API.
 
-    The API paginates via a ``page`` query parameter (0-indexed). Fetching
+    Both feeds paginate via a ``page`` query parameter (0-indexed). Fetching
     stops when the response is an empty array.
 
     Args:
@@ -68,7 +69,29 @@ def mitpe_source(
             yield from records
             page += 1
 
+    @dlt.resource(
+        name="raw__mitpe__api__programs",
+        primary_key=["title", "url"],
+        write_disposition="replace",
+        table_format=_table_format,
+    )
+    def programs() -> Generator[dict[str, Any], None, None]:
+        """Yield all MIT PE programs, fetching pages until the API returns empty."""
+        feed_url = urljoin(base_url, "/feeds/programs/")
+        page = 0
+        while True:
+            logger.info("Fetching MIT PE programs page %d from %s", page, feed_url)
+            resp = requests.get(feed_url, params={"page": page}, timeout=30)
+            resp.raise_for_status()
+            records = resp.json()
+            if not records:
+                logger.info("MIT PE programs: reached empty page at page=%d", page)
+                break
+            yield from records
+            page += 1
+
     yield courses
+    yield programs
 
 
 # ---------------------------------------------------------------------------

@@ -1211,3 +1211,43 @@ sources:
     - name: username
       data_type: varchar
       description: username of the learner on edX.org
+
+  - name: raw__edxorg__discovery__api__programs
+    description: >
+      MIT-authored active non-MicroMasters programs ingested from the edX.org
+      Programs Discovery API via OAuth2 client credentials. Loaded by the
+      mit_edx_programs dlt pipeline. Full replace on every run; primary key
+      is uuid. Pre-filtered to MIT owner keys and active status by the dlt
+      source before writing.
+    columns:
+    - name: uuid
+      description: str, edX.org program UUID (primary key)
+    - name: title
+      description: str, program title
+    - name: subtitle
+      description: str, short subtitle / tagline
+    - name: overview
+      description: str, full HTML overview of the program
+    - name: marketing_url
+      description: str, public marketing URL for the program
+    - name: status
+      description: str, program status (always "active" for rows in this table)
+    - name: type
+      description: str, program type (e.g. "Professional Certificate", "XSeries")
+    - name: authoring_organizations
+      description: >
+        json, array of authoring organization objects with keys: key, name, uuid,
+        logo_image_url, marketing_url. Stored as a JSON string by dlt.
+    - name: subjects
+      description: >
+        json, array of subject objects with key: name. Stored as a JSON string
+        by dlt. Example: [{"name": "Engineering"}, {"name": "Computer Science"}]
+    - name: courses
+      description: >
+        json, array of course objects with key: key (edX course key). Stored
+        as a JSON string by dlt. Example: [{"key": "MITx/6.00.1x"}]
+    - name: card_image_url
+      description: str, URL for the program card thumbnail image
+    - name: banner_image__large
+      description: str, URL for the large program banner image (dlt-flattened from
+        banner_image.large)

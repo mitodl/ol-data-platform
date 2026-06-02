@@ -1,24 +1,25 @@
 """
 MIT Professional Education (MIT PE) webhook delivery asset.
 
-Fetches courses and programs from the MIT PE feeds API, transforms them
-into MIT Learn's LearningResource payload shape, and delivers both
-catalogs as signed webhook POST batches.
+Reads pre-transformed course and program records from the
+``integrations__learn__mitpe_courses`` and ``integrations__learn__mitpe_programs``
+Iceberg tables (produced by dbt from the mitpe dlt pipeline) and delivers them
+to MIT Learn via signed webhook POST batches.
 
-MIT PE's API paginates via a ``page`` query parameter (0-indexed);
-fetching stops when an empty array is returned.
+Data flow:
+    raw__mitpe__api__courses  (Iceberg, via dlt) ─┐
+                                                  ├─► integrations__learn__mitpe_* (dbt)
+    raw__mitpe__api__programs (Iceberg, via dlt) ─┘
+        → MIT Learn webhook (this asset)
 
 Scheduling: daily at 06:15 UTC. Configured in definitions.py.
 """
 
-import html
 import logging
-import os
 from typing import Any, cast
-from urllib.parse import urljoin
 
 import httpx2 as httpx
-import requests
+import polars as pl
 from dagster import (
     AssetExecutionContext,
     AssetKey,
@@ -26,80 +27,42 @@ from dagster import (
     RetryPolicy,
     asset,
 )
+from ol_orchestrate.lib.constants import DAGSTER_ENV
+from ol_orchestrate.lib.glue_helper import get_dbt_model_as_dataframe
 from ol_orchestrate.resources.api_client_factory import ApiClientFactory
 from ol_orchestrate.resources.learn_api import MITLearnApiClient
 
 log = logging.getLogger(__name__)
 
-_MITPE_BASE_URL_DEFAULT = "https://professional.mit.edu"
+_GLUE_DB = (
+    f"ol_warehouse_{DAGSTER_ENV}_integrations"
+    if DAGSTER_ENV in ("qa", "production")
+    else "ol_warehouse_production_integrations"
+)
+_COURSES_TABLE = "integrations__learn__mitpe_courses"
+_PROGRAMS_TABLE = "integrations__learn__mitpe_programs"
 
 
-def _fetch_all_pages(url: str) -> list[dict[str, Any]]:
-    """Fetch all pages from a MIT PE paginated endpoint."""
-    results: list[dict[str, Any]] = []
-    page = 0
-    while True:
-        resp = requests.get(url, params={"page": page}, timeout=30)
-        resp.raise_for_status()
-        page_data = resp.json()
-        if not page_data:
-            break
-        results.extend(page_data)
-        page += 1
-    return results
+def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
+    """Map an integrations table row to the MIT Learn LearningResource shape."""
+    image_url = row.get("image_url")
+    image_alt = row.get("image_alt") or ""
+    topics_raw = row.get("topics") or ""
+    topics = [{"name": t.strip()} for t in topics_raw.split(",") if t.strip()]
 
-
-def _parse_topics(resource: dict[str, Any]) -> list[dict[str, str]]:
-    """Parse pipe-separated topic strings into dicts."""
-    raw = resource.get("topics") or ""
-    return [{"name": html.unescape(t)} for t in raw.split("|") if t.strip()]
-
-
-def _parse_image(resource: dict[str, Any], base_url: str) -> dict[str, str] | None:
-    """Build image dict from MIT PE image fields."""
-    img_src = resource.get("image__src")
-    if not img_src:
-        return None
     return {
-        "url": urljoin(base_url, img_src),
-        "alt": resource.get("image__alt", ""),
-    }
-
-
-def _transform_course(course: dict[str, Any], base_url: str) -> dict[str, Any]:
-    """Transform a raw MIT PE course dict into MIT Learn's resource shape."""
-    return {
-        "readable_id": course.get("readable_id") or course.get("url"),
-        "title": html.unescape(course.get("title") or ""),
-        "url": urljoin(base_url, course.get("url", "")),
-        "description": course.get("description"),
-        "image": _parse_image(course, base_url),
-        "topics": _parse_topics(course),
+        "readable_id": row["readable_id"],
+        "title": row["title"],
+        "url": row.get("url"),
+        "description": row.get("description"),
+        "image": {"url": image_url, "alt": image_alt} if image_url else None,
+        "topics": topics,
         "published": True,
         "professional": True,
         "etl_source": "mitpe",
         "offered_by": {"code": "mitpe"},
         "platform": "mitpe",
-        "resource_type": "course",
-    }
-
-
-def _transform_program(program: dict[str, Any], base_url: str) -> dict[str, Any]:
-    """Transform a raw MIT PE program dict into MIT Learn's resource shape."""
-    return {
-        "readable_id": program.get("readable_id") or program.get("url"),
-        "title": html.unescape(program.get("title") or ""),
-        "url": urljoin(base_url, program.get("url", "")),
-        "description": program.get("description"),
-        "image": _parse_image(program, base_url),
-        "topics": _parse_topics(program),
-        "published": True,
-        "professional": True,
-        "etl_source": "mitpe",
-        "offered_by": {"code": "mitpe"},
-        "platform": "mitpe",
-        "resource_type": "program",
-        "courses": [],
+        "resource_type": row.get("resource_type", "course"),
     }
 
 
@@ -107,9 +70,14 @@ def _transform_program(program: dict[str, Any], base_url: str) -> dict[str, Any]
     key=AssetKey(["mit_learn_delivery", "mitpe_webhook"]),
     group_name="mit_learn_delivery",
     description=(
-        "Fetch all MIT Professional Education courses and programs, "
-        "transform to MIT Learn resource shape, and POST as signed webhook batches."
+        "Read MIT Professional Education courses and programs from the "
+        "integrations__learn__mitpe_* Iceberg tables and POST as signed webhook "
+        "batches to MIT Learn."
     ),
+    deps=[
+        AssetKey(["integrations", "learn", "integrations__learn__mitpe_courses"]),
+        AssetKey(["integrations", "learn", "integrations__learn__mitpe_programs"]),
+    ],
     retry_policy=RetryPolicy(max_retries=3, delay=5.0),
 )
 def mitpe_webhook(
@@ -117,35 +85,29 @@ def mitpe_webhook(
     learn_api: ApiClientFactory,
 ) -> dict[str, Any]:
     """Deliver MIT PE courses and programs to MIT Learn via signed webhooks."""
-    base_url = os.environ.get("MITPE_BASE_URL", _MITPE_BASE_URL_DEFAULT)
-    courses_url = urljoin(base_url, "/feeds/courses/")
-    programs_url = urljoin(base_url, "/feeds/programs/")
+    context.log.info("Reading MIT PE tables from Glue database %s", _GLUE_DB)
 
-    context.log.info("Fetching MIT PE courses from %s", courses_url)
-    raw_courses = _fetch_all_pages(courses_url)
-    context.log.info("Fetched %d MIT PE courses", len(raw_courses))
+    courses_df: pl.DataFrame = get_dbt_model_as_dataframe(
+        database_name=_GLUE_DB, table_name=_COURSES_TABLE
+    ).collect()
+    context.log.info("Loaded %d MIT PE courses from Iceberg", len(courses_df))
 
-    context.log.info("Fetching MIT PE programs from %s", programs_url)
-    raw_programs = _fetch_all_pages(programs_url)
-    context.log.info("Fetched %d MIT PE programs", len(raw_programs))
+    programs_df: pl.DataFrame = get_dbt_model_as_dataframe(
+        database_name=_GLUE_DB, table_name=_PROGRAMS_TABLE
+    ).collect()
+    context.log.info("Loaded %d MIT PE programs from Iceberg", len(programs_df))
 
-    course_resources = [
-        r
-        for c in raw_courses
-        if (r := _transform_course(c, base_url)).get("readable_id")
+    all_resources = [
+        _row_to_resource(row)
+        for df in (courses_df, programs_df)
+        for row in df.iter_rows(named=True)
     ]
-    program_resources = [
-        r
-        for p in raw_programs
-        if (r := _transform_program(p, base_url)).get("readable_id")
-    ]
-    all_resources = course_resources + program_resources
 
     context.log.info(
         "Delivering %d MIT PE resources (%d courses, %d programs) to MIT Learn",
         len(all_resources),
-        len(course_resources),
-        len(program_resources),
+        len(courses_df),
+        len(programs_df),
     )
     try:
         response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
@@ -158,15 +120,15 @@ def mitpe_webhook(
 
     context.add_output_metadata(
         {
-            "course_count": len(course_resources),
-            "program_count": len(program_resources),
+            "course_count": len(courses_df),
+            "program_count": len(programs_df),
             "total_resource_count": len(all_resources),
             "webhook_status": "success",
             "response": MetadataValue.json(response),
         }
     )
     return {
-        "course_count": len(course_resources),
-        "program_count": len(program_resources),
+        "course_count": len(courses_df),
+        "program_count": len(programs_df),
         "webhook_status": "success",
     }
