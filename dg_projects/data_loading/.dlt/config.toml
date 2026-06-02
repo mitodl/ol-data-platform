@@ -6,6 +6,17 @@
 log_level = "INFO"
 dlthub_telemetry = true
 
+# Limit extraction parallelism to 1 worker.
+#
+# dlt's default workers=5 launches concurrent threads that all share a single
+# non-thread-safe injectable-context dict.  When threads race to enter/exit
+# their own context managers the dict ends up in an inconsistent state and
+# dlt raises ContainerInjectableContextMangled.  Using a single worker makes
+# the context stack strictly sequential and eliminates the race.
+[extract]
+workers = 1
+max_parallel_items = 20
+
 # EdX.org S3 Source Configuration
 # Path matches dlt's lookup: sources.<module_name>.<source_name>.<param>
 [sources.loads.edxorg_s3_source]
