@@ -46,10 +46,6 @@ class MITLearnApiClient(BaseApiClient):
     def notify_course_export(self, data: dict[str, Any]) -> dict[str, Any]:
         return self._post_signed_webhook("/api/v1/webhooks/content_files/", data)
 
-    def notify_video_shorts(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Send webhook notification for Video Shorts processing."""
-        return self._post_signed_webhook("/api/v1/webhooks/video_shorts/", data)
-
     def notify_ovs_video(self, data: dict[str, Any]) -> dict[str, Any]:
         """Send webhook notification for an OVS include_in_learn video."""
         return self._post_signed_webhook("/api/v1/webhooks/ovs_videos/", data)
