@@ -106,6 +106,8 @@ models:
     description: int, count of discussion posts created
   - name: posts_replied
     description: int, count of discussion posts replied to
+  - name: num_of_rewatches
+    description: int, count of video replays
   - name: video_name
     description: str, name of the video within the course
   - name: page_viewed_title

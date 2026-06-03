@@ -23,6 +23,43 @@ with video_pre_query as (
         , video_block_fk
 )
 
+, video_rewatches as (
+    select
+        user.email
+        , video_events.courserun_readable_id
+        , video_events.video_block_fk
+        , cast(video_events.event_timestamp as date) as activity_date
+        , lag(cast(video_events.event_timestamp as date)) over (partition by user.email
+        , video_events.courserun_readable_id
+        , video_events.video_block_fk order by cast(video_events.event_timestamp as date)) AS PreviousDATE
+    from ol_warehouse_production_dimensional.tfact_video_events as video_events
+    inner join ol_warehouse_production_dimensional.dim_user as user
+        on video_events.user_fk = user.user_pk
+    where
+        video_events.event_type in (
+            'play_video'
+        )
+    group by
+        user.email
+        , video_events.courserun_readable_id
+        , video_events.video_block_fk
+        , cast(video_events.event_timestamp as date)
+)
+
+, video_rewatch_final as (
+    select
+        email
+        , courserun_readable_id
+        , video_block_fk
+        , count(*) as num_of_rewatches
+    from video_rewatches
+    where PreviousDATE is not null
+    group by
+        email
+        , courserun_readable_id
+        , video_block_fk
+)
+
 , discuss_table as (
     select
         a.platform
@@ -136,6 +173,7 @@ with video_pre_query as (
         )
             as estimated_time_played
         , sum(a.video_duration) as video_duration
+        , sum(num_of_rewatches) as num_of_rewatches
     from video_pre_query as a
     inner join ol_warehouse_production_dimensional.dim_video as c
         on
@@ -171,6 +209,10 @@ with video_pre_query as (
             v.parent_block_id = unit.block_id
             and unit.is_latest = true
             and unit.block_category = 'vertical'
+    left join video_rewatch_final
+        on video_rewatch_final.email = coalesce(b.email, ob.email)
+        and video_rewatch_final.courserun_readable_id = a.courserun_readable_id
+        and video_rewatch_final.video_block_fk = a.video_block_fk
     group by
         a.platform
         , a.courserun_readable_id
@@ -294,6 +336,7 @@ with video_pre_query as (
         , video_views_table.unit_title
         , page_views_table.viewed_title as page_viewed_title
         , video_views_table.video_name
+        , video_views_table.num_of_rewatches
         , coalesce(video_views_table.platform, page_views_table.platform) as platform
         , coalesce(video_views_table.email, page_views_table.email) as email
         , coalesce(video_views_table.full_name, page_views_table.full_name) as full_name
@@ -327,6 +370,7 @@ with video_pre_query as (
         , problems_table.max_learner_grade
         , problems_table.min_learner_grade
         , page_and_video.video_name
+        , page_and_video.num_of_rewatches
         , page_and_video.page_viewed_title
         , problems_table.problem_name
         , coalesce(page_and_video.platform, problems_table.platform) as platform
@@ -362,6 +406,7 @@ select
     , page_video_problems.min_learner_grade
     , discuss_table.posts_created
     , discuss_table.posts_replied
+    , page_video_problems.num_of_rewatches
     , page_video_problems.video_name
     , page_video_problems.page_viewed_title
     , page_video_problems.problem_name
