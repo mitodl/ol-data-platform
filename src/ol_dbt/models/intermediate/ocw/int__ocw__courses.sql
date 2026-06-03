@@ -35,8 +35,8 @@ select
     , websitecontents.course_department_numbers
     , websitecontents.learning_resource_types as course_learning_resource_types
     , if(
-        websitecontents.course_image_src is not null
-        , concat('{{ var("ocw_production_url") }}', ltrim(websitecontents.course_image_src, '/'))
+        course_images.websitecontent_file is not null
+        , concat('{{ var("ocw_production_url") }}', ltrim(course_images.websitecontent_file, '/'))
         , null
     ) as course_image_url
 from websites
@@ -44,6 +44,9 @@ inner join websitecontents
     on websites.website_uuid = websitecontents.website_uuid
 inner join websitestarters
     on websites.websitestarter_id = websitestarters.websitestarter_id
+left join websitecontents as course_images
+    on websitecontents.website_uuid = course_images.website_uuid
+    and websitecontents.course_image_text_id = course_images.websitecontent_text_id
 --- the where clause ensure the records are OCW courses
 where
     websitecontents.websitecontent_type = 'sitemetadata'

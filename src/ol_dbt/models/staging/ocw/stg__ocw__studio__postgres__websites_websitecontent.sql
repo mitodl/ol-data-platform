@@ -26,26 +26,18 @@ with source as (
         , nullif({{ json_query_string('metadata', "'$.course_title'") }}, '') as course_title
         , nullif({{ json_query_string('metadata', "'$.term'") }}, '') as course_term
         , nullif({{ json_query_string('metadata', "'$.year'") }}, '') as course_year
-        -- convert to comma-separated list to be consistent with extra_course_numbers
-        , {{ array_join('cast(json_parse(json_query(metadata', "lax $.level") }}) as array (varchar)), ', ' --noqa
-        ) as course_level
-        , {{ array_join('cast(
-                json_parse(
-                    case
-                        when json_query(metadata', "lax $.learning_resource_types") }} = '[]' then null
-                        else nullif(json_query(metadata, 'lax $.learning_resource_types'), '')
-                    end
-                ) as array(varchar) --noqa
-            ), ', '
-        ) as learning_resource_types
-        , {{ array_join('cast(json_parse(json_query(metadata', "lax $.department_numbers") }}) as array (varchar)), ', ' --noqa
-        ) as course_department_numbers
+        -- convert JSON arrays to comma-separated strings using cross-db macros
+        , {{ array_join(json_extract_varchar_array('metadata', "'$.level'"), ', ') }} as course_level
+        , {{ array_join(json_extract_varchar_array('metadata', "'$.learning_resource_types'"), ', ') }} as learning_resource_types
+        , {{ array_join(json_extract_varchar_array('metadata', "'$.department_numbers'"), ', ') }} as course_department_numbers
         , nullif({{ json_query_string('metadata', "'$.primary_course_number'") }}, '') as course_primary_course_number
         , {{ json_query_string('metadata', "'$.extra_course_numbers'") }} as course_extra_course_numbers
-        , json_query(metadata, 'lax $.instructors.content') as course_instructor_uuids
-        , json_query(metadata, 'lax $.topics') as course_topics
-        , json_query(metadata, 'lax $.department_numbers') as course_department_numbers_json
-        , nullif({{ json_query_string('metadata', "'$.image_src'") }}, '') as course_image_src
+        , {{ json_extract_value('metadata', "'$.instructors.content'") }} as course_instructor_uuids
+        , {{ json_extract_value('metadata', "'$.topics'") }} as course_topics
+        , {{ json_extract_value('metadata', "'$.department_numbers'") }} as course_department_numbers_json
+        -- course_image is an object {content: <text_id>, website: <short_id>}; extract the text_id
+        -- to join against websitecontent for the image file path
+        , nullif({{ json_query_string('metadata', "'$.course_image.content'") }}, '') as course_image_text_id
         , {{ cast_timestamp_to_iso8601('deleted') }} as websitecontent_deleted_on
         , {{ cast_timestamp_to_iso8601('created_on') }} as websitecontent_created_on
         , {{ cast_timestamp_to_iso8601('updated_on') }} as websitecontent_updated_on
