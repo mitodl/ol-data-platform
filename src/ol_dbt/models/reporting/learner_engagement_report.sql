@@ -173,7 +173,7 @@ with video_pre_query as (
         )
             as estimated_time_played
         , sum(a.video_duration) as video_duration
-        , sum(num_of_rewatches) as num_of_rewatches
+        , coalesce(max(video_rewatch_final.num_of_rewatches), 0) as num_of_rewatches
     from video_pre_query as a
     inner join ol_warehouse_production_dimensional.dim_video as c
         on
