@@ -133,6 +133,64 @@ with combined_enrollments as (
     from missing_signatories_revision_mapping
 )
 
+, future_run_id_mapping as (
+    -- Map the known future edX.org runs (no certificate yet) to their MITx Online
+    -- counterparts by matching course number and run tag, ignoring org prefix differences
+    -- (e.g. MITx vs MITxT). edX.org format: org/course/run; MITx Online: course-v1:org+course+run.
+    select
+        {{ format_course_id('edxorg_runs.courserun_readable_id', false) }} as edxorg_courserun_readable_id
+        , mitxonline__course_runs.courserun_readable_id as mitxonline_courserun_readable_id
+    from edxorg_runs
+    inner join mitxonline__course_runs
+        on split(edxorg_runs.courserun_readable_id, '/')[2]
+            = split(mitxonline__course_runs.courserun_readable_id, '+')[2]
+        and split(edxorg_runs.courserun_readable_id, '/')[3]
+            = split(mitxonline__course_runs.courserun_readable_id, '+')[3]
+    where edxorg_runs.courserun_readable_id in (
+        'MITx/CTL.SC2x/2T2026',
+        'MITx/CTL.SC4x/2T2026',
+        'MITx/IDS.S24x/1T2027',
+        'MITx/15.763x/2T2026',
+        'MITx/2.830.1x/2T2026',
+        'MITx/2.830.2x/3T2026',
+        'MITx/2.961.1x/3T2026',
+        'MITx/2.961.2x/1T2027',
+        'MITx/2.854.2x/1T2027',
+        'MITx/6.431x/3T2026',
+        'MITx/18.6501x/3T2026'
+    )
+        and mitxonline__course_runs.courserun_platform = '{{ var("mitxonline") }}'
+)
+
+, product_versions as (
+    select version_id, version_object_id
+    from {{ ref('stg__mitxonline__app__postgres__reversion_version') }}
+    where contenttype_id in (
+        select contenttype_id
+        from {{ ref('stg__mitxonline__app__postgres__django_contenttype') }}
+        where contenttype_full_name = 'ecommerce_product'
+    )
+)
+
+, courserun_product_version as (
+    select
+        mitxonline_products.courserun_id
+        , min(product_versions.version_id) as product_version_id
+    from future_run_id_mapping
+    inner join {{ ref('int__mitxonline__ecommerce_product') }} as mitxonline_products
+        on future_run_id_mapping.mitxonline_courserun_readable_id = mitxonline_products.courserun_readable_id
+    inner join product_versions
+        on mitxonline_products.product_id = product_versions.version_object_id
+    group by mitxonline_products.courserun_id
+)
+
+, purchased_on_edx_discount as (
+    select discount_id
+    from {{ ref('int__mitxonline__ecommerce_discount') }}
+    where discount_code = 'purchased-on-edx'
+    limit 1
+)
+
 , mitxonline_enrollment as (
     select * from {{ ref('int__mitxonline__courserunenrollments') }}
 )
@@ -186,16 +244,31 @@ select
     , edxorg_enrollment.courseruncertificate_created_on
     , edx_to_mitxonline_certificate_revision.wagtailcore_revision_id as certificate_page_revision_id
     , edx_signatories.signatory_names
+    , case
+        when future_run_id_mapping.edxorg_courserun_readable_id is not null
+            then courserun_product_version.product_version_id
+    end as product_version_id
+    , case
+        when future_run_id_mapping.edxorg_courserun_readable_id is not null
+            then purchased_on_edx_discount.discount_id
+    end as discount_id
 from edxorg_enrollment
 left join edxorg_grade
     on edxorg_enrollment.user_id = edxorg_grade.user_id
     and edxorg_enrollment.courserun_readable_id = edxorg_grade.courserun_readable_id
+left join future_run_id_mapping
+    on edxorg_enrollment.courserun_readable_id = future_run_id_mapping.edxorg_courserun_readable_id
 left join mitxonline_enrollment
-    on
-        lower(edxorg_enrollment.user_email) = lower(mitxonline_enrollment.user_email)
-       and edxorg_enrollment.courserun_readable_id = mitxonline_enrollment.courserun_readable_id
+    on lower(edxorg_enrollment.user_email) = lower(mitxonline_enrollment.user_email)
+    and coalesce(
+        future_run_id_mapping.mitxonline_courserun_readable_id
+        , edxorg_enrollment.courserun_readable_id
+    ) = mitxonline_enrollment.courserun_readable_id
 left join mitxonline__course_runs
-    on edxorg_enrollment.courserun_readable_id = mitxonline__course_runs.courserun_readable_id
+    on coalesce(
+        future_run_id_mapping.mitxonline_courserun_readable_id
+        , edxorg_enrollment.courserun_readable_id
+    ) = mitxonline__course_runs.courserun_readable_id
 left join mitx__users
        on edxorg_enrollment.user_id = cast(mitx__users.user_edxorg_id as varchar)
 left join mitx__users as mitx_users_by_email
@@ -203,15 +276,24 @@ left join mitx__users as mitx_users_by_email
 left join mitxonline_enrollment as mitxonline_enrollment_by_userid
     on coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id)
         = mitxonline_enrollment_by_userid.user_id
-    and edxorg_enrollment.courserun_readable_id = mitxonline_enrollment_by_userid.courserun_readable_id
+    and coalesce(
+        future_run_id_mapping.mitxonline_courserun_readable_id
+        , edxorg_enrollment.courserun_readable_id
+    ) = mitxonline_enrollment_by_userid.courserun_readable_id
 left join edx_to_mitxonline_certificate_revision
     on edxorg_enrollment.courserun_readable_id = edx_to_mitxonline_certificate_revision.courserun_readable_id
 left join edx_signatories
     on edxorg_enrollment.courserun_readable_id = edx_signatories.courserun_readable_id
 left join retired_users
     on edxorg_enrollment.user_id = retired_users.user_id
+left join courserun_product_version
+    on mitxonline__course_runs.courserun_id = courserun_product_version.courserun_id
+cross join purchased_on_edx_discount
 where
-    edxorg_enrollment.courseruncertificate_created_on is not null
+    (
+        edxorg_enrollment.courseruncertificate_created_on is not null
+        or future_run_id_mapping.edxorg_courserun_readable_id is not null
+    )
     and mitxonline_enrollment.user_email is null
     and mitxonline_enrollment_by_userid.user_id is null
     and retired_users.user_id is null
