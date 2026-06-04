@@ -22,8 +22,6 @@ the ``DBT_TRINO_USERNAME`` / ``DBT_TRINO_PASSWORD`` environment variables so tha
 local development works without a Vault connection.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 from typing import Any
@@ -38,7 +36,7 @@ from ol_orchestrate.resources.secrets.vault import Vault
 log = logging.getLogger(__name__)
 
 
-class TrinoMaintenanceResource(ConfigurableResource):
+class TrinoMaintenanceResource(ConfigurableResource[None]):
     """Dagster resource for running Trino maintenance queries on Iceberg tables.
 
     Configure one instance per environment by keying off ``DAGSTER_ENV`` in
