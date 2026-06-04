@@ -40,6 +40,7 @@ select
     , time_commitment as cms_coursepage_time_commitment
     , catalog_details as cms_coursepage_catalog_details
     , external_marketing_url as cms_coursepage_external_marketing_url
+    , search_image_id as cms_coursepage_search_image_id
     , 'cms_coursepage' as cms_coursepage_model
 from most_recent_coursepage
 union all
@@ -53,6 +54,7 @@ select
     , most_recent_externalcoursepage.time_commitment as cms_coursepage_time_commitment
     , most_recent_externalcoursepage.catalog_details as cms_coursepage_catalog_details
     , most_recent_externalcoursepage.external_marketing_url as cms_coursepage_external_marketing_url
+    , most_recent_externalcoursepage.search_image_id as cms_coursepage_search_image_id
     , 'cms_externalcoursepage' as cms_coursepage_model
 
 from most_recent_externalcoursepage

@@ -1,31 +1,444 @@
 ---
 version: 2
-
 models:
-- name: stg__micromasters__app__postgres__ecommerce_redeemedcoupon
+- name: stg__micromasters__app__postgres__auth_user
   columns:
-  - name: redeemedcoupon_id
-    description: int, primary key representing a discount redemption
+  - name: user_id
+    description: int, sequential ID representing a user in MicroMasters
     tests:
     - unique
     - not_null
-  - name: redeemedcoupon_created_on
-    description: timestamp, specifying when the coupon was redeemed
+  - name: user_username
+    description: str, unique string to identify user
+    tests:
+    - unique
+    - not_null
+  - name: user_email
+    description: str, user email associated with user account (not unique)
     tests:
     - not_null
-  - name: redeemedcoupon_updated_on
-    description: timestamp, specifying when the coupon redemption was last updated
+  - name: user_is_active
+    description: boolean, indicate whether this user is active (use it to soft delete
+      account)
+  - name: user_joined_on
+    description: timestamp, specifying when a user account was initially created
+  - name: user_last_login
+    description: timestamp, specifying when a user last logged in
+- name: stg__micromasters__app__postgres__auth_usersocialauth
+  columns:
+  - name: user_auth_id
+    description: int, sequential ID representing a user social auth record in MicroMasters
     tests:
     - not_null
-  - name: coupon_id
-    description: int, foreign key for ecommerce_coupon
-  - name: order_id
-    description: int, foreign key for ecommerce_orders
+  - name: user_id
+    description: str, foreign key to auth_user representing a single user
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__micromasters__app__postgres__auth_user')
+          field: user_id
+  - name: user_auth_provider
+    description: str, social auth provider. It's either "edxorg" or "mitxonline"
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - edxorg
+          - mitxonline
+  - name: user_username
+    description: str, user name string to identify a user within a social auth provider
+    tests:
+    - not_null
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["order_id", "coupon_id"]
-
+        column_list:
+        - user_username
+        - user_auth_provider
+- name: stg__micromasters__app__postgres__cms_programpage
+  description: Wagtail CMS ProgramPage records for the MicroMasters application. Links
+    each program to its Wagtail page (for slug/URL) and stores thumbnail and background
+    image foreign keys.
+  columns:
+  - name: wagtail_page_id
+    description: int, FK to wagtailcore_page — the Wagtail page record for this program
+    tests:
+    - not_null
+    - unique
+  - name: program_id
+    description: int, FK to courses_program — the MicroMasters program
+    tests:
+    - not_null
+    - unique
+  - name: cms_programpage_thumbnail_image_id
+    description: int, FK to wagtailimages_image for the program thumbnail
+  - name: cms_programpage_background_image_id
+    description: int, FK to wagtailimages_image for the program hero background
+  - name: cms_programpage_description
+    description: str, program description rendered in the CMS
+- name: stg__micromasters__app__postgres__courses_course
+  columns:
+  - name: course_id
+    description: int, sequential ID representing a course in MicroMasters
+    tests:
+    - not_null
+    - unique
+  - name: course_title
+    description: str, title of the course
+    tests:
+    - not_null
+  - name: course_edx_key
+    description: str, edX key formatted as {org}+{course number}
+  - name: course_number
+    description: str, edX course number
+  - name: program_id
+    description: int, foreign key to courses_program
+    tests:
+    - relationships:
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_program')
+          field: program_id
+  - name: course_position_in_program
+    description: int, sequential number indicating the course position in a program
+    tests:
+    - not_null
+  - name: course_description
+    description: str, description of the course
+  - name: course_prerequisites
+    description: str, required courses as a prior condition before taking this course
+  - name: course_contact_email
+    description: str, email used to contact course team
+  - name: course_should_display_progress
+    description: boolean, indicating if "in progress" grades should be displayed for
+      the course
+    tests:
+    - not_null
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list:
+        - program_id
+        - course_position_in_program
+- name: stg__micromasters__app__postgres__courses_courserun
+  columns:
+  - name: courserun_id
+    description: int, primary key representing a course run
+    tests:
+    - not_null
+    - unique
+  - name: courserun_title
+    description: str, title of the course run
+    tests:
+    - not_null
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_course')
+          field: course_id
+  - name: courserun_readable_id
+    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag},
+      maybe blank
+  - name: courserun_edxorg_readable_id
+    description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
+      to match course in edxorg
+  - name: courserun_tag
+    description: str, string that identifies a single run in a course E.g. 1T2022
+  - name: courserun_enrollment_url
+    description: str, url to enroll in the course run
+  - name: courserun_is_discontinued
+    description: boolean, setting this to true discontinues the course run
+    tests:
+    - not_null
+  - name: courserun_prerequisites
+    description: str, prerequisites for the course
+  - name: courserun_platform
+    description: str, indicating the platform where this course runs on. It's either
+      mitxonline or edxorg.
+    tests:
+    - not_null
+  - name: courserun_start_on
+    description: timestamp, date and time when the run begins
+  - name: courserun_end_on
+    description: timestamp, date and time when the run ends
+  - name: courserun_enrollment_start_on
+    description: timestamp, date and time when enrollment starts
+  - name: courserun_enrollment_end_on
+    description: timestamp, date and time when enrollment ends
+  - name: courserun_grade_freeze_on
+    description: timestamp, date and time when the run freeze for grade
+  - name: courserun_upgrade_deadline
+    description: timestamp, date and time beyond which users can not enroll in paid
+      course mode
+- name: stg__micromasters__app__postgres__courses_electiveset
+  description: This represents the elective requirements for programs
+  columns:
+  - name: electiveset_id
+    description: int, sequential ID representing a elective requirement set for a
+      program in MicroMasters
+    tests:
+    - not_null
+    - unique
+  - name: electiveset_required_number
+    description: int, indicating the number of required courses from this elective
+      requirement set
+    tests:
+    - not_null
+  - name: program_id
+    description: int, foreign key to courses_program
+    tests:
+    - relationships:
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_program')
+          field: program_id
+  - name: electiveset_title
+    description: str, title of the elective requirement set
+    tests:
+    - not_null
+- name: stg__micromasters__app__postgres__courses_electiveset_to_course
+  description: this links a course to a elective set for programs
+  columns:
+  - name: electivesettocourse_id
+    description: int, sequential ID representing a course in a  set for a program
+      in MicroMasters
+  - name: electiveset_id
+    description: int, foreign key to courses_electivesset
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - relationships:
+        arguments:
+          to: ref('stg__micromasters__app__postgres__courses_course')
+          field: course_id
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list:
+        - course_id
+        - electiveset_id
+- name: stg__micromasters__app__postgres__courses_program
+  columns:
+  - name: program_id
+    description: int, sequential ID representing a program in MicroMasters
+    tests:
+    - not_null
+    - unique
+  - name: program_title
+    description: str, title of the program
+    tests:
+    - not_null
+  - name: program_description
+    description: str, description of the program
+  - name: program_num_required_courses
+    description: int, indicating the number of required courses to earn certificate
+    tests:
+    - not_null
+  - name: program_price
+    description: numeric, price of the program
+    tests:
+    - not_null
+  - name: program_ga_tracking_id
+    description: str, a unique tracking ID provided by Google Analytics used to track
+      the number of views to certain pages of MicroMasters
+    tests:
+    - not_null
+  - name: program_is_live
+    description: boolean, indicating whether program is available to users on MicroMasters
+      website
+    tests:
+    - not_null
+  - name: program_is_financial_aid_available
+    description: boolean, indicating if financial aid is available for the program
+    tests:
+    - not_null
+  - name: program_created_on
+    description: timestamp, specifying when a program was initially created
+  - name: program_updated_on
+    description: timestamp, specifying when a program was most recently updated
+- name: stg__micromasters__app__postgres__dashboard_programenrollment
+  columns:
+  - name: programenrollment_id
+    description: int, primary key representing a users program enrollment
+    tests:
+    - not_null
+  - name: user_id
+    description: int, foreign key for users_user
+    tests:
+    - not_null
+  - name: program_id
+    description: int, foreign key to courses_program
+    tests:
+    - not_null
+  - name: share_hash
+    description: str, share hash for the program enrollment
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list:
+        - user_id
+        - program_id
+- name: stg__micromasters__app__postgres__django_contenttype
+  columns:
+  - name: contenttype_id
+    description: int, sequential ID for the django model
+    tests:
+    - unique
+    - not_null
+  - name: contenttype_full_name
+    description: string, name for django model. A combination of the models name and
+      functional group
+    tests:
+    - unique
+    - not_null
+- name: stg__micromasters__app__postgres__ecommerce_coupon
+  columns:
+  - name: coupon_id
+    description: int, primary key representing a coupon
+    tests:
+    - unique
+    - not_null
+  - name: coupon_created_on
+    description: timestamp, specifying when the coupon was initially created
+    tests:
+    - not_null
+  - name: coupon_updated_on
+    description: timestamp, specifying when the coupon was most recently updated
+    tests:
+    - not_null
+  - name: coupon_code
+    description: string, coupon code
+  - name: coupon_type
+    description: str, type of the coupon which describes what circumstances the coupon
+      can be redeemed
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - standard
+          - discounted-previous-course
+  - name: coupon_object_id
+    description: int, id in either coures_course or courses_program for the course
+      entity for which the coupon can be redeemed
+    tests:
+    - not_null
+  - name: coupon_amount_type
+    description: string, type of coupon discount and meaning of the "amount" column.
+      May be "fixed-discount" "fixed-price" or "percent-discount"
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - fixed-discount
+          - fixed-price
+          - percent-discount
+  - name: coupon_amount
+    description: numeric, discount amount. May be a percent or dollar amount
+    tests:
+    - not_null
+  - name: coupon_discount_amount_text
+    description: str, discount amount in readable format. It can be fixed discount
+      which is $<dollar amount> off, fixed-price which is $<dollar amount> or percent-discount
+      which is <percentage> % off
+    tests:
+    - not_null
+  - name: coupon_activated_on
+    description: timestamp, specifying when the discount is activated
+  - name: coupon_expires_on
+    description: timestamp, specifying when the discount is deactivated
+  - name: coupon_is_active
+    description: boolean, wheter the coupon is currently redeemable
+    tests:
+    - not_null
+  - name: contenttype_id
+    description: int, id in django_contenttype for eather a course or a program, depending
+      on what the coupon can be redeemed for
+  - name: couponinvoice_id
+    description: int, foreign key in ecommerce_couponinvoice, which contains information
+      about why the a batch of coupons was created
+- name: stg__micromasters__app__postgres__ecommerce_couponinvoice
+  description: the ecommerce_couponinvoice table is used to identify batches of coupons
+    that a created togather for the same purpose
+  columns:
+  - name: couponinvoice_id
+    description: int, primary key representing a coupon invoice
+    tests:
+    - unique
+    - not_null
+  - name: couponinvoice_number
+    description: string, short string used to identify a batch of coupons
+  - name: couponinvoice_description
+    description: string, description for a batch of coupons
+- name: stg__micromasters__app__postgres__ecommerce_line
+  columns:
+  - name: line_id
+    tests:
+    - unique
+    - not_null
+    description: int, primary key representing an ecommerce line
+  - name: line_created_on
+    description: timestamp, specifying when the line was initially created
+    tests:
+    - not_null
+  - name: line_updated_on
+    description: timestamp, specifying when the line was most recently updated
+    tests:
+    - not_null
+  - name: courserun_readable_id
+    description: string, courserun_readable_id from courses_courserun
+    tests:
+    - not_null
+  - name: courserun_edxorg_readable_id
+    description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
+      to match course in edxorg
+  - name: line_price
+    description: numeric, price paid for the course run
+    tests:
+    - not_null
+  - name: order_id
+    description: int, foreign key in the orders_order table for the order that contains
+      the line. Orders have exactly one line
+    tests:
+    - not_null
+  - name: line_description
+    description: string, description of the course run being purchased
+- name: stg__micromasters__app__postgres__ecommerce_order
+  columns:
+  - name: order_id
+    description: int, primary key representing a single  order
+    tests:
+    - unique
+    - not_null
+  - name: order_created_on
+    description: timestamp, specifying when the order was initially created
+    tests:
+    - not_null
+  - name: order_updated_on
+    description: timestamp, specifying when the order was most recently updated
+    tests:
+    - not_null
+  - name: order_state
+    description: string, order state. Options are "fulfilled", "failed", "created"
+      "refunded", "partially_refunded"
+    tests:
+    - not_null
+  - name: order_total_price_paid
+    description: number, total order amount
+    tests:
+    - not_null
+  - name: user_id
+    description: int, primary key in users_user for the purchaser
+    tests:
+    - not_null
+  - name: order_reference_number
+    description: string, readable id for the order
+    tests:
+    - unique
 - name: stg__micromasters__app__postgres__ecommerce_receipt
   description: Data returned from cybersource when a user pays for an order
   columns:
@@ -93,73 +506,31 @@ models:
     description: string, the UUID of the transaction from the receipt
   - name: order_id
     description: int, primary key in ecommerce_order
-
-- name: stg__micromasters__app__postgres__ecommerce_line
+- name: stg__micromasters__app__postgres__ecommerce_redeemedcoupon
   columns:
-  - name: line_id
+  - name: redeemedcoupon_id
+    description: int, primary key representing a discount redemption
     tests:
     - unique
     - not_null
-    description: int, primary key representing an ecommerce line
-  - name: line_created_on
-    description: timestamp, specifying when the line was initially created
+  - name: redeemedcoupon_created_on
+    description: timestamp, specifying when the coupon was redeemed
     tests:
     - not_null
-  - name: line_updated_on
-    description: timestamp, specifying when the line was most recently updated
+  - name: redeemedcoupon_updated_on
+    description: timestamp, specifying when the coupon redemption was last updated
     tests:
     - not_null
-  - name: courserun_readable_id
-    description: string, courserun_readable_id from courses_courserun
-    tests:
-    - not_null
-  - name: courserun_edxorg_readable_id
-    description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
-      to match course in edxorg
-  - name: line_price
-    description: numeric, price paid for the course run
-    tests:
-    - not_null
+  - name: coupon_id
+    description: int, foreign key for ecommerce_coupon
   - name: order_id
-    description: int, foreign key in the orders_order table for the order that contains
-      the line. Orders have exactly one line
-    tests:
-    - not_null
-  - name: line_description
-    description: string, description of the course run being purchased
-- name: stg__micromasters__app__postgres__ecommerce_order
-  columns:
-  - name: order_id
-    description: int, primary key representing a single  order
-    tests:
-    - unique
-    - not_null
-  - name: order_created_on
-    description: timestamp, specifying when the order was initially created
-    tests:
-    - not_null
-  - name: order_updated_on
-    description: timestamp, specifying when the order was most recently updated
-    tests:
-    - not_null
-  - name: order_state
-    description: string, order state. Options are "fulfilled", "failed", "created"
-      "refunded", "partially_refunded"
-    tests:
-    - not_null
-  - name: order_total_price_paid
-    description: number, total order amount
-    tests:
-    - not_null
-  - name: user_id
-    description: int, primary key in users_user for the purchaser
-    tests:
-    - not_null
-  - name: order_reference_number
-    description: string, readable id for the order
-    tests:
-    - unique
-
+    description: int, foreign key for ecommerce_orders
+  tests:
+  - dbt_expectations.expect_compound_columns_to_be_unique:
+      arguments:
+        column_list:
+        - order_id
+        - coupon_id
 - name: stg__micromasters__app__postgres__ecommerce_usercoupon
   columns:
   - name: usercoupon_id
@@ -184,145 +555,89 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["user_id", "coupon_id"]
-
-- name: stg__micromasters__app__postgres__ecommerce_couponinvoice
-  description: the ecommerce_couponinvoice table is used to identify batches of coupons
-    that a created togather for the same purpose
+        column_list:
+        - user_id
+        - coupon_id
+- name: stg__micromasters__app__postgres__exams_examrun
+  description: DEDP proctored exam runs from MicroMasters application database
   columns:
-  - name: couponinvoice_id
-    description: int, primary key representing a coupon invoice
+  - name: examrun_id
+    description: int, primary key in exams_examrun
+    tests:
+    - not_null
+    - unique
+  - name: course_id
+    description: int, foreign key to courses_course
+    tests:
+    - not_null
+  - name: exam_series_code
+    description: str, unique series code for the exam. e.g., MIT_14.100x
+    tests:
+    - not_null
+  - name: examrun_readable_id
+    description: str, edX exam run ID formatted as course-v1:{org}+{exam code}+{semester},
+      e.g., course-v1:MITxT+14.100PEx+2T2022. May be null for exam runs before 2022.
+  - name: examrun_semester
+    description: str, semester for the exam run, e.g., 2T2022.
+    tests:
+    - not_null
+  - name: examrun_description
+    description: str, description for the exam run
+  - name: examrun_is_authorized
+    description: boolean, indicating if the exam run has authorizations from Pearson
+    tests:
+    - not_null
+  - name: examrun_passing_grade
+    description: float, passing grade for the exam run, range between 0 to 1. Default
+      to 0.5.
+    tests:
+    - not_null
+  - name: examrun_created_on
+    description: timestamp, date and time when the exam run was initially created
+    tests:
+    - not_null
+  - name: examrun_updated_on
+    description: timestamp, date and time when the exam run was most recently updated
+    tests:
+    - not_null
+- name: stg__micromasters__app__postgres__grades_combinedcoursegrade
+  description: DEDP course combined final grades stored in MicroMasters database
+  columns:
+  - name: coursegrade_id
+    description: int, sequential ID representing a combined grade for DEDP course
     tests:
     - unique
     - not_null
-  - name: couponinvoice_number
-    description: string, short string used to identify a batch of coupons
-  - name: couponinvoice_description
-    description: string, description for a batch of coupons
-
-- name: stg__micromasters__app__postgres__ecommerce_coupon
-  columns:
-  - name: coupon_id
-    description: int, primary key representing a coupon
-    tests:
-    - unique
-    - not_null
-  - name: coupon_created_on
-    description: timestamp, specifying when the coupon was initially created
+  - name: course_id
+    description: int, foreign key to courses_course
     tests:
     - not_null
-  - name: coupon_updated_on
-    description: timestamp, specifying when the coupon was most recently updated
-    tests:
-    - not_null
-  - name: coupon_code
-    description: string, coupon code
-  - name: coupon_type
-    description: str, type of the coupon which describes what circumstances the coupon
-      can be redeemed
-    tests:
-    - not_null
-    - accepted_values:
+    - relationships:
         arguments:
-          values: ['standard', 'discounted-previous-course']
-  - name: coupon_object_id
-    description: int, id in either coures_course or courses_program for the course
-      entity for which the coupon can be redeemed
-    tests:
-    - not_null
-  - name: coupon_amount_type
-    description: string, type of coupon discount and meaning of the "amount" column.
-      May be "fixed-discount" "fixed-price" or "percent-discount"
-    tests:
-    - not_null
-    - accepted_values:
-        arguments:
-          values: ['fixed-discount', 'fixed-price', 'percent-discount']
-  - name: coupon_amount
-    description: numeric, discount amount. May be a percent or dollar amount
-    tests:
-    - not_null
-  - name: coupon_discount_amount_text
-    description: str, discount amount in readable format. It can be fixed discount
-      which is $<dollar amount> off, fixed-price which is $<dollar amount> or percent-discount
-      which is <percentage> % off
-    tests:
-    - not_null
-  - name: coupon_activated_on
-    description: timestamp, specifying when the discount is activated
-  - name: coupon_expires_on
-    description: timestamp, specifying when the discount is deactivated
-  - name: coupon_is_active
-    description: boolean, wheter the coupon is currently redeemable
-    tests:
-    - not_null
-  - name: contenttype_id
-    description: int, id in django_contenttype for eather a course or a program, depending
-      on what the coupon can be redeemed for
-  - name: couponinvoice_id
-    description: int, foreign key in ecommerce_couponinvoice, which contains information
-      about why the a batch of coupons was created
-- name: stg__micromasters__app__postgres__django_contenttype
-  columns:
-  - name: contenttype_id
-    description: int, sequential ID for the django model
-    tests:
-    - unique
-    - not_null
-  - name: contenttype_full_name
-    description: string, name for django model. A combination of the models name and
-      functional group
-    tests:
-    - unique
-    - not_null
-
-- name: stg__micromasters__app__user_program_certificate_override_list
-  description: Certain users should recieve a certificate even though they do not
-    meet all the program certificate requirements. This list has the user_id on user_edxorg
-    and the program_id on micromasters production for those users
-  columns:
-  - name: program_certificate_hashed_id
-    description: str, unique hash used to identify the program certificate
-  - name: user_edxorg_id
-    description: int, edxorg id for a user
-    tests:
-    - not_null
-  - name: micromasters_program_id
-    description: int, foreign key in courses_program for the program the user should
-      recieve a certificate
-    tests:
-    - not_null
-
-- name: stg__micromasters__app__postgres__grades_programcertificate
-  columns:
-  - name: programcertificate_id
-    description: int, sequential ID representing a program certificate. Only has records
-      for DEDP
-    tests:
-    - unique
-    - not_null
-  - name: programcertificate_created_on
-    description: timestamp, specifying when a program certificate was initially created
-    tests:
-    - not_null
-  - name: programcertificate_updated_on
-    description: timestamp, specifying when a program certificate was most recently
-      updated
-    tests:
-    - not_null
-  - name: programcertificate_hash
-    description: str, unique hash used to identify the program certificate
-    tests:
-    - not_null
-  - name: program_id
-    description: id, int foreign key referece to courses_program
-    tests:
-    - not_null
+          to: ref('stg__micromasters__app__postgres__courses_course')
+          field: course_id
   - name: user_id
-    description: int, foreign key referece to auth_user
+    description: int, foreign key to auth_user
     tests:
     - not_null
-
+    - relationships:
+        arguments:
+          to: ref('stg__micromasters__app__postgres__auth_user')
+          field: user_id
+  - name: coursegrade_grade
+    description: float, calculated course grade, combined from course run and proctored
+      exam using formula - course run grade * 0.4 + exam grade * 0.6, range between
+      0.0 to 100.0
+    tests:
+    - not_null
+  - name: coursegrade_created_on
+    description: timestamp, date and time when this grade was initially calculated
+    tests:
+    - not_null
+  - name: coursegrade_updated_on
+    description: timestamp, date and time when this grade was most recently updated
+    tests:
+    - not_null
 - name: stg__micromasters__app__postgres__grades_coursecertificate
   description: DEDP course certificates stored in MicroMasters database
   columns:
@@ -367,46 +682,6 @@ models:
       updated
     tests:
     - not_null
-
-- name: stg__micromasters__app__postgres__grades_combinedcoursegrade
-  description: DEDP course combined final grades stored in MicroMasters database
-  columns:
-  - name: coursegrade_id
-    description: int, sequential ID representing a combined grade for DEDP course
-    tests:
-    - unique
-    - not_null
-  - name: course_id
-    description: int, foreign key to courses_course
-    tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg__micromasters__app__postgres__courses_course')
-          field: course_id
-  - name: user_id
-    description: int, foreign key to auth_user
-    tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg__micromasters__app__postgres__auth_user')
-          field: user_id
-  - name: coursegrade_grade
-    description: float, calculated course grade, combined from course run and proctored
-      exam using formula - course run grade * 0.4 + exam grade * 0.6, range between
-      0.0 to 100.0
-    tests:
-    - not_null
-  - name: coursegrade_created_on
-    description: timestamp, date and time when this grade was initially calculated
-    tests:
-    - not_null
-  - name: coursegrade_updated_on
-    description: timestamp, date and time when this grade was most recently updated
-    tests:
-    - not_null
-
 - name: stg__micromasters__app__postgres__grades_courserungrade
   description: edx course run final grades stored in MicroMasters database
   columns:
@@ -441,7 +716,9 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ["complete", "pending"]
+          values:
+          - complete
+          - pending
   - name: courserungrade_is_passing
     description: boolean, indicating whether the user has passed the passing score
       set for this course
@@ -460,8 +737,9 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["courserun_id", "user_id"]
-
+        column_list:
+        - courserun_id
+        - user_id
 - name: stg__micromasters__app__postgres__grades_proctoredexamgrade
   description: DEDP proctored exam grades stored in MicroMasters database
   columns:
@@ -519,32 +797,117 @@ models:
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
-        column_list: ["user_id", "examrun_id"]
-
-- name: stg__micromasters__app__postgres__auth_user
+        column_list:
+        - user_id
+        - examrun_id
+- name: stg__micromasters__app__postgres__grades_programcertificate
   columns:
+  - name: programcertificate_id
+    description: int, sequential ID representing a program certificate. Only has records
+      for DEDP
+    tests:
+    - unique
+    - not_null
+  - name: programcertificate_created_on
+    description: timestamp, specifying when a program certificate was initially created
+    tests:
+    - not_null
+  - name: programcertificate_updated_on
+    description: timestamp, specifying when a program certificate was most recently
+      updated
+    tests:
+    - not_null
+  - name: programcertificate_hash
+    description: str, unique hash used to identify the program certificate
+    tests:
+    - not_null
+  - name: program_id
+    description: id, int foreign key referece to courses_program
+    tests:
+    - not_null
   - name: user_id
-    description: int, sequential ID representing a user in MicroMasters
+    description: int, foreign key referece to auth_user
     tests:
+    - not_null
+- name: stg__micromasters__app__postgres__profiles_education
+  columns:
+  - name: user_education_id
+    description: int, primary key representing a user education record
+    tests:
+    - not_null
     - unique
-    - not_null
-  - name: user_username
-    description: str, unique string to identify user
-    tests:
-    - unique
-    - not_null
-  - name: user_email
-    description: str, user email associated with user account (not unique)
+  - name: user_profile_id
+    description: int, foreign key to profiles_profile
     tests:
     - not_null
-  - name: user_is_active
-    description: boolean, indicate whether this user is active (use it to soft delete
-      account)
-  - name: user_joined_on
-    description: timestamp, specifying when a user account was initially created
-  - name: user_last_login
-    description: timestamp, specifying when a user last logged in
-
+    - relationships:
+        arguments:
+          to: ref('stg__micromasters__app__postgres__profiles_profile')
+          field: user_profile_id
+  - name: user_education_degree
+    description: str, user education degree
+    tests:
+    - accepted_values:
+        arguments:
+          values:
+          - Doctorate
+          - Master''s or professional degree
+          - Bachelor''s degree
+          - Associate degree
+          - Secondary/high school
+          - Other education
+  - name: user_field_of_study
+    description: str, field of study for this education degree
+  - name: user_education_is_online_degree
+    description: boolean, indicating if it's online education degree
+    tests:
+    - not_null
+  - name: user_school_name
+    description: str, name of school for this education
+    tests:
+    - not_null
+  - name: user_school_city
+    description: str, city where school is located
+  - name: user_school_state
+    description: str, state or territory where school is located
+  - name: user_school_country
+    description: str, country code where school is located
+  - name: user_graduation_date
+    description: date, graduation date for this education
+    tests:
+    - not_null
+- name: stg__micromasters__app__postgres__profiles_employment
+  columns:
+  - name: user_employment_id
+    description: int, primary key representing a user employment record
+  - name: user_profile_id
+    description: int, foreign key to profiles_profile
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg__micromasters__app__postgres__profiles_profile')
+          field: user_profile_id
+  - name: user_company_name
+    description: str, name of the company for this employment
+    tests:
+    - not_null
+  - name: user_job_position
+    description: str, user's job position in this company
+  - name: user_company_industry
+    description: str, industry of this company
+  - name: user_company_city
+    description: str, city where this company is located
+  - name: user_company_state
+    description: str, state or territory where this company is located
+  - name: user_company_country
+    description: str, country code where this company is located
+  - name: user_start_date
+    description: date, start date for this employment
+    tests:
+    - not_null
+  - name: user_end_date
+    description: date, end date for this employment
 - name: stg__micromasters__app__postgres__profiles_profile
   columns:
   - name: user_profile_id
@@ -588,17 +951,27 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-            "Associate degree", "Secondary/high school", "Junior secondary/junior\
-              \ high/middle school", "Elementary/primary school", "No formal education",
-            "Other education", "Doctorate in science or engineering", "Doctorate in\
-              \ another field"]
+          values:
+          - Doctorate
+          - Master''s or professional degree
+          - Bachelor''s degree
+          - Associate degree
+          - Secondary/high school
+          - Junior secondary/junior high/middle school
+          - Elementary/primary school
+          - No formal education
+          - Other education
+          - Doctorate in science or engineering
+          - Doctorate in another field
   - name: user_gender
     description: str, user gender (could be blank)
     tests:
     - accepted_values:
         arguments:
-          values: ['Male', 'Female', 'Other/Prefer Not to Say']
+          values:
+          - Male
+          - Female
+          - Other/Prefer Not to Say
   - name: user_mail_id
     description: str, UUID generated for user profile (used in automatic/bulk emails)
     tests:
@@ -632,7 +1005,10 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Public to everyone', 'Public to logged in users', 'Private']
+          values:
+          - Public to everyone
+          - Public to logged in users
+          - Private
   - name: user_preferred_language
     description: str, user's preferred language
   - name: user_mailing_address
@@ -664,357 +1040,61 @@ models:
     description: str, first name on user profile
   - name: user_last_name
     description: str, last name on user profile
-
-- name: stg__micromasters__app__postgres__auth_usersocialauth
+- name: stg__micromasters__app__postgres__wagtailcore_page
+  description: Wagtail CMS page records for the MicroMasters application. Used to
+    resolve program page slugs and construct public-facing URLs for programs.
   columns:
-  - name: user_auth_id
-    description: int, sequential ID representing a user social auth record in MicroMasters
-    tests:
-    - not_null
-  - name: user_id
-    description: str, foreign key to auth_user representing a single user
-    tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg__micromasters__app__postgres__auth_user')
-          field: user_id
-  - name: user_auth_provider
-    description: str, social auth provider. It's either "edxorg" or "mitxonline"
-    tests:
-    - not_null
-    - accepted_values:
-        arguments:
-          values: ['edxorg', 'mitxonline']
-  - name: user_username
-    description: str, user name string to identify a user within a social auth provider
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["user_username", "user_auth_provider"]
-
-
-- name: stg__micromasters__app__postgres__courses_course
-  columns:
-  - name: course_id
-    description: int, sequential ID representing a course in MicroMasters
+  - name: wagtail_page_id
+    description: int, primary key for the Wagtail page record
     tests:
     - not_null
     - unique
-  - name: course_title
-    description: str, title of the course
-    tests:
-    - not_null
-  - name: course_edx_key
-    description: str, edX key formatted as {org}+{course number}
-  - name: course_number
-    description: str, edX course number
-  - name: program_id
-    description: int, foreign key to courses_program
-    tests:
-    - relationships:
-        arguments:
-          to: ref('stg__micromasters__app__postgres__courses_program')
-          field: program_id
-  - name: course_position_in_program
-    description: int, sequential number indicating the course position in a program
-    tests:
-    - not_null
-  - name: course_description
-    description: str, description of the course
-  - name: course_prerequisites
-    description: str, required courses as a prior condition before taking this course
-  - name: course_contact_email
-    description: str, email used to contact course team
-  - name: course_should_display_progress
-    description: boolean, indicating if "in progress" grades should be displayed for
-      the course
-    tests:
-    - not_null
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["program_id", "course_position_in_program"]
-
-- name: stg__micromasters__app__postgres__courses_courserun
+  - name: wagtail_page_slug
+    description: str, URL slug for the page (e.g. 'scm' → https://micromasters.mit.edu/scm/)
+  - name: wagtail_page_live_url
+    description: str, fully-qualified live URL constructed from micromasters_production_url
+      and the page slug. NULL for unpublished pages.
+  - name: wagtail_page_url_path
+    description: str, internal Wagtail tree path (e.g. /home/scm/)
+  - name: wagtail_page_is_live
+    description: boolean, whether the page is currently published
+  - name: wagtail_page_first_published_on
+    description: timestamp, when the page was first published
+  - name: wagtail_page_last_published_on
+    description: timestamp, when the page was most recently published
+- name: stg__micromasters__app__postgres__wagtailimages_image
+  description: Images uploaded to the MicroMasters Wagtail CMS image library. Used
+    to resolve thumbnail_image_id foreign keys on cms_programpage to full image URLs.
   columns:
-  - name: courserun_id
-    description: int, primary key representing a course run
+  - name: image_id
+    description: int, primary key for the Wagtail image record
     tests:
     - not_null
     - unique
-  - name: courserun_title
-    description: str, title of the course run
-    tests:
-    - not_null
-  - name: course_id
-    description: int, foreign key to courses_course
-    tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg__micromasters__app__postgres__courses_course')
-          field: course_id
-  - name: courserun_readable_id
-    description: str, Open edX Course ID formatted as course-v1:{org}+{course code}+{run_tag},
-      maybe blank
-  - name: courserun_edxorg_readable_id
-    description: str, courserun_readable_id formatted as {org}/{course code}/{run_tag}
-      to match course in edxorg
-  - name: courserun_tag
-    description: str, string that identifies a single run in a course E.g. 1T2022
-  - name: courserun_enrollment_url
-    description: str, url to enroll in the course run
-  - name: courserun_is_discontinued
-    description: boolean, setting this to true discontinues the course run
-    tests:
-    - not_null
-  - name: courserun_prerequisites
-    description: str, prerequisites for the course
-  - name: courserun_platform
-    description: str, indicating the platform where this course runs on. It's either
-      mitxonline or edxorg.
-    tests:
-    - not_null
-  - name: courserun_start_on
-    description: timestamp, date and time when the run begins
-  - name: courserun_end_on
-    description: timestamp, date and time when the run ends
-  - name: courserun_enrollment_start_on
-    description: timestamp, date and time when enrollment starts
-  - name: courserun_enrollment_end_on
-    description: timestamp, date and time when enrollment ends
-  - name: courserun_grade_freeze_on
-    description: timestamp, date and time when the run freeze for grade
-  - name: courserun_upgrade_deadline
-    description: timestamp, date and time beyond which users can not enroll in paid
-      course mode
-
-- name: stg__micromasters__app__postgres__courses_program
+  - name: image_file
+    description: str, S3 key path for the image (e.g. original_images/scm_thumb.jpg)
+  - name: image_url
+    description: str, fully-qualified image URL constructed by prepending micromasters_media_url
+      to image_file
+  - name: image_title
+    description: str, title/label for the image as entered in the CMS
+  - name: image_width
+    description: int, image width in pixels
+  - name: image_height
+    description: int, image height in pixels
+- name: stg__micromasters__app__user_program_certificate_override_list
+  description: Certain users should receive a certificate even though they do not
+    meet all the program certificate requirements. This list has the user_id on user_edxorg
+    and the program_id on micromasters production for those users
   columns:
-  - name: program_id
-    description: int, sequential ID representing a program in MicroMasters
+  - name: program_certificate_hashed_id
+    description: str, unique hash used to identify the program certificate
+  - name: user_edxorg_id
+    description: int, edxorg id for a user
     tests:
     - not_null
-    - unique
-  - name: program_title
-    description: str, title of the program
-    tests:
-    - not_null
-  - name: program_description
-    description: str, description of the program
-  - name: program_num_required_courses
-    description: int, indicating the number of required courses to earn certificate
-    tests:
-    - not_null
-  - name: program_price
-    description: numeric, price of the program
-    tests:
-    - not_null
-  - name: program_ga_tracking_id
-    description: str, a unique tracking ID provided by Google Analytics used to track
-      the number of views to certain pages of MicroMasters
-    tests:
-    - not_null
-  - name: program_is_live
-    description: boolean, indicating whether program is available to users on MicroMasters
-      website
-    tests:
-    - not_null
-  - name: program_is_financial_aid_available
-    description: boolean, indicating if financial aid is available for the program
-    tests:
-    - not_null
-  - name: program_created_on
-    description: timestamp, specifying when a program was initially created
-  - name: program_updated_on
-    description: timestamp, specifying when a program was most recently updated
-
-- name: stg__micromasters__app__postgres__courses_electiveset
-  description: This represents the elective requirements for programs
-  columns:
-  - name: electiveset_id
-    description: int, sequential ID representing a elective requirement set for a
-      program in MicroMasters
-    tests:
-    - not_null
-    - unique
-  - name: electiveset_required_number
-    description: int, indicating the number of required courses from this elective
-      requirement set
-    tests:
-    - not_null
-  - name: program_id
-    description: int, foreign key to courses_program
-    tests:
-    - relationships:
-        arguments:
-          to: ref('stg__micromasters__app__postgres__courses_program')
-          field: program_id
-  - name: electiveset_title
-    description: str, title of the elective requirement set
-    tests:
-    - not_null
-
-- name: stg__micromasters__app__postgres__courses_electiveset_to_course
-  description: this links a course to a elective set for programs
-  columns:
-  - name: electivesettocourse_id
-    description: int, sequential ID representing a course in a  set for a program
-      in MicroMasters
-  - name: electiveset_id
-    description: int, foreign key to courses_electivesset
-  - name: course_id
-    description: int, foreign key to courses_course
-    tests:
-    - relationships:
-        arguments:
-          to: ref('stg__micromasters__app__postgres__courses_course')
-          field: course_id
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["course_id", "electiveset_id"]
-
-
-- name: stg__micromasters__app__postgres__profiles_education
-  columns:
-  - name: user_education_id
-    description: int, primary key representing a user education record
-    tests:
-    - not_null
-    - unique
-  - name: user_profile_id
-    description: int, foreign key to profiles_profile
-    tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg__micromasters__app__postgres__profiles_profile')
-          field: user_profile_id
-  - name: user_education_degree
-    description: str, user education degree
-    tests:
-    - accepted_values:
-        arguments:
-          values: ["Doctorate", "Master''s or professional degree", "Bachelor''s degree",
-            "Associate degree", "Secondary/high school", "Other education"]
-  - name: user_field_of_study
-    description: str, field of study for this education degree
-  - name: user_education_is_online_degree
-    description: boolean, indicating if it's online education degree
-    tests:
-    - not_null
-  - name: user_school_name
-    description: str, name of school for this education
-    tests:
-    - not_null
-  - name: user_school_city
-    description: str, city where school is located
-  - name: user_school_state
-    description: str, state or territory where school is located
-  - name: user_school_country
-    description: str, country code where school is located
-  - name: user_graduation_date
-    description: date, graduation date for this education
-    tests:
-    - not_null
-
-- name: stg__micromasters__app__postgres__profiles_employment
-  columns:
-  - name: user_employment_id
-    description: int, primary key representing a user employment record
-  - name: user_profile_id
-    description: int, foreign key to profiles_profile
-    tests:
-    - not_null
-    - relationships:
-        arguments:
-          to: ref('stg__micromasters__app__postgres__profiles_profile')
-          field: user_profile_id
-  - name: user_company_name
-    description: str, name of the company for this employment
-    tests:
-    - not_null
-  - name: user_job_position
-    description: str, user's job position in this company
-  - name: user_company_industry
-    description: str, industry of this company
-  - name: user_company_city
-    description: str, city where this company is located
-  - name: user_company_state
-    description: str, state or territory where this company is located
-  - name: user_company_country
-    description: str, country code where this company is located
-  - name: user_start_date
-    description: date, start date for this employment
-    tests:
-    - not_null
-  - name: user_end_date
-    description: date, end date for this employment
-
-- name: stg__micromasters__app__postgres__dashboard_programenrollment
-  columns:
-  - name: programenrollment_id
-    description: int, primary key representing a users program enrollment
-    tests:
-    - not_null
-  - name: user_id
-    description: int, foreign key for users_user
-    tests:
-    - not_null
-  - name: program_id
-    description: int, foreign key to courses_program
-    tests:
-    - not_null
-  - name: share_hash
-    description: str, share hash for the program enrollment
-  tests:
-  - dbt_expectations.expect_compound_columns_to_be_unique:
-      arguments:
-        column_list: ["user_id", "program_id"]
-
-- name: stg__micromasters__app__postgres__exams_examrun
-  description: DEDP proctored exam runs from MicroMasters application database
-  columns:
-  - name: examrun_id
-    description: int, primary key in exams_examrun
-    tests:
-    - not_null
-    - unique
-  - name: course_id
-    description: int, foreign key to courses_course
-    tests:
-    - not_null
-  - name: exam_series_code
-    description: str, unique series code for the exam. e.g., MIT_14.100x
-    tests:
-    - not_null
-  - name: examrun_readable_id
-    description: str, edX exam run ID formatted as course-v1:{org}+{exam code}+{semester},
-      e.g., course-v1:MITxT+14.100PEx+2T2022. May be null for exam runs before 2022.
-  - name: examrun_semester
-    description: str, semester for the exam run, e.g., 2T2022.
-    tests:
-    - not_null
-  - name: examrun_description
-    description: str, description for the exam run
-  - name: examrun_is_authorized
-    description: boolean, indicating if the exam run has authorizations from Pearson
-    tests:
-    - not_null
-  - name: examrun_passing_grade
-    description: float, passing grade for the exam run, range between 0 to 1. Default
-      to 0.5.
-    tests:
-    - not_null
-  - name: examrun_created_on
-    description: timestamp, date and time when the exam run was initially created
-    tests:
-    - not_null
-  - name: examrun_updated_on
-    description: timestamp, date and time when the exam run was most recently updated
+  - name: micromasters_program_id
+    description: int, foreign key in courses_program for the program the user should
+      receive a certificate
     tests:
     - not_null

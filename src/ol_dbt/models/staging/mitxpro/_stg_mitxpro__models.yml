@@ -911,7 +911,7 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['fulfilled', 'failed', 'created', 'refunded']
+          values: ["fulfilled", "failed", "created", "refunded"]
   - name: order_total_price_paid
     description: number, total order amount
     tests:
@@ -1022,7 +1022,7 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Male', 'Female', 'Other/Prefer Not to Say']
+          values: ["Male", "Female", "Other/Prefer Not to Say"]
   - name: user_birth_year
     description: int, user birth year
   - name: user_company
@@ -1046,17 +1046,17 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['Small/Start-up (1+ employees)', 'Small/Home office (1-9 employees)',
-            'Small (10-99 employees)', 'Small to medium-sized (100-999 employees)',
-            'Medium-sized (1000-9999 employees)', 'Large Enterprise (10,000+ employees)',
+          values: ["Small/Start-up (1+ employees)", "Small/Home office (1-9 employees)",
+            "Small (10-99 employees)", "Small to medium-sized (100-999 employees)",
+            "Medium-sized (1000-9999 employees)", "Large Enterprise (10,000+ employees)",
             "Other (N/A or Don''t know)"]
   - name: user_years_experience
     description: str, years experience
     tests:
     - accepted_values:
         arguments:
-          values: ['Less than 2 years', '2-5 years', '6 - 10 years', '11 - 15 years',
-            '16 - 20 years', 'More than 20 years', 'Prefer not to say']
+          values: ["Less than 2 years", "2-5 years", "6 - 10 years", "11 - 15 years",
+            "16 - 20 years", "More than 20 years", "Prefer not to say"]
   - name: user_leadership_level
     description: str, user leadership level
     tests:
@@ -1408,8 +1408,8 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
-            '', null]
+          values: ["deferred", "transferred", "refunded", "enrolled", "unenrolled",
+            "", null]
   - name: courserunenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the run
     tests:
@@ -1465,8 +1465,8 @@ models:
     tests:
     - accepted_values:
         arguments:
-          values: ['deferred', 'transferred', 'refunded', 'enrolled', 'unenrolled',
-            '', null]
+          values: ["deferred", "transferred", "refunded", "enrolled", "unenrolled",
+            "", null]
   - name: programenrollment_is_active
     description: boolean, indicating whether the user is still enrolled in the program
     tests:
@@ -1615,7 +1615,7 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['Online', 'Other', 'Hybrid']
+          values: ["Online", "Other", "Hybrid"]
   - name: cms_coursepage_subhead
     description: str, short subheading to appear below the title on the course page
     tests:
@@ -1636,7 +1636,7 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['cms_coursepage', 'cms_externalcoursepage']
+          values: ["cms_coursepage", "cms_externalcoursepage"]
 - name: stg__mitxpro__app__postgres__cms_coursepage_topics
   columns:
   - name: wagtail_page_id
@@ -1751,7 +1751,7 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['Online', 'Other']
+          values: ["Online", "Other"]
   - name: cms_programpage_subhead
     description: str, short subheading to appear below the title on the program page
     tests:
@@ -1774,7 +1774,7 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['cms_programpage', 'cms_externalprogrampage']
+          values: ["cms_programpage", "cms_externalprogrampage"]
 - name: stg__mitxpro__app__postgres__cms_coursesinprogrampage
   description: This table contains 1) Lists of courses in programs 2) Additional lists
     - for example upcoming courses and programs The type of list can be determined
@@ -1816,7 +1816,6 @@ models:
     description: str, the certifate signatory title
   - name: cms_signatorypage_organization
     description: str, organization text
-
 
 - name: stg__mitxpro__app__postgres__cms_facultymemberspage
   description: This table contains the faculty for a course
@@ -2016,9 +2015,9 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['staff', 'limited_staff', 'data_researcher', 'instructor', 'finance_admin',
-            'sales_admin', 'beta_testers', 'library_user', 'org_course_creator_group',
-            'course_creator_group', 'support']
+          values: ["staff", "limited_staff", "data_researcher", "instructor", "finance_admin",
+            "sales_admin", "beta_testers", "library_user", "org_course_creator_group",
+            "course_creator_group", "support"]
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
@@ -2042,7 +2041,7 @@ models:
     - not_null
     - accepted_values:
         arguments:
-          values: ['audit', 'no-id-professional']
+          values: ["audit", "no-id-professional"]
   - name: courserunenrollment_is_active
     description: boolean, indicating whether this enrollment is active on xPro open
       edx platform.
@@ -2322,3 +2321,46 @@ models:
     description: string, the edX course ID formatted as course-v1:{org}+{course code}+{run_tag}
     tests:
     - not_null
+
+- name: stg__mitxpro__app__postgres__wagtailimages_image
+  description: Images uploaded to xPRO's Wagtail CMS image library. Used to resolve
+    image_id foreign keys on CMS page tables to their file paths.
+  columns:
+  - name: image_id
+    description: int, primary key for the Wagtail image record
+    tests:
+    - not_null
+    - unique
+  - name: image_file
+    description: str, path to the image file in storage relative to the S3 bucket
+      root. e.g. original_images/course.jpg
+  - name: image_url
+    description: str, fully-qualified URL to the image, constructed by prepending
+      the xpro_media_url dbt variable (https://ol-xpro-app-production.s3.amazonaws.com/)
+      to image_file. e.g. https://ol-xpro-app-production.s3.amazonaws.com/original_images/course.jpg
+  - name: image_title
+    description: str, title/label for the image as entered in the CMS
+  - name: image_width
+    description: int, image width in pixels
+  - name: image_height
+    description: int, image height in pixels
+  - name: image_file_hash
+    description: str, hash of the image file used for deduplication
+  - name: image_file_size
+    description: int, size of the image file in bytes
+  - name: image_created_on
+    description: timestamp, when the image was uploaded to the CMS
+  - name: collection_id
+    description: int, foreign key to the Wagtail collection this image belongs to
+  - name: image_focal_point_x
+    description: int, x coordinate of the focal point used for smart cropping
+  - name: image_focal_point_y
+    description: int, y coordinate of the focal point used for smart cropping
+  - name: image_focal_point_width
+    description: int, width of the focal point region used for smart cropping
+  - name: image_focal_point_height
+    description: int, height of the focal point region used for smart cropping
+  - name: uploaded_by_user_id
+    description: int, foreign key to users_user for the user who uploaded the image
+  - name: image_description
+    description: str, optional description of the image as entered in the CMS

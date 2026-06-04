@@ -394,6 +394,64 @@
 {%- endmacro %}
 
 
+{#
+    unnest_json_array: Cross-db unnesting of a JSON array into individual (json) rows.
+    Trino: UNNEST(try_cast(json_parse(expr) as array(json))) AS alias(col)
+    DuckDB: UNNEST(try_cast(expr as json[])) AS alias(col)
+
+    Usage (in FROM / CROSS JOIN clause):
+      cross join {{ unnest_json_array('col_expr', 't', 'element') }}
+
+    Parameters:
+      json_expr: expression (varchar) containing a JSON array string
+      alias:     table alias for the result
+      col_name:  column name for each array element
+#}
+{% macro unnest_json_array(json_expr, alias, col_name) -%}
+    {{ adapter.dispatch('unnest_json_array', 'open_learning')(json_expr, alias, col_name) }}
+{%- endmacro %}
+
+{% macro default__unnest_json_array(json_expr, alias, col_name) -%}
+    {#
+        Trino: try() wraps json_parse() so malformed JSON returns NULL before try_cast
+        sees it (json_parse raises before try_cast can catch). try_cast then converts
+        the JSON value to array(json), returning NULL for non-array JSON.
+        UNNEST skips NULL inputs, yielding 0 rows for malformed/non-array input.
+    #}
+    unnest(try_cast(try(json_parse({{ json_expr }})) as array(json))) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+{#
+    json_extract_varchar_array: Extract a JSON array field and cast to an array of varchar
+    for use with array_join(). Handles the Trino/DuckDB difference in JSON-to-array casting.
+
+    Trino: json_parse(json_query(col, 'lax $.path')) cast to array(varchar)
+    DuckDB: json_extract(col, '$.path') cast to varchar[]
+
+    Usage:
+      {{ array_join(json_extract_varchar_array('metadata', "'$.level'"), ', ') }}
+#}
+{% macro json_extract_varchar_array(json_col, json_path) -%}
+    {{ adapter.dispatch('json_extract_varchar_array', 'open_learning')(json_col, json_path) }}
+{%- endmacro %}
+
+{% macro default__json_extract_varchar_array(json_col, json_path) -%}
+    cast(json_parse(json_query({{ json_col }}, 'lax {{ json_path | replace("'", "") }}')) as array(varchar))
+{%- endmacro %}
+
+{% macro duckdb__json_extract_varchar_array(json_col, json_path) -%}
+    cast(json_extract({{ json_col }}, {{ json_path }}) as varchar[])
+{%- endmacro %}
+
+{% macro duckdb__unnest_json_array(json_expr, alias, col_name) -%}
+    {#
+        DuckDB: cast the varchar JSON array string directly to json[] (list of json values).
+        try_cast returns NULL for malformed input → unnest of NULL produces 0 rows.
+    #}
+    unnest(try_cast({{ json_expr }} as json[])) as {{ alias }} ({{ col_name }})
+{%- endmacro %}
+
+
 {% macro is_courserun_current(start_on_timestamp_str, end_on_timestamp_str) -%}
     {{ adapter.dispatch('is_courserun_current', 'open_learning')(start_on_timestamp_str, end_on_timestamp_str) }}
 {%- endmacro %}

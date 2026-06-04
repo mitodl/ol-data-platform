@@ -55,6 +55,10 @@ with programs as (
     group by program_id
 )
 
+, program_images as (
+    select * from {{ ref('stg__mitxpro__app__postgres__wagtailimages_image') }}
+)
+
 select
     programs.program_id
     , programs.program_title
@@ -76,6 +80,7 @@ select
     , wagtail_page.wagtail_page_is_live as cms_programpage_is_live
     , wagtail_page.wagtail_page_first_published_on as cms_programpage_first_published_on
     , wagtail_page.wagtail_page_last_published_on as cms_programpage_last_published_on
+    , program_images.image_url as cms_programpage_image_url
 from programs
 left join cms_programs
     on programs.program_id = cms_programs.program_id
@@ -87,3 +92,4 @@ left join certificate_page_path
     on wagtail_page.wagtail_page_path like certificate_page_path.wagtail_page_path || '%'
 left join program_topics on programs.program_id = program_topics.program_id
 left join program_instructors on programs.program_id = program_instructors.program_id
+left join program_images on cms_programs.cms_programpage_search_image_id = program_images.image_id

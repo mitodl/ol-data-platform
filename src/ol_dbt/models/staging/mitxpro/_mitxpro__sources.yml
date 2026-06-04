@@ -4,7 +4,7 @@ version: 2
 sources:
 - name: ol_warehouse_raw_data
   loader: airbyte
-  database: '{{ target.database }}'
+  database: "{{ target.database }}"
   schema: '{{ target.schema.replace(var("schema_suffix", ""), "").rstrip("_") }}_raw'
   tables:
   - name: raw__xpro__app__postgres__b2b_ecommerce_b2bcouponredemption
@@ -1185,7 +1185,6 @@ sources:
     - name: alias_of_id
       description: int, always blank in xpro
 
-
   - name: raw__xpro__app__postgres__cms_programpage
     columns:
     - name: page_ptr_id
@@ -1300,7 +1299,6 @@ sources:
       description: str, organization text
     - name: signature_image_id
       description: int, primary key of signature image in wagtailimages_image
-
 
   - name: raw__xpro__app__postgres__cms_facultymemberspage
     description: This table contains the faculty for a course or program
@@ -1639,7 +1637,6 @@ sources:
     - name: criterion_id
       description: int, foreign key referencing criterion
 
-
   - name: raw__xpro__openedx__mysql__user_api_usercoursetag
     description: MITx Pro open edX user api course tag
     columns:
@@ -1826,7 +1823,6 @@ sources:
     - name: scored
       description: boolean, whether the peer workflow item has been scored
 
-
   - name: raw__xpro__openedx__mysql__assessment_studenttrainingworkflowitem
     description: MITx Pro open edX ai training workflow items
     columns:
@@ -1844,7 +1840,6 @@ sources:
     - name: completed_at
       description: timestamp, specifying when the ai training workflows items was
         completed
-
 
   - name: raw__xpro__openedx__mysql__assessment_rubric
     description: MITx Pro open edX assessment rubric
@@ -2343,6 +2338,42 @@ sources:
     - name: course_key
       description: string, unique string to identify a course run on the corresponding
         platform.
+
+  - name: raw__xpro__app__postgres__wagtailimages_image
+    description: Images uploaded to xPRO's Wagtail CMS image library. Each row is
+      a single uploaded image asset with its storage path and display metadata.
+    columns:
+    - name: id
+      description: int, primary key for the Wagtail image record
+    - name: file
+      description: str, path to the image file in storage (S3 key or CDN-relative
+        path)
+    - name: title
+      description: str, title/label for the image as entered in the CMS
+    - name: width
+      description: int, image width in pixels
+    - name: height
+      description: int, image height in pixels
+    - name: file_hash
+      description: str, hash of the image file used for deduplication
+    - name: file_size
+      description: int, size of the image file in bytes
+    - name: created_at
+      description: timestamp, when the image was uploaded to the CMS
+    - name: collection_id
+      description: int, foreign key to the Wagtail collection this image belongs to
+    - name: focal_point_x
+      description: int, x coordinate of the focal point used for smart cropping
+    - name: focal_point_y
+      description: int, y coordinate of the focal point used for smart cropping
+    - name: focal_point_width
+      description: int, width of the focal point region used for smart cropping
+    - name: focal_point_height
+      description: int, height of the focal point region used for smart cropping
+    - name: uploaded_by_user_id
+      description: int, foreign key to users_user for the user who uploaded the image
+    - name: description
+      description: str, optional description of the image
 
   - name: raw__xpro__app__postgres__ecommerce_taxrate
     description: MITx Pro ecommerce tax rates by country, used to calculate tax on
