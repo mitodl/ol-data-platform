@@ -132,6 +132,24 @@ with mitxonline_certificates as (
     from {{ ref('int__edxorg__mitx_program_certificates') }}
 )
 
+, bootcamps_certificates as (
+    select
+        cast(courseruncertificate_id as varchar) as certificate_id
+        , user_id
+        , courserun_id
+        , cast(null as varchar) as courserun_readable_id
+        , courseruncertificate_uuid as certificate_uuid
+        , courseruncertificate_is_revoked as certificate_is_revoked
+        , courseruncertificate_created_on as certificate_created_on
+        , courseruncertificate_updated_on as certificate_updated_on
+        , courseruncertificate_created_on as certificate_issued_on  -- no issued_on; fall back to created_on
+        , 'verified' as certificate_type_code
+        , 'bootcamps' as platform
+        , user_email
+        , cast(null as varchar) as program_id
+    from {{ ref('int__bootcamps__courserun_certificates') }}
+)
+
 , combined_certificates as (
     select * from mitxonline_certificates
     union all
@@ -146,6 +164,8 @@ with mitxonline_certificates as (
     select * from mitxpro_program_certificates
     union all
     select * from edxorg_program_certificates
+    union all
+    select * from bootcamps_certificates
 )
 
 , user_lookup as (
@@ -155,6 +175,7 @@ with mitxonline_certificates as (
         , mitxonline_application_user_id
         , mitxpro_application_user_id
         , edxorg_openedx_user_id
+        , bootcamps_application_user_id
     from {{ ref('dim_user') }}
     where user_pk is not null
 )
@@ -196,6 +217,9 @@ with mitxonline_certificates as (
             end,
             case when combined_certificates.platform = 'micromasters'
                 then ul_micromasters.user_pk
+            end,
+            case when combined_certificates.platform = 'bootcamps'
+                then ul_bootcamps.user_pk
             end
         ) as user_fk
         , dim_course_run.courserun_pk as courserun_fk
@@ -217,9 +241,12 @@ with mitxonline_certificates as (
     left join user_lookup as ul_micromasters
         on combined_certificates.platform = 'micromasters'
         and combined_certificates.user_email = ul_micromasters.email
+    left join user_lookup as ul_bootcamps
+        on combined_certificates.platform = 'bootcamps'
+        and combined_certificates.user_id = ul_bootcamps.bootcamps_application_user_id
     left join dim_course_run
         on (
-            (combined_certificates.platform in ('mitxonline', 'mitxpro')
+            (combined_certificates.platform in ('mitxonline', 'mitxpro', 'bootcamps')
                 and combined_certificates.courserun_id = dim_course_run.source_id
                 and combined_certificates.platform = dim_course_run.platform)
             or (combined_certificates.platform in ('edxorg', 'micromasters')

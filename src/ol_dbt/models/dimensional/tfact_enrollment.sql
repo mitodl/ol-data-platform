@@ -97,6 +97,23 @@ with mitxonline_enrollments as (
     from {{ ref('int__mitxresidential__courserun_enrollments') }}
 )
 
+, bootcamps_enrollments as (
+    select
+        cast(courserunenrollment_id as varchar) as enrollment_id
+        , user_id
+        , courserun_id
+        , courserun_readable_id
+        , null as program_id
+        , courserunenrollment_created_on as enrollment_created_on
+        , courserunenrollment_updated_on as enrollment_updated_on
+        , courserunenrollment_is_active as enrollment_is_active
+        , cast(null as varchar) as enrollment_mode
+        , courserunenrollment_enrollment_status as enrollment_status
+        , 'bootcamps' as platform
+        , 'bootcamps' as platform_code
+    from {{ ref('int__bootcamps__courserunenrollments') }}
+)
+
 , combined_enrollments as (
     select * from mitxonline_enrollments
     union all
@@ -107,6 +124,8 @@ with mitxonline_enrollments as (
     select * from residential_enrollments
     union all
     select * from program_enrollments
+    union all
+    select * from bootcamps_enrollments
 )
 
 -- Join to dimensions for FKs
@@ -120,6 +139,7 @@ with mitxonline_enrollments as (
         , edxorg_openedx_user_id
         , micromasters_user_id
         , residential_openedx_user_id
+        , bootcamps_application_user_id
     from {{ ref('dim_user') }}
     where user_pk is not null
 )
@@ -169,6 +189,9 @@ with mitxonline_enrollments as (
             end,
             case when combined_enrollments.platform = 'residential'
                 then ul_residential.user_pk
+            end,
+            case when combined_enrollments.platform = 'bootcamps'
+                then ul_bootcamps.user_pk
             end
         ) as user_fk
         , dim_course_run.courserun_pk as courserun_fk
@@ -188,10 +211,13 @@ with mitxonline_enrollments as (
     left join user_lookup as ul_residential
         on combined_enrollments.platform = 'residential'
         and combined_enrollments.user_id = ul_residential.residential_openedx_user_id
+    left join user_lookup as ul_bootcamps
+        on combined_enrollments.platform = 'bootcamps'
+        and combined_enrollments.user_id = ul_bootcamps.bootcamps_application_user_id
     left join dim_course_run
         on (
-            -- mitxonline/mitxpro: join on integer source_id
-            (combined_enrollments.platform in ('mitxonline', 'mitxpro') and combined_enrollments.courserun_id = dim_course_run.source_id and combined_enrollments.platform = dim_course_run.platform)
+            -- mitxonline/mitxpro/bootcamps: join on integer source_id
+            (combined_enrollments.platform in ('mitxonline', 'mitxpro', 'bootcamps') and combined_enrollments.courserun_id = dim_course_run.source_id and combined_enrollments.platform = dim_course_run.platform)
             -- edxorg, residential: join on readable_id + platform to prevent fan-out
             -- (dim_course_run grain is (platform, courserun_readable_id); same readable_id
             -- can exist across platforms)

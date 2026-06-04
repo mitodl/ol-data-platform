@@ -77,6 +77,33 @@ with mitxonline_courses as (
     from {{ ref('int__ocw__courses') }}
 )
 
+, bootcamps_course_numbers as (
+    select distinct
+        course_id
+        , case
+            when cardinality(split(courserun_readable_id, '+')) >= 2
+                then split(courserun_readable_id, '+')[2]
+        end as course_number
+        -- Use course_readable_id from int__bootcamps__course_runs which already has course_id
+        -- appended for uniqueness — no need to extract from courserun_readable_id here
+        , course_readable_id
+    from {{ ref('int__bootcamps__course_runs') }}
+    where course_readable_id is not null
+)
+
+, bootcamps_courses as (
+    select
+        coalesce(course_numbers.course_readable_id, courses.course_readable_id) as course_readable_id
+        , courses.course_id as source_id
+        , courses.course_title
+        , course_numbers.course_number
+        , cast(null as varchar) as course_description
+        , cast(null as boolean) as course_is_live
+        , 'bootcamps' as platform
+    from {{ ref('int__bootcamps__courses') }} as courses
+    left join bootcamps_course_numbers as course_numbers on courses.course_id = course_numbers.course_id
+)
+
 , combined_courses as (
     select * from mitxonline_courses
     union all
@@ -85,6 +112,8 @@ with mitxonline_courses as (
     select * from edxorg_courses
     union all
     select * from ocw_courses
+    union all
+    select * from bootcamps_courses
 )
 
 -- All (platform, course_readable_id) combinations are kept as distinct rows.

@@ -70,6 +70,31 @@ with mitxonline_orders as (
         on orders.order_id = lines.order_id
 )
 
+, bootcamps_orders as (
+    -- int__bootcamps__ecommerce_order grain: (order_id, line_id)
+    -- Bootcamps uses personal pricing; discounts are not modeled — revenue is in line_price / order_total_price_paid only.
+    select
+        cast(line_id as varchar) as line_id
+        , order_id
+        , order_purchaser_user_id as user_id
+        , cast(null as bigint) as product_id  -- no dim_product coverage for bootcamps
+        , line_price
+        , order_state
+        , order_total_price_paid
+        , order_total_price_paid as order_total_price_paid_plus_tax
+        , cast(null as decimal(38, 2)) as order_tax_amount
+        , cast(null as decimal(38, 4)) as order_tax_rate
+        , cast(null as varchar) as order_tax_country_code
+        , order_reference_number
+        , order_created_on
+        , order_updated_on
+        , 'bootcamps' as platform
+        , cast(null as bigint) as discount_id
+        , cast(null as varchar) as discount_code
+        , cast(null as varchar) as discount_type_code
+    from {{ ref('int__bootcamps__ecommerce_order') }}
+)
+
 , micromasters_orders as (
     -- int__micromasters__orders grain: (order_id, line_id)
     select
@@ -99,6 +124,8 @@ with mitxonline_orders as (
     union all
     select * from mitxpro_orders
     union all
+    select * from bootcamps_orders
+    union all
     select * from micromasters_orders
 )
 
@@ -108,6 +135,7 @@ with mitxonline_orders as (
         , mitxonline_application_user_id
         , mitxpro_application_user_id
         , micromasters_user_id
+        , bootcamps_application_user_id
     from {{ ref('dim_user') }}
     where user_pk is not null
 )
@@ -148,6 +176,9 @@ with mitxonline_orders as (
             case when combined_orders.platform = 'mitxpro'
                 then ul_mitxpro.user_pk
             end,
+            case when combined_orders.platform = 'bootcamps'
+                then ul_bootcamps.user_pk
+            end,
             case when combined_orders.platform = 'micromasters'
                 then ul_micromasters.user_pk
             end
@@ -166,6 +197,9 @@ with mitxonline_orders as (
     left join user_lookup as ul_mitxpro
         on combined_orders.platform = 'mitxpro'
         and combined_orders.user_id = ul_mitxpro.mitxpro_application_user_id
+    left join user_lookup as ul_bootcamps
+        on combined_orders.platform = 'bootcamps'
+        and combined_orders.user_id = ul_bootcamps.bootcamps_application_user_id
     left join user_lookup as ul_micromasters
         on combined_orders.platform = 'micromasters'
         and combined_orders.user_id = ul_micromasters.micromasters_user_id

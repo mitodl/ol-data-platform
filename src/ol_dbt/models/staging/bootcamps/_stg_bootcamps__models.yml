@@ -363,10 +363,12 @@ models:
   - name: courserun_title
     description: str, title of the bootcamp course run
   - name: courserun_readable_id
-    description: str, unique string to identify a bootcamp course run (could be blank
-      for older runs)
+    description: str, unique string to identify a bootcamp course run. Older runs
+      that lack a value in the source database are backfilled via a manual mapping
+      keyed on courserun_id (ids 2, 4, 11, 14, 16, 17, 18, 19).
     tests:
     - unique
+    - not_null
   - name: courserun_start_on
     description: timestamp, specifying when the course run begins
   - name: courserun_end_on
