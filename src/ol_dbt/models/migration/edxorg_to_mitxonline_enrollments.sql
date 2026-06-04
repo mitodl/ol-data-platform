@@ -142,10 +142,10 @@ with combined_enrollments as (
         , mitxonline__course_runs.courserun_readable_id as mitxonline_courserun_readable_id
     from edxorg_runs
     inner join mitxonline__course_runs
-        on split(edxorg_runs.courserun_readable_id, '/')[2]
-            = split(mitxonline__course_runs.courserun_readable_id, '+')[2]
-        and split(edxorg_runs.courserun_readable_id, '/')[3]
-            = split(mitxonline__course_runs.courserun_readable_id, '+')[3]
+        on {{ element_at_array("split(edxorg_runs.courserun_readable_id, '/')", 2) }}
+            = {{ element_at_array("split(mitxonline__course_runs.courserun_readable_id, '+')", 2) }}
+        and {{ element_at_array("split(edxorg_runs.courserun_readable_id, '/')", 3) }}
+            = {{ element_at_array("split(mitxonline__course_runs.courserun_readable_id, '+')", 3) }}
     where edxorg_runs.courserun_readable_id in (
         'MITx/CTL.SC2x/2T2026',
         'MITx/CTL.SC4x/2T2026',
@@ -290,7 +290,7 @@ left join retired_users
     on edxorg_enrollment.user_id = retired_users.user_id
 left join courserun_product_version
     on mitxonline__course_runs.courserun_id = courserun_product_version.courserun_id
-cross join purchased_on_edx_discount
+left join purchased_on_edx_discount on true
 where
     (
         edxorg_enrollment.courseruncertificate_created_on is not null
