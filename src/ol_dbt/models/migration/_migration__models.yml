@@ -86,12 +86,13 @@ models:
   - name: signatory_names
     description: array of strings, the names of the signatories for the course certificate
   - name: product_version_id
-    description: int, the latest product version ID for the corresponding MITx Online
-      course run product. Populated only for future enrollments (null for certificate
-      records).
+    description: int, the earliest product version ID for the corresponding MITx Online
+      course run product. Populated only for verified future enrollments (null for
+      certificate records and audit enrollments).
   - name: discount_id
     description: int, the discount ID for the 'purchased-on-edx' discount code on
-      MITx Online. Populated only for future enrollments (null for certificate records).
+      MITx Online. Populated only for verified future enrollments (null for certificate
+      records and audit enrollments).
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:

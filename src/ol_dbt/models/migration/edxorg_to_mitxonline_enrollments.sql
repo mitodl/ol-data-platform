@@ -246,10 +246,12 @@ select
     , edx_signatories.signatory_names
     , case
         when future_run_id_mapping.edxorg_courserun_readable_id is not null
+            and edxorg_enrollment.courserunenrollment_enrollment_mode = 'verified'
             then courserun_product_version.product_version_id
     end as product_version_id
     , case
         when future_run_id_mapping.edxorg_courserun_readable_id is not null
+            and edxorg_enrollment.courserunenrollment_enrollment_mode = 'verified'
             then purchased_on_edx_discount.discount_id
     end as discount_id
 from edxorg_enrollment
