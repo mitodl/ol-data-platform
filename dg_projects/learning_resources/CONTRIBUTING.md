@@ -5,8 +5,8 @@ delivers it to MIT Learn. Currently it serves three delivery patterns:
 
 | Pattern | Used by |
 |---|---|
-| Webhook push (REST API) | Sloan Executive Education, OVS Videos, Video Shorts |
-| Sensor-driven partitioned | OVS Videos, Video Shorts (one asset execution per item ID) |
+| Webhook push (REST API) | Sloan Executive Education, OVS Videos |
+| Sensor-driven partitioned | OVS Videos (one asset execution per item ID) |
 | Trino-pull (Iceberg mart) | OCW, MITxOnline, xPRO, MIT edX _(migration in progress)_ |
 
 ## Prerequisites
@@ -30,7 +30,7 @@ uv run dagster dev
 ```
 
 Open http://localhost:3000. You should see assets for Sloan, OVS Videos, and
-Video Shorts. All assets load even without real credentials because the code
+Open Learning Library. All assets load even without real credentials because the code
 location uses **resilient loading** — failed Vault auth falls back to a mock
 instance, and assets gracefully skip actual API calls when credentials are absent.
 
@@ -67,13 +67,10 @@ uv run pytest learning_resources_tests/ -v
 learning_resources/
 ├── learning_resources/
 │   ├── assets/             # One file per data source
-│   │   ├── sloan_api.py    # Reference implementation — read this first
-│   │   ├── ovs_videos.py   # Sensor-driven partitioned asset
-│   │   └── video_shorts.py # Google Sheets + FFmpeg processing
+│   │   ├── sloan_api.py         # Reference implementation — read this first
+│   │   ├── ovs_videos.py        # Sensor-driven partitioned asset
+│   │   └── open_learning_library.py  # Open Learning Library REST asset
 │   ├── lib/                # Shared utilities (not assets)
-│   │   ├── contants.py     # Video thumbnail dimensions, etc.
-│   │   ├── google_sheets.py
-│   │   └── video_processing.py
 │   ├── sensors/            # Discovery and cleanup sensors
 │   └── definitions.py      # Wires everything together
 ├── learning_resources_tests/

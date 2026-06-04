@@ -102,7 +102,7 @@ models:
 - name: integrations__learn__xpro_programs
   description: >
     xPRO programs exposed for MIT Learn's Trino-pull ETL. One row per live program.
-    Sourced from int__mitxpro__programs and int__mitxpro__coursesinprogram.
+    Sourced from int__mitxpro__programs and int__mitxpro__courses.
   columns:
   - name: readable_id
     description: xPRO program readable ID. Used for upsert matching.
@@ -126,8 +126,8 @@ models:
     MicroMasters programs exposed for MIT Learn's Trino-pull ETL.
     One row per live program. Sourced from int__micromasters__programs
     and int__micromasters__program_requirements.
-    NOTE: MicroMasters has no last_modified timestamp in source data;
-    last_modified is set to current_timestamp as a conservative fallback.
+    NOTE: last_modified is sourced from program_updated_on in the
+    MicroMasters programs staging table.
   columns:
   - name: readable_id
     description: >

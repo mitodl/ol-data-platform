@@ -442,7 +442,6 @@
 {% macro duckdb__json_extract_varchar_array(json_col, json_path) -%}
     cast(json_extract({{ json_col }}, {{ json_path }}) as varchar[])
 {%- endmacro %}
-{%- endmacro %}
 
 {% macro duckdb__unnest_json_array(json_expr, alias, col_name) -%}
     {#
