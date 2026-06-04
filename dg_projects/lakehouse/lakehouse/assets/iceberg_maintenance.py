@@ -32,8 +32,6 @@ Two assets run on staggered nightly schedules:
     volume without overwhelming the Glue API rate limits.
 """
 
-from __future__ import annotations
-
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any

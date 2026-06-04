@@ -1813,6 +1813,7 @@ dependencies = [
     { name = "pygsheets" },
     { name = "pyiceberg", extra = ["polars"] },
     { name = "s3fs" },
+    { name = "trino" },
     { name = "universal-pathlib" },
 ]
 
@@ -1834,6 +1835,7 @@ requires-dist = [
     { name = "pygsheets", specifier = "~=2.0.6" },
     { name = "pyiceberg", extras = ["polars"], specifier = ">=0.11.1" },
     { name = "s3fs", specifier = ">=2026.0.0,<2027.0.0" },
+    { name = "trino", specifier = ">=0.329" },
     { name = "universal-pathlib", specifier = "~=0.3.1" },
 ]
 
