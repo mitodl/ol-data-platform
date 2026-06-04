@@ -19,6 +19,7 @@ with enrollments as (
         , enrollments.user_id
         , enrollments.courserun_id
         , enrollments.courserunenrollment_created_on
+        , enrollments.courserunenrollment_updated_on
         , enrollments.courserunenrollment_enrollment_status
         , runs.courserun_readable_id
         , runs.courserun_title

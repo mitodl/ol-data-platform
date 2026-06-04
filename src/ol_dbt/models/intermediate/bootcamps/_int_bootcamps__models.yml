@@ -160,8 +160,8 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, unique string to identify a bootcamp course run (could be blank
-      for older runs)
+    description: str, unique string to identify a bootcamp course run. Older runs
+      lacking a source value are backfilled via a manual mapping on courserun_id.
   - name: line_price
     description: numeric, list price for the order line
     tests:
@@ -221,6 +221,10 @@ models:
     description: timestamp, specifying when an enrollment was initially created
     tests:
     - not_null
+  - name: courserunenrollment_updated_on
+    description: timestamp, specifying when an enrollment was most recently updated
+    tests:
+    - not_null
   - name: courserunenrollment_enrollment_status
     description: str, enrollment status for users whose enrollment changed. Options
       are 'deferred', 'refunded'
@@ -233,8 +237,8 @@ models:
     tests:
     - not_null
   - name: courserun_readable_id
-    description: str, unique string to identify a bootcamp course run (could be blank
-      for older runs)
+    description: str, unique string to identify a bootcamp course run. Older runs
+      lacking a source value are backfilled via a manual mapping on courserun_id.
   - name: courserun_start_on
     description: timestamp, date and time when the course starts
   - name: user_username
@@ -290,14 +294,25 @@ models:
   - name: courserun_title
     description: str, title of the bootcamp course run
   - name: courserun_readable_id
-    description: str, unique string to identify a bootcamp course run (could be blank
-      for older runs)
+    description: str, unique string to identify a bootcamp course run. Older runs
+      lacking a source value are backfilled via a manual mapping on courserun_id.
     tests:
     - unique
+    - not_null
   - name: courserun_start_on
     description: timestamp, specifying when the course run begins
   - name: courserun_end_on
     description: timestamp, specifying when the course run ends
+  - name: course_readable_id
+    description: >
+      str, unique string identifying the parent course for this run, derived from
+      courserun_readable_id by joining the first two '+'-delimited segments (e.g.
+      'bootcamp-v1:public+HI-f2f'). Because multiple bootcamp source course_ids can
+      share the same topic/format code, the numeric course_id is appended with a
+      hyphen (e.g. 'bootcamp-v1:public+HI-f2f-12') to guarantee uniqueness across
+      all runs. Downstream dimensional models use this value to join to dim_course.
+    tests:
+    - not_null
 
 - name: int__bootcamps__users
   description: denormalized bootcamps users

@@ -17,6 +17,7 @@ with mitxonline_courseruns as (
         , courserun_enrollment_end_on as enrollment_end
         , courserun_is_live
         , courserun_created_on
+        , cast(null as varchar) as course_readable_id
         , 'mitxonline' as platform
     from {{ ref('int__mitxonline__course_runs') }}
 )
@@ -33,6 +34,7 @@ with mitxonline_courseruns as (
         , courserun_enrollment_end_on as enrollment_end
         , courserun_is_live
         , courserun_created_on
+        , cast(null as varchar) as course_readable_id
         , 'mitxpro' as platform
     from {{ ref('int__mitxpro__course_runs') }}
 )
@@ -49,6 +51,7 @@ with mitxonline_courseruns as (
         , courserun_enrollment_end_date as enrollment_end
         , courserun_is_published as courserun_is_live
         , cast(null as varchar) as courserun_created_on
+        , cast(null as varchar) as course_readable_id
         , 'edxorg' as platform
     from {{ ref('int__edxorg__mitx_courseruns') }}
 )
@@ -65,8 +68,26 @@ with mitxonline_courseruns as (
         , courserun_enrollment_end_on as enrollment_end
         , cast(null as boolean) as courserun_is_live
         , courserun_created_on
+        , cast(null as varchar) as course_readable_id
         , 'residential' as platform
     from {{ ref('int__mitxresidential__courseruns') }}
+)
+
+, bootcamps_courseruns as (
+    select
+        runs.courserun_readable_id
+        , runs.courserun_id as source_id
+        , runs.course_id
+        , runs.courserun_title
+        , runs.courserun_start_on
+        , runs.courserun_end_on
+        , cast(null as varchar) as enrollment_start
+        , cast(null as varchar) as enrollment_end
+        , false as courserun_is_live
+        , cast(null as varchar) as courserun_created_on
+        , runs.course_readable_id
+        , 'bootcamps' as platform
+    from {{ ref('int__bootcamps__course_runs') }} as runs
 )
 
 , combined_courseruns as (
@@ -77,6 +98,45 @@ with mitxonline_courseruns as (
     select * from edxorg_courseruns
     union all
     select * from residential_courseruns
+    union all
+    select * from bootcamps_courseruns
+)
+
+-- Pre-compute course_readable_id for all platforms so the dim_course join is a simple equality
+, combined_courseruns_resolved as (
+    select
+        courserun_readable_id
+        , source_id
+        , course_id
+        , courserun_title
+        , courserun_start_on
+        , courserun_end_on
+        , enrollment_start
+        , enrollment_end
+        , courserun_is_live
+        , courserun_created_on
+        , platform
+        , coalesce(
+            course_readable_id,
+            case
+                when courserun_readable_id like 'course-v1:%'
+                    then substring(
+                        courserun_readable_id,
+                        1,
+                        length(courserun_readable_id)
+                        - strpos(reverse(courserun_readable_id), '+')
+                    )
+                when regexp_like(courserun_readable_id, '^[^/]+/[^/]+/[^/]+')
+                    then substring(
+                        courserun_readable_id,
+                        1,
+                        length(courserun_readable_id)
+                        - strpos(reverse(courserun_readable_id), '/')
+                    )
+                else courserun_readable_id
+            end
+        ) as course_readable_id
+    from combined_courseruns
 )
 
 -- Join to dim_course to get course_fk
@@ -91,32 +151,12 @@ with mitxonline_courseruns as (
 
 , courseruns_with_fk as (
     select
-        combined_courseruns.*
+        combined_courseruns_resolved.*
         , dim_course.course_pk as course_fk
-    from combined_courseruns
+    from combined_courseruns_resolved
     left join dim_course
-        on combined_courseruns.platform = dim_course.primary_platform
-        and
-            -- Extract course ID from course run ID
-            -- course-v1 format: course-v1:{org}+{course}+{run} → strip the last +{run} segment
-            -- edxorg slash format: {org}/{course}/{run} → strip the last /{run} segment
-            case
-                when combined_courseruns.courserun_readable_id like 'course-v1:%'
-                    then substring(
-                        combined_courseruns.courserun_readable_id,
-                        1,
-                        length(combined_courseruns.courserun_readable_id)
-                        - strpos(reverse(combined_courseruns.courserun_readable_id), '+')
-                    )
-                when regexp_like(combined_courseruns.courserun_readable_id, '^[^/]+/[^/]+/[^/]+')
-                    then substring(
-                        combined_courseruns.courserun_readable_id,
-                        1,
-                        length(combined_courseruns.courserun_readable_id)
-                        - strpos(reverse(combined_courseruns.courserun_readable_id), '/')
-                    )
-                else combined_courseruns.courserun_readable_id
-            end = dim_course.course_readable_id
+        on combined_courseruns_resolved.platform = dim_course.primary_platform
+        and combined_courseruns_resolved.course_readable_id = dim_course.course_readable_id
 )
 
 , courseruns_with_all_fks as (

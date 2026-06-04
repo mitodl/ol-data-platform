@@ -309,6 +309,8 @@ models:
       which is their email address.
   - name: mitxpro_openedx_user_id
     description: int, openedx user id for MITx Pro
+  - name: bootcamps_application_user_id
+    description: int, user id on Bootcamps application
   - name: mitxpro_application_user_id
     description: string, user id on MITx Pro application
   - name: user_mitxpro_username
@@ -361,6 +363,8 @@ models:
   - name: completed_onboarding
     description: boolean, indicating whether the user has completed the platform onboarding
       process on MIT Learn
+  - name: user_is_active_on_bootcamps
+    description: boolean, indicating if user's account is active on Bootcamps.
   - name: user_is_active_on_mitlearn
     description: boolean, indicating if user's account is active on MIT Learn.
   - name: user_joined_on_mitlearn
@@ -381,6 +385,8 @@ models:
     description: str, when the user joined on MITx Pro.
   - name: user_joined_on_residential
     description: str, when the user joined on Residential MITx.
+  - name: user_joined_on_bootcamps
+    description: str, when the user joined on Bootcamps.
   - name: micromasters_user_id
     description: int, user ID on the MicroMasters platform
 

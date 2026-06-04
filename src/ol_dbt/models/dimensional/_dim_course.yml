@@ -49,7 +49,7 @@ models:
     tests:
     - not_null
     - accepted_values:
-        values: ['mitxonline', 'mitxpro', 'edxorg', 'ocw', 'residential']
+        values: ['mitxonline', 'mitxpro', 'edxorg', 'ocw', 'residential', 'bootcamps']
   - name: effective_date
     description: >
       Timestamp (UTC) when this SCD Type 2 version became effective. Populated as

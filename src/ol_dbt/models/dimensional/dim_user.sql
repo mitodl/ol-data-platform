@@ -185,6 +185,10 @@ with mitx_users as (
     left join mitxresidential_profile on mitxresidential_openedx_users.user_id = mitxresidential_profile.user_id
 )
 
+, bootcamps_user_view as (
+    select * from {{ ref('int__bootcamps__users') }}
+)
+
 , mitx_users_view as (
     select
         mitx_users.user_global_id
@@ -339,6 +343,9 @@ with mitx_users as (
         , null as user_is_active_on_residential
         , null as user_joined_on_residential
         , user_micromasters_id as micromasters_user_id
+        , null as bootcamps_application_user_id
+        , null as user_is_active_on_bootcamps
+        , null as user_joined_on_bootcamps
     from users_with_global_id
 
     union all
@@ -382,6 +389,9 @@ with mitx_users as (
         , null as user_is_active_on_residential
         , null as user_joined_on_residential
         , null as micromasters_user_id
+        , null as bootcamps_application_user_id
+        , null as user_is_active_on_bootcamps
+        , null as user_joined_on_bootcamps
     from mitxpro_user_view
     left join mitxpro_openedx_users as openedx_users_username
         on mitxpro_user_view.user_username = openedx_users_username.user_username
@@ -427,6 +437,9 @@ with mitx_users as (
         , null as user_is_active_on_residential
         , null as user_joined_on_residential
         , null as micromasters_user_id
+        , null as bootcamps_application_user_id
+        , null as user_is_active_on_bootcamps
+        , null as user_joined_on_bootcamps
     from emeritus_users
     where user_email is not null
 
@@ -469,6 +482,9 @@ with mitx_users as (
         , null as user_is_active_on_residential
         , null as user_joined_on_residential
         , null as micromasters_user_id
+        , null as bootcamps_application_user_id
+        , null as user_is_active_on_bootcamps
+        , null as user_joined_on_bootcamps
     from global_alumni_users
     where user_email is not null
 
@@ -511,7 +527,55 @@ with mitx_users as (
         , mitxresidential_user_view.user_is_active as user_is_active_on_residential
         , mitxresidential_user_view.user_joined_on as user_joined_on_residential
         , null as micromasters_user_id
+        , null as bootcamps_application_user_id
+        , null as user_is_active_on_bootcamps
+        , null as user_joined_on_bootcamps
     from mitxresidential_user_view
+
+    union all
+
+    select
+        {{ dbt_utils.generate_surrogate_key(['lower(bootcamps_user_view.user_email)']) }} as user_pk
+        , null as user_global_id
+        , null as mitlearn_user_id
+        , null as mitlearn_openedx_user_id
+        , null as mitxonline_openedx_user_id
+        , null as mitxonline_application_user_id
+        , null as user_mitxonline_username
+        , null as mitxpro_openedx_user_id
+        , null as mitxpro_application_user_id
+        , null as user_mitxpro_username
+        , null as residential_openedx_user_id
+        , null as user_residential_username
+        , null as edxorg_openedx_user_id
+        , null as user_edxorg_username
+        , null as emeritus_user_id
+        , null as global_alumni_user_id
+        , lower(bootcamps_user_view.user_email) as email
+        , bootcamps_user_view.user_full_name as full_name
+        , bootcamps_user_view.user_address_country as address_country
+        , bootcamps_user_view.user_highest_education as highest_education
+        , bootcamps_user_view.user_gender as gender
+        , bootcamps_user_view.user_birth_year as birth_year
+        , bootcamps_user_view.user_company as company
+        , bootcamps_user_view.user_job_title as job_title
+        , bootcamps_user_view.user_industry as industry
+        , null as user_is_active_on_mitlearn
+        , null as user_joined_on_mitlearn
+        , null as user_is_active_on_mitxonline
+        , null as user_joined_on_mitxonline
+        , null as user_is_active_on_edxorg
+        , null as user_joined_on_edxorg
+        , null as user_is_active_on_mitxpro
+        , null as user_joined_on_mitxpro
+        , null as user_is_active_on_residential
+        , null as user_joined_on_residential
+        , null as micromasters_user_id
+        , bootcamps_user_view.user_id as bootcamps_application_user_id
+        , bootcamps_user_view.user_is_active as user_is_active_on_bootcamps
+        , bootcamps_user_view.user_joined_on as user_joined_on_bootcamps
+    from bootcamps_user_view
+    where bootcamps_user_view.user_email is not null
 
 )
 
@@ -527,6 +591,7 @@ with mitx_users as (
                     , user_joined_on_edxorg
                     , user_joined_on_mitxpro
                     , user_joined_on_residential
+                    , user_joined_on_bootcamps
                 ) desc
         ) as row_num
     from combined_users
@@ -567,6 +632,9 @@ with mitx_users as (
         , max(user_joined_on_mitxpro) as user_joined_on_mitxpro
         , max(user_is_active_on_residential) as user_is_active_on_residential
         , max(user_joined_on_residential) as user_joined_on_residential
+        , max(bootcamps_application_user_id) as bootcamps_application_user_id
+        , max(user_is_active_on_bootcamps) as user_is_active_on_bootcamps
+        , max(user_joined_on_bootcamps) as user_joined_on_bootcamps
     from combined_users
     group by user_pk
 )
@@ -613,6 +681,9 @@ select
     , agg.user_joined_on_mitxpro
     , agg.user_is_active_on_residential
     , agg.user_joined_on_residential
+    , agg.bootcamps_application_user_id
+    , agg.user_is_active_on_bootcamps
+    , agg.user_joined_on_bootcamps
 from base_info as base
 inner join agg_view as agg on base.user_pk = agg.user_pk
 left join learn_profile on base.mitlearn_user_id = learn_profile.user_id

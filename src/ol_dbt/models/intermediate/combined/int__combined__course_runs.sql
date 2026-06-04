@@ -184,7 +184,7 @@ with mitx_courses as (
         , bootcamps_runs.courserun_start_on
         , bootcamps_runs.courserun_end_on
         , null as courserun_upgrade_deadline
-        , null as courserun_is_live
+        , false as courserun_is_live
         , case
             when cardinality(split(bootcamps_runs.courserun_readable_id, '+')) >= 2
                 then split(bootcamps_runs.courserun_readable_id, '+')[2]
