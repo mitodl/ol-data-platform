@@ -89,13 +89,13 @@ authenticated token raises rate limits from 60 to 5,000 requests/hour. To set on
 
 ```toml
 # .dlt/secrets.toml
-[sources.podcast_rss_source]
+[sources.loads.podcast_rss_source]
 github_access_token = "ghp_your_token_here"
 ```
 
 Or via environment variable:
 ```bash
-export SOURCES__PODCAST_RSS_SOURCE__GITHUB_ACCESS_TOKEN=ghp_your_token_here
+export SOURCES__LOADS__PODCAST_RSS_SOURCE__GITHUB_ACCESS_TOKEN=ghp_your_token_here
 ```
 
 ### Source Parameters (Optional Overrides)
@@ -103,10 +103,10 @@ export SOURCES__PODCAST_RSS_SOURCE__GITHUB_ACCESS_TOKEN=ghp_your_token_here
 These can be overridden in `config.toml` if the defaults need to change:
 
 ```toml
-[sources.podcast_rss_source]
+[sources.loads.podcast_rss_source]
 github_repo = "mitodl/open-podcast-data"  # default
 github_folder = "podcasts"                 # default
-github_branch = "main"                     # default
+github_branch = "master"                   # default
 ```
 
 ### Destinations
@@ -115,7 +115,7 @@ The pipeline selects its destination from `DAGSTER_ENVIRONMENT`:
 
 | `DAGSTER_ENVIRONMENT` | Destination | Dataset |
 |---|---|---|
-| `dev` / unset | `podcast_local` → `file:///tmp/.dlt/data` | `podcast_rss_local` |
+| `dev` / unset | `podcast_local` → `file:///tmp/.dlt/data/podcast` | `podcast_rss_local` |
 | `qa` | `podcast_qa` → `s3://ol-data-lake-raw-qa/podcast` | `ol_warehouse_qa_raw` |
 | `production` | `podcast_production` → `s3://ol-data-lake-raw-production/podcast` | `ol_warehouse_production_raw` |
 
@@ -128,7 +128,7 @@ cd /path/to/ol-data-platform/dg_projects/data_loading
 
 # Load all podcasts to local Parquet files
 uv run python -m data_loading.defs.podcast_rss_ingest.loads
-# Output: /tmp/.dlt/data/raw__podcast__rss__channels/ and raw__podcast__rss__episodes/
+# Output: /tmp/.dlt/data/podcast/raw__podcast__rss__channels/ and raw__podcast__rss__episodes/
 ```
 
 ### Query local results with DuckDB
@@ -136,13 +136,13 @@ uv run python -m data_loading.defs.podcast_rss_ingest.loads
 ```bash
 duckdb -c "
 SELECT readable_id, title, offered_by, topics
-FROM read_parquet('/tmp/.dlt/data/raw__podcast__rss__channels/**/*.parquet');
+FROM read_parquet('/tmp/.dlt/data/podcast/raw__podcast__rss__channels/**/*.parquet');
 "
 
 duckdb -c "
 SELECT c.title as podcast, COUNT(e.readable_id) as episode_count
-FROM read_parquet('/tmp/.dlt/data/raw__podcast__rss__channels/**/*.parquet') c
-JOIN read_parquet('/tmp/.dlt/data/raw__podcast__rss__episodes/**/*.parquet') e
+FROM read_parquet('/tmp/.dlt/data/podcast/raw__podcast__rss__channels/**/*.parquet') c
+JOIN read_parquet('/tmp/.dlt/data/podcast/raw__podcast__rss__episodes/**/*.parquet') e
   ON e.channel_readable_id = c.readable_id
 GROUP BY c.title
 ORDER BY episode_count DESC;

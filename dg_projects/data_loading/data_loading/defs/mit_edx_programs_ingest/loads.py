@@ -76,16 +76,18 @@ def mit_edx_programs_source(
     ``Authorization: JWT <token>`` (not Bearer). Programs are filtered to
     MIT-authored, active, non-MicroMasters entries before storage.
 
-    Credentials are resolved at execution time from dlt secrets or environment
-    variables (``SOURCES__MIT_EDX_PROGRAMS_INGEST__CLIENT_ID`` etc.) if not
-    passed explicitly.
+    Credentials are resolved at execution time from environment variables
+    (``EDX_API_CLIENT_ID``, ``EDX_API_CLIENT_SECRET``, ``EDX_API_ACCESS_TOKEN_URL``,
+    ``EDX_PROGRAMS_API_URL``) if not passed explicitly.
 
     Args:
-        client_id: OAuth2 client ID. Resolved from secrets if not provided.
-        client_secret: OAuth2 client secret. Resolved from secrets if not provided.
-        access_token_url: Token endpoint URL. Resolved from secrets if not provided.
-        programs_api_url: Full base URL of the Programs API. Resolved from secrets
+        client_id: JWT client ID. Resolved from EDX_API_CLIENT_ID if not provided.
+        client_secret: JWT client secret. Resolved from EDX_API_CLIENT_SECRET
             if not provided.
+        access_token_url: Token endpoint URL. Resolved from EDX_API_ACCESS_TOKEN_URL
+            if not provided.
+        programs_api_url: Full base URL of the Programs API. Resolved from
+            EDX_PROGRAMS_API_URL if not provided.
     """
 
     @dlt.resource(

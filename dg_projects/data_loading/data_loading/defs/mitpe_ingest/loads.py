@@ -3,7 +3,7 @@ MIT Professional Education (MIT PE) course ingestion via dlt.
 
 Fetches courses from the MIT PE feeds API. The feed is page-based:
 incrementing ``page`` from 0 until an empty array is returned.
-Records are upserted by a composite key so repeated runs are idempotent.
+The table is fully replaced on each run (write_disposition="replace").
 
 Note: MIT PE does not have a separate /feeds/programs/ endpoint. Programs
 are mixed in with courses in the /feeds/courses/ feed.
@@ -51,7 +51,7 @@ def mitpe_source(
     @dlt.resource(
         name="raw__mitpe__api__courses",
         # MIT PE courses have no stable UUID; use title+url as a composite key
-        # to deduplicate across pages and runs.
+        # to deduplicate records across pages within a single run.
         primary_key=["title", "url"],
         write_disposition="replace",
         table_format=_table_format,

@@ -15,7 +15,7 @@ came from and how it was ingested.
 ## Pattern
 
 ```
-raw__{source_system}__{subsystem}__{storage_technology}__{entity_name}
+raw__{source_system}[__{subsystem}]__{storage_technology}[__{namespace}]__{entity_name}
 ```
 
 All segments are **lowercase**, separated by double underscores (`__`). Single
@@ -27,6 +27,7 @@ underscores are used within a segment (e.g., `auth_user`, `tracking_logs`).
 | `source_system` | Always | The application or external service that owns the data |
 | `subsystem` | When applicable | The internal component within the source system (see below) |
 | `storage_technology` | Always | The database engine, file format, or protocol used to store or deliver the data |
+| `namespace` | When applicable | An optional grouping within the storage layer (e.g., `tables` for S3 database exports) |
 | `entity_name` | Always | The table, resource, or entity name within the source |
 
 ### When to include `subsystem`
@@ -54,7 +55,6 @@ with a single data store.
 | `rss` | RSS / Atom feed |
 | `google_sheets` | Google Sheets CSV export |
 | `bigquery` | Google BigQuery (via IRx or partner data delivery) |
-| `discovery` | edX Discovery / Course Catalog API (sub-service of edX.org) |
 
 ---
 
@@ -89,8 +89,7 @@ raw__edxorg__s3__mitx_course_run
 
 ```
 raw__edxorg__discovery__api__programs      ← MIT-authored programs from the edX Discovery API
-raw__edxorg__api__course                   ← (stg__edxorg__api__course source)
-raw__edxorg__api__courserun
+                                             (subsystem=discovery, storage_technology=api)
 ```
 
 ### MIT Learn catalog sources (via dlt)

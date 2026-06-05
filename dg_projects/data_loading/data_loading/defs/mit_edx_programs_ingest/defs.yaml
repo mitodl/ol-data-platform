@@ -10,4 +10,4 @@ attributes:
       key: "{{ resource.name }}"
       key_prefix: "ol_warehouse_raw_data"
       description: "Raw MIT-authored edX.org program metadata ingested from the edX\
-        \ Programs API (OAuth2)."
+        \ Programs API (JWT client credentials)."
