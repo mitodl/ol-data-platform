@@ -177,7 +177,7 @@ with mitx_courses as (
     select
         '{{ var("bootcamps") }}' as platform
         , bootcamps_courses.course_title
-        , bootcamps_courses.course_readable_id
+        , bootcamps_runs.course_readable_id
         , bootcamps_runs.courserun_title
         , bootcamps_runs.courserun_readable_id
         , null as courserun_url
