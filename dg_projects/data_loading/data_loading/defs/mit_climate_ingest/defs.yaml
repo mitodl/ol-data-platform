@@ -1,0 +1,13 @@
+---
+type: dagster_dlt.DltLoadCollectionComponent
+
+attributes:
+  loads:
+  - source: .loads.mit_climate_load_source
+    pipeline: .loads.mit_climate_pipeline
+    translation:
+      group_name: ingestion
+      key: "{{ resource.name }}"
+      key_prefix: "ol_warehouse_raw_data"
+      description: "Raw MIT Climate Portal articles ingested from the Explainers and\
+        \ Ask MIT Climate JSON feeds."

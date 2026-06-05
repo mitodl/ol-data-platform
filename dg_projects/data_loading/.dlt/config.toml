@@ -29,6 +29,22 @@ destination_type = "filesystem"
 bucket_url = "file:///tmp/.dlt/data"
 layout = "{table_name}/{load_id}.{file_id}.{ext}"
 
+# Podcast RSS destinations (used by podcast_rss_ingest)
+[destination.podcast_local]
+destination_type = "filesystem"
+bucket_url = "file:///tmp/.dlt/data/podcast"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.podcast_qa]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-qa/podcast"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.podcast_production]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-production/podcast"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
 # QA Destination - Filesystem with Iceberg + Glue Catalog (named destination)
 # Writes Iceberg tables to S3 and registers in ol_warehouse_qa_raw Glue database
 [destination.qa]
@@ -65,3 +81,154 @@ warehouse = "s3://ol-data-lake-raw-production/edxorg"
 # - dev/ci -> local (filesystem, local disk, no Iceberg)
 # - qa -> qa (filesystem + Iceberg, S3 + ol_warehouse_qa_raw Glue catalog)
 # - production -> production (filesystem + Iceberg, S3 + ol_warehouse_production_raw Glue catalog)
+
+# =============================================================================
+# REST API / dlt sources
+# Each source gets its own named destinations so S3 prefixes stay isolated.
+# All share the same Iceberg catalog configuration.
+# =============================================================================
+
+# MIT Climate Portal
+[destination.mit_climate_local]
+destination_type = "filesystem"
+bucket_url = "file:///tmp/.dlt/data/mit_climate"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.mit_climate_qa]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-qa/mit_climate"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.mit_climate_production]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-production/mit_climate"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+# MIT Professional Education
+[destination.mitpe_local]
+destination_type = "filesystem"
+bucket_url = "file:///tmp/.dlt/data/mitpe"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.mitpe_qa]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-qa/mitpe"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.mitpe_production]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-production/mitpe"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+# Open Learning Library
+[destination.oll_local]
+destination_type = "filesystem"
+bucket_url = "file:///tmp/.dlt/data/oll"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.oll_qa]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-qa/oll"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.oll_production]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-production/oll"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+# MIT edX Programs
+[destination.mit_edx_programs_local]
+destination_type = "filesystem"
+bucket_url = "file:///tmp/.dlt/data/mit_edx_programs"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.mit_edx_programs_qa]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-qa/mit_edx_programs"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+[destination.mit_edx_programs_production]
+destination_type = "filesystem"
+bucket_url = "s3://ol-data-lake-raw-production/mit_edx_programs"
+layout = "{table_name}/{load_id}.{file_id}.{ext}"
+
+# Shared Iceberg catalog config for QA/production REST API source destinations
+[iceberg_catalog.mit_climate_qa]
+iceberg_catalog_name = "ol_warehouse_qa_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.mit_climate_qa.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-qa/mit_climate"
+
+[iceberg_catalog.mit_climate_production]
+iceberg_catalog_name = "ol_warehouse_production_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.mit_climate_production.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-production/mit_climate"
+
+[iceberg_catalog.mitpe_qa]
+iceberg_catalog_name = "ol_warehouse_qa_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.mitpe_qa.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-qa/mitpe"
+
+[iceberg_catalog.mitpe_production]
+iceberg_catalog_name = "ol_warehouse_production_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.mitpe_production.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-production/mitpe"
+
+[iceberg_catalog.oll_qa]
+iceberg_catalog_name = "ol_warehouse_qa_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.oll_qa.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-qa/oll"
+
+[iceberg_catalog.oll_production]
+iceberg_catalog_name = "ol_warehouse_production_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.oll_production.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-production/oll"
+
+[iceberg_catalog.mit_edx_programs_qa]
+iceberg_catalog_name = "ol_warehouse_qa_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.mit_edx_programs_qa.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-qa/mit_edx_programs"
+
+[iceberg_catalog.mit_edx_programs_production]
+iceberg_catalog_name = "ol_warehouse_production_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.mit_edx_programs_production.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-production/mit_edx_programs"
+
+[iceberg_catalog.podcast_qa]
+iceberg_catalog_name = "ol_warehouse_qa_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.podcast_qa.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-qa/podcast"
+
+[iceberg_catalog.podcast_production]
+iceberg_catalog_name = "ol_warehouse_production_raw"
+iceberg_catalog_type = "glue"
+
+[iceberg_catalog.podcast_production.iceberg_catalog_config]
+type = "glue"
+warehouse = "s3://ol-data-lake-raw-production/podcast"
