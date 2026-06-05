@@ -93,7 +93,7 @@ with mitxonline_courses as (
 
 , bootcamps_courses as (
     select
-        coalesce(course_numbers.course_readable_id, courses.course_readable_id) as course_readable_id
+        course_numbers.course_readable_id as course_readable_id
         , courses.course_id as source_id
         , courses.course_title
         , course_numbers.course_number
