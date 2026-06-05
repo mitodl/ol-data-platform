@@ -61,21 +61,26 @@ class MITLearnApiClient(BaseApiClient):
         return self._post_signed_webhook("/api/v1/webhooks/ovs_videos/", data)
 
     def notify_learning_resources(
-        self, resources: list[dict[str, Any]]
+        self,
+        resources: list[dict[str, Any]],
+        endpoint: str = "/api/v1/webhooks/learning_resources/",
     ) -> dict[str, Any]:
         """Send a batch of pre-computed LearningResource dicts to MIT Learn.
 
-        All catalog sources that deliver pre-transformed records use this
-        single endpoint. The handler routes each resource to the appropriate
-        loader (``load_courses`` or ``load_programs``) based on the
-        ``resource_type`` and ``etl_source`` fields already present in each
-        resource dict. No source-specific endpoint is needed.
+        All Cohort 2 catalog sources use a single consolidated endpoint
+        (``/api/v1/webhooks/learning_resources/``). MIT Learn's handler
+        routes each resource to the appropriate loader based on the
+        ``etl_source`` and ``resource_type`` fields already present in each
+        resource dict. No per-source endpoint is needed.
+
+        The ``endpoint`` parameter is exposed for testing or future
+        source-specific routing without requiring a new method.
 
         Args:
             resources: List of LearningResource-shaped dicts, each containing
                 at minimum ``readable_id``, ``etl_source``, and
                 ``resource_type``.
+            endpoint: Webhook path to POST to. Defaults to the consolidated
+                learning_resources endpoint.
         """
-        return self._post_signed_webhook(
-            "/api/v1/webhooks/learning_resources/", {"resources": resources}
-        )
+        return self._post_signed_webhook(endpoint, {"resources": resources})

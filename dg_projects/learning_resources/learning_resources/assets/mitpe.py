@@ -5,9 +5,8 @@ Reads pre-transformed course records from the
 ``integrations__learn__mitpe_courses`` Iceberg table (produced by dbt from the
 mitpe dlt pipeline) and delivers them to MIT Learn via a signed webhook POST.
 
-Note: MIT PE does not expose a separate programs API endpoint. Programs are
-mixed in with courses in the /feeds/courses/ feed and are delivered here via
-the courses table (resource_type distinguishes them if present).
+Note: MIT PE does not expose a separate programs API endpoint. All records
+from the /feeds/courses/ feed are delivered as courses (resource_type='course').
 
 Data flow:
     raw__mitpe__api__courses (Iceberg, via dlt)

@@ -14,12 +14,27 @@ with courses as (
     select * from {{ ref('stg__oll__google_sheets__courses') }}
 )
 
+-- The OLL spreadsheet has one row per course-semester offering, so the same
+-- course may appear multiple times. De-duplicate to one row per readable_id
+-- by selecting the most recent offering (by year desc, semester desc).
+, deduped as (
+    select
+        *
+        , row_number() over (
+            partition by course_readable_id
+            order by
+                coalesce(try_cast(course_year as int), 0) desc
+                , course_semester desc nulls last
+        ) as rn
+    from courses
+)
+
 select
     course_readable_id                                      as readable_id
     , course_title                                          as title
     , {{ cast_timestamp_to_iso8601('current_timestamp') }}  as last_modified
     , 'oll'                                                 as etl_source
-    , description                                           as description
+    , course_description                                    as description
     , course_url                                            as url
     , course_image_url                                      as image_url
     , replace(course_topics_raw, '|', ', ')                 as topics
@@ -31,4 +46,5 @@ select
         course_run_id,
         '|||true'
     )                                                       as runs
-from courses
+from deduped
+where rn = 1
