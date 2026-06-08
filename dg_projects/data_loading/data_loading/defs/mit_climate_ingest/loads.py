@@ -35,8 +35,8 @@ _DLT_PROJECT_DIR = Path(__file__).parent.parent.parent.parent
 if _DLT_PROJECT_DIR.exists():
     os.environ.setdefault("DLT_PROJECT_DIR", str(_DLT_PROJECT_DIR))
 
-_EXPLAINERS_URL_DEFAULT = "https://climate.mit.edu/api/explainers"
-_ASK_URL_DEFAULT = "https://climate.mit.edu/api/ask-mit-climate"
+_EXPLAINERS_URL_DEFAULT = "https://climate.mit.edu/feeds/explainers"
+_ASK_URL_DEFAULT = "https://climate.mit.edu/feeds/ask-mit-climate"
 
 
 @dlt.source(name="mit_climate_ingest")
