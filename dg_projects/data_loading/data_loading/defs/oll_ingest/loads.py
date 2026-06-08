@@ -48,7 +48,7 @@ def oll_source(
 
     @dlt.resource(
         name="raw__oll__google_sheets__courses",
-        primary_key=["OLL Course", "Semester", "Year"],
+        primary_key=["readable_id"],
         write_disposition="replace",
         table_format=_table_format,
     )
