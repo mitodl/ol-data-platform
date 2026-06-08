@@ -1,3 +1,4 @@
+import ssl
 from typing import Any
 
 import pymysql
@@ -7,6 +8,13 @@ from pymysql.cursors import DictCursor
 DEFAULT_MYSQL_PORT = 3306
 
 
+def _make_ssl_context() -> ssl.SSLContext:
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
 class MySQLClient:
     def __init__(
         self,
@@ -14,7 +22,7 @@ class MySQLClient:
         username: str,
         password: str,
         db_name: str | None = None,
-        port: Int = 3306,
+        port: int = 3306,
     ):
         """Instantiate a connection to a MySQL database.
 
@@ -36,11 +44,11 @@ class MySQLClient:
         self.connection = pymysql.connect(
             host=hostname,
             user=username,
-            passwd=password,
+            password=password,
             port=port,
-            db=db_name,
+            database=db_name,
             cursorclass=DictCursor,
-            ssl={"cipher": "TLSv1.3"},
+            ssl=_make_ssl_context(),
         )
 
     def run_query(self, query: str) -> tuple[list[str], list[dict[Any, Any]]]:
