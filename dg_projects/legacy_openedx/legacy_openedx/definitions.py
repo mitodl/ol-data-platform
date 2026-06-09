@@ -10,7 +10,7 @@ that were defined using repository-based patterns. These include:
 import os
 from typing import Literal
 
-from dagster import Definitions
+from dagster import Definitions, RunRequest, ScheduleEvaluationContext, schedule
 from dagster_aws.s3 import S3Resource
 from dagster_aws.s3.resources import s3_resource
 from ol_orchestrate.lib.constants import DAGSTER_ENV, VAULT_ADDRESS
@@ -22,13 +22,8 @@ from ol_orchestrate.resources.secrets.vault import Vault
 
 from legacy_openedx.jobs.open_edx import edx_course_pipeline
 from legacy_openedx.resources.healthchecks import HealthchecksIO
-from legacy_openedx.resources.mysql_db import mysql_db_resource
+from legacy_openedx.resources.mysql_db import VaultMySQLClientFactory
 from legacy_openedx.resources.sqlite_db import sqlite_db_resource
-from legacy_openedx.schedules.open_edx import (
-    mitxonline_edx_daily_schedule,
-    residential_edx_daily_schedule,
-    xpro_edx_daily_schedule,
-)
 
 # Initialize vault with resilient loading
 try:
@@ -139,14 +134,16 @@ def open_edx_export_irx_job_config(
         "token_url": f"{edx_creds['url']}/oauth2/access_token",
     }
 
-    db_creds = vault.client.secrets.database.generate_credentials(
-        mount_point=f"mariadb-{deployment}", name="readonly"
-    )["data"]
+    db_hostname = (
+        f"edxapp-db-{deployment}-{dagster_env}"
+        f"{'-replica' if dagster_env == 'production' else ''}"
+        ".cbnm7ajau6mi.us-east-1.rds.amazonaws.com"
+    )
     edx_db_config = {
         "mysql_db_name": "edxapp",
-        "mysql_hostname": f"edxapp-db-{deployment}-{dagster_env}{'-replica' if dagster_env == 'production' else ''}.cbnm7ajau6mi.us-east-1.rds.amazonaws.com",  # noqa: E501
-        "mysql_username": db_creds["username"],
-        "mysql_password": db_creds["password"],
+        "mysql_hostname": db_hostname,
+        "vault_mount_point": f"mariadb-{deployment}",
+        "vault_role": "readonly",
     }
 
     return {
@@ -184,39 +181,93 @@ qa_resources = {
 }
 
 production_resources = {
-    "sqldb": mysql_db_resource,
+    "sqldb": VaultMySQLClientFactory.configure_at_launch(),
+    "vault": vault,
     "s3": S3Resource(),
     "results_dir": DailyResultsDir.configure_at_launch(),
     "healthchecks": HealthchecksIO.configure_at_launch(),
     "openedx": OpenEdxApiClient.configure_at_launch(),
 }
 
-# Create jobs for each deployment
+# Create jobs for each deployment.
+# NOTE: config is intentionally omitted here — it is generated at schedule-fire time
+# (not at code-location load time) so that Vault dynamic DB credentials are always
+# fresh when the job runs.  See the @schedule definitions below.
 residential_edx_job = edx_course_pipeline.to_job(
     name="residential_edx_course_pipeline",
     resource_defs=production_resources,
-    config=open_edx_export_irx_job_config("mitx", DAGSTER_ENV),
 )
 
 xpro_edx_job = edx_course_pipeline.to_job(
     name="xpro_edx_course_pipeline",
     resource_defs=production_resources,
-    config=open_edx_export_irx_job_config("xpro", DAGSTER_ENV),
 )
 
 mitxonline_edx_job = edx_course_pipeline.to_job(
     name="mitxonline_edx_course_pipeline",
     resource_defs=production_resources,
-    config=open_edx_export_irx_job_config("mitxonline", DAGSTER_ENV),
 )
+
+
+# Schedules
+# ---------
+# Config (including Vault dynamic DB credentials) is generated inside each schedule
+# function so it is fetched at schedule-evaluation time, not at code-location load
+# time.  Vault database credentials have a short TTL (~1 h).  Baking them into the
+# static job config via `to_job(config=...)` caused "Access denied" failures when the
+# Dagster daemon had been running longer than the credential TTL before the daily job
+# fired.
+
+
+@schedule(
+    job=residential_edx_job,
+    cron_schedule="@daily",
+    execution_timezone="Etc/UTC",
+)
+def residential_edx_daily_schedule(_context: ScheduleEvaluationContext) -> RunRequest:
+    """Daily schedule for the residential (MITx) edX course pipeline."""
+    return RunRequest(
+        run_key="residential_edx_course_pipeline",
+        run_config=open_edx_export_irx_job_config("mitx", DAGSTER_ENV),
+        tags={"business_unit": "residential"},
+    )
+
+
+@schedule(
+    job=xpro_edx_job,
+    cron_schedule="@daily",
+    execution_timezone="Etc/UTC",
+)
+def xpro_edx_daily_schedule(_context: ScheduleEvaluationContext) -> RunRequest:
+    """Daily schedule for the xPRO edX course pipeline."""
+    return RunRequest(
+        run_key="xpro_edx_course_pipeline",
+        run_config=open_edx_export_irx_job_config("xpro", DAGSTER_ENV),
+        tags={"business_unit": "mitxpro"},
+    )
+
+
+@schedule(
+    job=mitxonline_edx_job,
+    cron_schedule="@daily",
+    execution_timezone="Etc/UTC",
+)
+def mitxonline_edx_daily_schedule(_context: ScheduleEvaluationContext) -> RunRequest:
+    """Daily schedule for the MITx Online edX course pipeline."""
+    return RunRequest(
+        run_key="mitxonline_edx_course_pipeline",
+        run_config=open_edx_export_irx_job_config("mitxonline", DAGSTER_ENV),
+        tags={"business_unit": "mitxonline"},
+    )
+
 
 # Create unified definitions
 defs = Definitions(
     jobs=[residential_edx_job, xpro_edx_job, mitxonline_edx_job],
     schedules=[
-        residential_edx_daily_schedule.with_updated_job(residential_edx_job),
-        xpro_edx_daily_schedule.with_updated_job(xpro_edx_job),
-        mitxonline_edx_daily_schedule.with_updated_job(mitxonline_edx_job),
+        residential_edx_daily_schedule,
+        xpro_edx_daily_schedule,
+        mitxonline_edx_daily_schedule,
     ],
     resources={
         "gcp_gcs": gcs_connection,
