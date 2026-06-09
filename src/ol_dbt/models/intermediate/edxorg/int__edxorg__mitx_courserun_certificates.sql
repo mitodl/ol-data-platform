@@ -4,10 +4,10 @@
 --
 -- Grain analysis for the enrollment LEFT JOIN in edxorg_dedp_certificates_from_micromasters:
 -- int__edxorg__mitx_courserun_enrollments is unique on (user_id, courserun_readable_id) (tested).
--- The join condition is (courserun_readable_id, user_username).  user_username in the enrollment
--- model is derived from int__edxorg__mitx_users which has a unique test on user_username,
+-- The join condition is (courserun_readable_id, user_username). user_username in the enrollment
+-- model is derived from int__edxorg__mitx_users, which has a unique test on user_username,
 -- so (courserun_readable_id, user_username) maps 1:1 to (courserun_readable_id, user_id),
--- which is the unique key of the enrollment model.  The LEFT JOIN therefore cannot fan out.
+-- which is the unique key of the enrollment model. The LEFT JOIN therefore cannot fan out.
 
 with person_courses as (
     select *
