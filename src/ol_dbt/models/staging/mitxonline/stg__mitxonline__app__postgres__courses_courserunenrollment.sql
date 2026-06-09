@@ -1,14 +1,16 @@
 -- MITx Online Course Run Enrollment Information
 -- Django enforces unique_together on (user, run), but hard-deletes followed by re-enrollment
 -- produce two rows with different IDs but the same (user_id, run_id) in the raw Iceberg table.
--- We deduplicate here, keeping the most recently created record (highest id) per (user_id, run_id).
+-- We deduplicate here, preferring active=True records first, then the highest id (most recently
+-- created) as a tiebreaker. This correctly handles cases where the higher-id record is a stale
+-- inactive/unenrolled row rather than the current live enrollment.
 with
     source as (
         select *
         from {{ source("ol_warehouse_raw_data", "raw__mitxonline__app__postgres__courses_courserunenrollment") }}
     )
 
-    {{ deduplicate_raw_table(order_by="id", partition_columns="user_id, run_id") }},
+    {{ deduplicate_raw_table(order_by="active desc, id", partition_columns="user_id, run_id") }},
     cleaned as (
         select
             id as courserunenrollment_id,
