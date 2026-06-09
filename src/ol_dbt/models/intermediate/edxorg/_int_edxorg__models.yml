@@ -79,8 +79,13 @@ models:
     description: string, short description of the course run
 
 - name: int__edxorg__mitx_courserun_certificates
-  description: Intermediate model for course run certificates for edx.org courses
-    For edx.org DEDP courses, certificates are sourced from MicroMasters
+  description: "Intermediate model for course run certificates for edx.org courses.\n\
+    For edx.org DEDP courses, certificates are sourced from MicroMasters.\nGrain:\
+    \ one row per (user_id, courserun_readable_id).\nThe LEFT JOIN to int__edxorg__mitx_courserun_enrollments\
+    \ in the DEDP CTE joins on\n(courserun_readable_id, user_username). Since user_username\
+    \ is unique per user_id\nin that model (sourced from int__edxorg__mitx_users),\
+    \ this resolves to the enrollment\nmodel’s (user_id, courserun_readable_id) unique\
+    \ key and cannot fan out."
   columns:
   - name: user_id
     description: int, Numerical user ID of a learner on edx.org
