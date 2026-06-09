@@ -1,20 +1,19 @@
 """
-Open Learning Library (OLL) webhook delivery asset.
+MIT Professional Education (MIT PE) webhook delivery asset.
 
 Reads pre-transformed course records from the
-``integrations__learn__oll_courses`` Iceberg table (produced by dbt from the
-oll dlt pipeline) and delivers them to MIT Learn via a single signed webhook
-POST.
+``integrations__learn__mitpe_courses`` Iceberg table (produced by dbt from the
+mitpe dlt pipeline) and delivers them to MIT Learn via a signed webhook POST.
 
-OCW-origin courses are excluded at the staging layer and are never present in
-the integration table, so no additional filtering is needed here.
+Note: MIT PE does not expose a separate programs API endpoint. All records
+from the /feeds/courses/ feed are delivered as courses (resource_type='course').
 
 Data flow:
-    raw__oll__google_sheets__courses (Iceberg, via dlt)
-        → integrations__learn__oll_courses (dbt)
+    raw__mitpe__api__courses (Iceberg, via dlt)
+        → integrations__learn__mitpe_courses (dbt)
             → MIT Learn webhook (this asset)
 
-Scheduling: daily at 06:30 UTC. Configured in definitions.py.
+Scheduling: daily at 06:15 UTC. Configured in definitions.py.
 """
 
 import logging
@@ -41,68 +40,68 @@ _GLUE_DB = (
     if DAGSTER_ENV in ("qa", "production")
     else "ol_warehouse_production_integrations"
 )
-_TABLE = "integrations__learn__oll_courses"
+_COURSES_TABLE = "integrations__learn__mitpe_courses"
 
 
 def _row_to_resource(row: dict[str, Any]) -> dict[str, Any]:
     """Map an integrations table row to the MIT Learn LearningResource shape."""
     image_url = row.get("image_url")
+    image_alt = row.get("image_alt") or ""
     topics_raw = row.get("topics") or ""
     topics = [{"name": t.strip()} for t in topics_raw.split(",") if t.strip()]
-
-    # Reconstruct the single run from the pipe-delimited runs string
-    runs = []
-    if runs_str := row.get("runs"):
-        parts = runs_str.split("|")
-        runs = [{"run_id": parts[0]}]
 
     return {
         "readable_id": row["readable_id"],
         "title": row["title"],
         "url": row.get("url"),
         "description": row.get("description"),
-        "image": {"url": image_url, "alt": row["readable_id"]} if image_url else None,
+        "image": {"url": image_url, "alt": image_alt} if image_url else None,
         "topics": topics,
         "published": True,
-        "etl_source": "oll",
-        "offered_by": {"code": "oll"},
-        "platform": "oll",
-        "resource_type": "course",
-        "runs": runs,
+        "professional": True,
+        "etl_source": "mitpe",
+        "offered_by": {"code": "mitpe"},
+        "platform": "mitpe",
+        "resource_type": row.get("resource_type", "course"),
     }
 
 
 @asset(
-    key=AssetKey(["mit_learn_delivery", "oll_webhook"]),
+    key=AssetKey(["mit_learn_delivery", "mitpe_webhook"]),
     group_name="mit_learn_delivery",
     description=(
-        "Read Open Learning Library courses from the integrations__learn__oll_courses "
-        "Iceberg table and POST as a signed webhook batch to MIT Learn."
+        "Read MIT Professional Education courses from the "
+        "integrations__learn__mitpe_courses Iceberg table and POST as a signed "
+        "webhook batch to MIT Learn."
     ),
-    deps=[AssetKey(["integrations", "learn", "integrations__learn__oll_courses"])],
+    deps=[
+        AssetKey(["integrations", "learn", "integrations__learn__mitpe_courses"]),
+    ],
     retry_policy=RetryPolicy(max_retries=3, delay=5.0),
 )
-def oll_webhook(
+def mitpe_webhook(
     context: AssetExecutionContext,
     learn_api: ApiClientFactory,
 ) -> dict[str, Any]:
-    """Deliver OLL courses to MIT Learn via signed webhook."""
-    context.log.info("Reading %s from Glue database %s", _TABLE, _GLUE_DB)
-    df: pl.DataFrame = get_dbt_model_as_dataframe(
-        database_name=_GLUE_DB,
-        table_name=_TABLE,
+    """Deliver MIT PE courses to MIT Learn via signed webhook."""
+    context.log.info("Reading %s from Glue database %s", _COURSES_TABLE, _GLUE_DB)
+
+    courses_df: pl.DataFrame = get_dbt_model_as_dataframe(
+        database_name=_GLUE_DB, table_name=_COURSES_TABLE
     ).collect()
-    context.log.info("Loaded %d OLL courses from Iceberg", len(df))
+    context.log.info("Loaded %d MIT PE courses from Iceberg", len(courses_df))
 
-    resources = [_row_to_resource(row) for row in df.iter_rows(named=True)]
+    resources = [_row_to_resource(row) for row in courses_df.iter_rows(named=True)]
 
-    context.log.info("Delivering %d OLL courses to MIT Learn webhook", len(resources))
+    context.log.info(
+        "Delivering %d MIT PE courses to MIT Learn webhook", len(resources)
+    )
     try:
         response = cast(MITLearnApiClient, learn_api.client).notify_learning_resources(
             resources
         )
     except httpx.HTTPStatusError as exc:
-        msg = f"OLL webhook failed with status {exc.response.status_code}: {exc}"
+        msg = f"MIT PE webhook failed with status {exc.response.status_code}: {exc}"
         context.log.exception(msg)
         raise RuntimeError(msg) from exc
 

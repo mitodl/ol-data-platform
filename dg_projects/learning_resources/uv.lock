@@ -1301,6 +1301,7 @@ dependencies = [
     { name = "pygsheets" },
     { name = "python-dateutil" },
     { name = "pyyaml" },
+    { name = "requests" },
 ]
 
 [package.dev-dependencies]
@@ -1322,6 +1323,7 @@ requires-dist = [
     { name = "pygsheets", specifier = ">=2.0.6" },
     { name = "python-dateutil", specifier = ">=2.8.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "requests", specifier = ">=2.32.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -2424,6 +2426,24 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/06/b3/36c8ecf72e8925200671613332db156d84b99b3aee742a41c1938ebb0808/tqdm-4.68.1.tar.gz", hash = "sha256:fc163d96b287bd031e1aa24421ce4411b25559bd0a1be4fe649bdaa4d2c02bf5", size = 171236, upload-time = "2026-06-05T17:23:15.267Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/47/aa/218a0eb34de1f753c83e4d0d1c8e7c4cef27f20dcb8342e024f63a80dc86/tqdm-4.68.1-py3-none-any.whl", hash = "sha256:fea4a90e4023f764914569f7802a297277c5ab1a66be5144143e142e1a4031d8", size = 78354, upload-time = "2026-06-05T17:23:13.654Z" },
+]
+
+[[package]]
+name = "trino"
+version = "0.337.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "lz4" },
+    { name = "orjson", marker = "platform_python_implementation != 'PyPy'" },
+    { name = "python-dateutil" },
+    { name = "pytz" },
+    { name = "requests" },
+    { name = "tzlocal" },
+    { name = "zstandard" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7f/b6/73315c36902ecd87d061fe045a1df4611f5b7ff714498864896b4d454ab1/trino-0.337.0.tar.gz", hash = "sha256:3a0bd03a09b7ea5dccd41ca6e58abfb127c6303f3a48a258ff794d411dd83a3c", size = 55995, upload-time = "2026-03-06T13:24:01.495Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2d/99/c39eca8b3fca72d39fe507f9e7598174acb0a5845ecdd20630790e268cb2/trino-0.337.0-py3-none-any.whl", hash = "sha256:868f2b8137d4d1baa84c9bc341f2cdf29039462aa69d7c089a0b821b5a91f29c", size = 58558, upload-time = "2026-03-06T13:23:59.662Z" },
 ]
 
 [[package]]
