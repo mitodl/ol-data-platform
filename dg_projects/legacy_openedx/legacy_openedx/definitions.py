@@ -7,6 +7,7 @@ that were defined using repository-based patterns. These include:
 2. IRx course data exports for 3 deployments (mitx, xpro, mitxonline)
 """
 
+import logging
 import os
 from typing import Literal
 
@@ -23,6 +24,8 @@ from ol_orchestrate.resources.secrets.vault import Vault
 from legacy_openedx.jobs.open_edx import edx_course_pipeline
 from legacy_openedx.resources.healthchecks import HealthchecksIO
 from legacy_openedx.resources.mysql_db import VaultMySQLClientFactory
+
+log = logging.getLogger(__name__)
 
 # Initialize vault with resilient loading
 try:
@@ -212,6 +215,13 @@ def _job_default_config(
     try:
         return open_edx_export_irx_job_config(deployment, DAGSTER_ENV)
     except Exception:  # noqa: BLE001
+        log.warning(
+            "Failed to build default job config for '%s' at code-location load "
+            "time; launchpad will not be pre-populated. "
+            "Scheduled runs are unaffected.",
+            deployment,
+            exc_info=True,
+        )
         return {}
 
 
