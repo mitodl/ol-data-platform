@@ -106,8 +106,12 @@ def get_dbt_model_as_dataframe(database_name: str, table_name: str) -> pl.LazyFr
         KeyError: If the table metadata doesn't contain the expected fields
         boto3 exceptions: If the AWS Glue API call fails
     """
-    # pyiceberg's PyArrowFileIO expects timeout values as plain numeric seconds strings.
+    # Route pyiceberg I/O through fsspec/s3fs (aiobotocore) instead of the default
+    # PyArrow S3 FileIO (aws-sdk-cpp). The native PyArrow reader leaves wedged
+    # threads/connections on K8s that no S3 timeout interrupts, deadlocking the
+    # run. fsspec honors the same s3.connect-timeout / s3.request-timeout keys.
     pyiceberg_s3_properties = {
+        "py-io-impl": "pyiceberg.io.fsspec.FsspecFileIO",
         "s3.region": "us-east-1",
         "s3.connect-timeout": "10",
         "s3.request-timeout": "120",
