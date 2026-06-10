@@ -234,10 +234,10 @@ models:
       "errored", "failed", "fulfilled", "refunded", "partially_refunded",  "pending",
       "review".
   - name: order_updated_on
-    description: timestamp, specifying when the order was last updated. If this
-      is a b2b order it will be the timestamp that order was updated otherwise it
-      will be when the regular order was updated. For edX.org, it is the timestamp
-      that order was updated in MicroMasters application.
+    description: timestamp, specifying when the order was last updated. If this is
+      a b2b order it will be the timestamp that order was updated otherwise it will
+      be when the regular order was updated. For edX.org, it is the timestamp that
+      order was updated in MicroMasters application.
   - name: receipt_payment_amount
     description: numeric, total amount for the order - req_amount from cybersource
       payment

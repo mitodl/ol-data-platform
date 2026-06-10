@@ -67,7 +67,7 @@ with enrollment as (
 )
 
 , discount_names as (
-    select 
+    select
         discount_code
         , discount_name
     from combined_discounts
@@ -81,7 +81,7 @@ with enrollment as (
 )
 
 , order_emails as (
-    select 
+    select
         order_id
         , platform
         , redeemed_email
@@ -97,7 +97,7 @@ with enrollment as (
 )
 
 , order_emails as (
-    select 
+    select
         order_id
         , platform
         , courserun_readable_id
@@ -129,8 +129,8 @@ select
     , certificate_created_on as courseruncertificate_created_on
     , certificate_issued_on as courseruncertificate_issued_on
     , case when certificate_issued_on is not null then true else false end as courseruncertificate_is_earned
-    , case when certificate_uuid is not null 
-        then concat('https://mitxonline.mit.edu/certificate/', certificate_uuid) 
+    , case when certificate_uuid is not null
+        then concat('https://mitxonline.mit.edu/certificate/', certificate_uuid)
         else null end as courseruncertificate_url
     , grade_value as courserungrade_grade
     , is_passing as courserungrade_is_passing
@@ -170,15 +170,15 @@ inner join course_run
 inner join course
     on course_run.course_fk=course.course_pk
 left join f_certificate
-    on 
+    on
         enrollment.user_fk = f_certificate.user_fk
         and enrollment.courserun_fk = f_certificate.courserun_fk
         and enrollment.platform_fk = f_certificate.platform_fk
 left join grade
-    on 
+    on
         enrollment.user_fk = grade.user_fk
         and enrollment.courserun_fk = grade.courserun_fk
-        and enrollment.platform_fk = grade.platform_fk 
+        and enrollment.platform_fk = grade.platform_fk
 left join organization_courserun
     on enrollment.courserun_fk = organization_courserun.courserun_fk
 left join organization
@@ -186,19 +186,19 @@ left join organization
 inner join d_user
     on enrollment.user_fk = d_user.user_pk
 left join product
-    on 
+    on
         (enrollment.courserun_fk = product.courserun_fk
         or enrollment.program_fk = product.program_fk)
         and enrollment.platform_fk = product.platform_fk
 left join f_order
-    on 
+    on
         enrollment.user_fk = f_order.user_fk
         and product.product_pk = f_order.product_fk
         and enrollment.platform_fk = f_order.platform_fk
 left join discount
     on f_order.discount_fk = discount.discount_pk
 left join payment
-    on 
+    on
         f_order.order_id = payment.order_id
         and f_order.platform_fk = payment.platform_fk
 left join payment_method
