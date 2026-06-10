@@ -23,7 +23,6 @@ from ol_orchestrate.resources.secrets.vault import Vault
 from legacy_openedx.jobs.open_edx import edx_course_pipeline
 from legacy_openedx.resources.healthchecks import HealthchecksIO
 from legacy_openedx.resources.mysql_db import VaultMySQLClientFactory
-from legacy_openedx.resources.sqlite_db import sqlite_db_resource
 
 # Initialize vault with resilient loading
 try:
@@ -190,11 +189,6 @@ _base_production_resources = {
     "results_dir": DailyResultsDir.configure_at_launch(),
     "healthchecks": HealthchecksIO.configure_at_launch(),
     "openedx": OpenEdxApiClient.configure_at_launch(),
-}
-
-qa_resources = {
-    "sqldb": sqlite_db_resource,
-    **_base_production_resources,
 }
 
 # Create jobs for each deployment.
