@@ -138,6 +138,11 @@ def get_glue_catalog(region: str = AWS_REGION) -> GlueCatalog:
         "default",
         client=boto3.client("glue", region_name=region),
         **{
+            # Route pyiceberg I/O through fsspec/s3fs (aiobotocore) rather than the
+            # default PyArrow S3 FileIO (aws-sdk-cpp), whose native threads deadlock
+            # on K8s during commits (expire_snapshots) and are not interrupted by
+            # the configured S3 timeouts.
+            "py-io-impl": "pyiceberg.io.fsspec.FsspecFileIO",
             "s3.connect-timeout": "10",
             "s3.request-timeout": "120",
         },
