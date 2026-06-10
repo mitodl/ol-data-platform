@@ -1,13 +1,5 @@
 -- Course Certificate information for edx.org
 -- for DEDP courses that were ran on edX.org, certificates are pull from MicroMasters.
--- Model grain: one row per (user_id, courserun_readable_id).
---
--- Grain analysis for the enrollment LEFT JOIN in edxorg_dedp_certificates_from_micromasters:
--- int__edxorg__mitx_courserun_enrollments is unique on (user_id, courserun_readable_id) (tested).
--- The join condition is (courserun_readable_id, user_username).  user_username in the enrollment
--- model is derived from int__edxorg__mitx_users which has a unique test on user_username,
--- so (courserun_readable_id, user_username) maps 1:1 to (courserun_readable_id, user_id),
--- which is the unique key of the enrollment model.  The LEFT JOIN therefore cannot fan out.
 
 with person_courses as (
     select *
@@ -106,10 +98,6 @@ with person_courses as (
             = dedp_edxorg_grades_from_micromasters.courserun_readable_id
             and dedp_edxorg_certificates_from_micromasters.user_micromasters_id
             = dedp_edxorg_grades_from_micromasters.user_micromasters_id
-    -- int__edxorg__mitx_courserun_enrollments is unique on (user_id, courserun_readable_id).
-    -- user_username is unique per user_id in that model (sourced from int__edxorg__mitx_users),
-    -- so this join on (courserun_readable_id, user_username) cannot produce more than one
-    -- matching row per certificate and cannot fan out.
     left join edxorg_enrollments
         on
             dedp_edxorg_certificates_from_micromasters.courserun_edxorg_readable_id
@@ -143,11 +131,6 @@ with person_courses as (
     left join runs
         on certificates.courserun_readable_id = runs.courserun_readable_id
     left join micromasters_users
-        -- user_edxorg_username is not uniqueness-tested in __micromasters__users, but the
-        -- most_recent_edx_username CTE in that model ensures each micromasters user_id maps
-        -- to at most one user_edxorg_username.  A single edxorg username can only link back
-        -- to one micromasters account in practice; the compound unique test on the final model
-        -- (user_id, courserun_readable_id) will catch any fan-out if that assumption breaks.
         on certificates.user_username = micromasters_users.user_edxorg_username
     where
         runs.micromasters_program_id != {{ var("dedp_micromasters_program_id") }}
