@@ -134,18 +134,6 @@ def open_edx_export_irx_job_config(
         "token_url": f"{edx_creds['url']}/oauth2/access_token",
     }
 
-    db_hostname = (
-        f"edxapp-db-{deployment}-{dagster_env}"
-        f"{'-replica' if dagster_env == 'production' else ''}"
-        ".cbnm7ajau6mi.us-east-1.rds.amazonaws.com"
-    )
-    edx_db_config = {
-        "mysql_db_name": "edxapp",
-        "mysql_hostname": db_hostname,
-        "vault_mount_point": f"mariadb-{deployment}",
-        "vault_role": "readonly",
-    }
-
     return {
         "ops": {
             "collect_edx_course_exports": {
@@ -166,46 +154,76 @@ def open_edx_export_irx_job_config(
             "results_dir": {
                 "config": {"date_format": "%Y%m%d", "dir_prefix": deployment}
             },
-            "sqldb": {"config": edx_db_config},
         },
     }
 
 
+def _mysql_resource(
+    deployment: Literal["mitx", "mitxonline", "xpro"],
+    dagster_env: Literal["dev", "ci", "qa", "production"],
+) -> VaultMySQLClientFactory:
+    """Build a VaultMySQLClientFactory pre-wired with the module-level vault instance.
+
+    Vault is passed directly as a constructor argument (the pattern used by all
+    other Vault-backed resources in this project, e.g. ApiClientFactory).  This
+    ensures Dagster injects the live vault object rather than relying on
+    ResourceDependency registry look-up, which fails when the resource is
+    configured at launch.
+    """
+    db_hostname = (
+        f"edxapp-db-{deployment}-{dagster_env}"
+        f"{'-replica' if dagster_env == 'production' else ''}"
+        ".cbnm7ajau6mi.us-east-1.rds.amazonaws.com"
+    )
+    return VaultMySQLClientFactory(
+        vault=vault,
+        vault_mount_point=f"mariadb-{deployment}",
+        vault_role="readonly",
+        mysql_hostname=db_hostname,
+        mysql_db_name="edxapp",
+    )
+
+
 # Resource definitions for IRx jobs
-qa_resources = {
-    "sqldb": sqlite_db_resource,
+_base_production_resources = {
     "s3": S3Resource(),
     "results_dir": DailyResultsDir.configure_at_launch(),
     "healthchecks": HealthchecksIO.configure_at_launch(),
     "openedx": OpenEdxApiClient.configure_at_launch(),
 }
 
-production_resources = {
-    "sqldb": VaultMySQLClientFactory.configure_at_launch(),
-    "vault": vault,
-    "s3": S3Resource(),
-    "results_dir": DailyResultsDir.configure_at_launch(),
-    "healthchecks": HealthchecksIO.configure_at_launch(),
-    "openedx": OpenEdxApiClient.configure_at_launch(),
+qa_resources = {
+    "sqldb": sqlite_db_resource,
+    **_base_production_resources,
 }
 
 # Create jobs for each deployment.
-# NOTE: config is intentionally omitted here — it is generated at schedule-fire time
-# (not at code-location load time) so that Vault dynamic DB credentials are always
-# fresh when the job runs.  See the @schedule definitions below.
+# Each job gets its own VaultMySQLClientFactory instance with vault wired in
+# directly (matching the ApiClientFactory pattern used throughout this project).
+# The resource fetches fresh Vault credentials on first use and reconnects
+# automatically if the credential expires mid-run.
 residential_edx_job = edx_course_pipeline.to_job(
     name="residential_edx_course_pipeline",
-    resource_defs=production_resources,
+    resource_defs={
+        "sqldb": _mysql_resource("mitx", DAGSTER_ENV),
+        **_base_production_resources,
+    },
 )
 
 xpro_edx_job = edx_course_pipeline.to_job(
     name="xpro_edx_course_pipeline",
-    resource_defs=production_resources,
+    resource_defs={
+        "sqldb": _mysql_resource("xpro", DAGSTER_ENV),
+        **_base_production_resources,
+    },
 )
 
 mitxonline_edx_job = edx_course_pipeline.to_job(
     name="mitxonline_edx_course_pipeline",
-    resource_defs=production_resources,
+    resource_defs={
+        "sqldb": _mysql_resource("mitxonline", DAGSTER_ENV),
+        **_base_production_resources,
+    },
 )
 
 
