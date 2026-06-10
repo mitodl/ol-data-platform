@@ -143,6 +143,7 @@ def get_glue_catalog(region: str = AWS_REGION) -> GlueCatalog:
             # on K8s during commits (expire_snapshots) and are not interrupted by
             # the configured S3 timeouts.
             "py-io-impl": "pyiceberg.io.fsspec.FsspecFileIO",
+            "s3.region": region,
             "s3.connect-timeout": "10",
             "s3.request-timeout": "120",
         },
