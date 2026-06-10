@@ -7,6 +7,7 @@ that were defined using repository-based patterns. These include:
 2. IRx course data exports for 3 deployments (mitx, xpro, mitxonline)
 """
 
+import logging
 import os
 from typing import Literal
 
@@ -23,6 +24,8 @@ from ol_orchestrate.resources.secrets.vault import Vault
 from legacy_openedx.jobs.open_edx import edx_course_pipeline
 from legacy_openedx.resources.healthchecks import HealthchecksIO
 from legacy_openedx.resources.mysql_db import VaultMySQLClientFactory
+
+log = logging.getLogger(__name__)
 
 # Initialize vault with resilient loading
 try:
@@ -196,12 +199,39 @@ _base_production_resources = {
 # directly (matching the ApiClientFactory pattern used throughout this project).
 # The resource fetches fresh Vault credentials on first use and reconnects
 # automatically if the credential expires mid-run.
+#
+# When Vault is reachable at code-location load time (i.e. in production), each
+# job is also given a default config so the Dagster launchpad is pre-populated
+# for ad-hoc manual runs.  The schedule's run_config= always overrides this with
+# freshly fetched values at schedule-evaluation time.
+
+
+def _job_default_config(
+    deployment: Literal["mitx", "mitxonline", "xpro"],
+) -> dict[str, object]:
+    """Return a default run config for the launchpad when Vault is available."""
+    if not vault_authenticated:
+        return {}
+    try:
+        return open_edx_export_irx_job_config(deployment, DAGSTER_ENV)
+    except Exception:  # noqa: BLE001
+        log.warning(
+            "Failed to build default job config for '%s' at code-location load "
+            "time; launchpad will not be pre-populated. "
+            "Scheduled runs are unaffected.",
+            deployment,
+            exc_info=True,
+        )
+        return {}
+
+
 residential_edx_job = edx_course_pipeline.to_job(
     name="residential_edx_course_pipeline",
     resource_defs={
         "sqldb": _mysql_resource("mitx", DAGSTER_ENV),
         **_base_production_resources,
     },
+    config=_job_default_config("mitx"),
 )
 
 xpro_edx_job = edx_course_pipeline.to_job(
@@ -210,6 +240,7 @@ xpro_edx_job = edx_course_pipeline.to_job(
         "sqldb": _mysql_resource("xpro", DAGSTER_ENV),
         **_base_production_resources,
     },
+    config=_job_default_config("xpro"),
 )
 
 mitxonline_edx_job = edx_course_pipeline.to_job(
@@ -218,6 +249,7 @@ mitxonline_edx_job = edx_course_pipeline.to_job(
         "sqldb": _mysql_resource("mitxonline", DAGSTER_ENV),
         **_base_production_resources,
     },
+    config=_job_default_config("mitxonline"),
 )
 
 
