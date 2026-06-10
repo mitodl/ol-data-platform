@@ -33,6 +33,7 @@ Two assets run on staggered nightly schedules:
 """
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -57,6 +58,7 @@ from ol_orchestrate.lib.iceberg_maintenance import (
     remove_orphan_files,
 )
 from ol_orchestrate.resources.trino_maintenance import TrinoMaintenanceResource
+from pyiceberg.catalog.glue import GlueCatalog
 
 from lakehouse.assets.lakehouse.dbt import dbt_project
 
@@ -141,12 +143,16 @@ def _run_table_maintenance(
     instance,
     last_cursor: int | None,
     trino_maintenance: TrinoMaintenanceResource,
+    catalog: GlueCatalog,
 ) -> dict[str, Any]:
     """Run all maintenance operations for one dbt-layer table.
 
+    The shared ``catalog`` is created once by the asset and reused across all
+    tables: constructing a fresh GlueCatalog (and its S3 FileIO) per table is
+    both wasteful and a known trigger for native-client hangs.
+
     Returns a summary dict used to aggregate the asset's output metadata.
     """
-    catalog = get_glue_catalog()
     summary: dict[str, Any] = {
         "model": cfg.model_name,
         "optimized": False,
@@ -258,6 +264,8 @@ def iceberg_dbt_layer_maintenance(
             "First maintenance run — all operations will execute unconditionally."
         )
 
+    catalog = get_glue_catalog()
+
     tables_processed = 0
     tables_optimized = 0
     tables_analyzed = 0
@@ -270,7 +278,7 @@ def iceberg_dbt_layer_maintenance(
             continue
         try:
             result = _run_table_maintenance(
-                cfg, context.instance, last_cursor, trino_maintenance
+                cfg, context.instance, last_cursor, trino_maintenance, catalog
             )
             tables_processed += 1
             if result["optimized"]:
@@ -354,15 +362,26 @@ def iceberg_raw_layer_maintenance(context: AssetExecutionContext) -> Output[None
         RAW_LAYER_WORKERS,
     )
 
-    catalog = get_glue_catalog()
-
     tables_cleaned = 0
     snapshots_expired = 0
     orphans_removed = 0
     failures: list[str] = []
 
+    # A GlueCatalog (and its underlying S3 FileIO / boto3 client) must not be
+    # shared across worker threads: concurrent commits mutate catalog state and
+    # the native client deadlocks under the nested ThreadPoolExecutor. Give each
+    # of the RAW_LAYER_WORKERS threads its own catalog, created once and reused
+    # for every table that thread processes.
+    _thread_local = threading.local()
+
+    def _worker_catalog():
+        if not hasattr(_thread_local, "catalog"):
+            _thread_local.catalog = get_glue_catalog()
+        return _thread_local.catalog
+
     def _process_one(table_info) -> dict[str, Any]:
         cfg = raw_config_for_table(table_info.table_name)
+        catalog = _worker_catalog()
         result: dict[str, Any] = {
             "table": table_info.table_name,
             "ok": True,

@@ -51,6 +51,12 @@ defs = Definitions(
                 properties={
                     "type": "glue",
                     "glue.region": "us-east-1",
+                    # Write/commit via fsspec/s3fs (aiobotocore) instead of the
+                    # default PyArrow S3 FileIO, whose native threads deadlock on
+                    # K8s in handle_output and ignore the configured S3 timeouts.
+                    # reader_override above only covers the Polars read path.
+                    "py-io-impl": "pyiceberg.io.fsspec.FsspecFileIO",
+                    "s3.region": "us-east-1",
                     "s3.connect-timeout": "10",
                     "s3.request-timeout": "120",
                 }

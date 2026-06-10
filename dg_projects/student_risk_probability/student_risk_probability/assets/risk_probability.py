@@ -23,6 +23,7 @@ from student_risk_probability.lib.helper import (
     automation_condition=upstream_or_code_changes(),
     io_manager_key="io_manager",
     key=AssetKey(["reporting", "student_risk_probability"]),
+    pool="student_risk_probability",
 )
 def student_risk_probability(context: AssetExecutionContext) -> pl.DataFrame:
     """

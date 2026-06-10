@@ -11,7 +11,7 @@ with mitxonline_certificates as (
         cast(courseruncertificate_id as varchar) as certificate_id
         , user_id
         , courserun_id
-        , cast(null as varchar) as courserun_readable_id  -- edxorg join key only
+        , courserun_readable_id
         , courseruncertificate_uuid as certificate_uuid
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
@@ -29,7 +29,7 @@ with mitxonline_certificates as (
         cast(courseruncertificate_id as varchar) as certificate_id
         , user_id
         , courserun_id
-        , cast(null as varchar) as courserun_readable_id  -- edxorg join key only
+        , courserun_readable_id
         , courseruncertificate_uuid as certificate_uuid
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
@@ -137,7 +137,7 @@ with mitxonline_certificates as (
         cast(courseruncertificate_id as varchar) as certificate_id
         , user_id
         , courserun_id
-        , cast(null as varchar) as courserun_readable_id
+        , courserun_readable_id
         , courseruncertificate_uuid as certificate_uuid
         , courseruncertificate_is_revoked as certificate_is_revoked
         , courseruncertificate_created_on as certificate_created_on
@@ -181,7 +181,7 @@ with mitxonline_certificates as (
 )
 
 , dim_course_run as (
-    select courserun_pk, source_id, courserun_readable_id, platform
+    select courserun_pk, courserun_readable_id, platform
     from {{ ref('dim_course_run') }}
     where is_current = true
 )
@@ -245,14 +245,11 @@ with mitxonline_certificates as (
         on combined_certificates.platform = 'bootcamps'
         and combined_certificates.user_id = ul_bootcamps.bootcamps_application_user_id
     left join dim_course_run
-        on (
-            (combined_certificates.platform in ('mitxonline', 'mitxpro', 'bootcamps')
-                and combined_certificates.courserun_id = dim_course_run.source_id
-                and combined_certificates.platform = dim_course_run.platform)
-            or (combined_certificates.platform in ('edxorg', 'micromasters')
-                and combined_certificates.courserun_readable_id = dim_course_run.courserun_readable_id
-                and dim_course_run.platform = 'edxorg')
-        )
+        on combined_certificates.courserun_readable_id = dim_course_run.courserun_readable_id
+        and case
+            when combined_certificates.platform = 'micromasters' then 'edxorg'
+            else combined_certificates.platform
+        end = dim_course_run.platform
     left join dim_platform_lookup
         on combined_certificates.platform = dim_platform_lookup.platform_readable_id
     left join dim_certificate_type
