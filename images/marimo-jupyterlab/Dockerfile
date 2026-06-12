@@ -4,6 +4,12 @@
 # All quay.io/jupyter/* images are built for Z2JH single-user server use.
 FROM quay.io/jupyter/scipy-notebook:latest
 
+# Install uv/uvx so marimo-jupyter-extension can run notebooks in sandbox
+# (isolated virtual environment) mode. Copied from the official uv image to
+# avoid curl-pipe-sh; this is the pattern used elsewhere in the org.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uvx /usr/local/bin/uvx
+
 # Install marimo with sandbox (uv) support and the JupyterLab extension.
 # Both must be in the same environment so JupyterLab can import and proxy marimo.
 # trino connects to Starburst Galaxy; TRINO_TOKEN is injected at pod launch by KubeSpawner.
