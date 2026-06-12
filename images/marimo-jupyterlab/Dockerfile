@@ -17,3 +17,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uvx /usr/local/bin/uvx
 RUN pip install --no-cache-dir \
     'marimo[sandbox]>=0.19.11' \
     marimo-jupyter-extension
+
+# Seed notebook copied to ~/notebooks/ on first user login via postStart hook.
+COPY templates/ /usr/local/share/marimo/templates/
