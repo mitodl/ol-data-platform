@@ -36,9 +36,18 @@ with mitxonline_courses as (
 
 , edxorg_courses as (
     -- edxorg has no native course table — courses are represented only at the courserun level.
-    -- One row per course_readable_id, using the most-recent course run to supply course-level
-    -- attributes (title, course_number, is_live). source_id is always null for edxorg courses.
-    -- Note: QUALIFY is not supported by Trino; using ROW_NUMBER subquery instead.
+    -- One row per course_readable_id is synthesized by collapsing all course runs for a given
+    -- course_readable_id down to the single most-recent run (by courserun_start_date desc nulls
+    -- last), which supplies the course-level attributes (title, course_number, is_live).
+    -- source_id is always null for edxorg courses because edxorg exposes no integer course ID.
+    --
+    -- Implementation note — QUALIFY collapse via ROW_NUMBER subquery:
+    -- The natural way to write this in DuckDB/Snowflake/BigQuery would be:
+    --   QUALIFY row_number() OVER (PARTITION BY course_readable_id
+    --                              ORDER BY courserun_start_date DESC NULLS LAST) = 1
+    -- Trino does not support the QUALIFY clause, so the equivalent pattern is used instead:
+    -- ROW_NUMBER() is computed in an inner subquery and the outer query filters WHERE _row_num = 1.
+    -- The semantics are identical — exactly one row is kept per course_readable_id.
     select
         course_readable_id
         , source_id

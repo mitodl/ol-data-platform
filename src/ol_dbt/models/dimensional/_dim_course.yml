@@ -9,8 +9,11 @@ models:
     Tracks historical changes to course metadata.
     Note: edxorg has no native course-level table. edxorg courses are derived from
     courserun records, with one row per course_readable_id using the most-recent course
-    run to supply attributes (title, course_number, is_live). source_id is null
-    for edxorg and OCW courses.
+    run (by courserun_start_date desc nulls last) to supply attributes (title,
+    course_number, is_live). source_id is null for edxorg and OCW courses.
+    The most-recent-run collapse uses a ROW_NUMBER subquery (WHERE _row_num = 1) rather
+    than a QUALIFY clause because Trino does not support QUALIFY; the semantics are
+    identical — exactly one row is retained per course_readable_id.
   meta:
     owner: data_team
   columns:
