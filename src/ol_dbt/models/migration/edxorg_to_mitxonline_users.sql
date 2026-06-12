@@ -87,7 +87,7 @@ with edx_certificate as (
 
 , future_enrollment_users as (
     select distinct
-        user_email
+        lower(user_email) as user_email
         , user_full_name
         , user_gender
         , user_birth_year
@@ -99,7 +99,7 @@ with edx_certificate as (
 
 select * from cert_entitlement_users
 
-union
+union all
 
 select * from future_enrollment_users
 where not exists (
