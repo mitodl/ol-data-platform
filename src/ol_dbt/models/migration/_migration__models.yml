@@ -108,7 +108,9 @@ models:
 
 
 - name: edxorg_to_mitxonline_users
-  description: edX.org certificate learners who not yet have account on MITx Online
+  description: >
+    edX.org learners (certificate holders, program entitlement holders, and future
+    enrollment users) who do not yet have an account on MITx Online
   columns:
   - name: user_email
     description: string, user email that user registered on edX.org platform.

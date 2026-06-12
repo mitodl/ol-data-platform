@@ -73,12 +73,36 @@ with edx_certificate as (
         and mitx_user2.user_mitxonline_email is null
 )
 
-select
-    coalesce(cert_users.user_email, entitlement_users.user_email) as user_email
-    , coalesce(cert_users.user_full_name, entitlement_users.user_full_name) as user_full_name
-    , coalesce(cert_users.user_gender, entitlement_users.user_gender) as user_gender
-    , coalesce(cert_users.user_birth_year, entitlement_users.user_birth_year) as user_birth_year
-    , coalesce(cert_users.user_country, entitlement_users.user_country) as user_country
-from cert_users
-full outer join entitlement_users
-    on cert_users.user_email = entitlement_users.user_email
+, cert_entitlement_users as (
+    select
+        coalesce(cert_users.user_email, entitlement_users.user_email) as user_email
+        , coalesce(cert_users.user_full_name, entitlement_users.user_full_name) as user_full_name
+        , coalesce(cert_users.user_gender, entitlement_users.user_gender) as user_gender
+        , coalesce(cert_users.user_birth_year, entitlement_users.user_birth_year) as user_birth_year
+        , coalesce(cert_users.user_country, entitlement_users.user_country) as user_country
+    from cert_users
+    full outer join entitlement_users
+        on cert_users.user_email = entitlement_users.user_email
+)
+
+, future_enrollment_users as (
+    select distinct
+        user_email
+        , user_full_name
+        , user_gender
+        , user_birth_year
+        , user_country
+    from {{ ref('edxorg_to_mitxonline_enrollments') }}
+    where user_mitxonline_id is null
+        and courseruncertificate_created_on is null
+)
+
+select * from cert_entitlement_users
+
+union
+
+select * from future_enrollment_users
+where not exists (
+    select 1 from cert_entitlement_users
+    where cert_entitlement_users.user_email = future_enrollment_users.user_email
+)
