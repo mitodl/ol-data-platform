@@ -212,9 +212,9 @@ class VaultMySQLClientFactory(ConfigurableResource["VaultMySQLClientFactory"]):
         :raises pymysql.err.OperationalError: if the retry also fails or the error
             code is not retriable.
         """
-        if self._client is None:
-            self._connect()
         try:
+            if self._client is None:
+                self._connect()
             return self._client.run_query(query)  # type: ignore[union-attr]
         except pymysql.err.OperationalError as exc:
             if exc.args[0] in _RETRIABLE_MYSQL_ERRORS:
