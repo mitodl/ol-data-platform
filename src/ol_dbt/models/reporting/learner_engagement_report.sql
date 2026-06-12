@@ -7,7 +7,7 @@ with video_pre_query as (
         , max(video_duration) as video_duration
         , max(video_position) as end_time
         , min(case when event_type = 'play_video' then video_position end) as start_time
-    from ol_warehouse_production_dimensional.tfact_video_events
+    from {{ ref('tfact_video_events') }}
     where
         event_type in (
             'play_video'
@@ -32,8 +32,8 @@ with video_pre_query as (
         , lag(cast(video_events.event_timestamp as date)) over (partition by user.email
         , video_events.courserun_readable_id
         , video_events.video_block_fk order by cast(video_events.event_timestamp as date)) AS PreviousDATE
-    from ol_warehouse_production_dimensional.tfact_video_events as video_events
-    inner join ol_warehouse_production_dimensional.dim_user as user
+    from {{ ref('tfact_video_events') }} as video_events
+    inner join {{ ref('dim_user') }} as user
         on video_events.user_fk = user.user_pk
     where
         video_events.event_type in (
@@ -73,28 +73,28 @@ with video_pre_query as (
         , coalesce(u.full_name, ou.full_name) as full_name
         , sum(a.post_created) as posts_created
         , sum(a.post_replied) as posts_replied
-    from ol_warehouse_production_dimensional.afact_discussion_engagement as a
-    left join ol_warehouse_production_dimensional.dim_discussion_topic as topic
+    from {{ ref('afact_discussion_engagement') }} as a
+    left join {{ ref('dim_discussion_topic') }} as topic
         on a.discussion_topic_fk = topic.discussion_topic_pk
-    left join ol_warehouse_production_dimensional.dim_user as u
+    left join {{ ref('dim_user') }} as u
         on a.platform = 'mitxonline' and a.openedx_user_id = u.mitxonline_openedx_user_id
-    left join ol_warehouse_production_dimensional.dim_user as ou
+    left join {{ ref('dim_user') }} as ou
         on a.platform = 'edxorg' and a.openedx_user_id = ou.edxorg_openedx_user_id
-    left join ol_warehouse_production_intermediate.int__combined__course_runs as h2
+    left join {{ ref('int__combined__course_runs') }} as h2
         on a.courserun_readable_id = h2.courserun_readable_id
-    left join ol_warehouse_production_dimensional.dim_course_content as c
+    left join {{ ref('dim_course_content') }} as c
         on
             a.sequential_block_fk = c.block_id
             and c.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_course_content as d
+    left join {{ ref('dim_course_content') }} as d
         on
             a.chapter_block_fk = d.block_id
             and d.is_latest = true
-   left join ol_warehouse_production_dimensional.dim_course_content as content_block
+   left join {{ ref('dim_course_content') }} as content_block
         on
             a.content_block_fk = content_block.content_block_pk
             and content_block.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_course_content as unit
+    left join {{ ref('dim_course_content') }} as unit
         on
             content_block.parent_block_id = unit.block_id
             and unit.is_latest = true
@@ -122,28 +122,28 @@ with video_pre_query as (
         , coalesce(u.email, ou.email) as email
         , coalesce(u.full_name, ou.full_name) as full_name
         , sum(a.num_of_views) as num_of_page_views
-    from ol_warehouse_production_dimensional.afact_course_page_engagement as a
-    left join ol_warehouse_production_dimensional.dim_course_content as b
+    from {{ ref('afact_course_page_engagement') }} as a
+    left join {{ ref('dim_course_content') }} as b
         on
             a.block_fk = b.block_id
             and b.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_course_content as c
+    left join {{ ref('dim_course_content') }} as c
         on
             b.parent_block_id = c.block_id
             and c.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_course_content as d
+    left join {{ ref('dim_course_content') }} as d
         on
             c.parent_block_id = d.block_id
             and d.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_user as u
+    left join {{ ref('dim_user') }} as u
         on
             a.platform = 'mitxonline'
             and a.openedx_user_id = u.mitxonline_openedx_user_id
-    left join ol_warehouse_production_dimensional.dim_user as ou
+    left join {{ ref('dim_user') }} as ou
         on
             a.platform = 'edxorg'
             and a.openedx_user_id = ou.edxorg_openedx_user_id
-    left join ol_warehouse_production_intermediate.int__combined__course_runs as h2
+    left join {{ ref('int__combined__course_runs') }} as h2
         on a.courserun_readable_id = h2.courserun_readable_id
     group by
         a.platform
@@ -175,36 +175,36 @@ with video_pre_query as (
         , sum(a.video_duration) as video_duration
         , coalesce(max(video_rewatch_final.num_of_rewatches), 0) as num_of_rewatches
     from video_pre_query as a
-    inner join ol_warehouse_production_dimensional.dim_video as c
+    inner join {{ ref('dim_video') }} as c
         on
             a.courserun_readable_id = c.courserun_readable_id
             and a.video_block_fk = substring(c.video_block_pk, regexp_position(c.video_block_pk, 'block@') + 6)
-    left join ol_warehouse_production_dimensional.dim_user as b
+    left join {{ ref('dim_user') }} as b
         on
             a.platform = 'mitxonline'
             and a.openedx_user_id = b.mitxonline_openedx_user_id
-    left join ol_warehouse_production_dimensional.dim_user as ob
+    left join {{ ref('dim_user') }} as ob
         on
             a.platform = 'edxorg'
             and a.openedx_user_id = ob.edxorg_openedx_user_id
-    left join ol_warehouse_production_intermediate.int__combined__course_runs as h2
+    left join {{ ref('int__combined__course_runs') }} as h2
         on a.courserun_readable_id = h2.courserun_readable_id
-    left join ol_warehouse_production_dimensional.dim_course_content as v
+    left join {{ ref('dim_course_content') }} as v
         on
             c.content_block_fk = v.content_block_pk
             and a.courserun_readable_id = v.courserun_readable_id
             and v.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_course_content as cc_subsection
+    left join {{ ref('dim_course_content') }} as cc_subsection
         on
             v.parent_block_id = cc_subsection.block_id
             and a.courserun_readable_id = cc_subsection.courserun_readable_id
             and cc_subsection.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_course_content as cc_section
+    left join {{ ref('dim_course_content') }} as cc_section
         on
             cc_subsection.parent_block_id = cc_section.block_id
             and a.courserun_readable_id = cc_section.courserun_readable_id
             and cc_section.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_course_content as unit
+    left join {{ ref('dim_course_content') }} as unit
       on
             v.parent_block_id = unit.block_id
             and unit.is_latest = true
@@ -229,8 +229,8 @@ with video_pre_query as (
     select
         c.sequential_block_id
         , count(p.problem_block_pk) as problem_numb
-    from ol_warehouse_production_dimensional.dim_problem as p
-    inner join ol_warehouse_production_dimensional.dim_course_content as c
+    from {{ ref('dim_problem') }} as p
+    inner join {{ ref('dim_course_content') }} as c
         on p.content_block_fk = c.content_block_pk
     group by c.sequential_block_id
 )
@@ -248,7 +248,7 @@ with video_pre_query as (
             / nullif(cast(max_grade as decimal(30, 10)), 0)
         )
             as avg_percent_grade
-    from ol_warehouse_production_dimensional.tfact_problem_events
+    from {{ ref('tfact_problem_events') }}
     group by
         problem_block_fk
         , courserun_readable_id
@@ -279,34 +279,34 @@ with video_pre_query as (
         end) as decimal(30, 10))
         / cast(max(c.problem_numb) as decimal(30, 10)
         ) as percetage_problems_attempted
-    from ol_warehouse_production_dimensional.afact_problem_engagement as a
-    inner join ol_warehouse_production_dimensional.dim_problem as problem
+    from {{ ref('afact_problem_engagement') }} as a
+    inner join {{ ref('dim_problem') }} as problem
         on a.problem_block_fk = problem.problem_block_pk
     inner join pre_problems_table as c
         on a.sequential_block_fk = c.sequential_block_id
-    left join ol_warehouse_production_dimensional.dim_user as u
+    left join {{ ref('dim_user') }} as u
         on
             a.platform = 'mitxonline'
             and a.openedx_user_id = u.mitxonline_openedx_user_id
-    left join ol_warehouse_production_dimensional.dim_user as ou
+    left join {{ ref('dim_user') }} as ou
         on
             a.platform = 'edxorg'
             and a.openedx_user_id = ou.edxorg_openedx_user_id
-    left join ol_warehouse_production_intermediate.int__combined__course_runs as h2
+    left join {{ ref('int__combined__course_runs') }} as h2
         on a.courserun_readable_id = h2.courserun_readable_id
-    left join ol_warehouse_production_dimensional.dim_course_content as d
+    left join {{ ref('dim_course_content') }} as d
         on
             a.sequential_block_fk = d.block_id
             and d.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_course_content as sec
+    left join {{ ref('dim_course_content') }} as sec
         on
             a.chapter_block_fk = sec.block_id
             and sec.is_latest = true
-    inner join ol_warehouse_production_dimensional.dim_course_content as problem_block
+    inner join {{ ref('dim_course_content') }} as problem_block
         on
             a.problem_block_fk = problem_block.block_id
             and problem_block.is_latest = true
-    left join ol_warehouse_production_dimensional.dim_course_content as unit
+    left join {{ ref('dim_course_content') }} as unit
       on
             problem_block.parent_block_id = unit.block_id
             and unit.is_latest = true
