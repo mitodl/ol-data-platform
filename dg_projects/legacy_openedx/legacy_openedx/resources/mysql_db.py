@@ -3,6 +3,7 @@
 import contextlib
 import logging
 import ssl
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any, Self
@@ -31,6 +32,16 @@ log = logging.getLogger(__name__)
 # 2006 CR_SERVER_GONE_ERROR     - server gone away (restart / idle timeout)
 # 2013 CR_SERVER_LOST           - connection lost mid-query
 _RETRIABLE_MYSQL_ERRORS: frozenset[int] = frozenset({1044, 1045, 2006, 2013})
+
+# 1045 specifically signals that the dynamic user Vault created on the primary
+# has not yet been replicated to the replica we're connecting to.
+_ER_ACCESS_DENIED_ERROR = 1045
+
+# Vault writes credentials to the primary; the replica may not have replicated
+# the new user grant yet.  Retry the connection with the same credentials up to
+# this many times, doubling the delay each attempt (1s, 2s, …).
+_CONNECT_RETRIES = 3
+_CONNECT_RETRY_BASE_DELAY = 1  # seconds
 
 DEFAULT_MYSQL_PORT = 3306
 
@@ -187,18 +198,45 @@ class VaultMySQLClientFactory(ConfigurableResource["VaultMySQLClientFactory"]):
         return creds["username"], creds["password"]
 
     def _connect(self) -> None:
-        """Open a new database connection using freshly generated Vault credentials."""
+        """Open a new database connection using freshly generated Vault credentials.
+
+        After generating credentials Vault writes them to the primary; the replica
+        may not have propagated the new user grant yet.  On a 1045 error the same
+        credentials are retried up to _CONNECT_RETRIES times with exponential
+        back-off so the replica has time to catch up before we give up.
+        """
         with contextlib.suppress(Exception):
             if self._client is not None:
                 self._client.connection.close()
         username, password = self._generate_credentials()
-        self._client = MySQLClient(
-            hostname=self.mysql_hostname,
-            username=username,
-            password=password,
-            db_name=self.mysql_db_name,
-            port=self.mysql_port,
-        )
+        for attempt in range(_CONNECT_RETRIES):
+            try:
+                self._client = MySQLClient(
+                    hostname=self.mysql_hostname,
+                    username=username,
+                    password=password,
+                    db_name=self.mysql_db_name,
+                    port=self.mysql_port,
+                )
+            except pymysql.err.OperationalError as exc:
+                if (
+                    exc.args[0] == _ER_ACCESS_DENIED_ERROR
+                    and attempt < _CONNECT_RETRIES - 1
+                ):
+                    delay = _CONNECT_RETRY_BASE_DELAY * (2**attempt)
+                    log.warning(
+                        "MySQL 1045 for Vault user '%s' (attempt %d/%d) — "
+                        "waiting %ds for replica replication lag.",
+                        username,
+                        attempt + 1,
+                        _CONNECT_RETRIES,
+                        delay,
+                    )
+                    time.sleep(delay)
+                else:
+                    raise
+            else:
+                return
 
     def run_query(self, query: str) -> tuple[list[str], list[dict[Any, Any]]]:
         """Execute *query*, regenerating Vault credentials on auth/connection failure.
