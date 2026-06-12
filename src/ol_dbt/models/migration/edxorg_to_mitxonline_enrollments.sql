@@ -232,6 +232,12 @@ select
     edxorg_enrollment.user_id as user_edxorg_id
     , coalesce(mitx_users_by_email.user_mitxonline_id, mitx__users.user_mitxonline_id) as user_mitxonline_id
     , edxorg_enrollment.user_email
+    , coalesce(mitx_users_by_email.user_full_name, mitx__users.user_full_name) as user_full_name
+    , coalesce(mitx_users_by_email.user_gender, mitx__users.user_gender) as user_gender
+    , coalesce(mitx_users_by_email.user_birth_year, mitx__users.user_birth_year) as user_birth_year
+    , coalesce(
+        mitx_users_by_email.user_address_country, mitx__users.user_address_country
+    ) as user_country
     , mitxonline__course_runs.courserun_id
     , edxorg_enrollment.courserun_readable_id
     , edxorg_enrollment.courserunenrollment_enrollment_mode
