@@ -430,3 +430,98 @@ models:
   - name: grade_updated_on
     description: Grade last update timestamp (for incremental processing). Null for
       edX.org.
+
+- name: tfact_program_certificate
+  description: >
+    Transaction fact table for program-level certificate issuance events.
+    Grain: One row per (certificate_id, platform) — one certificate per learner per
+    program per platform.
+
+    Platforms covered: MITx Online, MITx Pro, edX.org, MicroMasters.
+    MicroMasters rows apply DEDP-era split logic: certs awarded before 2022-10-01
+    come
+    from the MicroMasters DB; certs from 2022-10-01 onward come from MITx Online DB.
+
+    Note: unlike tfact_certificate (which covers both course and program certs in
+    one table),
+    this model is program-certificates-only and provides a cleaner grain for program-level
+    reporting without filtering on certificate_scope.
+  tests:
+  - dbt_utils.unique_combination_of_columns:
+      combination_of_columns:
+      - certificate_id
+      - platform
+  columns:
+  - name: program_certificate_key
+    description: Surrogate primary key. Generated from (certificate_id, platform).
+    tests:
+    - unique
+    - not_null
+  - name: certificate_id
+    description: >
+      Source system certificate ID. Integer for MITx Online and MITx Pro;
+      hashed ID (program_certificate_hashed_id) for edX.org and MicroMasters.
+    tests:
+    - not_null
+  - name: certificate_issued_date_key
+    description: >
+      Foreign key to dim_date for the certificate issuance date (YYYYMMDD integer).
+      Null for records where no issued date is available in the source system.
+    tests:
+    - relationships:
+        to: ref('dim_date')
+        field: date_key
+        where: "certificate_issued_date_key is not null"
+  - name: user_fk
+    description: Foreign key to dim_user. Resolved via platform-specific user ID joins.
+      Null when the learner cannot be matched to a dim_user record.
+    tests:
+    - relationships:
+        to: ref('dim_user')
+        field: user_pk
+        where: "user_fk is not null"
+        config:
+          severity: warn
+  - name: program_fk
+    description: >
+      Foreign key to dim_program. Null when the program cannot be matched
+      (e.g. MicroMasters programs not yet in dim_program).
+    tests:
+    - relationships:
+        to: ref('dim_program')
+        field: program_pk
+        where: "program_fk is not null"
+        config:
+          severity: warn
+  - name: platform_fk
+    description: Foreign key to dim_platform
+    tests:
+    - not_null
+    - relationships:
+        to: ref('dim_platform')
+        field: platform_pk
+  - name: platform
+    description: Platform identifier string
+    tests:
+    - not_null
+    - accepted_values:
+        values: ['mitxonline', 'mitxpro', 'edxorg', 'micromasters']
+  - name: certificate_uuid
+    description: >
+      UUID for the certificate. Null for edX.org (where hashed_id is used instead)
+      and MicroMasters (no UUID in source).
+  - name: certificate_is_revoked
+    description: Boolean — true if certificate has been revoked. Always false for
+      edX.org and MicroMasters (revocations not tracked in source data).
+    tests:
+    - not_null
+  - name: certificate_created_on
+    description: Certificate creation timestamp (for incremental processing)
+  - name: certificate_updated_on
+    description: Certificate last update timestamp. Null for edX.org and MicroMasters
+      where only a single awarded/completion timestamp is available.
+  - name: certificate_issued_on
+    description: >
+      Certificate issuance timestamp. For MITx Online this is the actual issued_on
+      from the source; for MITx Pro and MicroMasters this falls back to created_on;
+      for edX.org this is program_certificate_awarded_on.
