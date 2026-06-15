@@ -140,10 +140,13 @@ select
     , d_user.address_country as user_country_code
     , d_user.highest_education as user_highest_education
     , d_user.full_name as user_full_name
-    , d_user.user_mitxonline_username
-    , d_user.user_mitxpro_username
-    , d_user.user_residential_username
-    , d_user.user_edxorg_username
+    , case enrollment.platform
+        when 'mitxonline' then d_user.user_mitxonline_username
+        when 'mitxpro' then d_user.user_mitxpro_username
+        when 'residential' then d_user.user_residential_username
+        when 'edxorg' then d_user.user_edxorg_username
+        else null
+      end as user_username
     , d_user.email as user_email
     , discount.discount_code as coupon_code
     , discount_names.discount_name as coupon_name
