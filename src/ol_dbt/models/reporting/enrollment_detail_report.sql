@@ -44,7 +44,25 @@ with enrollment as (
 )
 
 , payment as (
-    select * from {{ ref('tfact_payment') }}
+    select
+        payment_id
+        , order_id
+        , user_fk
+        , platform_fk
+        , payment_method_fk
+        , transaction_amount
+        , transaction_created_on
+    from (
+        select
+            *
+            , row_number() over (
+                partition by order_id, platform_fk
+                order by transaction_created_on desc, payment_id desc
+            ) as row_num
+        from {{ ref('tfact_payment') }}
+        where transaction_type = 'payment'
+    )
+    where row_num = 1
 )
 
 , payment_method as (
