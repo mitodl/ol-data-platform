@@ -97,7 +97,7 @@ with enrollment as (
     select * from {{ ref('marts__combined_course_enrollment_detail') }}
 )
 
-, order_emails as (
+, enrollment_upgrades as (
     select
         order_id
         , platform
@@ -126,7 +126,7 @@ select
     , enrollment_mode as courserunenrollment_enrollment_mode
     , enrollment_status as courserunenrollment_enrollment_status
     , enrollment_is_active as courserunenrollment_is_active
-    , courserunenrollment_upgraded_on
+    , enrollment_upgrades.courserunenrollment_upgraded_on
     , certificate_created_on as courseruncertificate_created_on
     , certificate_issued_on as courseruncertificate_issued_on
     , case when certificate_issued_on is not null then true else false end as courseruncertificate_is_earned
@@ -215,6 +215,11 @@ left join discount_type
     on f_order.discount_type_fk = discount_type.discount_type_pk
 left join discount_names
     on discount.discount_code = discount_names.discount_code
+left join enrollment_upgrades
+    on f_order.order_id = enrollment_upgrades.order_id
+    and enrollment.platform = enrollment_upgrades.platform
+    and course_run.courserun_readable_id = enrollment_upgrades.courserun_readable_id
+    and d_user.email = enrollment_upgrades.user_email
 left join order_emails
     on f_order.order_id = order_emails.order_id
     and case enrollment.platform
