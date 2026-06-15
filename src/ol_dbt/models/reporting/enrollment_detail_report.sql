@@ -11,7 +11,8 @@ with enrollment as (
 )
 
 , f_certificate as (
-    select * from {{ ref('f_certificate') }}
+    select * from {{ ref('tfact_certificate') }}
+    where certificate_scope = 'course'
 )
 
 , grade as (
