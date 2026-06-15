@@ -113,7 +113,16 @@ with enrollment as (
 )
 
 select
-    enrollment.platform
+    case enrollment.platform
+        when 'bootcamps' then '{{ var("bootcamps") }}'
+        when 'edxorg' then '{{ var("edxorg") }}'
+        when 'emeritus' then '{{ var("emeritus") }}'
+        when 'global_alumni' then '{{ var("global_alumni") }}'
+        when 'mitxonline' then '{{ var("mitxonline") }}'
+        when 'mitxpro' then '{{ var("mitxpro") }}'
+        when 'residential' then '{{ var("residential") }}'
+        else enrollment.platform
+    end as platform
     , enrollment_id as courserunenrollment_id
     , course_readable_id
     , course_title
