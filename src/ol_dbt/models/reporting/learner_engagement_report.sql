@@ -178,7 +178,7 @@ with video_pre_query as (
     inner join {{ ref('dim_video') }} as c
         on
             a.courserun_readable_id = c.courserun_readable_id
-            and a.video_block_fk = substring(c.video_block_pk, regexp_position(c.video_block_pk, 'block@') + 6)
+            and a.video_block_fk = substring(c.video_block_pk, strpos(c.video_block_pk, 'block@') + 6)
     left join {{ ref('dim_user') }} as b
         on
             a.platform = 'mitxonline'
