@@ -136,6 +136,16 @@ models:
     description: boolean, Set to true if the user has recieved a program credential
   - name: has_dedp_program_certificate
     description: boolean, Set to true if the user has recieved a DEDP program credential
+  - name: user_hashed_id_edxorg_legacy
+    description: >
+      Temporary transition column. For users who were previously identified as
+      'edX.org'-only in the old mart but are now linked to a MITx Online account
+      in dim_user, user_hashed_id changes from an edX.org-based hash to a MITx
+      Online-based hash. This column preserves the old edX.org hash
+      (sha256(edxorg_id || 'edX.org')) to allow downstream consumers (Hightouch,
+      cross-model joins) to perform a graceful key migration without a hard cutover.
+      NULL for users without an edX.org account. Remove once all consumers have
+      migrated to user_hashed_id.
   tests:
   - dbt_expectations.expect_compound_columns_to_be_unique:
       arguments:
