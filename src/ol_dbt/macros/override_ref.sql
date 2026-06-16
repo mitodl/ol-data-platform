@@ -35,6 +35,7 @@
       {% elif model_name.startswith('int__') %}
         {% set glue_database = 'ol_warehouse_production_intermediate' %}
       {% elif model_name.startswith('dim_') or model_name.startswith('tfact_') or model_name.startswith('afact_') or model_name.startswith('bridge_') %}
+        {% set glue_database = 'ol_warehouse_production_dimensional' %}
       {% elif model_name.startswith('marts__') %}
         {% set glue_database = 'ol_warehouse_production_mart' %}
       {% elif model_name.startswith('rpt__') %}
