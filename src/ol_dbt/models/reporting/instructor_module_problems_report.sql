@@ -8,6 +8,7 @@ with enrollment as (
 
 , course_run as (
     select * from {{ ref('dim_course_run') }}
+    where is_current = true
 )
 
 , problem as (
