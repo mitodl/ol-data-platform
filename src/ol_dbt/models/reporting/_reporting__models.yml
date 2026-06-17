@@ -1395,7 +1395,7 @@ models:
   - name: grade
     description: number, grade received for this attempt
   - name: platform
-    description: string, name of the platform (e.g. MITx Online, edX.org, xPRO, etc.)
+    description: string, platform code (e.g. mitxonline, mitxpro, edxorg, residential)
   - name: course_title
     description: string, title of the course
   - name: organization_name
