@@ -1388,7 +1388,7 @@ models:
   - name: problem_name
     description: string, name of the problem
   - name: attempt
-    description: int, number of attempt the user made on this problem
+    description: int, attempt number for the user's submission
   - name: success
     description: int, whether the attempt was successful 1 or 0
   - name: grade
