@@ -101,7 +101,7 @@ with mitx__users as (
         , user_edxorg_id
         , null as user_mitxpro_id
         , null as user_bootcamps_id
-        , null as user_mitlearn_id
+        , mitlearn_users.mitlearn_user_id as user_mitlearn_id
         , user_mitxonline_username
         , user_edxorg_username
         , null as user_mitxpro_username
@@ -147,7 +147,8 @@ with mitx__users as (
         , user_address_state as user_address_state_or_territory
         , user_address_postal_code
     from mitx__users
-    where is_mitxonline_user = true or is_edxorg_user = true
+    left join mitlearn_users on lower(mitlearn_users.email) = lower(mitx__users.user_mitxonline_email)
+    where mitx__users.is_mitxonline_user = true or mitx__users.is_edxorg_user = true
 
     union all
 
@@ -279,6 +280,11 @@ with mitx__users as (
         , null as user_address_state_or_territory
         , null as user_address_postal_code
     from mitlearn_users
+    where lower(email) not in (
+        select lower(user_mitxonline_email)
+        from mitx__users
+        where user_mitxonline_email is not null
+    )
 
 )
 

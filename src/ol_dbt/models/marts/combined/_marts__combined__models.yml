@@ -43,9 +43,9 @@ models:
     - unique
   - name: user_email
     description: string, user email on the corresponding platform including xpro,
-      bootcamps, edX.org, MITx Online, and Residential MITx. If the user is on edX.org
-      and MITx Online then the email will be chosen from the last platform they joined
-      if their account is active. May be null for some xPRO Emeritus learners.
+      bootcamps, edX.org, MITx Online, Residential MITx, and MIT Learn. If the user
+      is on edX.org and MITx Online then the email will be chosen from the last platform
+      they joined if their account is active. May be null for some xPRO Emeritus learners.
     tests:
     - dbt_expectations.expect_column_values_to_not_be_null:
         arguments:
