@@ -44,6 +44,7 @@ vars:
     mitxpro: "xPro"
     micromasters: "MicroMasters"
     mitxonline: "MITx Online"
+    mitlearn: "MIT Learn"
     residential: "Residential MITx"
     emeritus: "xPRO Emeritus"
     global_alumni: "xPRO Global Alumni"

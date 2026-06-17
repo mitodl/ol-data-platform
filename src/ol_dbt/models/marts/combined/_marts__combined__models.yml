@@ -105,6 +105,8 @@ models:
     description: int, user ID on MITxPRO
   - name: user_bootcamps_id
     description: int, user ID on bootcamps
+  - name: user_mitlearn_id
+    description: int, user ID on MIT Learn
   - name: user_mitxonline_username
     description: string, username on MITxOnline
   - name: user_edxorg_username

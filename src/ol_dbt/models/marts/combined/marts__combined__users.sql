@@ -8,6 +8,24 @@ with mitx__users as (
     select * from {{ ref('int__combined__users') }}
 )
 
+, mitlearn_users as (
+    select
+        mitlearn_user_id
+        , email
+        , full_name
+        , address_country
+        , highest_education
+        , gender
+        , birth_year
+        , company
+        , job_title
+        , industry
+        , user_is_active_on_mitlearn
+        , user_joined_on_mitlearn
+    from {{ ref('dim_user') }}
+    where mitlearn_user_id is not null
+)
+
 , combined_enrollments as (
     select * from {{ ref('int__combined__courserun_enrollments') }}
 )
@@ -83,6 +101,7 @@ with mitx__users as (
         , user_edxorg_id
         , null as user_mitxpro_id
         , null as user_bootcamps_id
+        , null as user_mitlearn_id
         , user_mitxonline_username
         , user_edxorg_username
         , null as user_mitxpro_username
@@ -138,6 +157,7 @@ with mitx__users as (
         , null as user_edxorg_id
         , user_id as user_mitxpro_id
         , null as user_bootcamps_id
+        , null as user_mitlearn_id
         , null as user_mitxonline_username
         , null as user_edxorg_username
         , user_username as user_mitxpro_username
@@ -170,6 +190,7 @@ with mitx__users as (
         , null as user_edxorg_id
         , null as user_mitxpro_id
         , user_id as user_bootcamps_id
+        , null as user_mitlearn_id
         , null as user_mitxonline_username
         , null as user_edxorg_username
         , null as user_mitxpro_username
@@ -202,6 +223,7 @@ with mitx__users as (
         , null as user_edxorg_id
         , null as user_mitxpro_id
         , null as user_bootcamps_id
+        , null as user_mitlearn_id
         , null as user_mitxonline_username
         , null as user_edxorg_username
         , null as user_mitxpro_username
@@ -225,6 +247,38 @@ with mitx__users as (
         , user_address_postal_code
     from non_mitx_users
     where platform in ('{{ var("emeritus") }}', '{{ var("global_alumni") }}')
+
+    union all
+
+    select
+        {{ generate_hash_id("cast(mitlearn_user_id as varchar) || '" ~ var("mitlearn") ~ "'") }} as user_hashed_id
+        , null as user_mitxonline_id
+        , null as user_edxorg_id
+        , null as user_mitxpro_id
+        , null as user_bootcamps_id
+        , mitlearn_user_id as user_mitlearn_id
+        , null as user_mitxonline_username
+        , null as user_edxorg_username
+        , null as user_mitxpro_username
+        , null as user_bootcamps_username
+        , email as user_email
+        , user_joined_on_mitlearn as user_joined_on
+        , null as user_last_login
+        , user_is_active_on_mitlearn as user_is_active
+        , '{{ var("mitlearn") }}' as platforms
+        , full_name as user_full_name
+        , address_country as user_address_country
+        , highest_education as user_highest_education
+        , gender as user_gender
+        , birth_year as user_birth_year
+        , company as user_company
+        , job_title as user_job_title
+        , industry as user_industry
+        , null as user_street_address
+        , null as user_address_city
+        , null as user_address_state_or_territory
+        , null as user_address_postal_code
+    from mitlearn_users
 
 )
 
@@ -251,6 +305,7 @@ select
     , combined_users.user_edxorg_id
     , combined_users.user_mitxpro_id
     , combined_users.user_bootcamps_id
+    , combined_users.user_mitlearn_id
     , combined_users.user_mitxonline_username
     , combined_users.user_edxorg_username
     , combined_users.user_mitxpro_username
